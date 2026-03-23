@@ -3,6 +3,8 @@ package io.kognio.arknet.mcp;
 import io.kognio.arknet.core.ModelLoader;
 import io.kognio.arknet.core.SparqlExecutor;
 import io.kognio.arknet.core.ValidationReport;
+import io.kognio.arknet.projection.AsciiDocConverter;
+import io.kognio.arknet.projection.ContextMapProjection;
 import org.eclipse.rdf4j.query.BindingSet;
 import org.eclipse.rdf4j.repository.Repository;
 
@@ -60,6 +62,21 @@ public class ArknetEngine {
 
         List<BindingSet> results = sparqlExecutor.select(repository, sparql);
         return formatResults(results);
+    }
+
+    public String generate(String filePath, String outputDir, String format) throws IOException {
+        if (repository == null) {
+            // Load on-the-fly if not loaded yet
+            load(filePath);
+        }
+        var projection = new ContextMapProjection();
+        String adocContent = projection.generate(repository);
+
+        var outputPath = Path.of(outputDir);
+        var converter = new AsciiDocConverter();
+        converter.convert(adocContent, outputPath, "context-map", format);
+
+        return "Generated context-map.%s in %s".formatted(format, outputDir);
     }
 
     public List<String> listQueries() {
