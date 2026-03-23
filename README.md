@@ -4,13 +4,15 @@ DDD-Architekturmodelle, die Maschinen verstehen.
 
 W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).
 
+## Voraussetzungen
+
+- Java 21+
+- Maven 3.9+
+
 ## Claude Code Plugin
 
 ```bash
-# Build
-mvn clean package -q
-
-# Als Plugin verwenden
+# Als Plugin verwenden (baut automatisch beim ersten Start)
 claude --plugin-dir /path/to/arknet
 
 # Skill: Architektur-Analyse eines bestehenden Projekts

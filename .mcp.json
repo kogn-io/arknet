@@ -1,8 +1,7 @@
 {
   "mcpServers": {
     "arknet": {
-      "command": "java",
-      "args": ["-jar", "${CLAUDE_PLUGIN_ROOT}/arknet-mcp/target/arknet-mcp-0.1.0-SNAPSHOT.jar"]
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/arknet-mcp.sh"
     }
   }
 }

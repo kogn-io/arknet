@@ -20,11 +20,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.kognio.arknet</groupId>
-            <artifactId>arknet-projection</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>
             <artifactId>mcp-core</artifactId>
         </dependency>
