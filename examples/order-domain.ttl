@@ -1,0 +1,404 @@
+##############################################################################
+#  arknet Example: Online Shop – Order Domain
+#  Validates against arknet-shapes.ttl + process-shapes.ttl
+##############################################################################
+
+@prefix :        <https://example.shop/model#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkproc: <https://w3id.org/arknet/process#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+
+
+# ═══════════════════════════════════════════════════════════
+#  ARCHITECTURE
+# ═══════════════════════════════════════════════════════════
+
+:ShopArchitecture a arknet:Architecture ;
+    arknet:name "Online Shop"^^xsd:string ;
+    arknet:description "E-Commerce Platform with Order, Inventory, Payment and Notification contexts."^^xsd:string .
+
+
+# ═══════════════════════════════════════════════════════════
+#  BOUNDED CONTEXTS
+# ═══════════════════════════════════════════════════════════
+
+:OrderContext a arknet:BoundedContext ;
+    arknet:name "Order Context"^^xsd:string ;
+    arknet:domainVision "Verwaltet den gesamten Bestelllebenszyklus vom Warenkorb bis zur Auslieferung."^^xsd:string ;
+    arknet:subdomain arknet:CoreDomain ;
+    arknet:ownedBy "Order Team"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Bestellung"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Bestellposition"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Warenkorb"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Lieferadresse"^^xsd:string ;
+    arknet:hasAggregate :OrderAggregate .
+
+:InventoryContext a arknet:BoundedContext ;
+    arknet:name "Inventory Context"^^xsd:string ;
+    arknet:domainVision "Verwaltet Lagerbestaende, Reservierungen und Verfuegbarkeitspruefungen."^^xsd:string ;
+    arknet:subdomain arknet:SupportingDomain ;
+    arknet:ubiquitousLanguageTerm "Lagerbestand"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Reservierung"^^xsd:string ;
+    arknet:hasAggregate :InventoryAggregate .
+
+:PaymentContext a arknet:BoundedContext ;
+    arknet:name "Payment Context"^^xsd:string ;
+    arknet:domainVision "Wickelt Zahlungsautorisierung, Abrechnung und Erstattungen ab."^^xsd:string ;
+    arknet:subdomain arknet:SupportingDomain ;
+    arknet:ubiquitousLanguageTerm "Zahlung"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Autorisierung"^^xsd:string ;
+    arknet:hasAggregate :PaymentAggregate .
+
+:NotificationContext a arknet:BoundedContext ;
+    arknet:name "Notification Context"^^xsd:string ;
+    arknet:domainVision "Versendet Benachrichtigungen per Email, SMS und Push an Kunden."^^xsd:string ;
+    arknet:subdomain arknet:GenericDomain ;
+    arknet:ubiquitousLanguageTerm "Benachrichtigung"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm "Email"^^xsd:string ;
+    arknet:hasAggregate :NotificationAggregate .
+
+
+# ═══════════════════════════════════════════════════════════
+#  CONTEXT MAP RELATIONSHIPS
+# ═══════════════════════════════════════════════════════════
+
+:OrderToInventory a arknet:ContextRelationship ;
+    arknet:upstream :OrderContext ;
+    arknet:downstream :InventoryContext ;
+    arknet:relationshipType arknet:CustomerSupplier .
+
+:OrderToPayment a arknet:ContextRelationship ;
+    arknet:upstream :PaymentContext ;
+    arknet:downstream :OrderContext ;
+    arknet:relationshipType arknet:AnticorruptionLayer .
+
+:OrderToNotification a arknet:ContextRelationship ;
+    arknet:upstream :OrderContext ;
+    arknet:downstream :NotificationContext ;
+    arknet:relationshipType arknet:OpenHostService .
+
+
+# ═══════════════════════════════════════════════════════════
+#  AGGREGATES & DOMAIN OBJECTS
+# ═══════════════════════════════════════════════════════════
+
+# ── Order Aggregate (fully modeled) ──────────────────────
+
+:OrderAggregate a arknet:Aggregate ;
+    arknet:name "Order"^^xsd:string ;
+    arknet:aggregateRoot :OrderEntity ;
+    arknet:hasEntity :OrderLineEntity ;
+    arknet:hasValueObject :MoneyVO ;
+    arknet:hasValueObject :AddressVO ;
+    arknet:hasCommand :PlaceOrderCommand ;
+    arknet:hasCommand :CancelOrderCommand ;
+    arknet:hasEvent :OrderPlacedEvent ;
+    arknet:hasEvent :OrderFailedEvent ;
+    arknet:hasEvent :OrderCancelledEvent ;
+    arknet:hasInvariant :OrderMustHaveItems ;
+    arknet:hasInvariant :OrderTotalMustBePositive .
+
+:OrderEntity a arknet:AggregateRoot ;
+    arknet:name "Order"^^xsd:string .
+
+:OrderLineEntity a arknet:Entity ;
+    arknet:name "OrderLine"^^xsd:string .
+
+:MoneyVO a arknet:ValueObject ;
+    arknet:name "Money"^^xsd:string .
+
+:AddressVO a arknet:ValueObject ;
+    arknet:name "Address"^^xsd:string .
+
+# ── Stub Aggregates (other contexts) ─────────────────────
+
+:InventoryAggregate a arknet:Aggregate ;
+    arknet:name "InventoryItem"^^xsd:string ;
+    arknet:aggregateRoot :InventoryItemEntity .
+
+:InventoryItemEntity a arknet:AggregateRoot ;
+    arknet:name "InventoryItem"^^xsd:string .
+
+:PaymentAggregate a arknet:Aggregate ;
+    arknet:name "Payment"^^xsd:string ;
+    arknet:aggregateRoot :PaymentEntity .
+
+:PaymentEntity a arknet:AggregateRoot ;
+    arknet:name "Payment"^^xsd:string .
+
+:NotificationAggregate a arknet:Aggregate ;
+    arknet:name "Notification"^^xsd:string ;
+    arknet:aggregateRoot :NotificationEntity .
+
+:NotificationEntity a arknet:AggregateRoot ;
+    arknet:name "Notification"^^xsd:string .
+
+
+# ═══════════════════════════════════════════════════════════
+#  INVARIANTS
+# ═══════════════════════════════════════════════════════════
+
+:OrderMustHaveItems a arknet:Invariant ;
+    arknet:name "Eine Bestellung muss mindestens eine Position enthalten"^^xsd:string ;
+    arknet:invariantExpression "order.lines.size() >= 1"^^xsd:string .
+
+:OrderTotalMustBePositive a arknet:Invariant ;
+    arknet:name "Der Bestellwert muss positiv sein"^^xsd:string ;
+    arknet:invariantExpression "order.total.amount > 0"^^xsd:string .
+
+
+# ═══════════════════════════════════════════════════════════
+#  COMMANDS
+# ═══════════════════════════════════════════════════════════
+
+:PlaceOrderCommand a arknet:Command ;
+    arknet:name "PlaceOrder"^^xsd:string .
+
+:CancelOrderCommand a arknet:Command ;
+    arknet:name "CancelOrder"^^xsd:string .
+
+
+# ═══════════════════════════════════════════════════════════
+#  DOMAIN EVENTS
+# ═══════════════════════════════════════════════════════════
+
+:OrderPlacedEvent a arknet:DomainEvent ;
+    arknet:name "OrderPlaced"^^xsd:string ;
+    arknet:publishedTo :InventoryContext ;
+    arknet:publishedTo :NotificationContext .
+
+:OrderFailedEvent a arknet:DomainEvent ;
+    arknet:name "OrderFailed"^^xsd:string ;
+    arknet:publishedTo :NotificationContext .
+
+:OrderCancelledEvent a arknet:DomainEvent ;
+    arknet:name "OrderCancelled"^^xsd:string ;
+    arknet:publishedTo :InventoryContext ;
+    arknet:publishedTo :NotificationContext .
+
+
+# ═══════════════════════════════════════════════════════════
+#  ACTORS
+# ═══════════════════════════════════════════════════════════
+
+:Customer a arkproc:HumanActor ;
+    arkproc:actorName "Kunde"^^xsd:string ;
+    arkproc:actorRole "Besteller"^^xsd:string .
+
+:OrderService a arkproc:SystemActor ;
+    arkproc:actorName "Order Service"^^xsd:string .
+
+:InventoryService a arkproc:SystemActor ;
+    arkproc:actorName "Inventory Service"^^xsd:string .
+
+:PaymentService a arkproc:SystemActor ;
+    arkproc:actorName "Payment Service"^^xsd:string .
+
+:OrderRepository a arkproc:SystemActor ;
+    arkproc:actorName "Order Repository"^^xsd:string .
+
+
+# ═══════════════════════════════════════════════════════════
+#  STATES
+# ═══════════════════════════════════════════════════════════
+
+:StateCartActive      a arkproc:State ; arkproc:stateName "Cart(active)"^^xsd:string       ; arkproc:stateOf :OrderAggregate .
+:StateOrderPending    a arkproc:State ; arkproc:stateName "Order(pending)"^^xsd:string      ; arkproc:stateOf :OrderAggregate .
+:StateOrderConfirmed  a arkproc:State ; arkproc:stateName "Order(confirmed)"^^xsd:string    ; arkproc:stateOf :OrderAggregate .
+:StateOrderFailed     a arkproc:State ; arkproc:stateName "Order(failed)"^^xsd:string       ; arkproc:stateOf :OrderAggregate .
+:StateOrderDelivered  a arkproc:State ; arkproc:stateName "Order(delivered)"^^xsd:string    ; arkproc:stateOf :OrderAggregate .
+:StateOrderCancelled  a arkproc:State ; arkproc:stateName "Order(cancelled)"^^xsd:string    ; arkproc:stateOf :OrderAggregate .
+
+
+# ═══════════════════════════════════════════════════════════
+#  PROCESS 1: Place Order
+# ═══════════════════════════════════════════════════════════
+
+:PlaceOrderProcess a arkproc:Process ;
+    arkproc:processId          "order.placeOrder"^^xsd:string ;
+    arkproc:processName        "Bestellung aufgeben"^^xsd:string ;
+    arkproc:processDescription "Kunde gibt eine Bestellung aus einem aktiven Warenkorb auf."^^xsd:string ;
+    arkproc:processVersion     "1.0.0"^^xsd:string ;
+    arkproc:belongsTo          :OrderContext ;
+    arkproc:triggeredBy        :PlaceOrderCommand ;
+    arkproc:initiatedBy        :Customer ;
+
+    # Preconditions
+    arkproc:hasPrecondition :Pre_CartNotEmpty ;
+    arkproc:hasPrecondition :Pre_StockAvailable ;
+    arkproc:hasPrecondition :Pre_PaymentMethodValid ;
+
+    # Postconditions
+    arkproc:hasPostcondition :Post_OrderPersisted ;
+    arkproc:hasPostcondition :Post_StockReserved ;
+
+    # Steps
+    arkproc:firstStep :Step_CheckInventory ;
+    arkproc:hasStep   :Step_CheckInventory ;
+    arkproc:hasStep   :Step_AuthorizePayment ;
+    arkproc:hasStep   :Step_PersistOrder ;
+
+    # State transitions
+    arkproc:causes :Trans_CartToConfirmed ;
+    arkproc:causes :Trans_CartToFailed ;
+
+    # Outcomes
+    arkproc:hasOutcome :Outcome_OrderSuccess ;
+    arkproc:hasOutcome :Outcome_PaymentFailure ;
+    arkproc:hasOutcome :Outcome_StockFailure ;
+
+    # Events
+    arkproc:produces :OrderPlacedEvent ;
+    arkproc:produces :OrderFailedEvent .
+
+# Preconditions
+:Pre_CartNotEmpty a arkproc:Precondition ;
+    arkproc:ruleDescription "Warenkorb enthaelt mindestens einen Artikel"^^xsd:string ;
+    arkproc:ruleExpression "cart.items.isNotEmpty()"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+:Pre_StockAvailable a arkproc:Precondition ;
+    arkproc:ruleDescription "Alle Artikel im Warenkorb sind verfuegbar"^^xsd:string ;
+    arkproc:ruleExpression "inventory.checkAvailability(cart.items) == true"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+:Pre_PaymentMethodValid a arkproc:Precondition ;
+    arkproc:ruleDescription "Zahlungsmethode ist gueltig und aktiv"^^xsd:string ;
+    arkproc:ruleExpression "payment.isValid(paymentMethodId) == true"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+# Postconditions
+:Post_OrderPersisted a arkproc:Postcondition ;
+    arkproc:ruleDescription "Bestellung wurde persistiert und hat eine ID"^^xsd:string ;
+    arkproc:ruleExpression "order.id != null && orderRepository.exists(order.id)"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+:Post_StockReserved a arkproc:Postcondition ;
+    arkproc:ruleDescription "Lagerbestand ist fuer alle Positionen reserviert"^^xsd:string ;
+    arkproc:ruleExpression "inventory.allReserved(order.lines)"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+# Steps
+:Step_CheckInventory a arkproc:Step ;
+    arkproc:stepName  "Verfuegbarkeit pruefen"^^xsd:string ;
+    arkproc:stepOrder 1 ;
+    arkproc:performedBy :InventoryService ;
+    arkproc:nextStep   :Step_AuthorizePayment .
+
+:Step_AuthorizePayment a arkproc:Step ;
+    arkproc:stepName  "Zahlung autorisieren"^^xsd:string ;
+    arkproc:stepOrder 2 ;
+    arkproc:performedBy :PaymentService ;
+    arkproc:nextStep   :Step_PersistOrder .
+
+:Step_PersistOrder a arkproc:Step ;
+    arkproc:stepName  "Bestellung speichern"^^xsd:string ;
+    arkproc:stepOrder 3 ;
+    arkproc:performedBy :OrderRepository .
+
+# State transitions
+:Trans_CartToConfirmed a arkproc:StateTransition ;
+    arkproc:fromState :StateCartActive ;
+    arkproc:toState   :StateOrderConfirmed ;
+    arkproc:transitionGuard "payment.authorized == true && inventory.reserved == true"^^xsd:string .
+
+:Trans_CartToFailed a arkproc:StateTransition ;
+    arkproc:fromState :StateCartActive ;
+    arkproc:toState   :StateOrderFailed ;
+    arkproc:transitionGuard "payment.authorized == false || inventory.reserved == false"^^xsd:string .
+
+# Outcomes
+:Outcome_OrderSuccess a arkproc:SuccessOutcome ;
+    arkproc:outcomeDescription "Bestellung wurde erfolgreich aufgegeben"^^xsd:string ;
+    arkproc:outcomeCondition "payment.authorized && inventory.reserved"^^xsd:string ;
+    arkproc:outcomeTriggers  :OrderPlacedEvent ;
+    arkproc:outcomeCauses    :Trans_CartToConfirmed .
+
+:Outcome_PaymentFailure a arkproc:FailureOutcome ;
+    arkproc:outcomeDescription "Zahlung wurde abgelehnt"^^xsd:string ;
+    arkproc:outcomeCondition "payment.authorized == false"^^xsd:string ;
+    arkproc:errorCode "PAYMENT_DECLINED"^^xsd:string ;
+    arkproc:outcomeTriggers :OrderFailedEvent ;
+    arkproc:outcomeCauses   :Trans_CartToFailed .
+
+:Outcome_StockFailure a arkproc:FailureOutcome ;
+    arkproc:outcomeDescription "Nicht genug Lagerbestand"^^xsd:string ;
+    arkproc:outcomeCondition "inventory.available == false"^^xsd:string ;
+    arkproc:errorCode "INSUFFICIENT_STOCK"^^xsd:string ;
+    arkproc:outcomeTriggers :OrderFailedEvent ;
+    arkproc:outcomeCauses   :Trans_CartToFailed .
+
+
+# ═══════════════════════════════════════════════════════════
+#  PROCESS 2: Cancel Order (Compensation)
+# ═══════════════════════════════════════════════════════════
+
+:CancelOrderProcess a arkproc:Process ;
+    arkproc:processId          "order.cancelOrder"^^xsd:string ;
+    arkproc:processName        "Bestellung stornieren"^^xsd:string ;
+    arkproc:processDescription "Stornierung einer bestaetigten Bestellung."^^xsd:string ;
+    arkproc:processVersion     "1.0.0"^^xsd:string ;
+    arkproc:belongsTo          :OrderContext ;
+    arkproc:triggeredBy        :CancelOrderCommand ;
+    arkproc:initiatedBy        :Customer ;
+    arkproc:compensatedBy      :PlaceOrderProcess ;
+
+    arkproc:hasPrecondition :Pre_OrderExists ;
+    arkproc:hasPrecondition :Pre_OrderCancellable ;
+
+    arkproc:hasStep   :Step_ReleaseStock ;
+    arkproc:hasStep   :Step_RefundPayment ;
+    arkproc:hasStep   :Step_UpdateOrderStatus ;
+    arkproc:firstStep :Step_ReleaseStock ;
+
+    arkproc:causes :Trans_ConfirmedToCancelled ;
+
+    arkproc:hasOutcome :Outcome_CancelSuccess ;
+    arkproc:hasOutcome :Outcome_CancelNotAllowed ;
+
+    arkproc:produces :OrderCancelledEvent .
+
+:Pre_OrderExists a arkproc:Precondition ;
+    arkproc:ruleDescription "Bestellung mit dieser ID existiert"^^xsd:string ;
+    arkproc:ruleExpression "orderRepository.exists(orderId)"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+:Pre_OrderCancellable a arkproc:Precondition ;
+    arkproc:ruleDescription "Bestellung ist noch nicht versendet"^^xsd:string ;
+    arkproc:ruleExpression "order.status in [CONFIRMED, PENDING]"^^xsd:string ;
+    arkproc:ruleExpressionLanguage "pseudocode"^^xsd:string .
+
+:Step_ReleaseStock a arkproc:Step ;
+    arkproc:stepName "Lagerreservierung freigeben"^^xsd:string ;
+    arkproc:stepOrder 1 ;
+    arkproc:performedBy :InventoryService ;
+    arkproc:nextStep :Step_RefundPayment .
+
+:Step_RefundPayment a arkproc:Step ;
+    arkproc:stepName "Zahlung erstatten"^^xsd:string ;
+    arkproc:stepOrder 2 ;
+    arkproc:performedBy :PaymentService ;
+    arkproc:nextStep :Step_UpdateOrderStatus .
+
+:Step_UpdateOrderStatus a arkproc:Step ;
+    arkproc:stepName "Bestellstatus aktualisieren"^^xsd:string ;
+    arkproc:stepOrder 3 ;
+    arkproc:performedBy :OrderRepository .
+
+:Trans_ConfirmedToCancelled a arkproc:StateTransition ;
+    arkproc:fromState :StateOrderConfirmed ;
+    arkproc:toState   :StateOrderCancelled ;
+    arkproc:transitionGuard "order.status == CONFIRMED"^^xsd:string .
+
+:Outcome_CancelSuccess a arkproc:SuccessOutcome ;
+    arkproc:outcomeDescription "Bestellung wurde erfolgreich storniert"^^xsd:string ;
+    arkproc:outcomeCondition "order.status == CONFIRMED || order.status == PENDING"^^xsd:string ;
+    arkproc:outcomeTriggers :OrderCancelledEvent ;
+    arkproc:outcomeCauses   :Trans_ConfirmedToCancelled .
+
+:Outcome_CancelNotAllowed a arkproc:FailureOutcome ;
+    arkproc:outcomeDescription "Bestellung kann nicht mehr storniert werden"^^xsd:string ;
+    arkproc:outcomeCondition "order.status == SHIPPED || order.status == DELIVERED"^^xsd:string ;
+    arkproc:errorCode "CANCELLATION_NOT_ALLOWED"^^xsd:string .
