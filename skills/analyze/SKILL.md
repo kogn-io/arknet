@@ -1,5 +1,5 @@
 ---
-description: "Architektur-Analyse eines bestehenden Projekts. Trigger: /arknet:analyze, 'analysiere die Architektur', 'erstelle Architekturmodell', 'DDD Analyse', 'architecture analysis'."
+description: "Vollstaendige Architektur-Analyse eines bestehenden Projekts mit Modell-Erzeugung. Trigger: /arknet:analyze, 'analysiere die Architektur', 'erstelle Architekturmodell', 'DDD Analyse starten'. NICHT triggern bei: arknet_generate, arknet_query, arknet_validate, arknet_load -- das sind MCP-Tools die direkt aufgerufen werden."
 ---
 
 # /arknet:analyze -- Architecture Analysis & Documentation
