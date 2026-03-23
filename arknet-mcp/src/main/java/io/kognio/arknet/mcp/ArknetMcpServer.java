@@ -67,16 +67,23 @@ public class ArknetMcpServer {
                 })
                 .toolCall(generateTool(), (exchange, request) -> {
                     String filePath = (String) request.arguments().get("filePath");
+                    String projection = (String) request.arguments().getOrDefault("projection", "context-map");
                     String outputDir = (String) request.arguments().getOrDefault("outputDir", "docs");
                     String format = (String) request.arguments().getOrDefault("format", "html");
                     try {
-                        String result = engine.generate(filePath, outputDir, format);
+                        String result = engine.generate(filePath, projection, outputDir, format);
                         return CallToolResult.builder().addTextContent(result).build();
                     } catch (Exception e) {
                         return CallToolResult.builder()
                                 .addTextContent("Error generating documentation: " + e.getMessage())
                                 .isError(true).build();
                     }
+                })
+                .toolCall(listProjectionsTool(), (exchange, request) -> {
+                    var available = engine.listProjections();
+                    return CallToolResult.builder()
+                            .addTextContent("Available projections:\n" + String.join("\n", available))
+                            .build();
                 })
                 .build();
     }
@@ -143,13 +150,17 @@ public class ArknetMcpServer {
     private static Tool generateTool() {
         return Tool.builder()
                 .name("arknet_generate")
-                .description("Generate documentation (Context Map as HTML or PDF) from a DDD architecture model.")
+                .description("Generate documentation from a DDD architecture model. "
+                        + "Use arknet_list_projections to see available projection types.")
                 .inputSchema(new JsonSchema(
                         "object",
                         Map.of(
                                 "filePath", Map.of(
                                         "type", "string",
                                         "description", "Absolute path to the Turtle model file (.ttl)"),
+                                "projection", Map.of(
+                                        "type", "string",
+                                        "description", "Projection type (default: context-map). Use arknet_list_projections for options."),
                                 "outputDir", Map.of(
                                         "type", "string",
                                         "description", "Output directory (default: docs)"),
@@ -157,6 +168,18 @@ public class ArknetMcpServer {
                                         "type", "string",
                                         "description", "Output format: html or pdf (default: html)")),
                         List.of("filePath"),
+                        null, null, null))
+                .build();
+    }
+
+    private static Tool listProjectionsTool() {
+        return Tool.builder()
+                .name("arknet_list_projections")
+                .description("List all available projection types for arknet_generate.")
+                .inputSchema(new JsonSchema(
+                        "object",
+                        Map.of(),
+                        List.of(),
                         null, null, null))
                 .build();
     }
