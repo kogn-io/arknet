@@ -3,8 +3,8 @@ package io.kognio.arknet.mcp;
 import io.kognio.arknet.core.ModelLoader;
 import io.kognio.arknet.core.SparqlExecutor;
 import io.kognio.arknet.core.ValidationReport;
-import io.kognio.arknet.projection.AsciiDocConverter;
-import io.kognio.arknet.projection.ContextMapProjection;
+import io.kognio.arknet.projection.Projection;
+import io.kognio.arknet.projection.ProjectionRegistry;
 import org.eclipse.rdf4j.query.BindingSet;
 import org.eclipse.rdf4j.repository.Repository;
 
@@ -26,6 +26,7 @@ public class ArknetEngine {
 
     private final ModelLoader modelLoader = new ModelLoader();
     private final SparqlExecutor sparqlExecutor = new SparqlExecutor();
+    private final ProjectionRegistry projections = new ProjectionRegistry();
     private Repository repository;
 
     public String load(String filePath) throws IOException {
@@ -64,19 +65,21 @@ public class ArknetEngine {
         return formatResults(results);
     }
 
-    public String generate(String filePath, String outputDir, String format) throws IOException {
+    public String generate(String filePath, String projectionName, String outputDir, String format) throws IOException {
         if (repository == null) {
-            // Load on-the-fly if not loaded yet
             load(filePath);
         }
-        var projection = new ContextMapProjection();
-        String adocContent = projection.generate(repository);
+        Projection projection = projections.get(projectionName);
+        if (projection == null) {
+            return "Error: Unknown projection '%s'. Available: %s".formatted(
+                    projectionName, String.join(", ", listProjections()));
+        }
+        projection.generate(repository, Path.of(outputDir), format);
+        return "Generated %s in %s (format: %s)".formatted(projectionName, outputDir, format);
+    }
 
-        var outputPath = Path.of(outputDir);
-        var converter = new AsciiDocConverter();
-        converter.convert(adocContent, outputPath, "context-map", format);
-
-        return "Generated context-map.%s in %s".formatted(format, outputDir);
+    public List<String> listProjections() {
+        return projections.available();
     }
 
     public List<String> listQueries() {
