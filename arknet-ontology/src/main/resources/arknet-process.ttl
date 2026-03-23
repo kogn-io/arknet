@@ -3,7 +3,7 @@
 #  Process Ontology  ·  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/process#
-#  License    : Apache 2.0
+#  License    : Proprietary. All rights reserved.
 #
 #  Migrated from: dddpo.ttl (dddprocess.org)
 #
@@ -33,7 +33,7 @@
     dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Akteure, Geschaeftsregeln und Outcomes fuer DDD."@de ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-03-23"^^xsd:date ;
-    dcterms:license  <https://www.apache.org/licenses/LICENSE-2.0> ;
+    dcterms:rights   "Proprietary. All rights reserved." ;
     vann:preferredNamespacePrefix "arkproc" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
     owl:versionInfo  "0.1.0" .

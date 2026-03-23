@@ -81,4 +81,4 @@ Konsolidiert aus drei Projekten:
 
 == Lizenz
 
-Apache 2.0
+Proprietary. All rights reserved.
