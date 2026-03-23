@@ -10,6 +10,7 @@ public class ProjectionRegistry {
 
     public ProjectionRegistry() {
         register(new ContextMapProjectionAdapter());
+        register(new ExplorerProjection());
     }
 
     public void register(Projection projection) {

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>arknet · Architecture Explorer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f1923; font-family: 'Inter', sans-serif; overflow: hidden; color: #c8dae8; }
+    #app { display: flex; width: 100vw; height: 100vh; }
+
+    /* --- Left Panel --- */
+    #panel { width: 360px; min-width: 360px; height: 100vh; background: #141e2b; border-right: 1px solid #1e2d3d; display: flex; flex-direction: column; z-index: 20; overflow: hidden; }
+    #panel-header { padding: 20px; border-bottom: 1px solid #1e2d3d; }
+    #panel-header .app-title { font-size: 11px; letter-spacing: 0.2em; color: #00d4aa; text-transform: uppercase; margin-bottom: 6px; font-weight: 500; }
+    #panel-header .system-name { font-size: 18px; font-weight: 700; color: #e8f4ff; }
+    #panel-header .system-desc { font-size: 12px; color: #6a8a9a; margin-top: 4px; line-height: 1.5; }
+    #breadcrumb { padding: 12px 20px; border-bottom: 1px solid #1e2d3d; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 44px; }
+    .crumb { font-size: 12px; color: #5a7a8a; cursor: pointer; transition: color 0.2s; }
+    .crumb:hover { color: #00d4aa; }
+    .crumb.active { color: #e8f4ff; cursor: default; font-weight: 600; }
+    .crumb-sep { font-size: 10px; color: #2a3a4a; }
+    #detail { flex: 1; overflow-y: auto; padding: 20px; }
+    #detail::-webkit-scrollbar { width: 4px; }
+    #detail::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 2px; }
+    .detail-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #3a5a6a; font-size: 13px; text-align: center; line-height: 1.8; }
+    .detail-type { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; font-weight: 600; }
+    .detail-name { font-size: 20px; font-weight: 700; color: #e8f4ff; margin-bottom: 4px; }
+    .detail-desc { font-size: 13px; color: #7a9ab8; line-height: 1.7; margin-bottom: 16px; }
+    .detail-section { margin-bottom: 18px; }
+    .detail-section-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a7a8a; margin-bottom: 10px; font-weight: 600; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: 11px; font-family: 'JetBrains Mono', monospace; border-radius: 4px; padding: 4px 10px; }
+    .tag-teal { background: rgba(0,212,170,0.1); border: 1px solid rgba(0,212,170,0.2); color: #00d4aa; }
+    .tag-orange { background: rgba(255,159,67,0.1); border: 1px solid rgba(255,159,67,0.25); color: #ff9f43; }
+    .tag-blue { background: rgba(84,160,255,0.1); border: 1px solid rgba(84,160,255,0.25); color: #54a0ff; }
+    .tag-purple { background: rgba(123,111,255,0.1); border: 1px solid rgba(123,111,255,0.25); color: #7b6fff; }
+    .tag-red { background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.25); color: #ff6b6b; }
+    .tag-green { background: rgba(29,209,161,0.1); border: 1px solid rgba(29,209,161,0.25); color: #1dd1a1; }
+    .detail-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #00d4aa; cursor: pointer; margin-top: 6px; transition: opacity 0.2s; text-decoration: none; }
+    .detail-link:hover { opacity: 0.7; }
+    .detail-prop { display: flex; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+    .detail-prop-key { color: #5a7a8a; min-width: 90px; }
+    .detail-prop-val { color: #9ab8cc; }
+
+    /* --- 3D Viewport --- */
+    #viewport { flex: 1; position: relative; cursor: grab; }
+    #viewport:active { cursor: grabbing; }
+    #nav-hint { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #3a5a6a; letter-spacing: 0.08em; pointer-events: none; text-align: center; line-height: 1.8; }
+    #level-indicator { position: absolute; top: 16px; left: 16px; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #3a5a6a; pointer-events: none; }
+
+    /* --- Dialog --- */
+    #dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    #dialog-overlay.open { display: flex; }
+    #dialog { background: #141e2b; border: 1px solid #2a3a4a; border-radius: 12px; padding: 28px; max-width: 640px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    #dialog .dialog-title { font-size: 16px; font-weight: 700; color: #e8f4ff; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    #dialog .dialog-close { background: none; border: none; color: #5a7a8a; cursor: pointer; font-size: 20px; padding: 0 4px; }
+    #dialog .dialog-close:hover { color: #e8f4ff; }
+    #dialog .dialog-body { font-size: 13px; color: #7a9ab8; line-height: 1.8; }
+    #dialog .dialog-body .adr-field { margin-bottom: 12px; }
+    #dialog .dialog-body .adr-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a7a8a; margin-bottom: 4px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="panel">
+      <div id="panel-header">
+        <div class="app-title">arknet · architecture explorer</div>
+        <div class="system-name" id="system-name"></div>
+        <div class="system-desc" id="system-desc"></div>
+      </div>
+      <div id="breadcrumb"></div>
+      <div id="detail"><div class="detail-empty">Klicke auf eine Karte<br>um Details zu sehen</div></div>
+    </div>
+    <div id="viewport">
+      <div id="level-indicator"></div>
+      <div id="nav-hint">drag to rotate · scroll to zoom · click to select · double-click to drill down</div>
+    </div>
+  </div>
+  <div id="dialog-overlay">
+    <div id="dialog">
+      <div class="dialog-title"><span id="dialog-title-text"></span><button class="dialog-close" id="dialog-close">&times;</button></div>
+      <div class="dialog-body" id="dialog-body"></div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+
+    // ============================================================
+    // MODEL — populated by arknet projection engine
+    // ============================================================
+    const MODEL = /* ARKNET_MODEL_JSON */;
+
+    // ============================================================
+    // Colors & Config — aligned with ontology types
+    // ============================================================
+    const SUBDOMAIN_COLORS = {
+      CoreDomain:       { hex: "#00d4aa", bg: "#0d2a24", label: "Core Domain" },
+      SupportingDomain: { hex: "#7b6fff", bg: "#1a1a2e", label: "Supporting" },
+      GenericDomain:    { hex: "#54a0ff", bg: "#0d1f2e", label: "Generic" },
+    };
+    const ELEMENT_COLORS = {
+      aggregate:      { hex: "#ff9f43", bg: "#2a1f0d" },
+      entity:         { hex: "#54a0ff", bg: "#0d1f2e" },
+      "value-object": { hex: "#1dd1a1", bg: "#0d2a1f" },
+      command:        { hex: "#ff6b6b", bg: "#2a0d0d" },
+      event:          { hex: "#ff9f43", bg: "#2a1f0d" },
+      relationship:   { hex: "#e8a0ff", bg: "#1f0d2a" },
+    };
+    const REL_TYPE_COLORS = {
+      OpenHostService:     { hex: "#54a0ff", label: "Open Host Service" },
+      CustomerSupplier:    { hex: "#ff9f43", label: "Customer/Supplier" },
+      AnticorruptionLayer: { hex: "#ff6b6b", label: "Anticorruption Layer" },
+      Partnership:         { hex: "#1dd1a1", label: "Partnership" },
+      SharedKernel:        { hex: "#e8a0ff", label: "Shared Kernel" },
+      Conformist:          { hex: "#ffdd59", label: "Conformist" },
+      PublishedLanguage:   { hex: "#54a0ff", label: "Published Language" },
+    };
+
+    // ============================================================
+    // State
+    // ============================================================
+    let currentLevel = "system";
+    let currentContext = null;
+    let currentAggregate = null;
+    let selectedNode = null;
+    let hoveredNodeId = null;
+    let scene, camera, renderer;
+    let cardGroups = {};       // id -> THREE.Group
+    let edgeObjects = [];      // { line, arrow, cardGroup, rel }
+    const sphereAngle = { theta: 0.5, phi: 1.0, r: 14 };
+    const targetAngle = { theta: 0.5, phi: 1.0, r: 14 };
+
+    const viewport = document.getElementById("viewport");
+    const detailEl = document.getElementById("detail");
+    const breadcrumbEl = document.getElementById("breadcrumb");
+    const levelIndicator = document.getElementById("level-indicator");
+    const navHint = document.getElementById("nav-hint");
+    const dialogOverlay = document.getElementById("dialog-overlay");
+
+    document.getElementById("system-name").textContent = MODEL.architecture.name;
+    document.getElementById("system-desc").textContent = MODEL.architecture.description;
+
+    // ============================================================
+    // Canvas texture for UML cards
+    // ============================================================
+    function createCardCanvas(opts) {
+      const { w, h, stereotype, name, typeLabel, color, bgColor, items, footer, isSelected, isHovered } = opts;
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = bgColor || "#0d1a24";
+      ctx.beginPath(); ctx.roundRect(2, 2, w - 4, h - 4, 10); ctx.fill();
+
+      // Border
+      ctx.strokeStyle = color;
+      ctx.lineWidth = isSelected ? 4 : isHovered ? 3 : 2;
+      ctx.globalAlpha = isSelected ? 1.0 : isHovered ? 0.9 : 0.5;
+      ctx.beginPath(); ctx.roundRect(2, 2, w - 4, h - 4, 10); ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      // Top bar
+      ctx.fillStyle = color; ctx.globalAlpha = 0.12;
+      ctx.beginPath(); ctx.roundRect(2, 2, w - 4, 48, [10, 10, 0, 0]); ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Stereotype
+      if (stereotype) {
+        ctx.fillStyle = color; ctx.font = "500 17px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
+        ctx.fillText(stereotype, w / 2, 30);
+      }
+
+      // Name
+      ctx.fillStyle = "#e8f4ff"; ctx.font = "bold 24px 'Inter', sans-serif"; ctx.textAlign = "center";
+      const nameText = name.length > 22 ? name.slice(0, 20) + ".." : name;
+      ctx.fillText(nameText, w / 2, 74);
+
+      // Type badge
+      if (typeLabel) {
+        ctx.font = "500 14px 'Inter', sans-serif";
+        const bw = ctx.measureText(typeLabel).width + 20;
+        ctx.fillStyle = color; ctx.globalAlpha = 0.2;
+        ctx.beginPath(); ctx.roundRect((w - bw) / 2, 86, bw, 22, 5); ctx.fill();
+        ctx.globalAlpha = 1.0; ctx.fillStyle = color;
+        ctx.fillText(typeLabel, w / 2, 102);
+      }
+
+      // Items
+      if (items && items.length > 0) {
+        ctx.textAlign = "left"; ctx.font = "400 15px 'JetBrains Mono', monospace";
+        let y = 128;
+        const max = Math.min(items.length, 7);
+        for (let i = 0; i < max; i++) {
+          ctx.fillStyle = items[i].color || "#7a9ab8";
+          const txt = items[i].label.length > 26 ? items[i].label.slice(0, 24) + ".." : items[i].label;
+          ctx.fillText(`${items[i].icon} ${txt}`, 24, y);
+          y += 21;
+        }
+        if (items.length > max) {
+          ctx.fillStyle = "#4a6a8a"; ctx.font = "italic 13px 'Inter', sans-serif";
+          ctx.fillText(`+ ${items.length - max} more`, 24, y);
+        }
+      }
+
+      // Footer
+      if (footer) {
+        ctx.fillStyle = "#3a5a6a"; ctx.font = "400 13px 'Inter', sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(footer, w / 2, h - 12);
+      }
+
+      return canvas;
+    }
+
+    // Small card for edge relationships
+    function createEdgeCardCanvas(rel) {
+      const w = 320, h = 140;
+      const rtc = REL_TYPE_COLORS[rel.type] || { hex: "#e8a0ff", label: rel.type };
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = "#12182280"; ctx.beginPath(); ctx.roundRect(2, 2, w - 4, h - 4, 8); ctx.fill();
+      // Border
+      ctx.strokeStyle = rtc.hex; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.roundRect(2, 2, w - 4, h - 4, 8); ctx.stroke(); ctx.globalAlpha = 1.0;
+
+      // Stereotype
+      ctx.fillStyle = rtc.hex; ctx.font = "500 14px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
+      ctx.fillText("\u00ABrelationship\u00BB", w / 2, 24);
+
+      // Type
+      ctx.fillStyle = "#e8f4ff"; ctx.font = "bold 18px 'Inter', sans-serif";
+      ctx.fillText(rtc.label, w / 2, 50);
+
+      // Upstream -> Downstream
+      const upName = MODEL.contexts.find(c => c.id === rel.upstream)?.name || rel.upstream;
+      const downName = MODEL.contexts.find(c => c.id === rel.downstream)?.name || rel.downstream;
+      ctx.font = "400 13px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#7a9ab8";
+      ctx.fillText(`${upName}`, w / 2, 76);
+      ctx.fillStyle = "#5a7a8a";
+      ctx.fillText("\u2193 upstream \u2192 downstream \u2193", w / 2, 94);
+      ctx.fillStyle = "#7a9ab8";
+      ctx.fillText(`${downName}`, w / 2, 112);
+
+      return canvas;
+    }
+
+    // ============================================================
+    // Three.js init
+    // ============================================================
+    function initThree() {
+      const W = viewport.clientWidth, H = viewport.clientHeight;
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
+      updateCamera();
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(W, H); renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setClearColor(0x0f1923, 1);
+      viewport.insertBefore(renderer.domElement, viewport.firstChild);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.3);
+      dl.position.set(5, 10, 5); scene.add(dl);
+
+      const grid = new THREE.GridHelper(30, 30, 0x1a2a3a, 0x131c26);
+      grid.position.y = -0.01; scene.add(grid);
+
+      window.addEventListener("resize", () => {
+        const w = viewport.clientWidth, h = viewport.clientHeight;
+        camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+      });
+    }
+
+    function updateCamera() {
+      const { theta, phi, r } = sphereAngle;
+      camera.position.set(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+      camera.lookAt(0, 0, 0);
+    }
+
+    // ============================================================
+    // Layout
+    // ============================================================
+    function clearScene() {
+      Object.values(cardGroups).forEach(g => scene.remove(g));
+      edgeObjects.forEach(e => { scene.remove(e.line); scene.remove(e.arrow); if (e.cardGroup) scene.remove(e.cardGroup); });
+      cardGroups = {}; edgeObjects = [];
+    }
+
+    function getNodesForLevel() {
+      if (currentLevel === "system") {
+        return MODEL.contexts.map(ctx => {
+          const sd = SUBDOMAIN_COLORS[ctx.subdomain];
+          return { id: ctx.id, name: ctx.name, stereotype: "\u00ABbounded context\u00BB", type: ctx.subdomain,
+            color: sd.hex, bg: sd.bg, typeLabel: sd.label, data: ctx, canDrillDown: true,
+            items: ctx.aggregates.map(a => ({ icon: "\u25A0", label: a.name, color: "#ff9f43" })) };
+        });
+      }
+      if (currentLevel === "context" && currentContext) {
+        return currentContext.aggregates.map(agg => ({
+          id: agg.id, name: agg.name, stereotype: "\u00ABaggregate\u00BB", type: "aggregate",
+          color: ELEMENT_COLORS.aggregate.hex, bg: ELEMENT_COLORS.aggregate.bg, typeLabel: `Root: ${agg.root}`,
+          data: agg, canDrillDown: true,
+          items: [
+            ...agg.entities.map(e => ({ icon: "\u25C6", label: e, color: "#54a0ff" })),
+            ...agg.valueObjects.map(v => ({ icon: "\u25CB", label: v, color: "#1dd1a1" })),
+            ...agg.commands.map(c => ({ icon: "\u25B6", label: c, color: "#ff6b6b" })),
+            ...agg.events.map(e => ({ icon: "\u26A1", label: e, color: "#ff9f43" })),
+          ],
+        }));
+      }
+      if (currentLevel === "aggregate" && currentAggregate) {
+        const items = [];
+        currentAggregate.entities.forEach(e => items.push({ id: `e-${e}`, name: e, stereotype: "\u00ABentity\u00BB", type: "entity", color: ELEMENT_COLORS.entity.hex, bg: ELEMENT_COLORS.entity.bg, typeLabel: "Entity", data: { name: e }, canDrillDown: false, items: [] }));
+        currentAggregate.valueObjects.forEach(v => items.push({ id: `vo-${v}`, name: v, stereotype: "\u00ABvalue object\u00BB", type: "value-object", color: ELEMENT_COLORS["value-object"].hex, bg: ELEMENT_COLORS["value-object"].bg, typeLabel: "Value Object", data: { name: v }, canDrillDown: false, items: [] }));
+        currentAggregate.commands.forEach(c => items.push({ id: `cmd-${c}`, name: c, stereotype: "\u00ABcommand\u00BB", type: "command", color: ELEMENT_COLORS.command.hex, bg: ELEMENT_COLORS.command.bg, typeLabel: "Command", data: { name: c }, canDrillDown: false, items: [] }));
+        currentAggregate.events.forEach(e => items.push({ id: `evt-${e}`, name: e, stereotype: "\u00ABdomain event\u00BB", type: "event", color: ELEMENT_COLORS.event.hex, bg: ELEMENT_COLORS.event.bg, typeLabel: "Domain Event", data: { name: e }, canDrillDown: false, items: [] }));
+        return items;
+      }
+      return [];
+    }
+
+    function getEdgesForLevel() {
+      return currentLevel === "system" ? MODEL.contextRelationships : [];
+    }
+
+    // Crossing minimization
+    function countCrossings(order, edges) {
+      const pos = {}; order.forEach((id, i) => pos[id] = i);
+      let c = 0;
+      for (let i = 0; i < edges.length; i++) {
+        for (let j = i + 1; j < edges.length; j++) {
+          const a = pos[edges[i].upstream], b = pos[edges[i].downstream];
+          const x = pos[edges[j].upstream], y = pos[edges[j].downstream];
+          if (a == null || b == null || x == null || y == null) continue;
+          if (a === x || a === y || b === x || b === y) continue;
+          const lo = Math.min(a, b), hi = Math.max(a, b);
+          if ((x > lo && x < hi) !== (y > lo && y < hi)) c++;
+        }
+      }
+      return c;
+    }
+
+    function optimizeOrder(nodeIds, edges) {
+      const n = nodeIds.length;
+      if (n <= 2) return nodeIds;
+      const adj = {}; nodeIds.forEach(id => adj[id] = []);
+      edges.forEach(e => { if (adj[e.upstream] && adj[e.downstream]) { adj[e.upstream].push(e.downstream); adj[e.downstream].push(e.upstream); }});
+      const sorted = [...nodeIds].sort((a, b) => adj[b].length - adj[a].length);
+      const placed = [sorted[0]], remaining = new Set(sorted.slice(1));
+      while (remaining.size > 0) {
+        let bestNode = null, bestScore = -1;
+        for (const id of remaining) { const s = adj[id].filter(n => placed.includes(n)).length; if (s > bestScore) { bestScore = s; bestNode = id; }}
+        let bestPos = placed.length, bestC = Infinity;
+        for (let p = 0; p <= placed.length; p++) { const t = [...placed]; t.splice(p, 0, bestNode); const c = countCrossings(t, edges); if (c < bestC) { bestC = c; bestPos = p; }}
+        placed.splice(bestPos, 0, bestNode); remaining.delete(bestNode);
+      }
+      let bestOrder = placed, bestCross = countCrossings(placed, edges);
+      let improved = true;
+      while (improved) { improved = false; for (let i = 0; i < n; i++) { const j = (i + 1) % n; const t = [...bestOrder]; [t[i], t[j]] = [t[j], t[i]]; const c = countCrossings(t, edges); if (c < bestCross) { bestOrder = t; bestCross = c; improved = true; }}}
+      return bestOrder;
+    }
+
+    function layoutNodes(nodeList) {
+      const n = nodeList.length;
+      if (n === 0) return [];
+      if (n === 1) return [{ ...nodeList[0], pos: new THREE.Vector3(0, 0, 0) }];
+
+      const edges = getEdgesForLevel();
+      const ids = nodeList.map(nd => nd.id);
+      const optimized = optimizeOrder(ids, edges);
+      const byId = {}; nodeList.forEach(nd => byId[nd.id] = nd);
+      const radius = Math.max(n * 1.2 + 1, 5);
+
+      return optimized.map((id, i) => {
+        const node = byId[id];
+        const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+        return { ...node, pos: new THREE.Vector3(radius * Math.cos(angle), 0, radius * Math.sin(angle)) };
+      });
+    }
+
+    // ============================================================
+    // Build 3D cards
+    // ============================================================
+    function createCard3D(node) {
+      const cw = 2.4, ch = 1.5;
+      const canvas = createCardCanvas({
+        w: 440, h: 280, stereotype: node.stereotype, name: node.name, typeLabel: node.typeLabel,
+        color: node.color, bgColor: node.bg, items: node.items, footer: node.canDrillDown ? "double-click to explore \u25B8" : null,
+        isSelected: selectedNode?.id === node.id, isHovered: hoveredNodeId === node.id,
+      });
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cw, ch), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+      const group = new THREE.Group();
+      group.add(mesh);
+      group.position.copy(node.pos);
+      group.lookAt(0, 0, 0); group.rotateY(Math.PI);
+      mesh.rotation.x = -0.12;
+      mesh.position.y = ch / 2 + 0.1;
+      group.userData = { id: node.id, nodeInfo: node, mesh };
+      return group;
+    }
+
+    function updateCard(nodeId) {
+      const g = cardGroups[nodeId]; if (!g) return;
+      const node = g.userData.nodeInfo;
+      const canvas = createCardCanvas({
+        w: 440, h: 280, stereotype: node.stereotype, name: node.name, typeLabel: node.typeLabel,
+        color: node.color, bgColor: node.bg, items: node.items, footer: node.canDrillDown ? "double-click to explore \u25B8" : null,
+        isSelected: selectedNode?.id === node.id, isHovered: hoveredNodeId === node.id,
+      });
+      const mesh = g.userData.mesh;
+      mesh.material.map.dispose();
+      mesh.material.map = new THREE.CanvasTexture(canvas);
+      mesh.material.map.minFilter = THREE.LinearFilter;
+      mesh.material.needsUpdate = true;
+    }
+
+    // ============================================================
+    // Build edges with relationship cards
+    // ============================================================
+    function createEdge(rel) {
+      const fromG = cardGroups[rel.upstream], toG = cardGroups[rel.downstream];
+      if (!fromG || !toG) return;
+      const fromPos = fromG.position, toPos = toG.position;
+      const dir = toPos.clone().sub(fromPos).normalize();
+      const start = fromPos.clone().add(dir.clone().multiplyScalar(1.5));
+      const end = toPos.clone().sub(dir.clone().multiplyScalar(1.5));
+      start.y = 0.2; end.y = 0.2;
+
+      const rtc = REL_TYPE_COLORS[rel.type] || { hex: "#e8a0ff" };
+      const color = new THREE.Color(rtc.hex);
+
+      // Line
+      const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 }));
+      scene.add(line);
+
+      // Arrow
+      const arrowDir = end.clone().sub(start).normalize();
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 8), new THREE.MeshBasicMaterial({ color }));
+      cone.position.copy(end).sub(arrowDir.clone().multiplyScalar(0.15));
+      cone.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), arrowDir));
+      scene.add(cone);
+
+      // Edge card — small relationship card at midpoint
+      const mid = start.clone().add(end).multiplyScalar(0.5);
+      mid.y = 0.4;
+      const ecCanvas = createEdgeCardCanvas(rel);
+      const ecTex = new THREE.CanvasTexture(ecCanvas);
+      ecTex.minFilter = THREE.LinearFilter;
+      const ecMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.57), new THREE.MeshBasicMaterial({ map: ecTex, transparent: true, side: THREE.DoubleSide }));
+      const ecGroup = new THREE.Group();
+      ecGroup.add(ecMesh);
+      ecGroup.position.copy(mid);
+      // Face the card toward center but stay upright
+      ecGroup.lookAt(camera.position);
+      ecMesh.position.y = 0.35;
+      ecGroup.userData = { id: rel.id, isEdgeCard: true, rel };
+      scene.add(ecGroup);
+
+      edgeObjects.push({ line, arrow: cone, cardGroup: ecGroup, rel });
+    }
+
+    // ============================================================
+    // Build scene
+    // ============================================================
+    function buildScene() {
+      clearScene();
+      const nodes = layoutNodes(getNodesForLevel());
+      const edges = getEdgesForLevel();
+      targetAngle.r = Math.max(10, nodes.length * 2.2 + 4);
+
+      nodes.forEach(n => { const g = createCard3D(n); scene.add(g); cardGroups[n.id] = g; });
+      edges.forEach(rel => createEdge(rel));
+
+      updateBreadcrumb(); updateLevelIndicator(); updateNavHint();
+    }
+
+    // ============================================================
+    // Detail panel
+    // ============================================================
+    function showDetail(nodeInfo) {
+      selectedNode = nodeInfo;
+      const data = nodeInfo.data || nodeInfo;
+      let html = `<div class="detail-type" style="color:${nodeInfo.color}">${nodeInfo.stereotype || ""}</div>`;
+      html += `<div class="detail-name">${nodeInfo.name}</div>`;
+
+      if (data.domainVision) html += `<div class="detail-desc">${data.domainVision}</div>`;
+      if (data.responsibilities) {
+        html += `<div class="detail-section"><div class="detail-section-title">Responsibilities</div><div class="detail-desc">${data.responsibilities}</div></div>`;
+      }
+      if (data.ownedBy) {
+        html += `<div class="detail-prop"><span class="detail-prop-key">Owned by</span><span class="detail-prop-val">${data.ownedBy}</span></div>`;
+      }
+      if (data.invariants?.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Invarianten</div><div class="tag-list">`;
+        data.invariants.forEach(inv => { html += `<span class="tag tag-red">${inv}</span>`; });
+        html += `</div></div>`;
+      }
+      if (data.aggregates?.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Aggregates</div><div class="tag-list">`;
+        data.aggregates.forEach(a => { html += `<span class="tag tag-orange">${a.name}</span>`; });
+        html += `</div></div>`;
+      }
+      if (data.entities?.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Entities</div><div class="tag-list">`;
+        data.entities.forEach(e => { html += `<span class="tag tag-blue">${e}</span>`; });
+        html += `</div></div>`;
+      }
+      if (data.valueObjects?.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Value Objects</div><div class="tag-list">`;
+        data.valueObjects.forEach(v => { html += `<span class="tag tag-green">${v}</span>`; });
+        html += `</div></div>`;
+      }
+      if (data.commands?.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Commands</div><div class="tag-list">`;
+        data.commands.forEach(c => { html += `<span class="tag tag-red">${c}</span>`; });
+        html += `</div></div>`;
+      }
+      if (data.events?.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Domain Events</div><div class="tag-list">`;
+        data.events.forEach(e => { html += `<span class="tag tag-orange">${e}</span>`; });
+        html += `</div></div>`;
+      }
+      // Service / tech layer
+      if (data.service) {
+        html += `<div class="detail-section"><div class="detail-section-title">Technischer Layer</div>`;
+        html += `<div class="detail-prop"><span class="detail-prop-key">Service</span><span class="detail-prop-val">${data.service.name}</span></div>`;
+        if (data.service.apis?.length) html += `<div class="detail-prop"><span class="detail-prop-key">APIs</span><span class="detail-prop-val">${data.service.apis.join(", ")}</span></div>`;
+        if (data.service.consumesApis?.length) html += `<div class="detail-prop"><span class="detail-prop-key">Consumes</span><span class="detail-prop-val">${data.service.consumesApis.join(", ")}</span></div>`;
+        if (data.service.databases?.length) html += `<div class="detail-prop"><span class="detail-prop-key">Database</span><span class="detail-prop-val">${data.service.databases.join(", ")}</span></div>`;
+        if (data.service.since) html += `<div class="detail-prop"><span class="detail-prop-key">Since</span><span class="detail-prop-val">${data.service.since}</span></div>`;
+        html += `</div>`;
+      }
+      // Context-level: show relationships
+      if (currentLevel === "system" && data.id) {
+        const rels = MODEL.contextRelationships.filter(r => r.upstream === data.id || r.downstream === data.id);
+        if (rels.length) {
+          html += `<div class="detail-section"><div class="detail-section-title">Context Relationships</div>`;
+          rels.forEach(r => {
+            const rtc = REL_TYPE_COLORS[r.type] || { hex: "#e8a0ff", label: r.type };
+            const isUp = r.upstream === data.id;
+            const other = MODEL.contexts.find(c => c.id === (isUp ? r.downstream : r.upstream));
+            html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="rel-badge" style="color:${rtc.hex};background:${rtc.hex}18;border:1px solid ${rtc.hex}40">${rtc.label}</span><span class="rel-arrow">${isUp ? "\u2192 downstream" : "\u2190 upstream"}</span><span class="rel-target">${other?.name}</span></div>`;
+          });
+          html += `</div>`;
+        }
+      }
+      // ADRs on system level
+      if (currentLevel === "system" && MODEL.adrs.length) {
+        html += `<div class="detail-section"><div class="detail-section-title">Architecture Decisions</div>`;
+        MODEL.adrs.forEach((adr, i) => {
+          html += `<a class="detail-link" data-adr="${i}">\u25B8 ${adr.id}: ${adr.name}</a><br>`;
+        });
+        html += `</div>`;
+      }
+      // Drill-down
+      if (nodeInfo.canDrillDown) {
+        html += `<div style="margin-top:16px;padding-top:16px;border-top:1px solid #1e2d3d"><a class="detail-link" id="drill-link">\u25B8 Reinzoomen in ${nodeInfo.name}</a></div>`;
+      }
+      detailEl.innerHTML = html;
+
+      // Bind ADR dialogs
+      detailEl.querySelectorAll("[data-adr]").forEach(el => {
+        el.addEventListener("click", () => {
+          const adr = MODEL.adrs[parseInt(el.dataset.adr)];
+          if (adr) openDialog(adr);
+        });
+      });
+      const dl = document.getElementById("drill-link");
+      if (dl) dl.addEventListener("click", () => drillDown(nodeInfo));
+      Object.keys(cardGroups).forEach(updateCard);
+    }
+
+    function showEdgeDetail(rel) {
+      const rtc = REL_TYPE_COLORS[rel.type] || { hex: "#e8a0ff", label: rel.type };
+      const up = MODEL.contexts.find(c => c.id === rel.upstream);
+      const down = MODEL.contexts.find(c => c.id === rel.downstream);
+      selectedNode = { id: rel.id };
+      let html = `<div class="detail-type" style="color:${rtc.hex}">\u00ABcontext relationship\u00BB</div>`;
+      html += `<div class="detail-name">${rtc.label}</div>`;
+      if (rel.description) html += `<div class="detail-desc">${rel.description}</div>`;
+      html += `<div class="detail-prop"><span class="detail-prop-key">Upstream</span><span class="detail-prop-val">${up?.name || rel.upstream}</span></div>`;
+      html += `<div class="detail-prop"><span class="detail-prop-key">Downstream</span><span class="detail-prop-val">${down?.name || rel.downstream}</span></div>`;
+      html += `<div style="margin-top:12px; font-size:12px; color:#5a7a8a; line-height:1.6">`;
+      html += `<strong style="color:#7a9ab8">Upstream</strong> gibt das Modell/Protokoll vor.<br>`;
+      html += `<strong style="color:#7a9ab8">Downstream</strong> konsumiert es.`;
+      html += `</div>`;
+      detailEl.innerHTML = html;
+    }
+
+    function clearDetail() {
+      selectedNode = null;
+      detailEl.innerHTML = `<div class="detail-empty">Klicke auf eine Karte<br>um Details zu sehen</div>`;
+      Object.keys(cardGroups).forEach(updateCard);
+    }
+
+    function openDialog(adr) {
+      document.getElementById("dialog-title-text").textContent = `${adr.id}: ${adr.name}`;
+      let html = `<div class="adr-field"><div class="adr-label">Status</div><span class="tag tag-green">${adr.status}</span></div>`;
+      html += `<div class="adr-field"><div class="adr-label">Kontext</div><p>${adr.context}</p></div>`;
+      html += `<div class="adr-field"><div class="adr-label">Entscheidung</div><p>${adr.decision}</p></div>`;
+      html += `<div class="adr-field"><div class="adr-label">Konsequenzen</div><p>${adr.consequences}</p></div>`;
+      document.getElementById("dialog-body").innerHTML = html;
+      dialogOverlay.classList.add("open");
+    }
+    document.getElementById("dialog-close").addEventListener("click", () => dialogOverlay.classList.remove("open"));
+    dialogOverlay.addEventListener("click", e => { if (e.target === dialogOverlay) dialogOverlay.classList.remove("open"); });
+
+    // ============================================================
+    // Navigation
+    // ============================================================
+    function drillDown(nodeInfo) {
+      if (!nodeInfo.canDrillDown) return;
+      if (currentLevel === "system") { currentContext = nodeInfo.data; currentLevel = "context"; }
+      else if (currentLevel === "context") { currentAggregate = nodeInfo.data; currentLevel = "aggregate"; }
+      selectedNode = null; clearDetail(); buildScene();
+    }
+
+    function navigateTo(level) {
+      if (level === "system") { currentLevel = "system"; currentContext = null; currentAggregate = null; }
+      else if (level === "context") { currentLevel = "context"; currentAggregate = null; }
+      selectedNode = null; clearDetail(); buildScene();
+    }
+
+    function updateBreadcrumb() {
+      let html = `<span class="crumb ${currentLevel === 'system' ? 'active' : ''}" data-nav="system">${MODEL.architecture.name}</span>`;
+      if (currentContext) html += `<span class="crumb-sep">\u203A</span><span class="crumb ${currentLevel === 'context' ? 'active' : ''}" data-nav="context">${currentContext.name}</span>`;
+      if (currentAggregate) html += `<span class="crumb-sep">\u203A</span><span class="crumb ${currentLevel === 'aggregate' ? 'active' : ''}" data-nav="aggregate">${currentAggregate.name}</span>`;
+      breadcrumbEl.innerHTML = html;
+      breadcrumbEl.querySelectorAll(".crumb:not(.active)").forEach(el => el.addEventListener("click", () => navigateTo(el.dataset.nav)));
+    }
+
+    function updateLevelIndicator() {
+      const l = { system: "Bounded Contexts \u00B7 Context Map", context: "Aggregates", aggregate: "Entities \u00B7 Value Objects \u00B7 Commands \u00B7 Events" };
+      levelIndicator.textContent = l[currentLevel] || "";
+    }
+
+    function updateNavHint() {
+      navHint.innerHTML = "drag to rotate \u00B7 scroll to zoom \u00B7 click to select" + (currentLevel !== "aggregate" ? " \u00B7 double-click to drill down" : "");
+    }
+
+    // ============================================================
+    // Interaction
+    // ============================================================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isDragging = false, prevMouse = { x: 0, y: 0 }, lastClickTime = 0, lastClickId = null;
+
+    function getHit(e) {
+      const rect = viewport.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      // Check node cards
+      const nodeMeshes = Object.values(cardGroups).map(g => g.userData.mesh);
+      let hits = raycaster.intersectObjects(nodeMeshes);
+      if (hits.length > 0) {
+        for (const [, g] of Object.entries(cardGroups)) { if (g.userData.mesh === hits[0].object) return { type: "node", group: g }; }
+      }
+      // Check edge cards
+      const edgeMeshes = edgeObjects.filter(e => e.cardGroup).map(e => e.cardGroup.children[0]);
+      hits = raycaster.intersectObjects(edgeMeshes);
+      if (hits.length > 0) {
+        for (const eo of edgeObjects) { if (eo.cardGroup && eo.cardGroup.children[0] === hits[0].object) return { type: "edge", rel: eo.rel }; }
+      }
+      return null;
+    }
+
+    viewport.addEventListener("mousemove", e => {
+      const hit = getHit(e);
+      const newHover = hit?.type === "node" ? hit.group.userData.id : null;
+      if (newHover !== hoveredNodeId) { const old = hoveredNodeId; hoveredNodeId = newHover; if (old) updateCard(old); if (newHover) updateCard(newHover); }
+      viewport.style.cursor = hit ? "pointer" : "grab";
+    });
+
+    viewport.addEventListener("mousedown", e => {
+      isDragging = false; prevMouse = { x: e.clientX, y: e.clientY };
+      function onMove(e) {
+        const dx = e.clientX - prevMouse.x, dy = e.clientY - prevMouse.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging = true;
+        sphereAngle.theta -= dx * 0.008;
+        sphereAngle.phi = Math.max(0.3, Math.min(Math.PI - 0.3, sphereAngle.phi + dy * 0.008));
+        targetAngle.theta = sphereAngle.theta; targetAngle.phi = sphereAngle.phi;
+        updateCamera(); prevMouse = { x: e.clientX, y: e.clientY };
+      }
+      function onUp(e) {
+        viewport.removeEventListener("mousemove", onMove);
+        viewport.removeEventListener("mouseup", onUp);
+        if (!isDragging) {
+          const hit = getHit(e);
+          if (hit?.type === "node") {
+            const ni = hit.group.userData.nodeInfo;
+            const now = Date.now();
+            if (lastClickId === ni.id && (now - lastClickTime) < 400) { drillDown(ni); lastClickId = null; return; }
+            lastClickTime = now; lastClickId = ni.id;
+            showDetail(ni);
+          } else if (hit?.type === "edge") {
+            showEdgeDetail(hit.rel); lastClickId = null;
+          } else { clearDetail(); lastClickId = null; }
+        }
+        isDragging = false;
+      }
+      viewport.addEventListener("mousemove", onMove);
+      viewport.addEventListener("mouseup", onUp);
+    });
+
+    viewport.addEventListener("wheel", e => { targetAngle.r = Math.max(6, Math.min(40, targetAngle.r + e.deltaY * 0.02)); });
+
+    // ============================================================
+    // Animation
+    // ============================================================
+    function animate() {
+      requestAnimationFrame(animate);
+      sphereAngle.r += (targetAngle.r - sphereAngle.r) * 0.08;
+      updateCamera();
+      // Edge cards face camera
+      edgeObjects.forEach(eo => { if (eo.cardGroup) eo.cardGroup.lookAt(camera.position); });
+      renderer.render(scene, camera);
+    }
+
+    // ============================================================
+    // Boot
+    // ============================================================
+    initThree();
+    buildScene();
+    animate();
+  </script>
+</body>
+</html>
