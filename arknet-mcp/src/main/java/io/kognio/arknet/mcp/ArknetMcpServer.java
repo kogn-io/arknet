@@ -65,6 +65,19 @@ public class ArknetMcpServer {
                             .addTextContent("Predefined queries: " + String.join(", ", queries))
                             .build();
                 })
+                .toolCall(generateTool(), (exchange, request) -> {
+                    String filePath = (String) request.arguments().get("filePath");
+                    String outputDir = (String) request.arguments().getOrDefault("outputDir", "docs");
+                    String format = (String) request.arguments().getOrDefault("format", "html");
+                    try {
+                        String result = engine.generate(filePath, outputDir, format);
+                        return CallToolResult.builder().addTextContent(result).build();
+                    } catch (Exception e) {
+                        return CallToolResult.builder()
+                                .addTextContent("Error generating documentation: " + e.getMessage())
+                                .isError(true).build();
+                    }
+                })
                 .build();
     }
 
@@ -123,6 +136,27 @@ public class ArknetMcpServer {
                         "object",
                         Map.of(),
                         List.of(),
+                        null, null, null))
+                .build();
+    }
+
+    private static Tool generateTool() {
+        return Tool.builder()
+                .name("arknet_generate")
+                .description("Generate documentation (Context Map as HTML or PDF) from a DDD architecture model.")
+                .inputSchema(new JsonSchema(
+                        "object",
+                        Map.of(
+                                "filePath", Map.of(
+                                        "type", "string",
+                                        "description", "Absolute path to the Turtle model file (.ttl)"),
+                                "outputDir", Map.of(
+                                        "type", "string",
+                                        "description", "Output directory (default: docs)"),
+                                "format", Map.of(
+                                        "type", "string",
+                                        "description", "Output format: html or pdf (default: html)")),
+                        List.of("filePath"),
                         null, null, null))
                 .build();
     }
