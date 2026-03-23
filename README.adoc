@@ -1,10 +1,10 @@
-= arknet – Architecture Knowledge Net
+= arknet -- Architecture Knowledge Net
 :toc:
 :toc-title: Inhalt
 
 DDD-Architekturmodelle, die Maschinen verstehen.
 
-W3C-Standards (RDF/OWL) statt proprietaerer DSL – validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).
+W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).
 
 == Quickstart
 
@@ -28,7 +28,7 @@ java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examp
 | RDF4J Triple Store, SPARQL-Execution, SHACL-Validierung
 
 | `arknet-projection`
-| Mustache-Templates + AsciidoctorJ Pipeline (Turtle → AsciiDoc → HTML/PDF)
+| Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF)
 
 | `arknet-cli`
 | PicoCLI-Einstiegspunkt: `validate`, `generate`
@@ -68,16 +68,16 @@ Modularer Aufbau unter dem Namespace `https://w3id.org/arknet/`:
 Pipes & Filters:
 
 ----
-Turtle (.ttl) → Parse → Validate (SHACL) → Triple Store (RDF4J) → SPARQL → Mustache → AsciiDoc → HTML/PDF
+Turtle (.ttl) -> Parse -> Validate (SHACL) -> Triple Store (RDF4J) -> SPARQL -> Mustache -> AsciiDoc -> HTML/PDF
 ----
 
 == Herkunft
 
 Konsolidiert aus drei Projekten:
 
-- *doc42* – Walking Skeleton (Java/RDF4J Pipeline)
-- *dddprocess* – DDD Process Ontology (Zustandsmaschinen, Gap Analysis)
-- *ddd-forge* – Claude Plugin (DSGVO-Ontologie, AI-Skills)
+- *doc42* -- Walking Skeleton (Java/RDF4J Pipeline)
+- *dddprocess* -- DDD Process Ontology (Zustandsmaschinen, Gap Analysis)
+- *ddd-forge* -- Claude Plugin (DSGVO-Ontologie, AI-Skills)
 
 == Lizenz
 
