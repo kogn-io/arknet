@@ -14,7 +14,7 @@ import java.util.*;
 
 public class ContextMapProjection {
 
-    private static final String NS = "https://doc42.ddd-forge.dev/ontology#";
+    private static final String NS = "https://w3id.org/arknet/core#";
 
     private final SparqlExecutor sparql = new SparqlExecutor();
     private final Mustache template;
@@ -40,7 +40,7 @@ public class ContextMapProjection {
     }
 
     private String queryArchitectureName(Repository repo) {
-        String query = "PREFIX doc42: <%s>\nSELECT ?name WHERE { ?arch a doc42:Architecture ; doc42:name ?name . } LIMIT 1".formatted(NS);
+        String query = "PREFIX arknet: <%s>\nSELECT ?name WHERE { ?arch a arknet:Architecture ; arknet:name ?name . } LIMIT 1".formatted(NS);
         var results = sparql.select(repo, query);
         return results.isEmpty() ? "Architecture" : str(results.getFirst(), "name");
     }

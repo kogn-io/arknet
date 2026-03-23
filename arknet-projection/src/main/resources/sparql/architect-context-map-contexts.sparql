@@ -1,13 +1,13 @@
-PREFIX doc42: <https://doc42.ddd-forge.dev/ontology#>
+PREFIX arknet: <https://w3id.org/arknet/core#>
 
 SELECT ?contextName ?domainVision ?subdomainType ?ownedBy ?responsibilities
 WHERE {
-  ?ctx a doc42:BoundedContext ;
-       doc42:name ?contextName ;
-       doc42:domainVision ?domainVision .
+  ?ctx a arknet:BoundedContext ;
+       arknet:name ?contextName ;
+       arknet:domainVision ?domainVision .
 
-  OPTIONAL { ?ctx doc42:subdomain ?subdomainType . }
-  OPTIONAL { ?ctx doc42:ownedBy ?ownedBy . }
-  OPTIONAL { ?ctx doc42:responsibilities ?responsibilities . }
+  OPTIONAL { ?ctx arknet:subdomain ?subdomainType . }
+  OPTIONAL { ?ctx arknet:ownedBy ?ownedBy . }
+  OPTIONAL { ?ctx arknet:responsibilities ?responsibilities . }
 }
 ORDER BY ?subdomainType ?contextName
