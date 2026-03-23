@@ -4,10 +4,31 @@ DDD-Architekturmodelle, die Maschinen verstehen.
 
 W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).
 
-## Quickstart
+## Claude Code Plugin
 
 ```bash
+# Build
 mvn clean package -q
+
+# Als Plugin verwenden
+claude --plugin-dir /path/to/arknet
+
+# Skill: Architektur-Analyse eines bestehenden Projekts
+/arknet:analyze
+```
+
+### MCP-Tools
+
+| Tool | Beschreibung |
+|------|-------------|
+| `arknet_load` | Turtle-Modell in Triple Store laden |
+| `arknet_validate` | SHACL-Validierung (Violations + Warnings) |
+| `arknet_query` | SPARQL-Query ausfuehren (frei oder vordefiniert Q01-Q20) |
+| `arknet_list_queries` | Vordefinierte Queries auflisten |
+
+## CLI
+
+```bash
 java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar validate examples/order-domain.ttl
 java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examples/order-domain.ttl --output docs
 ```
@@ -19,6 +40,7 @@ java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examp
 | `arknet-ontology` | OWL-Ontologie und SHACL-Shapes (nur .ttl Ressourcen, kein Java) |
 | `arknet-core` | RDF4J Triple Store, SPARQL-Execution, SHACL-Validierung |
 | `arknet-projection` | Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF) |
+| `arknet-mcp` | MCP-Server (stdio) -- macht die Engine fuer AI-Agenten querybar |
 | `arknet-cli` | PicoCLI-Einstiegspunkt: `validate`, `generate` |
 
 ## Ontologie
