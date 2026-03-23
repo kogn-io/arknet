@@ -26,6 +26,21 @@ claude --plugin-dir /path/to/arknet
 | `arknet_query` | SPARQL-Query ausfuehren (frei oder vordefiniert Q01-Q20) |
 | `arknet_list_queries` | Vordefinierte Queries auflisten |
 
+### Speichermodell
+
+Der Triple Store (RDF4J) laeuft **in-memory** und lebt nur solange die Claude-Session aktiv ist. Persistent ist nur die Turtle-Datei:
+
+```
+projekt/
+  architecture-model.ttl    <-- generiert von /arknet:analyze, versionierbar mit Git
+```
+
+**Erste Analyse:** `/arknet:analyze` analysiert den Code und schreibt `architecture-model.ttl`.
+
+**Naechste Session:** `arknet_load architecture-model.ttl` laedt das bestehende Modell. Kein Neuanalysieren noetig -- nur Weiterarbeiten (Queries, Gap Analysis, Doku).
+
+**Modell aktualisieren:** `/arknet:analyze` erneut ausfuehren oder `.ttl` manuell editieren, dann `arknet_validate`.
+
 ## CLI
 
 ```bash
