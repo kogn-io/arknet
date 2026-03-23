@@ -27,6 +27,7 @@ claude --plugin-dir /path/to/arknet
 | `arknet_validate` | SHACL-Validierung (Violations + Warnings) |
 | `arknet_query` | SPARQL-Query ausfuehren (frei oder vordefiniert Q01-Q20) |
 | `arknet_list_queries` | Vordefinierte Queries auflisten |
+| `arknet_generate` | Context-Map als HTML/PDF generieren |
 
 ### Speichermodell
 
