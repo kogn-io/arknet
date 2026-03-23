@@ -1,0 +1,18 @@
+# Build
+target/
+bin/
+
+# IDE
+.classpath
+.project
+.settings/
+*.iml
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Maven
+dependency-reduced-pom.xml
