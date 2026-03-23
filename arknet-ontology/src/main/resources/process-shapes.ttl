@@ -1,0 +1,189 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  Process SHACL Shapes  ·  Version 0.1.0
+#
+#  Validates process-specific concepts.
+#  Core DDD shapes (BoundedContext, Aggregate) are in arknet-shapes.ttl.
+#
+#  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
+##############################################################################
+
+@prefix sh:      <http://www.w3.org/ns/shacl#> .
+@prefix arkproc: <https://w3id.org/arknet/process#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix pshapes: <https://w3id.org/arknet/shapes/process#> .
+
+
+##############################################################################
+#  PROCESS SHAPES
+##############################################################################
+
+pshapes:ProcessShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:Process ;
+    sh:property pshapes:Process-processId ;
+    sh:property pshapes:Process-processName ;
+    sh:property pshapes:Process-belongsTo ;
+    sh:property pshapes:Process-hasOutcome ;
+    sh:property pshapes:Process-hasPrecondition ;
+    sh:property pshapes:Process-firstStep .
+
+pshapes:Process-processId
+    a sh:PropertyShape ;
+    sh:path     arkproc:processId ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 1 ;
+    sh:pattern  "^[a-z][a-z0-9]*\\.[a-z][a-zA-Z0-9]*$" ;
+    sh:message  "processId muss vorhanden sein und dem Format 'context.ProcessName' entsprechen."@de ;
+    sh:severity sh:Violation .
+
+pshapes:Process-processName
+    a sh:PropertyShape ;
+    sh:path     arkproc:processName ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 3 ;
+    sh:message  "Jeder Prozess braucht einen Namen (mind. 3 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+pshapes:Process-belongsTo
+    a sh:PropertyShape ;
+    sh:path     arkproc:belongsTo ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:class    arknet:BoundedContext ;
+    sh:message  "Jeder Prozess muss einem Bounded Context zugeordnet sein."@de ;
+    sh:severity sh:Violation .
+
+pshapes:Process-hasOutcome
+    a sh:PropertyShape ;
+    sh:path     arkproc:hasOutcome ;
+    sh:minCount 1 ;
+    sh:class    arkproc:Outcome ;
+    sh:message  "Jeder Prozess braucht mindestens ein Outcome."@de ;
+    sh:severity sh:Violation .
+
+pshapes:Process-hasPrecondition
+    a sh:PropertyShape ;
+    sh:path     arkproc:hasPrecondition ;
+    sh:minCount 1 ;
+    sh:message  "Best Practice: Definiere mindestens eine Vorbedingung."@de ;
+    sh:severity sh:Warning .
+
+pshapes:Process-firstStep
+    a sh:PropertyShape ;
+    sh:path     arkproc:firstStep ;
+    sh:maxCount 1 ;
+    sh:class    arkproc:Step ;
+    sh:message  "Wenn Schritte vorhanden sind, sollte firstStep gesetzt sein."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  STATE TRANSITION SHAPES
+##############################################################################
+
+pshapes:StateTransitionShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:StateTransition ;
+    sh:property pshapes:StateTransition-fromState ;
+    sh:property pshapes:StateTransition-toState .
+
+pshapes:StateTransition-fromState
+    a sh:PropertyShape ;
+    sh:path     arkproc:fromState ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:class    arkproc:State ;
+    sh:message  "StateTransition braucht genau einen fromState."@de ;
+    sh:severity sh:Violation .
+
+pshapes:StateTransition-toState
+    a sh:PropertyShape ;
+    sh:path     arkproc:toState ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:class    arkproc:State ;
+    sh:message  "StateTransition braucht genau einen toState."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  STEP SHAPES
+##############################################################################
+
+pshapes:StepShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:Step ;
+    sh:property pshapes:Step-stepName ;
+    sh:property pshapes:Step-stepOrder ;
+    sh:property pshapes:Step-performedBy .
+
+pshapes:Step-stepName
+    a sh:PropertyShape ;
+    sh:path     arkproc:stepName ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Prozessschritt braucht einen Namen."@de ;
+    sh:severity sh:Violation .
+
+pshapes:Step-stepOrder
+    a sh:PropertyShape ;
+    sh:path     arkproc:stepOrder ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 1 ;
+    sh:message  "Prozessschritt braucht eine Reihenfolge (stepOrder >= 1)."@de ;
+    sh:severity sh:Violation .
+
+pshapes:Step-performedBy
+    a sh:PropertyShape ;
+    sh:path     arkproc:performedBy ;
+    sh:minCount 1 ;
+    sh:class    arkproc:Actor ;
+    sh:message  "Best Practice: Definiere wer/was diesen Schritt ausfuehrt."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  BUSINESS RULE SHAPES
+##############################################################################
+
+pshapes:BusinessRuleShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:BusinessRule ;
+    sh:property pshapes:BusinessRule-ruleDescription .
+
+pshapes:BusinessRule-ruleDescription
+    a sh:PropertyShape ;
+    sh:path     arkproc:ruleDescription ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "Jede Geschaeftsregel braucht eine Beschreibung."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  OUTCOME SHAPES
+##############################################################################
+
+pshapes:OutcomeShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:Outcome ;
+    sh:property pshapes:Outcome-outcomeDescription .
+
+pshapes:Outcome-outcomeDescription
+    a sh:PropertyShape ;
+    sh:path     arkproc:outcomeDescription ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Outcome braucht eine Beschreibung."@de ;
+    sh:severity sh:Violation .
+
+# END OF PROCESS SHAPES

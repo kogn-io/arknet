@@ -1,0 +1,358 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  Process Ontology  ·  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/process#
+#  License    : Apache 2.0
+#
+#  Migrated from: dddpo.ttl (dddprocess.org)
+#
+#  Scope: Business processes, state machines, actors, business rules,
+#         outcomes. Imports arknet-core for DDD base concepts.
+##############################################################################
+
+@prefix arkproc: <https://w3id.org/arknet/process#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/process>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
+    dcterms:title    "arknet Process Ontology"@en ;
+    dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Akteure, Geschaeftsregeln und Outcomes fuer DDD."@de ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-03-23"^^xsd:date ;
+    dcterms:license  <https://www.apache.org/licenses/LICENSE-2.0> ;
+    vann:preferredNamespacePrefix "arkproc" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
+    owl:versionInfo  "0.1.0" .
+
+
+##############################################################################
+#  1. ACTORS
+##############################################################################
+
+arkproc:Actor a owl:Class ;
+    rdfs:label "Actor"@en , "Akteur"@de ;
+    rdfs:comment "Person oder System, das an einem Prozess beteiligt ist."@de .
+
+arkproc:HumanActor a owl:Class ;
+    rdfs:subClassOf arkproc:Actor ;
+    rdfs:label "Human Actor"@en , "Menschlicher Akteur"@de ;
+    skos:example "Kunde, Sachbearbeiter, Administrator" .
+
+arkproc:SystemActor a owl:Class ;
+    rdfs:subClassOf arkproc:Actor ;
+    rdfs:label "System Actor"@en , "Systemakteur"@de ;
+    skos:example "PaymentService, InventoryService, EmailService" .
+
+arkproc:actorName a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Actor ;
+    rdfs:range  xsd:string .
+
+arkproc:actorRole a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Actor ;
+    rdfs:range  xsd:string ;
+    rdfs:comment "Fachliche Rolle im Bounded Context."@de .
+
+
+##############################################################################
+#  2. STATES & STATE TRANSITIONS
+##############################################################################
+
+arkproc:State a owl:Class ;
+    rdfs:label "State"@en , "Zustand"@de ;
+    rdfs:comment "Ein diskreter Zustand eines Aggregates."@de .
+
+arkproc:stateName a owl:DatatypeProperty ;
+    rdfs:domain arkproc:State ;
+    rdfs:range  xsd:string .
+
+arkproc:stateOf a owl:ObjectProperty ;
+    rdfs:domain arkproc:State ;
+    rdfs:range  arknet:Aggregate .
+
+arkproc:initialState a owl:ObjectProperty ;
+    rdfs:domain arknet:Aggregate ;
+    rdfs:range  arkproc:State ;
+    rdfs:label  "initial state"@en .
+
+arkproc:terminalState a owl:ObjectProperty ;
+    rdfs:domain arknet:Aggregate ;
+    rdfs:range  arkproc:State ;
+    rdfs:label  "terminal state"@en .
+
+arkproc:StateTransition a owl:Class ;
+    rdfs:label "State Transition"@en , "Zustandsuebergang"@de .
+
+arkproc:fromState a owl:ObjectProperty ;
+    rdfs:domain arkproc:StateTransition ;
+    rdfs:range  arkproc:State ;
+    a owl:FunctionalProperty .
+
+arkproc:toState a owl:ObjectProperty ;
+    rdfs:domain arkproc:StateTransition ;
+    rdfs:range  arkproc:State ;
+    a owl:FunctionalProperty .
+
+arkproc:transitionGuard a owl:DatatypeProperty ;
+    rdfs:domain arkproc:StateTransition ;
+    rdfs:range  xsd:string ;
+    rdfs:comment "Bedingung als Ausdruck, z.B. 'payment.authorized == true'."@de .
+
+
+##############################################################################
+#  3. BUSINESS RULES
+##############################################################################
+
+arkproc:BusinessRule a owl:Class ;
+    rdfs:label "Business Rule"@en , "Geschaeftsregel"@de .
+
+arkproc:Precondition a owl:Class ;
+    rdfs:subClassOf arkproc:BusinessRule ;
+    rdfs:label "Precondition"@en , "Vorbedingung"@de ;
+    rdfs:comment "Muss erfuellt sein BEVOR der Prozess startet."@de .
+
+arkproc:Postcondition a owl:Class ;
+    rdfs:subClassOf arkproc:BusinessRule ;
+    rdfs:label "Postcondition"@en , "Nachbedingung"@de ;
+    rdfs:comment "Muss gelten NACHDEM der Prozess erfolgreich war."@de .
+
+arkproc:ruleId a owl:DatatypeProperty ;
+    rdfs:domain arkproc:BusinessRule ;
+    rdfs:range  xsd:string .
+
+arkproc:ruleDescription a owl:DatatypeProperty ;
+    rdfs:domain arkproc:BusinessRule ;
+    rdfs:range  xsd:string .
+
+arkproc:ruleExpression a owl:DatatypeProperty ;
+    rdfs:domain arkproc:BusinessRule ;
+    rdfs:range  xsd:string ;
+    rdfs:comment "Formaler Ausdruck, z.B. OCL, SpEL oder natural language."@de .
+
+arkproc:ruleExpressionLanguage a owl:DatatypeProperty ;
+    rdfs:domain arkproc:BusinessRule ;
+    rdfs:range  xsd:string ;
+    rdfs:comment "z.B. 'OCL', 'SpEL', 'natural', 'pseudocode'."@de .
+
+
+##############################################################################
+#  4. OUTCOMES
+##############################################################################
+
+arkproc:Outcome a owl:Class ;
+    rdfs:label "Outcome"@en , "Ergebnis"@de .
+
+arkproc:SuccessOutcome a owl:Class ;
+    rdfs:subClassOf arkproc:Outcome ;
+    rdfs:label "Success Outcome"@en , "Erfolgsergebnis"@de .
+
+arkproc:FailureOutcome a owl:Class ;
+    rdfs:subClassOf arkproc:Outcome ;
+    rdfs:label "Failure Outcome"@en , "Fehlerergebnis"@de .
+
+arkproc:outcomeCondition a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Outcome ;
+    rdfs:range  xsd:string ;
+    rdfs:comment "Bedingung unter der dieses Outcome eintritt."@de .
+
+arkproc:outcomeDescription a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Outcome ;
+    rdfs:range  xsd:string .
+
+arkproc:outcomeTriggers a owl:ObjectProperty ;
+    rdfs:domain arkproc:Outcome ;
+    rdfs:range  arknet:DomainEvent ;
+    rdfs:comment "Dieses Outcome loest ein Event aus."@de .
+
+arkproc:outcomeCauses a owl:ObjectProperty ;
+    rdfs:domain arkproc:Outcome ;
+    rdfs:range  arkproc:StateTransition .
+
+arkproc:errorCode a owl:DatatypeProperty ;
+    rdfs:domain arkproc:FailureOutcome ;
+    rdfs:range  xsd:string .
+
+
+##############################################################################
+#  5. STEPS
+##############################################################################
+
+arkproc:Step a owl:Class ;
+    rdfs:label "Step"@en , "Prozessschritt"@de .
+
+arkproc:stepId a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  xsd:string .
+
+arkproc:stepName a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  xsd:string .
+
+arkproc:stepOrder a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  xsd:integer ;
+    a owl:FunctionalProperty .
+
+arkproc:performedBy a owl:ObjectProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  arkproc:Actor .
+
+arkproc:nextStep a owl:ObjectProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  arkproc:Step .
+
+arkproc:conditionalNextStep a owl:ObjectProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  arkproc:Step ;
+    rdfs:comment "Alternativer naechster Schritt bei Bedingung."@de .
+
+arkproc:stepCondition a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Step ;
+    rdfs:range  xsd:string .
+
+
+##############################################################################
+#  6. PROCESS (Central Class)
+##############################################################################
+
+arkproc:Process a owl:Class ;
+    rdfs:label "Process"@en , "Prozess"@de ;
+    rdfs:comment "Zentrales Konzept. Beschreibt einen fachlichen Ablauf von einem Trigger bis zu einem oder mehreren Outcomes."@de .
+
+# ── Identification ─────────────────────────────────────────────────────────
+
+arkproc:processId a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  xsd:string ;
+    a owl:FunctionalProperty ;
+    rdfs:label "process ID"@en .
+
+arkproc:processName a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  xsd:string .
+
+arkproc:processDescription a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  xsd:string .
+
+arkproc:processVersion a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  xsd:string .
+
+# ── Context ────────────────────────────────────────────────────────────────
+
+arkproc:belongsTo a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arknet:BoundedContext .
+
+# ── Triggers ───────────────────────────────────────────────────────────────
+
+arkproc:triggeredBy a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arknet:Command .
+
+arkproc:triggeredByEvent a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arknet:DomainEvent ;
+    rdfs:comment "Prozess wird durch ein Event aus einem anderen Context gestartet."@de .
+
+# ── Actors ─────────────────────────────────────────────────────────────────
+
+arkproc:initiatedBy a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Actor .
+
+# ── Rules ──────────────────────────────────────────────────────────────────
+
+arkproc:hasPrecondition a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Precondition .
+
+arkproc:hasPostcondition a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Postcondition .
+
+# ── Steps ──────────────────────────────────────────────────────────────────
+
+arkproc:hasStep a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Step .
+
+arkproc:firstStep a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Step ;
+    a owl:FunctionalProperty .
+
+# ── Outcomes ───────────────────────────────────────────────────────────────
+
+arkproc:hasOutcome a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Outcome .
+
+# ── Side Effects ───────────────────────────────────────────────────────────
+
+arkproc:produces a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arknet:DomainEvent .
+
+arkproc:causes a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:StateTransition .
+
+# ── Process Relationships ──────────────────────────────────────────────────
+
+arkproc:subProcessOf a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Process .
+
+arkproc:compensatedBy a owl:ObjectProperty ;
+    rdfs:domain arkproc:Process ;
+    rdfs:range  arkproc:Process ;
+    rdfs:comment "Saga-Kompensationsprozess fuer Rollback."@de .
+
+
+##############################################################################
+#  7. OWL RESTRICTIONS
+##############################################################################
+
+# Every Process has at least one Outcome
+arkproc:Process rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty arkproc:hasOutcome ;
+    owl:minCardinality 1
+] .
+
+# Every Process has exactly one ID
+arkproc:Process rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty arkproc:processId ;
+    owl:cardinality 1
+] .
+
+# StateTransitions have exactly one from and to State
+arkproc:StateTransition rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty arkproc:fromState ;
+    owl:cardinality 1
+] .
+
+arkproc:StateTransition rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty arkproc:toState ;
+    owl:cardinality 1
+] .
+
+# END OF PROCESS ONTOLOGY

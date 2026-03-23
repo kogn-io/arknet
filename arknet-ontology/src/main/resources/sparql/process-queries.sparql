@@ -1,0 +1,292 @@
+# ═══════════════════════════════════════════════════════════
+#  SPARQL QUERY LIBRARY – arknet Process Ontology
+#  For analysis, gap detection, and reverse engineering
+# ═══════════════════════════════════════════════════════════
+
+PREFIX arknet:  <https://w3id.org/arknet/core#>
+PREFIX arkproc: <https://w3id.org/arknet/process#>
+PREFIX rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs:    <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd:     <http://www.w3.org/2001/XMLSchema#>
+
+
+# ───────────────────────────────────────────────────────────
+#  ANALYSIS QUERIES
+# ───────────────────────────────────────────────────────────
+
+## Q01: All processes with context and trigger
+SELECT ?processId ?processName ?context ?trigger WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processId   ?processId ;
+             arkproc:processName ?processName ;
+             arkproc:belongsTo   ?ctx .
+    ?ctx arknet:name ?context .
+    OPTIONAL {
+        ?process arkproc:triggeredBy ?cmd .
+        ?cmd arknet:name ?trigger .
+    }
+}
+ORDER BY ?context ?processName
+
+
+## Q02: State machine per aggregate
+SELECT ?aggregate ?fromState ?guard ?toState ?process WHERE {
+    ?trans  a arkproc:StateTransition ;
+            arkproc:fromState ?from ;
+            arkproc:toState   ?to .
+    ?from   arkproc:stateName  ?fromState ;
+            arkproc:stateOf    ?agg .
+    ?to     arkproc:stateName  ?toState .
+    ?agg    arknet:name ?aggregate .
+    ?proc   arkproc:causes ?trans ;
+            arkproc:processName ?process .
+    OPTIONAL { ?trans arkproc:transitionGuard ?guard . }
+}
+ORDER BY ?aggregate ?fromState
+
+
+## Q03: Event flow between contexts (Context Map)
+SELECT ?eventName ?sourceProcess ?sourceContext ?targetContext WHERE {
+    ?event   a arknet:DomainEvent ;
+             arknet:name ?eventName ;
+             arknet:publishedTo ?targetCtx .
+    ?proc    arkproc:produces    ?event ;
+             arkproc:processName ?sourceProcess ;
+             arkproc:belongsTo   ?sourceCtx .
+    ?sourceCtx arknet:name ?sourceContext .
+    ?targetCtx arknet:name ?targetContext .
+}
+ORDER BY ?sourceContext ?eventName
+
+
+## Q04: All inputs and outputs per process
+SELECT ?processId ?inputName ?outputName WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processId ?processId .
+    OPTIONAL {
+        ?process arkproc:hasInput ?input .
+        ?input arknet:name ?inputName .
+    }
+    OPTIONAL {
+        ?process arkproc:hasOutput ?output .
+        ?output arknet:name ?outputName .
+    }
+}
+ORDER BY ?processId
+
+
+## Q05: All preconditions with expressions
+SELECT ?processName ?ruleId ?description ?expression ?language WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processName ?processName ;
+             arkproc:hasPrecondition ?rule .
+    ?rule arkproc:ruleDescription ?description .
+    OPTIONAL { ?rule arkproc:ruleId ?ruleId . }
+    OPTIONAL { ?rule arkproc:ruleExpression ?expression . }
+    OPTIONAL { ?rule arkproc:ruleExpressionLanguage ?language . }
+}
+ORDER BY ?processName
+
+
+## Q06: Complete process steps in order
+SELECT ?processName ?order ?stepName ?actor WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processName ?processName ;
+             arkproc:hasStep ?step .
+    ?step arkproc:stepName  ?stepName ;
+          arkproc:stepOrder ?order .
+    OPTIONAL {
+        ?step arkproc:performedBy ?a .
+        ?a arkproc:actorName ?actor .
+    }
+}
+ORDER BY ?processName ?order
+
+
+## Q07: Failure outcomes with error codes
+SELECT ?processName ?errorCode ?condition ?description WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processName ?processName ;
+             arkproc:hasOutcome ?outcome .
+    ?outcome a arkproc:FailureOutcome ;
+             arkproc:outcomeDescription ?description .
+    OPTIONAL { ?outcome arkproc:errorCode ?errorCode . }
+    OPTIONAL { ?outcome arkproc:outcomeCondition ?condition . }
+}
+ORDER BY ?processName
+
+
+## Q08: Aggregate with all fields and invariants
+SELECT ?aggregateName ?rootName ?invariant ?invariantExpr WHERE {
+    ?agg  a arknet:Aggregate ;
+          arknet:name ?aggregateName ;
+          arknet:aggregateRoot ?root .
+    ?root arknet:name ?rootName .
+    OPTIONAL {
+        ?agg arknet:hasInvariant ?inv .
+        ?inv arknet:invariantExpression ?invariantExpr .
+        OPTIONAL { ?inv arknet:name ?invariant . }
+    }
+}
+ORDER BY ?aggregateName
+
+
+# ───────────────────────────────────────────────────────────
+#  GAP ANALYSIS QUERIES
+# ───────────────────────────────────────────────────────────
+
+## Q09: Processes without failure outcome
+SELECT ?processId ?processName WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processId   ?processId ;
+             arkproc:processName ?processName .
+    FILTER NOT EXISTS {
+        ?process arkproc:hasOutcome ?o .
+        ?o a arkproc:FailureOutcome .
+    }
+}
+
+
+## Q10: Domain events without consumers
+SELECT ?eventName WHERE {
+    ?event a arknet:DomainEvent ;
+           arknet:name ?eventName ;
+           arknet:publishedTo ?ctx .
+    FILTER NOT EXISTS {
+        ?proc arkproc:triggeredByEvent ?event .
+    }
+}
+
+
+## Q11: Processes without steps (skeleton processes)
+SELECT ?processId ?processName WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processId   ?processId ;
+             arkproc:processName ?processName .
+    FILTER NOT EXISTS {
+        ?process arkproc:hasStep ?step .
+    }
+}
+
+
+## Q12: Commands consumed by no process
+SELECT ?commandName WHERE {
+    ?cmd a arknet:Command ;
+         arknet:name ?commandName .
+    FILTER NOT EXISTS {
+        ?process arkproc:triggeredBy ?cmd .
+    }
+}
+
+
+## Q13: Aggregates without state machine
+SELECT ?aggregateName WHERE {
+    ?agg a arknet:Aggregate ;
+         arknet:name ?aggregateName .
+    FILTER NOT EXISTS {
+        ?state arkproc:stateOf ?agg .
+    }
+}
+
+
+## Q14: Processes without preconditions
+SELECT ?processId ?processName WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processId   ?processId ;
+             arkproc:processName ?processName .
+    FILTER NOT EXISTS {
+        ?process arkproc:hasPrecondition ?pre .
+    }
+}
+
+
+## Q15: Completeness score per process
+SELECT ?processName
+    (IF(BOUND(?trigger),    1, 0) AS ?hasTrigger)
+    (IF(BOUND(?pre),        1, 0) AS ?hasPrecondition)
+    (IF(BOUND(?step),       1, 0) AS ?hasSteps)
+    (IF(BOUND(?success),    1, 0) AS ?hasSuccessOutcome)
+    (IF(BOUND(?failure),    1, 0) AS ?hasFailureOutcome)
+    (IF(BOUND(?event),      1, 0) AS ?producesEvent)
+    (IF(BOUND(?post),       1, 0) AS ?hasPostcondition)
+WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processName ?processName .
+    OPTIONAL { ?process arkproc:triggeredBy     ?trigger  . }
+    OPTIONAL { ?process arkproc:hasPrecondition ?pre      . }
+    OPTIONAL { ?process arkproc:hasStep         ?step     . }
+    OPTIONAL {
+        ?process arkproc:hasOutcome ?success .
+        ?success a arkproc:SuccessOutcome .
+    }
+    OPTIONAL {
+        ?process arkproc:hasOutcome ?failure .
+        ?failure a arkproc:FailureOutcome .
+    }
+    OPTIONAL { ?process arkproc:produces        ?event    . }
+    OPTIONAL { ?process arkproc:hasPostcondition ?post     . }
+}
+ORDER BY ?processName
+
+
+# ───────────────────────────────────────────────────────────
+#  REVERSE ENGINEERING QUERIES
+# ───────────────────────────────────────────────────────────
+
+## Q16: All processes touching a specific aggregate
+SELECT ?processName ?role WHERE {
+    {
+        ?process arkproc:hasInput ?obj .
+        BIND("input" AS ?role)
+    } UNION {
+        ?process arkproc:hasOutput ?obj .
+        BIND("output" AS ?role)
+    }
+    ?obj arknet:name "Order" .
+    ?process arkproc:processName ?processName .
+}
+ORDER BY ?processName
+
+
+## Q17: Reachable states from start state
+SELECT ?reachableState WHERE {
+    {
+        ?trans arkproc:fromState ?start ;
+               arkproc:toState   ?end .
+        ?start arkproc:stateName "Cart(active)" .
+        ?end   arkproc:stateName ?reachableState .
+    } UNION {
+        ?t1 arkproc:fromState ?s0 ; arkproc:toState ?s1 .
+        ?t2 arkproc:fromState ?s1 ; arkproc:toState ?s2 .
+        ?s0 arkproc:stateName "Cart(active)" .
+        ?s2 arkproc:stateName ?reachableState .
+    }
+}
+
+
+## Q18: Saga compensation chains
+SELECT ?processName ?compensatesFor WHERE {
+    ?process a arkproc:Process ;
+             arkproc:processName ?processName ;
+             arkproc:compensatedBy ?comp .
+    ?comp arkproc:processName ?compensatesFor .
+}
+
+
+## Q19: Ubiquitous language glossary
+SELECT ?context ?term WHERE {
+    ?ctx a arknet:BoundedContext ;
+         arknet:name ?context ;
+         arknet:ubiquitousLanguageTerm ?term .
+}
+ORDER BY ?context ?term
+
+
+## Q20: Context dependency graph
+SELECT ?upstream ?downstream WHERE {
+    ?rel a arknet:ContextRelationship ;
+         arknet:upstream ?upCtx ;
+         arknet:downstream ?downCtx .
+    ?upCtx   arknet:name ?upstream .
+    ?downCtx arknet:name ?downstream .
+}
