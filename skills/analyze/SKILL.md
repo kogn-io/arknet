@@ -1,8 +1,5 @@
 ---
-name: analyze
-description: Analyze an existing codebase and generate a DDD architecture model (Turtle), validate it, run gap analysis, and generate documentation.
-trigger: /arknet:analyze, 'analysiere die Architektur', 'erstelle Architekturmodell', 'DDD Analyse', 'architecture analysis'
-tools: Read, Glob, Grep, Agent, arknet_load, arknet_validate, arknet_query, arknet_list_queries
+description: "Architektur-Analyse eines bestehenden Projekts. Trigger: /arknet:analyze, 'analysiere die Architektur', 'erstelle Architekturmodell', 'DDD Analyse', 'architecture analysis'."
 ---
 
 # /arknet:analyze -- Architecture Analysis & Documentation
