@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.kognio.arknet</groupId>
+    <artifactId>arknet-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>arknet - Architecture Knowledge Net</name>
+    <description>DDD-Architekturmodelle, die Maschinen verstehen.</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <rdf4j.version>5.2.2</rdf4j.version>
+        <picocli.version>4.7.7</picocli.version>
+        <asciidoctorj.version>3.0.0</asciidoctorj.version>
+        <asciidoctorj-diagram.version>3.1.0</asciidoctorj-diagram.version>
+        <mustache.version>0.9.14</mustache.version>
+        <slf4j.version>2.0.16</slf4j.version>
+    </properties>
+
+    <modules>
+        <module>arknet-ontology</module>
+        <module>arknet-core</module>
+        <module>arknet-projection</module>
+        <module>arknet-cli</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.eclipse.rdf4j</groupId>
+                <artifactId>rdf4j-bom</artifactId>
+                <version>${rdf4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

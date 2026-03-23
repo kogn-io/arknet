@@ -1,0 +1,13 @@
+PREFIX doc42: <https://doc42.ddd-forge.dev/ontology#>
+
+SELECT ?upstreamName ?downstreamName ?relType
+WHERE {
+  ?rel a doc42:ContextRelationship ;
+       doc42:upstream ?up ;
+       doc42:downstream ?down ;
+       doc42:relationshipType ?relType .
+
+  ?up doc42:name ?upstreamName .
+  ?down doc42:name ?downstreamName .
+}
+ORDER BY ?upstreamName ?downstreamName

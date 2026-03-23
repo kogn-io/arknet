@@ -1,0 +1,13 @@
+PREFIX doc42: <https://doc42.ddd-forge.dev/ontology#>
+
+SELECT ?contextName ?domainVision ?subdomainType ?ownedBy ?responsibilities
+WHERE {
+  ?ctx a doc42:BoundedContext ;
+       doc42:name ?contextName ;
+       doc42:domainVision ?domainVision .
+
+  OPTIONAL { ?ctx doc42:subdomain ?subdomainType . }
+  OPTIONAL { ?ctx doc42:ownedBy ?ownedBy . }
+  OPTIONAL { ?ctx doc42:responsibilities ?responsibilities . }
+}
+ORDER BY ?subdomainType ?contextName

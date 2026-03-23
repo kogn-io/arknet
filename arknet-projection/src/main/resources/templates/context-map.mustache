@@ -1,0 +1,51 @@
+= Context Map: {{architectureName}}
+:toc: left
+:icons: font
+
+[plantuml,context-map,svg]
+----
+@startuml
+skinparam rectangle {
+  BackgroundColor<<core>> #FF6B6B
+  BackgroundColor<<supporting>> #F9CA24
+  BackgroundColor<<generic>> #DFE6E9
+  FontColor<<core>> White
+  FontColor<<supporting>> #333333
+  FontColor<<generic>> #333333
+  StereotypeFontColor<<core>> White
+  StereotypeFontColor<<supporting>> #333333
+  StereotypeFontColor<<generic>> #333333
+}
+
+title Context Map: {{architectureName}}
+
+{{#contexts}}
+rectangle "{{name}}" <<{{stereotype}}>> as {{alias}}
+{{/contexts}}
+
+{{#relationships}}
+{{upstreamAlias}} --> {{downstreamAlias}} : {{relTypeLabel}}
+{{/relationships}}
+@enduml
+----
+
+== Bounded Contexts
+
+{{#contexts}}
+=== {{name}}
+
+*Domain Vision:* {{domainVision}}
+
+*Subdomain:* {{subdomainLabel}}
+{{#ownedBy}}
+
+*Team:* {{ownedBy}}
+{{/ownedBy}}
+{{#responsibilities}}
+
+*Responsibilities:* {{responsibilities}}
+{{/responsibilities}}
+
+'''
+
+{{/contexts}}
