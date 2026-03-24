@@ -1,0 +1,8 @@
+PREFIX arknet: <https://w3id.org/arknet/core#>
+
+SELECT ?ctxUri ?term
+WHERE {
+  ?ctxUri a arknet:BoundedContext ;
+          arknet:ubiquitousLanguageTerm ?term .
+}
+ORDER BY ?ctxUri ?term

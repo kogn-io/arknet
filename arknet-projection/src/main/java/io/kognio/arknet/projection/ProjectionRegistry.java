@@ -11,6 +11,8 @@ public class ProjectionRegistry {
     public ProjectionRegistry() {
         register(new ContextMapProjectionAdapter());
         register(new ExplorerProjection());
+        register(new GlossaryProjection());
+        register(new BoundedContextCanvasProjection());
     }
 
     public void register(Projection projection) {
