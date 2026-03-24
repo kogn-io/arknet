@@ -1,8 +1,8 @@
 package io.kognio.arknet.cli;
 
 import io.kognio.arknet.core.ModelLoader;
-import io.kognio.arknet.projection.AsciiDocConverter;
-import io.kognio.arknet.projection.ContextMapProjection;
+import io.kognio.arknet.projection.Projection;
+import io.kognio.arknet.projection.ProjectionRegistry;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -15,6 +15,9 @@ public class GenerateCommand implements Callable<Integer> {
     @Option(names = "--input", required = true, description = "Path to the Turtle model file (.ttl)")
     private Path modelFile;
 
+    @Option(names = "--projection", required = true, description = "Projection name (e.g. context-map, glossary, bounded-context-canvas, explorer)")
+    private String projectionName;
+
     @Option(names = "--format", defaultValue = "html", description = "Output format: html or pdf")
     private String format;
 
@@ -24,18 +27,21 @@ public class GenerateCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
+            var registry = new ProjectionRegistry();
+            Projection projection = registry.get(projectionName);
+            if (projection == null) {
+                System.err.printf("Unknown projection: %s%n", projectionName);
+                System.err.printf("Available: %s%n", String.join(", ", registry.available()));
+                return 1;
+            }
+
             var loader = new ModelLoader();
             var repo = loader.loadModel(modelFile);
 
-            var projection = new ContextMapProjection();
-            String adocContent = projection.generate(repo);
-
-            var converter = new AsciiDocConverter();
-            converter.convert(adocContent, outputDir, "context-map", format);
-
+            projection.generate(repo, outputDir, format);
             repo.shutDown();
 
-            System.out.printf("Generated context-map.%s in %s%n", format, outputDir);
+            System.out.printf("Generated %s in %s%n", projectionName, outputDir);
             return 0;
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());

@@ -1,0 +1,12 @@
+PREFIX arknet: <https://w3id.org/arknet/core#>
+
+SELECT ?ctxUri ?ctxName ?domainVision ?subdomainType ?ownedBy ?responsibilities
+WHERE {
+  ?ctxUri a arknet:BoundedContext ;
+          arknet:name ?ctxName ;
+          arknet:domainVision ?domainVision .
+  OPTIONAL { ?ctxUri arknet:subdomain ?subdomainType . }
+  OPTIONAL { ?ctxUri arknet:ownedBy ?ownedBy . }
+  OPTIONAL { ?ctxUri arknet:responsibilities ?responsibilities . }
+}
+ORDER BY ?ctxName
