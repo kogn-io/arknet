@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.kognio.arknet</groupId>
+        <groupId>de.hauschel.arknet</groupId>
         <artifactId>arknet-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
@@ -15,7 +15,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.kognio.arknet</groupId>
+            <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-ontology</artifactId>
             <version>${project.version}</version>
         </dependency>
