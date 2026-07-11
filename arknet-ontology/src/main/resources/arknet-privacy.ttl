@@ -1,0 +1,234 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  Privacy / GDPR Ontology  ·  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/privacy#
+#  License    : Proprietary. All rights reserved.
+#
+#  Migrated from: ddd-forge.ttl (ddd-forge.org), TEIL 4 "DSGVO / Privacy by
+#                 Design". Re-licensed by the sole author into arknet.
+#
+#  Scope: GDPR data categories, legal bases (Art. 6), processing purposes,
+#         data subject rights (Chapter III), technical measures (Art. 32),
+#         Data Protection Impact Assessment (Art. 35). Aligned with the W3C
+#         Data Privacy Vocabulary (DPV) via rdfs:seeAlso. Imports arknet-core.
+##############################################################################
+
+@prefix arkpriv: <https://w3id.org/arknet/privacy#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+@prefix dpv:     <https://w3id.org/dpv#> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/privacy>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
+    dcterms:title    "arknet Privacy Ontology"@en ;
+    dcterms:description "DSGVO / Privacy-by-Design als OWL: Datenkategorien, Rechtsgrundlagen, Verarbeitungszwecke, Betroffenenrechte, technische Massnahmen und Datenschutz-Folgenabschaetzung."@de ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-07-11"^^xsd:date ;
+    dcterms:rights   "Proprietary. All rights reserved." ;
+    dcterms:source   "ddd-forge.ttl (ddd-forge.org), TEIL 4" ;
+    vann:preferredNamespacePrefix "arkpriv" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/privacy#" ;
+    rdfs:seeAlso     <https://w3id.org/dpv> ;
+    owl:versionInfo  "0.1.0" .
+
+
+##############################################################################
+#  1. DATA CATEGORIES  (Art. 4, Art. 9)
+##############################################################################
+
+arkpriv:DataCategory a owl:Class ;
+    rdfs:label   "Data Category"@en , "Datenkategorie"@de ;
+    rdfs:comment "Klassifikation nach DSGVO. Sollte fuer jede Entity definiert werden."@de ;
+    rdfs:seeAlso dpv:PersonalData .
+
+arkpriv:PersonalData a arkpriv:DataCategory ;
+    rdfs:label   "Personal Data"@en , "Personenbezogene Daten"@de ;
+    rdfs:comment "Art. 4 Nr. 1 DSGVO."@de .
+
+arkpriv:SensitivePersonalData a arkpriv:DataCategory ;
+    rdfs:label   "Sensitive Personal Data"@en , "Besondere Kategorien"@de ;
+    rdfs:comment "Art. 9 DSGVO: Gesundheit, Biometrie, Religion, etc."@de .
+
+arkpriv:PseudonymizedData a arkpriv:DataCategory ;
+    rdfs:label   "Pseudonymized Data"@en , "Pseudonymisierte Daten"@de ;
+    rdfs:comment "Art. 4 Nr. 5 DSGVO."@de .
+
+arkpriv:AnonymizedData a arkpriv:DataCategory ;
+    rdfs:label   "Anonymized Data"@en , "Anonymisierte Daten"@de ;
+    rdfs:comment "DSGVO gilt nicht."@de .
+
+arkpriv:NonPersonalData a arkpriv:DataCategory ;
+    rdfs:label   "Non-Personal Data"@en , "Nicht-personenbezogene Daten"@de .
+
+
+##############################################################################
+#  2. LEGAL BASES  (Art. 6)
+##############################################################################
+
+arkpriv:LegalBasis a owl:Class ;
+    rdfs:label   "Legal Basis"@en , "Rechtsgrundlage"@de ;
+    rdfs:seeAlso dpv:LegalBasis .
+
+arkpriv:Consent a arkpriv:LegalBasis ;
+    rdfs:label "Consent"@en , "Einwilligung"@de ;
+    rdfs:comment "Art. 6(1)(a)."@de .
+
+arkpriv:ContractPerformance a arkpriv:LegalBasis ;
+    rdfs:label "Contract Performance"@en , "Vertragserfuellung"@de ;
+    rdfs:comment "Art. 6(1)(b)."@de .
+
+arkpriv:LegalObligation a arkpriv:LegalBasis ;
+    rdfs:label "Legal Obligation"@en , "Rechtliche Verpflichtung"@de ;
+    rdfs:comment "Art. 6(1)(c)."@de .
+
+arkpriv:VitalInterest a arkpriv:LegalBasis ;
+    rdfs:label "Vital Interest"@en , "Lebenswichtiges Interesse"@de ;
+    rdfs:comment "Art. 6(1)(d)."@de .
+
+arkpriv:PublicInterest a arkpriv:LegalBasis ;
+    rdfs:label "Public Interest"@en , "Oeffentliches Interesse"@de ;
+    rdfs:comment "Art. 6(1)(e)."@de .
+
+arkpriv:LegitimateInterest a arkpriv:LegalBasis ;
+    rdfs:label "Legitimate Interest"@en , "Berechtigtes Interesse"@de ;
+    rdfs:comment "Art. 6(1)(f)."@de .
+
+
+##############################################################################
+#  3. PROCESSING PURPOSE  (Art. 5(1)(b))
+##############################################################################
+
+arkpriv:ProcessingPurpose a owl:Class ;
+    rdfs:label   "Processing Purpose"@en , "Verarbeitungszweck"@de ;
+    rdfs:comment "Art. 5(1)(b): Zweckbindung."@de .
+
+
+##############################################################################
+#  4. DATA SUBJECT RIGHTS  (Chapter III, Art. 15-21)
+##############################################################################
+
+arkpriv:DataSubjectRight a owl:Class ;
+    rdfs:label "Data Subject Right"@en , "Betroffenenrecht"@de .
+
+arkpriv:RightOfAccess a arkpriv:DataSubjectRight ;
+    rdfs:label "Right of Access"@en ;
+    rdfs:comment "Art. 15."@de .
+
+arkpriv:RightToRectification a arkpriv:DataSubjectRight ;
+    rdfs:label "Right to Rectification"@en ;
+    rdfs:comment "Art. 16."@de .
+
+arkpriv:RightToErasure a arkpriv:DataSubjectRight ;
+    rdfs:label "Right to Erasure"@en ;
+    rdfs:comment "Art. 17."@de ;
+    skos:altLabel "Right to be Forgotten"@en .
+
+arkpriv:RightToRestriction a arkpriv:DataSubjectRight ;
+    rdfs:label "Right to Restriction"@en ;
+    rdfs:comment "Art. 18."@de .
+
+arkpriv:RightToDataPortability a arkpriv:DataSubjectRight ;
+    rdfs:label "Right to Data Portability"@en ;
+    rdfs:comment "Art. 20."@de .
+
+arkpriv:RightToObject a arkpriv:DataSubjectRight ;
+    rdfs:label "Right to Object"@en ;
+    rdfs:comment "Art. 21."@de .
+
+
+##############################################################################
+#  5. TECHNICAL MEASURES  (Art. 32, Art. 5(1)(c))
+##############################################################################
+
+arkpriv:TechnicalMeasure a owl:Class ;
+    rdfs:label "Technical Measure"@en , "Technische Massnahme"@de .
+
+arkpriv:Encryption a arkpriv:TechnicalMeasure ;
+    rdfs:label "Encryption"@en .
+
+arkpriv:Pseudonymization a arkpriv:TechnicalMeasure ;
+    rdfs:label "Pseudonymization"@en .
+
+arkpriv:AccessControl a arkpriv:TechnicalMeasure ;
+    rdfs:label "Access Control"@en .
+
+arkpriv:AuditLogging a arkpriv:TechnicalMeasure ;
+    rdfs:label "Audit Logging"@en .
+
+arkpriv:DataMinimization a arkpriv:TechnicalMeasure ;
+    rdfs:label "Data Minimization"@en ;
+    rdfs:comment "Art. 5(1)(c)."@de .
+
+
+##############################################################################
+#  6. PRIVACY PROPERTIES
+##############################################################################
+
+arkpriv:hasDataCategory a owl:ObjectProperty ;
+    rdfs:label "has data category"@en ;
+    rdfs:range arkpriv:DataCategory .
+
+arkpriv:hasLegalBasis a owl:ObjectProperty ;
+    rdfs:label "has legal basis"@en ;
+    rdfs:range arkpriv:LegalBasis .
+
+arkpriv:hasProcessingPurpose a owl:ObjectProperty ;
+    rdfs:label "has processing purpose"@en ;
+    rdfs:range arkpriv:ProcessingPurpose .
+
+arkpriv:hasRetentionPeriod a owl:DatatypeProperty ;
+    rdfs:label "has retention period"@en ;
+    rdfs:range xsd:duration ;
+    rdfs:comment "Art. 5(1)(e): Speicherbegrenzung."@de .
+
+arkpriv:requiresTechnicalMeasure a owl:ObjectProperty ;
+    rdfs:label "requires technical measure"@en ;
+    rdfs:range arkpriv:TechnicalMeasure .
+
+arkpriv:supportsDataSubjectRight a owl:ObjectProperty ;
+    rdfs:label "supports data subject right"@en ;
+    rdfs:range arkpriv:DataSubjectRight .
+
+arkpriv:dataController a owl:DatatypeProperty ;
+    rdfs:label "data controller"@en , "Verantwortlicher"@de ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Art. 4 Nr. 7."@de .
+
+arkpriv:dataProcessor a owl:DatatypeProperty ;
+    rdfs:label "data processor"@en , "Auftragsverarbeiter"@de ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Art. 4 Nr. 8."@de .
+
+
+##############################################################################
+#  7. DATA PROTECTION IMPACT ASSESSMENT  (Art. 35)
+##############################################################################
+
+arkpriv:PrivacyImpactAssessment a owl:Class ;
+    rdfs:label   "Privacy Impact Assessment"@en , "Datenschutz-Folgenabschaetzung"@de ;
+    rdfs:comment "Art. 35 DSGVO."@de .
+
+arkpriv:assessesBoundedContext a owl:ObjectProperty ;
+    rdfs:label  "assesses bounded context"@en ;
+    rdfs:domain arkpriv:PrivacyImpactAssessment ;
+    rdfs:range  arknet:BoundedContext .
+
+arkpriv:riskLevel a owl:DatatypeProperty ;
+    rdfs:label  "risk level"@en ;
+    rdfs:domain arkpriv:PrivacyImpactAssessment ;
+    rdfs:range  xsd:string .
+
+# END OF PRIVACY ONTOLOGY

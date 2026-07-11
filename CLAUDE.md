@@ -4,7 +4,7 @@
 
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
-- Produktvision: `doc42-origin/research/produktvision.adoc`
+- Produktvision: `docs/produktvision.adoc`
 
 ## Architektur
 
@@ -57,10 +57,13 @@
 
 ## Herkunft
 
-Konsolidiert aus drei Projekten (Originale in `doc42-origin/`):
+Konsolidiert aus drei Projekten. Die Originale lagen als Archiv unter
+`doc42-origin/`; dieses wurde nach abgeschlossener doc42-/dddprocess-Migration
+entfernt und ist bei Bedarf ueber die Git-Historie wiederherstellbar
+(Import-Commit `139bb86 chore: import doc42 project as doc42-origin archive`).
 
-| Projekt | Wird zu | Beitrag |
-|---------|---------|---------|
-| doc42 | arknet-core/cli/projection | Pipeline, Walking Skeleton |
-| dddprocess | arknet-ontology (process-Modul) | Prozesse, State Machines, Gap Analysis |
-| ddd-forge | arknet-ontology (privacy-Modul, spaeter) | DSGVO-Ontologie |
+| Projekt | Wird zu | Beitrag | Status |
+|---------|---------|---------|--------|
+| doc42 | arknet-core/cli/projection | Pipeline, Walking Skeleton | fertig |
+| dddprocess | arknet-ontology (core + process) | Prozesse, State Machines, DDD-Bausteine | portiert (22/24 Klassen; abstrakte `DomainObject`/`Message` bewusst weggelassen) |
+| ddd-forge | arknet-ontology (privacy-Modul) | DSGVO-Ontologie | portiert (`arknet-privacy.ttl` + `privacy-shapes.ttl` aus ddd-forge.ttl re-lizenziert; DPV-aligned. Noch NICHT in `ModelLoader` verdrahtet -- wie `arknet-process.ttl` derzeit inaktiv) |
