@@ -154,4 +154,42 @@ shapes:ContextRelationship-relationshipType
     sh:message  "ContextRelationship muss einen gueltigen 'arknet:relationshipType' haben."@de ;
     sh:severity sh:Violation .
 
+
+# ── AnalysisRun ──────────────────────────────────────────────────────────
+
+shapes:AnalysisRunShape
+    a sh:NodeShape ;
+    sh:targetClass arknet:AnalysisRun ;
+    sh:property shapes:AnalysisRun-analyzedAt ;
+    sh:property shapes:AnalysisRun-pluginVersion ;
+    sh:property shapes:AnalysisRun-strategy .
+
+shapes:AnalysisRun-analyzedAt
+    a sh:PropertyShape ;
+    sh:path     arknet:analyzedAt ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:dateTime ;
+    sh:message  "AnalysisRun muss genau ein 'arknet:analyzedAt' haben (xsd:dateTime)."@de ;
+    sh:severity sh:Violation .
+
+shapes:AnalysisRun-pluginVersion
+    a sh:PropertyShape ;
+    sh:path     arknet:pluginVersion ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "AnalysisRun muss genau eine 'arknet:pluginVersion' haben."@de ;
+    sh:severity sh:Violation .
+
+shapes:AnalysisRun-strategy
+    a sh:PropertyShape ;
+    sh:path     arknet:strategy ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:in       ( "jdt" "text-search" ) ;
+    sh:message  "AnalysisRun muss eine 'arknet:strategy' haben (jdt oder text-search)."@de ;
+    sh:severity sh:Violation .
+
 # END OF SHAPES

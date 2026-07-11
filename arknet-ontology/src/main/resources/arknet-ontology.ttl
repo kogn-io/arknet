@@ -433,4 +433,69 @@ arknet:qualityAttribute
     rdfs:label   "quality attribute"@en ;
     rdfs:comment "Qualitaetsattribut (z.B. availability:99.9, latency:<50ms)."@de .
 
+
+##############################################################################
+#  ANALYSIS PROVENANCE
+##############################################################################
+
+arknet:AnalysisRun
+    a owl:Class ;
+    rdfs:label   "Analysis Run"@en , "Analyse-Lauf"@de ;
+    rdfs:comment "Metadaten eines automatischen Analyse-Laufs durch den arknet Skill."@de .
+
+arknet:analyzedAt
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:dateTime ;
+    rdfs:label   "analyzed at"@en ;
+    rdfs:comment "Zeitpunkt des Analyse-Laufs (ISO 8601)."@de .
+
+arknet:pluginVersion
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "plugin version"@en ;
+    rdfs:comment "Version des arknet-Plugins, das die Analyse durchgefuehrt hat."@de .
+
+arknet:gitCommit
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "git commit"@en ;
+    rdfs:comment "Short-Hash des Git-Commits zum Zeitpunkt der Analyse."@de .
+
+arknet:gitBranch
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "git branch"@en ;
+    rdfs:comment "Git-Branch zum Zeitpunkt der Analyse."@de .
+
+arknet:projectPath
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "project path"@en ;
+    rdfs:comment "Absoluter Pfad des analysierten Projekts."@de .
+
+arknet:strategy
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "analysis strategy"@en ;
+    rdfs:comment "Verwendete Analyse-Strategie: jdt oder text-search."@de .
+
+arknet:discoveredTypes
+    a owl:DatatypeProperty ;
+    rdfs:domain  arknet:AnalysisRun ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "discovered types"@en ;
+    rdfs:comment "Komma-separierte Liste der Konzepttypen, die in diesem Lauf gesucht wurden."@de .
+
+arknet:source
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "source"@en ;
+    rdfs:comment "Herkunft eines Triples. 'analyze' = maschinell generiert (darf aktualisiert werden). Kein source = manuell (geschuetzt)."@de .
+
 # END OF CORE ONTOLOGY

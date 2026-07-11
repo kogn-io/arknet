@@ -135,22 +135,55 @@ Use this when JDT is not available, or for non-Java projects.
 
 ### Phase 2: Model Creation
 
-9. **Generate Turtle model**
-   - Write a `.ttl` file using arknet ontology namespaces:
-     ```turtle
-     @prefix :        <https://example.com/model#> .
-     @prefix arknet:  <https://w3id.org/arknet/core#> .
-     @prefix arkproc: <https://w3id.org/arknet/process#> .
-     ```
-   - Include ALL discovered elements:
-     - BCs, Aggregates, Entities, VOs
-     - Commands AND Queries (both are first-class citizens)
-     - Events with `arknet:publishedTo` for each consumer BC
-     - State Machines (`arkproc:State`, `arkproc:StateTransition`)
-     - Policies (event -> command reactive chains)
-     - Context Map relationships
-     - `arknet:ubiquitousLanguageTerm` for domain terms
-   - Save to `{project}/architecture-model.ttl`
+9. **Gather Provenance data**
+   - Run `git rev-parse --short HEAD` in the project directory -> `gitCommit`
+   - Run `git branch --show-current` in the project directory -> `gitBranch`
+   - Note the current date/time in ISO 8601 format -> `analyzedAt`
+   - Note the working directory -> `projectPath`
+   - Note the strategy used in Phase 0 -> `strategy` ("jdt" or "text-search")
+   - Collect the list of concept types actually searched for -> `discoveredTypes`
+   - Plugin version: **0.3.4**
+
+10. **Generate Turtle model**
+    - Write a `.ttl` file using arknet ontology namespaces:
+      ```turtle
+      @prefix :        <https://example.com/model#> .
+      @prefix arknet:  <https://w3id.org/arknet/core#> .
+      @prefix arkproc: <https://w3id.org/arknet/process#> .
+      ```
+    - **First block after prefixes: PROVENANCE**
+      ```turtle
+      # ═══════════════════════════════════════════════════════════
+      #  PROVENANCE
+      # ═══════════════════════════════════════════════════════════
+
+      :AnalysisRun_YYYY-MM-DD a arknet:AnalysisRun ;
+          arknet:analyzedAt      "YYYY-MM-DDThh:mm:ss"^^xsd:dateTime ;
+          arknet:pluginVersion   "0.3.4" ;
+          arknet:gitCommit       "abc1234" ;
+          arknet:gitBranch       "main" ;
+          arknet:projectPath     "/path/to/project" ;
+          arknet:strategy        "jdt" ;
+          arknet:discoveredTypes "BoundedContext, Aggregate, Command, Query, DomainEvent, State, StateTransition, Policy" .
+      ```
+      Replace placeholders with actual values from step 9.
+    - **Tag every generated subject** with `arknet:source "analyze"`:
+      ```turtle
+      :OrderContext a arknet:BoundedContext ;
+          arknet:name "Order Context"^^xsd:string ;
+          arknet:source "analyze" ;
+          ...
+      ```
+      This marks the triple as machine-generated. Subjects without `arknet:source` are considered manually created and protected from automated updates.
+    - Include ALL discovered elements:
+      - BCs, Aggregates, Entities, VOs
+      - Commands AND Queries (both are first-class citizens)
+      - Events with `arknet:publishedTo` for each consumer BC
+      - State Machines (`arkproc:State`, `arkproc:StateTransition`)
+      - Policies (event -> command reactive chains)
+      - Context Map relationships
+      - `arknet:ubiquitousLanguageTerm` for domain terms
+    - Save to `{project}/architecture-model.ttl`
 
 ### Phase 3: Validation & Iterative Fix
 
