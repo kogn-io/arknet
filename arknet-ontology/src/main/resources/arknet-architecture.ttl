@@ -1,0 +1,320 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Architecture Ontology  :  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/architecture#
+#  License    : Proprietary. All rights reserved.
+#
+#  Scope: Architecture Description nach ISO/IEC/IEEE 42010 als Metamodell:
+#         Architecture, ArchitectureDescription, Stakeholder, Concern,
+#         View, Viewpoint und Architecture Decision Records (ADR).
+#
+#  GENERISCH: Allgemeines 42010-Metamodell fuer JEDES Projekt.
+#
+#  Standard-Situation (im Gegensatz zum Requirements-Modul):
+#    Fuer ISO 42010 existiert KEIN adoptiertes, dereferenzierbares RDF-Vokabular
+#    zum Wiederverwenden -- nur akademische Vorschlaege (OntolAD, OWL-2-Formal-
+#    isierungen) ohne stabile publizierte Namespace. Daher arkarch-eigen,
+#    migriert aus doc42-ontology.ttl (Schicht 1). Prior art: OntolAD (Formal
+#    Ontology for Architectural Descriptions, OWL 2).
+#
+#  Cross-Modul-Mehrwert:
+#    ADR -> arkreq:Requirement (welche Anforderung adressiert die Entscheidung)
+#    ADR -> arknet:BoundedContext (welchen Teil des Systems betrifft sie)
+#    Viewpoint = formales Rueckgrat von arknets Projektion
+#                (SPARQL-Query + Template + Rolle).
+#
+#  Konvention: Instanzen nutzen arknet:name / arknet:description (Core-Reuse,
+#              Hausstil). ADRs tragen zusaetzlich dcterms:identifier (Nummer),
+#              da ADRs konventionell nummeriert sind (wie Requirements in #17).
+#
+#  Imports: arknet-core (BoundedContext, Domain, name, description),
+#           arknet-requirements (Requirement).
+##############################################################################
+
+@prefix arkarch: <https://w3id.org/arknet/architecture#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkreq:  <https://w3id.org/arknet/requirements#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/architecture>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
+    owl:imports      <https://w3id.org/arknet/requirements> ;
+    dcterms:title    "arknet Architecture Ontology"@en ;
+    dcterms:description "Architekturbeschreibung nach ISO/IEC/IEEE 42010: Stakeholder, Concerns, Views, Viewpoints und ADRs; verknuepft mit Requirements und der DDD-Schicht."@de ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-07-11"^^xsd:date ;
+    dcterms:rights   "Proprietary. All rights reserved." ;
+    vann:preferredNamespacePrefix "arkarch" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/architecture#" ;
+    owl:versionInfo  "0.1.0" .
+
+
+##############################################################################
+#  1. ARCHITECTURE & ARCHITECTURE DESCRIPTION
+##############################################################################
+
+arkarch:Architecture a owl:Class ;
+    rdfs:label   "Architecture"@en , "Architektur"@de ;
+    rdfs:comment "Die Architektur eines konkreten Softwaresystems (ISO 42010). Wurzel des Modells."@de ;
+    skos:example "Die Architektur von 'MyShop'."@de .
+
+arkarch:ArchitectureDescription a owl:Class ;
+    rdfs:label   "Architecture Description"@en , "Architekturbeschreibung"@de ;
+    rdfs:comment "Eine formale Beschreibung der Architektur, bestehend aus Views, Modellen und ADRs (ISO 42010)."@de .
+
+arkarch:describes a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDescription ;
+    rdfs:range  arkarch:Architecture ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "describes"@en .
+
+arkarch:hasDomain a owl:ObjectProperty ;
+    rdfs:domain arkarch:Architecture ;
+    rdfs:range  arknet:Domain ;
+    rdfs:label  "has domain"@en ;
+    rdfs:comment "Verwurzelt die Architektur in der strategischen DDD-Schicht (Core)."@de .
+
+arkarch:hasStakeholder a owl:ObjectProperty ;
+    rdfs:domain arkarch:Architecture ;
+    rdfs:range  arkarch:Stakeholder ;
+    rdfs:label  "has stakeholder"@en .
+
+arkarch:hasView a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDescription ;
+    rdfs:range  arkarch:View ;
+    rdfs:label  "has view"@en .
+
+arkarch:hasADR a owl:ObjectProperty ;
+    rdfs:domain arkarch:Architecture ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    rdfs:label  "has ADR"@en .
+
+
+##############################################################################
+#  2. STAKEHOLDERS & CONCERNS
+##############################################################################
+
+arkarch:Stakeholder a owl:Class ;
+    rdfs:label   "Stakeholder"@en , "Stakeholder"@de ;
+    rdfs:comment "Eine Person oder Gruppe mit Interesse an der Architektur (Architekt, Entwickler, Product Owner, ...)."@de .
+
+arkarch:stakeholderRole a owl:DatatypeProperty ;
+    rdfs:domain arkarch:Stakeholder ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "stakeholder role"@en ;
+    rdfs:comment "Die Rolle des Stakeholders, z.B. Architekt, Product Owner, Betrieb."@de .
+
+arkarch:Concern a owl:Class ;
+    rdfs:label   "Concern"@en , "Anliegen"@de ;
+    rdfs:comment "Ein spezifisches Interesse eines Stakeholders an der Architektur (Skalierbarkeit, Sicherheit, Wartbarkeit, ...)."@de .
+
+arkarch:hasConcern a owl:ObjectProperty ;
+    rdfs:domain arkarch:Stakeholder ;
+    rdfs:range  arkarch:Concern ;
+    rdfs:label  "has concern"@en .
+
+arkarch:concernMotivates a owl:ObjectProperty ;
+    rdfs:domain arkarch:Concern ;
+    rdfs:range  arkreq:Requirement ;
+    rdfs:label  "motivates requirement"@en ;
+    rdfs:comment "Ein Concern (42010) kann als Anforderung (RE) formalisiert werden. Bruecke zu #17."@de .
+
+
+##############################################################################
+#  3. VIEWS & VIEWPOINTS
+#     Viewpoint = formales Rueckgrat der arknet-Projektion
+#                 (SPARQL-Query + Template + Rolle).
+##############################################################################
+
+arkarch:Viewpoint a owl:Class ;
+    rdfs:label   "Viewpoint"@en , "Sichtpunkt"@de ;
+    rdfs:comment "Eine Vorlage/Konvention fuer Views (ISO 42010). Definiert Zweck, Zielgruppe, Notation und -- in arknet -- die SPARQL-Query samt Template, die eine Projektion erzeugen."@de .
+
+arkarch:viewpointPurpose a owl:DatatypeProperty ;
+    rdfs:domain arkarch:Viewpoint ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "viewpoint purpose"@en ;
+    rdfs:comment "Wozu dient dieser Sichtpunkt? Welche Concerns rahmt er?"@de .
+
+arkarch:forStakeholder a owl:ObjectProperty ;
+    rdfs:domain arkarch:Viewpoint ;
+    rdfs:range  arkarch:Stakeholder ;
+    rdfs:label  "for stakeholder"@en ;
+    rdfs:comment "Die Zielgruppe (Rolle) dieses Sichtpunkts."@de .
+
+arkarch:sparqlQuery a owl:DatatypeProperty ;
+    rdfs:domain arkarch:Viewpoint ;
+    rdfs:range  xsd:anyURI ;
+    rdfs:label  "SPARQL query"@en ;
+    rdfs:comment "Verweis auf die .sparql-Datei, die die Daten fuer diese Projektion selektiert."@de .
+
+arkarch:template a owl:DatatypeProperty ;
+    rdfs:domain arkarch:Viewpoint ;
+    rdfs:range  xsd:anyURI ;
+    rdfs:label  "template"@en ;
+    rdfs:comment "Verweis auf die Template-Datei (z.B. Mustache), die aus dem Query-Ergebnis das Artefakt rendert."@de .
+
+arkarch:notation a owl:DatatypeProperty ;
+    rdfs:domain arkarch:Viewpoint ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "notation"@en ;
+    rdfs:comment "Verwendete Notation/Ausgabe, z.B. AsciiDoc, PlantUML, C4, Mermaid."@de .
+
+arkarch:View a owl:Class ;
+    rdfs:label   "View"@en , "Sicht"@de ;
+    rdfs:comment "Eine rollenspezifische Projektion des Architekturmodells; entsteht aus einem Viewpoint (ISO 42010)."@de .
+
+arkarch:conformsToViewpoint a owl:ObjectProperty ;
+    rdfs:domain arkarch:View ;
+    rdfs:range  arkarch:Viewpoint ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "conforms to viewpoint"@en .
+
+arkarch:addresses a owl:ObjectProperty ;
+    rdfs:domain arkarch:View ;
+    rdfs:range  arkarch:Concern ;
+    rdfs:label  "addresses concern"@en ;
+    rdfs:comment "Diese View adressiert das angegebene Concern."@de .
+
+arkarch:renderedAs a owl:DatatypeProperty ;
+    rdfs:domain arkarch:View ;
+    rdfs:range  xsd:anyURI ;
+    rdfs:label  "rendered as"@en ;
+    rdfs:comment "Verweis auf das erzeugte Artefakt (HTML/PDF/PlantUML)."@de .
+
+
+##############################################################################
+#  4. ARCHITECTURE DECISION RECORDS (ADR)
+#     Kern-Link zu #17: ADR -> Requirement.
+##############################################################################
+
+arkarch:ArchitectureDecisionRecord a owl:Class ;
+    rdfs:label   "Architecture Decision Record"@en , "Architekturentscheidung"@de ;
+    rdfs:comment "Eine dokumentierte Architekturentscheidung mit Kontext, Entscheidung und Konsequenzen (Nygard/MADR-Stil)."@de .
+
+# -- ADR data properties -----------------------------------------------------
+
+arkarch:adrContext a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "context"@en ;
+    rdfs:comment "Warum musste diese Entscheidung getroffen werden? Kraefte und Rahmenbedingungen."@de .
+
+arkarch:adrDecision a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "decision"@en ;
+    rdfs:comment "Die getroffene Entscheidung."@de .
+
+arkarch:adrConsequences a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "consequences"@en ;
+    rdfs:comment "Positive und negative Folgen der Entscheidung."@de .
+
+arkarch:decisionDate a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:date ;
+    rdfs:label  "decision date"@en .
+
+# -- ADR relationships -------------------------------------------------------
+
+arkarch:supersedes a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    rdfs:label  "supersedes"@en ;
+    rdfs:comment "Diese Entscheidung loest eine aeltere ab."@de .
+
+arkarch:supersededBy a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    owl:inverseOf arkarch:supersedes ;
+    rdfs:label  "superseded by"@en .
+
+arkarch:relatedTo a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    a owl:SymmetricProperty ;
+    rdfs:label  "related to"@en ;
+    rdfs:comment "Lose Querverweis-Beziehung zwischen ADRs."@de .
+
+arkarch:addressesRequirement a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkreq:Requirement ;
+    rdfs:label  "addresses requirement"@en ;
+    rdfs:comment "Kern-Traceability: diese Entscheidung adressiert/realisiert die angegebene Anforderung. Bruecke zu #17."@de .
+
+arkarch:affectsContext a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arknet:BoundedContext ;
+    rdfs:label  "affects context"@en ;
+    rdfs:comment "Welchen Bounded Context betrifft diese Entscheidung? Bruecke zur DDD-Schicht."@de .
+
+
+##############################################################################
+#  5. ADR STATUS  (Lifecycle, as Individuals)
+##############################################################################
+
+arkarch:ADRStatus a owl:Class ;
+    rdfs:label "ADR Status"@en ;
+    rdfs:comment "Lebenszyklus-Status einer Architekturentscheidung."@de .
+
+arkarch:Proposed a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Proposed"@en ;
+    rdfs:comment "Vorgeschlagen, noch nicht angenommen."@de .
+
+arkarch:Accepted a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Accepted"@en ;
+    rdfs:comment "Angenommen und gueltig."@de .
+
+arkarch:Rejected a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Rejected"@en ;
+    rdfs:comment "Abgelehnt; nicht umgesetzt."@de .
+
+arkarch:Deprecated a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Deprecated"@en ;
+    rdfs:comment "Ueberholt, aber nicht durch eine konkrete Nachfolge-Entscheidung ersetzt."@de .
+
+arkarch:Superseded a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Superseded"@en ;
+    rdfs:comment "Durch eine neuere Entscheidung ersetzt (siehe arkarch:supersededBy)."@de .
+
+arkarch:adrStatus a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ADRStatus ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "status"@en .
+
+
+##############################################################################
+#  6. OWL RESTRICTIONS
+##############################################################################
+
+# Every ADR has exactly one dcterms:identifier (its number)
+arkarch:ArchitectureDecisionRecord rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty dcterms:identifier ;
+    owl:cardinality 1
+] .
+
+# Every ADR has exactly one status
+arkarch:ArchitectureDecisionRecord rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty arkarch:adrStatus ;
+    owl:cardinality 1
+] .
+
+# END OF ARCHITECTURE ONTOLOGY

@@ -1,0 +1,219 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Architecture SHACL Shapes  :  Version 0.1.0
+#
+#  Validates ISO-42010-Konzepte (arkarch:).
+#  Core DDD shapes: arknet-shapes.ttl. Requirements: requirements-shapes.ttl.
+#
+#  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
+#  Instanzen nutzen arknet:name (Core-Reuse); ADRs zusaetzlich dcterms:identifier.
+##############################################################################
+
+@prefix sh:      <http://www.w3.org/ns/shacl#> .
+@prefix arkarch: <https://w3id.org/arknet/architecture#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix ashapes: <https://w3id.org/arknet/shapes/architecture#> .
+
+
+##############################################################################
+#  ARCHITECTURE SHAPES
+##############################################################################
+
+ashapes:ArchitectureShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:Architecture ;
+    sh:property ashapes:Architecture-name ;
+    sh:property ashapes:Architecture-hasStakeholder .
+
+ashapes:Architecture-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "Architecture muss genau einen arknet:name haben (min. 2 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:Architecture-hasStakeholder
+    a sh:PropertyShape ;
+    sh:path     arkarch:hasStakeholder ;
+    sh:minCount 1 ;
+    sh:class    arkarch:Stakeholder ;
+    sh:message  "Best Practice: Eine Architektur sollte mindestens einen Stakeholder benennen (ISO 42010)."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  STAKEHOLDER & CONCERN SHAPES
+##############################################################################
+
+ashapes:StakeholderShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:Stakeholder ;
+    sh:property ashapes:Stakeholder-name ;
+    sh:property ashapes:Stakeholder-hasConcern .
+
+ashapes:Stakeholder-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Stakeholder muss genau einen arknet:name haben."@de ;
+    sh:severity sh:Violation .
+
+ashapes:Stakeholder-hasConcern
+    a sh:PropertyShape ;
+    sh:path     arkarch:hasConcern ;
+    sh:minCount 1 ;
+    sh:class    arkarch:Concern ;
+    sh:message  "Best Practice: Ein Stakeholder ohne Concern ist im 42010-Sinn irrelevant -- benenne mindestens ein Anliegen."@de ;
+    sh:severity sh:Warning .
+
+ashapes:ConcernShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:Concern ;
+    sh:property ashapes:Concern-name .
+
+ashapes:Concern-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Concern muss genau einen arknet:name haben."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  VIEWPOINT & VIEW SHAPES
+##############################################################################
+
+ashapes:ViewpointShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:Viewpoint ;
+    sh:property ashapes:Viewpoint-name ;
+    sh:property ashapes:Viewpoint-purpose ;
+    sh:property ashapes:Viewpoint-sparqlQuery .
+
+ashapes:Viewpoint-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Viewpoint muss genau einen arknet:name haben."@de ;
+    sh:severity sh:Violation .
+
+ashapes:Viewpoint-purpose
+    a sh:PropertyShape ;
+    sh:path     arkarch:viewpointPurpose ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Viewpoint sollte einen arkarch:viewpointPurpose nennen (welche Concerns rahmt er?)."@de ;
+    sh:severity sh:Warning .
+
+ashapes:Viewpoint-sparqlQuery
+    a sh:PropertyShape ;
+    sh:path     arkarch:sparqlQuery ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:anyURI ;
+    sh:message  "arkarch:sparqlQuery muss ein URI-Verweis auf die .sparql-Datei sein."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ViewShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:View ;
+    sh:property ashapes:View-conformsToViewpoint ;
+    sh:property ashapes:View-addresses .
+
+ashapes:View-conformsToViewpoint
+    a sh:PropertyShape ;
+    sh:path     arkarch:conformsToViewpoint ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:class    arkarch:Viewpoint ;
+    sh:message  "Eine View muss genau einem Viewpoint entsprechen (ISO 42010: Views werden durch Viewpoints geregelt)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:View-addresses
+    a sh:PropertyShape ;
+    sh:path     arkarch:addresses ;
+    sh:minCount 1 ;
+    sh:class    arkarch:Concern ;
+    sh:message  "Best Practice: Eine View sollte mindestens ein Concern adressieren."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  ADR SHAPES
+##############################################################################
+
+ashapes:ADRShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:ArchitectureDecisionRecord ;
+    sh:property ashapes:ADR-identifier ;
+    sh:property ashapes:ADR-name ;
+    sh:property ashapes:ADR-status ;
+    sh:property ashapes:ADR-context ;
+    sh:property ashapes:ADR-decision ;
+    sh:property ashapes:ADR-consequences .
+
+ashapes:ADR-identifier
+    a sh:PropertyShape ;
+    sh:path     dcterms:identifier ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "ADR braucht genau eine dcterms:identifier (z.B. ADR-0007)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ADR-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "ADR braucht einen arknet:name (Titel der Entscheidung)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ADR-status
+    a sh:PropertyShape ;
+    sh:path     arkarch:adrStatus ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in       ( arkarch:Proposed arkarch:Accepted arkarch:Rejected
+                  arkarch:Deprecated arkarch:Superseded ) ;
+    sh:message  "ADR braucht genau einen arkarch:adrStatus (Proposed | Accepted | Rejected | Deprecated | Superseded)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ADR-context
+    a sh:PropertyShape ;
+    sh:path     arkarch:adrContext ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ADR-decision
+    a sh:PropertyShape ;
+    sh:path     arkarch:adrDecision ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ADR-consequences
+    a sh:PropertyShape ;
+    sh:path     arkarch:adrConsequences ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Best Practice: ADR sollte arkarch:adrConsequences dokumentieren (Folgen der Entscheidung)."@de ;
+    sh:severity sh:Warning .
+
+# END OF ARCHITECTURE SHAPES
