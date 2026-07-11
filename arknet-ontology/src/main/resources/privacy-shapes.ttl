@@ -1,0 +1,96 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  Privacy / GDPR SHACL Shapes  ·  Version 0.1.0
+#
+#  Validates GDPR annotations on DDD building blocks.
+#  Core DDD shapes (BoundedContext, Aggregate) are in arknet-shapes.ttl.
+#
+#  Migrated from: ddd-forge project-shape.ttl (ddd-forge.org), DSGVO section.
+#
+#  Named NodeShapes fuer RDF4J SHACL Sail Kompatibilitaet. Conditional
+#  constraints use SPARQL-based constraints with full IRIs (no prefix
+#  resolution needed).
+##############################################################################
+
+@prefix sh:        <http://www.w3.org/ns/shacl#> .
+@prefix arkpriv:   <https://w3id.org/arknet/privacy#> .
+@prefix arknet:    <https://w3id.org/arknet/core#> .
+@prefix xsd:       <http://www.w3.org/2001/XMLSchema#> .
+@prefix privshapes: <https://w3id.org/arknet/shapes/privacy#> .
+
+
+##############################################################################
+#  ENTITY DATA CATEGORY  (Art. 4)
+##############################################################################
+
+privshapes:EntityDataCategoryShape
+    a sh:NodeShape ;
+    sh:targetClass arknet:Entity ;
+    sh:property privshapes:Entity-hasDataCategory .
+
+privshapes:Entity-hasDataCategory
+    a sh:PropertyShape ;
+    sh:path     arkpriv:hasDataCategory ;
+    sh:minCount 1 ;
+    sh:class    arkpriv:DataCategory ;
+    sh:message  "DSGVO: Entity hat keine Datenkategorie-Annotation. Personenbezogene Daten?"@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  PERSONAL DATA -> LEGAL BASIS  (Art. 6)
+##############################################################################
+
+privshapes:AggregatePersonalDataLegalBasisShape
+    a sh:NodeShape ;
+    sh:targetClass arknet:Aggregate ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:severity sh:Violation ;
+        sh:message "DSGVO-Verstoss: Personenbezogene Daten ohne Rechtsgrundlage (Art. 6)."@de ;
+        sh:select """
+            SELECT $this WHERE {
+                $this <https://w3id.org/arknet/privacy#hasDataCategory> <https://w3id.org/arknet/privacy#PersonalData> .
+                FILTER NOT EXISTS { $this <https://w3id.org/arknet/privacy#hasLegalBasis> ?b }
+            }""" ;
+    ] .
+
+
+##############################################################################
+#  PERSONAL DATA -> RETENTION PERIOD  (Art. 5(1)(e))
+##############################################################################
+
+privshapes:AggregatePersonalDataRetentionShape
+    a sh:NodeShape ;
+    sh:targetClass arknet:Aggregate ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:severity sh:Warning ;
+        sh:message "DSGVO: Personenbezogene Daten ohne Aufbewahrungsfrist (Art. 5(1)(e))."@de ;
+        sh:select """
+            SELECT $this WHERE {
+                $this <https://w3id.org/arknet/privacy#hasDataCategory> <https://w3id.org/arknet/privacy#PersonalData> .
+                FILTER NOT EXISTS { $this <https://w3id.org/arknet/privacy#hasRetentionPeriod> ?p }
+            }""" ;
+    ] .
+
+
+##############################################################################
+#  SENSITIVE DATA -> TECHNICAL MEASURES  (Art. 9, Art. 32)
+##############################################################################
+
+privshapes:AggregateSensitiveDataMeasuresShape
+    a sh:NodeShape ;
+    sh:targetClass arknet:Aggregate ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:severity sh:Violation ;
+        sh:message "DSGVO-Verstoss: Art. 9 Daten ohne technische Massnahmen (Art. 32)."@de ;
+        sh:select """
+            SELECT $this WHERE {
+                $this <https://w3id.org/arknet/privacy#hasDataCategory> <https://w3id.org/arknet/privacy#SensitivePersonalData> .
+                FILTER NOT EXISTS { $this <https://w3id.org/arknet/privacy#requiresTechnicalMeasure> ?m }
+            }""" ;
+    ] .
+
+# END OF PRIVACY SHAPES
