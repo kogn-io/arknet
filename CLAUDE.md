@@ -3,7 +3,6 @@
 ## Projekt
 
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
-- Dach: kogn.io | Subdomain: arknet.kogn.io
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
 - Produktvision: `doc42-origin/research/produktvision.adoc`
 
@@ -50,8 +49,8 @@
 
 ## Konventionen
 
-- Java-Package: `io.kognio.arknet.*`
-- GroupId: `io.kognio.arknet`
+- Java-Package: `de.hauschel.arknet.*`
+- GroupId: `de.hauschel.arknet`
 - Turtle als Primaerformat (nicht JSON-LD)
 - SHACL-Validierung bei jedem Load (RDF4J SHACL Sail)
 - Projektionen als Plugin: `.sparql` + Template-Datei-Paar
