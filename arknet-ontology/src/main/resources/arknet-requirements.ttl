@@ -1,0 +1,456 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Requirements Ontology  :  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/requirements#
+#  License    : Proprietary. All rights reserved.
+#
+#  Scope: Requirements Engineering (ISO/IEC/IEEE 29148) als Metamodell.
+#         Goals, funktionale und nicht-funktionale Requirements, Constraints,
+#         Use Cases (Cockburn) sowie Release-/Milestone-Planung. Verknuepft
+#         Requirements ueber Use Cases mit der taktischen DDD-Schicht
+#         (Command -> Aggregate -> BoundedContext).
+#
+#  GENERISCH: Allgemeines RE-Metamodell fuer JEDES Projekt. Keine
+#             projektspezifischen Kategorien oder IDs.
+#
+#  Standard-Alignment (analog zum DPV-Alignment des Privacy-Moduls):
+#    - arkreq:Requirement rdfs:subClassOf oslc_rm:Requirement (OASIS OSLC RM).
+#    - OSLC-RM-Trace-Properties werden WIEDERVERWENDET statt neu erfunden:
+#      oslc_rm:constrainedBy, oslc_rm:satisfies/satisfiedBy,
+#      oslc_rm:decomposedBy/decomposes, oslc_rm:implementedBy.
+#    - Identitaet/Text ueber Dublin Core: dcterms:identifier / title / description
+#      (NICHT arknet:name -- bewusste Abweichung fuer OSLC-Interop; Projektionen,
+#      die Requirements rendern, muessen dcterms lesen).
+#    - arkreq: definiert NUR, was OSLC RM fehlt: Goal, UseCase (Cockburn),
+#      FR/NFR-Unterscheidung, MoSCoW-Priority, Status-Lifecycle, Quality-Kategorie,
+#      Release/Milestone (an doap:Version angelehnt).
+#
+#  Traceability-Kette:
+#    Goal -> Requirement -> UseCase -> Command -> Aggregate -> BoundedContext
+#    Requirement -> plannedFor -> Milestone -> deliveredIn -> Release
+#
+#  Imports: arknet-core (Command, Aggregate, BoundedContext),
+#           arknet-process (Actor), OSLC RM, DOAP.
+##############################################################################
+
+@prefix arkreq:  <https://w3id.org/arknet/requirements#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkproc: <https://w3id.org/arknet/process#> .
+@prefix oslc_rm: <http://open-services.net/ns/rm#> .
+@prefix doap:    <http://usefulinc.com/ns/doap#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/requirements>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
+    owl:imports      <https://w3id.org/arknet/process> ;
+    owl:imports      <http://open-services.net/ns/rm#> ;
+    owl:imports      <http://usefulinc.com/ns/doap#> ;
+    dcterms:title    "arknet Requirements Ontology"@en ;
+    dcterms:description "Requirements Engineering nach ISO 29148: Goals, Requirements, Constraints, Use Cases und Release-Planung; OSLC-RM-aligned und mit der DDD-Schicht verknuepft."@de ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-07-11"^^xsd:date ;
+    dcterms:rights   "Proprietary. All rights reserved." ;
+    vann:preferredNamespacePrefix "arkreq" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/requirements#" ;
+    owl:versionInfo  "0.1.0" .
+
+
+##############################################################################
+#  1. GOALS
+#     (kein OSLC-RM-Aequivalent -- arkreq-eigen)
+##############################################################################
+
+arkreq:Goal a owl:Class ;
+    rdfs:label   "Goal"@en , "Ziel"@de ;
+    rdfs:comment "Ein uebergeordnetes Stakeholder- oder Geschaeftsziel, das Requirements motiviert. Beschreibt das WARUM, nicht das WAS."@de ;
+    skos:example "Time-to-Market senken, Betrugsrate reduzieren, Self-Service ermoeglichen"@de .
+
+arkreq:goalStatement a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Goal ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "goal statement"@en ;
+    rdfs:comment "Die Zielformulierung in einem Satz."@de .
+
+arkreq:subGoalOf a owl:ObjectProperty ;
+    rdfs:domain arkreq:Goal ;
+    rdfs:range  arkreq:Goal ;
+    a owl:TransitiveProperty ;
+    rdfs:label  "sub-goal of"@en ;
+    rdfs:comment "Zielhierarchie: dieses Ziel verfeinert ein uebergeordnetes Ziel."@de .
+
+
+##############################################################################
+#  2. REQUIREMENTS
+#     Basis = oslc_rm:Requirement (OASIS OSLC RM). arkreq verfeinert.
+#     ID/Text ueber dcterms:identifier / dcterms:title / dcterms:description.
+##############################################################################
+
+arkreq:Requirement a owl:Class ;
+    rdfs:subClassOf oslc_rm:Requirement ;
+    rdfs:label   "Requirement"@en , "Anforderung"@de ;
+    rdfs:comment "Eine dokumentierte Faehigkeit oder Eigenschaft, die das System erfuellen muss (ISO 29148). Spezialisierung von oslc_rm:Requirement. Abstrakte Basisklasse."@de .
+
+arkreq:FunctionalRequirement a owl:Class ;
+    rdfs:subClassOf arkreq:Requirement ;
+    rdfs:label   "Functional Requirement"@en , "Funktionale Anforderung"@de ;
+    rdfs:comment "Beschreibt WAS das System tun soll (Funktion, Verhalten, Ergebnis)."@de ;
+    skos:example "Das System soll Bestellungen stornieren koennen."@de .
+
+arkreq:NonFunctionalRequirement a owl:Class ;
+    rdfs:subClassOf arkreq:Requirement ;
+    rdfs:label   "Non-Functional Requirement"@en , "Nicht-funktionale Anforderung"@de ;
+    rdfs:comment "Beschreibt eine Qualitaetseigenschaft (WIE gut), z.B. Performance, Sicherheit, Verfuegbarkeit (vgl. ISO 25010)."@de ;
+    skos:example "95% aller Anfragen in unter 200ms."@de .
+
+# -- Requirement Properties (arkreq-eigen; ID/Text via dcterms, s.u.) ---------
+
+arkreq:rationale a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "rationale"@en ;
+    rdfs:comment "Begruendung, warum diese Anforderung existiert."@de .
+
+arkreq:acceptanceCriterion a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "acceptance criterion"@en ;
+    rdfs:comment "Testbares Kriterium (Done when ...). Kann mehrfach vorkommen."@de .
+
+arkreq:qualityCategory a owl:DatatypeProperty ;
+    rdfs:domain arkreq:NonFunctionalRequirement ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "quality category"@en ;
+    rdfs:comment "Qualitaetsmerkmal nach ISO 25010, z.B. performance, security, reliability, usability, maintainability."@de .
+
+# -- Requirement Relationships -----------------------------------------------
+#    Reused from OSLC RM:
+#      oslc_rm:constrainedBy  (Requirement -> Constraint)
+#      oslc_rm:satisfiedBy    (Requirement -> UseCase)   inverse: oslc_rm:satisfies
+#      oslc_rm:decomposedBy   (Requirement -> Requirement) inverse: oslc_rm:decomposes
+#    arkreq adds only what OSLC lacks:
+
+arkreq:motivatedBy a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  arkreq:Goal ;
+    rdfs:label  "motivated by"@en ;
+    rdfs:comment "Diese Anforderung dient dem angegebenen Ziel."@de .
+
+arkreq:motivates a owl:ObjectProperty ;
+    rdfs:domain arkreq:Goal ;
+    rdfs:range  arkreq:Requirement ;
+    owl:inverseOf arkreq:motivatedBy ;
+    rdfs:label  "motivates"@en .
+
+arkreq:dependsOn a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  arkreq:Requirement ;
+    rdfs:label  "depends on"@en ;
+    rdfs:comment "Diese Anforderung setzt eine andere Anforderung voraus (kein direktes OSLC-Aequivalent; naeher als affectedBy)."@de .
+
+arkreq:scopedTo a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  arknet:BoundedContext ;
+    rdfs:label  "scoped to"@en ;
+    rdfs:comment "Der Bounded Context, in dem diese Anforderung realisiert wird."@de .
+
+
+##############################################################################
+#  3. CONSTRAINTS
+#     (Ziel von oslc_rm:constrainedBy; arkreq typisiert die Randbedingung)
+##############################################################################
+
+arkreq:Constraint a owl:Class ;
+    rdfs:label   "Constraint"@en , "Randbedingung"@de ;
+    rdfs:comment "Eine einschraenkende Vorgabe, die den Loesungsraum begrenzt (ISO 29148). Nicht verhandelbar. Wird ueber oslc_rm:constrainedBy an Requirements gehaengt."@de .
+
+arkreq:TechnicalConstraint a owl:Class ;
+    rdfs:subClassOf arkreq:Constraint ;
+    rdfs:label   "Technical Constraint"@en , "Technische Randbedingung"@de ;
+    skos:example "Muss auf der JVM laufen; nur PostgreSQL erlaubt."@de .
+
+arkreq:BusinessConstraint a owl:Class ;
+    rdfs:subClassOf arkreq:Constraint ;
+    rdfs:label   "Business Constraint"@en , "Geschaeftliche Randbedingung"@de ;
+    skos:example "Budget-Deckel; Go-Live vor Quartalsende."@de .
+
+arkreq:RegulatoryConstraint a owl:Class ;
+    rdfs:subClassOf arkreq:Constraint ;
+    rdfs:label   "Regulatory Constraint"@en , "Regulatorische Randbedingung"@de ;
+    rdfs:comment "Vorgabe aus Gesetz, Norm oder Vertrag."@de ;
+    skos:example "DSGVO-Konformitaet; Aufbewahrungspflicht 10 Jahre."@de .
+
+arkreq:constraintStatement a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Constraint ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "constraint statement"@en ;
+    rdfs:comment "Die Randbedingung in einem Satz."@de .
+
+
+##############################################################################
+#  4. USE CASES  (Cockburn)
+#     (kein OSLC-RM-Aequivalent -- arkreq-eigen. UseCase satisfies Requirement
+#      via oslc_rm:satisfies.)
+##############################################################################
+
+arkreq:UseCase a owl:Class ;
+    rdfs:label   "Use Case"@en , "Anwendungsfall"@de ;
+    rdfs:comment "Ein Interaktionsszenario zwischen Akteuren und System, das ein Ziel erreicht (Cockburn). Erfuellt Requirements ueber oslc_rm:satisfies."@de ;
+    skos:example "Bestellung aufgeben, Passwort zuruecksetzen"@de .
+
+arkreq:useCaseGoal a owl:DatatypeProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "use case goal"@en ;
+    rdfs:comment "Das Ziel im Kontext (goal-in-context nach Cockburn)."@de .
+
+arkreq:designScope a owl:DatatypeProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "design scope"@en ;
+    rdfs:comment "Der Systemumfang, den dieser Use Case betrachtet (Design Scope nach Cockburn)."@de .
+
+arkreq:mainSuccessScenario a owl:DatatypeProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "main success scenario"@en ;
+    rdfs:comment "Der Hauptablauf (Happy Path) als nummerierte Schrittfolge."@de .
+
+arkreq:extension a owl:DatatypeProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "extension"@en ;
+    rdfs:comment "Ein alternativer Ablauf oder Ausnahmefall. Kann mehrfach vorkommen."@de .
+
+arkreq:useCasePrecondition a owl:DatatypeProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "precondition"@en ;
+    rdfs:comment "Zustand, der vor dem Use Case gelten muss."@de .
+
+arkreq:useCasePostcondition a owl:DatatypeProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "postcondition"@en ;
+    rdfs:comment "Garantierter Zustand nach erfolgreichem Use Case (success guarantee)."@de .
+
+# -- Use Case Relationships --------------------------------------------------
+#    UseCase oslc_rm:satisfies Requirement  (reused; siehe Requirement-Block)
+
+arkreq:primaryActor a owl:ObjectProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arkproc:Actor ;
+    rdfs:label  "primary actor"@en ;
+    rdfs:comment "Der Akteur, dessen Ziel der Use Case erfuellt."@de .
+
+arkreq:supportingActor a owl:ObjectProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arkproc:Actor ;
+    rdfs:label  "supporting actor"@en ;
+    rdfs:comment "Ein unterstuetzender (sekundaerer) Akteur, den das System aufruft."@de .
+
+arkreq:realizedBy a owl:ObjectProperty ;
+    rdfs:subPropertyOf oslc_rm:implementedBy ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arknet:Command ;
+    rdfs:label  "realized by"@en ;
+    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy."@de .
+
+arkreq:includesUseCase a owl:ObjectProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arkreq:UseCase ;
+    rdfs:label  "includes"@en ;
+    rdfs:comment "UML include-Beziehung: dieser Use Case bindet einen anderen ein."@de .
+
+arkreq:extendsUseCase a owl:ObjectProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arkreq:UseCase ;
+    rdfs:label  "extends"@en ;
+    rdfs:comment "UML extend-Beziehung: dieser Use Case erweitert einen anderen optional."@de .
+
+
+##############################################################################
+#  5. PRIORITY  (MoSCoW, as Individuals -- kein OSLC-Aequivalent)
+##############################################################################
+
+arkreq:Priority a owl:Class ;
+    rdfs:label "Priority"@en , "Prioritaet"@de ;
+    rdfs:comment "Priorisierung nach MoSCoW."@de .
+
+arkreq:MustHave a owl:NamedIndividual , arkreq:Priority ;
+    rdfs:label "Must have"@en ;
+    rdfs:comment "Zwingend fuer den Release; ohne diese Anforderung ist das Ergebnis wertlos."@de .
+
+arkreq:ShouldHave a owl:NamedIndividual , arkreq:Priority ;
+    rdfs:label "Should have"@en ;
+    rdfs:comment "Wichtig, aber nicht release-kritisch; es gibt einen Workaround."@de .
+
+arkreq:CouldHave a owl:NamedIndividual , arkreq:Priority ;
+    rdfs:label "Could have"@en ;
+    rdfs:comment "Wuenschenswert; wird nur bei ausreichender Kapazitaet umgesetzt."@de .
+
+arkreq:WontHave a owl:NamedIndividual , arkreq:Priority ;
+    rdfs:label "Won't have (this time)"@en ;
+    rdfs:comment "Bewusst fuer diesen Zyklus ausgeschlossen."@de .
+
+arkreq:priority a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  arkreq:Priority ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "priority"@en .
+
+
+##############################################################################
+#  6. STATUS  (Lifecycle, as Individuals -- kein OSLC-Aequivalent)
+##############################################################################
+
+arkreq:RequirementStatus a owl:Class ;
+    rdfs:label "Requirement Status"@en , "Anforderungsstatus"@de ;
+    rdfs:comment "Lebenszyklus-Status einer Anforderung."@de .
+
+arkreq:Proposed a owl:NamedIndividual , arkreq:RequirementStatus ;
+    rdfs:label "Proposed"@en ;
+    rdfs:comment "Erfasst, aber noch nicht abgestimmt."@de .
+
+arkreq:Accepted a owl:NamedIndividual , arkreq:RequirementStatus ;
+    rdfs:label "Accepted"@en ;
+    rdfs:comment "Abgestimmt und fuer die Umsetzung freigegeben."@de .
+
+arkreq:Implemented a owl:NamedIndividual , arkreq:RequirementStatus ;
+    rdfs:label "Implemented"@en ;
+    rdfs:comment "Umgesetzt, aber noch nicht verifiziert."@de .
+
+arkreq:Verified a owl:NamedIndividual , arkreq:RequirementStatus ;
+    rdfs:label "Verified"@en ;
+    rdfs:comment "Umgesetzt und gegen die Akzeptanzkriterien geprueft."@de .
+
+arkreq:Rejected a owl:NamedIndividual , arkreq:RequirementStatus ;
+    rdfs:label "Rejected"@en ;
+    rdfs:comment "Verworfen; wird nicht umgesetzt."@de .
+
+arkreq:Deprecated a owl:NamedIndividual , arkreq:RequirementStatus ;
+    rdfs:label "Deprecated"@en ;
+    rdfs:comment "War gueltig, ist aber nicht mehr relevant."@de .
+
+arkreq:status a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  arkreq:RequirementStatus ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "status"@en .
+
+
+##############################################################################
+#  7. RELEASE & MILESTONE PLANNING
+#     arkreq:Release ist an doap:Version angelehnt (Projekt-Release/Version).
+#     Milestone = datierter Planungs-Bucket, der Requirements buendelt.
+##############################################################################
+
+arkreq:Milestone a owl:Class ;
+    rdfs:label   "Milestone"@en , "Meilenstein"@de ;
+    rdfs:comment "Ein datiertes Planungsziel, das Requirements buendelt (vgl. Issue-Tracker-Milestone). Wird typischerweise als ein Release ausgeliefert."@de ;
+    skos:example "v0.3.0 Projektionen, MVP-Launch"@de .
+
+arkreq:milestoneTitle a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Milestone ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "milestone title"@en .
+
+arkreq:dueDate a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Milestone ;
+    rdfs:range  xsd:date ;
+    rdfs:label  "due date"@en ;
+    rdfs:comment "Geplantes Zieldatum des Meilensteins."@de .
+
+arkreq:MilestoneState a owl:Class ;
+    rdfs:label "Milestone State"@en ;
+    rdfs:comment "Zustand eines Meilensteins."@de .
+
+arkreq:Open a owl:NamedIndividual , arkreq:MilestoneState ;
+    rdfs:label "Open"@en .
+
+arkreq:Closed a owl:NamedIndividual , arkreq:MilestoneState ;
+    rdfs:label "Closed"@en .
+
+arkreq:milestoneState a owl:ObjectProperty ;
+    rdfs:domain arkreq:Milestone ;
+    rdfs:range  arkreq:MilestoneState ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "milestone state"@en .
+
+arkreq:Release a owl:Class ;
+    rdfs:subClassOf doap:Version ;
+    rdfs:label   "Release"@en , "Release"@de ;
+    rdfs:comment "Eine ausgelieferte Version des Systems (Semantic Versioning). Spezialisierung von doap:Version."@de ;
+    skos:example "0.3.0, 1.0.0"@de .
+
+arkreq:releaseVersion a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Release ;
+    rdfs:range  xsd:string ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "release version"@en ;
+    rdfs:comment "Versionsnummer nach Semantic Versioning, z.B. 1.4.2."@de .
+
+arkreq:releaseDate a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Release ;
+    rdfs:range  xsd:date ;
+    rdfs:label  "release date"@en ;
+    rdfs:comment "Datum der Auslieferung."@de .
+
+# -- Planning Relationships --------------------------------------------------
+
+arkreq:plannedFor a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  arkreq:Milestone ;
+    rdfs:label  "planned for"@en ;
+    rdfs:comment "Diese Anforderung ist fuer den angegebenen Meilenstein eingeplant."@de .
+
+arkreq:deliveredIn a owl:ObjectProperty ;
+    rdfs:domain arkreq:Milestone ;
+    rdfs:range  arkreq:Release ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "delivered in"@en ;
+    rdfs:comment "Der Release, mit dem dieser Meilenstein ausgeliefert wurde."@de .
+
+
+##############################################################################
+#  8. OWL RESTRICTIONS
+#     Identitaet/Text via dcterms (OSLC-konform):
+#       dcterms:identifier  -> stabile Requirement-ID (z.B. FR-12)
+#       dcterms:title       -> kurzer Name
+#       dcterms:description -> die normative Aussage (Das System soll ...)
+##############################################################################
+
+# Every Requirement has exactly one dcterms:identifier
+arkreq:Requirement rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty dcterms:identifier ;
+    owl:cardinality 1
+] .
+
+# Every Requirement has at least one dcterms:description (the statement)
+arkreq:Requirement rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty dcterms:description ;
+    owl:minCardinality 1
+] .
+
+# Every UseCase has exactly one dcterms:identifier
+arkreq:UseCase rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty dcterms:identifier ;
+    owl:cardinality 1
+] .
+
+# END OF REQUIREMENTS ONTOLOGY

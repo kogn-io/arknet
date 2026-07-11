@@ -1,0 +1,240 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Requirements SHACL Shapes  :  Version 0.1.0
+#
+#  Validates requirements-specific concepts (arkreq:).
+#  Core DDD shapes are in arknet-shapes.ttl, process shapes in process-shapes.ttl.
+#
+#  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
+#  targetClass zeigt auf arkreq-Klassen (Instanzen sind so typisiert),
+#  Identitaet/Text wird gegen dcterms geprueft (OSLC-RM-Alignment).
+##############################################################################
+
+@prefix sh:      <http://www.w3.org/ns/shacl#> .
+@prefix arkreq:  <https://w3id.org/arknet/requirements#> .
+@prefix arkproc: <https://w3id.org/arknet/process#> .
+@prefix oslc_rm: <http://open-services.net/ns/rm#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix rshapes: <https://w3id.org/arknet/shapes/requirements#> .
+
+
+##############################################################################
+#  REQUIREMENT SHAPES
+##############################################################################
+
+rshapes:RequirementShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:Requirement ;
+    sh:property rshapes:Requirement-identifier ;
+    sh:property rshapes:Requirement-description ;
+    sh:property rshapes:Requirement-priority ;
+    sh:property rshapes:Requirement-status ;
+    sh:property rshapes:Requirement-motivatedBy .
+
+rshapes:Requirement-identifier
+    a sh:PropertyShape ;
+    sh:path     dcterms:identifier ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:pattern  "^[A-Za-z][A-Za-z0-9_.-]*$" ;
+    sh:message  "Requirement braucht genau eine dcterms:identifier (z.B. FR-12), Format: Buchstabe gefolgt von Buchstaben/Ziffern/_.-"@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-description
+    a sh:PropertyShape ;
+    sh:path     dcterms:description ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "Requirement braucht eine dcterms:description (die normative Aussage, min. 5 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-priority
+    a sh:PropertyShape ;
+    sh:path     arkreq:priority ;
+    sh:maxCount 1 ;
+    sh:in       ( arkreq:MustHave arkreq:ShouldHave arkreq:CouldHave arkreq:WontHave ) ;
+    sh:message  "Requirement sollte eine arkreq:priority (MoSCoW: MustHave | ShouldHave | CouldHave | WontHave) haben."@de ;
+    sh:severity sh:Warning .
+
+rshapes:Requirement-status
+    a sh:PropertyShape ;
+    sh:path     arkreq:status ;
+    sh:maxCount 1 ;
+    sh:in       ( arkreq:Proposed arkreq:Accepted arkreq:Implemented
+                  arkreq:Verified arkreq:Rejected arkreq:Deprecated ) ;
+    sh:message  "arkreq:status muss einer der gueltigen Lifecycle-Werte sein (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-motivatedBy
+    a sh:PropertyShape ;
+    sh:path     arkreq:motivatedBy ;
+    sh:class    arkreq:Goal ;
+    sh:message  "Best Practice: Verknuepfe die Anforderung ueber arkreq:motivatedBy mit einem Goal (Traceability zum WARUM)."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  NON-FUNCTIONAL REQUIREMENT SHAPES
+##############################################################################
+
+rshapes:NonFunctionalRequirementShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:NonFunctionalRequirement ;
+    sh:property rshapes:NFR-qualityCategory .
+
+rshapes:NFR-qualityCategory
+    a sh:PropertyShape ;
+    sh:path     arkreq:qualityCategory ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Non-Functional Requirement sollte eine arkreq:qualityCategory nennen (z.B. performance, security, reliability)."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  GOAL SHAPES
+##############################################################################
+
+rshapes:GoalShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:Goal ;
+    sh:property rshapes:Goal-statement .
+
+rshapes:Goal-statement
+    a sh:PropertyShape ;
+    sh:path     arkreq:goalStatement ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "Goal braucht eine arkreq:goalStatement (min. 5 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  CONSTRAINT SHAPES
+##############################################################################
+
+rshapes:ConstraintShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:Constraint ;
+    sh:property rshapes:Constraint-statement .
+
+rshapes:Constraint-statement
+    a sh:PropertyShape ;
+    sh:path     arkreq:constraintStatement ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "Constraint braucht eine arkreq:constraintStatement (min. 5 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  USE CASE SHAPES
+##############################################################################
+
+rshapes:UseCaseShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:UseCase ;
+    sh:property rshapes:UseCase-identifier ;
+    sh:property rshapes:UseCase-goal ;
+    sh:property rshapes:UseCase-primaryActor ;
+    sh:property rshapes:UseCase-satisfies .
+
+rshapes:UseCase-identifier
+    a sh:PropertyShape ;
+    sh:path     dcterms:identifier ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "Use Case braucht genau eine dcterms:identifier (z.B. UC-3)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-goal
+    a sh:PropertyShape ;
+    sh:path     arkreq:useCaseGoal ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "Use Case sollte ein arkreq:useCaseGoal (goal-in-context) nennen."@de ;
+    sh:severity sh:Warning .
+
+rshapes:UseCase-primaryActor
+    a sh:PropertyShape ;
+    sh:path     arkreq:primaryActor ;
+    sh:minCount 1 ;
+    sh:class    arkproc:Actor ;
+    sh:message  "Use Case braucht mindestens einen arkreq:primaryActor."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-satisfies
+    a sh:PropertyShape ;
+    sh:path     oslc_rm:satisfies ;
+    sh:minCount 1 ;
+    sh:class    arkreq:Requirement ;
+    sh:message  "Best Practice: Use Case sollte ueber oslc_rm:satisfies mindestens eine Anforderung erfuellen (Traceability)."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  MILESTONE SHAPES
+##############################################################################
+
+rshapes:MilestoneShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:Milestone ;
+    sh:property rshapes:Milestone-title ;
+    sh:property rshapes:Milestone-dueDate ;
+    sh:property rshapes:Milestone-state .
+
+rshapes:Milestone-title
+    a sh:PropertyShape ;
+    sh:path     arkreq:milestoneTitle ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "Milestone braucht genau einen arkreq:milestoneTitle."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Milestone-dueDate
+    a sh:PropertyShape ;
+    sh:path     arkreq:dueDate ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:date ;
+    sh:message  "arkreq:dueDate muss ein xsd:date sein."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Milestone-state
+    a sh:PropertyShape ;
+    sh:path     arkreq:milestoneState ;
+    sh:maxCount 1 ;
+    sh:in       ( arkreq:Open arkreq:Closed ) ;
+    sh:message  "arkreq:milestoneState muss Open oder Closed sein."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  RELEASE SHAPES
+##############################################################################
+
+rshapes:ReleaseShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:Release ;
+    sh:property rshapes:Release-version .
+
+rshapes:Release-version
+    a sh:PropertyShape ;
+    sh:path     arkreq:releaseVersion ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:pattern  "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" ;
+    sh:message  "Release braucht genau eine arkreq:releaseVersion nach Semantic Versioning (z.B. 1.4.2 oder 1.0.0-rc.1)."@de ;
+    sh:severity sh:Violation .
+
+# END OF REQUIREMENTS SHAPES
