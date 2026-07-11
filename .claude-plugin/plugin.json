@@ -1,6 +1,6 @@
 {
   "name": "arknet",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "DDD-Architekturmodelle, die Maschinen verstehen. Validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).",
   "author": {
     "name": "kogn.io"

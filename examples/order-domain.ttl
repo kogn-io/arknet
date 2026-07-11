@@ -12,10 +12,25 @@
 
 
 # ═══════════════════════════════════════════════════════════
+#  PROVENANCE
+# ═══════════════════════════════════════════════════════════
+
+:AnalysisRun_2026-03-23 a arknet:AnalysisRun ;
+    arknet:analyzedAt      "2026-03-23T14:00:00"^^xsd:dateTime ;
+    arknet:pluginVersion   "0.3.4" ;
+    arknet:gitCommit       "5f5cdee" ;
+    arknet:gitBranch       "main" ;
+    arknet:projectPath     "/examples/order-domain" ;
+    arknet:strategy        "text-search" ;
+    arknet:discoveredTypes "BoundedContext, Aggregate, Command, Query, DomainEvent, State, StateTransition, Policy" .
+
+
+# ═══════════════════════════════════════════════════════════
 #  ARCHITECTURE
 # ═══════════════════════════════════════════════════════════
 
 :ShopArchitecture a arknet:Architecture ;
+    arknet:source "analyze" ;
     arknet:name "Online Shop"^^xsd:string ;
     arknet:description "E-Commerce Platform with Order, Inventory, Payment and Notification contexts."^^xsd:string .
 
@@ -29,6 +44,7 @@
     arknet:domainVision "Verwaltet den gesamten Bestelllebenszyklus vom Warenkorb bis zur Auslieferung."^^xsd:string ;
     arknet:subdomain arknet:CoreDomain ;
     arknet:ownedBy "Order Team"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:ubiquitousLanguageTerm "Bestellung"^^xsd:string ;
     arknet:ubiquitousLanguageTerm "Bestellposition"^^xsd:string ;
     arknet:ubiquitousLanguageTerm "Warenkorb"^^xsd:string ;
@@ -39,6 +55,7 @@
     arknet:name "Inventory Context"^^xsd:string ;
     arknet:domainVision "Verwaltet Lagerbestaende, Reservierungen und Verfuegbarkeitspruefungen."^^xsd:string ;
     arknet:subdomain arknet:SupportingDomain ;
+    arknet:source "analyze" ;
     arknet:ubiquitousLanguageTerm "Lagerbestand"^^xsd:string ;
     arknet:ubiquitousLanguageTerm "Reservierung"^^xsd:string ;
     arknet:hasAggregate :InventoryAggregate .
@@ -47,6 +64,7 @@
     arknet:name "Payment Context"^^xsd:string ;
     arknet:domainVision "Wickelt Zahlungsautorisierung, Abrechnung und Erstattungen ab."^^xsd:string ;
     arknet:subdomain arknet:SupportingDomain ;
+    arknet:source "analyze" ;
     arknet:ubiquitousLanguageTerm "Zahlung"^^xsd:string ;
     arknet:ubiquitousLanguageTerm "Autorisierung"^^xsd:string ;
     arknet:hasAggregate :PaymentAggregate .
@@ -55,6 +73,7 @@
     arknet:name "Notification Context"^^xsd:string ;
     arknet:domainVision "Versendet Benachrichtigungen per Email, SMS und Push an Kunden."^^xsd:string ;
     arknet:subdomain arknet:GenericDomain ;
+    arknet:source "analyze" ;
     arknet:ubiquitousLanguageTerm "Benachrichtigung"^^xsd:string ;
     arknet:ubiquitousLanguageTerm "Email"^^xsd:string ;
     arknet:hasAggregate :NotificationAggregate .
@@ -65,16 +84,19 @@
 # ═══════════════════════════════════════════════════════════
 
 :OrderToInventory a arknet:ContextRelationship ;
+    arknet:source "analyze" ;
     arknet:upstream :OrderContext ;
     arknet:downstream :InventoryContext ;
     arknet:relationshipType arknet:CustomerSupplier .
 
 :OrderToPayment a arknet:ContextRelationship ;
+    arknet:source "analyze" ;
     arknet:upstream :PaymentContext ;
     arknet:downstream :OrderContext ;
     arknet:relationshipType arknet:AnticorruptionLayer .
 
 :OrderToNotification a arknet:ContextRelationship ;
+    arknet:source "analyze" ;
     arknet:upstream :OrderContext ;
     arknet:downstream :NotificationContext ;
     arknet:relationshipType arknet:OpenHostService .
@@ -88,6 +110,7 @@
 
 :OrderAggregate a arknet:Aggregate ;
     arknet:name "Order"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:aggregateRoot :OrderEntity ;
     arknet:hasEntity :OrderLineEntity ;
     arknet:hasValueObject :MoneyVO ;
@@ -101,39 +124,49 @@
     arknet:hasInvariant :OrderTotalMustBePositive .
 
 :OrderEntity a arknet:AggregateRoot ;
-    arknet:name "Order"^^xsd:string .
+    arknet:name "Order"^^xsd:string ;
+    arknet:source "analyze" .
 
 :OrderLineEntity a arknet:Entity ;
-    arknet:name "OrderLine"^^xsd:string .
+    arknet:name "OrderLine"^^xsd:string ;
+    arknet:source "analyze" .
 
 :MoneyVO a arknet:ValueObject ;
-    arknet:name "Money"^^xsd:string .
+    arknet:name "Money"^^xsd:string ;
+    arknet:source "analyze" .
 
 :AddressVO a arknet:ValueObject ;
-    arknet:name "Address"^^xsd:string .
+    arknet:name "Address"^^xsd:string ;
+    arknet:source "analyze" .
 
 # ── Stub Aggregates (other contexts) ─────────────────────
 
 :InventoryAggregate a arknet:Aggregate ;
     arknet:name "InventoryItem"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:aggregateRoot :InventoryItemEntity .
 
 :InventoryItemEntity a arknet:AggregateRoot ;
-    arknet:name "InventoryItem"^^xsd:string .
+    arknet:name "InventoryItem"^^xsd:string ;
+    arknet:source "analyze" .
 
 :PaymentAggregate a arknet:Aggregate ;
     arknet:name "Payment"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:aggregateRoot :PaymentEntity .
 
 :PaymentEntity a arknet:AggregateRoot ;
-    arknet:name "Payment"^^xsd:string .
+    arknet:name "Payment"^^xsd:string ;
+    arknet:source "analyze" .
 
 :NotificationAggregate a arknet:Aggregate ;
     arknet:name "Notification"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:aggregateRoot :NotificationEntity .
 
 :NotificationEntity a arknet:AggregateRoot ;
-    arknet:name "Notification"^^xsd:string .
+    arknet:name "Notification"^^xsd:string ;
+    arknet:source "analyze" .
 
 
 # ═══════════════════════════════════════════════════════════
@@ -154,10 +187,12 @@
 # ═══════════════════════════════════════════════════════════
 
 :PlaceOrderCommand a arknet:Command ;
-    arknet:name "PlaceOrder"^^xsd:string .
+    arknet:name "PlaceOrder"^^xsd:string ;
+    arknet:source "analyze" .
 
 :CancelOrderCommand a arknet:Command ;
-    arknet:name "CancelOrder"^^xsd:string .
+    arknet:name "CancelOrder"^^xsd:string ;
+    arknet:source "analyze" .
 
 
 # ═══════════════════════════════════════════════════════════
@@ -166,15 +201,18 @@
 
 :OrderPlacedEvent a arknet:DomainEvent ;
     arknet:name "OrderPlaced"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:publishedTo :InventoryContext ;
     arknet:publishedTo :NotificationContext .
 
 :OrderFailedEvent a arknet:DomainEvent ;
     arknet:name "OrderFailed"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:publishedTo :NotificationContext .
 
 :OrderCancelledEvent a arknet:DomainEvent ;
     arknet:name "OrderCancelled"^^xsd:string ;
+    arknet:source "analyze" ;
     arknet:publishedTo :InventoryContext ;
     arknet:publishedTo :NotificationContext .
 
