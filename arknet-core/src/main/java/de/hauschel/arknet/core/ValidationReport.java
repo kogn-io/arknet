@@ -32,7 +32,8 @@ public record ValidationReport(boolean conforms, List<ValidationResult> results)
             results.add(new ValidationResult(focusNode, path, message, level));
         }
 
-        return new ValidationReport(results.isEmpty(), results);
+        boolean conforms = results.stream().noneMatch(ValidationResult::isViolation);
+        return new ValidationReport(conforms, results);
     }
 
     private static String extractString(Model model, Resource subject, IRI predicate) {
