@@ -27,7 +27,8 @@ claude --plugin-dir /path/to/arknet
 | `arknet_validate` | SHACL-Validierung (Violations + Warnings) |
 | `arknet_query` | SPARQL-Query ausfuehren (frei oder vordefiniert Q01-Q20) |
 | `arknet_list_queries` | Vordefinierte Queries auflisten |
-| `arknet_generate` | Context-Map als HTML/PDF generieren |
+| `arknet_generate` | Projektion als HTML/PDF generieren (Default: context-map) |
+| `arknet_list_projections` | Verfuegbare Projektionstypen auflisten |
 
 ### Speichermodell
 
@@ -71,7 +72,7 @@ Modularer Aufbau unter dem Namespace `https://w3id.org/arknet/`:
 | `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome, Actor |
 | `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder (geplant) |
 | `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (geplant) |
-| `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose (geplant) |
+| `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
 
 ## Architektur
 
