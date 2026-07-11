@@ -13,11 +13,25 @@ import org.eclipse.rdf4j.sail.shacl.ShaclSailValidationException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.List;
 
 public class ModelLoader {
 
-    private static final String ONTOLOGY_RESOURCE = "/arknet-ontology.ttl";
-    private static final String SHAPES_RESOURCE = "/arknet-shapes.ttl";
+    private static final List<String> ONTOLOGY_RESOURCES = List.of(
+            "/arknet-ontology.ttl",
+            "/arknet-requirements.ttl",
+            "/arknet-architecture.ttl",
+            "/arknet-process.ttl",
+            "/arknet-privacy.ttl"
+    );
+
+    private static final List<String> SHAPES_RESOURCES = List.of(
+            "/arknet-shapes.ttl",
+            "/requirements-shapes.ttl",
+            "/architecture-shapes.ttl",
+            "/process-shapes.ttl",
+            "/privacy-shapes.ttl"
+    );
 
     public Repository loadModel(Path modelPath) throws IOException {
         var repo = new SailRepository(new MemoryStore());
@@ -38,10 +52,7 @@ public class ModelLoader {
 
         try (var conn = repo.getConnection()) {
             conn.begin();
-            try (InputStream shapes = getClass().getResourceAsStream(SHAPES_RESOURCE)) {
-                if (shapes == null) throw new IOException("SHACL shapes not found on classpath");
-                conn.add(shapes, "", RDFFormat.TURTLE, RDF4J.SHACL_SHAPE_GRAPH);
-            }
+            loadShapes(conn);
             conn.commit();
 
             conn.begin();
@@ -66,9 +77,20 @@ public class ModelLoader {
     }
 
     private void loadOntology(RepositoryConnection conn) throws IOException {
-        try (InputStream ontology = getClass().getResourceAsStream(ONTOLOGY_RESOURCE)) {
-            if (ontology == null) throw new IOException("Ontology not found on classpath");
-            conn.add(ontology, "", RDFFormat.TURTLE);
+        for (String ontologyResource : ONTOLOGY_RESOURCES) {
+            try (InputStream ontology = getClass().getResourceAsStream(ontologyResource)) {
+                if (ontology == null) throw new IOException("Ontology not found on classpath: " + ontologyResource);
+                conn.add(ontology, "", RDFFormat.TURTLE);
+            }
+        }
+    }
+
+    private void loadShapes(RepositoryConnection conn) throws IOException {
+        for (String shapesResource : SHAPES_RESOURCES) {
+            try (InputStream shapes = getClass().getResourceAsStream(shapesResource)) {
+                if (shapes == null) throw new IOException("SHACL shapes not found on classpath: " + shapesResource);
+                conn.add(shapes, "", RDFFormat.TURTLE, RDF4J.SHACL_SHAPE_GRAPH);
+            }
         }
     }
 }
