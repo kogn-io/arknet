@@ -10,6 +10,7 @@
 
 - Pipes & Filters: Turtle → Parse → Validate (SHACL) → Triple Store (RDF4J) → SPARQL → Template → AsciiDoc → HTML/PDF
 - Delivery: **MCP-first** + CLI als Convenience-Layer
+- Editionen/Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar (kognio-rdf lokal = Community/OSS <-> kognio-memory remote = Closed). Siehe `docs/adr/adr-001-editions-and-swappable-store.md`
 - CLI: `arknet validate`, `arknet generate`, `arknet query`
 
 ## Tech-Stack
@@ -20,6 +21,8 @@
 - AsciidoctorJ + asciidoctor-diagram (AsciiDoc → HTML/PDF)
 - PlantUML (Diagramme)
 - Mustache (Templates fuer AsciiDoc-Generierung)
+- Spring AI 2.0 (Tech-Linie fuer den MCP-Layer -- `@McpTool`)
+- kognio-rdf (`io.kogn.rdf`, embeddable RDF-Substrat hinter Out-Ports; OSS github.com/kogn-io/rdf-core)
 - Turtle (.ttl) als Primaerformat
 
 ## Maven-Module
@@ -29,13 +32,15 @@
 - **arknet-projection**: Template-Engine, View-Plugins
 - **arknet-cli**: PicoCLI, orchestriert core + projection
 - **arknet-mcp**: MCP-Server (spaetere Phase)
+- **arknet-requirements**: erste hexagonale BC -- requirements-core (Domaene/In-/Out-Ports) + adapter-kogniordf (Out) + adapter-mcp (In, Spring AI `@McpTool`). Requirement-Lifecycle.
 
 ## Ontologie-Namespaces
 
 - **Basis:** `https://w3id.org/arknet/`
 - `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — BoundedContext, Aggregate, Entity, ValueObject, Command, DomainEvent, ContextMap
 - `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Process, Step, StateTransition, BusinessRule, Outcome, Actor
-- `https://w3id.org/arknet/architecture#` (Prefix: `arkarch:`) — Architecture, View, Viewpoint, ADR, Stakeholder (ISO 42010)
+- `https://w3id.org/arknet/requirements#` (Prefix: `arkreq:`) — Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release (OSLC-RM-aligned, doap:Version)
+- `https://w3id.org/arknet/architecture#` (Prefix: `arkarch:`) — Architecture, View, Viewpoint, ADR, Stakeholder, Concern (ISO 42010)
 - `https://w3id.org/arknet/tech#` (Prefix: `arktech:`) — Service, Container, API, Database, MessageBroker
 - `https://w3id.org/arknet/privacy#` (Prefix: `arkpriv:`) — DataCategory, LegalBasis, ProcessingPurpose
 
@@ -66,4 +71,4 @@ entfernt und ist bei Bedarf ueber die Git-Historie wiederherstellbar
 |---------|---------|---------|--------|
 | doc42 | arknet-core/cli/projection | Pipeline, Walking Skeleton | fertig |
 | dddprocess | arknet-ontology (core + process) | Prozesse, State Machines, DDD-Bausteine | portiert (22/24 Klassen; abstrakte `DomainObject`/`Message` bewusst weggelassen) |
-| ddd-forge | arknet-ontology (privacy-Modul) | DSGVO-Ontologie | portiert (`arknet-privacy.ttl` + `privacy-shapes.ttl` aus ddd-forge.ttl re-lizenziert; DPV-aligned. Noch NICHT in `ModelLoader` verdrahtet -- wie `arknet-process.ttl` derzeit inaktiv) |
+| ddd-forge | arknet-ontology (privacy-Modul) | DSGVO-Ontologie | portiert (`arknet-privacy.ttl` + `privacy-shapes.ttl` aus ddd-forge.ttl re-lizenziert; DPV-aligned. Seit 2026-07-11 in `ModelLoader` verdrahtet -- alle 5 Module (core/process/requirements/architecture/privacy) werden geladen und gegen ihre Shapes validiert) |
