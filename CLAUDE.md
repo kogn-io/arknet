@@ -31,7 +31,7 @@
 - **arknet-core**: RDF4J, SPARQL, SHACL-Validierung
 - **arknet-projection**: Template-Engine, View-Plugins
 - **arknet-cli**: PicoCLI, orchestriert core + projection
-- **arknet-mcp**: MCP-Server (spaetere Phase)
+- **arknet-mcp**: MCP-Server (stdio) + Composition Root -- Spring Boot/Spring AI 2.0, verdrahtet arknet-Engine + requirements-Hexagon als `@McpTool`-Beans
 - **arknet-requirements**: erste hexagonale BC -- requirements-core (Domaene/In-/Out-Ports) + adapter-kogniordf (Out) + adapter-mcp (In, Spring AI `@McpTool`). Requirement-Lifecycle.
 
 ## Ontologie-Namespaces
