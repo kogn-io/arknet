@@ -11,7 +11,9 @@ import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
@@ -21,10 +23,12 @@ import de.hauschel.arknet.req.domain.WorkspaceId;
  * driven port. The component is wired as a plain object (constructor injection) by the
  * composition root; there are deliberately no framework annotations here.</p>
  *
- * <p><strong>Scaffold:</strong> the use-case bodies are intentionally not implemented
- * yet. Identity generation ({@code FR-N}/{@code NFR-N}), status-transition rules and
- * validation are policy to be added later; each method currently throws
- * {@link UnsupportedOperationException}.</p>
+ * <p><strong>Policy.</strong> Identity is assigned per type as {@code FR-N}/{@code NFR-N},
+ * where {@code N} is one above the highest running number currently used by that type in
+ * the target workspace (numbering is independent per type and per workspace). New
+ * requirements start {@link RequirementStatus#PROPOSED}. The only advancing status
+ * transition is {@code PROPOSED -> ACCEPTED}; setting the status a requirement already
+ * has is a no-op, and reverting an accepted requirement is rejected.</p>
  */
 public class RequirementService
         implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus {
@@ -42,21 +46,76 @@ public class RequirementService
 
     @Override
     public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
-        throw new UnsupportedOperationException("scaffold: add not yet implemented");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(command, "command");
+        RequirementId id = nextId(workspaceId, command.type());
+        Requirement requirement = new Requirement(id, command.title(), command.type(),
+                RequirementStatus.PROPOSED);
+        repository.save(workspaceId, requirement);
+        return requirement;
     }
 
     @Override
     public List<Requirement> list(WorkspaceId workspaceId) {
-        throw new UnsupportedOperationException("scaffold: list not yet implemented");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        return repository.findAll(workspaceId);
     }
 
     @Override
     public Optional<Requirement> get(WorkspaceId workspaceId, RequirementId id) {
-        throw new UnsupportedOperationException("scaffold: get not yet implemented");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(id, "id");
+        return repository.findById(workspaceId, id);
     }
 
     @Override
     public Requirement setStatus(WorkspaceId workspaceId, RequirementId id, RequirementStatus status) {
-        throw new UnsupportedOperationException("scaffold: setStatus not yet implemented");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(status, "status");
+        Requirement current = repository.findById(workspaceId, id)
+                .orElseThrow(() -> new RequirementNotFoundException(workspaceId, id));
+        if (current.status() == status) {
+            return current;
+        }
+        requireLegalTransition(current.status(), status);
+        Requirement updated = new Requirement(current.id(), current.title(), current.type(), status);
+        repository.save(workspaceId, updated);
+        return updated;
+    }
+
+    /**
+     * Derives the next free identity for {@code type} in {@code workspaceId}: the highest
+     * running number currently used by that type, plus one (starting at 1).
+     */
+    private RequirementId nextId(WorkspaceId workspaceId, RequirementType type) {
+        int next = repository.findAll(workspaceId).stream()
+                .filter(r -> r.type() == type)
+                .mapToInt(r -> runningNumber(r.id()))
+                .max()
+                .orElse(0) + 1;
+        return new RequirementId(type.idPrefix() + "-" + next);
+    }
+
+    /** Parses the running number from an id such as {@code FR-7} (0 if not parseable). */
+    private static int runningNumber(RequirementId id) {
+        String value = id.value();
+        int dash = value.lastIndexOf('-');
+        if (dash < 0 || dash == value.length() - 1) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(value.substring(dash + 1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static void requireLegalTransition(RequirementStatus from, RequirementStatus to) {
+        boolean legal = from == RequirementStatus.PROPOSED && to == RequirementStatus.ACCEPTED;
+        if (!legal) {
+            throw new IllegalStateException(
+                    "illegal status transition " + from + " -> " + to);
+        }
     }
 }
