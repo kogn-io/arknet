@@ -5,7 +5,6 @@ import java.util.Objects;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
-import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
 
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -17,8 +16,6 @@ import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.WorkspaceId;
-
-import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
@@ -33,18 +30,16 @@ import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
  * hand-written. This adapter does <strong>not</strong> bootstrap an MCP server or wire
  * any transport; that remains the concern of the composition root (arknet-mcp).</p>
  *
- * <p><strong>Bridge to the (still raw-SDK) composition root.</strong> {@link #tools()}
- * turns the {@code @McpTool}-annotated methods on this instance into the same
- * {@link SyncToolSpecification} collectible unit the composition root already knows how
- * to register, using {@link SyncMcpToolProvider} (from {@code spring-ai-mcp-annotations})
- * instead of hand-built {@code McpSchema.Tool}/{@code JsonSchema} objects. Once arknet-mcp
- * itself migrates to Spring AI, this bridge method can likely be dropped in favor of
- * Spring's own bean auto-detection of {@code @McpTool} methods.</p>
+ * <p><strong>Registration.</strong> The composition root (arknet-mcp, a Spring Boot MCP
+ * server on Spring AI 2.0) declares this class as a bean; the Spring AI MCP annotation
+ * scanner discovers the {@code @McpTool} methods and registers them automatically. No
+ * manual tool-specification bridge is needed - the earlier {@code tools()} adapter (which
+ * pre-built {@code SyncToolSpecification}s for a raw-SDK composition root) was removed
+ * with the arknet-mcp migration (#27).</p>
  *
  * <p><strong>Scaffold:</strong> the delegated in-ports are currently stubs throwing
- * {@link UnsupportedOperationException}; {@link SyncMcpToolProvider} maps any such
- * exception to an error {@code CallToolResult} automatically, so no manual try/catch is
- * needed here.</p>
+ * {@link UnsupportedOperationException}; Spring AI maps any such exception to an error
+ * {@code CallToolResult} automatically, so no manual try/catch is needed here.</p>
  *
  * <p><strong>Workspace (single-user default).</strong> Every in-port now takes a
  * {@link WorkspaceId} routing key. This adapter is single-user/local, so it always
@@ -76,17 +71,6 @@ public final class RequirementMcpTools {
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
-    }
-
-    /**
-     * Provider contract: the MCP tool specifications contributed by the requirements
-     * component. A composition root collects these (together with other components')
-     * and registers them on an MCP server.
-     *
-     * @return the four requirement tool specifications, never {@code null}
-     */
-    public List<SyncToolSpecification> tools() {
-        return new SyncMcpToolProvider(List.of(this)).getToolSpecifications();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------

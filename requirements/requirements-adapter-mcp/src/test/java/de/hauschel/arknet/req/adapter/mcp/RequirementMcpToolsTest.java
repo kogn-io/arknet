@@ -4,10 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
@@ -19,7 +21,7 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
- * Scaffold-level check that the adapter publishes exactly the four requirement
+ * Scaffold-level check that the adapter declares exactly the four requirement
  * tools and guards its in-port dependencies. Behaviour of the handlers is not
  * asserted here; the delegated in-ports are still scaffold stubs.
  */
@@ -30,9 +32,11 @@ class RequirementMcpToolsTest {
             new RequirementMcpTools(stub, stub, stub, stub);
 
     @Test
-    void publishesTheFourRequirementTools() {
-        List<String> names = adapter.tools().stream()
-                .map(spec -> spec.tool().name())
+    void declaresTheFourRequirementTools() {
+        List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
+                .map(m -> m.getAnnotation(McpTool.class))
+                .filter(a -> a != null)
+                .map(McpTool::name)
                 .toList();
 
         assertEquals(4, names.size());
