@@ -24,6 +24,9 @@
         <slf4j.version>2.0.16</slf4j.version>
         <mcp-sdk.version>1.1.0</mcp-sdk.version>
         <junit.version>5.14.4</junit.version>
+        <!-- Spring AI 2.0 ist die Tech-Linie fuer arknets MCP-Layer (siehe ADR-Kandidat).
+             Version konsistent zu kogn-io/kognio-memory (Schwesterprojekt) uebernommen. -->
+        <spring-ai.version>2.0.0</spring-ai.version>
     </properties>
 
     <modules>
@@ -72,6 +75,15 @@
                 <groupId>org.junit</groupId>
                 <artifactId>junit-bom</artifactId>
                 <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Spring AI 2.0 BOM: managed einheitliche Versionen fuer den Spring-AI-MCP-Stack
+                 (u.a. spring-ai-mcp-annotations). -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
