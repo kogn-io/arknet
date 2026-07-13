@@ -16,3 +16,4 @@ Thumbs.db
 
 # Maven
 dependency-reduced-pom.xml
+.flattened-pom.xml

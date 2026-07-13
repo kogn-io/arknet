@@ -7,7 +7,7 @@
     <parent>
         <groupId>de.hauschel.arknet</groupId>
         <artifactId>arknet-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>arknet-mcp</artifactId>
