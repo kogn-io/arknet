@@ -2,6 +2,7 @@ package de.hauschel.arknet.req.application.port.in;
 
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
  * Driving port: register a new requirement.
@@ -15,10 +16,11 @@ public interface AddRequirement {
     /**
      * Adds a new requirement.
      *
-     * @param command the data describing the requirement to create
+     * @param workspaceId the workspace (architecture model) to add the requirement to
+     * @param command     the data describing the requirement to create
      * @return the persisted requirement including its assigned identity
      */
-    Requirement add(NewRequirement command);
+    Requirement add(WorkspaceId workspaceId, NewRequirement command);
 
     /**
      * Input data for {@link #add(NewRequirement)}.

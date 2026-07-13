@@ -3,6 +3,7 @@ package de.hauschel.arknet.req.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
  * Driving port: list all managed requirements.
@@ -12,9 +13,10 @@ import de.hauschel.arknet.req.domain.Requirement;
 public interface ListRequirements {
 
     /**
-     * Returns all requirements currently under management.
+     * Returns all requirements currently under management in the given workspace.
      *
+     * @param workspaceId the workspace (architecture model) to list requirements from
      * @return all requirements, never {@code null}
      */
-    List<Requirement> list();
+    List<Requirement> list(WorkspaceId workspaceId);
 }

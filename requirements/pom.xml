@@ -21,6 +21,7 @@
     <modules>
         <module>requirements-core</module>
         <module>requirements-adapter-kogniordf</module>
+        <module>requirements-adapter-mcp</module>
     </modules>
 
     <dependencyManagement>
@@ -28,6 +29,11 @@
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>requirements-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>requirements-adapter-mcp</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

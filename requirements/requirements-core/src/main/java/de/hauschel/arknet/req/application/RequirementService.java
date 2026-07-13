@@ -12,6 +12,7 @@ import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
  * Application service implementing the requirement use cases.
@@ -40,22 +41,22 @@ public class RequirementService
     }
 
     @Override
-    public Requirement add(NewRequirement command) {
+    public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
         throw new UnsupportedOperationException("scaffold: add not yet implemented");
     }
 
     @Override
-    public List<Requirement> list() {
+    public List<Requirement> list(WorkspaceId workspaceId) {
         throw new UnsupportedOperationException("scaffold: list not yet implemented");
     }
 
     @Override
-    public Optional<Requirement> get(RequirementId id) {
+    public Optional<Requirement> get(WorkspaceId workspaceId, RequirementId id) {
         throw new UnsupportedOperationException("scaffold: get not yet implemented");
     }
 
     @Override
-    public Requirement setStatus(RequirementId id, RequirementStatus status) {
+    public Requirement setStatus(WorkspaceId workspaceId, RequirementId id, RequirementStatus status) {
         throw new UnsupportedOperationException("scaffold: setStatus not yet implemented");
     }
 }

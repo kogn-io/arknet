@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
  * Driving port: fetch a single requirement by identity.
@@ -13,10 +14,11 @@ import de.hauschel.arknet.req.domain.RequirementId;
 public interface GetRequirement {
 
     /**
-     * Looks up a requirement by its identity.
+     * Looks up a requirement by its identity within a workspace.
      *
-     * @param id the requirement identity
+     * @param workspaceId the workspace (architecture model) to look up the requirement in
+     * @param id          the requirement identity
      * @return the requirement if present, otherwise {@link Optional#empty()}
      */
-    Optional<Requirement> get(RequirementId id);
+    Optional<Requirement> get(WorkspaceId workspaceId, RequirementId id);
 }

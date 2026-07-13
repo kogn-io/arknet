@@ -6,6 +6,7 @@ import java.util.Optional;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate
@@ -15,6 +16,12 @@ import de.hauschel.arknet.req.domain.RequirementId;
  * {@link UnsupportedOperationException}. When implemented, this adapter will map
  * {@link Requirement} to/from RDF triples via the kognio-rdf ports
  * (GraphStore / SparqlUpdate / DatasetTx).</p>
+ *
+ * <p><strong>WorkspaceId (local, single-user).</strong> This adapter runs against
+ * exactly one embedded dataset, so {@link WorkspaceId} is accepted but currently
+ * treated as an implicit default - it is not yet used to select among several
+ * datasets. A future remote/team adapter (against kognio-memory) will use it as
+ * the mandatory routing key to address one of several workspaces/projects.</p>
  *
  * <p><strong>SHACL write-gate (deferred, "Weg 2b").</strong> Validation on write
  * is intentionally NOT wired here. kognio-rdf does not yet expose a standalone,
@@ -26,19 +33,19 @@ import de.hauschel.arknet.req.domain.RequirementId;
 public class KognioRdfRequirementRepository implements RequirementRepository {
 
     @Override
-    public void save(Requirement requirement) {
+    public void save(WorkspaceId workspaceId, Requirement requirement) {
         throw new UnsupportedOperationException(
                 "scaffold: kognio-rdf persistence not yet implemented");
     }
 
     @Override
-    public Optional<Requirement> findById(RequirementId id) {
+    public Optional<Requirement> findById(WorkspaceId workspaceId, RequirementId id) {
         throw new UnsupportedOperationException(
                 "scaffold: kognio-rdf persistence not yet implemented");
     }
 
     @Override
-    public List<Requirement> findAll() {
+    public List<Requirement> findAll(WorkspaceId workspaceId) {
         throw new UnsupportedOperationException(
                 "scaffold: kognio-rdf persistence not yet implemented");
     }
