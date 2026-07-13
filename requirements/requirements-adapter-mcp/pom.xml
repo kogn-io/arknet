@@ -11,32 +11,13 @@
     </parent>
 
     <artifactId>requirements-adapter-mcp</artifactId>
-    <description>In-Adapter (driving): uebersetzt MCP-Tool-Calls auf die requirements-core In-Ports. Liefert Tool-Specs an eine Composition Root (arknet-mcp).</description>
+    <description>In-Adapter (driving): uebersetzt MCP-Tool-Calls auf die requirements-core In-Ports via Spring-AI @McpTool. Eine Composition Root (arknet-mcp) sammelt die Tools per Bean-Auto-Detection ein.</description>
 
-    <!-- Ueberschreibt lokal (nur fuer dieses Modul) zwei Versionen, die arknet-parent auf
-         aeltere Werte pinnt (fuer den noch-raw-SDK arknet-mcp, separat spaeter migriert):
-         - mcp-core: arknet-parent pinnt 1.1.0 (mcp-sdk.version); spring-ai-mcp-annotations:2.0.0
-           ist aber gegen mcp-core:2.0.0 kompiliert (transitiv ueber io.modelcontextprotocol.sdk:mcp).
-           Ohne dieses Override wuerde Dependency-Mediation die 1.1.0-API erzwingen -> Risiko von
-           NoSuchMethodError zur Laufzeit gegen den 2.0.0-Bytecode von spring-ai-mcp-annotations.
-         - jackson-annotations: mcp-core:1.1.0 zieht die veraltete 2.13.5 herein, die noch kein
-           JsonSerializeAs kennt; jackson3 (tools.jackson:jackson-databind, von spring-ai-model
-           genutzt) braucht >=2.21 (siehe jackson-bom:3.1.4). -->
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.modelcontextprotocol.sdk</groupId>
-                <artifactId>mcp-core</artifactId>
-                <version>2.0.0</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-annotations</artifactId>
-                <version>2.21</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
+    <!-- Kein lokales dependencyManagement-Override mehr noetig (#27): seit arknet-mcp auf
+         Spring AI 2.0 migriert ist, pinnt arknet-parent mcp-core nicht mehr auf 1.1.0.
+         Die spring-ai-bom managed den kompletten MCP-Stack einheitlich auf 2.0.0 (mcp-core
+         transitiv ueber spring-ai-mcp-annotations -> io.modelcontextprotocol.sdk:mcp),
+         inklusive einer aktuellen jackson-Linie. -->
     <dependencies>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>

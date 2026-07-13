@@ -11,7 +11,39 @@
     </parent>
 
     <artifactId>arknet-mcp</artifactId>
-    <description>MCP-Server: macht arknet Engine fuer AI-Agenten querybar (stdio)</description>
+    <description>Composition Root: Spring-Boot-MCP-Server (stdio), buendelt die arknet-Engine-Tools und die Requirements-Tools</description>
+
+    <!-- Lokale Versions-Anhebungen fuer diese (einzige) Spring-Boot-Anwendung. Die rdf4j-BOM
+         wird im arknet-parent zuerst importiert und zieht ueber ihren rdf4j-Parent veraltete
+         Transitiv-Versionen herein, die den Spring-Boot-4.1-Stack sprengen:
+         - SLF4J 1.7.36 / Logback 1.2.13 -> NoClassDefFoundError StatusPrinter2 beim Log-Start.
+         - jackson-annotations 2.13.5 -> jackson3 (tools.jackson 3.1.4, vom Spring-AI-MCP-
+           JsonMapper genutzt) braucht >= 2.21 (JsonSerializeAs), sonst NoClassDefFoundError.
+         Nur dieses Modul ist eine Spring-Boot-Anwendung, deshalb bleiben die Anhebungen lokal. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>2.0.18</version>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>1.5.34</version>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-core</artifactId>
+                <version>1.5.34</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>2.21</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -24,51 +56,49 @@
             <artifactId>arknet-projection</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- Requirements-Hexagon: In-Adapter (MCP-Tools) + Out-Adapter (Repository).
+             Als Composition Root verdrahtet arknet-mcp das komplette Hexagon zu Beans;
+             die Spring-AI-Annotation-Scanner-AutoConfig sammelt die @McpTool-Methoden
+             des In-Adapters automatisch ein (kein manuelles Tool-Provider-Bridging mehr). -->
         <dependency>
-            <groupId>io.modelcontextprotocol.sdk</groupId>
-            <artifactId>mcp-core</artifactId>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>requirements-adapter-mcp</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.modelcontextprotocol.sdk</groupId>
-            <artifactId>mcp-json-jackson2</artifactId>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>requirements-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
         </dependency>
+
+        <!-- Spring AI 2.0 MCP-Server (NON-web = stdio-Variante). Version aus spring-ai-bom.
+             Zieht spring-boot-starter (inkl. logback) transitiv; slf4j-simple entfaellt. -->
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>${slf4j.version}</version>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.0</version>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>de.hauschel.arknet.mcp.ArknetMcpApplication</mainClass>
+                </configuration>
                 <executions>
                     <execution>
-                        <phase>package</phase>
                         <goals>
-                            <goal>shade</goal>
+                            <goal>repackage</goal>
                         </goals>
-                        <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>de.hauschel.arknet.mcp.ArknetMcpServer</mainClass>
-                                </transformer>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                            </transformers>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>
