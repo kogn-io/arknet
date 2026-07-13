@@ -31,6 +31,10 @@
         <spring-ai.version>2.0.0</spring-ai.version>
         <!-- Spring Boot 4.1 = Baseline von Spring AI 2.0 (arknet-mcp Composition Root). -->
         <spring-boot.version>4.1.0</spring-boot.version>
+        <!-- kognio-rdf (io.kogn.rdf): embeddable RDF-Substrat hinter den Out-Ports.
+             OSS auf github.com/kogn-io/rdf-core; kein BOM-Artefakt -> Version hier gepinnt,
+             Bezug aus den Central Portal Snapshots (siehe <repositories>). -->
+        <kognio-rdf.version>0.0.1-SNAPSHOT</kognio-rdf.version>
     </properties>
 
     <modules>
@@ -91,6 +95,23 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- kognio-rdf: kein BOM-Artefakt vorhanden, daher die drei Module einzeln
+                 auf ${kognio-rdf.version} gepinnt. -->
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-terms</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-dataset</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-dataset-rdf4j</artifactId>
+                <version>${kognio-rdf.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

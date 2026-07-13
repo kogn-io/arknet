@@ -9,6 +9,27 @@ package de.hauschel.arknet.req.domain;
  * </ul>
  */
 public enum RequirementType {
-    FUNCTIONAL,
-    NON_FUNCTIONAL
+
+    /** What the system must do; identities are prefixed {@code FR-}. */
+    FUNCTIONAL("FR"),
+
+    /** Qualities/constraints; identities are prefixed {@code NFR-}. */
+    NON_FUNCTIONAL("NFR");
+
+    private final String idPrefix;
+
+    RequirementType(String idPrefix) {
+        this.idPrefix = idPrefix;
+    }
+
+    /**
+     * The identity prefix used for this type, e.g. {@code FR} for functional
+     * requirements. Combined with a running number ({@code FR-1}, {@code NFR-7})
+     * by the application layer.
+     *
+     * @return the non-blank identity prefix
+     */
+    public String idPrefix() {
+        return idPrefix;
+    }
 }
