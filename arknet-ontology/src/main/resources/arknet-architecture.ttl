@@ -203,7 +203,7 @@ arkarch:renderedAs a owl:DatatypeProperty ;
 
 arkarch:ArchitectureDecisionRecord a owl:Class ;
     rdfs:label   "Architecture Decision Record"@en , "Architekturentscheidung"@de ;
-    rdfs:comment "Eine dokumentierte Architekturentscheidung mit Kontext, Entscheidung und Konsequenzen (Nygard/MADR-Stil)."@de .
+    rdfs:comment "Eine dokumentierte Architekturentscheidung mit Kontext, Entscheidung, Konsequenzen und erwogenen Alternativen (Nygard/MADR-Stil)."@de .
 
 # -- ADR data properties -----------------------------------------------------
 
@@ -224,6 +224,12 @@ arkarch:adrConsequences a owl:DatatypeProperty ;
     rdfs:range  xsd:string ;
     rdfs:label  "consequences"@en ;
     rdfs:comment "Positive und negative Folgen der Entscheidung."@de .
+
+arkarch:adrAlternatives a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "considered options"@en , "erwogene Alternativen"@de ;
+    rdfs:comment "Erwogene, aber verworfene Optionen mit kurzer Begruendung (MADR: Considered Options)."@de .
 
 arkarch:decisionDate a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
