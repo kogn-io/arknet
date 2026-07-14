@@ -1,6 +1,6 @@
 ##############################################################################
 #  arknet - Architecture Knowledge Net
-#  Requirements Ontology  :  Version 0.1.0
+#  Requirements Ontology  :  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/requirements#
 #  License    : Proprietary. All rights reserved.
@@ -60,12 +60,12 @@
     owl:imports      <http://usefulinc.com/ns/doap#> ;
     dcterms:title    "arknet Requirements Ontology"@en ;
     dcterms:description "Requirements Engineering nach ISO 29148: Goals, Requirements, Constraints, Use Cases und Release-Planung; OSLC-RM-aligned und mit der DDD-Schicht verknuepft."@de ;
-    dcterms:version  "0.1.0" ;
+    dcterms:version  "0.2.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
     dcterms:rights   "Proprietary. All rights reserved." ;
     vann:preferredNamespacePrefix "arkreq" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/requirements#" ;
-    owl:versionInfo  "0.1.0" .
+    owl:versionInfo  "0.2.0" .
 
 
 ##############################################################################
@@ -222,17 +222,14 @@ arkreq:designScope a owl:DatatypeProperty ;
     rdfs:label  "design scope"@en ;
     rdfs:comment "Der Systemumfang, den dieser Use Case betrachtet (Design Scope nach Cockburn)."@de .
 
-arkreq:mainSuccessScenario a owl:DatatypeProperty ;
+arkreq:trigger a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
     rdfs:range  xsd:string ;
-    rdfs:label  "main success scenario"@en ;
-    rdfs:comment "Der Hauptablauf (Happy Path) als nummerierte Schrittfolge."@de .
+    rdfs:label  "trigger"@en ;
+    rdfs:comment "Das Ereignis, das den Use Case ausloest (Cockburn trigger)."@de .
 
-arkreq:extension a owl:DatatypeProperty ;
-    rdfs:domain arkreq:UseCase ;
-    rdfs:range  xsd:string ;
-    rdfs:label  "extension"@en ;
-    rdfs:comment "Ein alternativer Ablauf oder Ausnahmefall. Kann mehrfach vorkommen."@de .
+# Haupt- und Ausnahmeablaeufe sind strukturiert (arkreq:mainStep / arkreq:extensionStep
+# auf arkreq:Step), nicht mehr Freitext -- siehe Abschnitt 4b.
 
 arkreq:useCasePrecondition a owl:DatatypeProperty ;
     rdfs:domain arkreq:UseCase ;
@@ -279,6 +276,62 @@ arkreq:extendsUseCase a owl:ObjectProperty ;
     rdfs:range  arkreq:UseCase ;
     rdfs:label  "extends"@en ;
     rdfs:comment "UML extend-Beziehung: dieser Use Case erweitert einen anderen optional."@de .
+
+
+##############################################################################
+#  4b. FLOW STEPS  (strukturierter Ablauf statt Freitext)
+#      Haupt- und Extension-Schritte sind Step-Ressourcen; Ordnung ueber
+#      arkreq:position. Ein Schritt kann einzelne Requirements realisieren
+#      (arkreq:stepRealises, feiner als die grobe UseCase-satisfies-Kante).
+##############################################################################
+
+arkreq:mainStep a owl:ObjectProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arkreq:Step ;
+    rdfs:label  "main step"@en ;
+    rdfs:comment "Ein Schritt des Hauptablaufs (main success scenario). Reihenfolge ueber arkreq:position."@de .
+
+arkreq:extensionStep a owl:ObjectProperty ;
+    rdfs:domain arkreq:UseCase ;
+    rdfs:range  arkreq:Step ;
+    rdfs:label  "extension step"@en ;
+    rdfs:comment "Ein Schritt eines alternativen Ablaufs oder Ausnahmefalls (Cockburn extension). Traegt typischerweise arkreq:stepLabel (A1, E1) und arkreq:stepOutcome."@de .
+
+arkreq:Step a owl:Class ;
+    rdfs:label   "Use Case Step"@en , "Anwendungsfall-Schritt"@de ;
+    rdfs:comment "Ein einzelner Schritt in einem Use-Case-Ablauf -- Hauptablauf (arkreq:mainStep) oder Ausnahme/Alternative (arkreq:extensionStep)."@de .
+
+arkreq:position a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Step ;
+    rdfs:range  xsd:integer ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "position"@en ;
+    rdfs:comment "1-basierte Ordnungsposition des Schritts innerhalb seines Ablaufs. Bewusst keine rdf:List -- Ordnung ueber eine ganzzahlige Position (einfacher zu schreiben und per SPARQL zu sortieren)."@de .
+
+arkreq:stepText a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Step ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "step text"@en ;
+    rdfs:comment "Beschreibung dessen, was in diesem Schritt geschieht."@de .
+
+arkreq:stepLabel a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Step ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "step label"@en ;
+    rdfs:comment "Optionale Kennung eines Extension-Schritts nach Cockburn (z.B. A1, E2). Fuer Hauptablauf-Schritte i.d.R. leer."@de .
+
+arkreq:stepOutcome a owl:DatatypeProperty ;
+    rdfs:domain arkreq:Step ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "step outcome"@en ;
+    rdfs:comment "Optionales Ergebnis eines Extension-Schritts (was passiert, wenn der Ausnahmefall eintritt)."@de .
+
+arkreq:stepRealises a owl:ObjectProperty ;
+    rdfs:subPropertyOf oslc_rm:satisfies ;
+    rdfs:domain arkreq:Step ;
+    rdfs:range  arkreq:Requirement ;
+    rdfs:label  "step realises"@en ;
+    rdfs:comment "Dieser Schritt realisiert die angegebene Anforderung (feingranular). Sub-Property von oslc_rm:satisfies; die grobe UseCase-Ebene bleibt separat ueber oslc_rm:satisfies erhalten."@de .
 
 
 ##############################################################################
