@@ -18,6 +18,8 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.ActorFacet;
+import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
 
@@ -58,6 +60,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String TERM_INSTANCE_NAMESPACE = "https://w3id.org/arknet/model/term/";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
     private static final String GLOSSARY_SCHEME = "https://w3id.org/arknet/model/glossary";
+    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
 
     private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
     private static final String CONCEPT_SCHEME_TYPE = SKOS_NAMESPACE + "ConceptScheme";
@@ -65,6 +68,9 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String PREF_LABEL_PROPERTY = SKOS_NAMESPACE + "prefLabel";
     private static final String DEFINITION_PROPERTY = SKOS_NAMESPACE + "definition";
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
+    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
+    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
+    private static final String ACTOR_ROLE_PROPERTY = ARKPROC_NAMESPACE + "actorRole";
 
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
@@ -98,6 +104,18 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), rdf.createLiteral(term.definition()));
         // The per-workspace glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
+
+        // Optional actor facet: the same skos:Concept is additionally typed as an
+        // arkproc:Actor (#45). Added before the gate so the facet is validated too.
+        ActorFacet actorFacet = term.actorFacet();
+        if (actorFacet != null) {
+            String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
+            graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+            if (actorFacet.role() != null) {
+                graph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY), rdf.createLiteral(actorFacet.role()));
+            }
+        }
+
         gate.enforce(graph);
 
         String deleteExisting = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { <"
@@ -118,10 +136,14 @@ public class KognioRdfTermRepository implements TermRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(id, "id");
 
-        String query = "SELECT ?prefLabel ?definition WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+        String query = "SELECT ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
+                + TERMS_GRAPH + "> { "
                 + "<" + termIri(id) + "> a <" + CONCEPT_TYPE + "> ; "
                 + "<" + PREF_LABEL_PROPERTY + "> ?prefLabel ; "
-                + "<" + DEFINITION_PROPERTY + "> ?definition . } }";
+                + "<" + DEFINITION_PROPERTY + "> ?definition . "
+                + "OPTIONAL { <" + termIri(id) + "> a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
+                + "OPTIONAL { <" + termIri(id) + "> a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
+                + "OPTIONAL { <" + termIri(id) + "> <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -129,7 +151,8 @@ public class KognioRdfTermRepository implements TermRepository {
                     .map(row -> new Term(
                             id,
                             literalOf(row, "prefLabel").getLexicalForm(),
-                            literalOf(row, "definition").getLexicalForm()));
+                            literalOf(row, "definition").getLexicalForm(),
+                            actorFacetOf(row)));
         }
     }
 
@@ -137,18 +160,23 @@ public class KognioRdfTermRepository implements TermRepository {
     public List<Term> findAll(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
 
-        String query = "SELECT ?identifier ?prefLabel ?definition WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+        String query = "SELECT ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
+                + TERMS_GRAPH + "> { "
                 + "?s a <" + CONCEPT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
-                + "?s <" + DEFINITION_PROPERTY + "> ?definition . } }";
+                + "?s <" + DEFINITION_PROPERTY + "> ?definition . "
+                + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
+                + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
+                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> new Term(
                             new TermId(literalOf(row, "identifier").getLexicalForm()),
                             literalOf(row, "prefLabel").getLexicalForm(),
-                            literalOf(row, "definition").getLexicalForm()))
+                            literalOf(row, "definition").getLexicalForm(),
+                            actorFacetOf(row)))
                     .toList();
         }
     }
@@ -160,5 +188,23 @@ public class KognioRdfTermRepository implements TermRepository {
     private static Literal literalOf(BindingSet row, String name) {
         return (Literal) row.getValue(name)
                 .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /**
+     * Reconstructs the {@link ActorFacet} of a term row, or {@code null} if the
+     * subject carries no {@code arkproc:HumanActor}/{@code arkproc:SystemActor} type.
+     */
+    private static ActorFacet actorFacetOf(BindingSet row) {
+        if (row.hasBinding("isHuman")) {
+            return new ActorFacet(ActorKind.HUMAN, optionalLiteralOf(row, "actorRole"));
+        }
+        if (row.hasBinding("isSystem")) {
+            return new ActorFacet(ActorKind.SYSTEM, optionalLiteralOf(row, "actorRole"));
+        }
+        return null;
+    }
+
+    private static String optionalLiteralOf(BindingSet row, String name) {
+        return row.getValue(name).map(value -> ((Literal) value).getLexicalForm()).orElse(null);
     }
 }

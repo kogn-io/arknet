@@ -44,7 +44,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
         TermId id = nextId(workspaceId);
-        Term term = new Term(id, command.prefLabel(), command.definition());
+        Term term = new Term(id, command.prefLabel(), command.definition(), command.actorFacet());
         repository.save(workspaceId, term);
         return term;
     }
