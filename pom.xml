@@ -125,6 +125,16 @@
                 <artifactId>rdf-dataset-rdf4j</artifactId>
                 <version>${kognio-rdf.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-shacl</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-shacl-rdf4j</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

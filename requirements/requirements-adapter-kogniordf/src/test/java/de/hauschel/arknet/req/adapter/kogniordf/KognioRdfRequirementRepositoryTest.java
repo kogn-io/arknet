@@ -2,6 +2,7 @@ package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -18,6 +19,7 @@ import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 
+import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -35,7 +37,7 @@ class KognioRdfRequirementRepositoryTest {
     private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
 
     private DatasetLifecycleRdf4j lifecycle;
-    private KognioRdfRequirementRepository repository;
+    private RequirementRepository repository;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -43,7 +45,7 @@ class KognioRdfRequirementRepositoryTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        repository = new KognioRdfRequirementRepository(datasetLifecycle);
+        repository = KognioRdfRequirementRepositoryFactory.over(datasetLifecycle);
     }
 
     @AfterEach
@@ -163,5 +165,23 @@ class KognioRdfRequirementRepositoryTest {
         assertNull(found.orElseThrow().priority());
         assertNull(found.orElseThrow().motivatedBy());
         assertNull(found.orElseThrow().qualityCategory());
+    }
+
+    /**
+     * Regression test for the RDFS gotcha: {@code RequirementShape} targets the abstract
+     * {@code arkreq:Requirement}, while the adapter types instances as the concrete
+     * {@code arkreq:FunctionalRequirement}. The write-gate must reason the subclass axioms
+     * from {@code arknet-requirements.ttl} into the validated data graph, otherwise the
+     * shape silently never fires and this test would pass with an invalid requirement saved.
+     */
+    @Test
+    void saveRejectsRequirementViolatingShaclShapes() {
+        Requirement tooShortDescription = new Requirement(
+                new RequirementId("FR-1"), "Login", "Hi", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null);
+
+        assertThrows(WriteConstraintViolationException.class,
+                () -> repository.save(WORKSPACE_A, tooShortDescription));
+        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
     }
 }

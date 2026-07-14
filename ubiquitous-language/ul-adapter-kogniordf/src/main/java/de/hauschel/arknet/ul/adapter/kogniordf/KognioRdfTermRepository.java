@@ -45,9 +45,12 @@ import de.hauschel.arknet.ul.domain.TermId;
  * {@code skos:ConceptScheme} per workspace ({@link #GLOSSARY_SCHEME}); a per-bounded-context
  * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
  *
- * <p><strong>SHACL write-gate (deferred, "Weg 2b").</strong> Validation on write is
- * intentionally NOT wired here yet (symmetric to the requirements adapter); see
- * {@link #enforceWriteConstraints(Term)}.</p>
+ * <p><strong>SHACL write-gate.</strong> Every {@link #save(WorkspaceId, Term)} call validates
+ * the candidate instance graph against the ubiquitous-language SHACL shapes via
+ * {@link ShaclWriteGate} before starting the write transaction (symmetric to the requirements
+ * adapter); a violation throws {@link WriteConstraintViolationException} and nothing is
+ * persisted. The gate itself is technology-neutral - only
+ * {@link KognioRdfTermRepositoryFactory} names RDF4J.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
 
@@ -64,6 +67,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
 
     private final DatasetLifecycle lifecycle;
+    private final ShaclWriteGate gate;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -71,16 +75,18 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from (must not be
      *                  {@code null})
+     * @param gate      the SHACL write-gate validating candidate graphs before persistence
+     *                  (must not be {@code null})
      */
-    public KognioRdfTermRepository(DatasetLifecycle lifecycle) {
+    KognioRdfTermRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.gate = Objects.requireNonNull(gate, "gate");
     }
 
     @Override
     public void save(WorkspaceId workspaceId, Term term) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(term, "term");
-        enforceWriteConstraints(term);
 
         IRI subjectIri = rdf.createIRI(termIri(term.id()));
         IRI schemeIri = rdf.createIRI(GLOSSARY_SCHEME);
@@ -92,6 +98,7 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), rdf.createLiteral(term.definition()));
         // The per-workspace glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
+        gate.enforce(graph);
 
         String deleteExisting = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { <"
                 + subjectIri.getIRIString() + "> ?p ?o } }";
@@ -144,19 +151,6 @@ public class KognioRdfTermRepository implements TermRepository {
                             literalOf(row, "definition").getLexicalForm()))
                     .toList();
         }
-    }
-
-    /**
-     * SHACL write-gate stub (MVP: no-op).
-     *
-     * <p>TODO(kogn-io/rdf-core#3): SHACL write-gate scharf schalten, sobald der standalone
-     * ShaclValidation-Port + RDFS-Reasoning-Option verfuegbar ist. Bis dahin bewusst kein
-     * Gate ("Weg 2b"), symmetrisch zum requirements-Adapter.</p>
-     *
-     * @param term the term about to be persisted
-     */
-    private void enforceWriteConstraints(Term term) {
-        Objects.requireNonNull(term, "term");
     }
 
     private static String termIri(TermId id) {

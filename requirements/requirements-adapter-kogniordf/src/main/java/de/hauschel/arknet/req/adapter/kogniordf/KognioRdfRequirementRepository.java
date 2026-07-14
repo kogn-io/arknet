@@ -46,11 +46,11 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * would use the same routing key differently (e.g. as a server-side project
  * selector), but the local embedded adapter already keeps workspaces separate.</p>
  *
- * <p><strong>SHACL write-gate (deferred, "Weg 2b").</strong> Validation on write
- * is intentionally NOT wired here. kognio-rdf does not yet expose a standalone,
- * technology-neutral ShaclValidation port (tracked as kogn-io/rdf-core#3). Until
- * that is released we do not depend on {@code rdf4j-shacl} directly, to avoid
- * leaking RDF4J into arknet. See {@link #enforceWriteConstraints(Requirement)}.</p>
+ * <p><strong>SHACL write-gate.</strong> Every {@link #save(WorkspaceId, Requirement)} call
+ * validates the candidate instance graph against the requirements SHACL shapes via
+ * {@link ShaclWriteGate} before starting the write transaction; a violation throws
+ * {@link WriteConstraintViolationException} and nothing is persisted. The gate itself is
+ * technology-neutral - only {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  */
 public class KognioRdfRequirementRepository implements RequirementRepository {
 
@@ -74,6 +74,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String WONT_HAVE_PRIORITY = ARKREQ_NAMESPACE + "WontHave";
 
     private final DatasetLifecycle lifecycle;
+    private final ShaclWriteGate gate;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -81,16 +82,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from (must not be
      *                  {@code null})
+     * @param gate      the SHACL write-gate validating candidate graphs before persistence
+     *                  (must not be {@code null})
      */
-    public KognioRdfRequirementRepository(DatasetLifecycle lifecycle) {
+    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.gate = Objects.requireNonNull(gate, "gate");
     }
 
     @Override
     public void save(WorkspaceId workspaceId, Requirement requirement) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(requirement, "requirement");
-        enforceWriteConstraints(requirement);
 
         IRI subjectIri = rdf.createIRI(requirementIri(requirement.id()));
         Graph graph = rdf.createGraph();
@@ -110,6 +113,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             graph.add(subjectIri, rdf.createIRI(QUALITY_CATEGORY_PROPERTY),
                     rdf.createLiteral(requirement.qualityCategory()));
         }
+        gate.enforce(graph);
 
         String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
                 + subjectIri.getIRIString() + "> ?p ?o } }";
@@ -186,19 +190,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                             qualityCategoryOf(row)))
                     .toList();
         }
-    }
-
-    /**
-     * SHACL write-gate stub (MVP: no-op).
-     *
-     * <p>TODO(kogn-io/rdf-core#3): SHACL write-gate scharf schalten, sobald der standalone
-     * ShaclValidation-Port + RDFS-Reasoning-Option verfuegbar ist. Bis dahin bewusst kein
-     * Gate ("Weg 2b").</p>
-     *
-     * @param requirement the requirement about to be persisted
-     */
-    private void enforceWriteConstraints(Requirement requirement) {
-        Objects.requireNonNull(requirement, "requirement");
     }
 
     private static String requirementIri(RequirementId id) {
