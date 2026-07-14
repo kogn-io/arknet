@@ -16,7 +16,10 @@
         <revision>0.1.0-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
-        <rdf4j.version>5.2.2</rdf4j.version>
+        <!-- 6.0.0 (nicht 5.2.2): Voraussetzung fuer io.kogn.rdf:rdf-shacl-rdf4j, das
+             gegen RDF4J 6.0.0 gebaut ist (ShaclValidator.builder() existiert erst dort).
+             Der Bump ist bewusst als eigener Schritt getrennt vom SHACL-Write-Gate (#38). -->
+        <rdf4j.version>6.0.0</rdf4j.version>
         <picocli.version>4.7.7</picocli.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj-diagram.version>3.1.0</asciidoctorj-diagram.version>
