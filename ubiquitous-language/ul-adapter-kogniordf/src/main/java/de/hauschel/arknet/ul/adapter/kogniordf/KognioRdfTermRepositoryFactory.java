@@ -62,7 +62,7 @@ public final class KognioRdfTermRepositoryFactory {
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
      * @return a ready-to-use {@link TermRepository}
      */
-    static TermRepository over(DatasetLifecycle lifecycle) {
+    public static TermRepository over(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         return new KognioRdfTermRepository(lifecycle, buildGate());
     }
