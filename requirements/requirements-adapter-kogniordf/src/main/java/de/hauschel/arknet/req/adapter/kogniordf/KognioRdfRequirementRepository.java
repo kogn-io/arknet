@@ -17,6 +17,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -27,9 +28,13 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate
  * ({@code io.kogn.rdf}, embeddable RDF dataset).
  *
- * <p>Maps a {@link Requirement} to five triples with a fixed subject IRI
+ * <p>Maps a {@link Requirement} to a fixed subject IRI
  * ({@code https://w3id.org/arknet/model/requirement/<id>}), stored in one named
- * graph shared by all requirements. This class depends only on the neutral
+ * graph shared by all requirements: five mandatory triples (identifier, type, title,
+ * description, status) plus up to three optional triples for {@code priority},
+ * {@code motivatedBy} and {@code qualityCategory} - written only when the corresponding
+ * field is non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so that
+ * requirements without them still match. This class depends only on the neutral
  * kognio-rdf ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it
  * never imports RDF4J or any other backend-specific type. The backend
  * ({@link DatasetLifecycle} implementation) is supplied by the composition
@@ -60,6 +65,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String ACCEPTED_STATUS = ARKREQ_NAMESPACE + "Accepted";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
     private static final String DESCRIPTION_PROPERTY = VocabDct.NAMESPACE + "description";
+    private static final String PRIORITY_PROPERTY = ARKREQ_NAMESPACE + "priority";
+    private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
+    private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
+    private static final String MUST_HAVE_PRIORITY = ARKREQ_NAMESPACE + "MustHave";
+    private static final String SHOULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "ShouldHave";
+    private static final String COULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "CouldHave";
+    private static final String WONT_HAVE_PRIORITY = ARKREQ_NAMESPACE + "WontHave";
 
     private final DatasetLifecycle lifecycle;
     private final RDF rdf = new SimpleRdf();
@@ -87,6 +99,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(requirement.title()));
         graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), rdf.createLiteral(requirement.description()));
         graph.add(subjectIri, rdf.createIRI(STATUS_PROPERTY), rdf.createIRI(statusIriFor(requirement.status())));
+        if (requirement.priority() != null) {
+            graph.add(subjectIri, rdf.createIRI(PRIORITY_PROPERTY),
+                    rdf.createIRI(priorityIriFor(requirement.priority())));
+        }
+        if (requirement.motivatedBy() != null) {
+            graph.add(subjectIri, rdf.createIRI(MOTIVATED_BY_PROPERTY), rdf.createIRI(requirement.motivatedBy()));
+        }
+        if (requirement.qualityCategory() != null) {
+            graph.add(subjectIri, rdf.createIRI(QUALITY_CATEGORY_PROPERTY),
+                    rdf.createLiteral(requirement.qualityCategory()));
+        }
 
         String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
                 + subjectIri.getIRIString() + "> ?p ?o } }";
@@ -106,11 +129,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(id, "id");
 
-        String query = "SELECT ?type ?title ?description ?status WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "<" + requirementIri(id) + "> a ?type ; "
+        String subject = "<" + requirementIri(id) + ">";
+        String query = "SELECT ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + subject + " a ?type ; "
                 + "<" + TITLE_PROPERTY + "> ?title ; "
                 + "<" + DESCRIPTION_PROPERTY + "> ?description ; "
-                + "<" + STATUS_PROPERTY + "> ?status . } }";
+                + "<" + STATUS_PROPERTY + "> ?status . "
+                + "OPTIONAL { " + subject + " <" + PRIORITY_PROPERTY + "> ?priority } "
+                + "OPTIONAL { " + subject + " <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
+                + "OPTIONAL { " + subject + " <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -120,7 +148,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                             literalOf(row, "title").getLexicalForm(),
                             literalOf(row, "description").getLexicalForm(),
                             typeFromIri(iriOf(row, "type").getIRIString()),
-                            statusFromIri(iriOf(row, "status").getIRIString())));
+                            statusFromIri(iriOf(row, "status").getIRIString()),
+                            priorityOf(row),
+                            motivatedByOf(row),
+                            qualityCategoryOf(row)));
         }
     }
 
@@ -128,7 +159,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     public List<Requirement> findAll(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
 
-        String query = "SELECT ?identifier ?title ?description ?type ?status WHERE { GRAPH <"
+        String query = "SELECT ?identifier ?title ?description ?type ?status ?priority ?motivatedBy "
+                + "?qualityCategory WHERE { GRAPH <"
                 + REQUIREMENTS_GRAPH + "> { "
                 + "?s a ?type . "
                 + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
@@ -136,7 +168,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "?s <" + VocabDct.IDENTIFIER.getIRIString() + "> ?identifier . "
                 + "?s <" + TITLE_PROPERTY + "> ?title . "
                 + "?s <" + DESCRIPTION_PROPERTY + "> ?description . "
-                + "?s <" + STATUS_PROPERTY + "> ?status . } }";
+                + "?s <" + STATUS_PROPERTY + "> ?status . "
+                + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
+                + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
+                + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -145,7 +180,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                             literalOf(row, "title").getLexicalForm(),
                             literalOf(row, "description").getLexicalForm(),
                             typeFromIri(iriOf(row, "type").getIRIString()),
-                            statusFromIri(iriOf(row, "status").getIRIString())))
+                            statusFromIri(iriOf(row, "status").getIRIString()),
+                            priorityOf(row),
+                            motivatedByOf(row),
+                            qualityCategoryOf(row)))
                     .toList();
         }
     }
@@ -199,6 +237,49 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             return RequirementStatus.ACCEPTED;
         }
         throw new IllegalStateException("unexpected status " + iri);
+    }
+
+    private static String priorityIriFor(Priority priority) {
+        return switch (priority) {
+            case MUST_HAVE -> MUST_HAVE_PRIORITY;
+            case SHOULD_HAVE -> SHOULD_HAVE_PRIORITY;
+            case COULD_HAVE -> COULD_HAVE_PRIORITY;
+            case WONT_HAVE -> WONT_HAVE_PRIORITY;
+        };
+    }
+
+    private static Priority priorityFromIri(String iri) {
+        if (MUST_HAVE_PRIORITY.equals(iri)) {
+            return Priority.MUST_HAVE;
+        }
+        if (SHOULD_HAVE_PRIORITY.equals(iri)) {
+            return Priority.SHOULD_HAVE;
+        }
+        if (COULD_HAVE_PRIORITY.equals(iri)) {
+            return Priority.COULD_HAVE;
+        }
+        if (WONT_HAVE_PRIORITY.equals(iri)) {
+            return Priority.WONT_HAVE;
+        }
+        throw new IllegalStateException("unexpected priority " + iri);
+    }
+
+    private static Priority priorityOf(BindingSet row) {
+        return row.getValue("priority")
+                .map(value -> priorityFromIri(((IRI) value).getIRIString()))
+                .orElse(null);
+    }
+
+    private static String motivatedByOf(BindingSet row) {
+        return row.getValue("motivatedBy")
+                .map(value -> ((IRI) value).getIRIString())
+                .orElse(null);
+    }
+
+    private static String qualityCategoryOf(BindingSet row) {
+        return row.getValue("qualityCategory")
+                .map(value -> ((Literal) value).getLexicalForm())
+                .orElse(null);
     }
 
     private static IRI iriOf(BindingSet row, String name) {

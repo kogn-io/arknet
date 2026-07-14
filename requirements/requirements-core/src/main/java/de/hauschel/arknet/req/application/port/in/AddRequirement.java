@@ -1,5 +1,6 @@
 package de.hauschel.arknet.req.application.port.in;
 
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -25,10 +26,21 @@ public interface AddRequirement {
     /**
      * Input data for {@link #add(WorkspaceId, NewRequirement)}.
      *
-     * @param title       short human-readable summary
-     * @param description the normative statement ("The system shall ...")
-     * @param type        functional vs. non-functional classification
+     * @param title           short human-readable summary
+     * @param description     the normative statement ("The system shall ...")
+     * @param type            functional vs. non-functional classification
+     * @param priority        MoSCoW priority; optional (may be {@code null})
+     * @param motivatedBy     IRI of the motivating {@code arkreq:Goal}; optional (may be
+     *                        {@code null})
+     * @param qualityCategory free-text quality category; optional (may be {@code null}),
+     *                        only meaningful for {@link RequirementType#NON_FUNCTIONAL}
      */
-    record NewRequirement(String title, String description, RequirementType type) {
+    record NewRequirement(
+            String title,
+            String description,
+            RequirementType type,
+            Priority priority,
+            String motivatedBy,
+            String qualityCategory) {
     }
 }

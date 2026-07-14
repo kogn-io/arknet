@@ -52,7 +52,7 @@ class ArknetMcpConfigurationTest {
                     Requirement created = service.add(WorkspaceId.DEFAULT,
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.",
-                                    RequirementType.FUNCTIONAL));
+                                    RequirementType.FUNCTIONAL, null, null, null));
 
                     assertThat(created.id().value()).isEqualTo("FR-1");
                     assertThat(service.get(WorkspaceId.DEFAULT, created.id()))
