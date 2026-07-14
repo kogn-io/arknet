@@ -73,7 +73,9 @@ java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examp
 | `arknet-projection` | Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF) |
 | `arknet-mcp` | MCP-Server (stdio) -- macht die Engine fuer AI-Agenten querybar |
 | `arknet-cli` | PicoCLI-Einstiegspunkt: `validate`, `generate` |
+| `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`) |
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
+| `arknet-ubiquitous-language` | Zweite hexagonale BC: Glossar-Begriffe als SKOS-Concepts (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 
 ## Ontologie
 
