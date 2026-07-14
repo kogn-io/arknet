@@ -1,9 +1,12 @@
 package de.hauschel.arknet.mcp;
 
+import java.nio.file.Path;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepository;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -17,13 +20,14 @@ import de.hauschel.arknet.req.application.port.out.RequirementRepository;
  *
  * <ul>
  *   <li><strong>arknet engine</strong> ({@link ArknetTools} over {@link ArknetEngine}) -
- *       fully functional today (load / validate / query / generate).</li>
+ *       load / validate / query / generate.</li>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
- *       {@link RequirementService} over {@link KognioRdfRequirementRepository}) - the
- *       four requirement tools are registered and callable, but the underlying
- *       use-case and persistence bodies are still scaffold stubs that throw
- *       {@link UnsupportedOperationException}; Spring AI maps that to an error result
- *       until the requirements hexagon is implemented.</li>
+ *       {@link RequirementService} over an RDF-persisted requirement repository) - the
+ *       four requirement tools are registered, callable and backed by kognio-rdf
+ *       persistence. The repository is assembled through
+ *       {@link KognioRdfRequirementRepositoryFactory} so this composition root stays
+ *       free of any direct RDF4J dependency; it only supplies the storage directory
+ *       ({@code arknet.rdf.storage}).</li>
  * </ul>
  */
 @Configuration(proxyBeanMethods = false)
@@ -39,11 +43,12 @@ public class ArknetMcpConfiguration {
         return new ArknetTools(engine);
     }
 
-    // --- Requirements hexagon (scaffold; see class Javadoc) --------------------
+    // --- Requirements hexagon --------------------------------------------------
 
     @Bean
-    RequirementRepository requirementRepository() {
-        return new KognioRdfRequirementRepository();
+    RequirementRepository requirementRepository(
+            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
+        return KognioRdfRequirementRepositoryFactory.persistent(storageDir);
     }
 
     @Bean
