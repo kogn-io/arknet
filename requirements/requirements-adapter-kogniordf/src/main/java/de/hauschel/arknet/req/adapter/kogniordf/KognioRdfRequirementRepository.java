@@ -21,7 +21,7 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate

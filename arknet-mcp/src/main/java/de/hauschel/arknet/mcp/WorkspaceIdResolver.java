@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
 
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Resolves the {@link WorkspaceId} a single arknet MCP server instance operates

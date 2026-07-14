@@ -1,0 +1,66 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Ubiquitous-Language SHACL Shapes  :  Version 0.1.0
+#
+#  Validates the ubiquitous-language bounded context: glossary terms modelled
+#  as skos:Concept (W3C SKOS) instead of bare strings, grouped into per-workspace
+#  glossaries (skos:ConceptScheme).
+#
+#  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
+##############################################################################
+
+@prefix sh:       <http://www.w3.org/ns/shacl#> .
+@prefix arknet:   <https://w3id.org/arknet/core#> .
+@prefix skos:     <http://www.w3.org/2004/02/skos/core#> .
+@prefix ulshapes: <https://w3id.org/arknet/shapes/ul#> .
+
+
+##############################################################################
+#  TERM (skos:Concept) SHAPES
+##############################################################################
+
+ulshapes:TermShape
+    a sh:NodeShape ;
+    sh:targetClass skos:Concept ;
+    sh:property ulshapes:Term-prefLabel ;
+    sh:property ulshapes:Term-inScheme .
+
+ulshapes:Term-prefLabel
+    a sh:PropertyShape ;
+    sh:path     skos:prefLabel ;
+    sh:minCount 1 ;
+    sh:minLength 1 ;
+    sh:message  "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff)."@de ;
+    sh:severity sh:Violation .
+
+ulshapes:Term-inScheme
+    a sh:PropertyShape ;
+    sh:path     skos:inScheme ;
+    sh:minCount 1 ;
+    sh:class    skos:ConceptScheme ;
+    sh:message  "Best Practice: Ein Begriff sollte via skos:inScheme in einem Glossar (skos:ConceptScheme) liegen."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  BOUNDED-CONTEXT LINK SHAPE
+#
+#  arknet:ubiquitousLanguageTerm verweist jetzt auf einen skos:Concept
+#  (breaking: frueher xsd:string). Eigene NodeShape auf arknet:BoundedContext,
+#  damit die Kern-BoundedContext-Shape (arknet-shapes.ttl) unangetastet bleibt.
+##############################################################################
+
+ulshapes:BoundedContextTermsShape
+    a sh:NodeShape ;
+    sh:targetClass arknet:BoundedContext ;
+    sh:property ulshapes:BoundedContext-ubiquitousLanguageTerm .
+
+ulshapes:BoundedContext-ubiquitousLanguageTerm
+    a sh:PropertyShape ;
+    sh:path     arknet:ubiquitousLanguageTerm ;
+    sh:nodeKind sh:IRI ;
+    sh:class    skos:Concept ;
+    sh:message  "arknet:ubiquitousLanguageTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
+    sh:severity sh:Violation .
+
+# END OF UL SHAPES

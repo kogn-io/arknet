@@ -43,7 +43,9 @@
         <module>arknet-projection</module>
         <module>arknet-cli</module>
         <module>arknet-mcp</module>
+        <module>shared-kernel</module>
         <module>requirements</module>
+        <module>ubiquitous-language</module>
     </modules>
 
     <repositories>
@@ -62,6 +64,13 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Shared Kernel: von mehreren Bounded Contexts (requirements, ubiquitous-language)
+                 geteilte Domain-Bausteine (WorkspaceId). Version zentral hier gemanaged. -->
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-shared-kernel</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.eclipse.rdf4j</groupId>
                 <artifactId>rdf4j-bom</artifactId>

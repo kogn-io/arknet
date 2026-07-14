@@ -8,7 +8,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Unit test for the workspace resolution chain. A fake {@link GitToplevelLocator}

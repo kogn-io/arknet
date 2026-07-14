@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Driving port: fetch a single requirement by identity.

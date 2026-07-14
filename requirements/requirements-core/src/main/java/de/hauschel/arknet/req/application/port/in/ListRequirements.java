@@ -3,7 +3,7 @@ package de.hauschel.arknet.req.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Driving port: list all managed requirements.

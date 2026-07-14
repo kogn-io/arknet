@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-ubiquitous-language</artifactId>
+    <packaging>pom</packaging>
+    <description>Ubiquitous-Language-Komponente (hexagonal, Shared Kernel): Fachbegriffe als SKOS-Concepts (Glossar). Zweite hexagonale BC nach requirements, gleiche Bauart. Dogfood: arknet verwaltet seine eigene Fachsprache.</description>
+
+    <properties>
+        <kognio-rdf.version>0.0.1-SNAPSHOT</kognio-rdf.version>
+    </properties>
+
+    <modules>
+        <module>ul-core</module>
+        <module>ul-adapter-kogniordf</module>
+        <module>ul-adapter-mcp</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>ul-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>ul-adapter-mcp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-terms</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-dataset</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-dataset-rdf4j</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
