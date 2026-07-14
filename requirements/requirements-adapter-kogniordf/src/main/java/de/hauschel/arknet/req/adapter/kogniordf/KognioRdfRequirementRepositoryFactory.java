@@ -49,10 +49,30 @@ public final class KognioRdfRequirementRepositoryFactory {
      * @return a ready-to-use {@link RequirementRepository}
      */
     public static RequirementRepository persistent(Path storageDir) {
+        return over(persistentLifecycle(storageDir));
+    }
+
+    /**
+     * Creates the shared persistent, RDF4J-backed kognio-rdf dataset lifecycle stored
+     * under {@code storageDir}, returning only the technology-neutral
+     * {@link DatasetLifecycle} type.
+     *
+     * <p>This is the single place that constructs a persistent {@link DatasetLifecycleRdf4j}.
+     * The composition root (arknet-mcp) calls it once to obtain <em>one</em> shared lifecycle
+     * bean and hands that same instance to every consumer of the store - the requirements and
+     * ubiquitous-language repositories (via their {@code over(DatasetLifecycle)} factories) and
+     * the generic store report. Sharing a single lifecycle over one storage directory avoids
+     * several {@link DatasetLifecycleRdf4j} instances competing for a lock on the same
+     * {@code ~/.arknet/rdf} store. Because the return type is the neutral
+     * {@link DatasetLifecycle}, arknet-mcp obtains a working store without itself depending on
+     * {@code io.kogn.rdf.rdf4j.*} or RDF4J.</p>
+     *
+     * @param storageDir the directory the embedded RDF store persists into
+     * @return the shared, technology-neutral dataset lifecycle
+     */
+    public static DatasetLifecycle persistentLifecycle(Path storageDir) {
         Objects.requireNonNull(storageDir, "storageDir");
-        final DatasetLifecycle lifecycle =
-                new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle);
+        return new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
     }
 
     /**
@@ -63,7 +83,7 @@ public final class KognioRdfRequirementRepositoryFactory {
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
      * @return a ready-to-use {@link RequirementRepository}
      */
-    static RequirementRepository over(DatasetLifecycle lifecycle) {
+    public static RequirementRepository over(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         return new KognioRdfRequirementRepository(lifecycle, buildGate());
     }
