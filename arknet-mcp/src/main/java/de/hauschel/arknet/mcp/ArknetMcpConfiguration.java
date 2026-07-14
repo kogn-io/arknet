@@ -6,7 +6,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import io.kogn.rdf.dataset.DatasetLifecycle;
+
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.mcp.store.HtmlReportRenderer;
+import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.mcp.store.StoreReader;
+import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
@@ -54,12 +60,30 @@ public class ArknetMcpConfiguration {
         return new ArknetTools(engine);
     }
 
+    // --- Shared store ----------------------------------------------------------
+
+    /**
+     * The single kognio-rdf dataset lifecycle shared by every store consumer: the
+     * requirements and ubiquitous-language repositories and the generic store report.
+     *
+     * <p>Extracted into one bean so all consumers acquire datasets from the <em>same</em>
+     * persistent store under {@code arknet.rdf.storage} instead of each factory building its
+     * own {@code DatasetLifecycleRdf4j} over the same directory (a lock risk). The lifecycle
+     * is created via {@link KognioRdfRequirementRepositoryFactory#persistentLifecycle(Path)},
+     * which returns the technology-neutral {@link DatasetLifecycle} - so this composition root
+     * stays free of any direct RDF4J dependency.</p>
+     */
+    @Bean
+    DatasetLifecycle datasetLifecycle(
+            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
+        return KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+    }
+
     // --- Requirements hexagon --------------------------------------------------
 
     @Bean
-    RequirementRepository requirementRepository(
-            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
-        return KognioRdfRequirementRepositoryFactory.persistent(storageDir);
+    RequirementRepository requirementRepository(final DatasetLifecycle datasetLifecycle) {
+        return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle);
     }
 
     @Bean
@@ -89,9 +113,8 @@ public class ArknetMcpConfiguration {
     // --- Ubiquitous-language hexagon -------------------------------------------
 
     @Bean
-    TermRepository termRepository(
-            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
-        return KognioRdfTermRepositoryFactory.persistent(storageDir);
+    TermRepository termRepository(final DatasetLifecycle datasetLifecycle) {
+        return KognioRdfTermRepositoryFactory.over(datasetLifecycle);
     }
 
     @Bean
@@ -103,5 +126,33 @@ public class ArknetMcpConfiguration {
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
             final TermService service, final WorkspaceId workspaceId) {
         return new UbiquitousLanguageMcpTools(service, service, service, workspaceId);
+    }
+
+    // --- Generic store report (domain-agnostic read path) ----------------------
+
+    @Bean
+    Prefixes storeReportPrefixes() {
+        return Prefixes.defaults();
+    }
+
+    @Bean
+    StoreReader storeReader(final DatasetLifecycle datasetLifecycle) {
+        return new StoreReader(datasetLifecycle);
+    }
+
+    /**
+     * The two generic, read-only store tools ({@code store_overview}, {@code resource_get}).
+     * They read the workspace dataset through {@link StoreReader} - a single generic
+     * {@code SELECT ?s ?p ?o} - and render domain-agnostic views, so they work for every
+     * bounded context (requirements, ubiquitous-language, ...) without type-to-tool mapping.
+     * The HTML report is written into {@code arknet.report.dir} (default: the launched project
+     * root / working directory).
+     */
+    @Bean
+    StoreReportTools storeReportTools(
+            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceId workspaceId,
+            @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path reportDir) {
+        return new StoreReportTools(
+                storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceId, reportDir);
     }
 }
