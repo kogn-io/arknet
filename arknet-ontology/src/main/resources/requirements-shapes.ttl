@@ -1,6 +1,6 @@
 ##############################################################################
 #  arknet - Architecture Knowledge Net
-#  Requirements SHACL Shapes  :  Version 0.1.0
+#  Requirements SHACL Shapes  :  Version 0.2.0
 #
 #  Validates requirements-specific concepts (arkreq:).
 #  Core DDD shapes are in arknet-shapes.ttl, process shapes in process-shapes.ttl.
@@ -143,7 +143,8 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-identifier ;
     sh:property rshapes:UseCase-goal ;
     sh:property rshapes:UseCase-primaryActor ;
-    sh:property rshapes:UseCase-satisfies .
+    sh:property rshapes:UseCase-satisfies ;
+    sh:property rshapes:UseCase-mainStep .
 
 rshapes:UseCase-identifier
     a sh:PropertyShape ;
@@ -178,6 +179,52 @@ rshapes:UseCase-satisfies
     sh:class    arkreq:Requirement ;
     sh:message  "Best Practice: Use Case sollte ueber oslc_rm:satisfies mindestens eine Anforderung erfuellen (Traceability)."@de ;
     sh:severity sh:Warning .
+
+rshapes:UseCase-mainStep
+    a sh:PropertyShape ;
+    sh:path     arkreq:mainStep ;
+    sh:minCount 1 ;
+    sh:class    arkreq:Step ;
+    sh:message  "Use Case sollte einen Hauptablauf aus arkreq:mainStep-Schritten haben."@de ;
+    sh:severity sh:Warning .
+
+
+##############################################################################
+#  FLOW STEP SHAPES
+##############################################################################
+
+rshapes:StepShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:Step ;
+    sh:property rshapes:Step-position ;
+    sh:property rshapes:Step-text ;
+    sh:property rshapes:Step-realises .
+
+rshapes:Step-position
+    a sh:PropertyShape ;
+    sh:path     arkreq:position ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 1 ;
+    sh:message  "Step braucht genau eine arkreq:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Step-text
+    a sh:PropertyShape ;
+    sh:path     arkreq:stepText ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 3 ;
+    sh:message  "Step braucht einen arkreq:stepText (min. 3 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Step-realises
+    a sh:PropertyShape ;
+    sh:path     arkreq:stepRealises ;
+    sh:class    arkreq:Requirement ;
+    sh:message  "arkreq:stepRealises muss auf ein arkreq:Requirement zeigen."@de ;
+    sh:severity sh:Violation .
 
 
 ##############################################################################
