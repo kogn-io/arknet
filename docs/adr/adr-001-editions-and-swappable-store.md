@@ -99,9 +99,11 @@ wenn Adapter B ansteht. Bis dahin kein Auth-Code in arknet.
   kein Modell-Management ist (effektiv genau ein lokaler Workspace). Zielbild: die
   WorkspaceId kommt **von der Composition Root beim MCP-Server-Start** (Startup-Arg/Env
   oder Arbeitsverzeichnis; ein stdio-Prozess = ein Modell) als session-scoped Wert, der in
-  die Tools injiziert wird -- nicht aus einer Domain-Konstante. Umsetzung beim
-  arknet-mcp-Umbau (#27).
-- **mcp-core-Doppelversion** (1.1.0 raw / 2.0.0 Spring AI) bis arknet-mcp migriert ist -- #27.
+  die Tools injiziert wird -- nicht aus einer Domain-Konstante. Der arknet-mcp-Umbau
+  (#27, erledigt) hat diesen Punkt bewusst NICHT mitgenommen -- WorkspaceId bleibt vorerst
+  `WorkspaceId.DEFAULT`; die session-scoped Herkunft bleibt offen.
+- ~~**mcp-core-Doppelversion** (1.1.0 raw / 2.0.0 Spring AI)~~ -- erledigt mit #27
+  (arknet-mcp auf Spring AI 2.0 migriert, nur noch mcp-core 2.0.0). Siehe ADR-002.
 
 ## Referenzen
 
@@ -109,4 +111,4 @@ wenn Adapter B ansteht. Bis dahin kein Auth-Code in arknet.
   Modell-Achse (WorkspaceId) vs. User-Achse (Auth, im Backend).
 - kogn-io/rdf-core#2 (transaktionale SHACL, deferred), #3 (standalone SHACL).
 - Forgejo kogn-io/arknet #25 (schreibende MCP-Tools), #26 (requirements-Komponente MVP).
-- Tech-Linie Spring AI 2.0 fuer den MCP-Layer (Kandidat fuer eigenen ADR-002).
+- ADR-002 (Spring AI 2.0 als Tech-Linie fuer den MCP-Layer).
