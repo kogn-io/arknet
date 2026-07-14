@@ -1,11 +1,22 @@
 package de.hauschel.arknet.ul.adapter.kogniordf;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.Objects;
 
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.Rio;
+
 import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.rdf4j.RDF4JGraph;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
+import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 
@@ -13,14 +24,18 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
  * Assembles a {@link KognioRdfTermRepository} over a concrete kognio-rdf dataset
  * lifecycle.
  *
- * <p>This factory is the single place that names the RDF4J-backed lifecycle
- * ({@link DatasetLifecycleRdf4j}). It lets the composition root wire an RDF-persisted
- * term repository by handing over just a storage directory, without itself depending
- * on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-mcp and preserving the
- * port-neutrality of {@link KognioRdfTermRepository}, which only knows the
- * technology-neutral {@link DatasetLifecycle} port.</p>
+ * <p>This factory is the single place that names RDF4J-backed types: the lifecycle
+ * ({@link DatasetLifecycleRdf4j}), the SHACL validation implementation
+ * ({@link ShaclValidationRdf4j}) and the Turtle parsing ({@link Rio}) used to load the
+ * ubiquitous-language SHACL shapes onto the classpath. It lets the composition root wire
+ * an RDF-persisted term repository by handing over just a storage directory, without
+ * itself depending on {@code io.kogn.rdf.rdf4j.*} - keeping RDF4J out of arknet-mcp and
+ * preserving the port-neutrality of {@link KognioRdfTermRepository} and
+ * {@link ShaclWriteGate}, which only know technology-neutral kognio-rdf ports.</p>
  */
 public final class KognioRdfTermRepositoryFactory {
+
+    private static final String SHAPES_RESOURCE = "/ul-shapes.ttl";
 
     private KognioRdfTermRepositoryFactory() {
     }
@@ -36,6 +51,48 @@ public final class KognioRdfTermRepositoryFactory {
         Objects.requireNonNull(storageDir, "storageDir");
         final DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return new KognioRdfTermRepository(lifecycle);
+        return over(lifecycle);
+    }
+
+    /**
+     * Assembles a term repository over an already-created dataset lifecycle, wired with
+     * the ubiquitous-language SHACL write-gate. Used by {@link #persistent(Path)} and
+     * directly by tests that supply their own (e.g. in-memory) lifecycle.
+     *
+     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
+     * @return a ready-to-use {@link TermRepository}
+     */
+    static TermRepository over(DatasetLifecycle lifecycle) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        return new KognioRdfTermRepository(lifecycle, buildGate());
+    }
+
+    /**
+     * Builds the ubiquitous-language write-gate.
+     *
+     * <p>{@code TermShape} targets {@code skos:Concept} directly - the type every term
+     * instance already carries - so no RDFS reasoning or ontology axioms are needed (unlike
+     * the sibling requirements adapter): an empty {@code axioms} graph and
+     * {@link ValidationOptions#defaults()} suffice.</p>
+     *
+     * <p>Package-private (not private) so {@code KognioRdfTermRepositoryTest} can drive the
+     * gate directly, at gate level, without duplicating this shapes-loading logic.</p>
+     *
+     * @return the assembled ubiquitous-language SHACL write-gate
+     */
+    static ShaclWriteGate buildGate() {
+        ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
+        ReadableGraph axioms = new SimpleRdf().createGraph();
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults());
+    }
+
+    private static ReadableGraph loadGraph(String classpathResource) {
+        try (InputStream in = KognioRdfTermRepositoryFactory.class.getResourceAsStream(classpathResource)) {
+            Objects.requireNonNull(in, "missing classpath resource " + classpathResource);
+            Model model = Rio.parse(in, "", RDFFormat.TURTLE);
+            return new RDF4JGraph(model);
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to load " + classpathResource, e);
+        }
     }
 }
