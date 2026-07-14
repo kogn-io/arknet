@@ -11,6 +11,7 @@ import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -86,10 +87,23 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Short human-readable summary of the requirement") final String title,
             @McpToolParam(description = "The normative statement, e.g. 'The system shall ...'")
             final String description,
-            @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type) {
+            @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type,
+            @McpToolParam(description = "MoSCoW priority (optional): MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
+                    + "WONT_HAVE", required = false)
+            final String priority,
+            @McpToolParam(description = "IRI of the arkreq:Goal this requirement is motivated by (optional)",
+                    required = false)
+            final String motivatedBy,
+            @McpToolParam(description = "Free-text quality category (optional, e.g. performance, security, "
+                    + "reliability); only meaningful for NON_FUNCTIONAL requirements", required = false)
+            final String qualityCategory) {
         final RequirementType requirementType = RequirementType.valueOf(type);
-        final Requirement created =
-                addRequirement.add(workspaceId, new NewRequirement(title, description, requirementType));
+        final Priority requirementPriority = blankToNull(priority) == null
+                ? null
+                : Priority.valueOf(priority.trim());
+        final Requirement created = addRequirement.add(workspaceId,
+                new NewRequirement(title, description, requirementType, requirementPriority,
+                        blankToNull(motivatedBy), blankToNull(qualityCategory)));
         return format(created);
     }
 
@@ -123,6 +137,11 @@ public final class RequirementMcpTools {
     }
 
     private static String format(final Requirement r) {
-        return "%s [%s] %s (%s)".formatted(r.id().value(), r.type(), r.title(), r.status());
+        final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
+        return "%s [%s] %s (%s)%s".formatted(r.id().value(), r.type(), r.title(), r.status(), priority);
+    }
+
+    private static String blankToNull(final String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 }

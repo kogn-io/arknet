@@ -1,6 +1,7 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -53,7 +55,7 @@ class KognioRdfRequirementRepositoryTest {
     void savesAndFindsFunctionalRequirementById() {
         Requirement requirement = new Requirement(
                 new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
 
         repository.save(WORKSPACE_A, requirement);
         Optional<Requirement> found = repository.findById(WORKSPACE_A, new RequirementId("FR-1"));
@@ -66,14 +68,14 @@ class KognioRdfRequirementRepositoryTest {
     void findAllContainsAllSavedRequirements() {
         Requirement first = new Requirement(
                 new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
 
         repository.save(WORKSPACE_A, first);
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
 
         Requirement second = new Requirement(
                 new RequirementId("FR-2"), "Logout", "The system shall end a user session.",
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
         repository.save(WORKSPACE_A, second);
 
         List<Requirement> all = repository.findAll(WORKSPACE_A);
@@ -86,9 +88,9 @@ class KognioRdfRequirementRepositoryTest {
     void saveReplacesByIdentityInsteadOfDuplicating() {
         RequirementId id = new RequirementId("FR-1");
         Requirement proposed = new Requirement(id, "Login", "The system shall authenticate a user.",
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
         Requirement accepted = new Requirement(id, "Login", "The system shall authenticate a user.",
-                RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED);
+                RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null);
 
         repository.save(WORKSPACE_A, proposed);
         repository.save(WORKSPACE_A, accepted);
@@ -107,7 +109,7 @@ class KognioRdfRequirementRepositoryTest {
     void workspacesAreIsolated() {
         Requirement requirement = new Requirement(
                 new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
 
         repository.save(WORKSPACE_A, requirement);
 
@@ -119,12 +121,47 @@ class KognioRdfRequirementRepositoryTest {
         Requirement requirement = new Requirement(
                 new RequirementId("NFR-1"), "Response time < 200ms",
                 "95% of requests shall complete in under 200ms.",
-                RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED);
+                RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
 
         repository.save(WORKSPACE_A, requirement);
         Optional<Requirement> found = repository.findById(WORKSPACE_A, new RequirementId("NFR-1"));
 
         assertEquals(Optional.of(requirement), found);
         assertEquals(RequirementType.NON_FUNCTIONAL, found.get().type());
+    }
+
+    @Test
+    void savesAndFindsPriorityMotivatedByAndQualityCategory() {
+        Requirement requirement = new Requirement(
+                new RequirementId("NFR-1"), "Response time < 200ms",
+                "95% of requests shall complete in under 200ms.",
+                RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED,
+                Priority.MUST_HAVE, "https://w3id.org/arknet/model/goal/fast-ux", "performance");
+
+        repository.save(WORKSPACE_A, requirement);
+        Optional<Requirement> found = repository.findById(WORKSPACE_A, new RequirementId("NFR-1"));
+
+        assertEquals(Optional.of(requirement), found);
+        assertEquals(Priority.MUST_HAVE, found.orElseThrow().priority());
+        assertEquals("https://w3id.org/arknet/model/goal/fast-ux", found.orElseThrow().motivatedBy());
+        assertEquals("performance", found.orElseThrow().qualityCategory());
+        assertTrue(repository.findAll(WORKSPACE_A).contains(requirement));
+    }
+
+    @Test
+    void savedWithoutOptionalFieldsAreFoundWithNullOptionalFields() {
+        Requirement requirement = new Requirement(
+                new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null);
+
+        repository.save(WORKSPACE_A, requirement);
+        Optional<Requirement> found = repository.findById(WORKSPACE_A, new RequirementId("FR-1"));
+        Requirement foundViaFindAll = repository.findAll(WORKSPACE_A).get(0);
+
+        assertEquals(Optional.of(requirement), found);
+        assertEquals(requirement, foundViaFindAll);
+        assertNull(found.orElseThrow().priority());
+        assertNull(found.orElseThrow().motivatedBy());
+        assertNull(found.orElseThrow().qualityCategory());
     }
 }

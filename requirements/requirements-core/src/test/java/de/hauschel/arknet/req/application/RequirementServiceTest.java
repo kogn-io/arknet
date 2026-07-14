@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
@@ -40,7 +41,8 @@ class RequirementServiceTest {
     @Test
     void addAssignsFirstFunctionalIdAndProposedStatus() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
-                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL));
+                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
+                null, null, null));
 
         assertEquals(new RequirementId("FR-1"), added.id());
         assertEquals("User can log in", added.title());
@@ -53,16 +55,32 @@ class RequirementServiceTest {
     @Test
     void addAssignsNfrPrefixForNonFunctional() {
         Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
-                "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL));
+                "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL,
+                null, null, null));
 
         assertEquals(new RequirementId("NFR-1"), added.id());
     }
 
     @Test
+    void addCarriesPriorityMotivatedByAndQualityCategoryThrough() {
+        Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
+                "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL,
+                Priority.MUST_HAVE, "https://w3id.org/arknet/model/goal/fast-ux", "performance"));
+
+        assertEquals(Priority.MUST_HAVE, added.priority());
+        assertEquals("https://w3id.org/arknet/model/goal/fast-ux", added.motivatedBy());
+        assertEquals("performance", added.qualityCategory());
+        assertEquals(added, repository.findById(WS, added.id()).orElseThrow());
+    }
+
+    @Test
     void addNumbersRunPerTypeIndependently() {
-        RequirementId fr1 = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
-        RequirementId nfr1 = service.add(WS, new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL)).id();
-        RequirementId fr2 = service.add(WS, new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL)).id();
+        RequirementId fr1 = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
+        RequirementId nfr1 = service.add(WS,
+                new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL, null, null, null)).id();
+        RequirementId fr2 = service.add(WS,
+                new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL, null, null, null)).id();
 
         assertEquals(new RequirementId("FR-1"), fr1);
         assertEquals(new RequirementId("NFR-1"), nfr1);
@@ -72,9 +90,10 @@ class RequirementServiceTest {
     @Test
     void addIsScopedPerWorkspace() {
         WorkspaceId other = new WorkspaceId("other");
-        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL));
+        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null));
 
-        Requirement inOther = service.add(other, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL));
+        Requirement inOther = service.add(other,
+                new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null));
 
         assertEquals(new RequirementId("FR-1"), inOther.id());
         assertTrue(service.list(other).stream().allMatch(r -> r.title().equals("b")));
@@ -83,8 +102,8 @@ class RequirementServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL));
-        service.add(WS, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL));
+        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null));
+        service.add(WS, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null));
 
         List<Requirement> all = service.list(WS);
 
@@ -95,7 +114,8 @@ class RequirementServiceTest {
 
     @Test
     void getReturnsPersistedRequirement() {
-        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
 
         assertTrue(service.get(WS, id).isPresent());
         assertEquals("a", service.get(WS, id).orElseThrow().title());
@@ -108,7 +128,8 @@ class RequirementServiceTest {
 
     @Test
     void setStatusAcceptsProposedToAccepted() {
-        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
 
         Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
 
@@ -118,8 +139,21 @@ class RequirementServiceTest {
     }
 
     @Test
+    void setStatusPreservesPriorityMotivatedByAndQualityCategory() {
+        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
+                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security")).id();
+
+        Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
+
+        assertEquals(Priority.COULD_HAVE, accepted.priority());
+        assertEquals("https://w3id.org/arknet/model/goal/g", accepted.motivatedBy());
+        assertEquals("security", accepted.qualityCategory());
+    }
+
+    @Test
     void setStatusToSameStatusIsIdempotent() {
-        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
 
         Requirement result = service.setStatus(WS, id, RequirementStatus.PROPOSED);
 
@@ -128,7 +162,8 @@ class RequirementServiceTest {
 
     @Test
     void setStatusRejectsRevertingAcceptedToProposed() {
-        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
         service.setStatus(WS, id, RequirementStatus.ACCEPTED);
 
         assertThrows(IllegalStateException.class,
