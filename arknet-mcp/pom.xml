@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-mcp</artifactId>
-    <description>Composition Root: Spring-Boot-MCP-Server (stdio), buendelt die arknet-Engine-Tools und die Requirements-Tools</description>
+    <description>Composition Root: Spring-Boot-MCP-Server (stdio), buendelt die arknet-Engine-Tools und die Tools der hexagonalen BCs (requirements, ubiquitous-language, use-cases) ueber einen geteilten DatasetLifecycle</description>
 
     <!-- Lokale Versions-Anhebungen fuer diese (einzige) Spring-Boot-Anwendung. Die rdf4j-BOM
          wird im arknet-parent zuerst importiert und zieht ueber ihren rdf4j-Parent veraltete
@@ -82,6 +82,21 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>ul-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Use-Cases-Hexagon: dritte hexagonale BC, gleiche Verdrahtung. Out-Adapter loest
+             beim Schreiben Requirement-/Actor-Label-Referenzen gegen DENSELBEN geteilten
+             DatasetLifecycle auf, ueber den auch requirements und ubiquitous-language schreiben
+             (Cross-BC-Lookup im gemeinsamen Workspace-Store). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>use-cases-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>use-cases-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
         </dependency>
 

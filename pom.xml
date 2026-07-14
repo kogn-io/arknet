@@ -49,6 +49,7 @@
         <module>shared-kernel</module>
         <module>requirements</module>
         <module>ubiquitous-language</module>
+        <module>use-cases</module>
     </modules>
 
     <repositories>
