@@ -78,12 +78,14 @@ public final class RequirementMcpTools {
     @McpTool(name = "req_add", description = "Register a new requirement (functional or non-functional).")
     public String add(
             @McpToolParam(description = "Short human-readable summary of the requirement") final String title,
+            @McpToolParam(description = "The normative statement, e.g. 'The system shall ...'")
+            final String description,
             @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type) {
         final RequirementType requirementType = RequirementType.valueOf(type);
         // TODO: single-user default; a remote/team mode must expose the workspace
         // as a tool argument or MCP session context instead of hard-coding DEFAULT.
         final Requirement created =
-                addRequirement.add(WorkspaceId.DEFAULT, new NewRequirement(title, requirementType));
+                addRequirement.add(WorkspaceId.DEFAULT, new NewRequirement(title, description, requirementType));
         return format(created);
     }
 

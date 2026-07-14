@@ -27,7 +27,7 @@ import de.hauschel.arknet.req.domain.WorkspaceId;
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate
  * ({@code io.kogn.rdf}, embeddable RDF dataset).
  *
- * <p>Maps a {@link Requirement} to four triples with a fixed subject IRI
+ * <p>Maps a {@link Requirement} to five triples with a fixed subject IRI
  * ({@code https://w3id.org/arknet/model/requirement/<id>}), stored in one named
  * graph shared by all requirements. This class depends only on the neutral
  * kognio-rdf ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it
@@ -59,6 +59,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String PROPOSED_STATUS = ARKREQ_NAMESPACE + "Proposed";
     private static final String ACCEPTED_STATUS = ARKREQ_NAMESPACE + "Accepted";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
+    private static final String DESCRIPTION_PROPERTY = VocabDct.NAMESPACE + "description";
 
     private final DatasetLifecycle lifecycle;
     private final RDF rdf = new SimpleRdf();
@@ -84,6 +85,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.id().value()));
         graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(requirement.title()));
+        graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), rdf.createLiteral(requirement.description()));
         graph.add(subjectIri, rdf.createIRI(STATUS_PROPERTY), rdf.createIRI(statusIriFor(requirement.status())));
 
         String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
@@ -104,9 +106,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(id, "id");
 
-        String query = "SELECT ?type ?title ?status WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+        String query = "SELECT ?type ?title ?description ?status WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "<" + requirementIri(id) + "> a ?type ; "
                 + "<" + TITLE_PROPERTY + "> ?title ; "
+                + "<" + DESCRIPTION_PROPERTY + "> ?description ; "
                 + "<" + STATUS_PROPERTY + "> ?status . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
@@ -115,6 +118,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     .map(row -> new Requirement(
                             id,
                             literalOf(row, "title").getLexicalForm(),
+                            literalOf(row, "description").getLexicalForm(),
                             typeFromIri(iriOf(row, "type").getIRIString()),
                             statusFromIri(iriOf(row, "status").getIRIString())));
         }
@@ -124,12 +128,14 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     public List<Requirement> findAll(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
 
-        String query = "SELECT ?identifier ?title ?type ?status WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+        String query = "SELECT ?identifier ?title ?description ?type ?status WHERE { GRAPH <"
+                + REQUIREMENTS_GRAPH + "> { "
                 + "?s a ?type . "
                 + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
                 + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) "
                 + "?s <" + VocabDct.IDENTIFIER.getIRIString() + "> ?identifier . "
                 + "?s <" + TITLE_PROPERTY + "> ?title . "
+                + "?s <" + DESCRIPTION_PROPERTY + "> ?description . "
                 + "?s <" + STATUS_PROPERTY + "> ?status . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
@@ -137,6 +143,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     .map(row -> new Requirement(
                             new RequirementId(literalOf(row, "identifier").getLexicalForm()),
                             literalOf(row, "title").getLexicalForm(),
+                            literalOf(row, "description").getLexicalForm(),
                             typeFromIri(iriOf(row, "type").getIRIString()),
                             statusFromIri(iriOf(row, "status").getIRIString())))
                     .toList();

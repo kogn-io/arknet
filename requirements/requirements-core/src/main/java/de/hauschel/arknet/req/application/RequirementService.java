@@ -49,8 +49,8 @@ public class RequirementService
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
         RequirementId id = nextId(workspaceId, command.type());
-        Requirement requirement = new Requirement(id, command.title(), command.type(),
-                RequirementStatus.PROPOSED);
+        Requirement requirement = new Requirement(id, command.title(), command.description(),
+                command.type(), RequirementStatus.PROPOSED);
         repository.save(workspaceId, requirement);
         return requirement;
     }
@@ -79,7 +79,8 @@ public class RequirementService
             return current;
         }
         requireLegalTransition(current.status(), status);
-        Requirement updated = new Requirement(current.id(), current.title(), current.type(), status);
+        Requirement updated = new Requirement(current.id(), current.title(), current.description(),
+                current.type(), status);
         repository.save(workspaceId, updated);
         return updated;
     }

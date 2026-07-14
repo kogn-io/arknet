@@ -52,24 +52,28 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void savesAndFindsFunctionalRequirementById() {
         Requirement requirement = new Requirement(
-                new RequirementId("FR-1"), "Login", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
 
         repository.save(WORKSPACE_A, requirement);
         Optional<Requirement> found = repository.findById(WORKSPACE_A, new RequirementId("FR-1"));
 
         assertEquals(Optional.of(requirement), found);
+        assertEquals("The system shall authenticate a user.", found.orElseThrow().description());
     }
 
     @Test
     void findAllContainsAllSavedRequirements() {
         Requirement first = new Requirement(
-                new RequirementId("FR-1"), "Login", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
 
         repository.save(WORKSPACE_A, first);
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
 
         Requirement second = new Requirement(
-                new RequirementId("FR-2"), "Logout", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                new RequirementId("FR-2"), "Logout", "The system shall end a user session.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
         repository.save(WORKSPACE_A, second);
 
         List<Requirement> all = repository.findAll(WORKSPACE_A);
@@ -81,8 +85,10 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void saveReplacesByIdentityInsteadOfDuplicating() {
         RequirementId id = new RequirementId("FR-1");
-        Requirement proposed = new Requirement(id, "Login", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
-        Requirement accepted = new Requirement(id, "Login", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED);
+        Requirement proposed = new Requirement(id, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+        Requirement accepted = new Requirement(id, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED);
 
         repository.save(WORKSPACE_A, proposed);
         repository.save(WORKSPACE_A, accepted);
@@ -100,7 +106,8 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void workspacesAreIsolated() {
         Requirement requirement = new Requirement(
-                new RequirementId("FR-1"), "Login", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
+                new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
 
         repository.save(WORKSPACE_A, requirement);
 
@@ -111,6 +118,7 @@ class KognioRdfRequirementRepositoryTest {
     void savesAndFindsNonFunctionalRequirement() {
         Requirement requirement = new Requirement(
                 new RequirementId("NFR-1"), "Response time < 200ms",
+                "95% of requests shall complete in under 200ms.",
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED);
 
         repository.save(WORKSPACE_A, requirement);
