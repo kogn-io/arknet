@@ -21,13 +21,17 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
+import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
+import de.hauschel.arknet.uc.application.UseCaseService;
+import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
 /**
  * Bean wiring for the arknet MCP composition root.
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Three hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Four hexagons are wired:</p>
  *
  * <ul>
  *   <li><strong>arknet engine</strong> ({@link ArknetTools} over {@link ArknetEngine}) -
@@ -42,10 +46,18 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
  *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
  *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
- *       RDF4J-free wiring as requirements). Both hexagons share the single
- *       {@link WorkspaceId} bean, so requirements and glossary terms of the same
- *       project land in the same workspace/dataset.</li>
+ *       RDF4J-free wiring as requirements).</li>
+ *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
+ *       an RDF-persisted use-case repository) - the three use-case tools, assembled through
+ *       {@link KognioRdfUseCaseRepositoryFactory}. Its out-adapter strictly resolves a use
+ *       case's requirement/actor label references against the shared store, so it must read
+ *       what the other two hexagons wrote.</li>
  * </ul>
+ *
+ * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
+ * {@code arknet.rdf.storage}, no competing locks) and the single {@link WorkspaceId} bean, so
+ * requirements, glossary terms and use cases of the same project land in the same
+ * workspace/dataset and can reference each other.</p>
  */
 @Configuration(proxyBeanMethods = false)
 public class ArknetMcpConfiguration {
@@ -126,6 +138,31 @@ public class ArknetMcpConfiguration {
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
             final TermService service, final WorkspaceId workspaceId) {
         return new UbiquitousLanguageMcpTools(service, service, service, workspaceId);
+    }
+
+    // --- Use-cases hexagon -----------------------------------------------------
+
+    /**
+     * The use-case out-adapter, assembled over the <em>shared</em> {@link DatasetLifecycle}
+     * bean. This is what makes the strict cross-bounded-context resolution work: when a use
+     * case is saved, its step-level {@code stepRealises} labels (e.g. {@code FR-1}) and its
+     * {@code primaryActor}/{@code supportingActor} labels are looked up against the same
+     * per-workspace store the requirements and ubiquitous-language repositories write into.
+     */
+    @Bean
+    UseCaseRepository useCaseRepository(final DatasetLifecycle datasetLifecycle) {
+        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle);
+    }
+
+    @Bean
+    UseCaseService useCaseService(final UseCaseRepository repository) {
+        return new UseCaseService(repository);
+    }
+
+    @Bean
+    UseCaseMcpTools useCaseMcpTools(
+            final UseCaseService service, final WorkspaceId workspaceId) {
+        return new UseCaseMcpTools(service, service, service, workspaceId);
     }
 
     // --- Generic store report (domain-agnostic read path) ----------------------
