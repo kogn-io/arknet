@@ -41,11 +41,13 @@ import de.hauschel.arknet.req.domain.WorkspaceId;
  * {@link UnsupportedOperationException}; Spring AI maps any such exception to an error
  * {@code CallToolResult} automatically, so no manual try/catch is needed here.</p>
  *
- * <p><strong>Workspace (single-user default).</strong> Every in-port now takes a
- * {@link WorkspaceId} routing key. This adapter is single-user/local, so it always
- * calls the in-ports with {@link WorkspaceId#DEFAULT} and does not expose the
- * workspace as a tool argument. TODO: a remote/team mode will need to expose the
- * workspace, either as an explicit tool argument or via MCP session context.</p>
+ * <p><strong>Workspace (one server = one workspace).</strong> Every in-port takes a
+ * {@link WorkspaceId} routing key. This adapter is single-user/local: it operates
+ * against exactly one workspace - the {@code workspaceId} injected at construction -
+ * and does not expose the workspace as a tool argument. The composition root resolves
+ * that id per project (explicit config, else the git/working-directory name); see
+ * {@code WorkspaceIdResolver}. TODO: a remote/team mode may instead expose the
+ * workspace as an explicit tool argument or via MCP session context.</p>
  */
 public final class RequirementMcpTools {
 
@@ -53,24 +55,28 @@ public final class RequirementMcpTools {
     private final ListRequirements listRequirements;
     private final GetRequirement getRequirement;
     private final SetRequirementStatus setRequirementStatus;
+    private final WorkspaceId workspaceId;
 
     /**
-     * Creates the adapter with its four driving in-ports.
+     * Creates the adapter with its four driving in-ports and the workspace it serves.
      *
      * @param addRequirement       in-port backing {@code req_add}
      * @param listRequirements     in-port backing {@code req_list}
      * @param getRequirement       in-port backing {@code req_get}
      * @param setRequirementStatus in-port backing {@code req_set_status}
+     * @param workspaceId          the single workspace all tool calls route to
      */
     public RequirementMcpTools(
             final AddRequirement addRequirement,
             final ListRequirements listRequirements,
             final GetRequirement getRequirement,
-            final SetRequirementStatus setRequirementStatus) {
+            final SetRequirementStatus setRequirementStatus,
+            final WorkspaceId workspaceId) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
+        this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -82,19 +88,15 @@ public final class RequirementMcpTools {
             final String description,
             @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type) {
         final RequirementType requirementType = RequirementType.valueOf(type);
-        // TODO: single-user default; a remote/team mode must expose the workspace
-        // as a tool argument or MCP session context instead of hard-coding DEFAULT.
         final Requirement created =
-                addRequirement.add(WorkspaceId.DEFAULT, new NewRequirement(title, description, requirementType));
+                addRequirement.add(workspaceId, new NewRequirement(title, description, requirementType));
         return format(created);
     }
 
     @McpTool(name = "req_list", description = "List all managed requirements.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list() {
-        // TODO: single-user default; a remote/team mode must expose the workspace
-        // as a tool argument or MCP session context instead of hard-coding DEFAULT.
-        final List<Requirement> all = listRequirements.list(WorkspaceId.DEFAULT);
+        final List<Requirement> all = listRequirements.list(workspaceId);
         return all.stream().map(RequirementMcpTools::format)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
@@ -104,9 +106,7 @@ public final class RequirementMcpTools {
     public String get(
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id) {
         final RequirementId requirementId = new RequirementId(id);
-        // TODO: single-user default; a remote/team mode must expose the workspace
-        // as a tool argument or MCP session context instead of hard-coding DEFAULT.
-        return getRequirement.get(WorkspaceId.DEFAULT, requirementId)
+        return getRequirement.get(workspaceId, requirementId)
                 .map(RequirementMcpTools::format)
                 .orElse("Requirement not found: " + requirementId.value());
     }
@@ -117,10 +117,8 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Target status: PROPOSED or ACCEPTED") final String status) {
         final RequirementId requirementId = new RequirementId(id);
         final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
-        // TODO: single-user default; a remote/team mode must expose the workspace
-        // as a tool argument or MCP session context instead of hard-coding DEFAULT.
         final Requirement updated =
-                setRequirementStatus.setStatus(WorkspaceId.DEFAULT, requirementId, requirementStatus);
+                setRequirementStatus.setStatus(workspaceId, requirementId, requirementStatus);
         return format(updated);
     }
 

@@ -37,7 +37,9 @@ class ArknetMcpConfigurationTest {
     @Test
     void wiresRequirementsHexagonFromStoragePropertyAndRoundTrips() {
         contextRunner
-                .withPropertyValues("arknet.rdf.storage=" + storageDir)
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir,
+                        "arknet.workspace.id=test-workspace")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(RequirementMcpTools.class);
@@ -51,6 +53,19 @@ class ArknetMcpConfigurationTest {
                     assertThat(created.id().value()).isEqualTo("FR-1");
                     assertThat(service.get(WorkspaceId.DEFAULT, created.id()))
                             .isEqualTo(Optional.of(created));
+                });
+    }
+
+    @Test
+    void resolvesWorkspaceIdFromExplicitProperty() {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir,
+                        "arknet.workspace.id=noistill")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).getBean(WorkspaceId.class)
+                            .isEqualTo(new WorkspaceId("noistill"));
                 });
     }
 }

@@ -10,6 +10,7 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.domain.WorkspaceId;
 
 /**
  * Bean wiring for the arknet MCP composition root.
@@ -56,8 +57,22 @@ public class ArknetMcpConfiguration {
         return new RequirementService(repository);
     }
 
+    /**
+     * The single workspace this server instance operates against. Resolved once at
+     * startup from the explicit {@code arknet.workspace.id} property, else derived from
+     * the git top-level / working-directory name (defaulting to {@code arknet.workspace.dir},
+     * i.e. the launched project root). See {@link WorkspaceIdResolver}.
+     */
     @Bean
-    RequirementMcpTools requirementMcpTools(final RequirementService service) {
-        return new RequirementMcpTools(service, service, service, service);
+    WorkspaceId workspaceId(
+            @Value("${arknet.workspace.id:}") final String explicitId,
+            @Value("${arknet.workspace.dir:${user.dir}}") final Path workingDir) {
+        return new WorkspaceIdResolver().resolve(explicitId, workingDir);
+    }
+
+    @Bean
+    RequirementMcpTools requirementMcpTools(
+            final RequirementService service, final WorkspaceId workspaceId) {
+        return new RequirementMcpTools(service, service, service, service, workspaceId);
     }
 }
