@@ -14,9 +14,6 @@ W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar
 ```bash
 # Als Plugin verwenden (baut automatisch beim ersten Start)
 claude --plugin-dir /path/to/arknet
-
-# Skill: Architektur-Analyse eines bestehenden Projekts
-/arknet:analyze
 ```
 
 ### MCP-Tools
@@ -45,14 +42,12 @@ Der Triple Store (RDF4J) laeuft **in-memory** und lebt nur solange die Claude-Se
 
 ```
 projekt/
-  architecture-model.ttl    <-- generiert von /arknet:analyze, versionierbar mit Git
+  architecture-model.ttl    <-- dein Architekturmodell, versionierbar mit Git
 ```
 
-**Erste Analyse:** `/arknet:analyze` analysiert den Code und schreibt `architecture-model.ttl`.
+**Modell laden:** `arknet_load architecture-model.ttl` laedt das Modell in den Store.
 
-**Naechste Session:** `arknet_load architecture-model.ttl` laedt das bestehende Modell. Kein Neuanalysieren noetig -- nur Weiterarbeiten (Queries, Gap Analysis, Doku).
-
-**Modell aktualisieren:** `/arknet:analyze` erneut ausfuehren oder `.ttl` manuell editieren, dann `arknet_validate`.
+**Modell aktualisieren:** `.ttl` manuell editieren, dann `arknet_validate`.
 
 ## CLI
 
