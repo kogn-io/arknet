@@ -1,7 +1,7 @@
 # ADR-001: Lokaler Single-User-Client und austauschbarer Store
 
 - Status: Proposed (2026-07-13)
-- Verwandt: ADR-002, ADR-003
+- Verwandt: ADR-002, ADR-003, ADR-005
 
 ## Kontext
 
