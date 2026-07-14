@@ -30,6 +30,15 @@ claude --plugin-dir /path/to/arknet
 | `arknet_generate` | Projektion als HTML/PDF generieren (Default: context-map) |
 | `arknet_list_projections` | Verfuegbare Projektionstypen auflisten |
 
+Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
+
+| Tool | Beschreibung |
+|------|-------------|
+| `req_add` | Requirement anlegen (funktional / nicht-funktional) |
+| `req_list` | Alle verwalteten Requirements auflisten |
+| `req_get` | Einzelnes Requirement per Identitaet holen (z.B. FR-1, NFR-7) |
+| `req_set_status` | Lebenszyklus-Status aendern (PROPOSED / ACCEPTED) |
+
 ### Speichermodell
 
 Der Triple Store (RDF4J) laeuft **in-memory** und lebt nur solange die Claude-Session aktiv ist. Persistent ist nur die Turtle-Datei:
