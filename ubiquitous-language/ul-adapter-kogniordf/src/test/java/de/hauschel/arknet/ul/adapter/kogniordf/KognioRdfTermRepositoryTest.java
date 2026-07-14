@@ -1,6 +1,8 @@
 package de.hauschel.arknet.ul.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +16,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.kogn.rdf.dataset.DatasetHandle;
+import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
@@ -25,6 +29,8 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.ActorFacet;
+import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
 
@@ -58,7 +64,7 @@ class KognioRdfTermRepositoryTest {
     @Test
     void savesAndFindsTermById() {
         Term term = new Term(new TermId("TERM-1"), "Gutschrift",
-                "Rueckerstattung eines bereits gezahlten Betrags.");
+                "Rueckerstattung eines bereits gezahlten Betrags.", null);
 
         repository.save(WORKSPACE_A, term);
         Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
@@ -70,11 +76,11 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void findAllContainsAllSavedTerms() {
-        Term first = new Term(new TermId("TERM-1"), "Gutschrift", "def a");
+        Term first = new Term(new TermId("TERM-1"), "Gutschrift", "def a", null);
         repository.save(WORKSPACE_A, first);
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
 
-        Term second = new Term(new TermId("TERM-2"), "Bestellung", "def b");
+        Term second = new Term(new TermId("TERM-2"), "Bestellung", "def b", null);
         repository.save(WORKSPACE_A, second);
 
         List<Term> all = repository.findAll(WORKSPACE_A);
@@ -86,8 +92,8 @@ class KognioRdfTermRepositoryTest {
     @Test
     void saveReplacesByIdentityInsteadOfDuplicating() {
         TermId id = new TermId("TERM-1");
-        Term original = new Term(id, "Gutschrift", "Erste Definition.");
-        Term revised = new Term(id, "Gutschrift", "Ueberarbeitete Definition.");
+        Term original = new Term(id, "Gutschrift", "Erste Definition.", null);
+        Term revised = new Term(id, "Gutschrift", "Ueberarbeitete Definition.", null);
 
         repository.save(WORKSPACE_A, original);
         repository.save(WORKSPACE_A, revised);
@@ -104,7 +110,7 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void workspacesAreIsolated() {
-        Term term = new Term(new TermId("TERM-1"), "Gutschrift", "def a");
+        Term term = new Term(new TermId("TERM-1"), "Gutschrift", "def a", null);
 
         repository.save(WORKSPACE_A, term);
 
@@ -128,5 +134,67 @@ class KognioRdfTermRepositoryTest {
         invalidConcept.add(subject, VocabRdf.TYPE, rdf.createIRI(SKOS_CONCEPT));
 
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(invalidConcept));
+    }
+
+    @Test
+    void savesAndFindsTermWithHumanActorFacet() {
+        Term term = new Term(new TermId("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
+                new ActorFacet(ActorKind.HUMAN, "Besteller"));
+
+        repository.save(WORKSPACE_A, term);
+        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+
+        assertEquals(Optional.of(term), found);
+        ActorFacet facet = found.orElseThrow().actorFacet();
+        assertEquals(ActorKind.HUMAN, facet.kind());
+        assertEquals("Besteller", facet.role());
+        assertTrue(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#HumanActor"));
+    }
+
+    @Test
+    void savesAndFindsTermWithSystemActorFacet() {
+        Term term = new Term(new TermId("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
+                new ActorFacet(ActorKind.SYSTEM, "PaymentService"));
+
+        repository.save(WORKSPACE_A, term);
+        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+
+        assertEquals(Optional.of(term), found);
+        ActorFacet facet = found.orElseThrow().actorFacet();
+        assertEquals(ActorKind.SYSTEM, facet.kind());
+        assertEquals("PaymentService", facet.role());
+        assertTrue(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#SystemActor"));
+    }
+
+    @Test
+    void savesAndFindsTermWithoutActorFacet() {
+        Term term = new Term(new TermId("TERM-1"), "Gutschrift", "def a", null);
+
+        repository.save(WORKSPACE_A, term);
+        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+
+        assertNull(found.orElseThrow().actorFacet());
+        assertFalse(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#HumanActor"));
+        assertFalse(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#SystemActor"));
+    }
+
+    @Test
+    void findAllReconstructsActorFacet() {
+        Term withFacet = new Term(new TermId("TERM-1"), "Kunde", "def a",
+                new ActorFacet(ActorKind.HUMAN, "Besteller"));
+        repository.save(WORKSPACE_A, withFacet);
+
+        List<Term> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
+    }
+
+    private boolean subjectHasType(WorkspaceId workspaceId, String termId, String typeIri) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<https://w3id.org/arknet/model/term/" + termId + "> a <" + typeIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
     }
 }

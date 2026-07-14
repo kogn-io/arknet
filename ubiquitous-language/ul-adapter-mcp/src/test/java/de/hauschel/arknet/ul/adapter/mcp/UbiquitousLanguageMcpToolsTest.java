@@ -1,6 +1,7 @@
 package de.hauschel.arknet.ul.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,6 +16,8 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
+import de.hauschel.arknet.ul.domain.ActorFacet;
+import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
 
@@ -52,12 +55,36 @@ class UbiquitousLanguageMcpToolsTest {
                 () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null));
     }
 
+    @Test
+    void addPassesThroughActorFacet() {
+        adapter.add("Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller");
+
+        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), stub.lastCommand.actorFacet());
+    }
+
+    @Test
+    void addWithoutActorKindLeavesFacetNull() {
+        adapter.add("Gutschrift", "def a", null, null);
+
+        assertNull(stub.lastCommand.actorFacet());
+    }
+
+    @Test
+    void addRejectsInvalidActorKind() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.add("Gutschrift", "def a", "NOT_A_KIND", null));
+    }
+
     /** Structural stub implementing the three driving in-ports. */
     private static final class Stub implements AddTerm, ListTerms, GetTerm {
 
+        private NewTerm lastCommand;
+
         @Override
         public Term add(WorkspaceId workspaceId, NewTerm command) {
-            throw new UnsupportedOperationException();
+            lastCommand = command;
+            return new Term(new TermId("TERM-1"), command.prefLabel(), command.definition(),
+                    command.actorFacet());
         }
 
         @Override

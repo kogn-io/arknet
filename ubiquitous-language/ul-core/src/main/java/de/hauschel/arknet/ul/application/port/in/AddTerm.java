@@ -1,6 +1,7 @@
 package de.hauschel.arknet.ul.application.port.in;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
@@ -26,7 +27,10 @@ public interface AddTerm {
      *
      * @param prefLabel  the preferred label, i.e. the term itself
      * @param definition the meaning of the term
+     * @param actorFacet optional Actor facette (Weg A aus #45): if set, the same
+     *                   skos:Concept is additionally an {@code arkproc:Actor}.
+     *                   Optional (may be {@code null})
      */
-    record NewTerm(String prefLabel, String definition) {
+    record NewTerm(String prefLabel, String definition, ActorFacet actorFacet) {
     }
 }

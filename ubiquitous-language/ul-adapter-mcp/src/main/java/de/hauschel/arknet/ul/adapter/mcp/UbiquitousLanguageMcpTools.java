@@ -11,6 +11,8 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
+import de.hauschel.arknet.ul.domain.ActorFacet;
+import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
 
@@ -67,8 +69,17 @@ public final class UbiquitousLanguageMcpTools {
     public String add(
             @McpToolParam(description = "The term itself (its preferred label), e.g. 'Gutschrift'")
             final String label,
-            @McpToolParam(description = "The meaning of the term (its definition)") final String definition) {
-        final Term created = addTerm.add(workspaceId, new NewTerm(label, definition));
+            @McpToolParam(description = "The meaning of the term (its definition)") final String definition,
+            @McpToolParam(description = "Optional: mark this term as an actor (a skos:Concept that is "
+                    + "additionally an arkproc:Actor). Actor kind: HUMAN or SYSTEM", required = false)
+            final String actorKind,
+            @McpToolParam(description = "Optional: the actor's role in the bounded context "
+                    + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
+            final String actorRole) {
+        final ActorFacet facet = blankToNull(actorKind) == null
+                ? null
+                : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
+        final Term created = addTerm.add(workspaceId, new NewTerm(label, definition, facet));
         return format(created);
     }
 
@@ -91,6 +102,14 @@ public final class UbiquitousLanguageMcpTools {
     }
 
     private static String format(final Term t) {
-        return "%s %s - %s".formatted(t.id().value(), t.prefLabel(), t.definition());
+        final ActorFacet facet = t.actorFacet();
+        final String actor = facet == null
+                ? ""
+                : " [actor:%s%s]".formatted(facet.kind(), facet.role() == null ? "" : " role=" + facet.role());
+        return "%s %s - %s%s".formatted(t.id().value(), t.prefLabel(), t.definition(), actor);
+    }
+
+    private static String blankToNull(final String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 }

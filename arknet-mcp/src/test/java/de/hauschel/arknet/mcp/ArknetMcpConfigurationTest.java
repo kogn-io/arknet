@@ -72,7 +72,7 @@ class ArknetMcpConfigurationTest {
 
                     TermService service = context.getBean(TermService.class);
                     Term created = service.add(WorkspaceId.DEFAULT,
-                            new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags."));
+                            new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null));
 
                     assertThat(created.id().value()).isEqualTo("TERM-1");
                     assertThat(service.get(WorkspaceId.DEFAULT, created.id()))

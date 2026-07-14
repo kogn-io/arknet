@@ -2,6 +2,7 @@ package de.hauschel.arknet.ul.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
+import de.hauschel.arknet.ul.domain.ActorFacet;
+import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermId;
 
@@ -34,7 +37,7 @@ class TermServiceTest {
     @Test
     void addAssignsFirstIdentity() {
         Term added = service.add(WS, new NewTerm("Gutschrift",
-                "Rueckerstattung eines bereits gezahlten Betrags."));
+                "Rueckerstattung eines bereits gezahlten Betrags.", null));
 
         assertEquals(new TermId("TERM-1"), added.id());
         assertEquals("Gutschrift", added.prefLabel());
@@ -44,8 +47,8 @@ class TermServiceTest {
 
     @Test
     void addNumbersRunSequentially() {
-        TermId first = service.add(WS, new NewTerm("Gutschrift", "def a")).id();
-        TermId second = service.add(WS, new NewTerm("Bestellung", "def b")).id();
+        TermId first = service.add(WS, new NewTerm("Gutschrift", "def a", null)).id();
+        TermId second = service.add(WS, new NewTerm("Bestellung", "def b", null)).id();
 
         assertEquals(new TermId("TERM-1"), first);
         assertEquals(new TermId("TERM-2"), second);
@@ -54,9 +57,9 @@ class TermServiceTest {
     @Test
     void addIsScopedPerWorkspace() {
         WorkspaceId other = new WorkspaceId("other");
-        service.add(WS, new NewTerm("Gutschrift", "def a"));
+        service.add(WS, new NewTerm("Gutschrift", "def a", null));
 
-        Term inOther = service.add(other, new NewTerm("Bestellung", "def b"));
+        Term inOther = service.add(other, new NewTerm("Bestellung", "def b", null));
 
         assertEquals(new TermId("TERM-1"), inOther.id());
         assertTrue(service.list(other).stream().allMatch(t -> t.prefLabel().equals("Bestellung")));
@@ -65,8 +68,8 @@ class TermServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, new NewTerm("Gutschrift", "def a"));
-        service.add(WS, new NewTerm("Bestellung", "def b"));
+        service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        service.add(WS, new NewTerm("Bestellung", "def b", null));
 
         List<Term> all = service.list(WS);
 
@@ -77,7 +80,7 @@ class TermServiceTest {
 
     @Test
     void getReturnsPersistedTerm() {
-        TermId id = service.add(WS, new NewTerm("Gutschrift", "def a")).id();
+        TermId id = service.add(WS, new NewTerm("Gutschrift", "def a", null)).id();
 
         assertTrue(service.get(WS, id).isPresent());
         assertEquals("Gutschrift", service.get(WS, id).orElseThrow().prefLabel());
@@ -86,5 +89,22 @@ class TermServiceTest {
     @Test
     void getIsEmptyForUnknownId() {
         assertFalse(service.get(WS, new TermId("TERM-99")).isPresent());
+    }
+
+    @Test
+    void addPassesThroughActorFacet() {
+        ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
+
+        Term added = service.add(WS, new NewTerm("Kunde", "Person, die eine Bestellung aufgibt.", facet));
+
+        assertEquals(facet, added.actorFacet());
+        assertEquals(facet, repository.findById(WS, added.id()).orElseThrow().actorFacet());
+    }
+
+    @Test
+    void addWithoutActorFacetLeavesItNull() {
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+
+        assertNull(added.actorFacet());
     }
 }
