@@ -42,9 +42,15 @@ Backend (kognio-memory), das Team / Multi-Project / Auth selbst traegt.
 **Positiv:** Team-Faehigkeit wird zum reinen Adapter-Austausch, ohne den Core mit
 Auth/Tenancy zu belasten. Der Single-User-Bau bleibt schlank; nichts Spekulatives im Core.
 
-**Negativ / bewusst deferred (YAGNI):** Kein Workspace-Management (CRUD/Listing) und keine
-festgelegte Herkunft der WorkspaceId je Session -- bewusst offen, bis der Bedarf konkret
-ist (das Routing selbst traegt bereits mehrere Projekte). Kein Actor/Provenance-Feld am
+**Negativ / bewusst deferred (YAGNI):** Kein Workspace-Management (CRUD/Listing) -- weiterhin
+deferred, bis der Bedarf konkret ist (das Routing selbst traegt bereits mehrere Projekte).
+
+Die zunaechst offen gelassene **Herkunft der WorkspaceId je Session ist mit PR #30 entschieden:**
+eine MCP-Serverinstanz = genau ein Workspace, einmal beim Start aufgeloest ueber
+`WorkspaceIdResolver` (explizites Property `arknet.workspace.id` verbatim -> geslugter
+git-Toplevel-Verzeichnisname -> geslugter Arbeitsverzeichnis-Name -> `WorkspaceId.DEFAULT`).
+Damit isoliert jedes Claude-/git-Projekt seine Daten ohne Konfigurationszwang, explizit
+ueberschreibbar in der `.mcp.json`. Kein Actor/Provenance-Feld am
 `Requirement` (generatedBy = Agent additiv spaeter, PROV-konform). SHACL-Validierung auf
 dem Schreibpfad ist auch lokal ein Ziel, nicht nur ein Team-Belang; im Single-Writer-Betrieb
 genuegt dafuer standalone Validierung -- transaktionale Validierung wird erst mit Adapter B
@@ -59,3 +65,9 @@ genuegt dafuer standalone Validierung -- transaktionale Validierung wird erst mi
   Verworfen.
 - **Triple-/GraphStore-Out-Port statt domaennahem Repository.** Wuerde Adapter B an arknets
   RDF-Interna binden und die Austauschbarkeit zerstoeren. Verworfen.
+- **WorkspaceId-Herkunft nur explizit (`arknet.workspace.id` Pflicht).** Jedes Projekt muesste
+  die Id in der `.mcp.json` setzen, um isoliert zu sein -- Isolation waere Opt-in statt Default.
+  Verworfen zugunsten des git-Toplevel-Fallbacks (zero-config pro git-Projekt).
+- **WorkspaceId-Herkunft nur aus dem Arbeitsverzeichnis (CWD).** Ohne git-Bezug weniger stabil
+  (Umbenennen/Verschieben aendert die Id -> anderes Dataset) und ohne expliziten Override.
+  Verworfen.
