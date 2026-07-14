@@ -23,11 +23,12 @@ public interface AddRequirement {
     Requirement add(WorkspaceId workspaceId, NewRequirement command);
 
     /**
-     * Input data for {@link #add(NewRequirement)}.
+     * Input data for {@link #add(WorkspaceId, NewRequirement)}.
      *
-     * @param title short human-readable summary
-     * @param type  functional vs. non-functional classification
+     * @param title       short human-readable summary
+     * @param description the normative statement ("The system shall ...")
+     * @param type        functional vs. non-functional classification
      */
-    record NewRequirement(String title, RequirementType type) {
+    record NewRequirement(String title, String description, RequirementType type) {
     }
 }

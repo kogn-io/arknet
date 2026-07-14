@@ -17,10 +17,13 @@ class RequirementTest {
     void holdsItsFields() {
         RequirementId id = new RequirementId("FR-1");
         Requirement req = new Requirement(id, "User can log in",
+                "The system shall let a registered user authenticate with email and password.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED);
 
         assertEquals(id, req.id());
         assertEquals("User can log in", req.title());
+        assertEquals("The system shall let a registered user authenticate with email and password.",
+                req.description());
         assertEquals(RequirementType.FUNCTIONAL, req.type());
         assertEquals(RequirementStatus.PROPOSED, req.status());
     }
@@ -29,16 +32,25 @@ class RequirementTest {
     void rejectsNullFields() {
         RequirementId id = new RequirementId("FR-1");
         assertThrows(NullPointerException.class,
-                () -> new Requirement(null, "t", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
+                () -> new Requirement(null, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
         assertThrows(NullPointerException.class,
-                () -> new Requirement(id, null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
+                () -> new Requirement(id, null, "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
+        assertThrows(NullPointerException.class,
+                () -> new Requirement(id, "t", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
     }
 
     @Test
     void rejectsBlankTitle() {
         RequirementId id = new RequirementId("FR-1");
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(id, "  ", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
+                () -> new Requirement(id, "  ", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
+    }
+
+    @Test
+    void rejectsBlankDescription() {
+        RequirementId id = new RequirementId("FR-1");
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(id, "t", "  ", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED));
     }
 
     @Test

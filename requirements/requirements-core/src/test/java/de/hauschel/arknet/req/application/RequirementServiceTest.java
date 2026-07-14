@@ -39,10 +39,12 @@ class RequirementServiceTest {
 
     @Test
     void addAssignsFirstFunctionalIdAndProposedStatus() {
-        Requirement added = service.add(WS, new NewRequirement("User can log in", RequirementType.FUNCTIONAL));
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL));
 
         assertEquals(new RequirementId("FR-1"), added.id());
         assertEquals("User can log in", added.title());
+        assertEquals("The system shall let a registered user authenticate.", added.description());
         assertEquals(RequirementType.FUNCTIONAL, added.type());
         assertEquals(RequirementStatus.PROPOSED, added.status());
         assertEquals(added, repository.findById(WS, added.id()).orElseThrow());
@@ -50,16 +52,17 @@ class RequirementServiceTest {
 
     @Test
     void addAssignsNfrPrefixForNonFunctional() {
-        Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms", RequirementType.NON_FUNCTIONAL));
+        Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
+                "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL));
 
         assertEquals(new RequirementId("NFR-1"), added.id());
     }
 
     @Test
     void addNumbersRunPerTypeIndependently() {
-        RequirementId fr1 = service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL)).id();
-        RequirementId nfr1 = service.add(WS, new NewRequirement("b", RequirementType.NON_FUNCTIONAL)).id();
-        RequirementId fr2 = service.add(WS, new NewRequirement("c", RequirementType.FUNCTIONAL)).id();
+        RequirementId fr1 = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
+        RequirementId nfr1 = service.add(WS, new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL)).id();
+        RequirementId fr2 = service.add(WS, new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL)).id();
 
         assertEquals(new RequirementId("FR-1"), fr1);
         assertEquals(new RequirementId("NFR-1"), nfr1);
@@ -69,9 +72,9 @@ class RequirementServiceTest {
     @Test
     void addIsScopedPerWorkspace() {
         WorkspaceId other = new WorkspaceId("other");
-        service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL));
+        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL));
 
-        Requirement inOther = service.add(other, new NewRequirement("b", RequirementType.FUNCTIONAL));
+        Requirement inOther = service.add(other, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL));
 
         assertEquals(new RequirementId("FR-1"), inOther.id());
         assertTrue(service.list(other).stream().allMatch(r -> r.title().equals("b")));
@@ -80,8 +83,8 @@ class RequirementServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL));
-        service.add(WS, new NewRequirement("b", RequirementType.FUNCTIONAL));
+        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL));
+        service.add(WS, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL));
 
         List<Requirement> all = service.list(WS);
 
@@ -92,7 +95,7 @@ class RequirementServiceTest {
 
     @Test
     void getReturnsPersistedRequirement() {
-        RequirementId id = service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
 
         assertTrue(service.get(WS, id).isPresent());
         assertEquals("a", service.get(WS, id).orElseThrow().title());
@@ -105,17 +108,18 @@ class RequirementServiceTest {
 
     @Test
     void setStatusAcceptsProposedToAccepted() {
-        RequirementId id = service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
 
         Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals("desc a", accepted.description());
         assertEquals(RequirementStatus.ACCEPTED, repository.findById(WS, id).orElseThrow().status());
     }
 
     @Test
     void setStatusToSameStatusIsIdempotent() {
-        RequirementId id = service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
 
         Requirement result = service.setStatus(WS, id, RequirementStatus.PROPOSED);
 
@@ -124,7 +128,7 @@ class RequirementServiceTest {
 
     @Test
     void setStatusRejectsRevertingAcceptedToProposed() {
-        RequirementId id = service.add(WS, new NewRequirement("a", RequirementType.FUNCTIONAL)).id();
+        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL)).id();
         service.setStatus(WS, id, RequirementStatus.ACCEPTED);
 
         assertThrows(IllegalStateException.class,
