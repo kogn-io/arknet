@@ -29,7 +29,7 @@ class RequirementMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub);
+            new RequirementMcpTools(stub, stub, stub, stub, WorkspaceId.DEFAULT);
 
     @Test
     void declaresTheFourRequirementTools() {
@@ -47,7 +47,13 @@ class RequirementMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(null, stub, stub, stub));
+                () -> new RequirementMcpTools(null, stub, stub, stub, WorkspaceId.DEFAULT));
+    }
+
+    @Test
+    void rejectsNullWorkspace() {
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(stub, stub, stub, stub, null));
     }
 
     /** Structural stub implementing the four driving in-ports. */
