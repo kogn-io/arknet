@@ -6,18 +6,22 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
+import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
+import de.hauschel.arknet.ul.application.TermService;
+import de.hauschel.arknet.ul.application.port.out.TermRepository;
 
 /**
  * Bean wiring for the arknet MCP composition root.
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Two hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Three hexagons are wired:</p>
  *
  * <ul>
  *   <li><strong>arknet engine</strong> ({@link ArknetTools} over {@link ArknetEngine}) -
@@ -29,6 +33,12 @@ import de.hauschel.arknet.req.domain.WorkspaceId;
  *       {@link KognioRdfRequirementRepositoryFactory} so this composition root stays
  *       free of any direct RDF4J dependency; it only supplies the storage directory
  *       ({@code arknet.rdf.storage}).</li>
+ *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
+ *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
+ *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
+ *       RDF4J-free wiring as requirements). Both hexagons share the single
+ *       {@link WorkspaceId} bean, so requirements and glossary terms of the same
+ *       project land in the same workspace/dataset.</li>
  * </ul>
  */
 @Configuration(proxyBeanMethods = false)
@@ -74,5 +84,24 @@ public class ArknetMcpConfiguration {
     RequirementMcpTools requirementMcpTools(
             final RequirementService service, final WorkspaceId workspaceId) {
         return new RequirementMcpTools(service, service, service, service, workspaceId);
+    }
+
+    // --- Ubiquitous-language hexagon -------------------------------------------
+
+    @Bean
+    TermRepository termRepository(
+            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
+        return KognioRdfTermRepositoryFactory.persistent(storageDir);
+    }
+
+    @Bean
+    TermService termService(final TermRepository repository) {
+        return new TermService(repository);
+    }
+
+    @Bean
+    UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
+            final TermService service, final WorkspaceId workspaceId) {
+        return new UbiquitousLanguageMcpTools(service, service, service, workspaceId);
     }
 }

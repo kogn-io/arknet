@@ -72,6 +72,19 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Ubiquitous-Language-Hexagon: zweite hexagonale BC, gleiche Verdrahtung wie
+             requirements (In-Adapter mit @McpTool-Beans + Out-Adapter Repository). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>ul-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>ul-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring AI 2.0 MCP-Server (NON-web = stdio-Variante). Version aus spring-ai-bom.
              Zieht spring-boot-starter (inkl. logback) transitiv; slf4j-simple entfaellt. -->
         <dependency>

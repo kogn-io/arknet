@@ -1,4 +1,4 @@
-package de.hauschel.arknet.req.domain;
+package de.hauschel.arknet.kernel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Domain invariant tests for {@link WorkspaceId}.
  *
- * <p>Pure, framework-free unit tests - they guard the value object's contract,
- * not yet-to-be-written application policy.</p>
+ * <p>Pure, framework-free unit tests - they guard the value object's contract.</p>
  */
 class WorkspaceIdTest {
 

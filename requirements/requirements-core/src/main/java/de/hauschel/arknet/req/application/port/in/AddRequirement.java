@@ -2,7 +2,7 @@ package de.hauschel.arknet.req.application.port.in;
 
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.req.domain.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Driving port: register a new requirement.

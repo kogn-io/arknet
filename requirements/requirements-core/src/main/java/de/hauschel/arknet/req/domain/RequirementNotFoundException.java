@@ -2,6 +2,8 @@ package de.hauschel.arknet.req.domain;
 
 import java.util.Objects;
 
+import de.hauschel.arknet.kernel.WorkspaceId;
+
 /**
  * Thrown when an operation refers to a requirement that does not exist in the
  * targeted workspace.

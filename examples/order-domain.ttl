@@ -8,6 +8,7 @@
 @prefix arkproc: <https://w3id.org/arknet/process#> .
 @prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
 
 
@@ -36,6 +37,64 @@
 
 
 # ═══════════════════════════════════════════════════════════
+#  UBIQUITOUS LANGUAGE GLOSSARY (SKOS)
+# ═══════════════════════════════════════════════════════════
+
+:OrderDomainGlossary a skos:ConceptScheme ;
+    skos:prefLabel "Order Domain Glossary"^^xsd:string .
+
+:Bestellung a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Bestellung"^^xsd:string ;
+    skos:definition "Ein vom Kunden verbindlich aufgegebener Auftrag zum Kauf einer oder mehrerer Positionen."^^xsd:string .
+
+:Bestellposition a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Bestellposition"^^xsd:string ;
+    skos:definition "Ein einzelner Artikel mit Menge innerhalb einer Bestellung."^^xsd:string .
+
+:Warenkorb a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Warenkorb"^^xsd:string ;
+    skos:definition "Vorlaeufige Sammlung von Artikeln, die der Kunde vor der Bestellung zusammenstellt."^^xsd:string .
+
+:Lieferadresse a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Lieferadresse"^^xsd:string ;
+    skos:definition "Die Anschrift, an die eine Bestellung ausgeliefert werden soll."^^xsd:string .
+
+:Lagerbestand a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Lagerbestand"^^xsd:string ;
+    skos:definition "Die aktuell verfuegbare Menge eines Artikels im Lager."^^xsd:string .
+
+:Reservierung a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Reservierung"^^xsd:string ;
+    skos:definition "Eine vorlaeufige Blockierung von Lagerbestand fuer eine bestimmte Bestellung."^^xsd:string .
+
+:Zahlung a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Zahlung"^^xsd:string ;
+    skos:definition "Die finanzielle Begleichung einer Bestellung durch den Kunden."^^xsd:string .
+
+:Autorisierung a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Autorisierung"^^xsd:string ;
+    skos:definition "Die Freigabe einer Zahlung durch den Zahlungsdienstleister vor der eigentlichen Abbuchung."^^xsd:string .
+
+:Benachrichtigung a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Benachrichtigung"^^xsd:string ;
+    skos:definition "Eine an den Kunden gesendete Information ueber den Status seiner Bestellung."^^xsd:string .
+
+:Email a skos:Concept ;
+    skos:inScheme :OrderDomainGlossary ;
+    skos:prefLabel "Email"^^xsd:string ;
+    skos:definition "Ein Kanal, ueber den Benachrichtigungen an den Kunden versendet werden."^^xsd:string .
+
+
+# ═══════════════════════════════════════════════════════════
 #  BOUNDED CONTEXTS
 # ═══════════════════════════════════════════════════════════
 
@@ -45,10 +104,7 @@
     arknet:subdomain arknet:CoreDomain ;
     arknet:ownedBy "Order Team"^^xsd:string ;
     arknet:source "analyze" ;
-    arknet:ubiquitousLanguageTerm "Bestellung"^^xsd:string ;
-    arknet:ubiquitousLanguageTerm "Bestellposition"^^xsd:string ;
-    arknet:ubiquitousLanguageTerm "Warenkorb"^^xsd:string ;
-    arknet:ubiquitousLanguageTerm "Lieferadresse"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm :Bestellung, :Bestellposition, :Warenkorb, :Lieferadresse ;
     arknet:hasAggregate :OrderAggregate .
 
 :InventoryContext a arknet:BoundedContext ;
@@ -56,8 +112,7 @@
     arknet:domainVision "Verwaltet Lagerbestaende, Reservierungen und Verfuegbarkeitspruefungen."^^xsd:string ;
     arknet:subdomain arknet:SupportingDomain ;
     arknet:source "analyze" ;
-    arknet:ubiquitousLanguageTerm "Lagerbestand"^^xsd:string ;
-    arknet:ubiquitousLanguageTerm "Reservierung"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm :Lagerbestand, :Reservierung ;
     arknet:hasAggregate :InventoryAggregate .
 
 :PaymentContext a arknet:BoundedContext ;
@@ -65,8 +120,7 @@
     arknet:domainVision "Wickelt Zahlungsautorisierung, Abrechnung und Erstattungen ab."^^xsd:string ;
     arknet:subdomain arknet:SupportingDomain ;
     arknet:source "analyze" ;
-    arknet:ubiquitousLanguageTerm "Zahlung"^^xsd:string ;
-    arknet:ubiquitousLanguageTerm "Autorisierung"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm :Zahlung, :Autorisierung ;
     arknet:hasAggregate :PaymentAggregate .
 
 :NotificationContext a arknet:BoundedContext ;
@@ -74,8 +128,7 @@
     arknet:domainVision "Versendet Benachrichtigungen per Email, SMS und Push an Kunden."^^xsd:string ;
     arknet:subdomain arknet:GenericDomain ;
     arknet:source "analyze" ;
-    arknet:ubiquitousLanguageTerm "Benachrichtigung"^^xsd:string ;
-    arknet:ubiquitousLanguageTerm "Email"^^xsd:string ;
+    arknet:ubiquitousLanguageTerm :Benachrichtigung, :Email ;
     arknet:hasAggregate :NotificationAggregate .
 
 

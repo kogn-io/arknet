@@ -27,6 +27,7 @@ public class ModelLoader {
 
     private static final List<String> SHAPES_RESOURCES = List.of(
             "/arknet-shapes.ttl",
+            "/ul-shapes.ttl",
             "/requirements-shapes.ttl",
             "/architecture-shapes.ttl",
             "/process-shapes.ttl",

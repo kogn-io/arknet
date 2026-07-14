@@ -176,11 +176,11 @@ arknet:responsibilities
     rdfs:comment "Freitext-Beschreibung der Verantwortlichkeiten des Bounded Context."@de .
 
 arknet:ubiquitousLanguageTerm
-    a owl:DatatypeProperty ;
+    a owl:ObjectProperty ;
     rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   xsd:string ;
+    rdfs:range   skos:Concept ;
     rdfs:label   "ubiquitous language term"@en ;
-    rdfs:comment "Kann mehrfach vorkommen – ein Triple pro Begriff der Ubiquitous Language."@de .
+    rdfs:comment "Verweist auf einen Begriff der Ubiquitous Language, modelliert als skos:Concept (nicht mehr ein blosser String). Kann mehrfach vorkommen – ein Triple pro Begriff. Der Begriff traegt skos:prefLabel/skos:definition und liegt via skos:inScheme in einem Glossar (skos:ConceptScheme)."@de .
 
 arknet:subdomain
     a owl:ObjectProperty ;

@@ -36,6 +36,14 @@ Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
 | `req_get` | Einzelnes Requirement per Identitaet holen (z.B. FR-1, NFR-7) |
 | `req_set_status` | Lebenszyklus-Status aendern (PROPOSED / ACCEPTED) |
 
+Ubiquitous-Language-BC -- Glossar-Begriffe (SKOS Concepts):
+
+| Tool | Beschreibung |
+|------|-------------|
+| `term_add` | Neuen Glossar-Begriff anlegen (mintet ein SKOS Concept) |
+| `term_list` | Alle Glossar-Begriffe auflisten |
+| `term_get` | Einzelnen Begriff per Identitaet holen (z.B. TERM-1) |
+
 ### Speichermodell
 
 Der Triple Store (RDF4J) laeuft **in-memory** und lebt nur solange die Claude-Session aktiv ist. Persistent ist nur die Turtle-Datei:

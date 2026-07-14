@@ -1,9 +1,11 @@
 PREFIX arknet: <https://w3id.org/arknet/core#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 
 SELECT ?context ?term
 WHERE {
   ?ctx a arknet:BoundedContext ;
        arknet:name ?context ;
-       arknet:ubiquitousLanguageTerm ?term .
+       arknet:ubiquitousLanguageTerm ?concept .
+  ?concept skos:prefLabel ?term .
 }
 ORDER BY ?context ?term
