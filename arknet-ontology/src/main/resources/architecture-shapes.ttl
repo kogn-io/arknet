@@ -160,7 +160,8 @@ ashapes:ADRShape
     sh:property ashapes:ADR-status ;
     sh:property ashapes:ADR-context ;
     sh:property ashapes:ADR-decision ;
-    sh:property ashapes:ADR-consequences .
+    sh:property ashapes:ADR-consequences ;
+    sh:property ashapes:ADR-alternatives .
 
 ashapes:ADR-identifier
     a sh:PropertyShape ;
@@ -214,6 +215,13 @@ ashapes:ADR-consequences
     sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:message  "Best Practice: ADR sollte arkarch:adrConsequences dokumentieren (Folgen der Entscheidung)."@de ;
+    sh:severity sh:Warning .
+
+ashapes:ADR-alternatives
+    a sh:PropertyShape ;
+    sh:path     arkarch:adrAlternatives ;
+    sh:datatype xsd:string ;
+    sh:message  "Best Practice: ADR sollte erwogene Alternativen (arkarch:adrAlternatives) dokumentieren."@de ;
     sh:severity sh:Warning .
 
 # END OF ARCHITECTURE SHAPES

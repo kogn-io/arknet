@@ -10,7 +10,7 @@
 
 - Pipes & Filters: Turtle → Parse → Validate (SHACL) → Triple Store (RDF4J) → SPARQL → Template → AsciiDoc → HTML/PDF
 - Delivery: **MCP-first** + CLI als Convenience-Layer
-- Editionen/Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar (kognio-rdf lokal = Community/OSS <-> kognio-memory remote = Closed). Siehe `docs/adr/adr-001-editions-and-swappable-store.md`
+- Editionen/Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar (kognio-rdf lokal = Community/OSS <-> kognio-memory remote = Closed). Siehe `docs/adr/adr-001-local-client-and-swappable-store.md` (Client+Store), `adr-002-open-core-editions.md` (Editionen), `adr-003-adapter-b-remote-store.md` (Adapter B), `adr-004-spring-ai-mcp-tech-line.md` (Spring-AI-Tech-Linie fuer MCP)
 - CLI: `arknet validate`, `arknet generate`, `arknet query`
 
 ## Tech-Stack
