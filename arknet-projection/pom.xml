@@ -19,6 +19,15 @@
             <artifactId>arknet-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Explizites klassisches Jackson 2 (com.fasterxml.jackson.core:*): RDF4J 6.0.0's
+             rdf4j-query nutzt intern Jackson 3 (tools.jackson.core:jackson-databind) statt
+             des klassischen Jackson 2, sodass die von ExplorerProjection direkt genutzte
+             com.fasterxml.jackson.databind.ObjectMapper nicht mehr transitiv mitkommt. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.22.1</version>
+        </dependency>
         <dependency>
             <groupId>com.github.spullara.mustache.java</groupId>
             <artifactId>compiler</artifactId>
