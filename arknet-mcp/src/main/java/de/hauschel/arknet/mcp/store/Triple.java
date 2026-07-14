@@ -1,0 +1,21 @@
+package de.hauschel.arknet.mcp.store;
+
+import java.util.Objects;
+
+/**
+ * One RDF statement read from the store: an IRI {@code subject}, an IRI {@code predicate}
+ * and an {@link RdfNode} {@code object}. Backend-neutral value object shared by the reader
+ * and the renderers.
+ *
+ * @param subject   the subject IRI
+ * @param predicate the predicate IRI
+ * @param object    the object node
+ */
+public record Triple(String subject, String predicate, RdfNode object) {
+
+    public Triple {
+        Objects.requireNonNull(subject, "subject");
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(object, "object");
+    }
+}

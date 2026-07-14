@@ -1,0 +1,71 @@
+package de.hauschel.arknet.mcp.store;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import de.hauschel.arknet.kernel.WorkspaceId;
+
+/**
+ * Unit tests for the domain-agnostic digest rendering. Builds snapshots from hand-made
+ * triples so the renderer is exercised without any store.
+ */
+class DigestRendererTest {
+
+    private static final String REQ = "https://w3id.org/arknet/model/requirement/";
+    private static final String TERM = "https://w3id.org/arknet/model/term/";
+    private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
+    private static final String SKOS = "http://www.w3.org/2004/02/skos/core#";
+    private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private static final String TITLE = "http://purl.org/dc/terms/title";
+
+    private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults());
+
+    @Test
+    void rendersHeaderCountersPrefixLegendAndResourceLines() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(REQ + "FR-1", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(REQ + "FR-1", TITLE, "Login"),
+                iri(REQ + "FR-1", ARKREQ + "status", ARKREQ + "Proposed"),
+                iri(REQ + "FR-1", ARKREQ + "priority", ARKREQ + "MustHave"),
+                iri(TERM + "login", RDF_TYPE, SKOS + "Concept"),
+                lit(TERM + "login", SKOS + "prefLabel", "Anmeldung")));
+
+        String digest = renderer.render(new WorkspaceId("noistill"), snapshot);
+
+        assertThat(digest).contains("# Workspace noistill -- 2 resources, 6 triples, 2 types");
+        assertThat(digest).contains("# Prefixes:");
+        assertThat(digest).contains("req:").contains(REQ);
+        assertThat(digest).contains("# Handle for resource_get is the IRI (as a CURIE), NOT the label.");
+        assertThat(digest).contains("1 arkreq:FunctionalRequirement");
+        assertThat(digest).contains("1 skos:Concept");
+        assertThat(digest).contains("req:FR-1 [FunctionalRequirement] \"Login\" Proposed MustHave"
+                + "  -> resource_get(\"req:FR-1\")");
+        assertThat(digest).contains("term:login [Concept] \"Anmeldung\"  -> resource_get(\"term:login\")");
+        assertThat(digest).contains("- no dangling references");
+    }
+
+    @Test
+    void reportsDanglingReference() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(REQ + "FR-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(REQ + "FR-3", TITLE, "Export"),
+                iri(REQ + "FR-3", ARKREQ + "refinesTerm", TERM + "rezept")));
+
+        String digest = renderer.render(new WorkspaceId("ws"), snapshot);
+
+        assertThat(digest).contains("dangling reference(s)");
+        assertThat(digest).contains("req:FR-3").contains("term:rezept").contains("(missing)");
+    }
+
+    private static Triple iri(String subject, String predicate, String objectIri) {
+        return new Triple(subject, predicate, new RdfNode.Resource(objectIri));
+    }
+
+    private static Triple lit(String subject, String predicate, String lexical) {
+        return new Triple(subject, predicate,
+                new RdfNode.Literal(lexical, "http://www.w3.org/2001/XMLSchema#string", null));
+    }
+}
