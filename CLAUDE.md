@@ -31,10 +31,11 @@
 - **arknet-core**: RDF4J, SPARQL, SHACL-Validierung
 - **arknet-projection**: Template-Engine, View-Plugins
 - **arknet-cli**: PicoCLI, orchestriert core + projection
-- **arknet-mcp**: MCP-Server (stdio) + Composition Root -- Spring Boot/Spring AI 2.0, verdrahtet arknet-Engine + requirements-Hexagon + ubiquitous-language-Hexagon als `@McpTool`-Beans (beide Hexagons teilen den WorkspaceId-Bean)
+- **arknet-mcp**: MCP-Server (stdio) + Composition Root -- Spring Boot/Spring AI 2.0, verdrahtet arknet-Engine + requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon als `@McpTool`-Beans (die BC-Hexagons teilen den WorkspaceId-Bean UND einen gemeinsamen DatasetLifecycle-Bean -- ein Store pro Workspace, siehe #48/#49)
 - **shared-kernel** (`arknet-shared-kernel`): DDD Shared Kernel -- technologieneutrale, von mehreren BCs geteilte Domain-Bausteine (`de.hauschel.arknet.kernel.WorkspaceId`). Bewusst winzig.
 - **arknet-requirements**: erste hexagonale BC -- requirements-core (Domaene/In-/Out-Ports) + adapter-kogniordf (Out) + adapter-mcp (In, Spring AI `@McpTool`). Requirement-Lifecycle.
 - **arknet-ubiquitous-language**: zweite hexagonale BC (Bauart 1:1 zu requirements) -- ul-core + adapter-kogniordf (Out) + adapter-mcp (In). Glossar-Begriffe als SKOS-Concepts (`term_add`/`term_list`/`term_get`); `arknet:ubiquitousLanguageTerm` ist seit #32 ein `skos:Concept` (nicht mehr `xsd:string`). Dogfood.
+- **arknet-use-cases**: dritte hexagonale BC (Bauart 1:1 zu requirements, #41) -- use-cases-core + adapter-kogniordf (Out) + adapter-mcp (In). Flow-orientierte Cockburn-Use-Cases als `arkreq:UseCase` mit strukturiertem Step-Flow (`uc_add`/`uc_list`/`uc_get`); coarse-grained write (ein `uc_add`-Call) / fine-grained read; strenge Cross-BC-Referenz-Aufloesung (FR per `dcterms:identifier`, Actor per `skos:prefLabel`) mit didaktischer Ablehnung bei Unbekanntem.
 
 ## Ontologie-Namespaces
 
