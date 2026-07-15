@@ -20,7 +20,6 @@
              gegen RDF4J 6.0.0 gebaut ist (ShaclValidator.builder() existiert erst dort).
              Der Bump ist bewusst als eigener Schritt getrennt vom SHACL-Write-Gate (#38). -->
         <rdf4j.version>6.0.0</rdf4j.version>
-        <picocli.version>4.7.7</picocli.version>
         <asciidoctorj.version>3.0.0</asciidoctorj.version>
         <asciidoctorj-diagram.version>3.1.0</asciidoctorj-diagram.version>
         <mustache.version>0.9.14</mustache.version>
@@ -44,7 +43,6 @@
         <module>arknet-ontology</module>
         <module>arknet-core</module>
         <module>arknet-projection</module>
-        <module>arknet-cli</module>
         <module>arknet-mcp</module>
         <module>shared-kernel</module>
         <module>requirements</module>

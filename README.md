@@ -67,13 +67,6 @@ Das Modell lebt primaer im lokalen RDF-Store (kognio-rdf), **persistent ueber Se
 
 Die datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate` aus einer `.ttl`) gelten als **aussterbend** -- geduldet fuer Import/Interop, aber kein primaerer Modell-Lebenszyklus mehr. Hintergrund: [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md).
 
-## CLI
-
-```bash
-java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar validate examples/order-domain.ttl
-java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examples/order-domain.ttl --output docs
-```
-
 ## Module
 
 | Modul | Beschreibung |
@@ -82,7 +75,6 @@ java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examp
 | `arknet-core` | RDF4J Triple Store, SPARQL-Execution, SHACL-Validierung |
 | `arknet-projection` | Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF) |
 | `arknet-mcp` | MCP-Server (stdio) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) |
-| `arknet-cli` | PicoCLI-Einstiegspunkt: `validate`, `generate` |
 | `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`) |
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 | `arknet-ubiquitous-language` | Zweite hexagonale BC: Glossar-Begriffe als SKOS-Concepts (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
