@@ -92,7 +92,7 @@ Faellen die Antwort auf einen belegten Bedarf, nie auf eine Vermutung.
   `rdf4j-rio-turtle` ins Modul-POM aufnimmt, und die Eigenschaft kippt lautlos -- Tests blieben
   gruen. Dasselbe gilt fuer "nur die Factory nennt RDF4J-Typen". Das sind genau die stillen Fehler,
   die ArchUnit-Regeln festnageln wuerden; ArchUnit ist im Projekt derzeit **nicht** im Einsatz
-  (eigenes Issue).
+  (Issue #60).
 - **ADR-006 Punkt 3 bleibt unberuehrt.** Die Fabrikmethode `persistentLifecycle(Path)` haengt
   weiter physisch am requirements-Adapter, obwohl der Lifecycle BC-neutral ist. Das jetzt
   existierende Infra-Modul entkraeftet zwar das damalige Argument ("kein neues Infra-Modul fuer eine
