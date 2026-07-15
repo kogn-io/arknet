@@ -19,16 +19,16 @@
     </properties>
 
     <modules>
-        <module>use-cases-core</module>
-        <module>use-cases-adapter-kogniordf</module>
-        <module>use-cases-adapter-mcp</module>
+        <module>arknet-use-cases-core</module>
+        <module>arknet-use-cases-adapter-kogniordf</module>
+        <module>arknet-use-cases-adapter-mcp</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>use-cases-core</artifactId>
+                <artifactId>arknet-use-cases-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

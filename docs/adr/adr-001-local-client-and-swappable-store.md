@@ -22,10 +22,10 @@ Backend (kognio-memory), das Team / Multi-Project / Auth selbst traegt.
    ausschliesslich ueber domaennahe Out-Ports (z.B. `RequirementRepository` mit
    `Requirement` rein/raus -- keine Triples, keine RDF-Typen im Port). Zwei Adapter
    erfuellen denselben Port:
-   - **Adapter A -- lokal:** `requirements-adapter-kogniordf` ueber kognio-rdf (embeddable
-     RDF-Substrat). Single-User, lokales Dataset.
-   - **Adapter B -- remote (spaeter):** `requirements-adapter-kogniomemory`, ein MCP-Client
-     gegen kognio-memory. Dieses Backend traegt Team / Multi-Project / Auth selbst.
+   - **Adapter A -- lokal:** `arknet-requirements-adapter-kogniordf` ueber kognio-rdf
+     (embeddable RDF-Substrat). Single-User, lokales Dataset.
+   - **Adapter B -- remote (spaeter):** `arknet-requirements-adapter-kogniomemory`, ein
+     MCP-Client gegen kognio-memory. Dieses Backend traegt Team / Multi-Project / Auth selbst.
 
    arknet ist damit zugleich MCP-Server (fuer den treibenden Agenten) und MCP-Client (fuer
    kognio-memory als Store).
