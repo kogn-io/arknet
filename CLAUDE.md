@@ -17,7 +17,6 @@
 
 - Java 21+, Maven Multi-Module
 - RDF4J 6.x (Triple Store + SHACL Sail)
-- PicoCLI (CLI)
 - AsciidoctorJ + asciidoctor-diagram (AsciiDoc → HTML/PDF)
 - PlantUML (Diagramme)
 - Mustache (Templates fuer AsciiDoc-Generierung)
