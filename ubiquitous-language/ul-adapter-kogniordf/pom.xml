@@ -20,6 +20,10 @@
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-ontology</artifactId>
             <version>${project.version}</version>
         </dependency>

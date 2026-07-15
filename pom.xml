@@ -45,6 +45,7 @@
         <module>arknet-projection</module>
         <module>arknet-mcp</module>
         <module>shared-kernel</module>
+        <module>persistence-support</module>
         <module>requirements</module>
         <module>ubiquitous-language</module>
         <module>use-cases</module>
@@ -71,6 +72,14 @@
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-shared-kernel</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- Technischer Support fuer die kognio-rdf-Out-Adapter (SHACL-Write-Gate), von
+                 requirements, ubiquitous-language und use-cases geteilt. Getrennt vom
+                 Shared Kernel, weil hier Technik statt Domain-Vokabular wohnt (#52). -->
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-persistence-support</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

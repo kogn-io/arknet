@@ -23,6 +23,7 @@ import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
 /**
