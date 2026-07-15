@@ -44,6 +44,14 @@ Ubiquitous-Language-BC -- Glossar-Begriffe (SKOS Concepts):
 | `term_list` | Alle Glossar-Begriffe auflisten |
 | `term_get` | Einzelnen Begriff per Identitaet holen (z.B. TERM-1) |
 
+Use-Cases-BC (`arknet-use-cases`) -- flow-orientierte Cockburn-Use-Cases (binden FR ueber einen Interaktionsablauf):
+
+| Tool | Beschreibung |
+|------|-------------|
+| `uc_add` | Kompletten Use Case in einem Call anlegen (Goal, Actor, Trigger, nummerierter Step-Flow mit FR-Referenzen) |
+| `uc_list` | Alle Use Cases auflisten |
+| `uc_get` | Einzelnen Use Case mit aufgeloesten Steps und FR-/Actor-Kanten holen (z.B. UC1) |
+
 ### Speichermodell
 
 Der Triple Store (RDF4J) laeuft **in-memory** und lebt nur solange die Claude-Session aktiv ist. Persistent ist nur die Turtle-Datei:
@@ -76,6 +84,7 @@ java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examp
 | `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`) |
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 | `arknet-ubiquitous-language` | Zweite hexagonale BC: Glossar-Begriffe als SKOS-Concepts (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
+| `arknet-use-cases` | Dritte hexagonale BC: flow-orientierte Cockburn-Use-Cases (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 
 ## Ontologie
 
