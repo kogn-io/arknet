@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-architecture-tests</artifactId>
+
+    <name>arknet - Architecture Tests</name>
+    <description>
+        ArchUnit-Regeln fuer die Dependency-Invarianten, die der Maven-Modulschnitt NICHT
+        erzwingen kann und die sonst nur durch Reviewer-Aufmerksamkeit gelten (#60).
+        Bewusst KEIN Produktivcode: das Modul hat nur src/test und wird von niemandem
+        konsumiert. Es haengt (test-scope) auf die Module, ueber die es Aussagen trifft.
+        Das ist der Preis fuer den eigenen Schnitt; die Alternative waere gewesen, die
+        Regeln in arknet-mcp zu legen, das als Composition Root ohnehin breit haengt,
+        aber Verdrahtung beherbergt und nicht Architektur-Kontrolle.
+    </description>
+
+    <dependencies>
+        <!-- Regel 1: das Modul, dessen RDF4J-Freiheit ADR-007 traegt. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Regel 2: die drei Out-Adapter, in denen nur die Repository-Factory RDF4J nennen darf.
+             Sie ziehen die *-core transitiv mit, die Regel 3 prueft. Diese sind unten trotzdem
+             explizit deklariert: ein Architektur-Test-Modul soll benennen, worueber es urteilt,
+             statt sich auf Transitivitaet zu verlassen. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-requirements-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-use-cases-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Regel 3: die technologieneutralen Hexagon-Inneren. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-requirements-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-use-cases-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

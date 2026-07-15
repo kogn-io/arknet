@@ -88,11 +88,14 @@ Faellen die Antwort auf einen belegten Bedarf, nie auf eine Vermutung.
   ist ein bekannter Grabbelkisten-Attraktor: fuer aktuell eine Klasse plus eine Exception eine
   Nummer zu gross. Gegenmittel ist bis auf Weiteres das `<description>` im POM, das den Inhalt
   festnagelt. Wird das Modul zur Halde, ist der Name das erste, was faellt (`arknet-shacl-write-gate`).
-- **Die RDF4J-Freiheit ist nur durch Reviewer-Aufmerksamkeit geschuetzt.** Es genuegt, dass jemand
-  `rdf4j-rio-turtle` ins Modul-POM aufnimmt, und die Eigenschaft kippt lautlos -- Tests blieben
-  gruen. Dasselbe gilt fuer "nur die Factory nennt RDF4J-Typen". Das sind genau die stillen Fehler,
-  die ArchUnit-Regeln festnageln wuerden; ArchUnit ist im Projekt derzeit **nicht** im Einsatz
-  (Issue #60).
+- **Die RDF4J-Freiheit haengt am Modul-POM, nicht am Modulschnitt.** Sie gilt, solange niemand eine
+  `rdf4j-*`-Dependency aufnimmt -- eine einzige Zeile kippt sie. Dasselbe gilt fuer "nur die Factory
+  nennt RDF4J-Typen", eine modulinterne Regel, die Maven prinzipiell nicht sehen kann. Beides sind
+  stille Fehler: kein Compiler-Fehler, kein roter Test, nur Reviewer-Aufmerksamkeit. Diese
+  Entscheidung erzwingt daher eine Kontrolle ausserhalb des Modulschnitts -- ArchUnit-Regeln in
+  `arknet-architecture-tests`, die den Zugriff auf RDF4J-Typen aus diesem Modul verbieten. Deren
+  Reichweite endet am Bytecode: eine ungenutzte `rdf4j-*`-Dependency im POM bleibt unsichtbar. Sie
+  ist dann Ballast, aber kein Bruch -- die Eigenschaft kippt erst bei Nutzung, und die faellt auf.
 - **ADR-006 Punkt 3 bleibt unberuehrt.** Die Fabrikmethode `persistentLifecycle(Path)` haengt
   weiter physisch am requirements-Adapter, obwohl der Lifecycle BC-neutral ist. Das jetzt
   existierende Infra-Modul entkraeftet zwar das damalige Argument ("kein neues Infra-Modul fuer eine
