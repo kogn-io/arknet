@@ -119,7 +119,7 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementMcpTools requirementMcpTools(
             final RequirementService service, final WorkspaceId workspaceId) {
-        return new RequirementMcpTools(service, service, service, service, workspaceId);
+        return new RequirementMcpTools(service, service, service, service, service, workspaceId);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------

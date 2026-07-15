@@ -17,6 +17,7 @@ import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.uc.adapter.kogniordf.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
 import de.hauschel.arknet.uc.application.UseCaseService;
@@ -30,6 +31,7 @@ import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
+import de.hauschel.arknet.ul.domain.Term;
 
 /**
  * The regression proof for issue #41: three bounded contexts (requirements,
@@ -120,6 +122,62 @@ class CrossBoundedContextStoreWiringTest {
                             .hasMessageContaining("req_add");
 
                     assertThat(useCases.list(WS)).isEmpty();
+                });
+    }
+
+    /**
+     * The same proof for the requirement -&gt; glossary-term edge of issue #36: {@code term_add}
+     * writes a concept, {@code req_link_term} resolves it over the shared store and
+     * {@code req_get} reads the edge back.
+     */
+    @Test
+    void requirementLinksATermWrittenByTheOtherContextOverTheSharedStore() {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir,
+                        "arknet.workspace.id=test-workspace")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    RequirementService requirements = context.getBean(RequirementService.class);
+                    TermService terms = context.getBean(TermService.class);
+
+                    Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
+                            "The system shall let a customer place an order.",
+                            RequirementType.FUNCTIONAL, null, null, null));
+                    Term order = terms.add(WS, new NewTerm("Order", "A customer's request to buy.", null));
+
+                    requirements.linkTerm(WS, fr.id(), new TermRef(order.id().value()));
+
+                    assertThat(requirements.get(WS, fr.id()).orElseThrow().usesTerms())
+                            .containsExactly(new TermRef(order.id().value()));
+                });
+    }
+
+    /**
+     * A term identity that no concept carries must abort the link with a didactic message and
+     * persist nothing - the requirements BC never creates a dangling {@code arkreq:usesTerm}.
+     */
+    @Test
+    void linkingAnUnknownTermIsRejectedWithDidacticMessageAndNothingPersisted() {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir,
+                        "arknet.workspace.id=test-workspace")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    RequirementService requirements = context.getBean(RequirementService.class);
+
+                    Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
+                            "The system shall let a customer place an order.",
+                            RequirementType.FUNCTIONAL, null, null, null));
+
+                    assertThatThrownBy(() -> requirements.linkTerm(WS, fr.id(), new TermRef("TERM-99")))
+                            .isInstanceOf(
+                                    de.hauschel.arknet.req.adapter.kogniordf.UnresolvedReferenceException.class)
+                            .hasMessageContaining("TERM-99")
+                            .hasMessageContaining("term_add");
+
+                    assertThat(requirements.get(WS, fr.id()).orElseThrow().usesTerms()).isEmpty();
                 });
     }
 }

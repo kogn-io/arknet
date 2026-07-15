@@ -18,12 +18,13 @@ import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Policy tests for {@link RequirementService}: identity assignment, listing,
- * lookup and status-transition rules, exercised against an in-memory fake
- * repository.
+ * lookup, status-transition and term-linking rules, exercised against an
+ * in-memory fake repository.
  */
 class RequirementServiceTest {
 
@@ -177,5 +178,73 @@ class RequirementServiceTest {
 
         assertSame(WS, ex.workspaceId());
         assertEquals(new RequirementId("FR-42"), ex.requirementId());
+    }
+
+    @Test
+    void addStartsWithoutLinkedTerms() {
+        Requirement added = service.add(WS, newFunctionalRequirement());
+
+        assertEquals(List.of(), added.usesTerms());
+    }
+
+    @Test
+    void linkTermAddsTheTermToTheRequirement() {
+        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
+
+        Requirement linked = service.linkTerm(WS, id, new TermRef("TERM-1"));
+
+        assertEquals(List.of(new TermRef("TERM-1")), linked.usesTerms());
+        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, id).orElseThrow().usesTerms());
+    }
+
+    @Test
+    void linkTermAppendsToAlreadyLinkedTerms() {
+        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
+        service.linkTerm(WS, id, new TermRef("TERM-1"));
+
+        Requirement linked = service.linkTerm(WS, id, new TermRef("TERM-2"));
+
+        assertEquals(List.of(new TermRef("TERM-1"), new TermRef("TERM-2")), linked.usesTerms());
+    }
+
+    @Test
+    void linkingTheSameTermTwiceIsANoOp() {
+        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
+        service.linkTerm(WS, id, new TermRef("TERM-1"));
+
+        Requirement linked = service.linkTerm(WS, id, new TermRef("TERM-1"));
+
+        assertEquals(List.of(new TermRef("TERM-1")), linked.usesTerms());
+    }
+
+    @Test
+    void linkTermThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.linkTerm(WS, new RequirementId("FR-42"), new TermRef("TERM-1")));
+
+        assertSame(WS, ex.workspaceId());
+        assertEquals(new RequirementId("FR-42"), ex.requirementId());
+    }
+
+    /**
+     * Regression guard for the replace-by-identity write path: the out-adapter persists a
+     * requirement by wiping and re-writing its triples, so a status change must carry the
+     * linked terms along rather than silently dropping them.
+     */
+    @Test
+    void setStatusPreservesLinkedTerms() {
+        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
+        service.linkTerm(WS, id, new TermRef("TERM-1"));
+
+        Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
+
+        assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals(List.of(new TermRef("TERM-1")), accepted.usesTerms());
+        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, id).orElseThrow().usesTerms());
+    }
+
+    private static NewRequirement newFunctionalRequirement() {
+        return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
+                RequirementType.FUNCTIONAL, null, null, null);
     }
 }

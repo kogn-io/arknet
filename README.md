@@ -35,6 +35,7 @@ Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
 | `req_list` | Alle verwalteten Requirements auflisten |
 | `req_get` | Einzelnes Requirement per Identitaet holen (z.B. FR-1, NFR-7) |
 | `req_set_status` | Lebenszyklus-Status aendern (PROPOSED / ACCEPTED) |
+| `req_link_term` | Requirement mit einem Glossar-Begriff verknuepfen (`arkreq:usesTerm`; Term muss existieren, #36) |
 
 Ubiquitous-Language-BC -- Glossar-Begriffe (SKOS Concepts):
 

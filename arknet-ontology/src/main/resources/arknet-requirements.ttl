@@ -166,6 +166,12 @@ arkreq:scopedTo a owl:ObjectProperty ;
     rdfs:label  "scoped to"@en ;
     rdfs:comment "Der Bounded Context, in dem diese Anforderung realisiert wird."@de .
 
+arkreq:usesTerm a owl:ObjectProperty ;
+    rdfs:domain arkreq:Requirement ;
+    rdfs:range  skos:Concept ;
+    rdfs:label  "uses term"@en ;
+    rdfs:comment "Diese Anforderung verwendet einen Begriff der Ubiquitous Language (skos:Concept aus dem Glossar). Kann mehrfach vorkommen -- ein Triple pro Begriff. Zeigt auf die Term-Identitaet (dcterms:identifier, z.B. TERM-1), nicht auf das skos:prefLabel: die Kante bleibt damit stabil, wenn der Begriff umbenannt wird. Die Kante gehoert der requirements-BC (Domain ist arkreq:Requirement), damit die Ubiquitous-Language-BC nicht von requirements abhaengt."@de .
+
 
 ##############################################################################
 #  3. CONSTRAINTS

@@ -1,12 +1,14 @@
 package de.hauschel.arknet.req.domain;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
  * A single requirement (functional or non-functional) under management.
  *
  * <p>Value object of the requirements component. All invariants are enforced
- * in the compact constructor; instances are immutable.</p>
+ * in the compact constructor; instances are immutable and their collections are
+ * defensively copied.</p>
  *
  * @param id               stable business identity (e.g. {@code FR-1});
  *                         maps to {@code dcterms:identifier}
@@ -26,6 +28,13 @@ import java.util.Objects;
  * @param qualityCategory  free-text quality category (e.g. "performance", "security"); maps
  *                         to {@code arkreq:qualityCategory}. Optional (may be {@code null});
  *                         only meaningful for {@link RequirementType#NON_FUNCTIONAL}
+ * @param usesTerms        the glossary terms of the ubiquitous language this requirement
+ *                         uses; maps to {@code arkreq:usesTerm}, {@code 0..n}, held as bare
+ *                         identity references (never {@code null}; a {@code null} argument is
+ *                         normalised to an empty list). Part of the requirement's own state
+ *                         rather than a side edge: the out-adapter persists a requirement by
+ *                         replacing it wholesale, so a link kept outside this record would be
+ *                         silently dropped by the next status change.
  */
 public record Requirement(
         RequirementId id,
@@ -35,7 +44,8 @@ public record Requirement(
         RequirementStatus status,
         Priority priority,
         String motivatedBy,
-        String qualityCategory) {
+        String qualityCategory,
+        List<TermRef> usesTerms) {
 
     public Requirement {
         Objects.requireNonNull(id, "id");
@@ -43,6 +53,7 @@ public record Requirement(
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(status, "status");
+        usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
         if (title.isBlank()) {
             throw new IllegalArgumentException("title must not be blank");
         }

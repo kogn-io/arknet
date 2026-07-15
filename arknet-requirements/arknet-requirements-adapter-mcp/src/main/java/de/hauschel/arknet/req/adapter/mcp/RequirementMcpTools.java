@@ -9,6 +9,7 @@ import org.springframework.ai.mcp.annotation.McpToolParam;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
+import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.domain.Priority;
@@ -16,13 +17,14 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
  * use-cases as MCP tools ({@code req_add}, {@code req_list}, {@code req_get},
- * {@code req_set_status}) and delegates each tool call to the corresponding
- * in-port.
+ * {@code req_set_status}, {@code req_link_term}) and delegates each tool call to the
+ * corresponding in-port.
  *
  * <p>This adapter belongs to the requirements hexagon (symmetric to the out-adapter
  * {@code arknet-requirements-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -56,15 +58,17 @@ public final class RequirementMcpTools {
     private final ListRequirements listRequirements;
     private final GetRequirement getRequirement;
     private final SetRequirementStatus setRequirementStatus;
+    private final LinkTerm linkTerm;
     private final WorkspaceId workspaceId;
 
     /**
-     * Creates the adapter with its four driving in-ports and the workspace it serves.
+     * Creates the adapter with its five driving in-ports and the workspace it serves.
      *
      * @param addRequirement       in-port backing {@code req_add}
      * @param listRequirements     in-port backing {@code req_list}
      * @param getRequirement       in-port backing {@code req_get}
      * @param setRequirementStatus in-port backing {@code req_set_status}
+     * @param linkTerm             in-port backing {@code req_link_term}
      * @param workspaceId          the single workspace all tool calls route to
      */
     public RequirementMcpTools(
@@ -72,11 +76,13 @@ public final class RequirementMcpTools {
             final ListRequirements listRequirements,
             final GetRequirement getRequirement,
             final SetRequirementStatus setRequirementStatus,
+            final LinkTerm linkTerm,
             final WorkspaceId workspaceId) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
+        this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
     }
 
@@ -136,9 +142,27 @@ public final class RequirementMcpTools {
         return format(updated);
     }
 
+    @McpTool(name = "req_link_term",
+            description = "Link a requirement to a glossary term of the ubiquitous language it uses. "
+                    + "The term must already exist (create it with term_add first). Linking the same "
+                    + "term twice is a no-op.")
+    public String linkTerm(
+            @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
+            @McpToolParam(description = "Term identity, e.g. TERM-1 (the term's identity, not its label)")
+            final String termId) {
+        final Requirement updated =
+                linkTerm.linkTerm(workspaceId, new RequirementId(reqId), new TermRef(termId));
+        return format(updated);
+    }
+
     private static String format(final Requirement r) {
         final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
-        return "%s [%s] %s (%s)%s".formatted(r.id().value(), r.type(), r.title(), r.status(), priority);
+        final String terms = r.usesTerms().isEmpty()
+                ? ""
+                : " [terms: " + r.usesTerms().stream().map(TermRef::termId)
+                        .reduce((a, b) -> a + ", " + b).orElse("") + "]";
+        return "%s [%s] %s (%s)%s%s".formatted(
+                r.id().value(), r.type(), r.title(), r.status(), priority, terms);
     }
 
     private static String blankToNull(final String value) {

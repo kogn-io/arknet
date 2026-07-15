@@ -55,7 +55,7 @@ class StoreReportToolsTest {
 
         requirements.save(WORKSPACE, new Requirement(
                 new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
-                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null));
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null));
         terms.save(WORKSPACE, new Term(
                 new TermId("TERM-1"), "Anmeldung", "The act of proving one's identity.", null));
 
