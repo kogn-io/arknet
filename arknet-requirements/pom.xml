@@ -14,10 +14,6 @@
     <packaging>pom</packaging>
     <description>Requirements-Engineering-Komponente (hexagonal): Requirement Lifecycle als eigenes Hexagon</description>
 
-    <properties>
-        <kognio-rdf.version>0.0.1-SNAPSHOT</kognio-rdf.version>
-    </properties>
-
     <modules>
         <module>arknet-requirements-core</module>
         <module>arknet-requirements-adapter-kogniordf</module>
@@ -35,31 +31,6 @@
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-requirements-adapter-mcp</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-terms</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-dataset</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-dataset-rdf4j</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-shacl</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-shacl-rdf4j</artifactId>
-                <version>${kognio-rdf.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
