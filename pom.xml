@@ -44,11 +44,11 @@
         <module>arknet-core</module>
         <module>arknet-projection</module>
         <module>arknet-mcp</module>
-        <module>shared-kernel</module>
+        <module>arknet-shared-kernel</module>
         <module>arknet-persistence-support</module>
-        <module>requirements</module>
-        <module>ubiquitous-language</module>
-        <module>use-cases</module>
+        <module>arknet-requirements</module>
+        <module>arknet-ubiquitous-language</module>
+        <module>arknet-use-cases</module>
     </modules>
 
     <repositories>
