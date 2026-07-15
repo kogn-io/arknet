@@ -52,18 +52,13 @@ Use-Cases-BC (`arknet-use-cases`) -- flow-orientierte Cockburn-Use-Cases (binden
 | `uc_list` | Alle Use Cases auflisten |
 | `uc_get` | Einzelnen Use Case mit aufgeloesten Steps und FR-/Actor-Kanten holen (z.B. UC1) |
 
-### Speichermodell
+### Speichermodell (store-first)
 
-Der Triple Store (RDF4J) laeuft **in-memory** und lebt nur solange die Claude-Session aktiv ist. Persistent ist nur die Turtle-Datei:
+Das Modell lebt primaer im lokalen RDF-Store (kognio-rdf), **persistent ueber Sessions hinweg** -- nicht in-memory und nicht in einer Turtle-Datei. Pro Workspace (= Projekt, abgeleitet aus dem Git-Top-Level bzw. Arbeitsverzeichnis) haelt der Store ein isoliertes Dataset; Default-Ablage `~/.arknet/rdf`, konfigurierbar via `arknet.rdf.storage`.
 
-```
-projekt/
-  architecture-model.ttl    <-- dein Architekturmodell, versionierbar mit Git
-```
+**Modell verwalten:** ueber die store-basierten BC-Tools (`req_*`, `term_*`, `uc_*`) -- nicht durch Text-Edits an einer `.ttl`. SHACL-Validierung greift einheitlich am Write-Gate des Stores: ein ungueltiger Schreibvorgang wird abgelehnt, nichts wird persistiert.
 
-**Modell laden:** `arknet_load architecture-model.ttl` laedt das Modell in den Store.
-
-**Modell aktualisieren:** `.ttl` manuell editieren, dann `arknet_validate`.
+Die datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate` aus einer `.ttl`) gelten als **aussterbend** -- geduldet fuer Import/Interop, aber kein primaerer Modell-Lebenszyklus mehr. Hintergrund: [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md).
 
 ## CLI
 
