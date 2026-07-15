@@ -40,7 +40,7 @@ Ubiquitous-Language-BC -- Glossar-Begriffe (SKOS Concepts):
 
 | Tool | Beschreibung |
 |------|-------------|
-| `term_add` | Neuen Glossar-Begriff anlegen (mintet ein SKOS Concept) |
+| `term_add` | Neuen Glossar-Begriff anlegen (mintet ein SKOS Concept; optional als Actor markierbar via `actorKind`/`actorRole`, #45) |
 | `term_list` | Alle Glossar-Begriffe auflisten |
 | `term_get` | Einzelnen Begriff per Identitaet holen (z.B. TERM-1) |
 
@@ -51,6 +51,13 @@ Use-Cases-BC (`arknet-use-cases`) -- flow-orientierte Cockburn-Use-Cases (binden
 | `uc_add` | Kompletten Use Case in einem Call anlegen (Goal, Actor, Trigger, nummerierter Step-Flow mit FR-Referenzen) |
 | `uc_list` | Alle Use Cases auflisten |
 | `uc_get` | Einzelnen Use Case mit aufgeloesten Steps und FR-/Actor-Kanten holen (z.B. UC1) |
+
+Store-Report -- generischer, BC-uebergreifender Lesepfad (readOnly; funktioniert fuer jede BC ohne Typ-Mapping):
+
+| Tool | Beschreibung |
+|------|-------------|
+| `store_overview` | Kompakter Text-Digest des Workspace-Stores (Prefix-Legende, Typ-Zaehler, Entity-Zeilen mit `resource_get`-Drill-down, Integritaets-Hinweis) + schreibt einen self-contained HTML-Resource-Browser und gibt den Pfad zurueck |
+| `resource_get` | Alle Triples einer Ressource (aus- und eingehend); Handle als CURIE (`req:FR-1`), volle IRI oder bare Business-Id (`FR-1`) |
 
 ### Speichermodell (store-first)
 
@@ -74,7 +81,7 @@ java -jar arknet-cli/target/arknet-cli-0.1.0-SNAPSHOT.jar generate --input examp
 | `arknet-ontology` | OWL-Ontologie und SHACL-Shapes (nur .ttl Ressourcen, kein Java) |
 | `arknet-core` | RDF4J Triple Store, SPARQL-Execution, SHACL-Validierung |
 | `arknet-projection` | Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF) |
-| `arknet-mcp` | MCP-Server (stdio) -- macht die Engine fuer AI-Agenten querybar |
+| `arknet-mcp` | MCP-Server (stdio) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) |
 | `arknet-cli` | PicoCLI-Einstiegspunkt: `validate`, `generate` |
 | `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`) |
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
