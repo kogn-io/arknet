@@ -11,7 +11,7 @@
 - Pipes & Filters: Turtle → Parse → Validate (SHACL) → Triple Store (RDF4J) → SPARQL → Template → AsciiDoc → HTML/PDF
 - Delivery: **MCP-first** + CLI als Convenience-Layer
 - Editionen/Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar (kognio-rdf lokal = Community/OSS <-> kognio-memory remote = Closed). Siehe `docs/adr/adr-001-local-client-and-swappable-store.md` (Client+Store), `adr-002-open-core-editions.md` (Editionen), `adr-003-adapter-b-remote-store.md` (Adapter B), `adr-004-spring-ai-mcp-tech-line.md` (Spring-AI-Tech-Linie fuer MCP), `adr-005-store-first-model-lifecycle.md` (Store-first: der Store ist der primaere Modell-Ort; Datei-Pipeline / `arknet_*`-Tools aussterbend), `adr-006-generic-store-read-path.md` (generischer BC-uebergreifender Store-Lesepfad `store_overview`/`resource_get` im Composition Root)
-- CLI: `arknet validate`, `arknet generate`, `arknet query`
+- CLI: derzeit **nicht implementiert**. Das datei-basierte `arknet-cli`-Modul (PicoCLI, `validate`/`generate` aus einer `.ttl`) wurde entfernt, weil es auf der von ADR-005 abgeloesten Datei-Pipeline sass. Die Produktvision haelt an einem CLI als CI/CD-Convenience-Layer fest -- ein store-first-Neuschnitt, wenn der CI-Bedarf konkret wird (#57).
 
 ## Tech-Stack
 
@@ -30,7 +30,6 @@
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes)
 - **arknet-core**: RDF4J, SPARQL, SHACL-Validierung
 - **arknet-projection**: Template-Engine, View-Plugins
-- **arknet-cli**: PicoCLI, orchestriert core + projection
 - **arknet-mcp**: MCP-Server (stdio) + Composition Root -- Spring Boot/Spring AI 2.0, verdrahtet arknet-Engine + requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon als `@McpTool`-Beans (die BC-Hexagons teilen den WorkspaceId-Bean UND einen gemeinsamen DatasetLifecycle-Bean -- ein Store pro Workspace, siehe #48/#49). Beherbergt zusaetzlich den generischen, BC-uebergreifenden Store-Lesepfad (`store_overview`/`resource_get`, readOnly; #47/ADR-006) -- Logik in `mcp/store/`, kein eigener BC
 - **shared-kernel** (`arknet-shared-kernel`): DDD Shared Kernel -- technologieneutrale, von mehreren BCs geteilte Domain-Bausteine (`de.hauschel.arknet.kernel.WorkspaceId`). Bewusst winzig.
 - **arknet-requirements**: erste hexagonale BC -- requirements-core (Domaene/In-/Out-Ports) + adapter-kogniordf (Out) + adapter-mcp (In, Spring AI `@McpTool`). Requirement-Lifecycle.
