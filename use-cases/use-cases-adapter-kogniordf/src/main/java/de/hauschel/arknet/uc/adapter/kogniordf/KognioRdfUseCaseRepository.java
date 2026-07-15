@@ -21,6 +21,8 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;

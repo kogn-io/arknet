@@ -18,6 +18,7 @@ import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 
+import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 
 /**

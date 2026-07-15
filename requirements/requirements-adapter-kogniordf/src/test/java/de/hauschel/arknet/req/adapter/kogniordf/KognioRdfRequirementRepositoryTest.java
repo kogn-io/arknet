@@ -19,6 +19,7 @@ import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 
+import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;

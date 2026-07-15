@@ -1,4 +1,4 @@
-package de.hauschel.arknet.uc.adapter.kogniordf;
+package de.hauschel.arknet.persistence;
 
 import java.util.List;
 import java.util.Objects;
@@ -15,29 +15,28 @@ import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 
 /**
- * SHACL write-gate: rejects a candidate instance graph before persistence if it violates
- * the use-case SHACL shapes ({@code UseCaseShape}, {@code StepShape} in
- * {@code requirements-shapes.ttl}).
+ * SHACL write-gate: rejects a candidate instance graph before persistence if it violates the
+ * shapes it was built with. Shared by every bounded context's kognio-rdf out-adapter.
  *
- * <p>Technology-neutral: depends only on the {@code io.kogn.rdf.shacl} port and
- * {@code io.kogn.rdf.terms}, never on RDF4J - the concrete {@link ShaclValidation} and the
- * loaded shapes/axioms graphs are handed in by
- * {@link KognioRdfUseCaseRepositoryFactory}, the only RDF4J-aware collaborator in this
- * module.</p>
+ * <p>The gate is deliberately ignorant of <em>which</em> context it guards. Everything that
+ * differs per context is constructor state, not code:</p>
+ * <ul>
+ *   <li>{@code shapes} - the context's SHACL shapes (possibly filtered to the node shapes the
+ *       writing adapter actually owns).</li>
+ *   <li>{@code axioms} + {@code options} - the ontology axioms merged into the validated data
+ *       graph and whether to reason over them. This is what makes shapes fire that target a
+ *       superclass or a super-property of the type the adapter asserts; an adapter whose
+ *       instances already carry the targeted type passes an empty graph and
+ *       {@link ValidationOptions#defaults()}.</li>
+ * </ul>
  *
- * <p><strong>Mirror, not reuse.</strong> This class is a byte-for-byte sibling of the
- * requirements adapter's {@code ShaclWriteGate}. That one is package-private and lives in a
- * bounded context this module must not depend on, so it is copied here rather than shared.
- * Extracting a single gate into a shared technical module is a deliberate later step (open
- * point), not part of this scaffolding.</p>
- *
- * <p><strong>RDFS gotcha.</strong> The shapes target the abstract {@code arkreq:UseCase} /
- * {@code arkreq:Step} classes, which is exactly how this adapter types its instances, so
- * (unlike the requirements adapter) no subclass reasoning is strictly required for the shape
- * to fire. Axioms and RDFS reasoning are still supplied for the {@code rdfs:subPropertyOf}
- * relation of {@code arkreq:stepRealises} to {@code oslc_rm:satisfies} and future needs.</p>
+ * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf.shacl} port
+ * and {@code io.kogn.rdf.terms}, never on RDF4J: the concrete {@link ShaclValidation} and the
+ * loaded shapes/axioms graphs are handed in by each adapter's repository factory, which stays
+ * the only RDF4J-aware collaborator. That is why this module carries no RDF4J dependency even
+ * though every one of its callers does.</p>
  */
-final class ShaclWriteGate {
+public final class ShaclWriteGate {
 
     private final ShaclValidation validation;
     private final ReadableGraph shapes;
@@ -50,11 +49,12 @@ final class ShaclWriteGate {
      *
      * @param validation the SHACL validation port implementation
      * @param shapes     the SHACL shapes to validate candidate graphs against
-     * @param axioms     ontology axioms (e.g. {@code rdfs:subClassOf}/{@code subPropertyOf})
-     *                   merged into the validated data graph (an empty graph if none needed)
+     * @param axioms     ontology axioms (e.g. {@code rdfs:subClassOf} / {@code subPropertyOf})
+     *                   merged into the validated data graph so that shapes targeting a
+     *                   superclass fire (an empty graph if no axioms are needed)
      * @param options    validation options (e.g. whether to reason over {@code axioms})
      */
-    ShaclWriteGate(ShaclValidation validation, ReadableGraph shapes, ReadableGraph axioms,
+    public ShaclWriteGate(ShaclValidation validation, ReadableGraph shapes, ReadableGraph axioms,
             ValidationOptions options) {
         this.validation = Objects.requireNonNull(validation, "validation");
         this.shapes = Objects.requireNonNull(shapes, "shapes");
@@ -69,7 +69,7 @@ final class ShaclWriteGate {
      * @param candidate the instance graph about to be persisted
      * @throws WriteConstraintViolationException if the candidate violates the shapes
      */
-    void enforce(ReadableGraph candidate) {
+    public void enforce(ReadableGraph candidate) {
         Objects.requireNonNull(candidate, "candidate");
 
         Graph data = rdf.createGraph();

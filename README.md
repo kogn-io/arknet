@@ -76,6 +76,7 @@ Die datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate` aus einer 
 | `arknet-projection` | Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF) |
 | `arknet-mcp` | MCP-Server (stdio) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) |
 | `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`) |
+| `arknet-persistence-support` | Technischer Support der kognio-rdf-Out-Adapter: das geteilte SHACL-Write-Gate (validate-before-commit) |
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 | `arknet-ubiquitous-language` | Zweite hexagonale BC: Glossar-Begriffe als SKOS-Concepts (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 | `arknet-use-cases` | Dritte hexagonale BC: flow-orientierte Cockburn-Use-Cases (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
