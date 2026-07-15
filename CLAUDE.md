@@ -32,9 +32,9 @@
 - **arknet-mcp**: MCP-Server (stdio) + Composition Root -- Spring Boot/Spring AI 2.0, verdrahtet arknet-Engine + requirements-Hexagon + ubiquitous-language-Hexagon + use-cases-Hexagon als `@McpTool`-Beans (die BC-Hexagons teilen den WorkspaceId-Bean UND einen gemeinsamen DatasetLifecycle-Bean -- ein Store pro Workspace, siehe #48/#49). Beherbergt zusaetzlich den generischen, BC-uebergreifenden Store-Lesepfad (`store_overview`/`resource_get`, readOnly; #47/ADR-006) -- Logik in `mcp/store/`, kein eigener BC
 - **arknet-shared-kernel**: DDD Shared Kernel -- technologieneutrale, von mehreren BCs geteilte Domain-Bausteine (`de.hauschel.arknet.kernel.WorkspaceId`). Bewusst winzig.
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- das von allen BCs geteilte SHACL-Write-Gate (`de.hauschel.arknet.persistence.ShaclWriteGate` + `WriteConstraintViolationException`, validate-before-commit; #52, vorher je BC kopiert). Bewusst KEIN Shared Kernel: hier wohnt Technik, kein Domain-Vokabular. Trotz kognio-rdf-Abhaengigkeit RDF4J-frei -- das Gate kennt nur die `io.kogn.rdf.shacl`/`terms`-Ports, RDF4J bleibt in den Repository-Factories. Kontextunterschiede (req: `subClassOf`-Reasoning, ul: keins, uc: `subPropertyOf`) sind Konstruktor-Parameter (`shapes`/`axioms`/`options`), kein Code.
-- **arknet-requirements**: erste hexagonale BC -- requirements-core (Domaene/In-/Out-Ports) + adapter-kogniordf (Out) + adapter-mcp (In, Spring AI `@McpTool`). Requirement-Lifecycle.
-- **arknet-ubiquitous-language**: zweite hexagonale BC (Bauart 1:1 zu requirements) -- ul-core + adapter-kogniordf (Out) + adapter-mcp (In). Glossar-Begriffe als SKOS-Concepts (`term_add`/`term_list`/`term_get`); `arknet:ubiquitousLanguageTerm` ist seit #32 ein `skos:Concept` (nicht mehr `xsd:string`). Seit #45 kann ein Term optional eine Actor-Facette tragen (derselbe Concept zusaetzlich `arkproc:HumanActor`/`SystemActor` + `actorRole`; `term_add` mit optionalem `actorKind`/`actorRole`) -- Pre-Req der Use-Case-BC. Dogfood.
-- **arknet-use-cases**: dritte hexagonale BC (Bauart 1:1 zu requirements, #41) -- use-cases-core + adapter-kogniordf (Out) + adapter-mcp (In). Flow-orientierte Cockburn-Use-Cases als `arkreq:UseCase` mit strukturiertem Step-Flow (`uc_add`/`uc_list`/`uc_get`); coarse-grained write (ein `uc_add`-Call) / fine-grained read; strenge Cross-BC-Referenz-Aufloesung (FR per `dcterms:identifier`, Actor per `skos:prefLabel`) mit didaktischer Ablehnung bei Unbekanntem.
+- **arknet-requirements**: erste hexagonale BC -- arknet-requirements-core (Domaene/In-/Out-Ports) + arknet-requirements-adapter-kogniordf (Out) + arknet-requirements-adapter-mcp (In, Spring AI `@McpTool`). Requirement-Lifecycle.
+- **arknet-ubiquitous-language**: zweite hexagonale BC (Bauart 1:1 zu requirements) -- arknet-ubiquitous-language-core + arknet-ubiquitous-language-adapter-kogniordf (Out) + arknet-ubiquitous-language-adapter-mcp (In). Glossar-Begriffe als SKOS-Concepts (`term_add`/`term_list`/`term_get`); `arknet:ubiquitousLanguageTerm` ist seit #32 ein `skos:Concept` (nicht mehr `xsd:string`). Seit #45 kann ein Term optional eine Actor-Facette tragen (derselbe Concept zusaetzlich `arkproc:HumanActor`/`SystemActor` + `actorRole`; `term_add` mit optionalem `actorKind`/`actorRole`) -- Pre-Req der Use-Case-BC. Dogfood.
+- **arknet-use-cases**: dritte hexagonale BC (Bauart 1:1 zu requirements, #41) -- arknet-use-cases-core + arknet-use-cases-adapter-kogniordf (Out) + arknet-use-cases-adapter-mcp (In). Flow-orientierte Cockburn-Use-Cases als `arkreq:UseCase` mit strukturiertem Step-Flow (`uc_add`/`uc_list`/`uc_get`); coarse-grained write (ein `uc_add`-Call) / fine-grained read; strenge Cross-BC-Referenz-Aufloesung (FR per `dcterms:identifier`, Actor per `skos:prefLabel`) mit didaktischer Ablehnung bei Unbekanntem.
 
 ## Ontologie-Namespaces
 
@@ -58,9 +58,13 @@
 
 - Java-Package: `de.hauschel.arknet.*`
 - GroupId: `de.hauschel.arknet`
-- Modulverzeichnis == artifactId (ausnahmslos). Top-Level-Reaktor-Module tragen das
-  `arknet-`-Prefix (`arknet-mcp`, `arknet-shared-kernel`, ...), BC-Submodule nicht
-  (`requirements-core`, `ul-adapter-mcp`, `use-cases-adapter-kogniordf`).
+- Modulverzeichnis == artifactId (ausnahmslos), und **jedes** Modul traegt das
+  `arknet-`-Prefix -- auch BC-Submodule (`arknet-mcp`, `arknet-requirements`,
+  `arknet-requirements-core`, `arknet-ubiquitous-language-adapter-mcp`).
+  Keine Abkuerzungen im Modulnamen: der BC-Name wird ausgeschrieben
+  (`arknet-ubiquitous-language-core`, nicht `ul-core`). Java-Packages duerfen
+  weiterhin kuerzen (`de.hauschel.arknet.ul.*`) -- die Regel gilt fuer Modul-
+  und Artefaktnamen, nicht fuer Packages.
 - Turtle als Primaerformat (nicht JSON-LD)
 - SHACL-Validierung bei jedem Load (RDF4J SHACL Sail)
 - Projektionen als Plugin: `.sparql` + Template-Datei-Paar

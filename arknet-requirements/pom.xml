@@ -19,21 +19,21 @@
     </properties>
 
     <modules>
-        <module>requirements-core</module>
-        <module>requirements-adapter-kogniordf</module>
-        <module>requirements-adapter-mcp</module>
+        <module>arknet-requirements-core</module>
+        <module>arknet-requirements-adapter-kogniordf</module>
+        <module>arknet-requirements-adapter-mcp</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>requirements-core</artifactId>
+                <artifactId>arknet-requirements-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>requirements-adapter-mcp</artifactId>
+                <artifactId>arknet-requirements-adapter-mcp</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

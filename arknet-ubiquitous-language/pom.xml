@@ -19,21 +19,21 @@
     </properties>
 
     <modules>
-        <module>ul-core</module>
-        <module>ul-adapter-kogniordf</module>
-        <module>ul-adapter-mcp</module>
+        <module>arknet-ubiquitous-language-core</module>
+        <module>arknet-ubiquitous-language-adapter-kogniordf</module>
+        <module>arknet-ubiquitous-language-adapter-mcp</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>ul-core</artifactId>
+                <artifactId>arknet-ubiquitous-language-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
-                <artifactId>ul-adapter-mcp</artifactId>
+                <artifactId>arknet-ubiquitous-language-adapter-mcp</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

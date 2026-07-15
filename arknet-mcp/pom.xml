@@ -63,12 +63,12 @@
              des In-Adapters automatisch ein (kein manuelles Tool-Provider-Bridging mehr). -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>requirements-adapter-mcp</artifactId>
+            <artifactId>arknet-requirements-adapter-mcp</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>requirements-adapter-kogniordf</artifactId>
+            <artifactId>arknet-requirements-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -76,12 +76,12 @@
              requirements (In-Adapter mit @McpTool-Beans + Out-Adapter Repository). -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>ul-adapter-mcp</artifactId>
+            <artifactId>arknet-ubiquitous-language-adapter-mcp</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>ul-adapter-kogniordf</artifactId>
+            <artifactId>arknet-ubiquitous-language-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -91,12 +91,12 @@
              (Cross-BC-Lookup im gemeinsamen Workspace-Store). -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>use-cases-adapter-mcp</artifactId>
+            <artifactId>arknet-use-cases-adapter-mcp</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
-            <artifactId>use-cases-adapter-kogniordf</artifactId>
+            <artifactId>arknet-use-cases-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
         </dependency>
 
