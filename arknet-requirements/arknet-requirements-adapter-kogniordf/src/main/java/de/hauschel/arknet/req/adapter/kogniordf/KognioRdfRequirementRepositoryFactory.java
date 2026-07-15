@@ -97,9 +97,12 @@ public final class KognioRdfRequirementRepositoryFactory {
      * {@code arkreq:NonFunctionalRequirement}. Without reasoning + the {@code rdfs:subClassOf}
      * axioms merged in via {@code axioms}, the shape never fires (silent pass).</p>
      *
+     * <p>Package-private (not private) so {@code KognioRdfRequirementRepositoryTest} can drive
+     * the gate directly, at gate level, without duplicating this shapes-loading logic.</p>
+     *
      * @return the assembled requirements SHACL write-gate
      */
-    private static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate() {
         ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
         ReadableGraph axioms = loadGraph(AXIOMS_RESOURCE);
         return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true));

@@ -15,6 +15,7 @@
 @prefix arkproc: <https://w3id.org/arknet/process#> .
 @prefix oslc_rm: <http://open-services.net/ns/rm#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
 @prefix rshapes: <https://w3id.org/arknet/shapes/requirements#> .
 
@@ -30,7 +31,8 @@ rshapes:RequirementShape
     sh:property rshapes:Requirement-description ;
     sh:property rshapes:Requirement-priority ;
     sh:property rshapes:Requirement-status ;
-    sh:property rshapes:Requirement-motivatedBy .
+    sh:property rshapes:Requirement-motivatedBy ;
+    sh:property rshapes:Requirement-usesTerm .
 
 rshapes:Requirement-identifier
     a sh:PropertyShape ;
@@ -75,6 +77,14 @@ rshapes:Requirement-motivatedBy
     sh:class    arkreq:Goal ;
     sh:message  "Best Practice: Verknuepfe die Anforderung ueber arkreq:motivatedBy mit einem Goal (Traceability zum WARUM)."@de ;
     sh:severity sh:Warning .
+
+rshapes:Requirement-usesTerm
+    a sh:PropertyShape ;
+    sh:path     arkreq:usesTerm ;
+    sh:nodeKind sh:IRI ;
+    sh:class    skos:Concept ;
+    sh:message  "arkreq:usesTerm muss auf einen Glossar-Begriff (skos:Concept, IRI) verweisen -- lege ihn zuerst mit term_add an."@de ;
+    sh:severity sh:Violation .
 
 
 ##############################################################################

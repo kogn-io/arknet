@@ -13,52 +13,71 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
+import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
- * Scaffold-level check that the adapter declares exactly the four requirement
+ * Scaffold-level check that the adapter declares exactly the five requirement
  * tools and guards its in-port dependencies. Behaviour of the handlers is not
- * asserted here; the delegated in-ports are still scaffold stubs.
+ * asserted here beyond the pass-through of {@code req_link_term}'s arguments;
+ * the delegated in-ports are still scaffold stubs.
  */
 class RequirementMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, WorkspaceId.DEFAULT);
+            new RequirementMcpTools(stub, stub, stub, stub, stub, WorkspaceId.DEFAULT);
 
     @Test
-    void declaresTheFourRequirementTools() {
+    void declaresTheFiveRequirementTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(4, names.size());
+        assertEquals(5, names.size());
         assertTrue(names.containsAll(
-                List.of("req_add", "req_list", "req_get", "req_set_status")));
+                List.of("req_add", "req_list", "req_get", "req_set_status", "req_link_term")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(null, stub, stub, stub, WorkspaceId.DEFAULT));
+                () -> new RequirementMcpTools(null, stub, stub, stub, stub, WorkspaceId.DEFAULT));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
     }
 
     @Test
     void rejectsNullWorkspace() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, null));
+                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, null));
     }
 
-    /** Structural stub implementing the four driving in-ports. */
+    @Test
+    void linkTermPassesIdentitiesThroughToTheInPort() {
+        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+
+        assertEquals(new RequirementId("FR-1"), stub.lastLinkedRequirement);
+        assertEquals(new TermRef("TERM-1"), stub.lastLinkedTerm);
+        assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+    }
+
+    /** Structural stub implementing the five driving in-ports. */
     private static final class Stub
-            implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus {
+            implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm {
+
+        private RequirementId lastLinkedRequirement;
+        private TermRef lastLinkedTerm;
 
         @Override
         public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
@@ -78,6 +97,14 @@ class RequirementMcpToolsTest {
         @Override
         public Requirement setStatus(WorkspaceId workspaceId, RequirementId id, RequirementStatus status) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Requirement linkTerm(WorkspaceId workspaceId, RequirementId id, TermRef term) {
+            lastLinkedRequirement = id;
+            lastLinkedTerm = term;
+            return new Requirement(id, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, null, List.of(term));
         }
     }
 }
