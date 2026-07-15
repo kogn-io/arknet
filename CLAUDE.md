@@ -58,6 +58,9 @@
 
 - Java-Package: `de.hauschel.arknet.*`
 - GroupId: `de.hauschel.arknet`
+- Modulverzeichnis == artifactId (ausnahmslos). Top-Level-Reaktor-Module tragen das
+  `arknet-`-Prefix (`arknet-mcp`, `arknet-shared-kernel`, ...), BC-Submodule nicht
+  (`requirements-core`, `ul-adapter-mcp`, `use-cases-adapter-kogniordf`).
 - Turtle als Primaerformat (nicht JSON-LD)
 - SHACL-Validierung bei jedem Load (RDF4J SHACL Sail)
 - Projektionen als Plugin: `.sparql` + Template-Datei-Paar
