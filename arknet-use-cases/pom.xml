@@ -14,10 +14,6 @@
     <packaging>pom</packaging>
     <description>Use-Cases-Komponente (hexagonal): flow-orientierte Cockburn-Use-Cases als eigenes Hexagon. Dritte hexagonale BC nach requirements und ubiquitous-language, gleiche Bauart.</description>
 
-    <properties>
-        <kognio-rdf.version>0.0.1-SNAPSHOT</kognio-rdf.version>
-    </properties>
-
     <modules>
         <module>arknet-use-cases-core</module>
         <module>arknet-use-cases-adapter-kogniordf</module>
@@ -30,31 +26,6 @@
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-use-cases-core</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-terms</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-dataset</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-dataset-rdf4j</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-shacl</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-shacl-rdf4j</artifactId>
-                <version>${kognio-rdf.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

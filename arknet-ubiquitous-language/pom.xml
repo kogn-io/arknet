@@ -14,10 +14,6 @@
     <packaging>pom</packaging>
     <description>Ubiquitous-Language-Komponente (hexagonal, Shared Kernel): Fachbegriffe als SKOS-Concepts (Glossar). Zweite hexagonale BC nach requirements, gleiche Bauart. Dogfood: arknet verwaltet seine eigene Fachsprache.</description>
 
-    <properties>
-        <kognio-rdf.version>0.0.1-SNAPSHOT</kognio-rdf.version>
-    </properties>
-
     <modules>
         <module>arknet-ubiquitous-language-core</module>
         <module>arknet-ubiquitous-language-adapter-kogniordf</module>
@@ -35,31 +31,6 @@
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-ubiquitous-language-adapter-mcp</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-terms</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-dataset</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-dataset-rdf4j</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-shacl</artifactId>
-                <version>${kognio-rdf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.kogn.rdf</groupId>
-                <artifactId>rdf-shacl-rdf4j</artifactId>
-                <version>${kognio-rdf.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
