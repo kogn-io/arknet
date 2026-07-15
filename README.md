@@ -80,6 +80,7 @@ Die datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate` aus einer 
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 | `arknet-ubiquitous-language` | Zweite hexagonale BC: Glossar-Begriffe als SKOS-Concepts (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
 | `arknet-use-cases` | Dritte hexagonale BC: flow-orientierte Cockburn-Use-Cases (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
+| `arknet-architecture-tests` | ArchUnit-Regeln fuer die Dependency-Invarianten, die der Modulschnitt nicht erzwingen kann (nur `src/test`, kein Produktivcode) |
 
 ## Ontologie
 
