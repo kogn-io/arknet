@@ -11,25 +11,28 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * <p>An expected domain outcome (not a programming error): driving adapters -
  * e.g. the MCP tools - translate it into a user-facing "unknown use case"
  * message rather than a stack trace.</p>
+ *
+ * <p>Lookup by a human is by {@link UseCaseCode} (e.g. {@code UC1}), not by the opaque
+ * {@link UseCaseId} - that is what the user actually typed.</p>
  */
 public class UseCaseNotFoundException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
     private final transient WorkspaceId workspaceId;
-    private final transient UseCaseId id;
+    private final transient UseCaseCode code;
 
     /**
      * Creates the exception.
      *
      * @param workspaceId the workspace that was searched
-     * @param id          the use-case identity that was not found
+     * @param code        the use-case code that was not found
      */
-    public UseCaseNotFoundException(WorkspaceId workspaceId, UseCaseId id) {
-        super("no use case " + Objects.requireNonNull(id, "id").value()
+    public UseCaseNotFoundException(WorkspaceId workspaceId, UseCaseCode code) {
+        super("no use case " + Objects.requireNonNull(code, "code").value()
                 + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
         this.workspaceId = workspaceId;
-        this.id = id;
+        this.code = code;
     }
 
     /** @return the workspace that was searched */
@@ -37,8 +40,8 @@ public class UseCaseNotFoundException extends RuntimeException {
         return workspaceId;
     }
 
-    /** @return the use-case identity that was not found */
-    public UseCaseId useCaseId() {
-        return id;
+    /** @return the use-case code that was not found */
+    public UseCaseCode useCaseCode() {
+        return code;
     }
 }

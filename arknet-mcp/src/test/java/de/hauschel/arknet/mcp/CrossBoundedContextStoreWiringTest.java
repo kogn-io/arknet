@@ -26,7 +26,6 @@ import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
-import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.domain.ActorFacet;
@@ -85,8 +84,8 @@ class CrossBoundedContextStoreWiringTest {
                                     List.of(new RequirementRef(fr.code().value())))),
                             List.of()));
 
-                    // uc_get reads the resolved cross-context edges back.
-                    UseCase reloaded = useCases.get(WS, created.id()).orElseThrow();
+                    // uc_get reads the resolved cross-context edges back (looked up by code).
+                    UseCase reloaded = useCases.get(WS, created.code()).orElseThrow();
                     assertThat(reloaded.primaryActor()).isEqualTo(new ActorRef("Customer"));
                     assertThat(reloaded.steps()).singleElement()
                             .satisfies(step -> assertThat(step.realises())

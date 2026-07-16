@@ -23,6 +23,8 @@ import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.kernel.ResourceIdFactory;
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
@@ -63,7 +65,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
         Objects.requireNonNull(storageDir, "storageDir");
         final DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle);
+        return over(lifecycle, new UuidResourceIdFactory());
     }
 
     /**
@@ -77,12 +79,15 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * {@code FR-1}, or naming an actor term) actually find those resources. Tests likewise supply
      * their own (e.g. in-memory) lifecycle.</p>
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param resourceIdFactory mints the opaque IRI of each derived step resource; the same
+     *                          kernel-owned scheme the composition root uses everywhere else
      * @return a ready-to-use {@link UseCaseRepository}
      */
-    public static UseCaseRepository over(DatasetLifecycle lifecycle) {
+    public static UseCaseRepository over(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        return new KognioRdfUseCaseRepository(lifecycle, buildGate());
+        Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
+        return new KognioRdfUseCaseRepository(lifecycle, buildGate(), resourceIdFactory);
     }
 
     /**
