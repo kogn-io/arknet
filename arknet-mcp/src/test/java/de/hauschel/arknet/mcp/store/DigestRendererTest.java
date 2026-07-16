@@ -16,10 +16,12 @@ class DigestRendererTest {
 
     private static final String REQ = "https://w3id.org/arknet/model/requirement/";
     private static final String TERM = "https://w3id.org/arknet/model/term/";
+    private static final String OPAQUE = "https://w3id.org/arknet/id/";
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
     private static final String SKOS = "http://www.w3.org/2004/02/skos/core#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String TITLE = "http://purl.org/dc/terms/title";
+    private static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
     private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults());
 
@@ -45,6 +47,26 @@ class DigestRendererTest {
                 + "  -> resource_get(\"req:FR-1\")");
         assertThat(digest).contains("term:login [Concept] \"Anmeldung\"  -> resource_get(\"term:login\")");
         assertThat(digest).contains("- no dangling references");
+    }
+
+    /**
+     * Since requirement identity became an opaque {@code https://w3id.org/arknet/id/<uuid>}
+     * IRI (#68, unbound to any {@link Prefixes} namespace), the digest handle falls back to
+     * the resource's {@code dcterms:identifier} (its business code, e.g. {@code FR-1}) instead
+     * of rendering the raw, human-unreadable IRI.
+     */
+    @Test
+    void handleFallsBackToDctermsIdentifierWhenTheSubjectIriHasNoCurie() {
+        String opaqueIri = OPAQUE + "11111111-1111-1111-1111-111111111111";
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(opaqueIri, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(opaqueIri, TITLE, "Login"),
+                lit(opaqueIri, IDENTIFIER, "FR-1")));
+
+        String digest = renderer.render(new WorkspaceId("noistill"), snapshot);
+
+        assertThat(digest).doesNotContain(opaqueIri);
+        assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
     }
 
     @Test

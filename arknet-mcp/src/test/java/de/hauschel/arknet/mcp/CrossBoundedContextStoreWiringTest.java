@@ -82,7 +82,7 @@ class CrossBoundedContextStoreWiringTest {
                             "Customer places an order", null, null, new ActorRef("Customer"),
                             List.of(), null, null,
                             List.of(new Step(1, "Customer selects items and confirms",
-                                    List.of(new RequirementRef(fr.id().value())))),
+                                    List.of(new RequirementRef(fr.code().value())))),
                             List.of()));
 
                     // uc_get reads the resolved cross-context edges back.
@@ -90,7 +90,7 @@ class CrossBoundedContextStoreWiringTest {
                     assertThat(reloaded.primaryActor()).isEqualTo(new ActorRef("Customer"));
                     assertThat(reloaded.steps()).singleElement()
                             .satisfies(step -> assertThat(step.realises())
-                                    .containsExactly(new RequirementRef(fr.id().value())));
+                                    .containsExactly(new RequirementRef(fr.code().value())));
                 });
     }
 
@@ -146,9 +146,9 @@ class CrossBoundedContextStoreWiringTest {
                             RequirementType.FUNCTIONAL, null, null, null));
                     Term order = terms.add(WS, new NewTerm("Order", "A customer's request to buy.", null));
 
-                    requirements.linkTerm(WS, fr.id(), new TermRef(order.id().value()));
+                    requirements.linkTerm(WS, fr.code(), new TermRef(order.id().value()));
 
-                    assertThat(requirements.get(WS, fr.id()).orElseThrow().usesTerms())
+                    assertThat(requirements.get(WS, fr.code()).orElseThrow().usesTerms())
                             .containsExactly(new TermRef(order.id().value()));
                 });
     }
@@ -171,12 +171,12 @@ class CrossBoundedContextStoreWiringTest {
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null));
 
-                    assertThatThrownBy(() -> requirements.linkTerm(WS, fr.id(), new TermRef("TERM-99")))
+                    assertThatThrownBy(() -> requirements.linkTerm(WS, fr.code(), new TermRef("TERM-99")))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("TERM-99")
                             .hasMessageContaining("term_add");
 
-                    assertThat(requirements.get(WS, fr.id()).orElseThrow().usesTerms()).isEmpty();
+                    assertThat(requirements.get(WS, fr.code()).orElseThrow().usesTerms()).isEmpty();
                 });
     }
 }

@@ -11,6 +11,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
@@ -18,11 +20,11 @@ import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
-import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five requirement
@@ -31,6 +33,9 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * the delegated in-ports are still scaffold stubs.
  */
 class RequirementMcpToolsTest {
+
+    private static final RequirementId ID =
+            new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
     private final Stub stub = new Stub();
     private final RequirementMcpTools adapter =
@@ -67,7 +72,7 @@ class RequirementMcpToolsTest {
     void linkTermPassesIdentitiesThroughToTheInPort() {
         String rendered = adapter.linkTerm("FR-1", "TERM-1");
 
-        assertEquals(new RequirementId("FR-1"), stub.lastLinkedRequirement);
+        assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
         assertEquals(new TermRef("TERM-1"), stub.lastLinkedTerm);
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
     }
@@ -76,7 +81,7 @@ class RequirementMcpToolsTest {
     private static final class Stub
             implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm {
 
-        private RequirementId lastLinkedRequirement;
+        private RequirementCode lastLinkedRequirement;
         private TermRef lastLinkedTerm;
 
         @Override
@@ -90,20 +95,20 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Optional<Requirement> get(WorkspaceId workspaceId, RequirementId id) {
+        public Optional<Requirement> get(WorkspaceId workspaceId, RequirementCode code) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Requirement setStatus(WorkspaceId workspaceId, RequirementId id, RequirementStatus status) {
+        public Requirement setStatus(WorkspaceId workspaceId, RequirementCode code, RequirementStatus status) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Requirement linkTerm(WorkspaceId workspaceId, RequirementId id, TermRef term) {
-            lastLinkedRequirement = id;
+        public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, TermRef term) {
+            lastLinkedRequirement = code;
             lastLinkedTerm = term;
-            return new Requirement(id, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, List.of(term));
         }
     }

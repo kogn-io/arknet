@@ -5,16 +5,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 
 /**
  * In-memory test double for {@link RequirementRepository}.
  *
  * <p>A hand-rolled fake (not a mock): it actually stores requirements, keyed by
- * workspace then identity, so the service's policy can be exercised end-to-end.
+ * workspace then opaque identity, so the service's policy can be exercised end-to-end.
  * Insertion order is preserved to make {@link #findAll(WorkspaceId)} assertions
  * deterministic.</p>
  */
@@ -23,14 +26,29 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     private final Map<WorkspaceId, Map<RequirementId, Requirement>> byWorkspace = new LinkedHashMap<>();
 
     @Override
-    public void save(WorkspaceId workspaceId, Requirement requirement) {
-        byWorkspace.computeIfAbsent(workspaceId, k -> new LinkedHashMap<>())
-                .put(requirement.id(), requirement);
+    public void create(WorkspaceId workspaceId, Requirement requirement) {
+        Map<RequirementId, Requirement> requirements = byWorkspace.computeIfAbsent(workspaceId,
+                k -> new LinkedHashMap<>());
+        if (requirements.containsKey(requirement.id())) {
+            throw new ResourceAlreadyExistsException(workspaceId, requirement.id().value());
+        }
+        requirements.put(requirement.id(), requirement);
     }
 
     @Override
-    public Optional<Requirement> findById(WorkspaceId workspaceId, RequirementId id) {
-        return Optional.ofNullable(byWorkspace.getOrDefault(workspaceId, Map.of()).get(id));
+    public void update(WorkspaceId workspaceId, Requirement requirement) {
+        Map<RequirementId, Requirement> requirements = byWorkspace.getOrDefault(workspaceId, Map.of());
+        if (!requirements.containsKey(requirement.id())) {
+            throw new RequirementNotFoundException(workspaceId, requirement.code());
+        }
+        requirements.put(requirement.id(), requirement);
+    }
+
+    @Override
+    public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
+        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+                .filter(r -> r.code().equals(code))
+                .findFirst();
     }
 
     @Override

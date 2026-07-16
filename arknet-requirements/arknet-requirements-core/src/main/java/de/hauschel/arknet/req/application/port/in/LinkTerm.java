@@ -2,7 +2,7 @@ package de.hauschel.arknet.req.application.port.in;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.TermRef;
 
 /**
@@ -19,10 +19,11 @@ import de.hauschel.arknet.req.domain.TermRef;
 public interface LinkTerm {
 
     /**
-     * Links {@code term} to the requirement {@code id}. Linking an already-linked term is an
+     * Links {@code term} to the requirement {@code code}. Linking an already-linked term is an
      * idempotent no-op.
      *
+     * @param code the requirement code, e.g. {@code FR-1}
      * @return the requirement including the link
      */
-    Requirement linkTerm(WorkspaceId workspaceId, RequirementId id, TermRef term);
+    Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, TermRef term);
 }

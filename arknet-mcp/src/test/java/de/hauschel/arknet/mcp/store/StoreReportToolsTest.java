@@ -14,11 +14,13 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
@@ -36,7 +38,7 @@ import de.hauschel.arknet.ul.domain.TermId;
 class StoreReportToolsTest {
 
     private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
-    private static final String FR_1_IRI = "https://w3id.org/arknet/model/requirement/FR-1";
+    private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-report-test-fr-1";
 
     @TempDir
     Path storageDir;
@@ -53,8 +55,9 @@ class StoreReportToolsTest {
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
 
-        requirements.save(WORKSPACE, new Requirement(
-                new RequirementId("FR-1"), "Login", "The system shall authenticate a user.",
+        requirements.create(WORKSPACE, new Requirement(
+                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null));
         terms.save(WORKSPACE, new Term(
                 new TermId("TERM-1"), "Anmeldung", "The act of proving one's identity.", null));
@@ -73,9 +76,13 @@ class StoreReportToolsTest {
     void storeOverviewDigestSpansBothBoundedContextsAndWritesHtml() throws Exception {
         String result = tools.storeOverview(null);
 
-        // Digest is generic and contains resources from both BCs.
+        // Digest is generic and contains resources from both BCs. The requirement's identity
+        // is an opaque IRI (#68, unbound to any CURIE prefix), so the digest handle falls back
+        // to its dcterms:identifier ("FR-1") instead of the raw IRI; the glossary term's
+        // identity predates #68 and still shortens to its instance CURIE.
         assertThat(result).contains("# Workspace noistill");
-        assertThat(result).contains("req:FR-1").contains("-> resource_get(\"req:FR-1\")");
+        assertThat(result).doesNotContain(FR_1_IRI);
+        assertThat(result).contains("FR-1").contains("-> resource_get(\"FR-1\")");
         assertThat(result).contains("term:TERM-1").contains("-> resource_get(\"term:TERM-1\")");
         assertThat(result).contains("# HTML report: ");
         assertThat(result).contains("no dangling references");
@@ -90,17 +97,20 @@ class StoreReportToolsTest {
         assertThat(content).contains("class=\"pill status-proposed\">Proposed<");
     }
 
+    /**
+     * Since requirement identity became an opaque IRI (#68), the {@code req:} CURIE prefix
+     * (bound to the old {@code .../model/requirement/} namespace) no longer aliases a freshly
+     * added requirement's subject - only the full IRI and the {@code dcterms:identifier}-based
+     * bare-id lookup do.
+     */
     @Test
-    void resourceGetResolvesCurieFullIriAndBareIdToTheSameResource() {
-        String viaCurie = tools.resourceGet("req:FR-1");
+    void resourceGetResolvesFullIriAndBareIdToTheSameResource() {
         String viaIri = tools.resourceGet(FR_1_IRI);
         String viaBareId = tools.resourceGet("FR-1");
 
-        assertThat(viaCurie).isEqualTo(viaIri);
-        assertThat(viaBareId).isEqualTo(viaCurie);
-        assertThat(viaCurie).contains("req:FR-1");
-        assertThat(viaCurie).contains("dcterms:title").contains("\"Login\"");
-        assertThat(viaCurie).contains("# Outgoing").contains("# Incoming");
+        assertThat(viaBareId).isEqualTo(viaIri);
+        assertThat(viaIri).contains("dcterms:title").contains("\"Login\"");
+        assertThat(viaIri).contains("# Outgoing").contains("# Incoming");
     }
 
     @Test

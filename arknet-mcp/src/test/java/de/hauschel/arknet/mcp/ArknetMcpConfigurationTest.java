@@ -54,8 +54,8 @@ class ArknetMcpConfigurationTest {
                                     "The composition root shall wire the requirements hexagon.",
                                     RequirementType.FUNCTIONAL, null, null, null));
 
-                    assertThat(created.id().value()).isEqualTo("FR-1");
-                    assertThat(service.get(WorkspaceId.DEFAULT, created.id()))
+                    assertThat(created.code().value()).isEqualTo("FR-1");
+                    assertThat(service.get(WorkspaceId.DEFAULT, created.code()))
                             .isEqualTo(Optional.of(created));
                 });
     }

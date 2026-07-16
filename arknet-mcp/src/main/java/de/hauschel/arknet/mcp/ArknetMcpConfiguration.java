@@ -8,6 +8,8 @@ import org.springframework.context.annotation.Configuration;
 
 import io.kogn.rdf.dataset.DatasetLifecycle;
 
+import de.hauschel.arknet.kernel.ResourceIdFactory;
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.mcp.store.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.store.Prefixes;
@@ -98,9 +100,20 @@ public class ArknetMcpConfiguration {
         return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle);
     }
 
+    /**
+     * Mints the opaque {@link de.hauschel.arknet.kernel.ResourceId} of a newly added
+     * requirement. A single bean so every write path mints from the same kernel-owned scheme
+     * (see {@link UuidResourceIdFactory}).
+     */
     @Bean
-    RequirementService requirementService(final RequirementRepository repository) {
-        return new RequirementService(repository);
+    ResourceIdFactory resourceIdFactory() {
+        return new UuidResourceIdFactory();
+    }
+
+    @Bean
+    RequirementService requirementService(
+            final RequirementRepository repository, final ResourceIdFactory resourceIdFactory) {
+        return new RequirementService(repository, resourceIdFactory);
     }
 
     /**

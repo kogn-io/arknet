@@ -2,21 +2,21 @@ package de.hauschel.arknet.req.domain;
 
 import java.util.Objects;
 
+import de.hauschel.arknet.kernel.ResourceId;
+
 /**
- * Identity of a {@link Requirement}, e.g. {@code FR-1} or {@code NFR-7}.
+ * Opaque, unchanging identity of a {@link Requirement}.
  *
- * <p>Value object wrapping the human-readable business identifier. Generation
- * of the running number is a policy concern of the application layer, not of
- * this type.</p>
+ * <p>Thin newtype over the shared-kernel {@link ResourceId} for type safety within the
+ * requirements bounded context. Identity is deliberately independent of the human-readable
+ * {@link RequirementCode} ({@code FR-1}): the code may be relabelled, this identity never
+ * changes.</p>
  *
- * @param value the non-blank identifier string
+ * @param value the wrapped resource identity, never {@code null}
  */
-public record RequirementId(String value) {
+public record RequirementId(ResourceId value) {
 
     public RequirementId {
         Objects.requireNonNull(value, "value");
-        if (value.isBlank()) {
-            throw new IllegalArgumentException("RequirementId must not be blank");
-        }
     }
 }
