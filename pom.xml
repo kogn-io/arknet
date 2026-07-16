@@ -15,7 +15,10 @@
     <properties>
         <revision>0.1.0-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
+        <!-- 25 (nicht 21): io.kogn.rdf-Artefakte sind mit Java 25 (Classfile 69) gebaut;
+             release 21 kann nicht gegen sie kompilieren. arknet zieht mit (Entscheidung
+             2026-07-16, #68). -->
+        <maven.compiler.release>25</maven.compiler.release>
         <!-- 6.0.0 (nicht 5.2.2): Voraussetzung fuer io.kogn.rdf:rdf-shacl-rdf4j, das
              gegen RDF4J 6.0.0 gebaut ist (ShaclValidator.builder() existiert erst dort).
              Der Bump ist bewusst als eigener Schritt getrennt vom SHACL-Write-Gate (#38). -->

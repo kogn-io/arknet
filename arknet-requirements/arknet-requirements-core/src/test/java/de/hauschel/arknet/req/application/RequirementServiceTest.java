@@ -2,55 +2,71 @@ package de.hauschel.arknet.req.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
+import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
-import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
- * Policy tests for {@link RequirementService}: identity assignment, listing,
- * lookup, status-transition and term-linking rules, exercised against an
- * in-memory fake repository.
+ * Policy tests for {@link RequirementService}: identity minting, code assignment, listing,
+ * lookup, status-transition and term-linking rules, exercised against an in-memory fake
+ * repository and a deterministic fake {@link ResourceIdFactory}.
  */
 class RequirementServiceTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
 
     private InMemoryRequirementRepository repository;
+    private FakeResourceIdFactory resourceIdFactory;
     private RequirementService service;
 
     @BeforeEach
     void setUp() {
         repository = new InMemoryRequirementRepository();
-        service = new RequirementService(repository);
+        resourceIdFactory = new FakeResourceIdFactory();
+        service = new RequirementService(repository, resourceIdFactory);
     }
 
     @Test
-    void addAssignsFirstFunctionalIdAndProposedStatus() {
+    void addAssignsFirstFunctionalCodeAndProposedStatus() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
                 null, null, null));
 
-        assertEquals(new RequirementId("FR-1"), added.id());
+        assertEquals(new RequirementCode("FR-1"), added.code());
         assertEquals("User can log in", added.title());
         assertEquals("The system shall let a registered user authenticate.", added.description());
         assertEquals(RequirementType.FUNCTIONAL, added.type());
         assertEquals(RequirementStatus.PROPOSED, added.status());
-        assertEquals(added, repository.findById(WS, added.id()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+    }
+
+    @Test
+    void addMintsAFreshOpaqueIdentityViaTheFactory() {
+        Requirement first = service.add(WS, newFunctionalRequirement());
+        Requirement second = service.add(WS, newFunctionalRequirement());
+
+        assertNotEquals(first.id(), second.id());
+        assertEquals(2, resourceIdFactory.mintedCount());
     }
 
     @Test
@@ -59,7 +75,7 @@ class RequirementServiceTest {
                 "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL,
                 null, null, null));
 
-        assertEquals(new RequirementId("NFR-1"), added.id());
+        assertEquals(new RequirementCode("NFR-1"), added.code());
     }
 
     @Test
@@ -71,21 +87,21 @@ class RequirementServiceTest {
         assertEquals(Priority.MUST_HAVE, added.priority());
         assertEquals("https://w3id.org/arknet/model/goal/fast-ux", added.motivatedBy());
         assertEquals("performance", added.qualityCategory());
-        assertEquals(added, repository.findById(WS, added.id()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
     }
 
     @Test
     void addNumbersRunPerTypeIndependently() {
-        RequirementId fr1 = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
-        RequirementId nfr1 = service.add(WS,
-                new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL, null, null, null)).id();
-        RequirementId fr2 = service.add(WS,
-                new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL, null, null, null)).id();
+        RequirementCode fr1 = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).code();
+        RequirementCode nfr1 = service.add(WS,
+                new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL, null, null, null)).code();
+        RequirementCode fr2 = service.add(WS,
+                new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL, null, null, null)).code();
 
-        assertEquals(new RequirementId("FR-1"), fr1);
-        assertEquals(new RequirementId("NFR-1"), nfr1);
-        assertEquals(new RequirementId("FR-2"), fr2);
+        assertEquals(new RequirementCode("FR-1"), fr1);
+        assertEquals(new RequirementCode("NFR-1"), nfr1);
+        assertEquals(new RequirementCode("FR-2"), fr2);
     }
 
     @Test
@@ -96,7 +112,7 @@ class RequirementServiceTest {
         Requirement inOther = service.add(other,
                 new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null));
 
-        assertEquals(new RequirementId("FR-1"), inOther.id());
+        assertEquals(new RequirementCode("FR-1"), inOther.code());
         assertTrue(service.list(other).stream().allMatch(r -> r.title().equals("b")));
         assertEquals(1, service.list(WS).size());
     }
@@ -115,36 +131,36 @@ class RequirementServiceTest {
 
     @Test
     void getReturnsPersistedRequirement() {
-        RequirementId id = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).code();
 
-        assertTrue(service.get(WS, id).isPresent());
-        assertEquals("a", service.get(WS, id).orElseThrow().title());
+        assertTrue(service.get(WS, code).isPresent());
+        assertEquals("a", service.get(WS, code).orElseThrow().title());
     }
 
     @Test
-    void getIsEmptyForUnknownId() {
-        assertFalse(service.get(WS, new RequirementId("FR-99")).isPresent());
+    void getIsEmptyForUnknownCode() {
+        assertFalse(service.get(WS, new RequirementCode("FR-99")).isPresent());
     }
 
     @Test
     void setStatusAcceptsProposedToAccepted() {
-        RequirementId id = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).code();
 
-        Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals("desc a", accepted.description());
-        assertEquals(RequirementStatus.ACCEPTED, repository.findById(WS, id).orElseThrow().status());
+        assertEquals(RequirementStatus.ACCEPTED, repository.findByCode(WS, code).orElseThrow().status());
     }
 
     @Test
     void setStatusPreservesPriorityMotivatedByAndQualityCategory() {
-        RequirementId id = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
-                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security")).id();
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
+                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security")).code();
 
-        Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
 
         assertEquals(Priority.COULD_HAVE, accepted.priority());
         assertEquals("https://w3id.org/arknet/model/goal/g", accepted.motivatedBy());
@@ -153,31 +169,31 @@ class RequirementServiceTest {
 
     @Test
     void setStatusToSameStatusIsIdempotent() {
-        RequirementId id = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).code();
 
-        Requirement result = service.setStatus(WS, id, RequirementStatus.PROPOSED);
+        Requirement result = service.setStatus(WS, code, RequirementStatus.PROPOSED);
 
         assertEquals(RequirementStatus.PROPOSED, result.status());
     }
 
     @Test
     void setStatusRejectsRevertingAcceptedToProposed() {
-        RequirementId id = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).id();
-        service.setStatus(WS, id, RequirementStatus.ACCEPTED);
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null)).code();
+        service.setStatus(WS, code, RequirementStatus.ACCEPTED);
 
         assertThrows(IllegalStateException.class,
-                () -> service.setStatus(WS, id, RequirementStatus.PROPOSED));
+                () -> service.setStatus(WS, code, RequirementStatus.PROPOSED));
     }
 
     @Test
     void setStatusThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.setStatus(WS, new RequirementId("FR-42"), RequirementStatus.ACCEPTED));
+                () -> service.setStatus(WS, new RequirementCode("FR-42"), RequirementStatus.ACCEPTED));
 
         assertSame(WS, ex.workspaceId());
-        assertEquals(new RequirementId("FR-42"), ex.requirementId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
     }
 
     @Test
@@ -189,30 +205,30 @@ class RequirementServiceTest {
 
     @Test
     void linkTermAddsTheTermToTheRequirement() {
-        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        Requirement linked = service.linkTerm(WS, id, new TermRef("TERM-1"));
+        Requirement linked = service.linkTerm(WS, code, new TermRef("TERM-1"));
 
         assertEquals(List.of(new TermRef("TERM-1")), linked.usesTerms());
-        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, id).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, code).orElseThrow().usesTerms());
     }
 
     @Test
     void linkTermAppendsToAlreadyLinkedTerms() {
-        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
-        service.linkTerm(WS, id, new TermRef("TERM-1"));
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        service.linkTerm(WS, code, new TermRef("TERM-1"));
 
-        Requirement linked = service.linkTerm(WS, id, new TermRef("TERM-2"));
+        Requirement linked = service.linkTerm(WS, code, new TermRef("TERM-2"));
 
         assertEquals(List.of(new TermRef("TERM-1"), new TermRef("TERM-2")), linked.usesTerms());
     }
 
     @Test
     void linkingTheSameTermTwiceIsANoOp() {
-        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
-        service.linkTerm(WS, id, new TermRef("TERM-1"));
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        service.linkTerm(WS, code, new TermRef("TERM-1"));
 
-        Requirement linked = service.linkTerm(WS, id, new TermRef("TERM-1"));
+        Requirement linked = service.linkTerm(WS, code, new TermRef("TERM-1"));
 
         assertEquals(List.of(new TermRef("TERM-1")), linked.usesTerms());
     }
@@ -220,10 +236,10 @@ class RequirementServiceTest {
     @Test
     void linkTermThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.linkTerm(WS, new RequirementId("FR-42"), new TermRef("TERM-1")));
+                () -> service.linkTerm(WS, new RequirementCode("FR-42"), new TermRef("TERM-1")));
 
         assertSame(WS, ex.workspaceId());
-        assertEquals(new RequirementId("FR-42"), ex.requirementId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
     }
 
     /**
@@ -233,18 +249,33 @@ class RequirementServiceTest {
      */
     @Test
     void setStatusPreservesLinkedTerms() {
-        RequirementId id = service.add(WS, newFunctionalRequirement()).id();
-        service.linkTerm(WS, id, new TermRef("TERM-1"));
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        service.linkTerm(WS, code, new TermRef("TERM-1"));
 
-        Requirement accepted = service.setStatus(WS, id, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new TermRef("TERM-1")), accepted.usesTerms());
-        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, id).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, code).orElseThrow().usesTerms());
     }
 
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
                 RequirementType.FUNCTIONAL, null, null, null);
+    }
+
+    /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
+    private static final class FakeResourceIdFactory implements ResourceIdFactory {
+
+        private final AtomicInteger counter = new AtomicInteger();
+
+        @Override
+        public ResourceId newId() {
+            return ResourceId.of("https://w3id.org/arknet/id/fake-" + counter.incrementAndGet());
+        }
+
+        int mintedCount() {
+            return counter.get();
+        }
     }
 }

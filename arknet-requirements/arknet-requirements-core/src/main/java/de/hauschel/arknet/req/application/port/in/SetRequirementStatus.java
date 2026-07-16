@@ -1,9 +1,9 @@
 package de.hauschel.arknet.req.application.port.in;
 
-import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.RequirementId;
-import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementStatus;
 
 /**
  * Driving port: change the lifecycle status of a requirement.
@@ -14,12 +14,12 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 public interface SetRequirementStatus {
 
     /**
-     * Sets a new status on the requirement identified by {@code id} within a workspace.
+     * Sets a new status on the requirement identified by {@code code} within a workspace.
      *
      * @param workspaceId the workspace (architecture model) the requirement lives in
-     * @param id          the requirement identity
+     * @param code        the requirement code, e.g. {@code FR-1}
      * @param status      the target status
      * @return the updated requirement
      */
-    Requirement setStatus(WorkspaceId workspaceId, RequirementId id, RequirementStatus status);
+    Requirement setStatus(WorkspaceId workspaceId, RequirementCode code, RequirementStatus status);
 }

@@ -10,8 +10,11 @@ import java.util.Objects;
  * in the compact constructor; instances are immutable and their collections are
  * defensively copied.</p>
  *
- * @param id               stable business identity (e.g. {@code FR-1});
- *                         maps to {@code dcterms:identifier}
+ * @param id               opaque, unchanging identity of this requirement (never a business
+ *                         label); minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}
+ *                         and stable across relabelling
+ * @param code             human-readable business label (e.g. {@code FR-1}); maps to
+ *                         {@code dcterms:identifier}
  * @param title            short human-readable summary; maps to {@code dcterms:title}
  * @param description      the normative statement ("The system shall ..."); maps to
  *                         {@code dcterms:description} and is required by the requirements
@@ -38,6 +41,7 @@ import java.util.Objects;
  */
 public record Requirement(
         RequirementId id,
+        RequirementCode code,
         String title,
         String description,
         RequirementType type,
@@ -49,6 +53,7 @@ public record Requirement(
 
     public Requirement {
         Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(code, "code");
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(type, "type");

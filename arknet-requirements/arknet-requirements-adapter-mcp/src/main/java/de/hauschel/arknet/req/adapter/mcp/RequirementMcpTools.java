@@ -6,6 +6,7 @@ import java.util.Objects;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 
+import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
@@ -14,11 +15,10 @@ import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
-import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
-import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
@@ -40,9 +40,11 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * pre-built {@code SyncToolSpecification}s for a raw-SDK composition root) was removed
  * with the arknet-mcp migration (#27).</p>
  *
- * <p><strong>Scaffold:</strong> the delegated in-ports are currently stubs throwing
- * {@link UnsupportedOperationException}; Spring AI maps any such exception to an error
- * {@code CallToolResult} automatically, so no manual try/catch is needed here.</p>
+ * <p><strong>Identity vs. code.</strong> Every tool takes a requirement identity as a plain
+ * {@code String} - what a human types, e.g. {@code FR-1} - and maps it to a
+ * {@link RequirementCode}, never to the opaque {@link de.hauschel.arknet.req.domain.RequirementId}.
+ * The identity itself is a store-internal detail that never needs to cross the MCP boundary;
+ * responses render the code back to the caller, not the underlying resource identity.</p>
  *
  * <p><strong>Workspace (one server = one workspace).</strong> Every in-port takes a
  * {@link WorkspaceId} routing key. This adapter is single-user/local: it operates
@@ -125,20 +127,20 @@ public final class RequirementMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id) {
-        final RequirementId requirementId = new RequirementId(id);
-        return getRequirement.get(workspaceId, requirementId)
+        final RequirementCode code = new RequirementCode(id);
+        return getRequirement.get(workspaceId, code)
                 .map(RequirementMcpTools::format)
-                .orElse("Requirement not found: " + requirementId.value());
+                .orElse("Requirement not found: " + code.value());
     }
 
     @McpTool(name = "req_set_status", description = "Change the lifecycle status of a requirement.")
     public String setStatus(
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
             @McpToolParam(description = "Target status: PROPOSED or ACCEPTED") final String status) {
-        final RequirementId requirementId = new RequirementId(id);
+        final RequirementCode code = new RequirementCode(id);
         final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
         final Requirement updated =
-                setRequirementStatus.setStatus(workspaceId, requirementId, requirementStatus);
+                setRequirementStatus.setStatus(workspaceId, code, requirementStatus);
         return format(updated);
     }
 
@@ -151,7 +153,7 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Term identity, e.g. TERM-1 (the term's identity, not its label)")
             final String termId) {
         final Requirement updated =
-                linkTerm.linkTerm(workspaceId, new RequirementId(reqId), new TermRef(termId));
+                linkTerm.linkTerm(workspaceId, new RequirementCode(reqId), new TermRef(termId));
         return format(updated);
     }
 
@@ -162,7 +164,7 @@ public final class RequirementMcpTools {
                 : " [terms: " + r.usesTerms().stream().map(TermRef::termId)
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
         return "%s [%s] %s (%s)%s%s".formatted(
-                r.id().value(), r.type(), r.title(), r.status(), priority, terms);
+                r.code().value(), r.type(), r.title(), r.status(), priority, terms);
     }
 
     private static String blankToNull(final String value) {

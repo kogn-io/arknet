@@ -9,6 +9,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ResourceId;
+
 /**
  * Domain invariant tests for {@link Requirement} and its value objects.
  *
@@ -17,15 +19,19 @@ import org.junit.jupiter.api.Test;
  */
 class RequirementTest {
 
+    private static final RequirementId ID =
+            new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
+    private static final RequirementCode CODE = new RequirementCode("FR-1");
+
     @Test
     void holdsItsFields() {
-        RequirementId id = new RequirementId("FR-1");
-        Requirement req = new Requirement(id, "User can log in",
+        Requirement req = new Requirement(ID, CODE, "User can log in",
                 "The system shall let a registered user authenticate with email and password.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
                 "https://w3id.org/arknet/model/goal/secure-login", null, List.of(new TermRef("TERM-1")));
 
-        assertEquals(id, req.id());
+        assertEquals(ID, req.id());
+        assertEquals(CODE, req.code());
         assertEquals("User can log in", req.title());
         assertEquals("The system shall let a registered user authenticate with email and password.",
                 req.description());
@@ -39,9 +45,8 @@ class RequirementTest {
 
     @Test
     void optionalFieldsMayBeNull() {
-        RequirementId id = new RequirementId("FR-1");
-        Requirement req = new Requirement(id, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                null, null, null, null);
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null);
 
         assertNull(req.priority());
         assertNull(req.motivatedBy());
@@ -50,19 +55,17 @@ class RequirementTest {
 
     @Test
     void nullUsesTermsIsNormalisedToAnEmptyList() {
-        RequirementId id = new RequirementId("FR-1");
-        Requirement req = new Requirement(id, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                null, null, null, null);
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null);
 
         assertEquals(List.of(), req.usesTerms());
     }
 
     @Test
     void usesTermsAreDefensivelyCopied() {
-        RequirementId id = new RequirementId("FR-1");
         List<TermRef> terms = new ArrayList<>(List.of(new TermRef("TERM-1")));
-        Requirement req = new Requirement(id, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                null, null, null, terms);
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, terms);
 
         terms.add(new TermRef("TERM-2"));
 
@@ -72,54 +75,57 @@ class RequirementTest {
 
     @Test
     void allowsQualityCategoryOnNonFunctionalRequirement() {
-        RequirementId id = new RequirementId("NFR-1");
-        Requirement req = new Requirement(id, "t", "d", RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED,
-                null, null, "performance", null);
+        Requirement req = new Requirement(ID, new RequirementCode("NFR-1"), "t", "d",
+                RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, "performance", null);
 
         assertEquals("performance", req.qualityCategory());
     }
 
     @Test
     void rejectsQualityCategoryOnFunctionalRequirement() {
-        RequirementId id = new RequirementId("FR-1");
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(id, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, "performance", null));
     }
 
     @Test
     void rejectsNullFields() {
-        RequirementId id = new RequirementId("FR-1");
         assertThrows(NullPointerException.class,
-                () -> new Requirement(null, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(null, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null));
         assertThrows(NullPointerException.class,
-                () -> new Requirement(id, null, "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, null, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null));
         assertThrows(NullPointerException.class,
-                () -> new Requirement(id, "t", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, null, "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                        null, null, null, null));
+        assertThrows(NullPointerException.class,
+                () -> new Requirement(ID, CODE, "t", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null));
     }
 
     @Test
     void rejectsBlankTitle() {
-        RequirementId id = new RequirementId("FR-1");
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(id, "  ", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "  ", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null));
     }
 
     @Test
     void rejectsBlankDescription() {
-        RequirementId id = new RequirementId("FR-1");
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(id, "t", "  ", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "  ", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null));
     }
 
     @Test
-    void rejectsBlankId() {
-        assertThrows(IllegalArgumentException.class, () -> new RequirementId(" "));
+    void rejectsNullResourceId() {
+        assertThrows(NullPointerException.class, () -> new RequirementId(null));
+    }
+
+    @Test
+    void rejectsBlankCode() {
+        assertThrows(IllegalArgumentException.class, () -> new RequirementCode(" "));
     }
 
     @Test

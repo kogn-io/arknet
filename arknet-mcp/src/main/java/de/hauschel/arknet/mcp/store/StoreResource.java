@@ -23,6 +23,7 @@ public record StoreResource(String iri, List<Triple> outgoing) {
             "http://www.w3.org/2000/01/rdf-schema#label");
     private static final String STATUS_PREDICATE = "https://w3id.org/arknet/requirements#status";
     private static final String PRIORITY_PREDICATE = "https://w3id.org/arknet/requirements#priority";
+    private static final String IDENTIFIER_PREDICATE = "http://purl.org/dc/terms/identifier";
 
     public StoreResource {
         Objects.requireNonNull(iri, "iri");
@@ -58,6 +59,15 @@ public record StoreResource(String iri, List<Triple> outgoing) {
     /** @return the local name of the {@code arkreq:priority} object IRI, if present. */
     public Optional<String> priority() {
         return firstObjectIri(PRIORITY_PREDICATE).map(StoreResource::localName);
+    }
+
+    /**
+     * @return the {@code dcterms:identifier} literal of this resource, if present. Used as the
+     *         human-readable handle fallback when the subject IRI cannot be shortened to a
+     *         CURIE (e.g. an opaque, kernel-minted {@link de.hauschel.arknet.kernel.ResourceId}).
+     */
+    public Optional<String> identifier() {
+        return firstLiteral(IDENTIFIER_PREDICATE);
     }
 
     private Optional<String> firstLiteral(String predicate) {

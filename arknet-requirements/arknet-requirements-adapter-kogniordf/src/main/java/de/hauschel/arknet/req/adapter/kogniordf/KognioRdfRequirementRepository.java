@@ -19,34 +19,40 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.req.domain.TermRef;
-import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate
  * ({@code io.kogn.rdf}, embeddable RDF dataset).
  *
- * <p>Maps a {@link Requirement} to a fixed subject IRI
- * ({@code https://w3id.org/arknet/model/requirement/<id>}), stored in one named
- * graph shared by all requirements: five mandatory triples (identifier, type, title,
- * description, status) plus up to three optional triples for {@code priority},
- * {@code motivatedBy} and {@code qualityCategory} - written only when the corresponding
- * field is non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so that
- * requirements without them still match. This class depends only on the neutral
- * kognio-rdf ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it
- * never imports RDF4J or any other backend-specific type. The backend
- * ({@link DatasetLifecycle} implementation) is supplied by the composition
- * root.</p>
+ * <p>Maps a {@link Requirement} to its opaque {@link RequirementId} as the subject IRI (minted
+ * once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
+ * business code), stored in one named graph shared by all requirements: five mandatory triples
+ * (identifier, type, title, description, status) plus up to three optional triples for
+ * {@code priority}, {@code motivatedBy} and {@code qualityCategory} - written only when the
+ * corresponding field is non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so
+ * that requirements without them still match. The {@code dcterms:identifier} triple carries the
+ * human-readable {@link RequirementCode} ({@code FR-1}) - identity and label are deliberately
+ * different triples on the same subject. This class depends only on the neutral kognio-rdf
+ * ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any
+ * other backend-specific type. The backend ({@link DatasetLifecycle} implementation) is
+ * supplied by the composition root.</p>
  *
  * <p><strong>WorkspaceId (local, single-user).</strong> Each {@link WorkspaceId}
  * is mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are
@@ -54,27 +60,44 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * would use the same routing key differently (e.g. as a server-side project
  * selector), but the local embedded adapter already keeps workspaces separate.</p>
  *
+ * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
+ * minted once, "insert or replace by identity" is no longer one coherent operation.
+ * {@link #create} and {@link #update} each check whether the subject already exists
+ * <em>inside</em> the write transaction (an {@code ASK}) before writing - not via a separate
+ * {@code findByCode} call beforehand, which would leave a check-then-act race between the check
+ * and the write. {@link #create} rejects an existing subject with
+ * {@link ResourceAlreadyExistsException}; {@link #update} rejects a missing one with
+ * {@link RequirementNotFoundException}. An {@link #update} otherwise replaces the subject's
+ * triples wholesale (the same replace-by-identity mechanic the previous save-only contract
+ * used).</p>
+ *
+ * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
+ * {@code ASK} in the same transaction - by {@code dcterms:identifier}, not by subject - and
+ * rejects a match with {@link DuplicateRequirementCodeException}. This is deliberately a
+ * separate check and a separate exception from {@link ResourceAlreadyExistsException}: an
+ * opaque-identity collision is a programming error (identities are minted once and never
+ * reused), while a business-code collision (two requirements both claiming {@code FR-1}) is an
+ * expected, rejectable outcome a human can cause and must be told about by name.</p>
+ *
  * <p><strong>Strict cross-BC term resolution (issue #36).</strong> Requirements and
- * ubiquitous-language terms share one per-workspace store. On
- * {@link #save(WorkspaceId, Requirement)} every {@link TermRef} is resolved against that
- * store <em>before</em> anything is written: the term identity (e.g. {@code TERM-1}) is
- * looked up by {@code dcterms:identifier} among the {@code skos:Concept}s of the glossary.
- * An unknown or ambiguous identity aborts the write with a didactic
+ * ubiquitous-language terms share one per-workspace store. On write every {@link TermRef} is
+ * resolved against that store <em>before</em> anything is written: the term identity (e.g.
+ * {@code TERM-1}) is looked up by {@code dcterms:identifier} among the {@code skos:Concept}s of
+ * the glossary. An unknown or ambiguous identity aborts the write with a didactic
  * {@link UnresolvedReferenceException}; no dangling {@code arkreq:usesTerm} edge is ever
  * persisted. Resolution goes via the identifier, never the {@code skos:prefLabel}, so the
  * edge survives relabelling a term.</p>
  *
- * <p><strong>SHACL write-gate.</strong> Every {@link #save(WorkspaceId, Requirement)} call
- * validates the candidate instance graph against the requirements SHACL shapes via
- * {@link ShaclWriteGate} before starting the write transaction; a violation throws
- * {@link WriteConstraintViolationException} and nothing is persisted. The gate itself is
- * technology-neutral - only {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
+ * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
+ * against the requirements SHACL shapes via {@link ShaclWriteGate} before starting the write
+ * transaction; a violation throws {@link WriteConstraintViolationException} and nothing is
+ * persisted. The gate itself is technology-neutral - only
+ * {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  */
 public class KognioRdfRequirementRepository implements RequirementRepository {
 
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
-    private static final String REQUIREMENT_INSTANCE_NAMESPACE = "https://w3id.org/arknet/model/requirement/";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
     // Mirrors the graph IRI the ubiquitous-language out-adapter writes into. The bounded
     // contexts share one workspace dataset; resolving a term means reading across into
@@ -117,20 +140,28 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public void save(WorkspaceId workspaceId, Requirement requirement) {
+    public void create(WorkspaceId workspaceId, Requirement requirement) {
+        write(workspaceId, requirement, true);
+    }
+
+    @Override
+    public void update(WorkspaceId workspaceId, Requirement requirement) {
+        write(workspaceId, requirement, false);
+    }
+
+    private void write(WorkspaceId workspaceId, Requirement requirement, boolean expectAbsent) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(requirement, "requirement");
 
-        // Defense-in-depth: the requirement id's SHACL pattern already constrains it to a shape
-        // that serializes safely into an IRIREF, but that shape is enforced by the gate below,
-        // after this string is already built into a SPARQL query for the DELETE. Reject an
-        // impossible identifier before it ever reaches SPARQL string concatenation.
-        String subjectIriString = requirementIri(requirement.id());
+        // Defense-in-depth: ResourceId's own validation is looser than SPARQL's IRIREF grammar.
+        // Reject an impossible identity before it ever reaches SPARQL string concatenation.
+        String subjectIriString = requirement.id().value().value();
         if (!SparqlTerms.isValidIriReference(subjectIriString)) {
             throw new IllegalArgumentException(
                     "requirement id yields an invalid IRI for SPARQL: " + subjectIriString);
         }
         IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             // 1. Resolve every term reference strictly against the shared workspace store.
@@ -141,7 +172,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             // 2. Build the candidate graph.
             Graph graph = rdf.createGraph();
             graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
-            graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.id().value()));
+            graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.code().value()));
             graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(requirement.title()));
             graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), rdf.createLiteral(requirement.description()));
             graph.add(subjectIri, rdf.createIRI(STATUS_PROPERTY), rdf.createIRI(statusIriFor(requirement.status())));
@@ -160,7 +191,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termIri);
             }
 
-            // 3. Structural gate, then replace-by-identity. The usesTerm shape carries an
+            // 3. Structural gate, then create/update. The usesTerm shape carries an
             //    sh:class skos:Concept constraint, but the type triples of the referenced
             //    terms live in the sibling terms graph, not in this candidate graph. They are
             //    handed to the gate as a validation-only asserted context (never persisted
@@ -173,12 +204,31 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
             gate.enforce(graph, assertedContext);
 
-            String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
-                    + subjectIri.getIRIString() + "> ?p ?o } }";
+            String askExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
+            String askCodeExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirement.code().value())
+                    + "\" } }";
+            String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
             IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
             handle.transactor().inTransaction(tx -> {
-                tx.update(deleteExisting);
+                boolean exists = tx.ask(askExists);
+                if (expectAbsent) {
+                    if (exists) {
+                        throw new ResourceAlreadyExistsException(workspaceId, requirement.id().value());
+                    }
+                    // Identity is opaque and unique by construction, but the human-readable code
+                    // is a separate triple this ASK alone cannot rule out - check it here, inside
+                    // the same write transaction, so no other create() can race in between.
+                    if (tx.ask(askCodeExists)) {
+                        throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
+                    }
+                } else if (!exists) {
+                    throw new RequirementNotFoundException(workspaceId, requirement.code());
+                }
+                if (exists) {
+                    tx.update(deleteExisting);
+                }
                 tx.add(graphIri, graph);
                 return null;
             });
@@ -186,26 +236,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public Optional<Requirement> findById(WorkspaceId workspaceId, RequirementId id) {
+    public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(code, "code");
 
-        String iri = requirementIri(id);
-        if (!SparqlTerms.isValidIriReference(iri)) {
-            // A syntactically impossible identifier cannot match anything in the store -
-            // report "not found" instead of building a malformed SPARQL query.
-            return Optional.empty();
-        }
-        String subject = SparqlTerms.iriRef(iri);
-        String query = "SELECT ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory WHERE { "
-                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + subject + " a ?type ; "
+        String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory "
+                + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" ; "
+                + "a ?type ; "
                 + "<" + TITLE_PROPERTY + "> ?title ; "
                 + "<" + DESCRIPTION_PROPERTY + "> ?description ; "
                 + "<" + STATUS_PROPERTY + "> ?status . "
-                + "OPTIONAL { " + subject + " <" + PRIORITY_PROPERTY + "> ?priority } "
-                + "OPTIONAL { " + subject + " <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
-                + "OPTIONAL { " + subject + " <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
+                + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
+                + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
+                + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
@@ -213,8 +257,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 return Optional.empty();
             }
             BindingSet row = head.get();
+            String subjectIriString = iriOf(row, "s").getIRIString();
             return Optional.of(new Requirement(
-                    id,
+                    new RequirementId(ResourceId.of(subjectIriString)),
+                    code,
                     literalOf(row, "title").getLexicalForm(),
                     literalOf(row, "description").getLexicalForm(),
                     typeFromIri(iriOf(row, "type").getIRIString()),
@@ -222,7 +268,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     priorityOf(row),
                     motivatedByOf(row),
                     qualityCategoryOf(row),
-                    readUsesTerms(handle, subject)));
+                    readUsesTerms(handle, SparqlTerms.iriRef(subjectIriString))));
         }
     }
 
@@ -230,7 +276,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     public List<Requirement> findAll(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
 
-        String query = "SELECT ?identifier ?title ?description ?type ?status ?priority ?motivatedBy "
+        String query = "SELECT ?s ?identifier ?title ?description ?type ?status ?priority ?motivatedBy "
                 + "?qualityCategory WHERE { GRAPH <"
                 + REQUIREMENTS_GRAPH + "> { "
                 + "?s a ?type . "
@@ -245,12 +291,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            Map<String, List<TermRef>> termsByRequirement = readUsesTermsByRequirement(handle);
+            Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
             return handle.sparqlQuery().select(query)
                     .map(row -> {
-                        String identifier = literalOf(row, "identifier").getLexicalForm();
+                        String subjectIriString = iriOf(row, "s").getIRIString();
                         return new Requirement(
-                                new RequirementId(identifier),
+                                new RequirementId(ResourceId.of(subjectIriString)),
+                                new RequirementCode(literalOf(row, "identifier").getLexicalForm()),
                                 literalOf(row, "title").getLexicalForm(),
                                 literalOf(row, "description").getLexicalForm(),
                                 typeFromIri(iriOf(row, "type").getIRIString()),
@@ -258,7 +305,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                                 priorityOf(row),
                                 motivatedByOf(row),
                                 qualityCategoryOf(row),
-                                termsByRequirement.getOrDefault(identifier, List.of()));
+                                termsBySubject.getOrDefault(subjectIriString, List.of()));
                     })
                     .toList();
         }
@@ -276,8 +323,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *
      * <p><strong>The join is lossy, and the loss is not read-only.</strong> An edge whose
      * target carries no {@code dcterms:identifier} in the terms graph binds no row and drops
-     * out here. {@link #save} then rewrites the requirement from the record it was handed, so
-     * the next read-modify-write ({@code req_set_status}, {@code req_link_term}) erases the
+     * out here. The next {@link #update} then rewrites the requirement from the record it was
+     * handed, so a read-modify-write ({@code req_set_status}, {@code req_link_term}) erases the
      * dropped edge from the store for good. Every edge written through {@link #resolveTerm}
      * is joinable by construction, so this cannot bite via the MCP tools; an edge that entered
      * the requirements graph some other way (store-first, ADR-005) can be lost. See issue #65.</p>
@@ -293,17 +340,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /** Bulk variant of {@link #readUsesTerms}: all requirements' term identities in one query. */
-    private Map<String, List<TermRef>> readUsesTermsByRequirement(DatasetHandle handle) {
-        String query = "SELECT ?identifier ?termId WHERE { "
-                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier ; <" + USES_TERM_PROPERTY + "> ?term } "
+    private Map<String, List<TermRef>> readUsesTermsBySubject(DatasetHandle handle) {
+        String query = "SELECT ?s ?termId WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + USES_TERM_PROPERTY + "> ?term } "
                 + "GRAPH <" + TERMS_GRAPH + "> { ?term <" + IDENTIFIER_PROPERTY + "> ?termId } } "
-                + "ORDER BY ?identifier ?termId";
-        Map<String, List<TermRef>> byRequirement = new LinkedHashMap<>();
-        handle.sparqlQuery().select(query).forEach(row -> byRequirement
-                .computeIfAbsent(literalOf(row, "identifier").getLexicalForm(), key -> new ArrayList<>())
+                + "ORDER BY ?s ?termId";
+        Map<String, List<TermRef>> bySubject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> bySubject
+                .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
                 .add(new TermRef(literalOf(row, "termId").getLexicalForm())));
-        return byRequirement;
+        return bySubject;
     }
 
     // ---- strict reference resolution ---------------------------------------------------
@@ -330,10 +376,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     // ---- helpers -----------------------------------------------------------------------
-
-    private static String requirementIri(RequirementId id) {
-        return REQUIREMENT_INSTANCE_NAMESPACE + id.value();
-    }
 
     private static String typeIriFor(RequirementType type) {
         return switch (type) {

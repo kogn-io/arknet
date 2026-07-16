@@ -11,25 +11,28 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * <p>An expected domain outcome (not a programming error): driving adapters -
  * e.g. the MCP tools - translate it into a user-facing "unknown requirement"
  * message rather than a stack trace.</p>
+ *
+ * <p>Lookup by a human is by {@link RequirementCode} (e.g. {@code FR-1}), not by the opaque
+ * {@link RequirementId} - that is what the user actually typed.</p>
  */
 public class RequirementNotFoundException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
     private final transient WorkspaceId workspaceId;
-    private final transient RequirementId id;
+    private final transient RequirementCode code;
 
     /**
      * Creates the exception.
      *
      * @param workspaceId the workspace that was searched
-     * @param id          the requirement identity that was not found
+     * @param code        the requirement code that was not found
      */
-    public RequirementNotFoundException(WorkspaceId workspaceId, RequirementId id) {
-        super("no requirement " + Objects.requireNonNull(id, "id").value()
+    public RequirementNotFoundException(WorkspaceId workspaceId, RequirementCode code) {
+        super("no requirement " + Objects.requireNonNull(code, "code").value()
                 + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
         this.workspaceId = workspaceId;
-        this.id = id;
+        this.code = code;
     }
 
     /** @return the workspace that was searched */
@@ -37,8 +40,8 @@ public class RequirementNotFoundException extends RuntimeException {
         return workspaceId;
     }
 
-    /** @return the requirement identity that was not found */
-    public RequirementId requirementId() {
-        return id;
+    /** @return the requirement code that was not found */
+    public RequirementCode requirementCode() {
+        return code;
     }
 }

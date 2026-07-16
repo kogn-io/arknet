@@ -17,7 +17,12 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  *
  * <p>Pure and domain-agnostic: it consumes only a {@link StoreSnapshot} plus a
  * {@link Prefixes} resolver, so it is fully unit-testable and renders any bounded context's
- * data the same way. The handle it prints is always the IRI (as a CURIE), never the label.</p>
+ * data the same way. The handle it prints is never the label; the preference is (1) a CURIE,
+ * if the subject IRI shortens against a {@link Prefixes} namespace, (2) else the resource's
+ * {@code dcterms:identifier} (a bare business id, e.g. {@code FR-1}), if it carries one, (3)
+ * else the full IRI. Case (2) is what keeps opaque, kernel-minted identities
+ * (a {@link de.hauschel.arknet.kernel.ResourceId} is not bound to any CURIE namespace)
+ * human-readable in the digest.</p>
  */
 public final class DigestRenderer {
 
@@ -114,8 +119,8 @@ public final class DigestRenderer {
     }
 
     private String renderResourceLine(StoreResource resource) {
-        String curie = prefixes.toCurie(resource.iri());
-        StringBuilder line = new StringBuilder(curie);
+        String handle = handleFor(resource);
+        StringBuilder line = new StringBuilder(handle);
         String types = String.join(",", resource.types().stream().map(StoreResource::localName).toList());
         if (!types.isEmpty()) {
             line.append(" [").append(types).append(']');
@@ -123,8 +128,21 @@ public final class DigestRenderer {
         resource.label().ifPresent(label -> line.append(" \"").append(label).append('"'));
         resource.status().ifPresent(status -> line.append(' ').append(status));
         resource.priority().ifPresent(priority -> line.append(' ').append(priority));
-        line.append("  -> resource_get(\"").append(curie).append("\")");
+        line.append("  -> resource_get(\"").append(handle).append("\")");
         return line.toString();
+    }
+
+    /**
+     * The display/drill-down handle for one resource: a CURIE if the subject IRI shortens
+     * against a known {@link Prefixes} namespace, else its {@code dcterms:identifier} (bare
+     * business id), else the full IRI. See the class-level note for why case (2) matters.
+     */
+    private String handleFor(StoreResource resource) {
+        String curie = prefixes.toCurie(resource.iri());
+        if (!curie.equals(resource.iri())) {
+            return curie;
+        }
+        return resource.identifier().orElse(resource.iri());
     }
 
     private void appendNextSteps(StringBuilder out) {
