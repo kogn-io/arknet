@@ -8,6 +8,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ResourceId;
+
 /**
  * Domain invariant tests for {@link UseCase} and its value objects.
  *
@@ -16,24 +18,28 @@ import org.junit.jupiter.api.Test;
  */
 class UseCaseTest {
 
+    private static final UseCaseId ID = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
+    private static final UseCaseCode CODE = new UseCaseCode("UC1");
+
     private static Step step(int position, String text) {
         return new Step(position, text, List.of());
     }
 
     private static UseCase useCaseWithSteps(List<Step> steps) {
-        return new UseCase(new UseCaseId("UC1"), "Place order", "Customer places an order",
+        return new UseCase(ID, CODE, "Place order", "Customer places an order",
                 null, null, new ActorRef("Customer"), List.of(), null, null, steps, List.of());
     }
 
     @Test
     void holdsItsFields() {
         Step s1 = new Step(1, "Customer selects items", List.of(new RequirementRef("FR5")));
-        UseCase uc = new UseCase(new UseCaseId("UC1"), "Place order", "Customer places an order",
+        UseCase uc = new UseCase(ID, CODE, "Place order", "Customer places an order",
                 "Webshop", "Customer opens the cart", new ActorRef("Customer"),
                 List.of(new ActorRef("PaymentProvider")), "Customer is logged in",
                 "Order is recorded", List.of(s1), List.of("2a. Payment declined -> abort"));
 
-        assertEquals(new UseCaseId("UC1"), uc.id());
+        assertEquals(ID, uc.id());
+        assertEquals(CODE, uc.code());
         assertEquals("Place order", uc.title());
         assertEquals("Customer places an order", uc.goal());
         assertEquals("Webshop", uc.scope());
@@ -49,7 +55,7 @@ class UseCaseTest {
 
     @Test
     void optionalFieldsMayBeNullAndCollectionsDefaultToEmpty() {
-        UseCase uc = new UseCase(new UseCaseId("UC1"), "t", "g", null, null,
+        UseCase uc = new UseCase(ID, CODE, "t", "g", null, null,
                 new ActorRef("A"), null, null, null, List.of(step(1, "do")), null);
 
         assertTrue(uc.supportingActors().isEmpty());
@@ -59,25 +65,27 @@ class UseCaseTest {
     @Test
     void rejectsNullMandatoryFields() {
         List<Step> steps = List.of(step(1, "do"));
-        assertThrows(NullPointerException.class, () -> new UseCase(null, "t", "g", null, null,
+        assertThrows(NullPointerException.class, () -> new UseCase(null, CODE, "t", "g", null, null,
                 new ActorRef("A"), List.of(), null, null, steps, List.of()));
-        assertThrows(NullPointerException.class, () -> new UseCase(new UseCaseId("UC1"), null, "g", null, null,
+        assertThrows(NullPointerException.class, () -> new UseCase(ID, null, "t", "g", null, null,
                 new ActorRef("A"), List.of(), null, null, steps, List.of()));
-        assertThrows(NullPointerException.class, () -> new UseCase(new UseCaseId("UC1"), "t", null, null, null,
+        assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, null, "g", null, null,
                 new ActorRef("A"), List.of(), null, null, steps, List.of()));
-        assertThrows(NullPointerException.class, () -> new UseCase(new UseCaseId("UC1"), "t", "g", null, null,
+        assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", null, null, null,
+                new ActorRef("A"), List.of(), null, null, steps, List.of()));
+        assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
                 null, List.of(), null, null, steps, List.of()));
     }
 
     @Test
     void rejectsBlankTitle() {
-        assertThrows(IllegalArgumentException.class, () -> new UseCase(new UseCaseId("UC1"), "  ", "g",
+        assertThrows(IllegalArgumentException.class, () -> new UseCase(ID, CODE, "  ", "g",
                 null, null, new ActorRef("A"), List.of(), null, null, List.of(step(1, "do")), List.of()));
     }
 
     @Test
     void rejectsBlankGoal() {
-        assertThrows(IllegalArgumentException.class, () -> new UseCase(new UseCaseId("UC1"), "t", "  ",
+        assertThrows(IllegalArgumentException.class, () -> new UseCase(ID, CODE, "t", "  ",
                 null, null, new ActorRef("A"), List.of(), null, null, List.of(step(1, "do")), List.of()));
     }
 
@@ -121,8 +129,13 @@ class UseCaseTest {
     }
 
     @Test
-    void rejectsBlankUseCaseId() {
-        assertThrows(IllegalArgumentException.class, () -> new UseCaseId("  "));
+    void rejectsNullUseCaseId() {
+        assertThrows(NullPointerException.class, () -> new UseCaseId(null));
+    }
+
+    @Test
+    void rejectsBlankUseCaseCode() {
+        assertThrows(IllegalArgumentException.class, () -> new UseCaseCode("  "));
     }
 
     @Test

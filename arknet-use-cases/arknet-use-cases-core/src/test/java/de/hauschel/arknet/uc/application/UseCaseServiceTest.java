@@ -2,36 +2,43 @@ package de.hauschel.arknet.uc.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
-import de.hauschel.arknet.uc.domain.UseCaseId;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
 
 /**
- * Policy tests for {@link UseCaseService}: identity assignment, listing and
- * lookup, exercised against an in-memory fake repository.
+ * Policy tests for {@link UseCaseService}: opaque identity minting, code assignment, listing
+ * and lookup, exercised against an in-memory fake repository and a deterministic fake
+ * {@link ResourceIdFactory}.
  */
 class UseCaseServiceTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
 
     private InMemoryUseCaseRepository repository;
+    private FakeResourceIdFactory resourceIdFactory;
     private UseCaseService service;
 
     @BeforeEach
     void setUp() {
         repository = new InMemoryUseCaseRepository();
-        service = new UseCaseService(repository);
+        resourceIdFactory = new FakeResourceIdFactory();
+        service = new UseCaseService(repository, resourceIdFactory);
     }
 
     private static NewUseCase newUseCase(String title) {
@@ -40,12 +47,21 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void addAssignsFirstIdentity() {
+    void addAssignsFirstCode() {
         UseCase added = service.add(WS, newUseCase("Place order"));
 
-        assertEquals(new UseCaseId("UC1"), added.id());
+        assertEquals(new UseCaseCode("UC1"), added.code());
         assertEquals("Place order", added.title());
-        assertEquals(added, repository.findById(WS, added.id()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+    }
+
+    @Test
+    void addMintsAFreshOpaqueIdentityViaTheFactory() {
+        UseCase first = service.add(WS, newUseCase("a"));
+        UseCase second = service.add(WS, newUseCase("b"));
+
+        assertNotEquals(first.id(), second.id());
+        assertEquals(2, resourceIdFactory.mintedCount());
     }
 
     @Test
@@ -71,9 +87,9 @@ class UseCaseServiceTest {
 
     @Test
     void addNumbersRunningPerWorkspace() {
-        assertEquals(new UseCaseId("UC1"), service.add(WS, newUseCase("a")).id());
-        assertEquals(new UseCaseId("UC2"), service.add(WS, newUseCase("b")).id());
-        assertEquals(new UseCaseId("UC3"), service.add(WS, newUseCase("c")).id());
+        assertEquals(new UseCaseCode("UC1"), service.add(WS, newUseCase("a")).code());
+        assertEquals(new UseCaseCode("UC2"), service.add(WS, newUseCase("b")).code());
+        assertEquals(new UseCaseCode("UC3"), service.add(WS, newUseCase("c")).code());
     }
 
     @Test
@@ -83,7 +99,7 @@ class UseCaseServiceTest {
 
         UseCase inOther = service.add(other, newUseCase("b"));
 
-        assertEquals(new UseCaseId("UC1"), inOther.id());
+        assertEquals(new UseCaseCode("UC1"), inOther.code());
         assertEquals(1, service.list(other).size());
         assertEquals(1, service.list(WS).size());
     }
@@ -102,24 +118,39 @@ class UseCaseServiceTest {
 
     @Test
     void getReturnsPersistedUseCase() {
-        UseCaseId id = service.add(WS, newUseCase("a")).id();
+        UseCaseCode code = service.add(WS, newUseCase("a")).code();
 
-        assertTrue(service.get(WS, id).isPresent());
-        assertEquals("a", service.get(WS, id).orElseThrow().title());
+        assertTrue(service.get(WS, code).isPresent());
+        assertEquals("a", service.get(WS, code).orElseThrow().title());
     }
 
     @Test
-    void getIsEmptyForUnknownId() {
-        assertFalse(service.get(WS, new UseCaseId("UC99")).isPresent());
+    void getIsEmptyForUnknownCode() {
+        assertFalse(service.get(WS, new UseCaseCode("UC99")).isPresent());
     }
 
     @Test
     void addGetListRoundtrip() {
         UseCase added = service.add(WS, newUseCase("Place order"));
 
-        UseCase fetched = service.get(WS, added.id()).orElseThrow();
+        UseCase fetched = service.get(WS, added.code()).orElseThrow();
 
         assertEquals(added, fetched);
         assertTrue(service.list(WS).contains(added));
+    }
+
+    /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
+    private static final class FakeResourceIdFactory implements ResourceIdFactory {
+
+        private final AtomicInteger counter = new AtomicInteger();
+
+        @Override
+        public ResourceId newId() {
+            return ResourceId.of("https://w3id.org/arknet/id/fake-" + counter.incrementAndGet());
+        }
+
+        int mintedCount() {
+            return counter.get();
+        }
     }
 }

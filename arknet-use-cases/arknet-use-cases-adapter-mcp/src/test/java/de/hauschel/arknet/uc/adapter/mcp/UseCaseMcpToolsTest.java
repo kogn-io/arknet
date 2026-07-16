@@ -13,6 +13,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools.StepInput;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
@@ -22,6 +23,7 @@ import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 
 /**
@@ -29,8 +31,15 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
  * the nested {@code uc_add} payload onto the {@link AddUseCase.NewUseCase} command, the
  * {@code uc_get}/{@code uc_list} response shape, and verbatim propagation of a didactic
  * in-port error (which Spring AI turns into a tool error result).
+ *
+ * <p>The rendered id a caller sees is the human-readable {@link UseCaseCode} ({@code UC1}), not
+ * the opaque {@link UseCaseId} - and {@code uc_get} looks a use case up by that code.</p>
  */
 class UseCaseMcpToolsTest {
+
+    private static UseCaseId opaqueId(String slug) {
+        return new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/" + slug));
+    }
 
     private final Stub stub = new Stub();
     private final UseCaseMcpTools adapter =
@@ -108,7 +117,7 @@ class UseCaseMcpToolsTest {
 
     @Test
     void ucGetRendersAllFieldsStepsAndExtensions() {
-        stub.getResult = Optional.of(new UseCase(new UseCaseId("UC1"), "Place order",
+        stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                 "Customer places an order", "Webshop", "Customer opens the cart", new ActorRef("Customer"),
                 List.of(new ActorRef("PaymentProvider")), "Customer is logged in", "Order is recorded",
                 List.of(new Step(1, "Customer selects items", List.of(new RequirementRef("FR-1"))),
@@ -126,7 +135,7 @@ class UseCaseMcpToolsTest {
     }
 
     @Test
-    void ucGetReturnsNotFoundMessageForUnknownId() {
+    void ucGetReturnsNotFoundMessageForUnknownCode() {
         stub.getResult = Optional.empty();
         assertEquals("Use case not found: UC99", adapter.get("UC99"));
     }
@@ -134,10 +143,12 @@ class UseCaseMcpToolsTest {
     @Test
     void ucListRendersCompactLines() {
         stub.listResult = List.of(
-                new UseCase(new UseCaseId("UC1"), "Place order", "Customer places an order", null, null,
+                new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
+                        "Customer places an order", null, null,
                         new ActorRef("Customer"), List.of(), null, null,
                         List.of(new Step(1, "select items", List.of())), List.of()),
-                new UseCase(new UseCaseId("UC2"), "Reset password", "User resets password", null, null,
+                new UseCase(opaqueId("uc-2"), new UseCaseCode("UC2"), "Reset password",
+                        "User resets password", null, null,
                         new ActorRef("Customer"), List.of(), null, null,
                         List.of(new Step(1, "request link", List.of())), List.of()));
 
@@ -191,8 +202,8 @@ class UseCaseMcpToolsTest {
             if (addFailure != null) {
                 throw addFailure;
             }
-            return new UseCase(new UseCaseId("UC1"), command.title(), command.goal(), command.scope(),
-                    command.trigger(), command.primaryActor(), command.supportingActors(),
+            return new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), command.title(), command.goal(),
+                    command.scope(), command.trigger(), command.primaryActor(), command.supportingActors(),
                     command.precondition(), command.postcondition(), command.steps(), command.extensions());
         }
 
@@ -202,7 +213,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public Optional<UseCase> get(WorkspaceId workspaceId, UseCaseId id) {
+        public Optional<UseCase> get(WorkspaceId workspaceId, UseCaseCode code) {
             return getResult;
         }
     }

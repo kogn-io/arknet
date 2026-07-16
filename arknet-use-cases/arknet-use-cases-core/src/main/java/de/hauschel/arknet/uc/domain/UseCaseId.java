@@ -2,21 +2,22 @@ package de.hauschel.arknet.uc.domain;
 
 import java.util.Objects;
 
+import de.hauschel.arknet.kernel.ResourceId;
+
 /**
- * Identity of a {@link UseCase}, e.g. {@code UC1} or {@code UC7}.
+ * Opaque, unchanging identity of a {@link UseCase}.
  *
- * <p>Value object wrapping the human-readable business identifier. Generation
- * of the running number is a policy concern of the application layer, not of
- * this type.</p>
+ * <p>Thin newtype over the shared-kernel {@link ResourceId} for type safety within the
+ * use-cases bounded context. Identity is deliberately independent of the human-readable
+ * {@link UseCaseCode} ({@code UC1}): the code may be relabelled, this identity never changes.
+ * A use case is the aggregate root - it carries this stable identity; its {@link Step steps}
+ * are value objects inside the aggregate and have no identity of their own.</p>
  *
- * @param value the non-blank identifier string
+ * @param value the wrapped resource identity, never {@code null}
  */
-public record UseCaseId(String value) {
+public record UseCaseId(ResourceId value) {
 
     public UseCaseId {
         Objects.requireNonNull(value, "value");
-        if (value.isBlank()) {
-            throw new IllegalArgumentException("UseCaseId must not be blank");
-        }
     }
 }

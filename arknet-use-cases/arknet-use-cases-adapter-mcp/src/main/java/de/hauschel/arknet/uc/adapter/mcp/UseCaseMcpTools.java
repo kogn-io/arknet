@@ -15,7 +15,7 @@ import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
-import de.hauschel.arknet.uc.domain.UseCaseId;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
 
 /**
  * Driving (in) adapter of the use-cases component: exposes the use-case use-cases as MCP
@@ -148,15 +148,15 @@ public final class UseCaseMcpTools {
     }
 
     @McpTool(name = "uc_get",
-            description = "Fetch a single use case by its identity (e.g. UC1), with all fields, its ordered "
+            description = "Fetch a single use case by its code (e.g. UC1), with all fields, its ordered "
                     + "steps and their fulfilled requirement labels, and its extensions.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
-            @McpToolParam(description = "Use-case identity, e.g. UC1") final String id) {
-        final UseCaseId useCaseId = new UseCaseId(id);
-        return getUseCase.get(workspaceId, useCaseId)
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id) {
+        final UseCaseCode code = new UseCaseCode(id);
+        return getUseCase.get(workspaceId, code)
                 .map(UseCaseMcpTools::formatFull)
-                .orElse("Use case not found: " + useCaseId.value());
+                .orElse("Use case not found: " + code.value());
     }
 
     // --- mapping helpers -------------------------------------------------------
@@ -180,12 +180,12 @@ public final class UseCaseMcpTools {
     }
 
     private static String formatShort(final UseCase uc) {
-        return "%s | %s | %s".formatted(uc.id().value(), uc.title(), uc.goal());
+        return "%s | %s | %s".formatted(uc.code().value(), uc.title(), uc.goal());
     }
 
     private static String formatFull(final UseCase uc) {
         final StringBuilder sb = new StringBuilder();
-        sb.append(uc.id().value()).append(' ').append(uc.title()).append('\n');
+        sb.append(uc.code().value()).append(' ').append(uc.title()).append('\n');
         sb.append("  goal: ").append(uc.goal()).append('\n');
         appendOptional(sb, "scope", uc.scope());
         appendOptional(sb, "trigger", uc.trigger());

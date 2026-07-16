@@ -101,9 +101,9 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Mints the opaque {@link de.hauschel.arknet.kernel.ResourceId} of a newly added
-     * requirement. A single bean so every write path mints from the same kernel-owned scheme
-     * (see {@link UuidResourceIdFactory}).
+     * Mints the opaque {@link de.hauschel.arknet.kernel.ResourceId} of newly added resources
+     * (requirements, glossary terms, use cases and their derived step nodes). A single bean so
+     * every write path mints from the same kernel-owned scheme (see {@link UuidResourceIdFactory}).
      */
     @Bean
     ResourceIdFactory resourceIdFactory() {
@@ -163,13 +163,15 @@ public class ArknetMcpConfiguration {
      * per-workspace store the requirements and ubiquitous-language repositories write into.
      */
     @Bean
-    UseCaseRepository useCaseRepository(final DatasetLifecycle datasetLifecycle) {
-        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle);
+    UseCaseRepository useCaseRepository(
+            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory) {
+        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle, resourceIdFactory);
     }
 
     @Bean
-    UseCaseService useCaseService(final UseCaseRepository repository) {
-        return new UseCaseService(repository);
+    UseCaseService useCaseService(
+            final UseCaseRepository repository, final ResourceIdFactory resourceIdFactory) {
+        return new UseCaseService(repository, resourceIdFactory);
     }
 
     @Bean

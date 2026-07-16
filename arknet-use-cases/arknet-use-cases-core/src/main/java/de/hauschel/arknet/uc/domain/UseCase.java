@@ -17,7 +17,12 @@ import java.util.Objects;
  * Alternative and exception flows are, for now, kept as free-text
  * {@code extensions}.</p>
  *
- * @param id                stable business identity (e.g. {@code UC1})
+ * @param id                opaque, unchanging identity of this use case (never a business
+ *                          label); minted once by a
+ *                          {@link de.hauschel.arknet.kernel.ResourceIdFactory} and stable
+ *                          across relabelling
+ * @param code              human-readable business label (e.g. {@code UC1}); maps to
+ *                          {@code dcterms:identifier}
  * @param title             short human-readable name of the use case
  * @param goal              the goal the primary actor wants to achieve
  * @param scope             the system/boundary under design; optional (may be
@@ -41,6 +46,7 @@ import java.util.Objects;
  */
 public record UseCase(
         UseCaseId id,
+        UseCaseCode code,
         String title,
         String goal,
         String scope,
@@ -54,6 +60,7 @@ public record UseCase(
 
     public UseCase {
         Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(code, "code");
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(goal, "goal");
         Objects.requireNonNull(primaryActor, "primaryActor");

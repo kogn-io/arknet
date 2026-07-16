@@ -20,6 +20,8 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -27,37 +29,56 @@ import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
+import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
  * Out-adapter: {@link UseCaseRepository} backed by the kognio-rdf substrate
  * ({@code io.kogn.rdf}, embeddable RDF dataset).
  *
- * <p>Maps a {@link UseCase} to an {@code arkreq:UseCase} with a fixed subject IRI
- * ({@code https://w3id.org/arknet/model/usecase/<id>}), stored in one named graph shared by
- * all use cases of a workspace. Flow steps are <em>separate</em> {@code arkreq:Step}
- * resources with a deterministically derived IRI ({@code <useCaseIri>/step/<position>} for
- * the main flow, {@code <useCaseIri>/extension/<n>} for extensions) - ordering is carried by
- * the integer {@code arkreq:position}, never an {@code rdf:List}. The properties are exactly
- * those of the already-merged requirements/use-case ontology (PR #42): {@code arkreq:useCaseGoal},
- * {@code arkreq:designScope}, {@code arkreq:trigger}, {@code arkreq:useCasePrecondition},
- * {@code arkreq:useCasePostcondition}, {@code arkreq:primaryActor}, {@code arkreq:supportingActor},
- * {@code arkreq:mainStep}, {@code arkreq:extensionStep}, {@code arkreq:position},
- * {@code arkreq:stepText}, {@code arkreq:stepRealises} and {@code oslc_rm:satisfies}.</p>
+ * <p>Maps a {@link UseCase} to an {@code arkreq:UseCase} whose subject IRI is the opaque
+ * {@link UseCaseId} (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never
+ * derived from the business code), stored in one named graph shared by all use cases of a
+ * workspace. The {@code dcterms:identifier} triple carries the human-readable
+ * {@link UseCaseCode} ({@code UC1}) - identity and label are deliberately different triples on
+ * the same subject.</p>
+ *
+ * <p><strong>Steps are opaque value objects.</strong> Flow steps are <em>separate</em>
+ * {@code arkreq:Step} resources whose IRI is an opaque one minted from the same kernel scheme
+ * as the use case itself - no ordinal or business key is encoded in the step IRI (the ordering
+ * is carried by the integer {@code arkreq:position}, never an {@code rdf:List}). A step has no
+ * stable domain identity of its own: it is a value object inside the use-case aggregate,
+ * reachable only through the {@code arkreq:mainStep}/{@code arkreq:extensionStep} edges (there
+ * is no read entry point by step IRI). Because the whole aggregate is written by
+ * replace-by-identity, a step's opaque IRI is minted afresh on every write - clean addressing,
+ * not stable identity; that is harmless precisely because nothing ever references a step from
+ * the outside. Minting the step node is therefore a persistence-serialization concern of this
+ * adapter, whereas the use-case root's identity is minted store-neutrally above the store.</p>
+ *
+ * <p>The remaining properties are exactly those of the already-merged requirements/use-case
+ * ontology (PR #42): {@code arkreq:useCaseGoal}, {@code arkreq:designScope}, {@code arkreq:trigger},
+ * {@code arkreq:useCasePrecondition}, {@code arkreq:useCasePostcondition}, {@code arkreq:primaryActor},
+ * {@code arkreq:supportingActor}, {@code arkreq:mainStep}, {@code arkreq:extensionStep},
+ * {@code arkreq:position}, {@code arkreq:stepText}, {@code arkreq:stepRealises} and
+ * {@code oslc_rm:satisfies}.</p>
  *
  * <p><strong>Strict cross-BC reference resolution (issue #41).</strong> Use cases,
- * requirements and ubiquitous-language actors share one per-workspace store. On
- * {@link #save(WorkspaceId, UseCase)} every label reference is resolved against that store
- * <em>before</em> anything is written: a {@link RequirementRef} label (e.g. {@code FR-5}) is
- * looked up by {@code dcterms:identifier} among requirements, an {@link ActorRef} label
- * (e.g. {@code Customer}) by {@code skos:prefLabel} among concepts carrying an actor type
- * ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}). An unknown or ambiguous label
- * aborts the write with a didactic {@link UnresolvedReferenceException}; no dangling
- * reference is ever persisted. The coarse {@code UseCase oslc_rm:satisfies Requirement} edge
- * is derived as the union of the resolved {@code stepRealises} targets.</p>
+ * requirements and ubiquitous-language actors share one per-workspace store. On write every
+ * label reference is resolved against that store <em>before</em> anything is written: a
+ * {@link RequirementRef} label (e.g. {@code FR-5}) is looked up by {@code dcterms:identifier}
+ * among requirements, an {@link ActorRef} label (e.g. {@code Customer}) by {@code skos:prefLabel}
+ * among concepts carrying an actor type ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}).
+ * Both look-ups are schema-independent (by identifier/label, never by reconstructing a subject
+ * IRI), so they are unaffected by the opaque-identity switch of either bounded context. An
+ * unknown or ambiguous label aborts the write with a didactic {@link UnresolvedReferenceException};
+ * no dangling reference is ever persisted. The coarse {@code UseCase oslc_rm:satisfies Requirement}
+ * edge is derived as the union of the resolved {@code stepRealises} targets.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
@@ -67,10 +88,21 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
  * <p><strong>WorkspaceId (local, single-user).</strong> Each {@link WorkspaceId} is mapped
  * 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are fully isolated datasets.</p>
  *
- * <p><strong>SHACL write-gate.</strong> Every {@link #save(WorkspaceId, UseCase)} call
- * validates the candidate instance graph against the use-case SHACL shapes via
- * {@link ShaclWriteGate} before starting the write transaction; a violation throws
- * {@link WriteConstraintViolationException} and nothing is persisted.</p>
+ * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
+ * minted once, "insert or replace by identity" is no longer one coherent operation.
+ * {@link #create} and {@link #update} each check whether the subject already exists
+ * <em>inside</em> the write transaction (an {@code ASK}) before writing - not via a separate
+ * {@code findByCode} call beforehand, which would leave a check-then-act race between the check
+ * and the write. {@link #create} rejects an existing subject with
+ * {@link ResourceAlreadyExistsException} and, via a second {@code ASK} by
+ * {@code dcterms:identifier}, a colliding business code with {@link DuplicateUseCaseCodeException};
+ * {@link #update} rejects a missing subject with {@link UseCaseNotFoundException}. Either write
+ * otherwise replaces the subject and all its derived step resources wholesale.</p>
+ *
+ * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
+ * against the use-case SHACL shapes via {@link ShaclWriteGate} before starting the write
+ * transaction; a violation throws {@link WriteConstraintViolationException} and nothing is
+ * persisted.</p>
  */
 public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
@@ -79,7 +111,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
 
-    private static final String USE_CASE_INSTANCE_NAMESPACE = "https://w3id.org/arknet/model/usecase/";
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     // Mirrors the graph IRIs the requirements / ubiquitous-language out-adapters write into.
     // The three bounded contexts share one workspace dataset; resolving references means
@@ -112,36 +143,50 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
+    private final ResourceIdFactory resourceIdFactory;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from (must not be
-     *                  {@code null})
-     * @param gate      the SHACL write-gate validating candidate graphs before persistence
-     *                  (must not be {@code null})
+     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from (must
+     *                          not be {@code null})
+     * @param gate              the SHACL write-gate validating candidate graphs before
+     *                          persistence (must not be {@code null})
+     * @param resourceIdFactory mints the opaque IRI of each derived step resource (must not be
+     *                          {@code null}); the use-case root's own identity is minted above
+     *                          the store and arrives on the {@link UseCase}
      */
-    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate) {
+    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate,
+            ResourceIdFactory resourceIdFactory) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
+        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
     }
 
     @Override
-    public void save(WorkspaceId workspaceId, UseCase useCase) {
+    public void create(WorkspaceId workspaceId, UseCase useCase) {
+        write(workspaceId, useCase, true);
+    }
+
+    @Override
+    public void update(WorkspaceId workspaceId, UseCase useCase) {
+        write(workspaceId, useCase, false);
+    }
+
+    private void write(WorkspaceId workspaceId, UseCase useCase, boolean expectAbsent) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(useCase, "useCase");
 
-        // Defense-in-depth: the use-case id's SHACL pattern already constrains it to a shape
-        // that serializes safely into an IRIREF, but that shape is enforced by the gate below,
-        // after this string is already built into SPARQL queries for read/delete. Reject an
-        // impossible identifier before it ever reaches SPARQL string concatenation.
-        String subjectIriString = useCaseIri(useCase.id());
+        // Defense-in-depth: ResourceId's own validation is looser than SPARQL's IRIREF grammar.
+        // Reject an impossible identity before it ever reaches SPARQL string concatenation.
+        String subjectIriString = useCase.id().value().value();
         if (!SparqlTerms.isValidIriReference(subjectIriString)) {
             throw new IllegalArgumentException(
                     "use case id yields an invalid IRI for SPARQL: " + subjectIriString);
         }
         IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             // 1. Resolve every label reference strictly against the shared workspace store.
@@ -153,7 +198,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // 2. Build the candidate graph.
             Graph graph = rdf.createGraph();
             graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(USE_CASE_TYPE));
-            graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(useCase.id().value()));
+            graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(useCase.code().value()));
             graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(useCase.title()));
             graph.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), rdf.createLiteral(useCase.goal()));
             addOptional(graph, subjectIri, DESIGN_SCOPE_PROPERTY, useCase.scope());
@@ -165,10 +210,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 graph.add(subjectIri, rdf.createIRI(SUPPORTING_ACTOR_PROPERTY), supporting);
             }
 
-            // 3. Main-flow steps (own resources) + the coarse UC->Requirement satisfies edge.
+            // 3. Main-flow steps (own opaque resources) + the coarse UC->Requirement satisfies edge.
             Map<String, IRI> satisfies = new LinkedHashMap<>();
             for (Step step : useCase.steps()) {
-                IRI stepIri = rdf.createIRI(mainStepIri(subjectIri, step.position()));
+                IRI stepIri = mintStepIri();
                 graph.add(subjectIri, rdf.createIRI(MAIN_STEP_PROPERTY), stepIri);
                 graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
                 graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
@@ -184,10 +229,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 graph.add(subjectIri, rdf.createIRI(SATISFIES_PROPERTY), reqIri);
             }
 
-            // 4. Extensions: free-text alternative/exception flows as extensionStep resources.
+            // 4. Extensions: free-text alternative/exception flows as opaque extensionStep resources.
             int extensionPosition = 1;
             for (String extension : useCase.extensions()) {
-                IRI stepIri = rdf.createIRI(extensionStepIri(subjectIri, extensionPosition));
+                IRI stepIri = mintStepIri();
                 graph.add(subjectIri, rdf.createIRI(EXTENSION_STEP_PROPERTY), stepIri);
                 graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
                 graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
@@ -196,7 +241,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 extensionPosition++;
             }
 
-            // 5. Structural gate, then replace-by-identity (use case + all its derived steps).
+            // 5. Structural gate, then create/update (use case + all its derived steps).
             //    The shapes carry sh:class constraints on primaryActor (arkproc:Actor) and
             //    stepRealises (arkreq:Requirement). The type triples for those referenced nodes
             //    live in the sibling requirements/terms graphs, not in this candidate graph.
@@ -213,14 +258,39 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             }
             gate.enforce(graph, assertedContext);
 
+            // The step IRIs are opaque and not under the use-case IRI, so the old
+            // "delete everything whose subject STRSTARTS the use-case IRI" no longer reaches
+            // them. Delete the use-case subject's own triples and, following the
+            // mainStep/extensionStep edges, each step resource's triples.
+            String askExists = "ASK { GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " ?p ?o } }";
+            String askCodeExists = "ASK { GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(useCase.code().value())
+                    + "\" } }";
             String deleteExisting = "DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                    + "GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o . "
-                    + "FILTER(?s = <" + subjectIri.getIRIString() + "> "
-                    + "|| STRSTARTS(STR(?s), \"" + subjectIri.getIRIString() + "/\")) } }";
+                    + "GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                    + "{ " + subject + " (<" + MAIN_STEP_PROPERTY + ">|<" + EXTENSION_STEP_PROPERTY
+                    + ">) ?s . ?s ?p ?o } } }";
             IRI graphIri = rdf.createIRI(USE_CASES_GRAPH);
 
             handle.transactor().inTransaction(tx -> {
-                tx.update(deleteExisting);
+                boolean exists = tx.ask(askExists);
+                if (expectAbsent) {
+                    if (exists) {
+                        throw new ResourceAlreadyExistsException(workspaceId, useCase.id().value());
+                    }
+                    // Identity is opaque and unique by construction, but the human-readable code
+                    // is a separate triple this ASK alone cannot rule out - check it here, inside
+                    // the same write transaction, so no other create() can race in between.
+                    if (tx.ask(askCodeExists)) {
+                        throw new DuplicateUseCaseCodeException(workspaceId, useCase.code());
+                    }
+                } else if (!exists) {
+                    throw new UseCaseNotFoundException(workspaceId, useCase.code());
+                }
+                if (exists) {
+                    tx.update(deleteExisting);
+                }
                 tx.add(graphIri, graph);
                 return null;
             });
@@ -228,41 +298,51 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public Optional<UseCase> findById(WorkspaceId workspaceId, UseCaseId id) {
+    public Optional<UseCase> findByCode(WorkspaceId workspaceId, UseCaseCode code) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(code, "code");
+        String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
+                + SparqlTerms.escape(code.value()) + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            return readById(handle, id);
+            Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
+            if (head.isEmpty()) {
+                return Optional.empty();
+            }
+            return readBySubject(handle, iriOf(head.get(), "s").getIRIString(), code);
         }
     }
 
     @Override
     public List<UseCase> findAll(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        String query = "SELECT ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            List<UseCaseId> ids = handle.sparqlQuery().select(query)
-                    .map(row -> new UseCaseId(literalOf(row, "identifier").getLexicalForm()))
+            List<UseCaseRow> rows = handle.sparqlQuery().select(query)
+                    .map(row -> new UseCaseRow(iriOf(row, "s").getIRIString(),
+                            new UseCaseCode(literalOf(row, "identifier").getLexicalForm())))
                     .toList();
             List<UseCase> result = new ArrayList<>();
-            for (UseCaseId id : ids) {
-                readById(handle, id).ifPresent(result::add);
+            for (UseCaseRow row : rows) {
+                readBySubject(handle, row.subjectIri(), row.code()).ifPresent(result::add);
             }
             return List.copyOf(result);
         }
     }
 
+    private record UseCaseRow(String subjectIri, UseCaseCode code) {
+    }
+
     // ---- reading -----------------------------------------------------------------------
 
-    private Optional<UseCase> readById(DatasetHandle handle, UseCaseId id) {
-        String ucIri = useCaseIri(id);
-        if (!SparqlTerms.isValidIriReference(ucIri)) {
+    private Optional<UseCase> readBySubject(DatasetHandle handle, String subjectIriString, UseCaseCode code) {
+        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
             // A syntactically impossible identifier cannot match anything in the store -
             // report "not found" instead of building a malformed SPARQL query.
             return Optional.empty();
         }
-        String subject = SparqlTerms.iriRef(ucIri);
+        String subject = SparqlTerms.iriRef(subjectIriString);
         String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryLabel "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " a <" + USE_CASE_TYPE + "> ; "
@@ -286,7 +366,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         List<String> extensions = readExtensions(handle, subject);
 
         return Optional.of(new UseCase(
-                id,
+                new UseCaseId(ResourceId.of(subjectIriString)),
+                code,
                 literalOf(row, "title").getLexicalForm(),
                 literalOf(row, "goal").getLexicalForm(),
                 optionalLiteral(row, "scope"),
@@ -393,22 +474,18 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     // ---- helpers -----------------------------------------------------------------------
 
+    /**
+     * Mints an opaque IRI for a derived step resource from the same kernel scheme as the use
+     * case root. A step is a value object with no stable identity - see the class-level note.
+     */
+    private IRI mintStepIri() {
+        return rdf.createIRI(resourceIdFactory.newId().value());
+    }
+
     private void addOptional(Graph graph, IRI subject, String property, String value) {
         if (value != null) {
             graph.add(subject, rdf.createIRI(property), rdf.createLiteral(value));
         }
-    }
-
-    private static String useCaseIri(UseCaseId id) {
-        return USE_CASE_INSTANCE_NAMESPACE + id.value();
-    }
-
-    private static String mainStepIri(IRI useCaseIri, int position) {
-        return useCaseIri.getIRIString() + "/step/" + position;
-    }
-
-    private static String extensionStepIri(IRI useCaseIri, int position) {
-        return useCaseIri.getIRIString() + "/extension/" + position;
     }
 
     private static String optionalLiteral(BindingSet row, String name) {
