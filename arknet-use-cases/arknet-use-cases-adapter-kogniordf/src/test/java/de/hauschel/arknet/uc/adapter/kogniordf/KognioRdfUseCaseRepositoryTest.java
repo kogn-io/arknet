@@ -20,6 +20,7 @@ import io.kogn.rdf.dataset.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;

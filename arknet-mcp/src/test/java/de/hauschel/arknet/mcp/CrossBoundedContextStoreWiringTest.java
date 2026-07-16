@@ -13,12 +13,12 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.kogn.rdf.dataset.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
-import de.hauschel.arknet.uc.adapter.kogniordf.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
 import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
@@ -172,8 +172,7 @@ class CrossBoundedContextStoreWiringTest {
                             RequirementType.FUNCTIONAL, null, null, null));
 
                     assertThatThrownBy(() -> requirements.linkTerm(WS, fr.id(), new TermRef("TERM-99")))
-                            .isInstanceOf(
-                                    de.hauschel.arknet.req.adapter.kogniordf.UnresolvedReferenceException.class)
+                            .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("TERM-99")
                             .hasMessageContaining("term_add");
 

@@ -116,3 +116,36 @@ Faellen die Antwort auf einen belegten Bedarf, nie auf eine Vermutung.
 - **Gate als Interface im Core, Implementierung je Adapter.** Verworfen: validate-before-commit ist
   eine Persistenz-Invariante, keine Domaenenregel; im Core waere es ein Port ohne fachlichen Sinn,
   und die Implementierungen blieben dupliziert.
+
+## Nachtrag 2026-07-16 (#63)
+
+Der `validationGraph`-Workaround der Out-Adapter (req, uc) -- eine volle Kopie des Kandidaten-
+Graphen plus synthetische Typ-Tripel fuer referenzierte Nachbar-Knoten, nur um sie durch das Gate
+zu schleusen -- wurde in einen Gate-Overload ueberfuehrt:
+`ShaclWriteGate.enforce(ReadableGraph candidate, ReadableGraph assertedContext)`. Das Gate merged
+`candidate` + `assertedContext` + `axioms` fuer die Validierung; persistiert wird weiterhin nur
+`candidate`, wie zuvor.
+
+Das bleibt mit Entscheidung 3 ("Kontextunterschiede sind Konstruktor-Zustand, kein Code im Gate")
+vereinbar: `assertedContext` ist ein **Parameter**, kein gate-internes Kontextwissen -- das Gate
+weiss weiterhin nicht, *welche* Nachbar-BC oder welcher Typ dahintersteckt. Welche Typ-Tripel
+synthetisiert werden (`skos:Concept` fuer Terms in req, `arkproc:Actor`/`arkreq:Requirement` fuer
+Actors/Requirements in uc), entscheidet weiterhin jede Adapter-Factory bzw. jedes `save()` selbst.
+Die bestehende Ein-Parameter-Methode `enforce(candidate)` bleibt erhalten und delegiert an
+`enforce(candidate, <leerer Graph>)`; der ul-Adapter, der keinen Nachbar-Kontext braucht, ruft sie
+unveraendert auf.
+
+Bei derselben Gelegenheit (#63) wurden zwei bislang je BC duplizierte Bausteine nach
+`arknet-persistence-support` gezogen, weil sie inzwischen n=2 (bzw. n=3 fuer das SPARQL-Escaping)
+erreicht hatten:
+
+- **`SparqlTerms`** (`escape`/`isValidIriReference`/`iriRef`) buendelt das SPARQL-String-Escaping
+  der Out-Adapter. Der mitgezogene Fix: `escape` behandelt jetzt auch LF/CR/TAB (`\n`/`\r`/`\t`),
+  nicht nur Backslash und Anfuehrungszeichen -- ein Literal mit eingebettetem Zeilenumbruch haette
+  sonst eine SPARQL-Query zerrissen.
+- **`UnresolvedReferenceException`** war wortgleich in req- und uc-Adapter dupliziert (Rule of
+  Three erfuellt); jetzt eine Klasse mit oeffentlichem Konstruktor (beide Adapter werfen sie aus
+  fremdem Package).
+
+Beide Klassen sind technologieneutral (kein RDF4J-Bezug) und aendern nichts an der
+RDF4J-Freiheit des Moduls.

@@ -20,6 +20,8 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.SparqlTerms;
+import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -119,7 +121,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(requirement, "requirement");
 
-        IRI subjectIri = rdf.createIRI(requirementIri(requirement.id()));
+        // Defense-in-depth: the requirement id's SHACL pattern already constrains it to a shape
+        // that serializes safely into an IRIREF, but that shape is enforced by the gate below,
+        // after this string is already built into a SPARQL query for the DELETE. Reject an
+        // impossible identifier before it ever reaches SPARQL string concatenation.
+        String subjectIriString = requirementIri(requirement.id());
+        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
+            throw new IllegalArgumentException(
+                    "requirement id yields an invalid IRI for SPARQL: " + subjectIriString);
+        }
+        IRI subjectIri = rdf.createIRI(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             // 1. Resolve every term reference strictly against the shared workspace store.
@@ -151,16 +162,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
             // 3. Structural gate, then replace-by-identity. The usesTerm shape carries an
             //    sh:class skos:Concept constraint, but the type triples of the referenced
-            //    terms live in the sibling terms graph, not in this candidate graph, so they
-            //    are supplied to the validation graph ONLY (never persisted here). This is
-            //    safe: the strict lookup above already proved each term exists and is a
-            //    concept - the lookup, not the shape, is what keeps the edge non-dangling.
-            Graph validationGraph = rdf.createGraph();
-            graph.stream().forEach(validationGraph::add);
+            //    terms live in the sibling terms graph, not in this candidate graph. They are
+            //    handed to the gate as a validation-only asserted context (never persisted
+            //    here). This is safe: the strict lookup above already proved each term exists
+            //    and is a concept - the lookup, not the shape, is what keeps the edge
+            //    non-dangling.
+            Graph assertedContext = rdf.createGraph();
             for (IRI termIri : termIris) {
-                validationGraph.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+                assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
             }
-            gate.enforce(validationGraph);
+            gate.enforce(graph, assertedContext);
 
             String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { <"
                     + subjectIri.getIRIString() + "> ?p ?o } }";
@@ -179,7 +190,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(id, "id");
 
-        String subject = "<" + requirementIri(id) + ">";
+        String iri = requirementIri(id);
+        if (!SparqlTerms.isValidIriReference(iri)) {
+            // A syntactically impossible identifier cannot match anything in the store -
+            // report "not found" instead of building a malformed SPARQL query.
+            return Optional.empty();
+        }
+        String subject = SparqlTerms.iriRef(iri);
         String query = "SELECT ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + subject + " a ?type ; "
@@ -263,7 +280,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * the next read-modify-write ({@code req_set_status}, {@code req_link_term}) erases the
      * dropped edge from the store for good. Every edge written through {@link #resolveTerm}
      * is joinable by construction, so this cannot bite via the MCP tools; an edge that entered
-     * the requirements graph some other way (store-first, ADR-005) can be lost. See issue #63.</p>
+     * the requirements graph some other way (store-first, ADR-005) can be lost. See issue #65.</p>
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
         String query = "SELECT ?termId WHERE { "
@@ -294,7 +311,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private IRI resolveTerm(DatasetHandle handle, WorkspaceId workspaceId, TermRef term) {
         String query = "SELECT ?term WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?term a <" + CONCEPT_TYPE + "> ; "
-                + "<" + IDENTIFIER_PROPERTY + "> \"" + escape(term.termId()) + "\" } }";
+                + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.termId()) + "\" } }";
         List<IRI> matches = handle.sparqlQuery().select(query)
                 .map(row -> iriOf(row, "term"))
                 .distinct()
@@ -313,10 +330,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     // ---- helpers -----------------------------------------------------------------------
-
-    private static String escape(String literal) {
-        return literal.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
 
     private static String requirementIri(RequirementId id) {
         return REQUIREMENT_INSTANCE_NAMESPACE + id.value();
