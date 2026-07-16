@@ -22,6 +22,8 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.SparqlTerms;
+import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -130,7 +132,16 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(useCase, "useCase");
 
-        IRI subjectIri = rdf.createIRI(useCaseIri(useCase.id()));
+        // Defense-in-depth: the use-case id's SHACL pattern already constrains it to a shape
+        // that serializes safely into an IRIREF, but that shape is enforced by the gate below,
+        // after this string is already built into SPARQL queries for read/delete. Reject an
+        // impossible identifier before it ever reaches SPARQL string concatenation.
+        String subjectIriString = useCaseIri(useCase.id());
+        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
+            throw new IllegalArgumentException(
+                    "use case id yields an invalid IRI for SPARQL: " + subjectIriString);
+        }
+        IRI subjectIri = rdf.createIRI(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             // 1. Resolve every label reference strictly against the shared workspace store.
@@ -188,20 +199,19 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // 5. Structural gate, then replace-by-identity (use case + all its derived steps).
             //    The shapes carry sh:class constraints on primaryActor (arkproc:Actor) and
             //    stepRealises (arkreq:Requirement). The type triples for those referenced nodes
-            //    live in the sibling requirements/terms graphs, not in this candidate graph, so
-            //    they are supplied to the validation graph ONLY (never persisted here). This is
-            //    safe: the strict lookup above already proved each reference exists and is of the
-            //    right kind.
-            Graph validationGraph = rdf.createGraph();
-            graph.stream().forEach(validationGraph::add);
-            validationGraph.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
+            //    live in the sibling requirements/terms graphs, not in this candidate graph.
+            //    They are handed to the gate as a validation-only asserted context (never
+            //    persisted here). This is safe: the strict lookup above already proved each
+            //    reference exists and is of the right kind.
+            Graph assertedContext = rdf.createGraph();
+            assertedContext.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
             for (IRI supporting : supportingActorIris) {
-                validationGraph.add(supporting, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
+                assertedContext.add(supporting, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
             }
             for (IRI reqIri : satisfies.values()) {
-                validationGraph.add(reqIri, VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
+                assertedContext.add(reqIri, VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
             }
-            gate.enforce(validationGraph);
+            gate.enforce(graph, assertedContext);
 
             String deleteExisting = "DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
                     + "GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o . "
@@ -247,7 +257,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private Optional<UseCase> readById(DatasetHandle handle, UseCaseId id) {
         String ucIri = useCaseIri(id);
-        String subject = "<" + ucIri + ">";
+        if (!SparqlTerms.isValidIriReference(ucIri)) {
+            // A syntactically impossible identifier cannot match anything in the store -
+            // report "not found" instead of building a malformed SPARQL query.
+            return Optional.empty();
+        }
+        String subject = SparqlTerms.iriRef(ucIri);
         String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryLabel "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " a <" + USE_CASE_TYPE + "> ; "
@@ -337,7 +352,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private IRI resolveRequirement(DatasetHandle handle, WorkspaceId workspaceId, RequirementRef ref) {
         String query = "SELECT ?req WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?req <" + IDENTIFIER_PROPERTY + "> \"" + escape(ref.label()) + "\" } }";
+                + "?req <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(ref.label()) + "\" } }";
         List<IRI> matches = handle.sparqlQuery().select(query)
                 .map(row -> iriOf(row, "req"))
                 .distinct()
@@ -357,7 +372,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private IRI resolveActor(DatasetHandle handle, WorkspaceId workspaceId, ActorRef actor) {
         String query = "SELECT ?actor WHERE { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?actor <" + PREF_LABEL_PROPERTY + "> \"" + escape(actor.label()) + "\" . "
+                + "?actor <" + PREF_LABEL_PROPERTY + "> \"" + SparqlTerms.escape(actor.label()) + "\" . "
                 + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } } }";
         List<IRI> matches = handle.sparqlQuery().select(query)
                 .map(row -> iriOf(row, "actor"))
@@ -394,10 +409,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private static String extensionStepIri(IRI useCaseIri, int position) {
         return useCaseIri.getIRIString() + "/extension/" + position;
-    }
-
-    private static String escape(String literal) {
-        return literal.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static String optionalLiteral(BindingSet row, String name) {

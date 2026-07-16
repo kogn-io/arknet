@@ -111,6 +111,45 @@ class ShaclWriteGateTest {
     }
 
     /**
+     * The other half of issue #63's validationGraph workaround: an {@code assertedContext}
+     * graph passed to {@link ShaclWriteGate#enforce(ReadableGraph, ReadableGraph)} must be
+     * merged into the validated data exactly like {@code axioms} - it is validation-only, never
+     * persisted (the gate persists nothing to begin with).
+     */
+    @Test
+    void mergesAssertedContextIntoValidatedData() {
+        RecordingValidation validation = new RecordingValidation(new ShaclReport(true, List.of()));
+        ShaclWriteGate gate = new ShaclWriteGate(validation, emptyGraph(), emptyGraph(),
+                ValidationOptions.defaults());
+        String contextSubject = "https://example.org/context";
+
+        gate.enforce(graphWith(SUBJECT), graphWith(contextSubject));
+
+        assertNotNull(validation.data);
+        assertEquals(2L, validation.data.size());
+        assertTrue(containsSubject(validation.data, SUBJECT), "candidate triple must be validated");
+        assertTrue(containsSubject(validation.data, contextSubject), "asserted context must be merged in");
+    }
+
+    /**
+     * {@link ShaclWriteGate#enforce(ReadableGraph)} must behave exactly like
+     * {@link ShaclWriteGate#enforce(ReadableGraph, ReadableGraph)} with an empty asserted
+     * context - the one-argument overload is a convenience delegate, not a different code path.
+     */
+    @Test
+    void enforceWithoutContextEqualsEnforceWithEmptyContext() {
+        RecordingValidation validation = new RecordingValidation(new ShaclReport(true, List.of()));
+        ShaclWriteGate gate = new ShaclWriteGate(validation, emptyGraph(), emptyGraph(),
+                ValidationOptions.defaults());
+
+        gate.enforce(graphWith(SUBJECT));
+
+        assertNotNull(validation.data);
+        assertEquals(1L, validation.data.size());
+        assertTrue(containsSubject(validation.data, SUBJECT));
+    }
+
+    /**
      * The gate must not accumulate state across writes - the ubiquitous-language adapter reuses
      * one gate instance for every term it persists.
      */
@@ -143,6 +182,8 @@ class ShaclWriteGateTest {
 
         ShaclWriteGate gate = gateReturning(new ShaclReport(true, List.of()));
         assertThrows(NullPointerException.class, () -> gate.enforce(null));
+        assertThrows(NullPointerException.class, () -> gate.enforce(null, emptyGraph()));
+        assertThrows(NullPointerException.class, () -> gate.enforce(graphWith(SUBJECT), null));
     }
 
     private ShaclWriteGate gateReturning(ShaclReport report) {

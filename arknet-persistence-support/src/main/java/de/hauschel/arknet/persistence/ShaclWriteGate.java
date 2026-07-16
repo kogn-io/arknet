@@ -35,6 +35,16 @@ import io.kogn.rdf.terms.SimpleRdf;
  * loaded shapes/axioms graphs are handed in by each adapter's repository factory, which stays
  * the only RDF4J-aware collaborator. That is why this module carries no RDF4J dependency even
  * though every one of its callers does.</p>
+ *
+ * <p><strong>Validation-only asserted context (issue #63).</strong>
+ * {@link #enforce(ReadableGraph, ReadableGraph)} accepts a second graph of triples that are
+ * merged into the validated data alongside {@code candidate} and {@code axioms}, but are never
+ * persisted - the gate persists nothing to begin with; persistence remains the calling
+ * adapter's job. This lets an adapter satisfy an {@code sh:class} constraint on a node that
+ * belongs to a sibling graph it does not own (e.g. a term or actor referenced by IRI) without
+ * copying its own candidate graph. It stays context-neutral: {@code assertedContext} is a
+ * <em>parameter</em> supplied per call, not context knowledge baked into the gate - which
+ * synthetic type triples to assert remains entirely the calling adapter's decision.</p>
  */
 public final class ShaclWriteGate {
 
@@ -71,9 +81,26 @@ public final class ShaclWriteGate {
      */
     public void enforce(ReadableGraph candidate) {
         Objects.requireNonNull(candidate, "candidate");
+        enforce(candidate, rdf.createGraph());
+    }
+
+    /**
+     * Validates the candidate graph together with a validation-only asserted context against
+     * the SHACL shapes and rejects it if it does not conform.
+     *
+     * @param candidate       the instance graph about to be persisted
+     * @param assertedContext additional triples merged into the validated data for this call
+     *                        only - never persisted (e.g. type triples for nodes the candidate
+     *                        references but does not itself own)
+     * @throws WriteConstraintViolationException if the merged data violates the shapes
+     */
+    public void enforce(ReadableGraph candidate, ReadableGraph assertedContext) {
+        Objects.requireNonNull(candidate, "candidate");
+        Objects.requireNonNull(assertedContext, "assertedContext");
 
         Graph data = rdf.createGraph();
         candidate.stream().forEach(data::add);
+        assertedContext.stream().forEach(data::add);
         axioms.stream().forEach(data::add);
 
         ShaclReport report = validation.validate(data, shapes, options);
