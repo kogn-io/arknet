@@ -27,6 +27,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -39,6 +40,7 @@ class StoreReportToolsTest {
 
     private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-report-test-fr-1";
+    private static final String TERM_1_IRI = "https://w3id.org/arknet/id/store-report-test-term-1";
 
     @TempDir
     Path storageDir;
@@ -59,8 +61,9 @@ class StoreReportToolsTest {
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null));
-        terms.save(WORKSPACE, new Term(
-                new TermId("TERM-1"), "Anmeldung", "The act of proving one's identity.", null));
+        terms.create(WORKSPACE, new Term(
+                new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
+                "The act of proving one's identity.", null));
 
         Prefixes prefixes = Prefixes.defaults();
         StoreReader reader = new StoreReader(lifecycle);
@@ -76,14 +79,15 @@ class StoreReportToolsTest {
     void storeOverviewDigestSpansBothBoundedContextsAndWritesHtml() throws Exception {
         String result = tools.storeOverview(null);
 
-        // Digest is generic and contains resources from both BCs. The requirement's identity
-        // is an opaque IRI (#68, unbound to any CURIE prefix), so the digest handle falls back
-        // to its dcterms:identifier ("FR-1") instead of the raw IRI; the glossary term's
-        // identity predates #68 and still shortens to its instance CURIE.
+        // Digest is generic and contains resources from both BCs. Both identities are opaque
+        // IRIs (requirement since #68, term since #71), unbound to any CURIE prefix, so the
+        // digest handle falls back to their dcterms:identifier ("FR-1" / "TERM-1") instead of
+        // the raw IRI.
         assertThat(result).contains("# Workspace noistill");
         assertThat(result).doesNotContain(FR_1_IRI);
+        assertThat(result).doesNotContain(TERM_1_IRI);
         assertThat(result).contains("FR-1").contains("-> resource_get(\"FR-1\")");
-        assertThat(result).contains("term:TERM-1").contains("-> resource_get(\"term:TERM-1\")");
+        assertThat(result).contains("TERM-1").contains("-> resource_get(\"TERM-1\")");
         assertThat(result).contains("# HTML report: ");
         assertThat(result).contains("no dangling references");
 

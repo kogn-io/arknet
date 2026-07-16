@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,14 +28,19 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
+import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
+import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
  * Integration test for {@link KognioRdfTermRepository} against an in-memory
@@ -63,13 +69,18 @@ class KognioRdfTermRepositoryTest {
         lifecycle.shutDownAll();
     }
 
+    /** Fresh, valid opaque identity - every test picks its own so ids never collide. */
+    private static TermId freshId() {
+        return new TermId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
+    }
+
     @Test
-    void savesAndFindsTermById() {
-        Term term = new Term(new TermId("TERM-1"), "Gutschrift",
+    void createsAndFindsTermByCode() {
+        Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift",
                 "Rueckerstattung eines bereits gezahlten Betrags.", null);
 
-        repository.save(WORKSPACE_A, term);
-        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+        repository.create(WORKSPACE_A, term);
+        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
 
         assertEquals(Optional.of(term), found);
         assertEquals("Gutschrift", found.orElseThrow().prefLabel());
@@ -77,13 +88,13 @@ class KognioRdfTermRepositoryTest {
     }
 
     @Test
-    void findAllContainsAllSavedTerms() {
-        Term first = new Term(new TermId("TERM-1"), "Gutschrift", "def a", null);
-        repository.save(WORKSPACE_A, first);
+    void findAllContainsAllCreatedTerms() {
+        Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        repository.create(WORKSPACE_A, first);
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
 
-        Term second = new Term(new TermId("TERM-2"), "Bestellung", "def b", null);
-        repository.save(WORKSPACE_A, second);
+        Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
+        repository.create(WORKSPACE_A, second);
 
         List<Term> all = repository.findAll(WORKSPACE_A);
         assertEquals(2, all.size());
@@ -92,29 +103,84 @@ class KognioRdfTermRepositoryTest {
     }
 
     @Test
-    void saveReplacesByIdentityInsteadOfDuplicating() {
-        TermId id = new TermId("TERM-1");
-        Term original = new Term(id, "Gutschrift", "Erste Definition.", null);
-        Term revised = new Term(id, "Gutschrift", "Ueberarbeitete Definition.", null);
+    void createRejectsAnAlreadyExistingIdentityAndPersistsNothingElse() {
+        TermId id = freshId();
+        Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        repository.create(WORKSPACE_A, term);
 
-        repository.save(WORKSPACE_A, original);
-        repository.save(WORKSPACE_A, revised);
+        Term collidingId = new Term(id, new TermCode("TERM-2"), "Bestellung", "def b", null);
 
-        assertEquals(Optional.of(revised), repository.findById(WORKSPACE_A, id));
+        assertThrows(ResourceAlreadyExistsException.class,
+                () -> repository.create(WORKSPACE_A, collidingId));
+        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        assertEquals(Optional.of(term), repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")));
+    }
+
+    /**
+     * Identity collision and code collision are distinct failure modes: two different, freshly
+     * minted identities both claiming {@code TERM-1} must be rejected by code, not by identity -
+     * the sibling requirements BC relies on {@code dcterms:identifier} being unique (#36).
+     */
+    @Test
+    void createRejectsADuplicateCodeUnderADifferentIdentityAndPersistsNothingElse() {
+        TermCode code = new TermCode("TERM-1");
+        Term first = new Term(freshId(), code, "Gutschrift", "def a", null);
+        repository.create(WORKSPACE_A, first);
+
+        Term collidingCode = new Term(freshId(), code, "Bestellung", "def b", null);
+
+        assertThrows(DuplicateTermCodeException.class,
+                () -> repository.create(WORKSPACE_A, collidingCode));
+        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        assertEquals(Optional.of(first), repository.findByCode(WORKSPACE_A, code));
+    }
+
+    @Test
+    void updateRejectsAMissingIdentity() {
+        Term neverCreated = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+
+        assertThrows(TermNotFoundException.class,
+                () -> repository.update(WORKSPACE_A, neverCreated));
+        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+    }
+
+    @Test
+    void updateReplacesByIdentityInsteadOfDuplicating() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        Term original = new Term(id, code, "Gutschrift", "Erste Definition.", null);
+        Term revised = new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null);
+
+        repository.create(WORKSPACE_A, original);
+        repository.update(WORKSPACE_A, revised);
+
+        assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, code));
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
         assertEquals(revised, repository.findAll(WORKSPACE_A).get(0));
     }
 
+    /** The opaque identity is preserved across an update - only the term's state changes. */
     @Test
-    void findByIdReturnsEmptyForUnknownId() {
-        assertEquals(Optional.empty(), repository.findById(WORKSPACE_A, new TermId("TERM-99")));
+    void updatePreservesTheOpaqueIdentity() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+
+        repository.update(WORKSPACE_A, new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null));
+
+        assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
+    }
+
+    @Test
+    void findByCodeReturnsEmptyForUnknownCode() {
+        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, new TermCode("TERM-99")));
     }
 
     @Test
     void workspacesAreIsolated() {
-        Term term = new Term(new TermId("TERM-1"), "Gutschrift", "def a", null);
+        Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
-        repository.save(WORKSPACE_A, term);
+        repository.create(WORKSPACE_A, term);
 
         assertTrue(repository.findAll(WORKSPACE_B).isEmpty());
     }
@@ -123,7 +189,7 @@ class KognioRdfTermRepositoryTest {
      * Gate-level regression test: {@code TermShape} targets {@code skos:Concept} directly (no
      * RDFS reasoning needed, unlike the requirements shapes), but the {@link Term} domain record
      * forbids a blank {@code prefLabel}, so no violation is reachable through
-     * {@link TermRepository#save}. This test bypasses the domain and drives the gate with a
+     * {@link TermRepository#create}. This test bypasses the domain and drives the gate with a
      * hand-built {@code skos:Concept} that has no {@code skos:prefLabel}, proving the shapes
      * actually load and {@code targetClass skos:Concept} fires (no silent pass).
      */
@@ -131,7 +197,7 @@ class KognioRdfTermRepositoryTest {
     void gateRejectsConceptWithoutPrefLabel() {
         ShaclWriteGate gate = KognioRdfTermRepositoryFactory.buildGate();
         RDF rdf = new SimpleRdf();
-        IRI subject = rdf.createIRI("https://w3id.org/arknet/model/term/TERM-INVALID");
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         Graph invalidConcept = rdf.createGraph();
         invalidConcept.add(subject, VocabRdf.TYPE, rdf.createIRI(SKOS_CONCEPT));
 
@@ -139,52 +205,55 @@ class KognioRdfTermRepositoryTest {
     }
 
     @Test
-    void savesAndFindsTermWithHumanActorFacet() {
-        Term term = new Term(new TermId("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
+    void createsAndFindsTermWithHumanActorFacet() {
+        TermId id = freshId();
+        Term term = new Term(id, new TermCode("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
 
-        repository.save(WORKSPACE_A, term);
-        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+        repository.create(WORKSPACE_A, term);
+        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
 
         assertEquals(Optional.of(term), found);
         ActorFacet facet = found.orElseThrow().actorFacet();
         assertEquals(ActorKind.HUMAN, facet.kind());
         assertEquals("Besteller", facet.role());
-        assertTrue(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#HumanActor"));
+        assertTrue(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#HumanActor"));
     }
 
     @Test
-    void savesAndFindsTermWithSystemActorFacet() {
-        Term term = new Term(new TermId("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
+    void createsAndFindsTermWithSystemActorFacet() {
+        TermId id = freshId();
+        Term term = new Term(id, new TermCode("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
                 new ActorFacet(ActorKind.SYSTEM, "PaymentService"));
 
-        repository.save(WORKSPACE_A, term);
-        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+        repository.create(WORKSPACE_A, term);
+        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
 
         assertEquals(Optional.of(term), found);
         ActorFacet facet = found.orElseThrow().actorFacet();
         assertEquals(ActorKind.SYSTEM, facet.kind());
         assertEquals("PaymentService", facet.role());
-        assertTrue(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#SystemActor"));
+        assertTrue(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#SystemActor"));
     }
 
     @Test
-    void savesAndFindsTermWithoutActorFacet() {
-        Term term = new Term(new TermId("TERM-1"), "Gutschrift", "def a", null);
+    void createsAndFindsTermWithoutActorFacet() {
+        TermId id = freshId();
+        Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
-        repository.save(WORKSPACE_A, term);
-        Optional<Term> found = repository.findById(WORKSPACE_A, new TermId("TERM-1"));
+        repository.create(WORKSPACE_A, term);
+        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
 
         assertNull(found.orElseThrow().actorFacet());
-        assertFalse(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#HumanActor"));
-        assertFalse(subjectHasType(WORKSPACE_A, "TERM-1", "https://w3id.org/arknet/process#SystemActor"));
+        assertFalse(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#HumanActor"));
+        assertFalse(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#SystemActor"));
     }
 
     @Test
     void findAllReconstructsActorFacet() {
-        Term withFacet = new Term(new TermId("TERM-1"), "Kunde", "def a",
+        Term withFacet = new Term(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
-        repository.save(WORKSPACE_A, withFacet);
+        repository.create(WORKSPACE_A, withFacet);
 
         List<Term> all = repository.findAll(WORKSPACE_A);
 
@@ -192,9 +261,9 @@ class KognioRdfTermRepositoryTest {
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
     }
 
-    private boolean subjectHasType(WorkspaceId workspaceId, String termId, String typeIri) {
+    private boolean subjectHasType(WorkspaceId workspaceId, TermId id, String typeIri) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
-                + "<https://w3id.org/arknet/model/term/" + termId + "> a <" + typeIri + "> } }";
+                + "<" + id.value().value() + "> a <" + typeIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().ask(query);
         }

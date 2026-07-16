@@ -7,30 +7,52 @@ import java.util.Optional;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
+import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
  * In-memory test double for {@link TermRepository}.
  *
  * <p>A hand-rolled fake (not a mock): it actually stores terms, keyed by workspace
- * then identity, so the service's policy can be exercised end-to-end. Insertion
- * order is preserved to make {@link #findAll(WorkspaceId)} assertions
- * deterministic.</p>
+ * then opaque identity, so the service's policy can be exercised end-to-end. Insertion
+ * order is preserved to make {@link #findAll(WorkspaceId)} assertions deterministic. It honours
+ * the same create/update contract as the real adapter (create rejects an existing identity or a
+ * duplicate code; update rejects a missing identity), so tests exercise the true port semantics.</p>
  */
 final class InMemoryTermRepository implements TermRepository {
 
     private final Map<WorkspaceId, Map<TermId, Term>> byWorkspace = new LinkedHashMap<>();
 
     @Override
-    public void save(WorkspaceId workspaceId, Term term) {
-        byWorkspace.computeIfAbsent(workspaceId, k -> new LinkedHashMap<>())
-                .put(term.id(), term);
+    public void create(WorkspaceId workspaceId, Term term) {
+        Map<TermId, Term> terms = byWorkspace.computeIfAbsent(workspaceId, k -> new LinkedHashMap<>());
+        if (terms.containsKey(term.id())) {
+            throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
+        }
+        if (terms.values().stream().anyMatch(t -> t.code().equals(term.code()))) {
+            throw new DuplicateTermCodeException(workspaceId, term.code());
+        }
+        terms.put(term.id(), term);
     }
 
     @Override
-    public Optional<Term> findById(WorkspaceId workspaceId, TermId id) {
-        return Optional.ofNullable(byWorkspace.getOrDefault(workspaceId, Map.of()).get(id));
+    public void update(WorkspaceId workspaceId, Term term) {
+        Map<TermId, Term> terms = byWorkspace.getOrDefault(workspaceId, Map.of());
+        if (!terms.containsKey(term.id())) {
+            throw new TermNotFoundException(workspaceId, term.code());
+        }
+        terms.put(term.id(), term);
+    }
+
+    @Override
+    public Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code) {
+        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+                .filter(t -> t.code().equals(code))
+                .findFirst();
     }
 
     @Override

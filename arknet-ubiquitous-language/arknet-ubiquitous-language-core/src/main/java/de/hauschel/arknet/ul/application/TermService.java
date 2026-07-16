@@ -4,12 +4,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -19,33 +21,40 @@ import de.hauschel.arknet.ul.domain.TermId;
  * driven port. The component is wired as a plain object (constructor injection) by
  * the composition root; there are deliberately no framework annotations here.</p>
  *
- * <p><strong>Policy.</strong> Identity is assigned as {@code TERM-N}, where {@code N}
- * is one above the highest running number currently used in the target workspace
- * (numbering is independent per workspace). The identity is deliberately independent
- * of the term's label, so relabeling never changes identity (a core SKOS principle).</p>
+ * <p><strong>Policy.</strong> Identity ({@link TermId}) is opaque and minted once per term via
+ * {@link ResourceIdFactory}; it never changes. The human-readable business code
+ * ({@link TermCode}, {@code TERM-N}) is assigned independently, where {@code N} is one above the
+ * highest running number currently used in the target workspace (numbering is independent per
+ * workspace). Keeping identity separate from both the code and the {@code skos:prefLabel} means
+ * relabeling never changes identity (a core SKOS principle).</p>
  */
 public class TermService implements AddTerm, ListTerms, GetTerm {
 
     private static final String ID_PREFIX = "TERM";
 
     private final TermRepository repository;
+    private final ResourceIdFactory resourceIdFactory;
 
     /**
      * Creates the service.
      *
-     * @param repository the driven persistence port (must not be {@code null})
+     * @param repository        the driven persistence port (must not be {@code null})
+     * @param resourceIdFactory mints the opaque identity of a newly added term (must not be
+     *                          {@code null})
      */
-    public TermService(TermRepository repository) {
+    public TermService(TermRepository repository, ResourceIdFactory resourceIdFactory) {
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
     }
 
     @Override
     public Term add(WorkspaceId workspaceId, NewTerm command) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
-        TermId id = nextId(workspaceId);
-        Term term = new Term(id, command.prefLabel(), command.definition(), command.actorFacet());
-        repository.save(workspaceId, term);
+        TermId id = new TermId(resourceIdFactory.newId());
+        TermCode code = nextCode(workspaceId);
+        Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
+        repository.create(workspaceId, term);
         return term;
     }
 
@@ -56,27 +65,27 @@ public class TermService implements AddTerm, ListTerms, GetTerm {
     }
 
     @Override
-    public Optional<Term> get(WorkspaceId workspaceId, TermId id) {
+    public Optional<Term> get(WorkspaceId workspaceId, TermCode code) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        Objects.requireNonNull(id, "id");
-        return repository.findById(workspaceId, id);
+        Objects.requireNonNull(code, "code");
+        return repository.findByCode(workspaceId, code);
     }
 
     /**
-     * Derives the next free identity in {@code workspaceId}: the highest running
+     * Derives the next free business code in {@code workspaceId}: the highest running
      * number currently in use, plus one (starting at 1).
      */
-    private TermId nextId(WorkspaceId workspaceId) {
+    private TermCode nextCode(WorkspaceId workspaceId) {
         int next = repository.findAll(workspaceId).stream()
-                .mapToInt(t -> runningNumber(t.id()))
+                .mapToInt(t -> runningNumber(t.code()))
                 .max()
                 .orElse(0) + 1;
-        return new TermId(ID_PREFIX + "-" + next);
+        return new TermCode(ID_PREFIX + "-" + next);
     }
 
-    /** Parses the running number from an id such as {@code TERM-7} (0 if not parseable). */
-    private static int runningNumber(TermId id) {
-        String value = id.value();
+    /** Parses the running number from a code such as {@code TERM-7} (0 if not parseable). */
+    private static int runningNumber(TermCode code) {
+        String value = code.value();
         int dash = value.lastIndexOf('-');
         if (dash < 0 || dash == value.length() - 1) {
             return 0;

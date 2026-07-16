@@ -143,8 +143,8 @@ public class ArknetMcpConfiguration {
     }
 
     @Bean
-    TermService termService(final TermRepository repository) {
-        return new TermService(repository);
+    TermService termService(final TermRepository repository, final ResourceIdFactory resourceIdFactory) {
+        return new TermService(repository, resourceIdFactory);
     }
 
     @Bean

@@ -2,6 +2,7 @@ package de.hauschel.arknet.ul.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,16 +11,17 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Policy tests for {@link TermService}: identity assignment, listing and lookup,
- * exercised against an in-memory fake repository.
+ * Policy tests for {@link TermService}: opaque identity minting, code assignment, listing and
+ * lookup-by-code, exercised against an in-memory fake repository.
  */
 class TermServiceTest {
 
@@ -31,27 +33,37 @@ class TermServiceTest {
     @BeforeEach
     void setUp() {
         repository = new InMemoryTermRepository();
-        service = new TermService(repository);
+        service = new TermService(repository, new UuidResourceIdFactory());
     }
 
     @Test
-    void addAssignsFirstIdentity() {
+    void addAssignsFirstCode() {
         Term added = service.add(WS, new NewTerm("Gutschrift",
                 "Rueckerstattung eines bereits gezahlten Betrags.", null));
 
-        assertEquals(new TermId("TERM-1"), added.id());
+        assertEquals(new TermCode("TERM-1"), added.code());
         assertEquals("Gutschrift", added.prefLabel());
         assertEquals("Rueckerstattung eines bereits gezahlten Betrags.", added.definition());
-        assertEquals(added, repository.findById(WS, added.id()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+    }
+
+    @Test
+    void addMintsAFreshOpaqueIdentityPerTerm() {
+        Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term second = service.add(WS, new NewTerm("Bestellung", "def b", null));
+
+        // Identity is opaque and minted once - never derived from the (sequential) code.
+        assertNotEquals(first.id(), second.id());
+        assertTrue(first.id().value().value().startsWith("https://"));
     }
 
     @Test
     void addNumbersRunSequentially() {
-        TermId first = service.add(WS, new NewTerm("Gutschrift", "def a", null)).id();
-        TermId second = service.add(WS, new NewTerm("Bestellung", "def b", null)).id();
+        TermCode first = service.add(WS, new NewTerm("Gutschrift", "def a", null)).code();
+        TermCode second = service.add(WS, new NewTerm("Bestellung", "def b", null)).code();
 
-        assertEquals(new TermId("TERM-1"), first);
-        assertEquals(new TermId("TERM-2"), second);
+        assertEquals(new TermCode("TERM-1"), first);
+        assertEquals(new TermCode("TERM-2"), second);
     }
 
     @Test
@@ -61,7 +73,7 @@ class TermServiceTest {
 
         Term inOther = service.add(other, new NewTerm("Bestellung", "def b", null));
 
-        assertEquals(new TermId("TERM-1"), inOther.id());
+        assertEquals(new TermCode("TERM-1"), inOther.code());
         assertTrue(service.list(other).stream().allMatch(t -> t.prefLabel().equals("Bestellung")));
         assertEquals(1, service.list(WS).size());
     }
@@ -80,15 +92,15 @@ class TermServiceTest {
 
     @Test
     void getReturnsPersistedTerm() {
-        TermId id = service.add(WS, new NewTerm("Gutschrift", "def a", null)).id();
+        TermCode code = service.add(WS, new NewTerm("Gutschrift", "def a", null)).code();
 
-        assertTrue(service.get(WS, id).isPresent());
-        assertEquals("Gutschrift", service.get(WS, id).orElseThrow().prefLabel());
+        assertTrue(service.get(WS, code).isPresent());
+        assertEquals("Gutschrift", service.get(WS, code).orElseThrow().prefLabel());
     }
 
     @Test
-    void getIsEmptyForUnknownId() {
-        assertFalse(service.get(WS, new TermId("TERM-99")).isPresent());
+    void getIsEmptyForUnknownCode() {
+        assertFalse(service.get(WS, new TermCode("TERM-99")).isPresent());
     }
 
     @Test
@@ -98,7 +110,7 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Kunde", "Person, die eine Bestellung aufgibt.", facet));
 
         assertEquals(facet, added.actorFacet());
-        assertEquals(facet, repository.findById(WS, added.id()).orElseThrow().actorFacet());
+        assertEquals(facet, repository.findByCode(WS, added.code()).orElseThrow().actorFacet());
     }
 
     @Test

@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
@@ -19,6 +20,7 @@ import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -83,7 +85,8 @@ class UbiquitousLanguageMcpToolsTest {
         @Override
         public Term add(WorkspaceId workspaceId, NewTerm command) {
             lastCommand = command;
-            return new Term(new TermId("TERM-1"), command.prefLabel(), command.definition(),
+            return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")),
+                    new TermCode("TERM-1"), command.prefLabel(), command.definition(),
                     command.actorFacet());
         }
 
@@ -93,7 +96,7 @@ class UbiquitousLanguageMcpToolsTest {
         }
 
         @Override
-        public Optional<Term> get(WorkspaceId workspaceId, TermId id) {
+        public Optional<Term> get(WorkspaceId workspaceId, TermCode code) {
             throw new UnsupportedOperationException();
         }
     }

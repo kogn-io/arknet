@@ -74,8 +74,8 @@ class ArknetMcpConfigurationTest {
                     Term created = service.add(WorkspaceId.DEFAULT,
                             new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null));
 
-                    assertThat(created.id().value()).isEqualTo("TERM-1");
-                    assertThat(service.get(WorkspaceId.DEFAULT, created.id()))
+                    assertThat(created.code().value()).isEqualTo("TERM-1");
+                    assertThat(service.get(WorkspaceId.DEFAULT, created.code()))
                             .isEqualTo(Optional.of(created));
                 });
     }
