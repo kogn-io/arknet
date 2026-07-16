@@ -16,27 +16,35 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
+import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
+import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
  * Out-adapter: {@link TermRepository} backed by the kognio-rdf substrate
  * ({@code io.kogn.rdf}, embeddable RDF dataset).
  *
- * <p>Maps a {@link Term} to a W3C SKOS concept with a fixed subject IRI
- * ({@code https://w3id.org/arknet/model/term/<id>}), stored in one named graph
- * shared by all terms of a workspace. Each term is typed {@code skos:Concept},
- * placed into a per-workspace glossary via {@code skos:inScheme}, and carries
- * {@code skos:prefLabel} (the term) and {@code skos:definition} (its meaning); the
- * running identity is additionally kept as {@code dcterms:identifier}. This choice
- * makes the model a native fit for kognio-rdf (SKOS concepts are its model) and for
- * arknet's own dogfood glossary.</p>
+ * <p>Maps a {@link Term} to a W3C SKOS concept whose subject is its opaque {@link TermId}
+ * (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
+ * business code or the label), stored in one named graph shared by all terms of a workspace.
+ * Each term is typed {@code skos:Concept}, placed into a per-workspace glossary via
+ * {@code skos:inScheme}, and carries {@code skos:prefLabel} (the term) and
+ * {@code skos:definition} (its meaning); the human-readable running code
+ * ({@link TermCode}, {@code TERM-1}) is additionally kept as {@code dcterms:identifier} -
+ * identity and label are deliberately different triples on the same subject. This choice makes
+ * the model a native fit for kognio-rdf (SKOS concepts are its model) and for arknet's own
+ * dogfood glossary.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
@@ -49,17 +57,34 @@ import de.hauschel.arknet.ul.domain.TermId;
  * {@code skos:ConceptScheme} per workspace ({@link #GLOSSARY_SCHEME}); a per-bounded-context
  * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
  *
- * <p><strong>SHACL write-gate.</strong> Every {@link #save(WorkspaceId, Term)} call validates
- * the candidate instance graph against the ubiquitous-language SHACL shapes via
- * {@link ShaclWriteGate} before starting the write transaction (symmetric to the requirements
- * adapter); a violation throws {@link WriteConstraintViolationException} and nothing is
- * persisted. The gate itself is technology-neutral - only
- * {@link KognioRdfTermRepositoryFactory} names RDF4J.</p>
+ * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
+ * minted once, "insert or replace by identity" is no longer one coherent operation.
+ * {@link #create} and {@link #update} each check whether the subject already exists
+ * <em>inside</em> the write transaction (an {@code ASK}) before writing - not via a separate
+ * {@code findByCode} call beforehand, which would leave a check-then-act race between the check
+ * and the write. {@link #create} rejects an existing subject with
+ * {@link ResourceAlreadyExistsException}; {@link #update} rejects a missing one with
+ * {@link TermNotFoundException}. An {@link #update} otherwise replaces the subject's triples
+ * wholesale (the same replace-by-identity mechanic the previous save-only contract used).</p>
+ *
+ * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
+ * {@code ASK} in the same transaction - by {@code dcterms:identifier}, not by subject - and
+ * rejects a match with {@link DuplicateTermCodeException}. This is deliberately a separate check
+ * and a separate exception from {@link ResourceAlreadyExistsException}: an opaque-identity
+ * collision is a programming error (identities are minted once and never reused), while a
+ * business-code collision (two terms both claiming {@code TERM-1}) is an expected, rejectable
+ * outcome a human can cause - and one a sibling bounded context relies on being unique, since
+ * {@code arkreq:usesTerm} resolves a term by its {@code dcterms:identifier} (#36).</p>
+ *
+ * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
+ * against the ubiquitous-language SHACL shapes via {@link ShaclWriteGate} before starting the
+ * write transaction (symmetric to the requirements adapter); a violation throws
+ * {@link WriteConstraintViolationException} and nothing is persisted. The gate itself is
+ * technology-neutral - only {@link KognioRdfTermRepositoryFactory} names RDF4J.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
 
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
-    private static final String TERM_INSTANCE_NAMESPACE = "https://w3id.org/arknet/model/term/";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
     private static final String GLOSSARY_SCHEME = "https://w3id.org/arknet/model/glossary";
     private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
@@ -92,23 +117,42 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public void save(WorkspaceId workspaceId, Term term) {
+    public void create(WorkspaceId workspaceId, Term term) {
+        write(workspaceId, term, true);
+    }
+
+    @Override
+    public void update(WorkspaceId workspaceId, Term term) {
+        write(workspaceId, term, false);
+    }
+
+    private void write(WorkspaceId workspaceId, Term term, boolean expectAbsent) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(term, "term");
 
-        IRI subjectIri = rdf.createIRI(termIri(term.id()));
+        // Defense-in-depth: ResourceId's own validation is looser than SPARQL's IRIREF grammar.
+        // Reject an impossible identity before it ever reaches SPARQL string concatenation.
+        String subjectIriString = term.id().value().value();
+        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
+            throw new IllegalArgumentException(
+                    "term id yields an invalid IRI for SPARQL: " + subjectIriString);
+        }
+        IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
         IRI schemeIri = rdf.createIRI(GLOSSARY_SCHEME);
+
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         graph.add(subjectIri, rdf.createIRI(IN_SCHEME_PROPERTY), schemeIri);
-        graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.id().value()));
+        graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.code().value()));
         graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), rdf.createLiteral(term.prefLabel()));
         graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), rdf.createLiteral(term.definition()));
         // The per-workspace glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
         // Optional actor facet: the same skos:Concept is additionally typed as an
-        // arkproc:Actor (#45). Added before the gate so the facet is validated too.
+        // arkproc:Actor (#45). Added before the gate so the facet is validated too. The facet
+        // hangs off the subject, so it moves with the now-opaque identity for free.
         ActorFacet actorFacet = term.actorFacet();
         if (actorFacet != null) {
             String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
@@ -120,13 +164,31 @@ public class KognioRdfTermRepository implements TermRepository {
 
         gate.enforce(graph);
 
-        String deleteExisting = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { <"
-                + subjectIri.getIRIString() + "> ?p ?o } }";
+        String askExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
+        String askCodeExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.code().value()) + "\" } }";
+        String deleteExisting = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
         IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update(deleteExisting);
+                boolean exists = tx.ask(askExists);
+                if (expectAbsent) {
+                    if (exists) {
+                        throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
+                    }
+                    // Identity is opaque and unique by construction, but the human-readable code
+                    // is a separate triple this ASK alone cannot rule out - check it here, inside
+                    // the same write transaction, so no other create() can race in between.
+                    if (tx.ask(askCodeExists)) {
+                        throw new DuplicateTermCodeException(workspaceId, term.code());
+                    }
+                } else if (!exists) {
+                    throw new TermNotFoundException(workspaceId, term.code());
+                }
+                if (exists) {
+                    tx.update(deleteExisting);
+                }
                 tx.add(graphIri, graph);
                 return null;
             });
@@ -134,24 +196,26 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public Optional<Term> findById(WorkspaceId workspaceId, TermId id) {
+    public Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(code, "code");
 
-        String query = "SELECT ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
+        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
-                + "<" + termIri(id) + "> a <" + CONCEPT_TYPE + "> ; "
+                + "?s a <" + CONCEPT_TYPE + "> ; "
+                + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" ; "
                 + "<" + PREF_LABEL_PROPERTY + "> ?prefLabel ; "
                 + "<" + DEFINITION_PROPERTY + "> ?definition . "
-                + "OPTIONAL { <" + termIri(id) + "> a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
-                + "OPTIONAL { <" + termIri(id) + "> a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
-                + "OPTIONAL { <" + termIri(id) + "> <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
+                + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
+                + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
+                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .findFirst()
                     .map(row -> new Term(
-                            id,
+                            new TermId(ResourceId.of(iriOf(row, "s").getIRIString())),
+                            code,
                             literalOf(row, "prefLabel").getLexicalForm(),
                             literalOf(row, "definition").getLexicalForm(),
                             actorFacetOf(row)));
@@ -162,8 +226,8 @@ public class KognioRdfTermRepository implements TermRepository {
     public List<Term> findAll(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
 
-        String query = "SELECT ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
-                + TERMS_GRAPH + "> { "
+        String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole "
+                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?s a <" + CONCEPT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
@@ -175,7 +239,8 @@ public class KognioRdfTermRepository implements TermRepository {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> new Term(
-                            new TermId(literalOf(row, "identifier").getLexicalForm()),
+                            new TermId(ResourceId.of(iriOf(row, "s").getIRIString())),
+                            new TermCode(literalOf(row, "identifier").getLexicalForm()),
                             literalOf(row, "prefLabel").getLexicalForm(),
                             literalOf(row, "definition").getLexicalForm(),
                             actorFacetOf(row)))
@@ -183,8 +248,9 @@ public class KognioRdfTermRepository implements TermRepository {
         }
     }
 
-    private static String termIri(TermId id) {
-        return TERM_INSTANCE_NAMESPACE + id.value();
+    private static IRI iriOf(BindingSet row, String name) {
+        return (IRI) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
     }
 
     private static Literal literalOf(BindingSet row, String name) {

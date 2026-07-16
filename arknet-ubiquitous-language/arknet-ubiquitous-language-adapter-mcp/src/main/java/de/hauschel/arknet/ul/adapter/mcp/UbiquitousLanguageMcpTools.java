@@ -14,7 +14,7 @@ import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Driving (in) adapter of the ubiquitous-language component: exposes the glossary
@@ -29,6 +29,12 @@ import de.hauschel.arknet.ul.domain.TermId;
  * wire any transport; that remains the concern of the composition root (arknet-mcp),
  * which declares this class as a bean so the Spring AI MCP annotation scanner
  * discovers the {@code @McpTool} methods automatically.</p>
+ *
+ * <p><strong>Identity vs. code.</strong> {@code term_get} takes a term identity as a plain
+ * {@code String} - what a human types, e.g. {@code TERM-1} - and maps it to a
+ * {@link TermCode}, never to the opaque {@link de.hauschel.arknet.ul.domain.TermId}. The
+ * identity itself is a store-internal detail that never needs to cross the MCP boundary;
+ * responses render the code back to the caller, not the underlying resource identity.</p>
  *
  * <p><strong>Workspace (one server = one workspace).</strong> Every in-port takes a
  * {@link WorkspaceId} routing key. This adapter is single-user/local: it operates
@@ -95,10 +101,10 @@ public final class UbiquitousLanguageMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id) {
-        final TermId termId = new TermId(id);
-        return getTerm.get(workspaceId, termId)
+        final TermCode code = new TermCode(id);
+        return getTerm.get(workspaceId, code)
                 .map(UbiquitousLanguageMcpTools::format)
-                .orElse("Term not found: " + termId.value());
+                .orElse("Term not found: " + code.value());
     }
 
     private static String format(final Term t) {
@@ -106,7 +112,7 @@ public final class UbiquitousLanguageMcpTools {
         final String actor = facet == null
                 ? ""
                 : " [actor:%s%s]".formatted(facet.kind(), facet.role() == null ? "" : " role=" + facet.role());
-        return "%s %s - %s%s".formatted(t.id().value(), t.prefLabel(), t.definition(), actor);
+        return "%s %s - %s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), actor);
     }
 
     private static String blankToNull(final String value) {

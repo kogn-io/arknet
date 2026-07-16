@@ -146,10 +146,10 @@ class CrossBoundedContextStoreWiringTest {
                             RequirementType.FUNCTIONAL, null, null, null));
                     Term order = terms.add(WS, new NewTerm("Order", "A customer's request to buy.", null));
 
-                    requirements.linkTerm(WS, fr.code(), new TermRef(order.id().value()));
+                    requirements.linkTerm(WS, fr.code(), new TermRef(order.code().value()));
 
                     assertThat(requirements.get(WS, fr.code()).orElseThrow().usesTerms())
-                            .containsExactly(new TermRef(order.id().value()));
+                            .containsExactly(new TermRef(order.code().value()));
                 });
     }
 

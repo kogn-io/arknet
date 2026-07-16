@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ResourceId;
+
 /**
  * Domain invariant tests for {@link Term}.
  *
@@ -13,13 +15,15 @@ import org.junit.jupiter.api.Test;
  */
 class TermTest {
 
-    private static final TermId ID = new TermId("TERM-1");
+    private static final TermId ID = new TermId(ResourceId.of("https://w3id.org/arknet/id/abc-123"));
+    private static final TermCode CODE = new TermCode("TERM-1");
 
     @Test
     void holdsItsValues() {
-        Term term = new Term(ID, "Gutschrift", "Rueckerstattung eines Betrags.", null);
+        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null);
 
         assertEquals(ID, term.id());
+        assertEquals(CODE, term.code());
         assertEquals("Gutschrift", term.prefLabel());
         assertEquals("Rueckerstattung eines Betrags.", term.definition());
         assertNull(term.actorFacet());
@@ -27,33 +31,38 @@ class TermTest {
 
     @Test
     void rejectsNullId() {
-        assertThrows(NullPointerException.class, () -> new Term(null, "Gutschrift", "def", null));
+        assertThrows(NullPointerException.class, () -> new Term(null, CODE, "Gutschrift", "def", null));
+    }
+
+    @Test
+    void rejectsNullCode() {
+        assertThrows(NullPointerException.class, () -> new Term(ID, null, "Gutschrift", "def", null));
     }
 
     @Test
     void rejectsNullPrefLabel() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, null, "def", null));
+        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, null, "def", null));
     }
 
     @Test
     void rejectsBlankPrefLabel() {
-        assertThrows(IllegalArgumentException.class, () -> new Term(ID, " ", "def", null));
+        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, " ", "def", null));
     }
 
     @Test
     void rejectsNullDefinition() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, "Gutschrift", null, null));
+        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, "Gutschrift", null, null));
     }
 
     @Test
     void rejectsBlankDefinition() {
-        assertThrows(IllegalArgumentException.class, () -> new Term(ID, "Gutschrift", " ", null));
+        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, "Gutschrift", " ", null));
     }
 
     @Test
     void holdsActorFacetWhenPresent() {
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
-        Term term = new Term(ID, "Kunde", "Person, die eine Bestellung aufgibt.", facet);
+        Term term = new Term(ID, CODE, "Kunde", "Person, die eine Bestellung aufgibt.", facet);
 
         assertEquals(facet, term.actorFacet());
     }

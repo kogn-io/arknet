@@ -4,8 +4,11 @@ import java.util.List;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
-import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 
 /**
  * Driven port: persistence capability the component needs from the outside.
@@ -18,25 +21,45 @@ import de.hauschel.arknet.ul.domain.TermId;
  * thus which glossary) a term belongs to. A local single-user adapter may treat it
  * as an implicit default; a remote/team adapter uses it to address one of several
  * workspaces.</p>
+ *
+ * <p><strong>Create vs. update.</strong> Identity is opaque and minted once (see
+ * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
+ * longer a coherent single operation: an identity either already exists (an update) or it does
+ * not (a create), and conflating the two would hide a caller bug (writing to an id nobody
+ * minted, or an id that was already used). {@link #create} and {@link #update} therefore make
+ * that distinction explicit at the port.</p>
  */
 public interface TermRepository {
 
     /**
-     * Persists the given term, inserting or replacing by identity.
+     * Persists a brand-new term whose identity does not yet exist in the workspace.
      *
      * @param workspaceId the workspace (architecture model) to store the term in
-     * @param term        the term to store
+     * @param term        the term to create
+     * @throws ResourceAlreadyExistsException if a term with this identity already exists
+     * @throws DuplicateTermCodeException     if another term already carries this term's
+     *                                        {@link TermCode} - identity collision and
+     *                                        business-label collision are distinct failure modes
      */
-    void save(WorkspaceId workspaceId, Term term);
+    void create(WorkspaceId workspaceId, Term term);
 
     /**
-     * Finds a term by its identity within a workspace.
+     * Replaces an existing term by identity.
+     *
+     * @param workspaceId the workspace (architecture model) the term lives in
+     * @param term        the term to store in place of the current one
+     * @throws TermNotFoundException if no term with this identity exists
+     */
+    void update(WorkspaceId workspaceId, Term term);
+
+    /**
+     * Finds a term by its human-readable business code within a workspace.
      *
      * @param workspaceId the workspace (architecture model) to look up the term in
-     * @param id          the term identity
+     * @param code        the term code (e.g. {@code TERM-1})
      * @return the term if present, otherwise {@link Optional#empty()}
      */
-    Optional<Term> findById(WorkspaceId workspaceId, TermId id);
+    Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code);
 
     /**
      * Returns all terms stored in a workspace glossary.
