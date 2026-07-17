@@ -24,7 +24,6 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
-import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
@@ -80,14 +79,17 @@ import de.hauschel.arknet.req.domain.TermRef;
  * reused), while a business-code collision (two requirements both claiming {@code FR-1}) is an
  * expected, rejectable outcome a human can cause and must be told about by name.</p>
  *
- * <p><strong>Strict cross-BC term resolution (issue #36).</strong> Requirements and
- * ubiquitous-language terms share one per-workspace store. On write every {@link TermRef} is
- * resolved against that store <em>before</em> anything is written: the term identity (e.g.
- * {@code TERM-1}) is looked up by {@code dcterms:identifier} among the {@code skos:Concept}s of
- * the glossary. An unknown or ambiguous identity aborts the write with a didactic
- * {@link UnresolvedReferenceException}; no dangling {@code arkreq:usesTerm} edge is ever
- * persisted. Resolution goes via the identifier, never the {@code skos:prefLabel}, so the
- * edge survives relabelling a term.</p>
+ * <p><strong>Term references arrive pre-resolved (issue #36, identity-carrying since #77).</strong>
+ * {@link TermRef} carries the term's opaque subject {@link ResourceId} directly - resolving a
+ * human-typed term code (e.g. {@code TERM-1}) against the shared workspace store, and rejecting
+ * an unknown or ambiguous code, is done once by {@code KognioRdfTermLookup} at the moment a term
+ * is linked (in the application service), not here on every write. This adapter therefore neither
+ * queries the sibling terms graph nor re-verifies that a referenced subject still denotes a
+ * {@code skos:Concept}; it trusts the identity it was handed, the same way it trusts {@code
+ * motivatedBy} without re-resolving it. It still asserts each referenced subject's type as
+ * {@code skos:Concept} in the SHACL write-gate's validation-only context (see below), because
+ * that assertion is what proved true at resolution time and is what the shape needs to fire
+ * correctly against a candidate graph that does not itself carry the term's type triple.</p>
  *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the requirements SHACL shapes via {@link ShaclWriteGate} before starting the write
@@ -100,10 +102,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
-    // Mirrors the graph IRI the ubiquitous-language out-adapter writes into. The bounded
-    // contexts share one workspace dataset; resolving a term means reading across into
-    // that sibling graph (see class-level strict-resolution note).
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
     private static final String USES_TERM_PROPERTY = ARKREQ_NAMESPACE + "usesTerm";
@@ -165,9 +163,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         String subject = SparqlTerms.iriRef(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            // 1. Resolve every term reference strictly against the shared workspace store.
+            // 1. Every term reference already carries its resolved identity (see class-level
+            //    note) - just validate it is SPARQL-safe, the same defense-in-depth applied to
+            //    the subject above.
             List<IRI> termIris = requirement.usesTerms().stream()
-                    .map(term -> resolveTerm(handle, workspaceId, term))
+                    .map(this::termIriFor)
                     .toList();
 
             // 2. Build the candidate graph.
@@ -196,9 +196,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             //    sh:class skos:Concept constraint, but the type triples of the referenced
             //    terms live in the sibling terms graph, not in this candidate graph. They are
             //    handed to the gate as a validation-only asserted context (never persisted
-            //    here). This is safe: the strict lookup above already proved each term exists
-            //    and is a concept - the lookup, not the shape, is what keeps the edge
-            //    non-dangling.
+            //    here). This is safe: the term was already proven to exist and be a concept at
+            //    the moment it was resolved (KognioRdfTermLookup, called once from the
+            //    application service when the term was linked) - the lookup, not the shape, is
+            //    what keeps the edge non-dangling; this adapter no longer re-verifies it.
             Graph assertedContext = rdf.createGraph();
             for (IRI termIri : termIris) {
                 assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
@@ -210,17 +211,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirement.code().value())
                     + "\" } }";
             String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
-            // 4. Complement of the readUsesTerms join (issue #65): finds this subject's
-            //    usesTerm edges whose target has no dcterms:identifier in the terms graph, i.e.
-            //    exactly the edges readUsesTerms cannot bind and findByCode/findAll therefore
-            //    never put into requirement.usesTerms(). Only ever run on update - see the
-            //    exists-guard below, where exists == true implies expectAbsent == false because
-            //    the expectAbsent branch throws before reaching it, so create's subject (which
-            //    by contract cannot exist yet) never runs this query.
+            // 4. Reduced complement (issue #77) of what readUsesTerms can now read: since reading
+            //    no longer joins into the terms graph (a usesTerm edge's target IRI *is* the
+            //    TermRef, no re-derivation needed), the only edges Requirement#usesTerms() can
+            //    never carry are ones whose target is not an IRI at all - a store-first
+            //    (ADR-005) edge may legally point at a blank node ([ a skos:Concept ]), which
+            //    ResourceId cannot represent. This finds exactly those. Only ever run on update -
+            //    see the exists-guard below, where exists == true implies expectAbsent == false
+            //    because the expectAbsent branch throws before reaching it, so create's subject
+            //    (which by contract cannot exist yet) never runs this query.
             String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                     + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
-                    + "FILTER NOT EXISTS { GRAPH <" + TERMS_GRAPH + "> { ?term <" + IDENTIFIER_PROPERTY
-                    + "> ?id } } }";
+                    + "FILTER(!isIRI(?term)) }";
             IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
             handle.transactor().inTransaction(tx -> {
@@ -244,8 +246,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 // the ASKs above deliberately avoid. The binding is read as a bare RDFTerm, not
                 // cast to IRI: arkreq:usesTerm carries no sh:nodeKind constraint, so its target
                 // is RDF-legally allowed to be a blank node, and a store-first edge can and does
-                // point at one. Casting here would trade #65's silent data loss for a crash on
-                // every update of the affected requirement - a regression, not a fix.
+                // point at one - exactly the non-IRI target selectUnjoinableUsesTerms filters
+                // for. Casting here would trade #65's silent data loss for a crash on every
+                // update of the affected requirement - a regression, not a fix.
                 List<RDFTerm> unjoinableUsesTerms = exists
                         ? tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term")).toList()
                         : List.of();
@@ -255,9 +258,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 tx.add(graphIri, graph);
                 // 5. Re-attach the preserved edges only after the gate has already run and the
                 //    rewritten graph is committed - never mixed into `graph` before
-                //    gate.enforce above. A preserved edge's target has, by construction, no
-                //    dcterms:identifier and therefore no asserted type in this write's
-                //    assertedContext (built from the strictly resolved termIris only); feeding
+                //    gate.enforce above. A preserved edge's target is, by construction, not an
+                //    IRI and therefore cannot appear in this write's assertedContext (built from
+                //    the termIris in requirement.usesTerms() only, which are always IRIs); feeding
                 //    it to the gate would fail the usesTerm shape's sh:class skos:Concept
                 //    constraint and block every future update of this requirement. Appending it
                 //    here instead is safe precisely because nothing new is introduced - the edge
@@ -358,69 +361,59 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     // ---- usesTerm reading --------------------------------------------------------------
 
     /**
-     * Reads the {@code arkreq:usesTerm} edges of one requirement back as term identities.
+     * Reads the {@code arkreq:usesTerm} edges of one requirement back as term references.
      *
-     * <p>The edge points at the term's IRI; its {@code dcterms:identifier} lives in the
-     * sibling terms graph, so this joins across both graphs. Ordered by identity, because RDF
-     * has no intrinsic statement order and {@link Requirement} compares its {@code usesTerms}
-     * list positionally.</p>
+     * <p><strong>No longer a join (issue #77).</strong> The edge's target IRI <em>is</em> the
+     * {@link TermRef} - {@link TermRef#value()} wraps it directly - so this reads only the
+     * requirements graph; the sibling terms graph is never consulted here. Ordered by the
+     * target IRI, because RDF has no intrinsic statement order and {@link Requirement} compares
+     * its {@code usesTerms} list positionally.</p>
      *
-     * <p><strong>The join is lossy, but the loss is no longer destructive (issue #65).</strong>
-     * An edge whose target carries no {@code dcterms:identifier} in the terms graph binds no
-     * row and drops out here - {@link Requirement#usesTerms()} never reflects it, and there is
-     * no way for a caller to even ask to keep it, since it is not part of the record. {@link
-     * #write} nonetheless survives it: on an update it separately queries, inside the same
-     * write transaction, for exactly the edges this join cannot bind and re-attaches them after
-     * rewriting the subject's triples - so a read-modify-write ({@code req_set_status},
-     * {@code req_link_term}) carries the dropped edge along instead of erasing it. Every edge
-     * written through {@link #resolveTerm} is joinable by construction, so this cannot bite via
-     * the MCP tools; an edge that entered the requirements graph some other way (store-first,
-     * ADR-005) remains invisible to every read but no longer dies on the next write.</p>
+     * <p><strong>Still lossy for one, narrower case.</strong> {@code arkreq:usesTerm} carries no
+     * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
+     * node - which {@link de.hauschel.arknet.kernel.ResourceId} cannot represent. The
+     * {@code FILTER(isIRI(?term))} below excludes exactly that case; {@link
+     * Requirement#usesTerms()} never reflects such an edge. {@link #write} nonetheless survives
+     * it: on an update it separately queries, inside the same write transaction, for exactly the
+     * edges that are not IRIs and re-attaches them after rewriting the subject's triples (issue
+     * #65) - so a read-modify-write ({@code req_set_status}, {@code req_link_term}) carries the
+     * dropped edge along instead of erasing it. Every edge written through {@code req_link_term}
+     * targets a resolved subject IRI by construction, so this cannot bite via the MCP tools.</p>
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
-        String query = "SELECT ?termId WHERE { "
+        String query = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
-                + "GRAPH <" + TERMS_GRAPH + "> { ?term <" + IDENTIFIER_PROPERTY + "> ?termId } } "
-                + "ORDER BY ?termId";
+                + "FILTER(isIRI(?term)) } ORDER BY ?term";
         return handle.sparqlQuery().select(query)
-                .map(row -> new TermRef(literalOf(row, "termId").getLexicalForm()))
+                .map(row -> new TermRef(ResourceId.of(iriOf(row, "term").getIRIString())))
                 .toList();
     }
 
-    /** Bulk variant of {@link #readUsesTerms}: all requirements' term identities in one query. */
+    /** Bulk variant of {@link #readUsesTerms}: all requirements' term references in one query. */
     private Map<String, List<TermRef>> readUsesTermsBySubject(DatasetHandle handle) {
-        String query = "SELECT ?s ?termId WHERE { "
+        String query = "SELECT ?s ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + USES_TERM_PROPERTY + "> ?term } "
-                + "GRAPH <" + TERMS_GRAPH + "> { ?term <" + IDENTIFIER_PROPERTY + "> ?termId } } "
-                + "ORDER BY ?s ?termId";
+                + "FILTER(isIRI(?term)) } ORDER BY ?s ?term";
         Map<String, List<TermRef>> bySubject = new LinkedHashMap<>();
         handle.sparqlQuery().select(query).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
-                .add(new TermRef(literalOf(row, "termId").getLexicalForm())));
+                .add(new TermRef(ResourceId.of(iriOf(row, "term").getIRIString()))));
         return bySubject;
     }
 
-    // ---- strict reference resolution ---------------------------------------------------
-
-    private IRI resolveTerm(DatasetHandle handle, WorkspaceId workspaceId, TermRef term) {
-        String query = "SELECT ?term WHERE { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?term a <" + CONCEPT_TYPE + "> ; "
-                + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.termId()) + "\" } }";
-        List<IRI> matches = handle.sparqlQuery().select(query)
-                .map(row -> iriOf(row, "term"))
-                .distinct()
-                .toList();
-        if (matches.isEmpty()) {
-            throw new UnresolvedReferenceException("Term '" + term.termId()
-                    + "' does not exist in workspace '" + workspaceId.value()
-                    + "'. Create it first with term_add before a requirement uses it.");
+    /**
+     * Converts an already-resolved {@link TermRef} to an {@link IRI} for writing, applying the
+     * same defense-in-depth SPARQL-safety check as the subject identity in {@link #write}:
+     * {@link de.hauschel.arknet.kernel.ResourceId}'s own validation is looser than SPARQL's
+     * IRIREF grammar.
+     */
+    private IRI termIriFor(TermRef term) {
+        String termIriString = term.value().value();
+        if (!SparqlTerms.isValidIriReference(termIriString)) {
+            throw new IllegalArgumentException(
+                    "term reference yields an invalid IRI for SPARQL: " + termIriString);
         }
-        if (matches.size() > 1) {
-            throw new UnresolvedReferenceException("Term identity '" + term.termId()
-                    + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
-                    + " matches). Reference a term by its unique dcterms:identifier.");
-        }
-        return matches.get(0);
+        return rdf.createIRI(termIriString);
     }
 
     // ---- helpers -----------------------------------------------------------------------

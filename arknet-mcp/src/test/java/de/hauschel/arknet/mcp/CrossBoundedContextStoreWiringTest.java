@@ -145,10 +145,10 @@ class CrossBoundedContextStoreWiringTest {
                             RequirementType.FUNCTIONAL, null, null, null));
                     Term order = terms.add(WS, new NewTerm("Order", "A customer's request to buy.", null));
 
-                    requirements.linkTerm(WS, fr.code(), new TermRef(order.code().value()));
+                    requirements.linkTerm(WS, fr.code(), order.code().value());
 
                     assertThat(requirements.get(WS, fr.code()).orElseThrow().usesTerms())
-                            .containsExactly(new TermRef(order.code().value()));
+                            .containsExactly(new TermRef(order.id().value()));
                 });
     }
 
@@ -170,7 +170,7 @@ class CrossBoundedContextStoreWiringTest {
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null));
 
-                    assertThatThrownBy(() -> requirements.linkTerm(WS, fr.code(), new TermRef("TERM-99")))
+                    assertThatThrownBy(() -> requirements.linkTerm(WS, fr.code(), "TERM-99"))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("TERM-99")
                             .hasMessageContaining("term_add");

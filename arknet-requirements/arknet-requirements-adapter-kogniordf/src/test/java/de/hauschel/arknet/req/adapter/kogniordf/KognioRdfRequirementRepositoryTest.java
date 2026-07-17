@@ -30,7 +30,6 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
@@ -280,13 +279,13 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void createsAndFindsUsesTermEdge() {
         givenTerm(WORKSPACE_A, "TERM-1");
-        Requirement requirement = requirementUsing(new TermRef("TERM-1"));
+        Requirement requirement = requirementUsing(termRef("TERM-1"));
 
         repository.create(WORKSPACE_A, requirement);
 
         assertEquals(Optional.of(requirement),
                 repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")));
-        assertEquals(List.of(new TermRef("TERM-1")),
+        assertEquals(List.of(termRef("TERM-1")),
                 repository.findAll(WORKSPACE_A).get(0).usesTerms());
     }
 
@@ -295,39 +294,31 @@ class KognioRdfRequirementRepositoryTest {
         givenTerm(WORKSPACE_A, "TERM-1");
         givenTerm(WORKSPACE_A, "TERM-2");
 
-        repository.create(WORKSPACE_A, requirementUsing(new TermRef("TERM-1"), new TermRef("TERM-2")));
+        repository.create(WORKSPACE_A, requirementUsing(termRef("TERM-1"), termRef("TERM-2")));
 
         List<TermRef> found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1"))
                 .orElseThrow().usesTerms();
         assertEquals(2, found.size());
-        assertTrue(found.containsAll(List.of(new TermRef("TERM-1"), new TermRef("TERM-2"))));
+        assertTrue(found.containsAll(List.of(termRef("TERM-1"), termRef("TERM-2"))));
     }
 
     /**
-     * The edge resolves via the term's {@code dcterms:identifier}, never its
-     * {@code skos:prefLabel} - so an unknown identity is rejected even though a concept with
-     * that text as a label exists.
+     * Issue #77: term references arrive pre-resolved. This adapter no longer looks the term up
+     * (that strict, identifier-based resolution now lives in {@code KognioRdfTermLookup}, called
+     * once by the application service when a term is linked) - it trusts the identity it is
+     * handed, the same way it trusts {@code motivatedBy} without re-resolving it. A target that
+     * does not exist at all in the store is therefore persisted just the same as one that does;
+     * see {@code KognioRdfTermLookupTest} for the strict-resolution behaviour this used to be
+     * (and still is, just one layer up).
      */
     @Test
-    void createRejectsAnUnknownTermAndPersistsNothing() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+    void createPersistsAUsesTermEdgeEvenWhenItsTargetDoesNotExistInTheStore() {
+        TermRef doesNotExist = termRef("TERM-99");
 
-        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> repository.create(WORKSPACE_A, requirementUsing(new TermRef("TERM-99"))));
+        repository.create(WORKSPACE_A, requirementUsing(doesNotExist));
 
-        assertTrue(ex.getMessage().contains("TERM-99"), ex.getMessage());
-        assertTrue(ex.getMessage().contains("term_add"), ex.getMessage());
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
-    }
-
-    /** A term of another workspace must not satisfy this workspace's reference. */
-    @Test
-    void createRejectsATermFromAnotherWorkspace() {
-        givenTerm(WORKSPACE_B, "TERM-1");
-
-        assertThrows(UnresolvedReferenceException.class,
-                () -> repository.create(WORKSPACE_A, requirementUsing(new TermRef("TERM-1"))));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+        assertEquals(List.of(doesNotExist),
+                repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow().usesTerms());
     }
 
     /**
@@ -339,7 +330,7 @@ class KognioRdfRequirementRepositoryTest {
     void usesTermEdgesSurviveAReplacingUpdate() {
         givenTerm(WORKSPACE_A, "TERM-1");
         RequirementCode code = new RequirementCode("FR-1");
-        repository.create(WORKSPACE_A, requirementUsing(new TermRef("TERM-1")));
+        repository.create(WORKSPACE_A, requirementUsing(termRef("TERM-1")));
 
         Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
@@ -349,14 +340,14 @@ class KognioRdfRequirementRepositoryTest {
 
         Requirement found = repository.findByCode(WORKSPACE_A, code).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
-        assertEquals(List.of(new TermRef("TERM-1")), found.usesTerms());
+        assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
     }
 
     @Test
     void unlinkingATermRemovesTheEdge() {
         givenTerm(WORKSPACE_A, "TERM-1");
         RequirementCode code = new RequirementCode("FR-1");
-        Requirement created = requirementUsing(new TermRef("TERM-1"));
+        Requirement created = requirementUsing(termRef("TERM-1"));
         repository.create(WORKSPACE_A, created);
 
         repository.update(WORKSPACE_A, new Requirement(created.id(), created.code(), created.title(),
@@ -399,49 +390,51 @@ class KognioRdfRequirementRepositoryTest {
         assertTrue(ex.getMessage().contains("usesTerm"), ex.getMessage());
     }
 
-    // ---- usesTerm: store-first edges the strict read cannot join (#65) -----------------
+    // ---- usesTerm: reading is identity-based, not join-based, since #77 -----------------
 
     /**
-     * Store-first regression test for #65: an edge that entered the requirements graph via
-     * raw SPARQL (ADR-005), pointing at a term the strict read cannot join (no
-     * {@code dcterms:identifier} in the terms graph), must not be erased by the next
-     * read-modify-write. {@link #update} replaces the subject's triples wholesale from the
-     * record it was handed - and this edge is not, and cannot be, part of that record. The
-     * read stays lossy by design (the edge is simply invisible to
-     * {@link Requirement#usesTerms()}); what must no longer happen is that the loss becomes
-     * destructive.
+     * Issue #77 fixes the actual defect behind #65: {@link #readUsesTerms} no longer joins into
+     * the terms graph at all, so a target's missing {@code dcterms:identifier} can no longer
+     * hide the edge. What used to require the {@code write()} preservation mechanism (below) is
+     * now handled by the ordinary read-and-replace path, without any special-casing.
      */
     @Test
-    void storeFirstUsesTermEdgeWithoutIdentifierSurvivesAReplacingUpdate() {
-        String orphanTermIri = givenTermWithoutIdentifier(WORKSPACE_A);
+    void usesTermEdgeToATermWithoutIdentifierIsReadableAndSurvivesAnOrdinaryUpdate() {
+        String termIri = givenTermWithoutIdentifier(WORKSPACE_A);
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = requirementUsing();
         repository.create(WORKSPACE_A, created);
-        givenUsesTermEdge(WORKSPACE_A, created.id(), orphanTermIri);
+        givenUsesTermEdge(WORKSPACE_A, created.id(), termIri);
+        TermRef expected = new TermRef(ResourceId.of(termIri));
 
         Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
-        assertEquals(List.of(), reloaded.usesTerms(), "unjoinable edge must stay invisible to the read");
+        assertEquals(List.of(expected), reloaded.usesTerms(),
+                "reading no longer joins into the terms graph, so a missing dcterms:identifier "
+                        + "on the target no longer hides the edge");
 
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms());
         repository.update(WORKSPACE_A, accepted);
 
-        assertEquals(1, countUsesTermEdges(WORKSPACE_A, created.id(), orphanTermIri),
-                "store-first edge must survive the replacing update, even though it was never read");
+        assertEquals(List.of(expected), repository.findByCode(WORKSPACE_A, code).orElseThrow().usesTerms(),
+                "the edge is now part of the ordinary record, carried forward by the replacing "
+                        + "update without needing the #65 preservation mechanism at all");
     }
+
+    // ---- usesTerm: store-first edges to a non-IRI target the strict read cannot represent ----
 
     /**
      * Store-first regression test: {@code arkreq:usesTerm} is not range-constrained to
      * {@code IRI} at the RDF level (the SHACL {@code sh:class skos:Concept} constraint accepts
      * a blank node just as readily as an IRI), so a store-first edge can legally target a
      * blank node - {@code [ a skos:Concept ]} written directly into the requirements graph.
-     * Such a target never carries a {@code dcterms:identifier} in the terms graph (it typically
-     * is not even in the terms graph), so it is exactly the kind of edge the preservation query
-     * in {@code write()} must capture. Casting the captured binding to {@link IRI} would throw
-     * a {@link ClassCastException} on a blank node, turning the previously silent data loss of
-     * issue #65 into a crash on every {@link #update} of the affected requirement - a
-     * regression, not a fix.
+     * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent a blank node, so it is
+     * exactly the kind of edge the preservation query in {@code write()} must still capture
+     * (issue #65, narrowed to this one case by #77). Casting the captured binding to {@link IRI}
+     * would throw a {@link ClassCastException} on a blank node, turning the previously silent
+     * data loss of issue #65 into a crash on every {@link #update} of the affected requirement -
+     * a regression, not a fix.
      */
     @Test
     void storeFirstUsesTermEdgeToABlankNodeSurvivesAReplacingUpdateWithoutCrashing() {
@@ -464,16 +457,16 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Preserving an unreadable edge must not duplicate a joinable one. Both the ordinary
-     * rewrite and the preservation query run against the same subject inside the same write
-     * transaction; this pins that a joinable edge - which the preservation query's
-     * {@code FILTER NOT EXISTS} must exclude - is still written exactly once.
+     * Preserving a non-IRI-target edge must not duplicate an ordinary IRI-target one. Both the
+     * ordinary rewrite and the preservation query run against the same subject inside the same
+     * write transaction; this pins that an IRI-target edge - which the preservation query's
+     * {@code FILTER(!isIRI(?term))} must exclude - is still written exactly once.
      */
     @Test
-    void joinableUsesTermEdgeIsNotDuplicatedByPreservation() {
+    void ordinaryUsesTermEdgeIsNotDuplicatedByPreservation() {
         givenTerm(WORKSPACE_A, "TERM-1");
         RequirementCode code = new RequirementCode("FR-1");
-        repository.create(WORKSPACE_A, requirementUsing(new TermRef("TERM-1")));
+        repository.create(WORKSPACE_A, requirementUsing(termRef("TERM-1")));
 
         Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
@@ -489,6 +482,11 @@ class KognioRdfRequirementRepositoryTest {
         return new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, List.of(terms));
+    }
+
+    /** Builds the {@link TermRef} a term written by {@link #givenTerm} resolves to. */
+    private static TermRef termRef(String termId) {
+        return new TermRef(ResourceId.of("https://w3id.org/arknet/model/term/" + termId));
     }
 
     /**
@@ -514,9 +512,9 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Writes a glossary term into the sibling terms graph <em>without</em> a
      * {@code dcterms:identifier} - unreachable via {@code term_add}/{@link #givenTerm}, but
-     * reachable store-first (ADR-005). {@code resolveTerm} cannot resolve such a concept (no
-     * identity to look up by), so a test wiring an edge to it must do so directly per raw
-     * SPARQL as well. Returns the term's IRI for that purpose.
+     * reachable store-first (ADR-005). {@code KognioRdfTermLookup} cannot resolve such a concept
+     * by code (no identifier to look up by), so a test wiring an edge to it must do so directly
+     * per raw SPARQL as well. Returns the term's IRI for that purpose.
      */
     private String givenTermWithoutIdentifier(WorkspaceId workspaceId) {
         String termIri = "https://w3id.org/arknet/model/term/" + UUID.randomUUID();
@@ -534,8 +532,8 @@ class KognioRdfRequirementRepositoryTest {
 
     /**
      * Writes an {@code arkreq:usesTerm} edge straight into the requirements graph - the
-     * store-first path (ADR-005) that bypasses {@code resolveTerm} entirely, so it can point
-     * at a term the strict resolver would reject.
+     * store-first path (ADR-005), unmediated by {@code req_link_term}/{@code KognioRdfTermLookup},
+     * so it can point at a term the strict lookup would reject by code.
      */
     private void givenUsesTermEdge(WorkspaceId workspaceId, RequirementId subjectId, String termIri) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
@@ -568,8 +566,8 @@ class KognioRdfRequirementRepositoryTest {
      * Writes an {@code arkreq:usesTerm} edge straight into the requirements graph, targeting a
      * freshly minted anonymous blank node typed as a {@code skos:Concept} - RDF-legal (the
      * property carries no {@code sh:nodeKind} constraint forcing an IRI object) and reachable
-     * only store-first, never via {@code resolveTerm}, which looks concepts up by
-     * {@code dcterms:identifier} and therefore cannot even address a blank node.
+     * only store-first, never via {@code req_link_term}/{@code KognioRdfTermLookup}, which
+     * resolve a code to an IRI and therefore cannot even address a blank node.
      */
     private void givenUsesTermEdgeToFreshBlankNodeConcept(WorkspaceId workspaceId, RequirementId subjectId) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "

@@ -22,13 +22,17 @@ class RequirementTest {
     private static final RequirementId ID =
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
     private static final RequirementCode CODE = new RequirementCode("FR-1");
+    private static final TermRef TERM_1 =
+            new TermRef(ResourceId.of("https://w3id.org/arknet/id/22222222-2222-2222-2222-222222222222"));
+    private static final TermRef TERM_2 =
+            new TermRef(ResourceId.of("https://w3id.org/arknet/id/33333333-3333-3333-3333-333333333333"));
 
     @Test
     void holdsItsFields() {
         Requirement req = new Requirement(ID, CODE, "User can log in",
                 "The system shall let a registered user authenticate with email and password.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
-                "https://w3id.org/arknet/model/goal/secure-login", null, List.of(new TermRef("TERM-1")));
+                "https://w3id.org/arknet/model/goal/secure-login", null, List.of(TERM_1));
 
         assertEquals(ID, req.id());
         assertEquals(CODE, req.code());
@@ -40,7 +44,7 @@ class RequirementTest {
         assertEquals(Priority.MUST_HAVE, req.priority());
         assertEquals("https://w3id.org/arknet/model/goal/secure-login", req.motivatedBy());
         assertNull(req.qualityCategory());
-        assertEquals(List.of(new TermRef("TERM-1")), req.usesTerms());
+        assertEquals(List.of(TERM_1), req.usesTerms());
     }
 
     @Test
@@ -63,14 +67,14 @@ class RequirementTest {
 
     @Test
     void usesTermsAreDefensivelyCopied() {
-        List<TermRef> terms = new ArrayList<>(List.of(new TermRef("TERM-1")));
+        List<TermRef> terms = new ArrayList<>(List.of(TERM_1));
         Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, terms);
 
-        terms.add(new TermRef("TERM-2"));
+        terms.add(TERM_2);
 
-        assertEquals(List.of(new TermRef("TERM-1")), req.usesTerms());
-        assertThrows(UnsupportedOperationException.class, () -> req.usesTerms().add(new TermRef("TERM-3")));
+        assertEquals(List.of(TERM_1), req.usesTerms());
+        assertThrows(UnsupportedOperationException.class, () -> req.usesTerms().add(TERM_2));
     }
 
     @Test
@@ -130,12 +134,13 @@ class RequirementTest {
 
     @Test
     void termRefHoldsItsIdentity() {
-        assertEquals("TERM-1", new TermRef("TERM-1").termId());
+        ResourceId termId = ResourceId.of("https://w3id.org/arknet/id/44444444-4444-4444-4444-444444444444");
+
+        assertEquals(termId, new TermRef(termId).value());
     }
 
     @Test
-    void termRefRejectsNullOrBlankIdentity() {
+    void termRefRejectsNullIdentity() {
         assertThrows(NullPointerException.class, () -> new TermRef(null));
-        assertThrows(IllegalArgumentException.class, () -> new TermRef(" "));
     }
 }

@@ -16,9 +16,11 @@ import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfTermLookup;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
@@ -44,7 +46,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       persistence. The repository is assembled through
  *       {@link KognioRdfRequirementRepositoryFactory} so this composition root stays
  *       free of any direct RDF4J dependency; it only supplies the storage directory
- *       ({@code arknet.rdf.storage}).</li>
+ *       ({@code arknet.rdf.storage}). {@code req_link_term}'s cross-BC code-to-identity
+ *       resolution (issue #77) is a separate {@link KognioRdfTermLookup} bean over the same
+ *       shared dataset lifecycle.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
  *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
  *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
@@ -101,6 +105,18 @@ public class ArknetMcpConfiguration {
     }
 
     /**
+     * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
+     * subject identity - the strict cross-BC lookup {@code req_link_term} needs (issue #77).
+     * Acquires datasets from the same shared {@link DatasetLifecycle} as
+     * {@link #requirementRepository}, so it reads the same workspace the ubiquitous-language
+     * hexagon writes into.
+     */
+    @Bean
+    TermLookup requirementTermLookup(final DatasetLifecycle datasetLifecycle) {
+        return new KognioRdfTermLookup(datasetLifecycle);
+    }
+
+    /**
      * Mints the opaque {@link de.hauschel.arknet.kernel.ResourceId} of newly added resources
      * (requirements, glossary terms, use cases and their derived step nodes). A single bean so
      * every write path mints from the same kernel-owned scheme (see {@link UuidResourceIdFactory}).
@@ -112,8 +128,9 @@ public class ArknetMcpConfiguration {
 
     @Bean
     RequirementService requirementService(
-            final RequirementRepository repository, final ResourceIdFactory resourceIdFactory) {
-        return new RequirementService(repository, resourceIdFactory);
+            final RequirementRepository repository, final ResourceIdFactory resourceIdFactory,
+            final TermLookup requirementTermLookup) {
+        return new RequirementService(repository, resourceIdFactory, requirementTermLookup);
     }
 
     /**
