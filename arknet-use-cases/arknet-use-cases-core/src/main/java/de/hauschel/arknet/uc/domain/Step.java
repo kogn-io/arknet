@@ -13,9 +13,9 @@ import java.util.Objects;
  * @param position the 1-based position of the step in the flow ({@code >= 1})
  * @param text     the non-blank step description (an actor/system action)
  * @param realises the functional requirements this step realises; {@code 0..n},
- *                 held as bare label references (never {@code null}; a {@code null}
- *                 argument is normalised to an empty list). The list is copied
- *                 defensively and is immutable.
+ *                 held as {@link RequirementRef} (subject-identity references, never
+ *                 {@code null}; a {@code null} argument is normalised to an empty
+ *                 list). The list is copied defensively and is immutable.
  */
 public record Step(int position, String text, List<RequirementRef> realises) {
 
