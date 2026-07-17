@@ -24,6 +24,7 @@ import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
@@ -48,7 +49,10 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       free of any direct RDF4J dependency; it only supplies the storage directory
  *       ({@code arknet.rdf.storage}). {@code req_link_term}'s cross-BC code-to-identity
  *       resolution (issue #77) is a separate {@link KognioRdfTermLookup} bean over the same
- *       shared dataset lifecycle.</li>
+ *       shared dataset lifecycle. {@code req_get}/{@code req_list}'s reverse direction (identity
+ *       back to a displayable business code) is not a second store adapter - it is the
+ *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
+ *       {@link RequirementMcpTools} (#77 nachtrag).</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
  *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
  *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
@@ -146,10 +150,18 @@ public class ArknetMcpConfiguration {
         return new WorkspaceIdResolver().resolve(explicitId, workingDir);
     }
 
+    /**
+     * {@code resolveTerms} is the ubiquitous-language hexagon's {@link ResolveTerms} in-port
+     * (implemented by its {@code TermService} bean below) - borrowed here purely so
+     * {@code req_get}/{@code req_list} can render a linked term's business code instead of its
+     * bare IRI (issue #77 nachtrag). This wires an In-Adapter to a <em>different</em> hexagon's
+     * In-Port, not to that hexagon's core - see the "kein *-core* haengt an einem anderen BC"
+     * precision in CLAUDE.md.
+     */
     @Bean
     RequirementMcpTools requirementMcpTools(
-            final RequirementService service, final WorkspaceId workspaceId) {
-        return new RequirementMcpTools(service, service, service, service, service, workspaceId);
+            final RequirementService service, final ResolveTerms resolveTerms, final WorkspaceId workspaceId) {
+        return new RequirementMcpTools(service, service, service, service, service, resolveTerms, workspaceId);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -25,12 +26,17 @@ import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five requirement
- * tools and guards its in-port dependencies. Behaviour of the handlers is not
- * asserted here beyond the pass-through of {@code req_link_term}'s arguments;
- * the delegated in-ports are still scaffold stubs.
+ * tools and guards its in-port dependencies, plus the term-display-resolution
+ * contract added in the #77 nachtrag ({@link ResolveTerms}): renders the resolved
+ * business code, falls back to the bare IRI for an id it cannot resolve, and never
+ * issues more than one batch call per rendering.
  */
 class RequirementMcpToolsTest {
 
@@ -38,8 +44,9 @@ class RequirementMcpToolsTest {
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
     private final Stub stub = new Stub();
+    private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, stub, WorkspaceId.DEFAULT);
+            new RequirementMcpTools(stub, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT);
 
     @Test
     void declaresTheFiveRequirementTools() {
@@ -57,24 +64,107 @@ class RequirementMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(null, stub, stub, stub, stub, WorkspaceId.DEFAULT));
+                () -> new RequirementMcpTools(null, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT));
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
+                () -> new RequirementMcpTools(stub, stub, stub, stub, null, resolveTerms, WorkspaceId.DEFAULT));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
     }
 
     @Test
     void rejectsNullWorkspace() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, null));
+                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, resolveTerms, null));
     }
 
     @Test
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
+        // Round trip: the port hands back a TermRef whose IRI resolves to TERM-1 again, proving
+        // the code the human typed is what they see rendered back (issue #77 nachtrag).
+        resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-1"), new TermCode("TERM-1"));
+
         String rendered = adapter.linkTerm("FR-1", "TERM-1");
 
         assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
-        assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/TERM-1]"), rendered);
+        assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+    }
+
+    /** The resolvable case: a linked term shows its business code, not the raw IRI (issue #77). */
+    @Test
+    void formatRendersTheResolvedTermCodeInsteadOfTheBareIri() {
+        ResourceId termResourceId = ResourceId.of("https://w3id.org/arknet/id/some-term");
+        resolveTerms.register(termResourceId, new TermCode("TERM-7"));
+        stub.nextLinkedTermResourceId = termResourceId;
+
+        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+
+        assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
+    }
+
+    /**
+     * Hard invariant: an id {@link ResolveTerms} cannot resolve must never be dropped from the
+     * rendering and must never make {@code format} throw - it falls back to the bare IRI.
+     */
+    @Test
+    void formatFallsBackToTheBareIriWhenResolveTermsCannotResolveIt() {
+        ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-term");
+        stub.nextLinkedTermResourceId = unresolvable;
+        // Deliberately not registered with resolveTerms - simulates a missing/deleted term.
+
+        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+
+        assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
+    }
+
+    /** {@code format} for a single requirement issues exactly one batch call, not one per term. */
+    @Test
+    void formatOfASingleRequirementCallsResolveTermsExactlyOnce() {
+        ResourceId first = ResourceId.of("https://w3id.org/arknet/id/term-a");
+        ResourceId second = ResourceId.of("https://w3id.org/arknet/id/term-b");
+        resolveTerms.register(first, new TermCode("TERM-1"));
+        resolveTerms.register(second, new TermCode("TERM-2"));
+        stub.nextLinkedTerms = List.of(first, second);
+
+        adapter.linkTerm("FR-1", "TERM-1");
+
+        assertEquals(1, resolveTerms.callCount());
+    }
+
+    /**
+     * {@code req_list} must not issue one {@link ResolveTerms} call per requirement - a single
+     * batch across every listed requirement's linked terms.
+     */
+    @Test
+    void listResolvesTermsOfAllRequirementsInExactlyOneBatchCall() {
+        ResourceId termA = ResourceId.of("https://w3id.org/arknet/id/term-a");
+        ResourceId termB = ResourceId.of("https://w3id.org/arknet/id/term-b");
+        resolveTerms.register(termA, new TermCode("TERM-1"));
+        resolveTerms.register(termB, new TermCode("TERM-2"));
+        stub.allRequirements = List.of(
+                requirementWithTerms("FR-1", termA),
+                requirementWithTerms("FR-2", termB));
+
+        String rendered = adapter.list();
+
+        assertEquals(1, resolveTerms.callCount());
+        assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+        assertTrue(rendered.contains("[terms: TERM-2]"), rendered);
+    }
+
+    @Test
+    void listOfRequirementsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
+        stub.allRequirements = List.of(requirementWithTerms("FR-1"));
+
+        adapter.list();
+
+        assertEquals(0, resolveTerms.callCount());
+    }
+
+    private static Requirement requirementWithTerms(String code, ResourceId... termIds) {
+        List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
+        return new Requirement(ID, new RequirementCode(code), "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms);
     }
 
     /** Structural stub implementing the five driving in-ports. */
@@ -83,6 +173,9 @@ class RequirementMcpToolsTest {
 
         private RequirementCode lastLinkedRequirement;
         private String lastLinkedTermCode;
+        private ResourceId nextLinkedTermResourceId;
+        private List<ResourceId> nextLinkedTerms = List.of();
+        private List<Requirement> allRequirements = List.of();
 
         @Override
         public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
@@ -91,7 +184,7 @@ class RequirementMcpToolsTest {
 
         @Override
         public List<Requirement> list(WorkspaceId workspaceId) {
-            throw new UnsupportedOperationException();
+            return allRequirements;
         }
 
         @Override
@@ -108,9 +201,42 @@ class RequirementMcpToolsTest {
         public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode) {
             lastLinkedRequirement = code;
             lastLinkedTermCode = termCode;
-            TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + termCode));
+            List<ResourceId> ids = new ArrayList<>(nextLinkedTerms);
+            if (nextLinkedTermResourceId != null) {
+                ids.add(nextLinkedTermResourceId);
+            }
+            if (ids.isEmpty()) {
+                ids.add(ResourceId.of("https://w3id.org/arknet/id/" + termCode));
+            }
+            List<TermRef> terms = ids.stream().map(TermRef::new).toList();
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                    Priority.MUST_HAVE, null, null, List.of(term));
+                    Priority.MUST_HAVE, null, null, terms);
+        }
+    }
+
+    /**
+     * Fake {@link ResolveTerms}: resolves only what was {@link #register} registered, counts its
+     * own invocations so tests can pin the "at most one batch call" invariant, and - like the
+     * real port - never throws for an id it cannot resolve.
+     */
+    private static final class RecordingResolveTerms implements ResolveTerms {
+
+        private final List<Term> known = new ArrayList<>();
+        private int calls;
+
+        void register(ResourceId id, TermCode code) {
+            known.add(new Term(new TermId(id), code, "label", "definition", null));
+        }
+
+        int callCount() {
+            return calls;
+        }
+
+        @Override
+        public List<Term> getById(WorkspaceId workspaceId, ResourceId... ids) {
+            calls++;
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(t -> wanted.contains(t.id().value())).toList();
         }
     }
 }

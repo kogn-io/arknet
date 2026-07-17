@@ -3,6 +3,7 @@ package de.hauschel.arknet.ul.application.port.out;
 import java.util.List;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
@@ -68,4 +69,16 @@ public interface TermRepository {
      * @return all terms, never {@code null}
      */
     List<Term> findAll(WorkspaceId workspaceId);
+
+    /**
+     * Finds every term in a workspace whose identity is among {@code ids}, in one store
+     * round-trip - backs {@link de.hauschel.arknet.ul.application.port.in.ResolveTerms}
+     * (issue #77). This is a batch lookup, not a per-id existence check: an id absent from the
+     * workspace is simply absent from the result, never an error.
+     *
+     * @param workspaceId the workspace (architecture model) to look up terms in
+     * @param ids         the opaque identities to resolve; an empty list yields an empty result
+     * @return the terms found, in no particular order, never {@code null}
+     */
+    List<Term> findByIds(WorkspaceId workspaceId, List<ResourceId> ids);
 }

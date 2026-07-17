@@ -1,11 +1,14 @@
 package de.hauschel.arknet.req.adapter.mcp;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -19,6 +22,8 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.domain.Term;
 
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
@@ -53,6 +58,19 @@ import de.hauschel.arknet.req.domain.TermRef;
  * that id per project (explicit config, else the git/working-directory name); see
  * {@code WorkspaceIdResolver}. TODO: a remote/team mode may instead expose the
  * workspace as an explicit tool argument or via MCP session context.</p>
+ *
+ * <p><strong>Term display resolution (issue #77 nachtrag).</strong> {@link TermRef} carries a
+ * linked term's opaque subject identity, not its business code - but a human who typed
+ * {@code TERM-1} into {@code req_link_term} expects to see {@code TERM-1} again, not a raw IRI
+ * they cannot re-type. This adapter is the gate into the requirements hexagon, not part of its
+ * core, so it may borrow a driving port of a <em>different</em> hexagon
+ * ({@link ResolveTerms}, owned by ubiquitous-language) to answer that purely for display - the
+ * requirements core itself still never depends on {@code arknet-ubiquitous-language-core}, and
+ * {@code req_link_term}'s own write path still resolves via the decoupled {@code TermLookup}
+ * out-port. {@link #format} always calls {@link ResolveTerms#getById} exactly once per
+ * rendering, batched across every {@link TermRef} involved (never once per {@link TermRef}, and
+ * for {@code req_list} never once per requirement); an id {@link ResolveTerms} could not resolve
+ * simply falls back to the bare IRI - {@link #format} never throws and never drops a term.</p>
  */
 public final class RequirementMcpTools {
 
@@ -61,16 +79,20 @@ public final class RequirementMcpTools {
     private final GetRequirement getRequirement;
     private final SetRequirementStatus setRequirementStatus;
     private final LinkTerm linkTerm;
+    private final ResolveTerms resolveTerms;
     private final WorkspaceId workspaceId;
 
     /**
-     * Creates the adapter with its five driving in-ports and the workspace it serves.
+     * Creates the adapter with its five driving in-ports, the borrowed ubiquitous-language
+     * display port and the workspace it serves.
      *
      * @param addRequirement       in-port backing {@code req_add}
      * @param listRequirements     in-port backing {@code req_list}
      * @param getRequirement       in-port backing {@code req_get}
      * @param setRequirementStatus in-port backing {@code req_set_status}
      * @param linkTerm             in-port backing {@code req_link_term}
+     * @param resolveTerms         ubiquitous-language driving port used only to render a linked
+     *                             term's business code instead of its bare IRI
      * @param workspaceId          the single workspace all tool calls route to
      */
     public RequirementMcpTools(
@@ -79,12 +101,14 @@ public final class RequirementMcpTools {
             final GetRequirement getRequirement,
             final SetRequirementStatus setRequirementStatus,
             final LinkTerm linkTerm,
+            final ResolveTerms resolveTerms,
             final WorkspaceId workspaceId) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
     }
 
@@ -119,7 +143,12 @@ public final class RequirementMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list() {
         final List<Requirement> all = listRequirements.list(workspaceId);
-        return all.stream().map(RequirementMcpTools::format)
+        if (all.isEmpty()) {
+            return "(no requirements)";
+        }
+        // One batch resolution across every requirement's linked terms, not one per requirement.
+        final Map<ResourceId, Term> termsById = resolveTermsFor(all);
+        return all.stream().map(r -> format(r, termsById))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
 
@@ -129,7 +158,7 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id) {
         final RequirementCode code = new RequirementCode(id);
         return getRequirement.get(workspaceId, code)
-                .map(RequirementMcpTools::format)
+                .map(this::format)
                 .orElse("Requirement not found: " + code.value());
     }
 
@@ -158,21 +187,50 @@ public final class RequirementMcpTools {
         return format(updated);
     }
 
+    /** Renders a single requirement, resolving its own linked terms in one batch call. */
+    private String format(final Requirement r) {
+        return format(r, resolveTermsFor(List.of(r)));
+    }
+
     /**
-     * Renders a term reference for display. {@link TermRef} carries the term's opaque subject
-     * identity (issue #77), not its business code - showing the bare IRI here is a deliberate
-     * degradation rather than a joining lookup back into the glossary, so a requirement with
-     * linked terms still renders (just less prettily) even if a term's business code has since
-     * changed or disappeared.
+     * Renders {@code r} using an already-resolved {@code termsById} lookup - never itself calls
+     * {@link ResolveTerms}, so callers control the batching (one call for a single requirement,
+     * one call total for {@code req_list}). Never throws: a {@link TermRef} missing from
+     * {@code termsById} (unresolvable, or simply not looked up) falls back to its bare IRI.
      */
-    private static String format(final Requirement r) {
+    private static String format(final Requirement r, final Map<ResourceId, Term> termsById) {
         final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
         final String terms = r.usesTerms().isEmpty()
                 ? ""
-                : " [terms: " + r.usesTerms().stream().map(t -> t.value().value())
+                : " [terms: " + r.usesTerms().stream().map(ref -> renderTerm(ref, termsById))
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
         return "%s [%s] %s (%s)%s%s".formatted(
                 r.code().value(), r.type(), r.title(), r.status(), priority, terms);
+    }
+
+    /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
+    private static String renderTerm(final TermRef ref, final Map<ResourceId, Term> termsById) {
+        final Term term = termsById.get(ref.value());
+        return term != null ? term.code().value() : ref.value().value();
+    }
+
+    /**
+     * Batch-resolves every term referenced by {@code requirements} in exactly one call to
+     * {@link ResolveTerms#getById} - the union of all their {@link TermRef}s, deduplicated, not
+     * one call per requirement and not one call per {@link TermRef}. Missing ids are simply
+     * absent from the returned map, which {@link #renderTerm} treats as "fall back to the IRI".
+     */
+    private Map<ResourceId, Term> resolveTermsFor(final List<Requirement> requirements) {
+        final ResourceId[] ids = requirements.stream()
+                .flatMap(r -> r.usesTerms().stream())
+                .map(TermRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveTerms.getById(workspaceId, ids).stream()
+                .collect(Collectors.toMap(t -> t.id().value(), t -> t));
     }
 
     private static String blankToNull(final String value) {
