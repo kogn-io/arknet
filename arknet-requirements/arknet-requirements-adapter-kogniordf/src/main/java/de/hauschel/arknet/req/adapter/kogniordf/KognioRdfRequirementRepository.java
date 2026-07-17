@@ -375,7 +375,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code req_link_term}) carries the dropped edge along instead of erasing it. Every edge
      * written through {@link #resolveTerm} is joinable by construction, so this cannot bite via
      * the MCP tools; an edge that entered the requirements graph some other way (store-first,
-     * ADR-005) remains invisible to every read but no longer dies on the next write.</p>
+     * ADR-005) stays invisible to every read but no longer dies on the next write.</p>
+     *
+     * <p><strong>That guarantee covers only targets without a {@code dcterms:identifier}.</strong>
+     * A third category exists and is not fixed here: a target that <em>has</em> an identifier but
+     * is not typed {@code skos:Concept}. This join asserts no type, so such an edge binds and does
+     * reach {@link Requirement#usesTerms()} - it is not invisible. {@link #resolveTerm}, however,
+     * requires the type, so the next {@link #update} rejects the very {@link TermRef} this read
+     * produced and the requirement can no longer be written at all. The read join and the
+     * resolution query state different conditions; that mismatch, not the edge, is the defect.
+     * Pre-existing and store-first-only, like #65 itself - tracked in issue #77, whose root cause
+     * (references bound to predicate values rather than to identity) is the same.</p>
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
         String query = "SELECT ?termId WHERE { "
