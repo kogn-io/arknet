@@ -87,9 +87,19 @@ import de.hauschel.arknet.req.domain.TermRef;
  * queries the sibling terms graph nor re-verifies that a referenced subject still denotes a
  * {@code skos:Concept}; it trusts the identity it was handed, the same way it trusts {@code
  * motivatedBy} without re-resolving it. It still asserts each referenced subject's type as
- * {@code skos:Concept} in the SHACL write-gate's validation-only context (see below), because
- * that assertion is what proved true at resolution time and is what the shape needs to fire
- * correctly against a candidate graph that does not itself carry the term's type triple.</p>
+ * {@code skos:Concept} in the SHACL write-gate's validation-only context (see below), because the
+ * shape needs that type to fire correctly against a candidate graph that does not itself carry
+ * the term's type triple.</p>
+ *
+ * <p><strong>That assertion is trusted, not verified.</strong> For a ref that {@code
+ * KognioRdfTermLookup} produced the type did hold when the link was made - that query requires
+ * it. For a ref that {@link #readUsesTerms} produced it may never have held: that read filters
+ * for IRI-ness only and states no type condition, so a store-first (ADR-005) edge can carry a
+ * non-{@code Concept} target into the context, where asserting the type satisfies the gate's
+ * {@code sh:class} with the very fact under test. The MCP tools cannot reach the case, and it is
+ * no worse than before #77 (such an edge survived there too, preserved by #65 and equally
+ * unscrutinised) - but what makes it safe is that it is unreachable, not that anything checked
+ * it.</p>
  *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the requirements SHACL shapes via {@link ShaclWriteGate} before starting the write
@@ -379,6 +389,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * #65) - so a read-modify-write ({@code req_set_status}, {@code req_link_term}) carries the
      * dropped edge along instead of erasing it. Every edge written through {@code req_link_term}
      * targets a resolved subject IRI by construction, so this cannot bite via the MCP tools.</p>
+     *
+     * <p><strong>The "identifier but no {@code skos:Concept} type" category is gone (issue
+     * #77).</strong> While this read still joined the terms graph by {@code dcterms:identifier},
+     * a target carrying an identifier but not the type bound a row here, yet the resolution query
+     * demanded the type and so rejected, on the next {@link #update}, the very {@link TermRef}
+     * this read had produced - the requirement became unwritable, and #65 could not preserve the
+     * edge because the read did bind it. Carrying identity removes that mismatch at its root
+     * rather than reconciling it: there is no second query stating a different condition, because
+     * there is no resolution on the read path at all.</p>
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
         String query = "SELECT ?term WHERE { "
