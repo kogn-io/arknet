@@ -117,6 +117,28 @@ class RequirementMcpToolsTest {
         assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
     }
 
+    /**
+     * Issue #77, second nachtrag: a store-first term with several language-tagged
+     * {@code skos:prefLabel}s is shape-legal (no {@code sh:maxCount}) and makes
+     * {@code KognioRdfTermRepository#findByIds} return more than one {@link Term} for the same
+     * identity - see that class for the source-level fix. This pins the structural,
+     * implementation-independent backstop in {@link RequirementMcpTools}: even if a
+     * {@link ResolveTerms} implementation returned duplicate entries for one id, {@code format}
+     * must still not throw. A naive {@code Collectors.toMap(t -> t.id().value(), t -> t)} throws
+     * {@code IllegalStateException} on exactly this input.
+     */
+    @Test
+    void formatNeverThrowsWhenResolveTermsReturnsDuplicateEntriesForTheSameIdentity() {
+        ResourceId duplicated = ResourceId.of("https://w3id.org/arknet/id/duplicated-term");
+        resolveTerms.register(duplicated, new TermCode("TERM-7"));
+        resolveTerms.register(duplicated, new TermCode("TERM-7"));
+        stub.nextLinkedTermResourceId = duplicated;
+
+        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+
+        assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
+    }
+
     /** {@code format} for a single requirement issues exactly one batch call, not one per term. */
     @Test
     void formatOfASingleRequirementCallsResolveTermsExactlyOnce() {

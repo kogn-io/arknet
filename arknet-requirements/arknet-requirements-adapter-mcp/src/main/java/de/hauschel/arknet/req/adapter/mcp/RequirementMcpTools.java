@@ -219,6 +219,17 @@ public final class RequirementMcpTools {
      * {@link ResolveTerms#getById} - the union of all their {@link TermRef}s, deduplicated, not
      * one call per requirement and not one call per {@link TermRef}. Missing ids are simply
      * absent from the returned map, which {@link #renderTerm} treats as "fall back to the IRI".
+     *
+     * <p><strong>Structurally cannot throw on a duplicate key (issue #77, second nachtrag).</strong>
+     * {@link ResolveTerms} promises at most one {@link Term} per identity, but this method must
+     * not rely on every implementation upholding that: a plain {@code Collectors.toMap(t ->
+     * t.id().value(), t -> t)} throws {@code IllegalStateException} the moment two returned
+     * {@link Term}s share an identity, turning a display concern into a thrown exception - the
+     * very thing this rendering path exists to avoid. The merge function below keeps the first
+     * entry for a duplicate key instead; which one is kept is immaterial here, since rendering
+     * only ever reads {@link Term#code()} and any legitimate duplicate (e.g. a store-first term
+     * with more than one language-tagged {@code skos:prefLabel}, see
+     * {@code KognioRdfTermRepository#findByIds}) carries the same code on every row.</p>
      */
     private Map<ResourceId, Term> resolveTermsFor(final List<Requirement> requirements) {
         final ResourceId[] ids = requirements.stream()
@@ -230,7 +241,7 @@ public final class RequirementMcpTools {
             return Map.of();
         }
         return resolveTerms.getById(workspaceId, ids).stream()
-                .collect(Collectors.toMap(t -> t.id().value(), t -> t));
+                .collect(Collectors.toMap(t -> t.id().value(), t -> t, (first, second) -> first));
     }
 
     private static String blankToNull(final String value) {

@@ -314,6 +314,76 @@ class KognioRdfTermRepositoryTest {
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), resolved.get(0).actorFacet());
     }
 
+    /**
+     * Store-first regression test (issue #77, second nachtrag): {@code ulshapes:Term-prefLabel}
+     * has {@code sh:minCount 1} but deliberately no {@code sh:maxCount} - SKOS allows, and this
+     * glossary intends to allow, one {@code skos:prefLabel} per language on the same concept.
+     * Such a term is shape-legal but unreachable via {@code term_add} (which writes exactly one
+     * label); {@code findByIds}' mandatory {@code prefLabel} join must not multiply it into two
+     * {@link Term}s carrying the same {@link TermId} - a caller keying its own results by
+     * identity (as {@code RequirementMcpTools#resolveTermsFor} does) would otherwise throw on
+     * the duplicate key.
+     */
+    @Test
+    void findByIdsReturnsExactlyOneTermForASubjectWithSeveralLanguageTaggedPrefLabels() {
+        TermId id = freshId();
+        givenTermWithTwoLanguageTaggedPrefLabels(WORKSPACE_A, id, "TERM-1");
+
+        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(id.value()));
+
+        assertEquals(1, resolved.size());
+        assertEquals(new TermCode("TERM-1"), resolved.get(0).code());
+    }
+
+    /**
+     * A term without any {@code skos:prefLabel} at all - store-first, itself shape-invalid
+     * ({@code sh:minCount 1}) - must stay excluded from the result rather than turned into an
+     * {@code OPTIONAL} join: {@code findByIds} degrades correctly today (the caller falls back
+     * to the bare IRI), and widening the join to accommodate it would risk resurrecting the
+     * duplicate-row problem this class guards against instead.
+     */
+    @Test
+    void findByIdsExcludesATermWithoutAnyPrefLabel() {
+        TermId id = freshId();
+        givenTermWithoutPrefLabel(WORKSPACE_A, id, "TERM-1");
+
+        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of(id.value())));
+    }
+
+    /**
+     * Writes a {@code skos:Concept} straight into the terms graph with two
+     * {@code skos:prefLabel} triples tagged for different languages - RDF/SKOS-legal and
+     * shape-legal (no {@code sh:maxCount}), but unreachable via {@code term_add}.
+     */
+    private void givenTermWithTwoLanguageTaggedPrefLabels(WorkspaceId workspaceId, TermId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\"@de ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Customer\"@en ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"Eine Person, die bestellt.\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /** Writes a {@code skos:Concept} without any {@code skos:prefLabel} - store-first only. */
+    private void givenTermWithoutPrefLabel(WorkspaceId workspaceId, TermId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"Eine Person, die bestellt.\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     private boolean subjectHasType(WorkspaceId workspaceId, TermId id, String typeIri) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <" + typeIri + "> } }";

@@ -1,6 +1,8 @@
 package de.hauschel.arknet.ul.adapter.kogniordf;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -255,6 +257,20 @@ public class KognioRdfTermRepository implements TermRepository {
      * One {@code VALUES}-bound query for the whole batch, not one query per id: the caller (a
      * sibling bounded context's driving adapter, rendering several term references at once) must
      * not pay an N+1 store round-trip.
+     *
+     * <p><strong>Exactly one {@link Term} per resolved subject (issue #77 nachtrag 2).</strong>
+     * {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but deliberately no
+     * {@code sh:maxCount}: SKOS allows - and this glossary intends to allow - one
+     * {@code skos:prefLabel} per language on the same concept, store-first (ADR-005) legally so.
+     * The three mandatory joins below (identifier, prefLabel, definition) are therefore not
+     * guaranteed to bind exactly one row per subject; a multi-language term yields one row per
+     * label. Grouping by subject and keeping the first row's binding per predicate turns that
+     * cardinality back into "the terms" the port promises, not "one row per predicate
+     * combination" - which is what a naive per-row mapping would leak to every caller (a caller
+     * keying results by identity, e.g. via {@code Collectors.toMap}, would throw
+     * {@code IllegalStateException} on the duplicate key). Which language's label ends up chosen
+     * is deliberately unspecified - this port exists to answer "what code names this identity",
+     * not "what is this term's label in language X".</p>
      */
     @Override
     public List<Term> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
@@ -289,14 +305,19 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> new Term(
-                            new TermId(ResourceId.of(iriOf(row, "s").getIRIString())),
-                            new TermCode(literalOf(row, "identifier").getLexicalForm()),
-                            literalOf(row, "prefLabel").getLexicalForm(),
-                            literalOf(row, "definition").getLexicalForm(),
-                            actorFacetOf(row)))
-                    .toList();
+            Map<String, Term> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                // putIfAbsent, not put: the first row wins if a subject has several
+                // language-tagged prefLabels (or, symmetrically, several definitions).
+                bySubject.putIfAbsent(subjectIri, new Term(
+                        new TermId(ResourceId.of(subjectIri)),
+                        new TermCode(literalOf(row, "identifier").getLexicalForm()),
+                        literalOf(row, "prefLabel").getLexicalForm(),
+                        literalOf(row, "definition").getLexicalForm(),
+                        actorFacetOf(row)));
+            });
+            return List.copyOf(bySubject.values());
         }
     }
 
