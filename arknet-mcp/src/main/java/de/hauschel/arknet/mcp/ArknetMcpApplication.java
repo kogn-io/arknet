@@ -10,9 +10,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <strong>stdio</strong> (see {@code application.properties}). The Spring AI MCP server
  * auto-configuration discovers every Spring bean that carries
  * {@link org.springframework.ai.mcp.annotation.McpTool}-annotated methods and registers
- * those as MCP tools - both the arknet engine tools ({@link ArknetTools}) and the
- * requirements tools contributed by the requirements hexagon
- * ({@code de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools}). The bean wiring lives
+ * those as MCP tools - the tools contributed by the hexagonal bounded contexts
+ * (requirements, ubiquitous-language, use-cases), e.g.
+ * {@code de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools}. The bean wiring lives
  * in {@link ArknetMcpConfiguration}.</p>
  *
  * <p><strong>stdio discipline.</strong> stdout is the MCP transport channel, so nothing

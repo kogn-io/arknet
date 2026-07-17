@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-mcp</artifactId>
-    <description>Composition Root: Spring-Boot-MCP-Server (stdio), buendelt die arknet-Engine-Tools und die Tools der hexagonalen BCs (requirements, ubiquitous-language, use-cases) ueber einen geteilten DatasetLifecycle</description>
+    <description>Composition Root: Spring-Boot-MCP-Server (stdio), buendelt die Tools der hexagonalen BCs (requirements, ubiquitous-language, use-cases) ueber einen geteilten DatasetLifecycle sowie den generischen Store-Lesepfad (store_overview/resource_get)</description>
 
     <!-- Lokale Versions-Anhebungen fuer diese (einzige) Spring-Boot-Anwendung. Die rdf4j-BOM
          wird im arknet-parent zuerst importiert und zieht ueber ihren rdf4j-Parent veraltete
@@ -46,17 +46,6 @@
     </dependencyManagement>
 
     <dependencies>
-        <dependency>
-            <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-core</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>de.hauschel.arknet</groupId>
-            <artifactId>arknet-projection</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
         <!-- Requirements-Hexagon: In-Adapter (MCP-Tools) + Out-Adapter (Repository).
              Als Composition Root verdrahtet arknet-mcp das komplette Hexagon zu Beans;
              die Spring-AI-Annotation-Scanner-AutoConfig sammelt die @McpTool-Methoden
