@@ -329,6 +329,36 @@ class KognioRdfUseCaseRepositoryTest {
         }
     }
 
+    /**
+     * Regression test for the {@code primaryActor} blank-node bug found in the #95 review:
+     * {@code arkreq:primaryActor} carries no {@code sh:nodeKind} constraint, so a store-first
+     * (ADR-005) use case may legally target a blank node with it. Reading such a use case back
+     * must not throw a {@link ClassCastException} out of {@code readBySubject} - and, because
+     * {@code primaryActor} is a required (non-{@code OPTIONAL}) triple pattern in the scalar
+     * read, the malformed use case is treated as "not found" rather than crashing the rest of
+     * {@link UseCaseRepository#findAll}'s result list.
+     */
+    @Test
+    void findAllSkipsUseCaseWithBlankNodePrimaryActorInsteadOfFailingTheWholeList() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
+
+        UseCaseCode orphanCode = new UseCaseCode("UC-ORPHAN");
+        seed(WORKSPACE_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-orphan> "
+                        + "a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/title> \"Orphan use case\" ; "
+                        + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
+                        + "<https://w3id.org/arknet/requirements#primaryActor> _:orphanActor ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + orphanCode.value() + "\" .");
+
+        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        assertEquals(1, all.size());
+        assertEquals(CODE_1, all.get(0).code());
+
+        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, orphanCode));
+    }
+
     @Test
     void createRejectsStepViolatingShaclShapes() {
         seedRequirement(WORKSPACE_A, "FR-1");
