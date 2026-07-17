@@ -46,10 +46,12 @@ import de.hauschel.arknet.req.domain.TermRef;
  * <p>Maps a {@link Requirement} to its opaque {@link RequirementId} as the subject IRI (minted
  * once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
  * business code), stored in one named graph shared by all requirements: five mandatory triples
- * (identifier, type, title, description, status) plus up to three optional triples for
- * {@code priority}, {@code motivatedBy} and {@code qualityCategory} - written only when the
- * corresponding field is non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so
- * that requirements without them still match. The {@code dcterms:identifier} triple carries the
+ * (identifier, type, title, description, status) plus one or more mandatory
+ * {@code arkreq:acceptanceCriterion} literal triples (issue #91, {@code 1..n}, testable
+ * "Done when ..." criteria) plus up to three optional triples for {@code priority},
+ * {@code motivatedBy} and {@code qualityCategory} - written only when the corresponding field is
+ * non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so that requirements without
+ * them still match. The {@code dcterms:identifier} triple carries the
  * human-readable {@link RequirementCode} ({@code FR-1}) - identity and label are deliberately
  * different triples on the same subject. This class depends only on the neutral kognio-rdf
  * ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any
@@ -128,6 +130,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String PRIORITY_PROPERTY = ARKREQ_NAMESPACE + "priority";
     private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
+    private static final String ACCEPTANCE_CRITERION_PROPERTY = ARKREQ_NAMESPACE + "acceptanceCriterion";
     private static final String MUST_HAVE_PRIORITY = ARKREQ_NAMESPACE + "MustHave";
     private static final String SHOULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "ShouldHave";
     private static final String COULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "CouldHave";
@@ -202,6 +205,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
             for (IRI termIri : termIris) {
                 graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termIri);
+            }
+            for (String criterion : requirement.acceptanceCriteria()) {
+                graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), rdf.createLiteral(criterion));
             }
 
             // 3. Structural gate, then create/update. The usesTerm shape carries an
@@ -327,7 +333,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     priorityOf(row),
                     motivatedByOf(row),
                     qualityCategoryOf(row),
-                    readUsesTerms(handle, SparqlTerms.iriRef(subjectIriString))));
+                    readUsesTerms(handle, SparqlTerms.iriRef(subjectIriString)),
+                    readAcceptanceCriteria(handle, SparqlTerms.iriRef(subjectIriString))));
         }
     }
 
@@ -351,6 +358,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
+            Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(handle);
             return handle.sparqlQuery().select(query)
                     .map(row -> {
                         String subjectIriString = iriOf(row, "s").getIRIString();
@@ -364,7 +372,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                                 priorityOf(row),
                                 motivatedByOf(row),
                                 qualityCategoryOf(row),
-                                termsBySubject.getOrDefault(subjectIriString, List.of()));
+                                termsBySubject.getOrDefault(subjectIriString, List.of()),
+                                criteriaBySubject.getOrDefault(subjectIriString, List.of()));
                     })
                     .toList();
         }
@@ -485,6 +494,30 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         handle.sparqlQuery().select(query).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
                 .add(new TermRef(ResourceId.of(iriOf(row, "term").getIRIString()))));
+        return bySubject;
+    }
+
+    // ---- acceptanceCriterion reading ---------------------------------------------------
+
+    /** Reads the {@code arkreq:acceptanceCriterion} literals of one requirement, in lexical order. */
+    private List<String> readAcceptanceCriteria(DatasetHandle handle, String subject) {
+        String query = "SELECT ?criterion WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY
+                + "> ?criterion } } ORDER BY ?criterion";
+        return handle.sparqlQuery().select(query)
+                .map(row -> literalOf(row, "criterion").getLexicalForm())
+                .toList();
+    }
+
+    /** Bulk variant of {@link #readAcceptanceCriteria}: all requirements' criteria in one query. */
+    private Map<String, List<String>> readAcceptanceCriteriaBySubject(DatasetHandle handle) {
+        String query = "SELECT ?s ?criterion WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion } "
+                + "} ORDER BY ?s ?criterion";
+        Map<String, List<String>> bySubject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> bySubject
+                .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
+                .add(literalOf(row, "criterion").getLexicalForm()));
         return bySubject;
     }
 

@@ -72,7 +72,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         RequirementCode code = nextCode(workspaceId, command.type());
         Requirement requirement = new Requirement(id, code, command.title(), command.description(),
                 command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
-                command.qualityCategory(), List.of());
+                command.qualityCategory(), List.of(), command.acceptanceCriteria());
         repository.create(workspaceId, requirement);
         return requirement;
     }
@@ -103,7 +103,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         requireLegalTransition(current.status(), status);
         Requirement updated = new Requirement(current.id(), current.code(), current.title(),
                 current.description(), current.type(), status, current.priority(), current.motivatedBy(),
-                current.qualityCategory(), current.usesTerms());
+                current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria());
         repository.update(workspaceId, updated);
         return updated;
     }
@@ -123,7 +123,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         linked.add(term);
         Requirement updated = new Requirement(current.id(), current.code(), current.title(),
                 current.description(), current.type(), current.status(), current.priority(),
-                current.motivatedBy(), current.qualityCategory(), linked);
+                current.motivatedBy(), current.qualityCategory(), linked, current.acceptanceCriteria());
         repository.update(workspaceId, updated);
         return updated;
     }

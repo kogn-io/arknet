@@ -72,7 +72,8 @@ class CrossBoundedContextStoreWiringTest {
                     // req_add (FR) and term_add (actor) into the same shared workspace store.
                     Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
-                            RequirementType.FUNCTIONAL, null, null, null));
+                            RequirementType.FUNCTIONAL, null, null, null,
+                            List.of("An order is placed and confirmed")));
                     terms.add(WS, new NewTerm("Customer", "A person placing an order.",
                             new ActorFacet(ActorKind.HUMAN, "orderer")));
 
@@ -142,7 +143,8 @@ class CrossBoundedContextStoreWiringTest {
 
                     Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
-                            RequirementType.FUNCTIONAL, null, null, null));
+                            RequirementType.FUNCTIONAL, null, null, null,
+                            List.of("An order is placed and confirmed")));
                     Term order = terms.add(WS, new NewTerm("Order", "A customer's request to buy.", null));
 
                     requirements.linkTerm(WS, fr.code(), order.code().value());
@@ -168,7 +170,8 @@ class CrossBoundedContextStoreWiringTest {
 
                     Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
-                            RequirementType.FUNCTIONAL, null, null, null));
+                            RequirementType.FUNCTIONAL, null, null, null,
+                            List.of("An order is placed and confirmed")));
 
                     assertThatThrownBy(() -> requirements.linkTerm(WS, fr.code(), "TERM-99"))
                             .isInstanceOf(UnresolvedReferenceException.class)

@@ -120,6 +120,9 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "The normative statement, e.g. 'The system shall ...'")
             final String description,
             @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type,
+            @McpToolParam(description = "Testable 'Done when ...' criteria (at least one) that make this "
+                    + "requirement's completion checkable")
+            final List<String> acceptanceCriterion,
             @McpToolParam(description = "MoSCoW priority (optional): MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
                     + "WONT_HAVE", required = false)
             final String priority,
@@ -135,7 +138,8 @@ public final class RequirementMcpTools {
                 : Priority.valueOf(priority.trim());
         final Requirement created = addRequirement.add(workspaceId,
                 new NewRequirement(title, description, requirementType, requirementPriority,
-                        blankToNull(motivatedBy), blankToNull(qualityCategory)));
+                        blankToNull(motivatedBy), blankToNull(qualityCategory),
+                        acceptanceCriterion == null ? List.of() : List.copyOf(acceptanceCriterion)));
         return format(created);
     }
 
@@ -204,8 +208,9 @@ public final class RequirementMcpTools {
                 ? ""
                 : " [terms: " + r.usesTerms().stream().map(ref -> renderTerm(ref, termsById))
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
-        return "%s [%s] %s (%s)%s%s".formatted(
-                r.code().value(), r.type(), r.title(), r.status(), priority, terms);
+        final String criteria = " [done when: " + String.join("; ", r.acceptanceCriteria()) + "]";
+        return "%s [%s] %s (%s)%s%s%s".formatted(
+                r.code().value(), r.type(), r.title(), r.status(), priority, terms, criteria);
     }
 
     /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
