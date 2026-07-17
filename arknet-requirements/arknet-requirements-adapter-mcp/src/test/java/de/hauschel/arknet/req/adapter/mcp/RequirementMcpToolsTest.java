@@ -76,6 +76,29 @@ class RequirementMcpToolsTest {
                 () -> new RequirementMcpTools(stub, stub, stub, stub, stub, resolveTerms, null));
     }
 
+    /** Issue #91: the mandatory acceptance criteria reach {@link AddRequirement} and are rendered. */
+    @Test
+    void addPassesAcceptanceCriteriaThroughAndRendersThem() {
+        List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
+
+        String rendered = adapter.add("t", "d", "FUNCTIONAL", criteria, null, null, null);
+
+        assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
+        assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
+                rendered);
+    }
+
+    /**
+     * {@code acceptanceCriterion} carries no {@code required = false} - a missing value is
+     * caught by the domain's {@code sh:minCount 1} invariant ({@link Requirement}'s compact
+     * constructor), not silently normalised away here.
+     */
+    @Test
+    void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.add("t", "d", "FUNCTIONAL", null, null, null, null));
+    }
+
     @Test
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
         // Round trip: the port hands back a TermRef whose IRI resolves to TERM-1 again, proving
@@ -185,7 +208,8 @@ class RequirementMcpToolsTest {
     private static Requirement requirementWithTerms(String code, ResourceId... termIds) {
         List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
         return new Requirement(ID, new RequirementCode(code), "t", "d", RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms);
+                RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms,
+                List.of("Login succeeds with valid credentials"));
     }
 
     /** Structural stub implementing the five driving in-ports. */
@@ -197,10 +221,14 @@ class RequirementMcpToolsTest {
         private ResourceId nextLinkedTermResourceId;
         private List<ResourceId> nextLinkedTerms = List.of();
         private List<Requirement> allRequirements = List.of();
+        private NewRequirement lastAddCommand;
 
         @Override
         public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
-            throw new UnsupportedOperationException();
+            lastAddCommand = command;
+            return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
+                    command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
+                    command.qualityCategory(), List.of(), command.acceptanceCriteria());
         }
 
         @Override
@@ -231,7 +259,7 @@ class RequirementMcpToolsTest {
             }
             List<TermRef> terms = ids.stream().map(TermRef::new).toList();
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                    Priority.MUST_HAVE, null, null, terms);
+                    Priority.MUST_HAVE, null, null, terms, List.of("Login succeeds with valid credentials"));
         }
     }
 

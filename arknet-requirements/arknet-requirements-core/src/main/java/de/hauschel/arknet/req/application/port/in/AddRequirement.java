@@ -1,5 +1,7 @@
 package de.hauschel.arknet.req.application.port.in;
 
+import java.util.List;
+
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
@@ -34,6 +36,8 @@ public interface AddRequirement {
      *                        {@code null})
      * @param qualityCategory free-text quality category; optional (may be {@code null}),
      *                        only meaningful for {@link RequirementType#NON_FUNCTIONAL}
+     * @param acceptanceCriteria the testable "Done when ..." criteria; required, at least one
+     *                        entry
      */
     record NewRequirement(
             String title,
@@ -41,6 +45,7 @@ public interface AddRequirement {
             RequirementType type,
             Priority priority,
             String motivatedBy,
-            String qualityCategory) {
+            String qualityCategory,
+            List<String> acceptanceCriteria) {
     }
 }

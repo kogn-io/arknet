@@ -3,6 +3,7 @@ package de.hauschel.arknet.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,8 @@ class ArknetMcpConfigurationTest {
                     Requirement created = service.add(WorkspaceId.DEFAULT,
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.",
-                                    RequirementType.FUNCTIONAL, null, null, null));
+                                    RequirementType.FUNCTIONAL, null, null, null,
+                                    List.of("The requirement round-trips through the store")));
 
                     assertThat(created.code().value()).isEqualTo("FR-1");
                     assertThat(service.get(WorkspaceId.DEFAULT, created.code()))

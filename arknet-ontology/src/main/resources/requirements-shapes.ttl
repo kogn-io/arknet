@@ -32,7 +32,8 @@ rshapes:RequirementShape
     sh:property rshapes:Requirement-priority ;
     sh:property rshapes:Requirement-status ;
     sh:property rshapes:Requirement-motivatedBy ;
-    sh:property rshapes:Requirement-usesTerm .
+    sh:property rshapes:Requirement-usesTerm ;
+    sh:property rshapes:Requirement-acceptanceCriterion .
 
 rshapes:Requirement-identifier
     a sh:PropertyShape ;
@@ -84,6 +85,15 @@ rshapes:Requirement-usesTerm
     sh:nodeKind sh:IRI ;
     sh:class    skos:Concept ;
     sh:message  "arkreq:usesTerm muss auf einen Glossar-Begriff (skos:Concept, IRI) verweisen -- lege ihn zuerst mit term_add an."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-acceptanceCriterion
+    a sh:PropertyShape ;
+    sh:path     arkreq:acceptanceCriterion ;
+    sh:minCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:message  "Requirement braucht mindestens ein arkreq:acceptanceCriterion (testbares Done-when, min. 5 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 

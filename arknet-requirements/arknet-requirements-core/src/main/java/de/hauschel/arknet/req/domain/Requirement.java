@@ -38,6 +38,9 @@ import java.util.Objects;
  *                         rather than a side edge: the out-adapter persists a requirement by
  *                         replacing it wholesale, so a link kept outside this record would be
  *                         silently dropped by the next status change.
+ * @param acceptanceCriteria the testable "Done when ..." criteria for this requirement; maps
+ *                         to {@code arkreq:acceptanceCriterion}, {@code 1..n} and required by
+ *                         the requirements SHACL shape (never {@code null} or empty)
  */
 public record Requirement(
         RequirementId id,
@@ -49,7 +52,8 @@ public record Requirement(
         Priority priority,
         String motivatedBy,
         String qualityCategory,
-        List<TermRef> usesTerms) {
+        List<TermRef> usesTerms,
+        List<String> acceptanceCriteria) {
 
     public Requirement {
         Objects.requireNonNull(id, "id");
@@ -59,11 +63,15 @@ public record Requirement(
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(status, "status");
         usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
+        acceptanceCriteria = acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria);
         if (title.isBlank()) {
             throw new IllegalArgumentException("title must not be blank");
         }
         if (description.isBlank()) {
             throw new IllegalArgumentException("description must not be blank");
+        }
+        if (acceptanceCriteria.isEmpty()) {
+            throw new IllegalArgumentException("acceptanceCriteria must not be empty");
         }
         if (qualityCategory != null && type != RequirementType.NON_FUNCTIONAL) {
             throw new IllegalArgumentException("qualityCategory is only allowed for non-functional requirements");
