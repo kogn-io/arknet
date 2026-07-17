@@ -131,6 +131,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
     private static final String ACCEPTANCE_CRITERION_PROPERTY = ARKREQ_NAMESPACE + "acceptanceCriterion";
+
+    /**
+     * Stands in for a requirement that predates #91: {@code arkreq:acceptanceCriterion} became
+     * mandatory ({@code sh:minCount 1}) only with this field, so a requirement written by an
+     * older {@code req_add} carries none. The gate blocks that state on the next <em>write</em>,
+     * but reading is not gated - and {@link Requirement}'s constructor rejects an empty list
+     * unconditionally, so without this substitution {@link #findByCode}/{@link #findAll} would
+     * throw for every such pre-existing requirement instead of returning it. Substituting here,
+     * at the adapter boundary, keeps that domain invariant intact (it never sees an empty list)
+     * while surfacing the gap instead of crashing.
+     */
+    private static final List<String> LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER =
+            List.of("(Altdatensatz vor #91 - kein Akzeptanzkriterium hinterlegt)");
+
     private static final String MUST_HAVE_PRIORITY = ARKREQ_NAMESPACE + "MustHave";
     private static final String SHOULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "ShouldHave";
     private static final String COULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "CouldHave";
@@ -334,7 +348,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     motivatedByOf(row),
                     qualityCategoryOf(row),
                     readUsesTerms(handle, SparqlTerms.iriRef(subjectIriString)),
-                    readAcceptanceCriteria(handle, SparqlTerms.iriRef(subjectIriString))));
+                    acceptanceCriteriaOrLegacyPlaceholder(
+                            readAcceptanceCriteria(handle, SparqlTerms.iriRef(subjectIriString)))));
         }
     }
 
@@ -373,7 +388,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                                 motivatedByOf(row),
                                 qualityCategoryOf(row),
                                 termsBySubject.getOrDefault(subjectIriString, List.of()),
-                                criteriaBySubject.getOrDefault(subjectIriString, List.of()));
+                                acceptanceCriteriaOrLegacyPlaceholder(
+                                        criteriaBySubject.getOrDefault(subjectIriString, List.of())));
                     })
                     .toList();
         }
@@ -519,6 +535,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
                 .add(literalOf(row, "criterion").getLexicalForm()));
         return bySubject;
+    }
+
+    /**
+     * Substitutes {@link #LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER} for an empty read result - see
+     * that constant's javadoc for why an empty list must never reach {@link Requirement}'s
+     * constructor.
+     */
+    private static List<String> acceptanceCriteriaOrLegacyPlaceholder(List<String> criteria) {
+        return criteria.isEmpty() ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER : criteria;
     }
 
     /**
