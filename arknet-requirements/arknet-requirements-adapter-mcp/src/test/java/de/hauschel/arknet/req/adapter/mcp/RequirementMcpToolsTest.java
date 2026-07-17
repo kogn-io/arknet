@@ -89,7 +89,7 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * {@code acceptanceCriterion} carries no {@code required = false} - a missing value is
+     * {@code acceptanceCriteria} carries no {@code required = false} - a missing value is
      * caught by the domain's {@code sh:minCount 1} invariant ({@link Requirement}'s compact
      * constructor), not silently normalised away here.
      */

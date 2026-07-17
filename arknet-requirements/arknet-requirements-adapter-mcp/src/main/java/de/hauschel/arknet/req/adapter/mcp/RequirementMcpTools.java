@@ -122,7 +122,7 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type,
             @McpToolParam(description = "Testable 'Done when ...' criteria (at least one) that make this "
                     + "requirement's completion checkable")
-            final List<String> acceptanceCriterion,
+            final List<String> acceptanceCriteria,
             @McpToolParam(description = "MoSCoW priority (optional): MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
                     + "WONT_HAVE", required = false)
             final String priority,
@@ -139,7 +139,7 @@ public final class RequirementMcpTools {
         final Requirement created = addRequirement.add(workspaceId,
                 new NewRequirement(title, description, requirementType, requirementPriority,
                         blankToNull(motivatedBy), blankToNull(qualityCategory),
-                        acceptanceCriterion == null ? List.of() : List.copyOf(acceptanceCriterion)));
+                        acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria)));
         return format(created);
     }
 

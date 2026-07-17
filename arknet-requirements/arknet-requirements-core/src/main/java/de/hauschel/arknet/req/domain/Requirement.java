@@ -1,5 +1,6 @@
 package de.hauschel.arknet.req.domain;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -72,6 +73,12 @@ public record Requirement(
         }
         if (acceptanceCriteria.isEmpty()) {
             throw new IllegalArgumentException("acceptanceCriteria must not be empty");
+        }
+        if (acceptanceCriteria.stream().anyMatch(String::isBlank)) {
+            throw new IllegalArgumentException("acceptanceCriteria must not contain blank entries");
+        }
+        if (new HashSet<>(acceptanceCriteria).size() != acceptanceCriteria.size()) {
+            throw new IllegalArgumentException("acceptanceCriteria must not contain duplicate entries");
         }
         if (qualityCategory != null && type != RequirementType.NON_FUNCTIONAL) {
             throw new IllegalArgumentException("qualityCategory is only allowed for non-functional requirements");
