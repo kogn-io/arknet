@@ -31,6 +31,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
@@ -272,6 +273,99 @@ class KognioRdfRequirementRepositoryTest {
         assertThrows(WriteConstraintViolationException.class,
                 () -> repository.create(WORKSPACE_A, tooShortDescription));
         assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+    }
+
+    // ---- findByIds: batch resolution for ResolveRequirements (issue #88) ----------------
+
+    @Test
+    void findByIdsResolvesKnownIdentitiesInOneQuery() {
+        Requirement first = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null);
+        Requirement second = new Requirement(freshId(), new RequirementCode("FR-2"), "Logout",
+                "The system shall end a user session.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null);
+        repository.create(WORKSPACE_A, first);
+        repository.create(WORKSPACE_A, second);
+
+        List<ResolveRequirements.ResolvedRequirement> resolved = repository.findByIds(
+                WORKSPACE_A, List.of(first.id().value(), second.id().value()));
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(new ResolveRequirements.ResolvedRequirement(first.id().value(), first.code())));
+        assertTrue(
+                resolved.contains(new ResolveRequirements.ResolvedRequirement(second.id().value(), second.code())));
+    }
+
+    /** An id absent from the workspace is simply absent from the result, never an error. */
+    @Test
+    void findByIdsSilentlyOmitsUnknownIdentities() {
+        Requirement known = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null);
+        repository.create(WORKSPACE_A, known);
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
+
+        List<ResolveRequirements.ResolvedRequirement> resolved =
+                repository.findByIds(WORKSPACE_A, List.of(known.id().value(), unknown));
+
+        assertEquals(List.of(new ResolveRequirements.ResolvedRequirement(known.id().value(), known.code())),
+                resolved);
+    }
+
+    @Test
+    void findByIdsWithEmptyIdsReturnsAnEmptyListWithoutQuerying() {
+        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of()));
+    }
+
+    @Test
+    void findByIdsIsScopedPerWorkspace() {
+        Requirement inWorkspaceA = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null);
+        repository.create(WORKSPACE_A, inWorkspaceA);
+
+        assertEquals(List.of(), repository.findByIds(WORKSPACE_B, List.of(inWorkspaceA.id().value())));
+    }
+
+    /**
+     * Store-first regression test: {@code RequirementShape} places no {@code sh:maxCount} on
+     * {@code dcterms:identifier}, so a subject with two identifier triples is shape-legal even
+     * though {@code req_add} never writes more than one. {@code findByIds}' mandatory
+     * {@code identifier} join must not multiply such a subject into two
+     * {@link ResolveRequirements.ResolvedRequirement}s carrying the same id - a caller keying its
+     * own results by identity would otherwise throw on the duplicate key.
+     */
+    @Test
+    void findByIdsReturnsExactlyOneResolvedRequirementForASubjectWithSeveralIdentifiers() {
+        RequirementId id = freshId();
+        givenRequirementWithTwoIdentifiers(WORKSPACE_A, id, "FR-1", "FR-1-ALT");
+
+        List<ResolveRequirements.ResolvedRequirement> resolved =
+                repository.findByIds(WORKSPACE_A, List.of(id.value()));
+
+        assertEquals(1, resolved.size());
+        assertEquals(id.value(), resolved.get(0).id());
+    }
+
+    /**
+     * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with
+     * two {@code dcterms:identifier} triples - shape-legal ({@code RequirementShape} places no
+     * {@code sh:maxCount} on the property), but unreachable via {@code req_add}. No other fields
+     * are set: {@code findByIds}' query only selects {@code ?s}/{@code ?identifier}.
+     */
+    private void givenRequirementWithTwoIdentifiers(WorkspaceId workspaceId, RequirementId id, String first,
+            String second) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + first + "\" ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + second + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
     }
 
     // ---- usesTerm: the cross-BC requirement -> glossary-term edge (#36) -----------------

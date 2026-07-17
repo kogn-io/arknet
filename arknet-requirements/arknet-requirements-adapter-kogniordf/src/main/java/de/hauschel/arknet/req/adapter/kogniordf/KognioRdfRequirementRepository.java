@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
@@ -25,6 +26,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
@@ -365,6 +367,72 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                                 termsBySubject.getOrDefault(subjectIriString, List.of()));
                     })
                     .toList();
+        }
+    }
+
+    /**
+     * Batch variant of {@link #findByCode}, keyed by opaque identity instead of business code -
+     * backs {@link ResolveRequirements} (issue #88). One {@code VALUES}-bound query for the whole
+     * batch, not one query per id: the caller (a sibling bounded context's driving adapter,
+     * rendering several requirement references at once) must not pay an N+1 store round-trip.
+     *
+     * <p>Returns the slim {@link ResolveRequirements.ResolvedRequirement} projection, not the full
+     * {@link Requirement} aggregate: the query below therefore joins only {@code identifier}, not
+     * {@code title}/{@code description} - fields {@link ResolveRequirements} never reads.</p>
+     *
+     * <p><strong>No type filter, unlike the sibling ubiquitous-language adapter.</strong>
+     * {@code KognioRdfTermRepository#findByIds} joins {@code ?s a <skos:Concept>} because every
+     * subject in the terms graph carries that one type. Requirements, in contrast, are typed
+     * either {@code arkreq:FunctionalRequirement} or {@code arkreq:NonFunctionalRequirement}; a
+     * type filter here would either need both alternatives (no benefit - {@code dcterms:identifier}
+     * alone already scopes the join to requirements graph subjects that carry a code) or would
+     * arbitrarily exclude one requirement type. The join is therefore only over
+     * {@code VALUES ?s} + {@code dcterms:identifier}.</p>
+     *
+     * <p><strong>Exactly one {@link ResolveRequirements.ResolvedRequirement} per resolved
+     * subject.</strong> {@code RequirementShape}'s identifier constraint carries no
+     * {@code sh:maxCount}, so the single mandatory join below (identifier) is not guaranteed to
+     * bind exactly one row per subject. Grouping by subject and keeping the first row's binding
+     * turns that cardinality back into "the requirements" the port promises, not "one row per
+     * predicate combination" - which is what a naive per-row mapping would leak to every caller.
+     * Which identifier ends up chosen in that (pathological, store-first-only) case is
+     * deliberately unspecified.</p>
+     */
+    @Override
+    public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        // Defense-in-depth, same rationale as the subject check in write(): reject an impossible
+        // identity before it ever reaches SPARQL string concatenation.
+        String values = ids.stream()
+                .map(id -> {
+                    String iriString = id.value();
+                    if (!SparqlTerms.isValidIriReference(iriString)) {
+                        throw new IllegalArgumentException(
+                                "requirement id yields an invalid IRI for SPARQL: " + iriString);
+                    }
+                    return SparqlTerms.iriRef(iriString);
+                })
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            Map<String, ResolveRequirements.ResolvedRequirement> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
+                bySubject.putIfAbsent(subjectIri, new ResolveRequirements.ResolvedRequirement(
+                        ResourceId.of(subjectIri),
+                        new RequirementCode(literalOf(row, "identifier").getLexicalForm())));
+            });
+            return List.copyOf(bySubject.values());
         }
     }
 

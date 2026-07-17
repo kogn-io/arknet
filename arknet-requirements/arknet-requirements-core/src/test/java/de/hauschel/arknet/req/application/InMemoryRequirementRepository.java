@@ -4,8 +4,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -54,5 +57,14 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     @Override
     public List<Requirement> findAll(WorkspaceId workspaceId) {
         return List.copyOf(byWorkspace.getOrDefault(workspaceId, Map.of()).values());
+    }
+
+    @Override
+    public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+        Set<ResourceId> wanted = Set.copyOf(ids);
+        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+                .filter(r -> wanted.contains(r.id().value()))
+                .map(r -> new ResolveRequirements.ResolvedRequirement(r.id().value(), r.code()))
+                .toList();
     }
 }

@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
@@ -39,8 +41,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  * reverting an accepted requirement is rejected. Linking a glossary term is idempotent and
  * independent of the status lifecycle - terms may be linked to a requirement in any status.</p>
  */
-public class RequirementService
-        implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm {
+public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
+        SetRequirementStatus, LinkTerm, ResolveRequirements {
 
     private final RequirementRepository repository;
     private final ResourceIdFactory resourceIdFactory;
@@ -124,6 +126,16 @@ public class RequirementService
                 current.motivatedBy(), current.qualityCategory(), linked);
         repository.update(workspaceId, updated);
         return updated;
+    }
+
+    @Override
+    public List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.length == 0) {
+            return List.of();
+        }
+        return repository.findByIds(workspaceId, List.of(ids));
     }
 
     /**
