@@ -107,6 +107,20 @@ class RequirementTest {
     }
 
     @Test
+    void rejectsBlankAcceptanceCriterion() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                        null, null, null, null, List.of("Login succeeds", "   ")));
+    }
+
+    @Test
+    void rejectsDuplicateAcceptanceCriteria() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                        null, null, null, null, List.of("Login succeeds", "Login succeeds")));
+    }
+
+    @Test
     void allowsQualityCategoryOnNonFunctionalRequirement() {
         Requirement req = new Requirement(ID, new RequirementCode("NFR-1"), "t", "d",
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, "performance", null,
