@@ -399,6 +399,92 @@ class KognioRdfRequirementRepositoryTest {
         assertTrue(ex.getMessage().contains("usesTerm"), ex.getMessage());
     }
 
+    // ---- usesTerm: store-first edges the strict read cannot join (#65) -----------------
+
+    /**
+     * Store-first regression test for #65: an edge that entered the requirements graph via
+     * raw SPARQL (ADR-005), pointing at a term the strict read cannot join (no
+     * {@code dcterms:identifier} in the terms graph), must not be erased by the next
+     * read-modify-write. {@link #update} replaces the subject's triples wholesale from the
+     * record it was handed - and this edge is not, and cannot be, part of that record. The
+     * read stays lossy by design (the edge is simply invisible to
+     * {@link Requirement#usesTerms()}); what must no longer happen is that the loss becomes
+     * destructive.
+     */
+    @Test
+    void storeFirstUsesTermEdgeWithoutIdentifierSurvivesAReplacingUpdate() {
+        String orphanTermIri = givenTermWithoutIdentifier(WORKSPACE_A);
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirementUsing();
+        repository.create(WORKSPACE_A, created);
+        givenUsesTermEdge(WORKSPACE_A, created.id(), orphanTermIri);
+
+        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        assertEquals(List.of(), reloaded.usesTerms(), "unjoinable edge must stay invisible to the read");
+
+        Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
+                reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
+                reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms());
+        repository.update(WORKSPACE_A, accepted);
+
+        assertEquals(1, countUsesTermEdges(WORKSPACE_A, created.id(), orphanTermIri),
+                "store-first edge must survive the replacing update, even though it was never read");
+    }
+
+    /**
+     * Store-first regression test: {@code arkreq:usesTerm} is not range-constrained to
+     * {@code IRI} at the RDF level (the SHACL {@code sh:class skos:Concept} constraint accepts
+     * a blank node just as readily as an IRI), so a store-first edge can legally target a
+     * blank node - {@code [ a skos:Concept ]} written directly into the requirements graph.
+     * Such a target never carries a {@code dcterms:identifier} in the terms graph (it typically
+     * is not even in the terms graph), so it is exactly the kind of edge the preservation query
+     * in {@code write()} must capture. Casting the captured binding to {@link IRI} would throw
+     * a {@link ClassCastException} on a blank node, turning the previously silent data loss of
+     * issue #65 into a crash on every {@link #update} of the affected requirement - a
+     * regression, not a fix.
+     */
+    @Test
+    void storeFirstUsesTermEdgeToABlankNodeSurvivesAReplacingUpdateWithoutCrashing() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirementUsing();
+        repository.create(WORKSPACE_A, created);
+        givenUsesTermEdgeToFreshBlankNodeConcept(WORKSPACE_A, created.id());
+
+        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        assertEquals(List.of(), reloaded.usesTerms(), "blank-node edge must stay invisible to the read");
+
+        Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
+                reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
+                reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms());
+        repository.update(WORKSPACE_A, accepted);
+
+        assertTrue(usesTermEdgeTargetsAConceptBlankNode(WORKSPACE_A, reloaded.id()),
+                "blank-node edge must survive the replacing update and still point at its typed node - "
+                        + "not merely at some blank node");
+    }
+
+    /**
+     * Preserving an unreadable edge must not duplicate a joinable one. Both the ordinary
+     * rewrite and the preservation query run against the same subject inside the same write
+     * transaction; this pins that a joinable edge - which the preservation query's
+     * {@code FILTER NOT EXISTS} must exclude - is still written exactly once.
+     */
+    @Test
+    void joinableUsesTermEdgeIsNotDuplicatedByPreservation() {
+        givenTerm(WORKSPACE_A, "TERM-1");
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(WORKSPACE_A, requirementUsing(new TermRef("TERM-1")));
+
+        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
+                reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
+                reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms());
+        repository.update(WORKSPACE_A, accepted);
+
+        String termIri = "https://w3id.org/arknet/model/term/TERM-1";
+        assertEquals(1, countUsesTermEdges(WORKSPACE_A, reloaded.id(), termIri));
+    }
+
     private static Requirement requirementUsing(TermRef... terms) {
         return new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
@@ -422,6 +508,96 @@ class KognioRdfRequirementRepositoryTest {
                 tx.update(insert);
                 return null;
             });
+        }
+    }
+
+    /**
+     * Writes a glossary term into the sibling terms graph <em>without</em> a
+     * {@code dcterms:identifier} - unreachable via {@code term_add}/{@link #givenTerm}, but
+     * reachable store-first (ADR-005). {@code resolveTerm} cannot resolve such a concept (no
+     * identity to look up by), so a test wiring an edge to it must do so directly per raw
+     * SPARQL as well. Returns the term's IRI for that purpose.
+     */
+    private String givenTermWithoutIdentifier(WorkspaceId workspaceId) {
+        String termIri = "https://w3id.org/arknet/model/term/" + UUID.randomUUID();
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + termIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Anmeldung\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+        return termIri;
+    }
+
+    /**
+     * Writes an {@code arkreq:usesTerm} edge straight into the requirements graph - the
+     * store-first path (ADR-005) that bypasses {@code resolveTerm} entirely, so it can point
+     * at a term the strict resolver would reject.
+     */
+    private void givenUsesTermEdge(WorkspaceId workspaceId, RequirementId subjectId, String termIri) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> <"
+                + termIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Counts an {@code arkreq:usesTerm} edge between one subject and one term directly in the
+     * requirements graph, bypassing {@code findByCode}/{@code findAll} entirely - the
+     * assertion this supports must not rely on the very read path whose blind spot it is
+     * proving safe.
+     */
+    private long countUsesTermEdges(WorkspaceId workspaceId, RequirementId subjectId, String termIri) {
+        String select = "SELECT ?term WHERE { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> <"
+                + termIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return handle.sparqlQuery().select(select).count();
+        }
+    }
+
+    /**
+     * Writes an {@code arkreq:usesTerm} edge straight into the requirements graph, targeting a
+     * freshly minted anonymous blank node typed as a {@code skos:Concept} - RDF-legal (the
+     * property carries no {@code sh:nodeKind} constraint forcing an IRI object) and reachable
+     * only store-first, never via {@code resolveTerm}, which looks concepts up by
+     * {@code dcterms:identifier} and therefore cannot even address a blank node.
+     */
+    private void givenUsesTermEdgeToFreshBlankNodeConcept(WorkspaceId workspaceId, RequirementId subjectId) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> "
+                + "[ a <http://www.w3.org/2004/02/skos/core#Concept> ] } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Checks - via a single raw SPARQL {@code ASK} joining both patterns on the same variable -
+     * that the subject's {@code arkreq:usesTerm} edge still targets a node that itself carries
+     * {@code a skos:Concept} in the requirements graph. This is the identity check for #65's
+     * blank-node case: {@code DELETE WHERE { <subject> ?p ?o }} only ever removes triples whose
+     * subject is the requirement, never the target node's own type triple, so this passing is
+     * proof the edge was re-attached to the very same blank node rather than to a dangling or
+     * freshly-generated one.
+     */
+    private boolean usesTermEdgeTargetsAConceptBlankNode(WorkspaceId workspaceId, RequirementId subjectId) {
+        String ask = "ASK { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> ?term . "
+                + "?term a <http://www.w3.org/2004/02/skos/core#Concept> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return handle.sparqlQuery().ask(ask);
         }
     }
 }

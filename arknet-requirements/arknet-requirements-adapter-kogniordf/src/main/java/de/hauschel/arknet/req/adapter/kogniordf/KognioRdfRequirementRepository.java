@@ -15,6 +15,7 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -209,6 +210,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirement.code().value())
                     + "\" } }";
             String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
+            // 4. Complement of the readUsesTerms join (issue #65): finds this subject's
+            //    usesTerm edges whose target has no dcterms:identifier in the terms graph, i.e.
+            //    exactly the edges readUsesTerms cannot bind and findByCode/findAll therefore
+            //    never put into requirement.usesTerms(). Only ever run on update - see the
+            //    exists-guard below, where exists == true implies expectAbsent == false because
+            //    the expectAbsent branch throws before reaching it, so create's subject (which
+            //    by contract cannot exist yet) never runs this query.
+            String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
+                    + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
+                    + "FILTER NOT EXISTS { GRAPH <" + TERMS_GRAPH + "> { ?term <" + IDENTIFIER_PROPERTY
+                    + "> ?id } } }";
             IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
             handle.transactor().inTransaction(tx -> {
@@ -226,10 +238,42 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 } else if (!exists) {
                     throw new RequirementNotFoundException(workspaceId, requirement.code());
                 }
+                // Capture what a replacing update is about to destroy but could never have read
+                // (see selectUnjoinableUsesTerms above) before deleteExisting wipes it, inside
+                // this same transaction - a separate read beforehand would leave a TOCTOU window
+                // the ASKs above deliberately avoid. The binding is read as a bare RDFTerm, not
+                // cast to IRI: arkreq:usesTerm carries no sh:nodeKind constraint, so its target
+                // is RDF-legally allowed to be a blank node, and a store-first edge can and does
+                // point at one. Casting here would trade #65's silent data loss for a crash on
+                // every update of the affected requirement - a regression, not a fix.
+                List<RDFTerm> unjoinableUsesTerms = exists
+                        ? tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term")).toList()
+                        : List.of();
                 if (exists) {
                     tx.update(deleteExisting);
                 }
                 tx.add(graphIri, graph);
+                // 5. Re-attach the preserved edges only after the gate has already run and the
+                //    rewritten graph is committed - never mixed into `graph` before
+                //    gate.enforce above. A preserved edge's target has, by construction, no
+                //    dcterms:identifier and therefore no asserted type in this write's
+                //    assertedContext (built from the strictly resolved termIris only); feeding
+                //    it to the gate would fail the usesTerm shape's sh:class skos:Concept
+                //    constraint and block every future update of this requirement. Appending it
+                //    here instead is safe precisely because nothing new is introduced - the edge
+                //    already existed in the store and is carried forward untouched. A blank-node
+                //    target keeps its identity across this delete-and-readd cycle: deleteExisting
+                //    only removes triples whose subject is the requirement, never the target
+                //    node's own triples, and the RDFTerm captured by the select above is the same
+                //    object tx.add below writes back - RDF4J compares blank nodes by id, so this
+                //    re-attaches to the very node the store already knows, not a fresh one.
+                if (!unjoinableUsesTerms.isEmpty()) {
+                    Graph preservedEdges = rdf.createGraph();
+                    for (RDFTerm termNode : unjoinableUsesTerms) {
+                        preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
+                    }
+                    tx.add(graphIri, preservedEdges);
+                }
                 return null;
             });
         }
@@ -321,13 +365,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * has no intrinsic statement order and {@link Requirement} compares its {@code usesTerms}
      * list positionally.</p>
      *
-     * <p><strong>The join is lossy, and the loss is not read-only.</strong> An edge whose
-     * target carries no {@code dcterms:identifier} in the terms graph binds no row and drops
-     * out here. The next {@link #update} then rewrites the requirement from the record it was
-     * handed, so a read-modify-write ({@code req_set_status}, {@code req_link_term}) erases the
-     * dropped edge from the store for good. Every edge written through {@link #resolveTerm}
-     * is joinable by construction, so this cannot bite via the MCP tools; an edge that entered
-     * the requirements graph some other way (store-first, ADR-005) can be lost. See issue #65.</p>
+     * <p><strong>The join is lossy, but the loss is no longer destructive (issue #65).</strong>
+     * An edge whose target carries no {@code dcterms:identifier} in the terms graph binds no
+     * row and drops out here - {@link Requirement#usesTerms()} never reflects it, and there is
+     * no way for a caller to even ask to keep it, since it is not part of the record. {@link
+     * #write} nonetheless survives it: on an update it separately queries, inside the same
+     * write transaction, for exactly the edges this join cannot bind and re-attaches them after
+     * rewriting the subject's triples - so a read-modify-write ({@code req_set_status},
+     * {@code req_link_term}) carries the dropped edge along instead of erasing it. Every edge
+     * written through {@link #resolveTerm} is joinable by construction, so this cannot bite via
+     * the MCP tools; an edge that entered the requirements graph some other way (store-first,
+     * ADR-005) remains invisible to every read but no longer dies on the next write.</p>
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
         String query = "SELECT ?termId WHERE { "
@@ -461,6 +509,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     private static Literal literalOf(BindingSet row, String name) {
         return (Literal) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /**
+     * Reads a binding as the bare {@link RDFTerm} it is, without narrowing it to {@link IRI} -
+     * unlike {@link #iriOf}, deliberately used where the binding's kind is not known in advance
+     * (e.g. an {@code arkreq:usesTerm} target, which may legally be a blank node).
+     */
+    private static RDFTerm termOf(BindingSet row, String name) {
+        return row.getValue(name)
                 .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
     }
 }
