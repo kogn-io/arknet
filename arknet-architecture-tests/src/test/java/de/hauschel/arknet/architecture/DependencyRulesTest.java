@@ -10,10 +10,18 @@ import com.tngtech.archunit.lang.ArchRule;
 /**
  * Nails down the dependency invariants that the Maven module cut cannot express.
  *
- * <p><strong>What is deliberately absent.</strong> Rules like "a core does not depend on its
- * adapters" or "no bounded context depends on another" are not here: Maven already enforces
- * them harder than ArchUnit could, because the forbidden module is simply not on the core's
- * compile classpath. Restating them would be ceremony. Every rule below guards a property
+ * <p><strong>What is deliberately absent.</strong> A rule like "a core does not depend on its
+ * adapters" is not here: Maven already enforces it harder than ArchUnit could, because the
+ * adapter module is simply not on the core's compile classpath. Restating it would be
+ * ceremony. "No bounded context depends on another" used to be phrased the same blanket way,
+ * but issue #77 precised it: the invariant binds the {@code *-core} modules, not every module
+ * of a bounded context. A driving (In-) adapter is the gate into its own hexagon, not part of
+ * its core, and may call a neighbour bounded context's driving port --
+ * {@code arknet-requirements-adapter-mcp} depends on {@code arknet-ubiquitous-language-core}
+ * for exactly that (rendering a linked term's business code instead of its bare IRI in
+ * {@code req_get}/{@code req_list}; see CLAUDE.md). Maven still enforces the narrower,
+ * {@code *-core}-scoped claim without any help from this module: none of the {@code *-core}
+ * POMs declares a dependency on a sibling bounded context. Every rule below guards a property
  * that lives <em>inside</em> a module or <em>across</em> a seam Maven cannot see, and that
  * would therefore erode silently -- today they hold only by reviewer attention (#60).</p>
  *
