@@ -36,11 +36,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Four hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Three hexagons are wired:</p>
  *
  * <ul>
- *   <li><strong>arknet engine</strong> ({@link ArknetTools} over {@link ArknetEngine}) -
- *       load / validate / query / generate.</li>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
  *       {@link RequirementService} over an RDF-persisted requirement repository) - the
  *       four requirement tools are registered, callable and backed by kognio-rdf
@@ -71,16 +69,6 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  */
 @Configuration(proxyBeanMethods = false)
 public class ArknetMcpConfiguration {
-
-    @Bean
-    ArknetEngine arknetEngine() {
-        return new ArknetEngine();
-    }
-
-    @Bean
-    ArknetTools arknetTools(final ArknetEngine engine) {
-        return new ArknetTools(engine);
-    }
 
     // --- Shared store ----------------------------------------------------------
 

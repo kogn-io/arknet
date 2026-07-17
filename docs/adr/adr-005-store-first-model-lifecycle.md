@@ -60,3 +60,40 @@ Modell-Lebenszyklus.
 - **Beide Lebenszyklen dauerhaft gleichwertig fuehren (Datei UND Store als Wahrheit).**
   Verworfen: doppelter Validierungs- und Provenance-Weg plus staendige Synchronisation --
   genau die Zustandsstreuung, die vermieden werden soll.
+
+## Nachtrag 2026-07-17 (#75): Duldungsklausel kassiert, Datei-Pipeline entfernt
+
+Punkt 2 der Entscheidung und der dritte Negativ-Punkt der Konsequenzen setzten eine Duldung
+voraus: die datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate`/`arknet_query`/
+`arknet_generate`/`arknet_list_queries`/`arknet_list_projections`) bleiben "aussterbend, aber
+geduldet fuer Import und Interop" -- wer eine Datei als Interop-Format braucht, geht ueber
+Import/Export statt ueber den primaeren Lebenszyklus. Diese Klausel wird hiermit **kassiert**,
+nicht nur vollzogen: der Code, der sie eingeloest haette, ist entfernt.
+
+**Grund fuer die Verschaerfung:** Die Pruefung gegen den Code zeigte, dass die Duldung nie einen
+realen Import gedeckt hat. `ArknetEngine` hielt einen eigenen `SailRepository(new MemoryStore())`,
+vollstaendig getrennt vom Workspace-`DatasetLifecycle`. `arknet_load` hat **nie** in den Store
+importiert -- es fuellte einen Wegwerf-In-Memory-Store, der bei Prozessende verschwand. Die
+"zwei Wahrheiten nebeneinander" aus dem Kontext-Abschnitt waren also keine zwei gleichwertigen
+Modell-Lebenszyklen, sondern ein gelebter (Store) und ein fiktiver (Datei-Import, der nirgendwo
+ankam). Die Duldung deckte damit die Fiktion eines Imports, nicht einen funktionierenden.
+
+**Entfernt** (#75): die Module `arknet-core` (`ModelLoader`, `ValidationReport`,
+`ValidationResult`, `SparqlExecutor`) und `arknet-projection` (vier Projektionen, drei Mustache-
+Templates, sechs `.sparql`-Dateien) vollstaendig; aus `arknet-mcp` die Klassen `ArknetEngine` und
+`ArknetTools` sowie deren zwei Beans in `ArknetMcpConfiguration`. Wiederherstellbar ueber den
+Abriss-Commit dieses Nachtrags (Muster: doc42-origin, Import-Commit `139bb86`).
+
+**Bleibt unveraendert:** `arknet-ontology` (alle `.ttl`-Module) -- der `ModelLoader` war nur *ein*
+Konsument des Metamodells, nicht sein Eigentuemer; alle drei BC-Out-Adapter laden ihre
+`.ttl`/Shapes direkt aus `arknet-ontology`, nichts lief transitiv ueber `arknet-core`.
+`arknet-process.ttl`, `arknet-architecture.ttl`, `arknet-privacy.ttl` bleiben als Vorrat fuer
+kuenftige BCs liegen. Das self-contained `store-report.html` (#47, `store_overview`) bleibt der
+einzige *generierende* Ausgabepfad -- kein AsciiDoc, kein PDF, kein PlantUML mehr, bis ein
+Nachfolger (#16) neu entscheidet, ob eine Template-Engine in der MCP-first-Welt ueberhaupt noch
+das richtige Werkzeug ist.
+
+Der dritte Negativ-Punkt der Konsequenzen ("wer eine Datei als Interop-Format braucht, geht ueber
+Import/Export") ist damit ebenfalls ueberholt: es gibt aktuell **keinen** Import/Export-Pfad mehr,
+weder einen funktionierenden noch einen fiktiven. Ein store-basierter Reverse-Engineering-Weg
+(erster Negativ-Punkt oben) bleibt so lange offen, bis der Bedarf konkret ist.

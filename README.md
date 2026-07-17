@@ -18,15 +18,6 @@ claude --plugin-dir /path/to/arknet
 
 ### MCP-Tools
 
-| Tool | Beschreibung |
-|------|-------------|
-| `arknet_load` | Turtle-Modell in Triple Store laden |
-| `arknet_validate` | SHACL-Validierung (Violations + Warnings) |
-| `arknet_query` | SPARQL-Query ausfuehren (frei oder vordefiniert Q01-Q20) |
-| `arknet_list_queries` | Vordefinierte Queries auflisten |
-| `arknet_generate` | Projektion als HTML/PDF generieren (Default: context-map) |
-| `arknet_list_projections` | Verfuegbare Projektionstypen auflisten |
-
 Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
 
 | Tool | Beschreibung |
@@ -66,15 +57,13 @@ Das Modell lebt primaer im lokalen RDF-Store (kognio-rdf), **persistent ueber Se
 
 **Modell verwalten:** ueber die store-basierten BC-Tools (`req_*`, `term_*`, `uc_*`) -- nicht durch Text-Edits an einer `.ttl`. SHACL-Validierung greift einheitlich am Write-Gate des Stores: ein ungueltiger Schreibvorgang wird abgelehnt, nichts wird persistiert.
 
-Die datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate` aus einer `.ttl`) gelten als **aussterbend** -- geduldet fuer Import/Interop, aber kein primaerer Modell-Lebenszyklus mehr. Hintergrund: [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md).
+Die vormals geduldeten datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate`/`arknet_query`/`arknet_generate` aus einer `.ttl`) wurden entfernt -- store-first ist der einzige Modell-Lebenszyklus, keine parallele Datei-Wahrheit mehr. Hintergrund: [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md) inkl. Nachtrag.
 
 ## Module
 
 | Modul | Beschreibung |
 |-------|-------------|
 | `arknet-ontology` | OWL-Ontologie und SHACL-Shapes (nur .ttl Ressourcen, kein Java) |
-| `arknet-core` | RDF4J Triple Store, SPARQL-Execution, SHACL-Validierung |
-| `arknet-projection` | Mustache-Templates + AsciidoctorJ Pipeline (Turtle -> AsciiDoc -> HTML/PDF) |
 | `arknet-mcp` | MCP-Server (stdio) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) |
 | `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`, opake `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technischer Support der kognio-rdf-Out-Adapter: das geteilte SHACL-Write-Gate (validate-before-commit) |
@@ -98,11 +87,13 @@ Modularer Aufbau unter dem Namespace `https://w3id.org/arknet/`:
 
 ## Architektur
 
-Pipes & Filters:
+Pipes & Filters (Produktvision, siehe `docs/produktvision.adoc`; **nicht implementiert** -- der generierende Ausgabepfad wurde mit #75 entfernt, siehe ADR-005-Nachtrag):
 
 ```
 Turtle (.ttl) -> Parse -> Validate (SHACL) -> Triple Store (RDF4J) -> SPARQL -> Mustache -> AsciiDoc -> HTML/PDF
 ```
+
+Gelebt wird heute store-first (MCP-Write-Tools -> RDF4J-Store -> generischer Lesepfad `store_overview`/`resource_get`, s.o.).
 
 ## Herkunft
 

@@ -48,8 +48,6 @@
 
     <modules>
         <module>arknet-ontology</module>
-        <module>arknet-core</module>
-        <module>arknet-projection</module>
         <module>arknet-mcp</module>
         <module>arknet-shared-kernel</module>
         <module>arknet-persistence-support</module>
