@@ -3,7 +3,9 @@ package de.hauschel.arknet.req.application.port.out;
 import java.util.List;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -68,4 +70,23 @@ public interface RequirementRepository {
      * @return all requirements, never {@code null}
      */
     List<Requirement> findAll(WorkspaceId workspaceId);
+
+    /**
+     * Finds every requirement in a workspace whose identity is among {@code ids}, in one store
+     * round-trip - backs {@link ResolveRequirements} (issue #88). This is a batch lookup, not a
+     * per-id existence check: an id absent from the workspace is simply absent from the result,
+     * never an error.
+     *
+     * <p>Returns the slim {@link ResolveRequirements.ResolvedRequirement} projection, not the
+     * full {@link Requirement} aggregate: the only consumer of this method is
+     * {@link ResolveRequirements}, which exists purely to answer "what code names this identity"
+     * for display - joining fields such as {@code title}/{@code description} the caller never
+     * reads would needlessly exclude a store-first requirement that carries an identity and a
+     * code but happens to miss one of them.</p>
+     *
+     * @param workspaceId the workspace (architecture model) to look up requirements in
+     * @param ids         the opaque identities to resolve; an empty list yields an empty result
+     * @return the resolved requirements found, in no particular order, never {@code null}
+     */
+    List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId, List<ResourceId> ids);
 }
