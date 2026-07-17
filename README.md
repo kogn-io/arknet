@@ -6,7 +6,7 @@ W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar
 
 ## Voraussetzungen
 
-- Java 21+
+- Java 25+
 - Maven 3.9+
 
 ## Claude Code Plugin

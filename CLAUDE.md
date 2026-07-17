@@ -15,7 +15,8 @@
 
 ## Tech-Stack
 
-- Java 21+, Maven Multi-Module
+- Java 25+ (`release 25` seit #68 -- io.kogn.rdf ist Java-25-gebaut), Maven Multi-Module
+- Bauen/Testen: shell-`mvn` (default JDK 25); JDT-MCP kann `--release 25` (noch) nicht
 - RDF4J 6.x (Triple Store + SHACL Sail)
 - AsciidoctorJ + asciidoctor-diagram (AsciiDoc → HTML/PDF)
 - PlantUML (Diagramme)
