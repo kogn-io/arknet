@@ -19,6 +19,7 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfTermLookup;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
@@ -26,9 +27,13 @@ import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfActorLookup;
+import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfRequirementLookup;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfUseCaseRepositoryFactory;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
 import de.hauschel.arknet.uc.application.UseCaseService;
+import de.hauschel.arknet.uc.application.port.out.ActorLookup;
+import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
 /**
@@ -57,9 +62,14 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       RDF4J-free wiring as requirements).</li>
  *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
  *       an RDF-persisted use-case repository) - the three use-case tools, assembled through
- *       {@link KognioRdfUseCaseRepositoryFactory}. Its out-adapter strictly resolves a use
- *       case's requirement/actor label references against the shared store, so it must read
- *       what the other two hexagons wrote.</li>
+ *       {@link KognioRdfUseCaseRepositoryFactory}. {@code uc_add}'s cross-BC label-to-identity
+ *       resolution (issue #89, the use-cases analogue of requirements' #77) is two separate
+ *       {@link KognioRdfRequirementLookup}/{@link KognioRdfActorLookup} beans over the same
+ *       shared dataset lifecycle, called once by {@link UseCaseService#add}. {@code uc_get}/
+ *       {@code uc_list}'s reverse direction (identity back to a displayable business
+ *       code/name) is not a second store adapter - it is the requirements hexagon's own
+ *       {@link ResolveRequirements} and the ubiquitous-language hexagon's own
+ *       {@link ResolveTerms} in-ports, wired straight into {@link UseCaseMcpTools} (#89).</li>
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
@@ -174,10 +184,11 @@ public class ArknetMcpConfiguration {
 
     /**
      * The use-case out-adapter, assembled over the <em>shared</em> {@link DatasetLifecycle}
-     * bean. This is what makes the strict cross-bounded-context resolution work: when a use
-     * case is saved, its step-level {@code stepRealises} labels (e.g. {@code FR-1}) and its
-     * {@code primaryActor}/{@code supportingActor} labels are looked up against the same
-     * per-workspace store the requirements and ubiquitous-language repositories write into.
+     * bean. Since issue #89, this adapter no longer performs any cross-BC lookup itself - it
+     * persists the already-resolved {@link de.hauschel.arknet.uc.domain.ActorRef}/
+     * {@link de.hauschel.arknet.uc.domain.RequirementRef} identities {@link UseCaseService}
+     * hands it (resolved via {@link #useCaseRequirementLookup}/{@link #useCaseActorLookup}
+     * below).
      */
     @Bean
     UseCaseRepository useCaseRepository(
@@ -185,16 +196,51 @@ public class ArknetMcpConfiguration {
         return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle, resourceIdFactory);
     }
 
+    /**
+     * Resolves a requirement's human-typed business code (e.g. {@code FR-1}) to its opaque
+     * subject identity - the strict cross-BC lookup {@code uc_add}'s step-level
+     * {@code realises} references need (issue #89). Acquires datasets from the same shared
+     * {@link DatasetLifecycle} as {@link #requirementRepository}, so it reads the same
+     * workspace the requirements hexagon writes into.
+     */
     @Bean
-    UseCaseService useCaseService(
-            final UseCaseRepository repository, final ResourceIdFactory resourceIdFactory) {
-        return new UseCaseService(repository, resourceIdFactory);
+    RequirementLookup useCaseRequirementLookup(final DatasetLifecycle datasetLifecycle) {
+        return new KognioRdfRequirementLookup(datasetLifecycle);
+    }
+
+    /**
+     * Resolves an actor's human-typed name (e.g. {@code Customer}) to its opaque subject
+     * identity - the strict cross-BC lookup {@code uc_add}'s {@code primaryActor}/
+     * {@code supportingActors} references need (issue #89). Acquires datasets from the same
+     * shared {@link DatasetLifecycle} as {@link #termRepository}, so it reads the same
+     * workspace the ubiquitous-language hexagon writes into.
+     */
+    @Bean
+    ActorLookup useCaseActorLookup(final DatasetLifecycle datasetLifecycle) {
+        return new KognioRdfActorLookup(datasetLifecycle);
     }
 
     @Bean
+    UseCaseService useCaseService(
+            final UseCaseRepository repository, final ResourceIdFactory resourceIdFactory,
+            final RequirementLookup useCaseRequirementLookup, final ActorLookup useCaseActorLookup) {
+        return new UseCaseService(repository, resourceIdFactory, useCaseRequirementLookup, useCaseActorLookup);
+    }
+
+    /**
+     * {@code resolveTerms}/{@code resolveRequirements} are the ubiquitous-language and
+     * requirements hexagons' own driving ports (implemented by their {@code TermService}/
+     * {@code RequirementService} beans) - borrowed here purely so {@code uc_get}/
+     * {@code uc_list} can render a referenced actor's name / requirement's business code
+     * instead of a bare IRI (issue #89). This wires an In-Adapter to two <em>different</em>
+     * hexagons' In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem
+     * anderen BC" precision in CLAUDE.md.
+     */
+    @Bean
     UseCaseMcpTools useCaseMcpTools(
-            final UseCaseService service, final WorkspaceId workspaceId) {
-        return new UseCaseMcpTools(service, service, service, workspaceId);
+            final UseCaseService service, final ResolveTerms resolveTerms,
+            final ResolveRequirements resolveRequirements, final WorkspaceId workspaceId) {
+        return new UseCaseMcpTools(service, service, service, resolveTerms, resolveRequirements, workspaceId);
     }
 
     // --- Generic store report (domain-agnostic read path) ----------------------

@@ -3,9 +3,11 @@ package de.hauschel.arknet.uc.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,36 +16,48 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
-import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 
 /**
- * Policy tests for {@link UseCaseService}: opaque identity minting, code assignment, listing
- * and lookup, exercised against an in-memory fake repository and a deterministic fake
- * {@link ResourceIdFactory}.
+ * Policy tests for {@link UseCaseService}: opaque identity minting, code assignment, listing,
+ * lookup and reference resolution, exercised against an in-memory fake repository, deterministic
+ * fake {@link ResourceIdFactory} and fake {@code ActorLookup}/{@code RequirementLookup}.
  */
 class UseCaseServiceTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
 
+    private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
+    private static final ResourceId PAYMENT_PROVIDER_ID =
+            ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider");
+    private static final ResourceId FR5_ID = ResourceId.of("https://w3id.org/arknet/id/req-fr5");
+
     private InMemoryUseCaseRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
+    private InMemoryRequirementLookup requirementLookup;
+    private InMemoryActorLookup actorLookup;
     private UseCaseService service;
 
     @BeforeEach
     void setUp() {
         repository = new InMemoryUseCaseRepository();
         resourceIdFactory = new FakeResourceIdFactory();
-        service = new UseCaseService(repository, resourceIdFactory);
+        requirementLookup = new InMemoryRequirementLookup();
+        actorLookup = new InMemoryActorLookup();
+        actorLookup.register("Customer", CUSTOMER_ID);
+        actorLookup.register("PaymentProvider", PAYMENT_PROVIDER_ID);
+        requirementLookup.register("FR5", FR5_ID);
+        service = new UseCaseService(repository, resourceIdFactory, requirementLookup, actorLookup);
     }
 
     private static NewUseCase newUseCase(String title) {
-        return new NewUseCase(title, "goal of " + title, null, null, new ActorRef("Customer"),
-                List.of(), null, null, List.of(new Step(1, "do something", List.of())), List.of());
+        return new NewUseCase(title, "goal of " + title, null, null, "Customer",
+                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of());
     }
 
     @Test
@@ -65,24 +79,44 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void addCarriesTheCompleteUseCaseThrough() {
+    void addResolvesActorAndRequirementReferencesViaTheLookupPorts() {
         NewUseCase command = new NewUseCase("Place order", "Customer places an order", "Webshop",
-                "Customer opens the cart", new ActorRef("Customer"),
-                List.of(new ActorRef("PaymentProvider")), "Customer is logged in", "Order is recorded",
-                List.of(new Step(1, "select items", List.of(new RequirementRef("FR5"))),
-                        new Step(2, "confirm", List.of())),
+                "Customer opens the cart", "Customer",
+                List.of("PaymentProvider"), "Customer is logged in", "Order is recorded",
+                List.of(new NewStep(1, "select items", List.of("FR5")),
+                        new NewStep(2, "confirm", List.of())),
                 List.of("2a. Payment declined -> abort"));
 
         UseCase added = service.add(WS, command);
 
         assertEquals("Webshop", added.scope());
         assertEquals("Customer opens the cart", added.trigger());
-        assertEquals(List.of(new ActorRef("PaymentProvider")), added.supportingActors());
+        assertEquals(new ActorRef(CUSTOMER_ID), added.primaryActor());
+        assertEquals(List.of(new ActorRef(PAYMENT_PROVIDER_ID)), added.supportingActors());
         assertEquals("Customer is logged in", added.precondition());
         assertEquals("Order is recorded", added.postcondition());
         assertEquals(2, added.steps().size());
-        assertEquals(List.of(new RequirementRef("FR5")), added.steps().get(0).realises());
+        assertEquals(List.of(new RequirementRef(FR5_ID)), added.steps().get(0).realises());
         assertEquals(List.of("2a. Payment declined -> abort"), added.extensions());
+    }
+
+    @Test
+    void addPropagatesAnUnknownActorReferenceFromTheLookupPort() {
+        NewUseCase command = new NewUseCase("Broken", "goal", null, null, "Unknown",
+                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of());
+
+        assertThrows(NoSuchElementException.class, () -> service.add(WS, command));
+        assertTrue(service.list(WS).isEmpty());
+    }
+
+    @Test
+    void addPropagatesAnUnknownRequirementReferenceFromTheLookupPort() {
+        NewUseCase command = new NewUseCase("Broken", "goal", null, null, "Customer",
+                List.of(), null, null,
+                List.of(new NewStep(1, "do something", List.of("FR-UNKNOWN"))), List.of());
+
+        assertThrows(NoSuchElementException.class, () -> service.add(WS, command));
+        assertTrue(service.list(WS).isEmpty());
     }
 
     @Test

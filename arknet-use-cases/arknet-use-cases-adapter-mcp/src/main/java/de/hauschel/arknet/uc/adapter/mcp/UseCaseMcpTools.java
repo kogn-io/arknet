@@ -1,13 +1,20 @@
 package de.hauschel.arknet.uc.adapter.mcp;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
+import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
@@ -16,6 +23,8 @@ import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the use-cases component: exposes the use-case use-cases as MCP
@@ -35,8 +44,8 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  * including its ordered step list and its label references to requirements and actors - in a
  * single call (issue #41). The nested {@link StepInput} shape mirrors the domain
  * {@link Step}; requirement/actor references are passed as bare labels (e.g. {@code FR-1},
- * {@code Customer}). Whether those labels resolve against the shared workspace store is
- * enforced by the out-adapter, not here.</p>
+ * {@code Customer}) straight into {@link NewUseCase}/{@link NewStep} - resolving them to opaque
+ * identities is the application service's job (issue #89), not this adapter's.</p>
  *
  * <p><strong>Error hand-off.</strong> This adapter deliberately does not catch domain or
  * adapter exceptions. Spring AI maps any thrown exception to an error {@code CallToolResult}
@@ -50,30 +59,56 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  * exactly one workspace - the {@code workspaceId} injected at construction - and does not
  * expose the workspace as a tool argument. The composition root resolves that id per project;
  * see {@code WorkspaceIdResolver}.</p>
+ *
+ * <p><strong>Actor/requirement display resolution (issue #89).</strong> {@link ActorRef} and
+ * {@link RequirementRef} carry an opaque subject identity, not a business label - but a human
+ * who typed {@code Customer}/{@code FR-1} into {@code uc_add} expects to see those again, not a
+ * raw IRI they cannot re-type. This adapter is the gate into the use-cases hexagon, not part of
+ * its core, so it may borrow driving ports of <em>different</em> hexagons
+ * ({@link ResolveTerms}, owned by ubiquitous-language, and {@link ResolveRequirements}, owned by
+ * requirements) to answer that purely for display - the use-cases core itself still never
+ * depends on {@code arknet-ubiquitous-language-core}/{@code arknet-requirements-core}, and
+ * {@code uc_add}'s own write path still resolves via the decoupled {@code ActorLookup}/
+ * {@code RequirementLookup} out-ports (ADR-008). {@link #formatFull} calls
+ * {@link ResolveTerms#getById}/{@link ResolveRequirements#getById} exactly once each per
+ * rendering, batched across every {@link ActorRef}/{@link RequirementRef} involved; an id either
+ * port could not resolve simply falls back to the bare IRI - rendering never throws and never
+ * drops a reference.</p>
  */
 public final class UseCaseMcpTools {
 
     private final AddUseCase addUseCase;
     private final ListUseCases listUseCases;
     private final GetUseCase getUseCase;
+    private final ResolveTerms resolveTerms;
+    private final ResolveRequirements resolveRequirements;
     private final WorkspaceId workspaceId;
 
     /**
-     * Creates the adapter with its three driving in-ports and the workspace it serves.
+     * Creates the adapter with its three driving in-ports, the two borrowed sibling-hexagon
+     * display ports and the workspace it serves.
      *
-     * @param addUseCase   in-port backing {@code uc_add}
-     * @param listUseCases in-port backing {@code uc_list}
-     * @param getUseCase   in-port backing {@code uc_get}
-     * @param workspaceId  the single workspace all tool calls route to
+     * @param addUseCase          in-port backing {@code uc_add}
+     * @param listUseCases        in-port backing {@code uc_list}
+     * @param getUseCase          in-port backing {@code uc_get}
+     * @param resolveTerms        ubiquitous-language driving port used only to render a
+     *                            referenced actor's business name instead of its bare IRI
+     * @param resolveRequirements requirements driving port used only to render a referenced
+     *                            requirement's business code instead of its bare IRI
+     * @param workspaceId         the single workspace all tool calls route to
      */
     public UseCaseMcpTools(
             final AddUseCase addUseCase,
             final ListUseCases listUseCases,
             final GetUseCase getUseCase,
+            final ResolveTerms resolveTerms,
+            final ResolveRequirements resolveRequirements,
             final WorkspaceId workspaceId) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
+        this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
+        this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
     }
 
@@ -129,11 +164,11 @@ public final class UseCaseMcpTools {
                 goal,
                 blankToNull(scope),
                 blankToNull(trigger),
-                new ActorRef(primaryActor),
-                toActorRefs(supportingActors),
+                primaryActor,
+                supportingActors == null ? List.of() : List.copyOf(supportingActors),
                 blankToNull(precondition),
                 blankToNull(postcondition),
-                toSteps(steps),
+                toNewSteps(steps),
                 extensions == null ? List.of() : List.copyOf(extensions));
         final UseCase created = addUseCase.add(workspaceId, command);
         return formatFull(created);
@@ -155,27 +190,19 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id) {
         final UseCaseCode code = new UseCaseCode(id);
         return getUseCase.get(workspaceId, code)
-                .map(UseCaseMcpTools::formatFull)
+                .map(this::formatFull)
                 .orElse("Use case not found: " + code.value());
     }
 
     // --- mapping helpers -------------------------------------------------------
 
-    private static List<ActorRef> toActorRefs(final List<String> labels) {
-        if (labels == null) {
-            return List.of();
-        }
-        return labels.stream().map(ActorRef::new).toList();
-    }
-
-    private static List<Step> toSteps(final List<StepInput> steps) {
+    private static List<NewStep> toNewSteps(final List<StepInput> steps) {
         if (steps == null) {
             return List.of();
         }
         return steps.stream()
-                .map(s -> new Step(s.position(), s.text(),
-                        s.realises() == null ? List.of()
-                                : s.realises().stream().map(RequirementRef::new).toList()))
+                .map(s -> new NewStep(s.position(), s.text(),
+                        s.realises() == null ? List.of() : List.copyOf(s.realises())))
                 .toList();
     }
 
@@ -183,17 +210,20 @@ public final class UseCaseMcpTools {
         return "%s | %s | %s".formatted(uc.code().value(), uc.title(), uc.goal());
     }
 
-    private static String formatFull(final UseCase uc) {
+    private String formatFull(final UseCase uc) {
+        final Map<ResourceId, ResolvedTerm> actorsById = resolveActorsFor(uc);
+        final Map<ResourceId, ResolvedRequirement> requirementsById = resolveRequirementsFor(uc);
+
         final StringBuilder sb = new StringBuilder();
         sb.append(uc.code().value()).append(' ').append(uc.title()).append('\n');
         sb.append("  goal: ").append(uc.goal()).append('\n');
         appendOptional(sb, "scope", uc.scope());
         appendOptional(sb, "trigger", uc.trigger());
-        sb.append("  primaryActor: ").append(uc.primaryActor().label()).append('\n');
+        sb.append("  primaryActor: ").append(renderActor(uc.primaryActor(), actorsById)).append('\n');
         if (!uc.supportingActors().isEmpty()) {
             sb.append("  supportingActors: ")
-                    .append(uc.supportingActors().stream().map(ActorRef::label).reduce((a, b) -> a + ", " + b)
-                            .orElse(""))
+                    .append(uc.supportingActors().stream().map(ref -> renderActor(ref, actorsById))
+                            .reduce((a, b) -> a + ", " + b).orElse(""))
                     .append('\n');
         }
         appendOptional(sb, "precondition", uc.precondition());
@@ -203,7 +233,7 @@ public final class UseCaseMcpTools {
             sb.append("    ").append(step.position()).append(". ").append(step.text());
             if (!step.realises().isEmpty()) {
                 sb.append(" -> realises ")
-                        .append(step.realises().stream().map(RequirementRef::label)
+                        .append(step.realises().stream().map(ref -> renderRequirement(ref, requirementsById))
                                 .reduce((a, b) -> a + ", " + b).orElse(""));
             }
             sb.append('\n');
@@ -215,6 +245,67 @@ public final class UseCaseMcpTools {
             }
         }
         return sb.toString().stripTrailing();
+    }
+
+    /** Renders one actor reference: its resolved business name, or its bare IRI as a fallback. */
+    private static String renderActor(final ActorRef ref, final Map<ResourceId, ResolvedTerm> actorsById) {
+        final ResolvedTerm term = actorsById.get(ref.value());
+        return term != null ? term.code().value() : ref.value().value();
+    }
+
+    /**
+     * Renders one requirement reference: its resolved business code, or its bare IRI as a
+     * fallback.
+     */
+    private static String renderRequirement(
+            final RequirementRef ref, final Map<ResourceId, ResolvedRequirement> requirementsById) {
+        final ResolvedRequirement requirement = requirementsById.get(ref.value());
+        return requirement != null ? requirement.code().value() : ref.value().value();
+    }
+
+    /**
+     * Batch-resolves every actor referenced by {@code uc} (its primary actor plus its supporting
+     * actors) in exactly one call to {@link ResolveTerms#getById}.
+     *
+     * <p><strong>Structurally cannot throw on a duplicate key (mirrors
+     * {@code RequirementMcpTools#resolveTermsFor}).</strong> {@link ResolveTerms} promises at
+     * most one {@link ResolvedTerm} per identity, but this method must not rely on every
+     * implementation upholding that: a plain {@code Collectors.toMap(t -> t.id(), t -> t)} throws
+     * {@code IllegalStateException} the moment two returned {@link ResolvedTerm}s share an
+     * identity, turning a display concern into a thrown exception - the very thing this rendering
+     * path exists to avoid. The merge function below keeps the first entry for a duplicate key
+     * instead; which one is kept is immaterial here, since rendering only ever reads
+     * {@link ResolvedTerm#code()}.</p>
+     */
+    private Map<ResourceId, ResolvedTerm> resolveActorsFor(final UseCase uc) {
+        final ResourceId[] ids = Stream.concat(
+                        Stream.of(uc.primaryActor()), uc.supportingActors().stream())
+                .map(ActorRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveTerms.getById(workspaceId, ids).stream()
+                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
+    }
+
+    /**
+     * Batch-resolves every requirement referenced by {@code uc}'s steps (the union of all
+     * {@code realises} references) in exactly one call to {@link ResolveRequirements#getById} -
+     * same merge-function reasoning as {@link #resolveActorsFor}.
+     */
+    private Map<ResourceId, ResolvedRequirement> resolveRequirementsFor(final UseCase uc) {
+        final ResourceId[] ids = uc.steps().stream()
+                .flatMap(step -> step.realises().stream())
+                .map(RequirementRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveRequirements.getById(workspaceId, ids).stream()
+                .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
     }
 
     private static void appendOptional(final StringBuilder sb, final String field, final String value) {

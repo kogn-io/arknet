@@ -1,0 +1,157 @@
+package de.hauschel.arknet.uc.adapter.kogniordf;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import io.kogn.rdf.dataset.DatasetHandle;
+import io.kogn.rdf.dataset.DatasetId;
+import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.UnresolvedReferenceException;
+import de.hauschel.arknet.uc.application.port.out.ActorLookup;
+
+/**
+ * Integration test for {@link KognioRdfActorLookup} against an in-memory RDF4J-backed
+ * kognio-rdf store.
+ *
+ * <p>This carries the strict, prefLabel-based cross-BC resolution behaviour that used to be
+ * pinned inside {@code KognioRdfUseCaseRepositoryTest} (issue #41) - extracted here because
+ * issue #89 moved the resolution itself out of the use-case repository's write path into this
+ * dedicated port/adapter.</p>
+ */
+class KognioRdfActorLookupTest {
+
+    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
+    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+
+    private DatasetLifecycleRdf4j lifecycle;
+    private ActorLookup actorLookup;
+
+    @BeforeEach
+    void setUp() throws IOException {
+        Path tmp = Files.createTempDirectory("arknet-uc-actor-lookup-it");
+        DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+        lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
+        actorLookup = new KognioRdfActorLookup(datasetLifecycle);
+    }
+
+    @AfterEach
+    void tearDown() {
+        lifecycle.shutDownAll();
+    }
+
+    @Test
+    void resolvesAKnownHumanActorNameToItsSubjectIdentity() {
+        String actorIri = givenHumanActor(WORKSPACE_A, "customer", "Customer");
+
+        ResourceId resolved = actorLookup.resolveByName(WORKSPACE_A, "Customer");
+
+        assertEquals(ResourceId.of(actorIri), resolved);
+    }
+
+    @Test
+    void resolvesAKnownSystemActorNameToItsSubjectIdentity() {
+        String actorIri = givenSystemActor(WORKSPACE_A, "payment-provider", "PaymentProvider");
+
+        ResourceId resolved = actorLookup.resolveByName(WORKSPACE_A, "PaymentProvider");
+
+        assertEquals(ResourceId.of(actorIri), resolved);
+    }
+
+    /**
+     * The type-union constraint (human or system actor) must actually matter: a plain glossary
+     * concept sharing the same {@code skos:prefLabel} but carrying neither actor type must not
+     * satisfy the reference.
+     */
+    @Test
+    void aNonActorConceptWithTheSameLabelDoesNotSatisfyTheReference() {
+        givenNonActorConcept(WORKSPACE_A, "order", "Order");
+
+        assertThrows(UnresolvedReferenceException.class,
+                () -> actorLookup.resolveByName(WORKSPACE_A, "Order"));
+    }
+
+    @Test
+    void rejectsAnUnknownActorName() {
+        givenHumanActor(WORKSPACE_A, "customer", "Customer");
+
+        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
+                () -> actorLookup.resolveByName(WORKSPACE_A, "Unknown"));
+
+        assertTrue(ex.getMessage().contains("Unknown"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("term_add"), ex.getMessage());
+    }
+
+    @Test
+    void rejectsAnAmbiguousActorName() {
+        givenHumanActor(WORKSPACE_A, "customer-1", "Customer");
+        givenHumanActor(WORKSPACE_A, "customer-2", "Customer");
+
+        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
+                () -> actorLookup.resolveByName(WORKSPACE_A, "Customer"));
+
+        assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
+    }
+
+    /** An actor of another workspace must not satisfy this workspace's reference. */
+    @Test
+    void anActorOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
+        givenHumanActor(WORKSPACE_B, "customer", "Customer");
+
+        assertThrows(UnresolvedReferenceException.class,
+                () -> actorLookup.resolveByName(WORKSPACE_A, "Customer"));
+    }
+
+    private String givenHumanActor(WorkspaceId workspaceId, String slug, String prefLabel) {
+        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
+                + "<https://w3id.org/arknet/process#HumanActor> ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+        write(workspaceId, insert);
+        return actorIri;
+    }
+
+    private String givenSystemActor(WorkspaceId workspaceId, String slug, String prefLabel) {
+        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
+                + "<https://w3id.org/arknet/process#SystemActor> ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+        write(workspaceId, insert);
+        return actorIri;
+    }
+
+    private String givenNonActorConcept(WorkspaceId workspaceId, String slug, String prefLabel) {
+        String conceptIri = "https://w3id.org/arknet/model/term/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + conceptIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+        write(workspaceId, insert);
+        return conceptIri;
+    }
+
+    private void write(WorkspaceId workspaceId, String insert) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+}

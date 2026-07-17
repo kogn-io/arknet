@@ -18,6 +18,24 @@
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-use-cases-core</artifactId>
         </dependency>
+        <!-- In-Adapter -> fremder In-Port (issue #89, gleiches Muster wie #77 Nachtrag in
+             arknet-requirements-adapter-mcp): der In-Adapter ist das Tor zum use-cases-BC, nicht
+             dessen Core - eine Abhaengigkeit hierher auf andere BCs' In-Ports verletzt die
+             Invariante "kein *-core* haengt an einem anderen BC" nicht (die gilt fuer die
+             *-core-Module, siehe arknet-architecture-tests in CLAUDE.md). Genutzt nur fuer die
+             read-only Anzeige-Aufloesung ResourceId -> Actor-Name/FR-Code in
+             UseCaseMcpTools#formatFull; uc_add selbst bleibt entkoppelt (ActorLookup/
+             RequirementLookup). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-requirements-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-mcp-annotations</artifactId>

@@ -25,7 +25,6 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
-import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -68,17 +67,29 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@code arkreq:position}, {@code arkreq:stepText}, {@code arkreq:stepRealises} and
  * {@code oslc_rm:satisfies}.</p>
  *
- * <p><strong>Strict cross-BC reference resolution (issue #41).</strong> Use cases,
- * requirements and ubiquitous-language actors share one per-workspace store. On write every
- * label reference is resolved against that store <em>before</em> anything is written: a
- * {@link RequirementRef} label (e.g. {@code FR-5}) is looked up by {@code dcterms:identifier}
- * among requirements, an {@link ActorRef} label (e.g. {@code Customer}) by {@code skos:prefLabel}
- * among concepts carrying an actor type ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}).
- * Both look-ups are schema-independent (by identifier/label, never by reconstructing a subject
- * IRI), so they are unaffected by the opaque-identity switch of either bounded context. An
- * unknown or ambiguous label aborts the write with a didactic {@link UnresolvedReferenceException};
- * no dangling reference is ever persisted. The coarse {@code UseCase oslc_rm:satisfies Requirement}
- * edge is derived as the union of the resolved {@code stepRealises} targets.</p>
+ * <p><strong>Requirement/actor references arrive pre-resolved (issue #41, identity-carrying
+ * since #89).</strong> {@link RequirementRef} and {@link ActorRef} carry the referenced
+ * resource's opaque subject {@link ResourceId} directly - resolving a human-typed requirement
+ * code (e.g. {@code FR-5}) or actor name (e.g. {@code Customer}) against the shared workspace
+ * store, and rejecting an unknown or ambiguous one, is done once by
+ * {@code KognioRdfRequirementLookup}/{@code KognioRdfActorLookup} at the moment a use case is
+ * written (in the application service), not here on every write. This adapter therefore neither
+ * queries the sibling requirements/terms graphs nor re-verifies that a referenced subject still
+ * denotes a requirement or an actor; it trusts the identity it was handed, the same way it trusts
+ * a use case's own scalar fields without re-resolving them. It still asserts each referenced
+ * subject's type ({@code arkreq:Requirement}/{@code arkproc:Actor}) in the SHACL write-gate's
+ * validation-only context (see below), because the shapes need that type to fire correctly
+ * against a candidate graph that does not itself carry the referenced subject's type triple. The
+ * coarse {@code UseCase oslc_rm:satisfies Requirement} edge is derived as the union of the
+ * resolved {@code stepRealises} targets.</p>
+ *
+ * <p><strong>Still lossy for one, narrower case.</strong> Reading {@code supportingActor}/
+ * {@code stepRealises} back filters for IRI-ness only ({@code FILTER(isIRI(...))}), mirroring
+ * {@code KognioRdfRequirementRepository#readUsesTerms}: neither property carries an
+ * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
+ * node, which {@link ResourceId} cannot represent. Such an edge is simply absent from the
+ * corresponding list; this is unreachable via the MCP tools, which always resolve to a subject
+ * IRI before writing.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
@@ -108,15 +119,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
-    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
 
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
-    // Mirrors the graph IRIs the requirements / ubiquitous-language out-adapters write into.
-    // The three bounded contexts share one workspace dataset; resolving references means
-    // reading across those sibling graphs (see class-level strict-resolution note).
-    private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     private static final String USE_CASE_TYPE = ARKREQ_NAMESPACE + "UseCase";
     private static final String STEP_TYPE = ARKREQ_NAMESPACE + "Step";
@@ -137,9 +142,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String SATISFIES_PROPERTY = OSLC_RM_NAMESPACE + "satisfies";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
-    private static final String PREF_LABEL_PROPERTY = SKOS_NAMESPACE + "prefLabel";
-    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
-    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
 
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
@@ -189,10 +191,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         String subject = SparqlTerms.iriRef(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            // 1. Resolve every label reference strictly against the shared workspace store.
-            IRI primaryActorIri = resolveActor(handle, workspaceId, useCase.primaryActor());
+            // 1. Every actor/requirement reference already carries its resolved identity (see
+            //    class-level note) - just validate it is SPARQL-safe, the same defense-in-depth
+            //    applied to the subject above.
+            IRI primaryActorIri = actorIriFor(useCase.primaryActor());
             List<IRI> supportingActorIris = useCase.supportingActors().stream()
-                    .map(actor -> resolveActor(handle, workspaceId, actor))
+                    .map(this::actorIriFor)
                     .toList();
 
             // 2. Build the candidate graph.
@@ -220,7 +224,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         rdf.createLiteral(Integer.toString(step.position()), VocabXsd.INTEGER));
                 graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(step.text()));
                 for (RequirementRef ref : step.realises()) {
-                    IRI reqIri = resolveRequirement(handle, workspaceId, ref);
+                    IRI reqIri = requirementIriFor(ref);
                     graph.add(stepIri, rdf.createIRI(STEP_REALISES_PROPERTY), reqIri);
                     satisfies.putIfAbsent(reqIri.getIRIString(), reqIri);
                 }
@@ -246,8 +250,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             //    stepRealises (arkreq:Requirement). The type triples for those referenced nodes
             //    live in the sibling requirements/terms graphs, not in this candidate graph.
             //    They are handed to the gate as a validation-only asserted context (never
-            //    persisted here). This is safe: the strict lookup above already proved each
-            //    reference exists and is of the right kind.
+            //    persisted here). This is safe: the reference was already proven to exist and be
+            //    of the right kind at the moment it was resolved (KognioRdfRequirementLookup /
+            //    KognioRdfActorLookup, called once from the application service) - the lookup,
+            //    not the shape, is what keeps the edge non-dangling; this adapter no longer
+            //    re-verifies it.
             Graph assertedContext = rdf.createGraph();
             assertedContext.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
             for (IRI supporting : supportingActorIris) {
@@ -343,7 +350,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryLabel "
+        String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryActor "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " a <" + USE_CASE_TYPE + "> ; "
                 + "<" + TITLE_PROPERTY + "> ?title ; "
@@ -352,8 +359,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 + "OPTIONAL { " + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?scope } "
                 + "OPTIONAL { " + subject + " <" + TRIGGER_PROPERTY + "> ?trigger } "
                 + "OPTIONAL { " + subject + " <" + PRECONDITION_PROPERTY + "> ?precondition } "
-                + "OPTIONAL { " + subject + " <" + POSTCONDITION_PROPERTY + "> ?postcondition } } "
-                + "GRAPH <" + TERMS_GRAPH + "> { ?primaryActor <" + PREF_LABEL_PROPERTY + "> ?primaryLabel } }";
+                + "OPTIONAL { " + subject + " <" + POSTCONDITION_PROPERTY + "> ?postcondition } } }";
 
         Optional<BindingSet> head = handle.sparqlQuery().select(scalarQuery).findFirst();
         if (head.isEmpty()) {
@@ -372,7 +378,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 literalOf(row, "goal").getLexicalForm(),
                 optionalLiteral(row, "scope"),
                 optionalLiteral(row, "trigger"),
-                new ActorRef(literalOf(row, "primaryLabel").getLexicalForm()),
+                new ActorRef(ResourceId.of(iriOf(row, "primaryActor").getIRIString())),
                 supportingActors,
                 optionalLiteral(row, "precondition"),
                 optionalLiteral(row, "postcondition"),
@@ -380,12 +386,22 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 extensions));
     }
 
+    /**
+     * Reads the {@code arkreq:supportingActor} edges back as actor references.
+     *
+     * <p><strong>No longer a join (issue #89).</strong> The edge's target IRI <em>is</em> the
+     * {@link ActorRef} - no join into the sibling terms graph is needed, and none is performed
+     * here. {@code FILTER(isIRI(?a))} mirrors
+     * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
+     * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
+     * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
+     * tools.</p>
+     */
     private List<ActorRef> readSupportingActors(DatasetHandle handle, String subject) {
-        String query = "SELECT ?label WHERE { "
-                + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + SUPPORTING_ACTOR_PROPERTY + "> ?a } "
-                + "GRAPH <" + TERMS_GRAPH + "> { ?a <" + PREF_LABEL_PROPERTY + "> ?label } }";
+        String query = "SELECT ?a WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + SUPPORTING_ACTOR_PROPERTY + "> ?a } FILTER(isIRI(?a)) }";
         return handle.sparqlQuery().select(query)
-                .map(row -> new ActorRef(literalOf(row, "label").getLexicalForm()))
+                .map(row -> new ActorRef(ResourceId.of(iriOf(row, "a").getIRIString())))
                 .toList();
     }
 
@@ -404,17 +420,28 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 .toList();
     }
 
+    /**
+     * Reads each main-flow step's {@code arkreq:stepRealises} edges back as requirement
+     * references.
+     *
+     * <p><strong>No longer a join (issue #89).</strong> The edge's target IRI <em>is</em> the
+     * {@link RequirementRef} - no join into the sibling requirements graph is needed, and none is
+     * performed here. {@code FILTER(isIRI(?req))} mirrors
+     * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
+     * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
+     * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
+     * tools.</p>
+     */
     private Map<Integer, List<RequirementRef>> readMainStepRealises(DatasetHandle handle, String subject) {
-        String query = "SELECT ?position ?reqId WHERE { "
-                + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
+        String query = "SELECT ?position ?req WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
                 + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_REALISES_PROPERTY + "> ?req } "
-                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?req <" + IDENTIFIER_PROPERTY + "> ?reqId } } "
-                + "ORDER BY ?position";
+                + "FILTER(isIRI(?req)) } ORDER BY ?position";
         Map<Integer, List<RequirementRef>> byPosition = new LinkedHashMap<>();
         handle.sparqlQuery().select(query).forEach(row -> {
             int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
             byPosition.computeIfAbsent(position, k -> new ArrayList<>())
-                    .add(new RequirementRef(literalOf(row, "reqId").getLexicalForm()));
+                    .add(new RequirementRef(ResourceId.of(iriOf(row, "req").getIRIString())));
         });
         return byPosition;
     }
@@ -429,47 +456,35 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 .toList();
     }
 
-    // ---- strict reference resolution ---------------------------------------------------
+    // ---- already-resolved reference conversion -----------------------------------------
 
-    private IRI resolveRequirement(DatasetHandle handle, WorkspaceId workspaceId, RequirementRef ref) {
-        String query = "SELECT ?req WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?req <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(ref.label()) + "\" } }";
-        List<IRI> matches = handle.sparqlQuery().select(query)
-                .map(row -> iriOf(row, "req"))
-                .distinct()
-                .toList();
-        if (matches.isEmpty()) {
-            throw new UnresolvedReferenceException("Requirement '" + ref.label()
-                    + "' does not exist in workspace '" + workspaceId.value()
-                    + "'. Create it first with req_add before a use-case step realises it.");
+    /**
+     * Converts an already-resolved {@link RequirementRef} to an {@link IRI} for writing, applying
+     * the same defense-in-depth SPARQL-safety check as the subject identity in {@link #write}:
+     * {@link ResourceId}'s own validation is looser than SPARQL's IRIREF grammar. Mirrors
+     * {@code KognioRdfRequirementRepository#termIriFor}.
+     */
+    private IRI requirementIriFor(RequirementRef ref) {
+        String requirementIriString = ref.value().value();
+        if (!SparqlTerms.isValidIriReference(requirementIriString)) {
+            throw new IllegalArgumentException(
+                    "requirement reference yields an invalid IRI for SPARQL: " + requirementIriString);
         }
-        if (matches.size() > 1) {
-            throw new UnresolvedReferenceException("Requirement label '" + ref.label()
-                    + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
-                    + " matches). Reference a requirement by its unique dcterms:identifier.");
-        }
-        return matches.get(0);
+        return rdf.createIRI(requirementIriString);
     }
 
-    private IRI resolveActor(DatasetHandle handle, WorkspaceId workspaceId, ActorRef actor) {
-        String query = "SELECT ?actor WHERE { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?actor <" + PREF_LABEL_PROPERTY + "> \"" + SparqlTerms.escape(actor.label()) + "\" . "
-                + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } } }";
-        List<IRI> matches = handle.sparqlQuery().select(query)
-                .map(row -> iriOf(row, "actor"))
-                .distinct()
-                .toList();
-        if (matches.isEmpty()) {
-            throw new UnresolvedReferenceException("Actor '" + actor.label()
-                    + "' does not exist in workspace '" + workspaceId.value()
-                    + "'. Create it first with term_add (actorKind human|system) before a use case references it.");
+    /**
+     * Converts an already-resolved {@link ActorRef} to an {@link IRI} for writing, applying the
+     * same defense-in-depth SPARQL-safety check as the subject identity in {@link #write}.
+     * Mirrors {@code KognioRdfRequirementRepository#termIriFor}.
+     */
+    private IRI actorIriFor(ActorRef ref) {
+        String actorIriString = ref.value().value();
+        if (!SparqlTerms.isValidIriReference(actorIriString)) {
+            throw new IllegalArgumentException(
+                    "actor reference yields an invalid IRI for SPARQL: " + actorIriString);
         }
-        if (matches.size() > 1) {
-            throw new UnresolvedReferenceException("Actor label '" + actor.label()
-                    + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
-                    + " matches). Give the actor term a unique skos:prefLabel.");
-        }
-        return matches.get(0);
+        return rdf.createIRI(actorIriString);
     }
 
     // ---- helpers -----------------------------------------------------------------------

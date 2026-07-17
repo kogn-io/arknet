@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -15,8 +16,12 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools.StepInput;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
+import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -25,12 +30,17 @@ import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
+import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Behaviour of the use-case MCP tools against an in-port fake: tool declaration, mapping of
- * the nested {@code uc_add} payload onto the {@link AddUseCase.NewUseCase} command, the
- * {@code uc_get}/{@code uc_list} response shape, and verbatim propagation of a didactic
- * in-port error (which Spring AI turns into a tool error result).
+ * the nested {@code uc_add} payload onto the {@link AddUseCase.NewUseCase} command (now raw
+ * human-typed strings, issue #89), the {@code uc_get}/{@code uc_list} response shape - including
+ * the actor/requirement display-resolution contract borrowed from {@link ResolveTerms}/
+ * {@link ResolveRequirements} - and verbatim propagation of a didactic in-port error (which
+ * Spring AI turns into a tool error result).
  *
  * <p>The rendered id a caller sees is the human-readable {@link UseCaseCode} ({@code UC1}), not
  * the opaque {@link UseCaseId} - and {@code uc_get} looks a use case up by that code.</p>
@@ -42,8 +52,10 @@ class UseCaseMcpToolsTest {
     }
 
     private final Stub stub = new Stub();
+    private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
+    private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final UseCaseMcpTools adapter =
-            new UseCaseMcpTools(stub, stub, stub, WorkspaceId.DEFAULT);
+            new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, WorkspaceId.DEFAULT);
 
     @Test
     void declaresTheThreeUseCaseTools() {
@@ -67,13 +79,17 @@ class UseCaseMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, WorkspaceId.DEFAULT));
+                () -> new UseCaseMcpTools(null, stub, stub, resolveTerms, resolveRequirements, WorkspaceId.DEFAULT));
+        assertThrows(NullPointerException.class,
+                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveRequirements, WorkspaceId.DEFAULT));
+        assertThrows(NullPointerException.class,
+                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, null, WorkspaceId.DEFAULT));
     }
 
     @Test
     void rejectsNullWorkspace() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null));
+                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, null));
     }
 
     @Test
@@ -89,13 +105,12 @@ class UseCaseMcpToolsTest {
         assertEquals("Customer places an order", command.goal());
         assertEquals("Webshop", command.scope());
         assertEquals("Customer opens the cart", command.trigger());
-        assertEquals(new ActorRef("Customer"), command.primaryActor());
-        assertEquals(List.of(new ActorRef("PaymentProvider")), command.supportingActors());
+        assertEquals("Customer", command.primaryActor());
+        assertEquals(List.of("PaymentProvider"), command.supportingActors());
         assertEquals("Customer is logged in", command.precondition());
         assertEquals("Order is recorded", command.postcondition());
         assertEquals(2, command.steps().size());
-        assertEquals(new Step(1, "Customer selects items", List.of(new RequirementRef("FR-1"))),
-                command.steps().get(0));
+        assertEquals(new NewStep(1, "Customer selects items", List.of("FR-1")), command.steps().get(0));
         assertEquals(List.of(), command.steps().get(1).realises());
         assertEquals(List.of("2a. Payment declined -> use case ends in failure"), command.extensions());
     }
@@ -117,10 +132,17 @@ class UseCaseMcpToolsTest {
 
     @Test
     void ucGetRendersAllFieldsStepsAndExtensions() {
+        ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+        ActorRef supportingActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider"));
+        RequirementRef fr1 = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/req-fr1"));
+        resolveTerms.register(primaryActor.value(), new TermCode("Customer"));
+        resolveTerms.register(supportingActor.value(), new TermCode("PaymentProvider"));
+        resolveRequirements.register(fr1.value(), new RequirementCode("FR-1"));
+
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
-                "Customer places an order", "Webshop", "Customer opens the cart", new ActorRef("Customer"),
-                List.of(new ActorRef("PaymentProvider")), "Customer is logged in", "Order is recorded",
-                List.of(new Step(1, "Customer selects items", List.of(new RequirementRef("FR-1"))),
+                "Customer places an order", "Webshop", "Customer opens the cart", primaryActor,
+                List.of(supportingActor), "Customer is logged in", "Order is recorded",
+                List.of(new Step(1, "Customer selects items", List.of(fr1)),
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure")));
 
@@ -134,6 +156,28 @@ class UseCaseMcpToolsTest {
         assertTrue(rendered.contains("2a. Payment declined -> use case ends in failure"));
     }
 
+    /**
+     * Hard invariant (mirrors {@code RequirementMcpToolsTest}): an id neither
+     * {@link ResolveTerms} nor {@link ResolveRequirements} can resolve must never make
+     * rendering throw - it falls back to the bare IRI.
+     */
+    @Test
+    void ucGetFallsBackToTheBareIriWhenResolutionCannotResolveIt() {
+        ActorRef unresolvableActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/unknown-actor"));
+        RequirementRef unresolvableRequirement =
+                new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/unknown-req"));
+        // Deliberately not registered with either resolver - simulates a missing/deleted actor/requirement.
+
+        stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
+                "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
+                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of()));
+
+        String rendered = adapter.get("UC1");
+
+        assertTrue(rendered.contains("primaryActor: https://w3id.org/arknet/id/unknown-actor"), rendered);
+        assertTrue(rendered.contains("realises https://w3id.org/arknet/id/unknown-req"), rendered);
+    }
+
     @Test
     void ucGetReturnsNotFoundMessageForUnknownCode() {
         stub.getResult = Optional.empty();
@@ -142,14 +186,15 @@ class UseCaseMcpToolsTest {
 
     @Test
     void ucListRendersCompactLines() {
+        ActorRef customer = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
         stub.listResult = List.of(
                 new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                         "Customer places an order", null, null,
-                        new ActorRef("Customer"), List.of(), null, null,
+                        customer, List.of(), null, null,
                         List.of(new Step(1, "select items", List.of())), List.of()),
                 new UseCase(opaqueId("uc-2"), new UseCaseCode("UC2"), "Reset password",
                         "User resets password", null, null,
-                        new ActorRef("Customer"), List.of(), null, null,
+                        customer, List.of(), null, null,
                         List.of(new Step(1, "request link", List.of())), List.of()));
 
         String rendered = adapter.list();
@@ -191,20 +236,32 @@ class UseCaseMcpToolsTest {
     /** Structural stub implementing the three driving in-ports. */
     private static final class Stub implements AddUseCase, ListUseCases, GetUseCase {
 
-        private NewUseCase lastCommand;
+        private AddUseCase.NewUseCase lastCommand;
         private RuntimeException addFailure;
         private List<UseCase> listResult = List.of();
         private Optional<UseCase> getResult = Optional.empty();
 
         @Override
-        public UseCase add(WorkspaceId workspaceId, NewUseCase command) {
+        public UseCase add(WorkspaceId workspaceId, AddUseCase.NewUseCase command) {
             this.lastCommand = command;
             if (addFailure != null) {
                 throw addFailure;
             }
+            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-"
+                    + command.primaryActor()));
+            List<ActorRef> supportingActors = command.supportingActors().stream()
+                    .map(name -> new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-" + name)))
+                    .toList();
+            List<Step> steps = command.steps().stream()
+                    .map(step -> new Step(step.position(), step.text(),
+                            step.realises().stream()
+                                    .map(code -> new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/req-"
+                                            + code)))
+                                    .toList()))
+                    .toList();
             return new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), command.title(), command.goal(),
-                    command.scope(), command.trigger(), command.primaryActor(), command.supportingActors(),
-                    command.precondition(), command.postcondition(), command.steps(), command.extensions());
+                    command.scope(), command.trigger(), primaryActor, supportingActors,
+                    command.precondition(), command.postcondition(), steps, command.extensions());
         }
 
         @Override
@@ -215,6 +272,44 @@ class UseCaseMcpToolsTest {
         @Override
         public Optional<UseCase> get(WorkspaceId workspaceId, UseCaseCode code) {
             return getResult;
+        }
+    }
+
+    /**
+     * Fake {@link ResolveTerms}: resolves only what was {@link #register} registered - like the
+     * real port, never throws for an id it cannot resolve.
+     */
+    private static final class RecordingResolveTerms implements ResolveTerms {
+
+        private final List<ResolvedTerm> known = new ArrayList<>();
+
+        void register(ResourceId id, TermCode code) {
+            known.add(new ResolvedTerm(id, code));
+        }
+
+        @Override
+        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(t -> wanted.contains(t.id())).toList();
+        }
+    }
+
+    /**
+     * Fake {@link ResolveRequirements}: resolves only what was {@link #register} registered -
+     * like the real port, never throws for an id it cannot resolve.
+     */
+    private static final class RecordingResolveRequirements implements ResolveRequirements {
+
+        private final List<ResolvedRequirement> known = new ArrayList<>();
+
+        void register(ResourceId id, RequirementCode code) {
+            known.add(new ResolvedRequirement(id, code));
+        }
+
+        @Override
+        public List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids) {
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(r -> wanted.contains(r.id())).toList();
         }
     }
 }

@@ -3,8 +3,6 @@ package de.hauschel.arknet.uc.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.uc.domain.ActorRef;
-import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 
 /**
@@ -26,8 +24,17 @@ public interface AddUseCase {
     UseCase add(WorkspaceId workspaceId, NewUseCase command);
 
     /**
-     * Input data for {@link #add(WorkspaceId, NewUseCase)}. Mirrors {@link UseCase}
-     * minus the identity, which the service assigns.
+     * Input data for {@link #add(WorkspaceId, NewUseCase)}. Mirrors {@link UseCase} minus the
+     * identity, which the service assigns.
+     *
+     * <p><strong>Raw human-typed references (issue #89).</strong> {@code primaryActor},
+     * {@code supportingActors} and each step's {@code realises} are plain business
+     * labels/codes here, not {@link de.hauschel.arknet.uc.domain.ActorRef}/
+     * {@link de.hauschel.arknet.uc.domain.RequirementRef}: resolving them to the referenced
+     * resources' opaque identities happens in the application service, via the driven
+     * {@code ActorLookup}/{@code RequirementLookup} ports, before the real {@link UseCase} and
+     * its {@link de.hauschel.arknet.uc.domain.Step}s are constructed. The in-port boundary
+     * therefore never sees an opaque identity - only what a human typed.</p>
      *
      * @param title            short human-readable name of the use case
      * @param goal             the goal the primary actor wants to achieve
@@ -35,10 +42,10 @@ public interface AddUseCase {
      *                         {@code null})
      * @param trigger          the event that starts the use case; optional (may be
      *                         {@code null})
-     * @param primaryActor     the actor whose goal the use case serves, as a label
-     *                         reference
-     * @param supportingActors further participating actors; {@code 0..n} (may be
-     *                         {@code null}, treated as empty)
+     * @param primaryActor     name of the actor whose goal the use case serves (e.g.
+     *                         {@code Customer}), resolved by the service
+     * @param supportingActors further participating actors' names; {@code 0..n} (may be
+     *                         {@code null}, treated as empty), resolved by the service
      * @param precondition     what must hold before the use case runs; optional
      *                         (may be {@code null})
      * @param postcondition    what holds after a successful run; optional (may be
@@ -53,11 +60,23 @@ public interface AddUseCase {
             String goal,
             String scope,
             String trigger,
-            ActorRef primaryActor,
-            List<ActorRef> supportingActors,
+            String primaryActor,
+            List<String> supportingActors,
             String precondition,
             String postcondition,
-            List<Step> steps,
+            List<NewStep> steps,
             List<String> extensions) {
+    }
+
+    /**
+     * One step of a new use case's main flow.
+     *
+     * @param position 1-based position in the flow; the flow must be numbered {@code 1..n}
+     *                 gap-free
+     * @param text     what happens in this step (an actor or system action)
+     * @param realises business codes of the functional requirements this step fulfils (e.g.
+     *                 {@code FR-1}); may be empty, resolved by the service
+     */
+    record NewStep(int position, String text, List<String> realises) {
     }
 }
