@@ -149,3 +149,37 @@ erreicht hatten:
 
 Beide Klassen sind technologieneutral (kein RDF4J-Bezug) und aendern nichts an der
 RDF4J-Freiheit des Moduls.
+
+## Nachtrag 2026-07-17 (#65): der erste bewusste Gate-Bypass
+
+Der #65-Fix (PR #76) fuehrt im req-Out-Adapter Tripel in den Store, die **nicht** durch
+`gate.enforce` gelaufen sind. Das ist der erste Bypass dieser Art im Schreibpfad und deshalb hier
+festgehalten -- nicht, weil er ADR-007 widerspricht, sondern weil die naechste BC die Begruendung
+sonst im Javadoc eines fremden Adapters suchen muesste.
+
+**Was passiert:** `update` ist replace-by-identity (`DELETE` des Subjekts + Neuschreiben aus dem
+Record). Eine `arkreq:usesTerm`-Kante, deren Ziel im Terms-Graph keinen `dcterms:identifier`
+traegt, kann der Lese-Join nicht binden -- sie steht nie im Record und wurde daher bisher
+mitgeloescht. Der Fix erfasst diese Kanten vor dem `DELETE` (in derselben Transaktion) und haengt
+sie nach `tx.add(graph)` wieder an: **nach** dem Gate, nicht im Kandidaten-Graphen.
+
+**Warum nicht durchs Gate:** Das Ziel einer solchen Kante traegt per Konstruktion keinen
+Identifier und bekommt deshalb auch keinen synthetischen Typ in den `assertedContext` (der wird
+aus den strikt aufgeloesten Terms gebaut). Die `usesTerm`-Shape traegt `sh:class skos:Concept` --
+mischte man die Kante vor `enforce` in den Kandidaten, schluege die Validierung fehl und **jedes
+kuenftige `update` eines betroffenen Requirements waere blockiert**. Der Fix wuerde das Requirement
+unschreibbar machen, statt es zu retten.
+
+**Warum das vertretbar ist -- und die Grenze:** Der Bypass fuehrt **nichts Neues ein**; er traegt
+ausschliesslich Bestand weiter, der bereits im Store liegt und dort auf einem Weg entstanden ist,
+den das Gate nie gesehen hat (store-first, ADR-005 -- Direktimport/SPARQL-UPDATE laufen prinzipiell
+am Gate vorbei). Das Gate bleibt damit, was es ist: ein Tor fuer **neue** Behauptungen der
+Anwendung, keine fortlaufende Integritaetsgarantie ueber den Gesamtgraphen. Diese Unterscheidung
+ist die eigentliche Entscheidung dieses Nachtrags. Wer sie kuenftig fuer eine andere Kante
+wiederverwendet, muss zeigen, dass er ebenfalls nur Bestand bewahrt -- sobald der Adapter Tripel
+**erzeugt**, gehoeren sie durch `enforce`.
+
+Am Gate selbst aendert das nichts: `enforce`/`enforce(candidate, assertedContext)` laufen
+unveraendert vor der Transaktion, und der Kandidaten-Graph geht weiterhin vollstaendig durch.
+Die Entscheidung liegt im Adapter, wo sie hingehoert -- das Gate weiss nach wie vor nichts ueber
+Nachbar-BCs oder Kanten-Semantik (vgl. Entscheidung 3).
