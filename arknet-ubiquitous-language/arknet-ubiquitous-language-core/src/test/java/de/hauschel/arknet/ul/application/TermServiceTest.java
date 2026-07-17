@@ -15,6 +15,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
@@ -122,20 +123,20 @@ class TermServiceTest {
     }
 
     /**
-     * Issue #77 nachtrag: a sibling bounded context's driving adapter resolves opaque term
-     * identities back to full {@link Term}s (e.g. to render {@code TERM-N} for display) - in
-     * one batch, not per-id.
+     * Issue #77 nachtrag (slimmed by #84): a sibling bounded context's driving adapter resolves
+     * opaque term identities back to their identity and business code (e.g. to render
+     * {@code TERM-N} for display) - in one batch, not per-id.
      */
     @Test
     void getByIdResolvesKnownIdentitiesInOneBatch() {
         Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null));
         Term second = service.add(WS, new NewTerm("Bestellung", "def b", null));
 
-        List<Term> resolved = service.getById(WS, first.id().value(), second.id().value());
+        List<ResolveTerms.ResolvedTerm> resolved = service.getById(WS, first.id().value(), second.id().value());
 
         assertEquals(2, resolved.size());
-        assertTrue(resolved.contains(first));
-        assertTrue(resolved.contains(second));
+        assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(first.id().value(), first.code())));
+        assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(second.id().value(), second.code())));
     }
 
     /**
@@ -147,9 +148,9 @@ class TermServiceTest {
         Term known = service.add(WS, new NewTerm("Gutschrift", "def a", null));
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
-        List<Term> resolved = service.getById(WS, known.id().value(), unknown);
+        List<ResolveTerms.ResolvedTerm> resolved = service.getById(WS, known.id().value(), unknown);
 
-        assertEquals(List.of(known), resolved);
+        assertEquals(List.of(new ResolveTerms.ResolvedTerm(known.id().value(), known.code())), resolved);
     }
 
     @Test

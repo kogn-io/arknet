@@ -27,9 +27,8 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
-import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
-import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * Scaffold-level check that the adapter declares exactly the five requirement
@@ -118,13 +117,13 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * Issue #77, second nachtrag: a store-first term with several language-tagged
-     * {@code skos:prefLabel}s is shape-legal (no {@code sh:maxCount}) and makes
-     * {@code KognioRdfTermRepository#findByIds} return more than one {@link Term} for the same
-     * identity - see that class for the source-level fix. This pins the structural,
+     * Issue #77, second nachtrag: a store-first term with several {@code dcterms:identifier}
+     * triples is shape-legal (no {@code sh:maxCount}) and makes
+     * {@code KognioRdfTermRepository#findByIds} return more than one {@link ResolvedTerm} for the
+     * same identity - see that class for the source-level fix. This pins the structural,
      * implementation-independent backstop in {@link RequirementMcpTools}: even if a
      * {@link ResolveTerms} implementation returned duplicate entries for one id, {@code format}
-     * must still not throw. A naive {@code Collectors.toMap(t -> t.id().value(), t -> t)} throws
+     * must still not throw. A naive {@code Collectors.toMap(t -> t.id(), t -> t)} throws
      * {@code IllegalStateException} on exactly this input.
      */
     @Test
@@ -243,11 +242,11 @@ class RequirementMcpToolsTest {
      */
     private static final class RecordingResolveTerms implements ResolveTerms {
 
-        private final List<Term> known = new ArrayList<>();
+        private final List<ResolvedTerm> known = new ArrayList<>();
         private int calls;
 
         void register(ResourceId id, TermCode code) {
-            known.add(new Term(new TermId(id), code, "label", "definition", null));
+            known.add(new ResolvedTerm(id, code));
         }
 
         int callCount() {
@@ -255,10 +254,10 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public List<Term> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
             calls++;
             List<ResourceId> wanted = Arrays.asList(ids);
-            return known.stream().filter(t -> wanted.contains(t.id().value())).toList();
+            return known.stream().filter(t -> wanted.contains(t.id())).toList();
         }
     }
 }

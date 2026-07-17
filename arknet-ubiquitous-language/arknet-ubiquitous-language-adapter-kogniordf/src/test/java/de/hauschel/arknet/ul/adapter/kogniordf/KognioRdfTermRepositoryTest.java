@@ -32,6 +32,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
@@ -270,11 +271,12 @@ class KognioRdfTermRepositoryTest {
         repository.create(WORKSPACE_A, first);
         repository.create(WORKSPACE_A, second);
 
-        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(first.id().value(), second.id().value()));
+        List<ResolveTerms.ResolvedTerm> resolved =
+                repository.findByIds(WORKSPACE_A, List.of(first.id().value(), second.id().value()));
 
         assertEquals(2, resolved.size());
-        assertTrue(resolved.contains(first));
-        assertTrue(resolved.contains(second));
+        assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(first.id().value(), first.code())));
+        assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(second.id().value(), second.code())));
     }
 
     /** An id absent from the workspace is simply absent from the result, never an error. */
@@ -284,9 +286,10 @@ class KognioRdfTermRepositoryTest {
         repository.create(WORKSPACE_A, known);
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
-        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(known.id().value(), unknown));
+        List<ResolveTerms.ResolvedTerm> resolved =
+                repository.findByIds(WORKSPACE_A, List.of(known.id().value(), unknown));
 
-        assertEquals(List.of(known), resolved);
+        assertEquals(List.of(new ResolveTerms.ResolvedTerm(known.id().value(), known.code())), resolved);
     }
 
     @Test
@@ -302,66 +305,56 @@ class KognioRdfTermRepositoryTest {
         assertEquals(List.of(), repository.findByIds(WORKSPACE_B, List.of(inWorkspaceA.id().value())));
     }
 
-    @Test
-    void findByIdsReconstructsActorFacet() {
-        Term withFacet = new Term(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
-                new ActorFacet(ActorKind.HUMAN, "Besteller"));
-        repository.create(WORKSPACE_A, withFacet);
-
-        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(withFacet.id().value()));
-
-        assertEquals(1, resolved.size());
-        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), resolved.get(0).actorFacet());
-    }
-
     /**
-     * Store-first regression test (issue #77, second nachtrag): {@code ulshapes:Term-prefLabel}
-     * has {@code sh:minCount 1} but deliberately no {@code sh:maxCount} - SKOS allows, and this
-     * glossary intends to allow, one {@code skos:prefLabel} per language on the same concept.
-     * Such a term is shape-legal but unreachable via {@code term_add} (which writes exactly one
-     * label); {@code findByIds}' mandatory {@code prefLabel} join must not multiply it into two
-     * {@link Term}s carrying the same {@link TermId} - a caller keying its own results by
-     * identity (as {@code RequirementMcpTools#resolveTermsFor} does) would otherwise throw on
-     * the duplicate key.
+     * Store-first regression test (issue #77, second nachtrag; narrowed by issue #84):
+     * {@code ulshapes:TermShape} places no constraint at all on {@code dcterms:identifier} (no
+     * {@code sh:minCount}, no {@code sh:maxCount}), so a subject with two identifier triples is
+     * shape-legal even though {@code term_add} never writes more than one. {@code findByIds}'
+     * mandatory {@code identifier} join must not multiply such a subject into two
+     * {@link ResolveTerms.ResolvedTerm}s carrying the same id - a caller keying its own results
+     * by identity (as {@code RequirementMcpTools#resolveTermsFor} does) would otherwise throw on
+     * the duplicate key. (Before #84 this vector ran through {@code skos:prefLabel}, which
+     * {@code findByIds} no longer joins at all.)
      */
     @Test
-    void findByIdsReturnsExactlyOneTermForASubjectWithSeveralLanguageTaggedPrefLabels() {
+    void findByIdsReturnsExactlyOneResolvedTermForASubjectWithSeveralIdentifiers() {
         TermId id = freshId();
-        givenTermWithTwoLanguageTaggedPrefLabels(WORKSPACE_A, id, "TERM-1");
+        givenTermWithTwoIdentifiers(WORKSPACE_A, id, "TERM-1", "TERM-1-ALT");
 
-        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(id.value()));
+        List<ResolveTerms.ResolvedTerm> resolved = repository.findByIds(WORKSPACE_A, List.of(id.value()));
 
         assertEquals(1, resolved.size());
-        assertEquals(new TermCode("TERM-1"), resolved.get(0).code());
+        assertEquals(id.value(), resolved.get(0).id());
     }
 
     /**
-     * A term without any {@code skos:prefLabel} at all - store-first, itself shape-invalid
-     * ({@code sh:minCount 1}) - must stay excluded from the result rather than turned into an
-     * {@code OPTIONAL} join: {@code findByIds} degrades correctly today (the caller falls back
-     * to the bare IRI), and widening the join to accommodate it would risk resurrecting the
-     * duplicate-row problem this class guards against instead.
+     * Issue #84: {@code findByIds} joins only {@code identifier}, not {@code prefLabel}/
+     * {@code definition} - fields the {@link ResolveTerms.ResolvedTerm} projection never carries.
+     * A store-first term that has an identity and a code but happens to miss a
+     * {@code skos:prefLabel} (shape-invalid for {@link #findByCode}/{@link #findAll}, which still
+     * require one) is therefore resolvable here, where the earlier, wider join used to exclude it.
      */
     @Test
-    void findByIdsExcludesATermWithoutAnyPrefLabel() {
+    void findByIdsResolvesATermWithoutAnyPrefLabel() {
         TermId id = freshId();
         givenTermWithoutPrefLabel(WORKSPACE_A, id, "TERM-1");
 
-        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of(id.value())));
+        List<ResolveTerms.ResolvedTerm> resolved = repository.findByIds(WORKSPACE_A, List.of(id.value()));
+
+        assertEquals(List.of(new ResolveTerms.ResolvedTerm(id.value(), new TermCode("TERM-1"))), resolved);
     }
 
     /**
      * Writes a {@code skos:Concept} straight into the terms graph with two
-     * {@code skos:prefLabel} triples tagged for different languages - RDF/SKOS-legal and
-     * shape-legal (no {@code sh:maxCount}), but unreachable via {@code term_add}.
+     * {@code dcterms:identifier} triples - shape-legal ({@code ulshapes:TermShape} places no
+     * constraint on the property at all), but unreachable via {@code term_add}.
      */
-    private void givenTermWithTwoLanguageTaggedPrefLabels(WorkspaceId workspaceId, TermId id, String code) {
+    private void givenTermWithTwoIdentifiers(WorkspaceId workspaceId, TermId id, String first, String second) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
-                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\"@de ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Customer\"@en ; "
-                + "<http://www.w3.org/2004/02/skos/core#definition> \"Eine Person, die bestellt.\" } }";
+                + "<http://purl.org/dc/terms/identifier> \"" + first + "\" ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + second + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);

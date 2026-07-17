@@ -5,9 +5,10 @@ import java.util.List;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Driving port: batch-resolves opaque term identities back to full {@link Term}s.
+ * Driving port: batch-resolves opaque term identities back to their identity and business code.
  *
  * <p>The ubiquitous-language bounded context owns the glossary, so it - not a caller reading
  * the store directly - is who answers "what does this identity currently name?" This exists
@@ -27,13 +28,25 @@ import de.hauschel.arknet.ul.domain.Term;
 public interface ResolveTerms {
 
     /**
-     * Resolves {@code ids} to the {@link Term}s they currently identify within
+     * Resolves {@code ids} to the {@link ResolvedTerm}s they currently identify within
      * {@code workspaceId}, in a single batch (one store round-trip, not one per id).
      *
      * @param workspaceId the workspace (architecture model) to resolve terms in
      * @param ids         the opaque identities to resolve; may be empty
-     * @return the terms found; an id absent from the workspace is simply absent here too, never
-     *         {@code null}
+     * @return the resolved terms found; an id absent from the workspace is simply absent here
+     *         too, never {@code null}
      */
-    List<Term> getById(WorkspaceId workspaceId, ResourceId... ids);
+    List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids);
+
+    /**
+     * The slim projection this port resolves an identity to: just enough for a caller to render
+     * a linked term's business code (issue #84) - not the full {@link Term} aggregate, which
+     * would force every backing query to join fields (e.g. {@code prefLabel}, {@code definition})
+     * a display-only caller never reads.
+     *
+     * @param id   the resolved subject identity
+     * @param code the resolved business code (e.g. {@code TERM-1})
+     */
+    record ResolvedTerm(ResourceId id, TermCode code) {
+    }
 }

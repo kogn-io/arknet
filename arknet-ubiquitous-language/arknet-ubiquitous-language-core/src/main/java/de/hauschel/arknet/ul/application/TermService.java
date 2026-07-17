@@ -74,7 +74,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms {
     }
 
     @Override
-    public List<Term> getById(WorkspaceId workspaceId, ResourceId... ids) {
+    public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(ids, "ids");
         if (ids.length == 0) {
