@@ -26,13 +26,13 @@ Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
 | `req_list` | Alle verwalteten Requirements auflisten |
 | `req_get` | Einzelnes Requirement per Identitaet holen (z.B. FR-1, NFR-7) |
 | `req_set_status` | Lebenszyklus-Status aendern (PROPOSED / ACCEPTED) |
-| `req_link_term` | Requirement mit einem Glossar-Begriff verknuepfen (`arkreq:usesTerm`; Term muss existieren, #36) |
+| `req_link_term` | Requirement mit einem Glossar-Begriff verknuepfen (`arkreq:usesTerm`; Term muss existieren) |
 
 Ubiquitous-Language-BC -- Glossar-Begriffe (SKOS Concepts):
 
 | Tool | Beschreibung |
 |------|-------------|
-| `term_add` | Neuen Glossar-Begriff anlegen (mintet ein SKOS Concept; optional als Actor markierbar via `actorKind`/`actorRole`, #45) |
+| `term_add` | Neuen Glossar-Begriff anlegen (mintet ein SKOS Concept; optional als Actor markierbar via `actorKind`/`actorRole`) |
 | `term_list` | Alle Glossar-Begriffe auflisten |
 | `term_get` | Einzelnen Begriff per Identitaet holen (z.B. TERM-1) |
 
@@ -87,7 +87,7 @@ Modularer Aufbau unter dem Namespace `https://w3id.org/arknet/`:
 
 ## Architektur
 
-Pipes & Filters (Produktvision, siehe `docs/produktvision.adoc`; **nicht implementiert** -- der generierende Ausgabepfad wurde mit #75 entfernt, siehe ADR-005-Nachtrag):
+Pipes & Filters (Produktvision, siehe `docs/produktvision.adoc`; **nicht implementiert** -- kein generierender Ausgabepfad, siehe [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md)):
 
 ```
 Turtle (.ttl) -> Parse -> Validate (SHACL) -> Triple Store (RDF4J) -> SPARQL -> Mustache -> AsciiDoc -> HTML/PDF
