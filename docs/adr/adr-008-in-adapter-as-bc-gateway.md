@@ -30,8 +30,8 @@ auf die Probe gestellt hatte.
    das Tor zu seinem eigenen Hexagon, nicht Teil von dessen Core. Die Invariante "kein BC
    haengt an einem anderen" bindet die `*-core`-Module (Domaene + In-/Out-Ports); die Adapter
    drumherum duerfen komponieren. `arknet-requirements-adapter-mcp` haengt seither von
-   `arknet-ubiquitous-language-core` ab -- die erste Cross-BC-Dependency ueberhaupt, und rein
-   lesend: sie liefert nur Anzeige-Auskunft, sie schreibt nichts und `req_link_term`s eigener
+   `arknet-ubiquitous-language-core` ab -- die erste Cross-BC-Dependency ueberhaupt (mittlerweile
+   durch #89, siehe Nachtrag, um eine zweite ergaenzt), und rein lesend: sie liefert nur Anzeige-Auskunft, sie schreibt nichts und `req_link_term`s eigener
    Schreibpfad bleibt unveraendert ueber `TermLookup` entkoppelt.
 
 2. **Der neue In-Port traegt seinen Vertrag als Teil der Entscheidung, nicht als Implementierungsdetail.**
@@ -95,9 +95,9 @@ Composition Root: die Antwort liegt dort, wo die Frage gestellt wird.
   die Abhaengigkeit ist auf den In-Adapter begrenzt und rein lesend.
 - Der Nie-wirft-Vertrag von `ResolveTerms` macht den Degradationsfall strukturell sicher statt
   diszipliniert einzuhalten (siehe Entscheidung 2).
-- Ein Praezedenzfall fuer #66 (bounded-context-Zuordnung) und die noch ausstehende uc-Haelfte
-  von #77: beide brauchen dieselbe Art Fremdauskunft und muessen sie nicht mehr neu
-  herleiten.
+- Ein Praezedenzfall fuer #66 (bounded-context-Zuordnung) und die uc-Haelfte von #77: beide
+  brauchen dieselbe Art Fremdauskunft und muessen sie nicht mehr neu herleiten. Fuer die
+  uc-Haelfte eingeloest -- siehe Nachtrag.
 
 **Negativ / bewusst:**
 
@@ -112,11 +112,10 @@ Composition Root: die Antwort liegt dort, wo die Frage gestellt wird.
   (welche BCs zusammen ausgeliefert werden) ist laut Projektstand ohnehin offen und soll,
   wenn er faellt, entlang der **Adapter-Grenze** (lokal/remote, ADR-003) verlaufen,
   nicht entlang einzelner BCs -- diese Entscheidung nimmt dem nichts vorweg.
-- **Der Praezedenzfall bindet.** Naechste Cross-BC-Anzeige-Bedarfe (uc-Haelfte von #77, #66)
-  sollten denselben Schnitt waehlen (In-Adapter -> fremder In-Port, nie-wirft-Batch-Port),
-  nicht wieder Raw-SPARQL in einen fremden Graphen. Wo das nicht befolgt wird (uc's
-  `readBySubject`/`readSupportingActors` heute), ist es eine offene Altlast, keine zulaessige
-  zweite Bauart.
+- **Der Praezedenzfall bindet.** Naechste Cross-BC-Anzeige-Bedarfe (#66) sollten denselben
+  Schnitt waehlen (In-Adapter -> fremder In-Port, nie-wirft-Batch-Port), nicht wieder
+  Raw-SPARQL in einen fremden Graphen. Fuer die uc-Haelfte von #77 eingeloest -- siehe
+  Nachtrag.
 
 ## Alternativen
 
@@ -135,3 +134,11 @@ Composition Root: die Antwort liegt dort, wo die Frage gestellt wird.
   geteilter Baustein bekommt erst dann ein eigenes Modul, wenn er von mehreren Modulen
   gebraucht wird, die einander nicht sehen duerfen") greift hier nicht: es gibt nichts zu
   teilen, nur eine direkte Abhaengigkeit.
+
+## Nachtrag 2026-07-17: uc-Haelfte von #77 (Issue #89, PR #95)
+
+Die in "Konsequenzen" als offen benannte uc-Haelfte ist umgesetzt und gemergt. `arknet-use-cases-adapter-mcp` haengt jetzt ebenfalls von `arknet-ubiquitous-language-core` **und** von `arknet-requirements-core` ab (`ResolveTerms` fuer Actor-Namen, `ResolveRequirements` aus #88 fuer FR-Codes) -- die zweite Cross-BC-Dependency dieser ADR, mit zwei fremden In-Ports statt einem. Derselbe Schnitt wie bei req: rein lesend, nie im Pflichtteil, immer Fallback auf die IRI.
+
+Damit ist die in "Warum nicht die Alternativen" genannte Raw-SPARQL-Altlast (`KognioRdfUseCaseRepository#readBySubject`/`#readSupportingActors`, mandatory Cross-Graph-Join auf `prefLabel`) abgeloest: die Aufloesung Actor-Name/FR-Code -> `ResourceId` sitzt jetzt hinter zwei neuen Out-Ports (`ActorLookup`, `RequirementLookup`), einmalig beim Schreiben (`UseCaseService#add`) statt bei jedem Lesen. Der Lesepfad joint nicht mehr zwingend in Nachbar-Graphen; ein fehlendes/umbenanntes `primaryActor.prefLabel` liess vorher den ganzen UseCase aus `findAll`/`findByCode` verschwinden (das strukturelle Uebel, das dieser ADR fuer req bereits vermieden hatte) -- jetzt betrifft ein aehnlicher Fall (Blank-Node-`primaryActor`) nur noch den einzelnen UseCase, nicht mehr die anderen Eintraege in `findAll`.
+
+Mit zwei Konsumenten ist "Eigenes Modul, analog ADR-007" (oben verworfen) erneut zu pruefen, sobald ein dritter absehbar ist (#66) -- ADR-007s Leitregel greift ab dort, nicht schon bei zweien. Kein Handlungsbedarf heute.
