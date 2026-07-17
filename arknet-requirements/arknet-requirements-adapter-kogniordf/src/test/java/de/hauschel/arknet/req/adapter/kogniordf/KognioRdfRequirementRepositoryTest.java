@@ -343,6 +343,62 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(reloaded.acceptanceCriteria(), found.acceptanceCriteria());
     }
 
+    /**
+     * Regression guard: a requirement written by a pre-#91 {@code req_add} has no
+     * {@code arkreq:acceptanceCriterion} triple at all - SHACL only gates writes, so this state
+     * is reachable simply by not having re-saved the requirement since the field became
+     * mandatory, not just via an exotic store-first bypass. Before the fix, {@code findByCode}
+     * fed the resulting empty list straight into {@link Requirement}'s constructor, which rejects
+     * an empty list unconditionally, so this crashed {@code req_get} instead of returning the
+     * requirement with a placeholder.
+     */
+    @Test
+    void findByCodeSubstitutesAPlaceholderForARequirementPredatingAcceptanceCriterion() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithoutAcceptanceCriterion(WORKSPACE_A, id, "FR-1");
+
+        Requirement found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertEquals(1, found.acceptanceCriteria().size());
+        assertTrue(found.acceptanceCriteria().get(0).contains("Altdatensatz"), found.acceptanceCriteria().toString());
+    }
+
+    /** Same regression as above, exercised via the batch {@link RequirementRepository#findAll}. */
+    @Test
+    void findAllSubstitutesAPlaceholderForARequirementPredatingAcceptanceCriterion() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithoutAcceptanceCriterion(WORKSPACE_A, id, "FR-1");
+
+        List<Requirement> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertEquals(1, all.get(0).acceptanceCriteria().size());
+        assertTrue(all.get(0).acceptanceCriteria().get(0).contains("Altdatensatz"));
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
+     * graph without an {@code arkreq:acceptanceCriterion} triple - exactly what a {@code req_add}
+     * call made before issue #91 would have produced, since the shape only gates writes made
+     * after the SHACL property was added.
+     */
+    private void givenLegacyRequirementWithoutAcceptanceCriterion(WorkspaceId workspaceId, RequirementId id,
+            String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     // ---- findByIds: batch resolution for ResolveRequirements (issue #88) ----------------
 
     @Test
