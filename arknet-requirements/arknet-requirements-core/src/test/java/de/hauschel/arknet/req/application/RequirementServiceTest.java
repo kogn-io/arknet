@@ -18,6 +18,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -280,6 +281,54 @@ class RequirementServiceTest {
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
         assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code).orElseThrow().usesTerms());
+    }
+
+    /**
+     * Issue #88: a sibling bounded context's driving adapter resolves opaque requirement
+     * identities back to their identity and business code (e.g. to render {@code FR-N} for
+     * display) - in one batch, not per-id.
+     */
+    @Test
+    void getByIdResolvesKnownIdentitiesInOneBatch() {
+        Requirement first = service.add(WS, newFunctionalRequirement());
+        Requirement second = service.add(WS, newFunctionalRequirement());
+
+        List<ResolveRequirements.ResolvedRequirement> resolved =
+                service.getById(WS, first.id().value(), second.id().value());
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(new ResolveRequirements.ResolvedRequirement(first.id().value(), first.code())));
+        assertTrue(
+                resolved.contains(new ResolveRequirements.ResolvedRequirement(second.id().value(), second.code())));
+    }
+
+    /**
+     * The port never rejects an unresolvable id - it simply omits it from the result, so the
+     * caller (not this port) decides what "missing" means for its own display.
+     */
+    @Test
+    void getByIdSilentlyOmitsUnknownIdentities() {
+        Requirement known = service.add(WS, newFunctionalRequirement());
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
+
+        List<ResolveRequirements.ResolvedRequirement> resolved =
+                service.getById(WS, known.id().value(), unknown);
+
+        assertEquals(List.of(new ResolveRequirements.ResolvedRequirement(known.id().value(), known.code())),
+                resolved);
+    }
+
+    @Test
+    void getByIdWithNoIdsReturnsAnEmptyList() {
+        assertEquals(List.of(), service.getById(WS));
+    }
+
+    @Test
+    void getByIdIsScopedPerWorkspace() {
+        Requirement inWs = service.add(WS, newFunctionalRequirement());
+        WorkspaceId other = new WorkspaceId("other");
+
+        assertEquals(List.of(), service.getById(other, inWs.id().value()));
     }
 
     private static NewRequirement newFunctionalRequirement() {
