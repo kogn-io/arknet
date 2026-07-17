@@ -149,3 +149,21 @@ erreicht hatten:
 
 Beide Klassen sind technologieneutral (kein RDF4J-Bezug) und aendern nichts an der
 RDF4J-Freiheit des Moduls.
+
+## Nachtrag 2026-07-17 (#65): Reichweite des Gates
+
+Der #65-Fix (PR #76) haengt im req-Out-Adapter Tripel an, die nicht durch `gate.enforce` gelaufen
+sind -- `usesTerm`-Kanten, die der Lese-Join nicht binden kann und die das
+replace-by-identity-`update` sonst still loeschen wuerde (Mechanik: Javadoc `readUsesTerms`).
+Erster Bypass dieser Art im Schreibpfad.
+
+**Entscheidung:** Das Gate ist ein Tor fuer **neue** Behauptungen der Anwendung, keine
+fortlaufende Integritaetsgarantie ueber den Gesamtgraphen -- store-first (ADR-005) laeuft ohnehin
+prinzipiell daran vorbei. Bestand bewahren darf am Gate vorbei; Tripel **erzeugen** nicht. Wer den
+Bypass fuer eine andere Kante wiederverwendet, muss zeigen, dass er ebenfalls nur bewahrt.
+
+Die Kante durch das Gate zu schleusen war keine Option: ihr Ziel traegt per Konstruktion keinen
+Identifier, bekommt also keinen synthetischen Typ in den `assertedContext`, und `sh:class
+skos:Concept` der `usesTerm`-Shape kippte die Validierung -- jedes kuenftige `update` eines
+betroffenen Requirements waere blockiert. Am Gate selbst aendert der Bypass nichts, die
+Entscheidung liegt im Adapter (vgl. Entscheidung 3).
