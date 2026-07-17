@@ -167,3 +167,16 @@ Identifier, bekommt also keinen synthetischen Typ in den `assertedContext`, und 
 skos:Concept` der `usesTerm`-Shape kippte die Validierung -- jedes kuenftige `update` eines
 betroffenen Requirements waere blockiert. Am Gate selbst aendert der Bypass nichts, die
 Entscheidung liegt im Adapter (vgl. Entscheidung 3).
+
+**Praezisierung 2026-07-17 (#77, PR #79):** Die Entscheidung oben gilt unveraendert, ihr
+Anwendungsbereich ist aber kleiner geworden. Das definierende Kriterium der bewahrten Kanten war
+"Ziel traegt keinen `dcterms:identifier`"; seit `TermRef` die Subject-`ResourceId` traegt und der
+Lese-Rueckjoin ersatzlos entfaellt, ist es **"Ziel ist keine IRI"** -- Blank Nodes, die eine
+`ResourceId` nicht darstellen kann. Der Bypass bleibt also bestehen, betrifft aber nur noch diesen
+Restfall (Mechanik jeweils aktuell im Javadoc `readUsesTerms`, nicht hier). Die daraus
+resultierende Grenze ist noch praeziser zu ziehen als oben formuliert: nicht nur "Bestand bewahren
+darf am Gate vorbei", sondern auch -- wer dem `assertedContext` einen synthetischen Typ beilegt,
+den **niemand** geprueft hat, macht das Gate fuer genau diese Bedingung blind. Fuer die von
+`readUsesTerms` gelesenen Kanten trifft das zu (der Read stellt keine Typ-Bedingung); erreichbar
+ist der Fall nur store-first, nicht ueber die Tools. Kein eigenes Issue -- bewusste Entscheidung,
+festgehalten im Klassen-Javadoc von `KognioRdfRequirementRepository`.
