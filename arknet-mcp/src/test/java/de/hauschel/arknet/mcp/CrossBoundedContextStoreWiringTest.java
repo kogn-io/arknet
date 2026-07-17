@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.kogn.rdf.dataset.DatasetLifecycle;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.application.RequirementService;
@@ -21,10 +22,9 @@ import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools;
 import de.hauschel.arknet.uc.application.UseCaseService;
+import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
-import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
-import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
@@ -77,20 +77,26 @@ class CrossBoundedContextStoreWiringTest {
                     terms.add(WS, new NewTerm("Customer", "A person placing an order.",
                             new ActorFacet(ActorKind.HUMAN, "orderer")));
 
-                    // uc_add referencing that FR (by its assigned id) and that actor (by label).
+                    // uc_add referencing that FR (by its code) and that actor (by name); the
+                    // service resolves both raw strings to opaque identities via ActorLookup/
+                    // RequirementLookup before the real UseCase is constructed (issue #89).
                     UseCase created = useCases.add(WS, new NewUseCase("Place order",
-                            "Customer places an order", null, null, new ActorRef("Customer"),
+                            "Customer places an order", null, null, "Customer",
                             List.of(), null, null,
-                            List.of(new Step(1, "Customer selects items and confirms",
-                                    List.of(new RequirementRef(fr.code().value())))),
+                            List.of(new NewStep(1, "Customer selects items and confirms",
+                                    List.of(fr.code().value()))),
                             List.of()));
 
                     // uc_get reads the resolved cross-context edges back (looked up by code).
+                    // The resolved identity, not a label, is what the reference now carries -
+                    // assert it is stable/consistent with what was just created.
                     UseCase reloaded = useCases.get(WS, created.code()).orElseThrow();
-                    assertThat(reloaded.primaryActor()).isEqualTo(new ActorRef("Customer"));
+                    assertThat(reloaded.primaryActor()).isEqualTo(created.primaryActor());
+                    ResourceId frId = fr.id().value();
                     assertThat(reloaded.steps()).singleElement()
                             .satisfies(step -> assertThat(step.realises())
-                                    .containsExactly(new RequirementRef(fr.code().value())));
+                                    .extracting(RequirementRef::value)
+                                    .containsExactly(frId));
                 });
     }
 
@@ -112,8 +118,8 @@ class CrossBoundedContextStoreWiringTest {
                             new ActorFacet(ActorKind.HUMAN, "orderer")));
 
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
-                            null, null, new ActorRef("Customer"), List.of(), null, null,
-                            List.of(new Step(1, "does something", List.of(new RequirementRef("FR-1")))),
+                            null, null, "Customer", List.of(), null, null,
+                            List.of(new NewStep(1, "does something", List.of("FR-1"))),
                             List.of());
 
                     assertThatThrownBy(() -> useCases.add(WS, danglingFr))

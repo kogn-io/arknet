@@ -22,7 +22,6 @@ import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -39,12 +38,22 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * Integration test for {@link KognioRdfUseCaseRepository} against an in-memory RDF4J-backed
  * kognio-rdf store. Requirement and actor resources referenced by a use case are seeded
  * directly into the same workspace graphs (as the requirements / ubiquitous-language adapters
- * would write them), so the strict lookup-by-label resolution can be exercised without a
- * cross-bounded-context test dependency.
+ * would write them), so the write path can be exercised without a cross-bounded-context test
+ * dependency.
  *
  * <p>Identity is opaque (issue #72): the use-case subject IRI is minted above the store and
  * carried on the {@link UseCase}; the human-readable {@link UseCaseCode} ({@code UC1}) is a
  * separate {@code dcterms:identifier} triple and is what a caller looks up by.</p>
+ *
+ * <p><strong>References arrive pre-resolved (issue #89).</strong> {@link ActorRef}/
+ * {@link RequirementRef} now carry the referenced resource's opaque {@link ResourceId} directly
+ * - resolving a human-typed label against the shared store is no longer this repository's job
+ * (it moved to {@code KognioRdfActorLookup}/{@code KognioRdfRequirementLookup}, exercised in
+ * {@code KognioRdfActorLookupTest}/{@code KognioRdfRequirementLookupTest}). This test therefore no
+ * longer pins unknown/ambiguous-label rejection at the repository level - that behaviour now
+ * lives exclusively in the two lookup adapter tests, mirroring how
+ * {@code KognioRdfRequirementRepositoryTest} dropped its own resolution-rejection tests once
+ * issue #77 moved {@code usesTerm} resolution out of the requirement repository's write path.</p>
  */
 class KognioRdfUseCaseRepositoryTest {
 
@@ -59,6 +68,12 @@ class KognioRdfUseCaseRepositoryTest {
     private static final UseCaseId ID_2 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-2"));
     private static final UseCaseCode CODE_1 = new UseCaseCode("UC1");
     private static final UseCaseCode CODE_2 = new UseCaseCode("UC2");
+
+    private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/model/requirement/FR-1");
+    private static final ActorRef CUSTOMER = new ActorRef(ResourceId.of("https://w3id.org/arknet/model/term/customer"));
+    private static final ActorRef PAYMENT_PROVIDER =
+            new ActorRef(ResourceId.of("https://w3id.org/arknet/model/term/payment-provider"));
+    private static final RequirementRef FR_1_REF = new RequirementRef(FR_1);
 
     private DatasetLifecycleRdf4j lifecycle;
     private UseCaseRepository repository;
@@ -129,16 +144,16 @@ class KognioRdfUseCaseRepositoryTest {
     private static UseCase placeOrder(UseCaseId id, UseCaseCode code) {
         return new UseCase(
                 id, code, "Place order", "Customer places an order",
-                "Webshop", "Customer opens the cart", new ActorRef("Customer"),
-                List.of(new ActorRef("PaymentProvider")), "Customer is logged in", "Order is recorded",
+                "Webshop", "Customer opens the cart", CUSTOMER,
+                List.of(PAYMENT_PROVIDER), "Customer is logged in", "Order is recorded",
                 List.of(
-                        new Step(1, "Customer selects items", List.of(new RequirementRef("FR-1"))),
+                        new Step(1, "Customer selects items", List.of(FR_1_REF)),
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure"));
     }
 
     @Test
-    void createsAndFindsUseCaseByCodeWithStepsAndResolvedReferences() {
+    void createsAndFindsUseCaseByCodeWithStepsAndReferences() {
         seedReferences(WORKSPACE_A);
 
         repository.create(WORKSPACE_A, placeOrder());
@@ -152,14 +167,14 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals("Customer places an order", uc.goal());
         assertEquals("Webshop", uc.scope());
         assertEquals("Customer opens the cart", uc.trigger());
-        assertEquals(new ActorRef("Customer"), uc.primaryActor());
-        assertEquals(List.of(new ActorRef("PaymentProvider")), uc.supportingActors());
+        assertEquals(CUSTOMER, uc.primaryActor());
+        assertEquals(List.of(PAYMENT_PROVIDER), uc.supportingActors());
         assertEquals("Customer is logged in", uc.precondition());
         assertEquals("Order is recorded", uc.postcondition());
         assertEquals(2, uc.steps().size());
         assertEquals(1, uc.steps().get(0).position());
         assertEquals("Customer selects items", uc.steps().get(0).text());
-        assertEquals(List.of(new RequirementRef("FR-1")), uc.steps().get(0).realises());
+        assertEquals(List.of(FR_1_REF), uc.steps().get(0).realises());
         assertEquals(2, uc.steps().get(1).position());
         assertEquals(List.of(), uc.steps().get(1).realises());
         assertEquals(List.of("2a. Payment declined -> use case ends in failure"), uc.extensions());
@@ -171,7 +186,7 @@ class KognioRdfUseCaseRepositoryTest {
         repository.create(WORKSPACE_A, placeOrder());
 
         UseCase second = new UseCase(ID_2, CODE_2, "Reset password", "User resets password",
-                null, null, new ActorRef("Customer"), List.of(), null, null,
+                null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "User requests a reset link", List.of())), List.of());
         repository.create(WORKSPACE_A, second);
 
@@ -189,7 +204,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(3, countSteps(WORKSPACE_A));
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
-                null, null, new ActorRef("Customer"), List.of(), null, null,
+                null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
         repository.update(WORKSPACE_A, revised);
 
@@ -250,46 +265,68 @@ class KognioRdfUseCaseRepositoryTest {
         assertTrue(repository.findAll(WORKSPACE_B).isEmpty());
     }
 
+    /**
+     * Regression test (issue #89) for the bug this issue fixes: a use case whose primary
+     * actor's {@code skos:prefLabel} is deleted after creation must still be readable in full -
+     * the reference no longer depends on the label at all, unlike the old read path, which
+     * mandatorily joined into the terms graph on {@code skos:prefLabel} and silently dropped the
+     * whole use case ({@code findByCode} returned empty, {@code findAll} dropped it via
+     * {@code Optional::ifPresent}) the moment that join failed to bind.
+     */
     @Test
-    void createRejectsUnknownRequirementLabelWithDidacticMessage() {
-        seedHumanActor(WORKSPACE_A, "customer", "Customer");
-        seedSystemActor(WORKSPACE_A, "payment-provider", "PaymentProvider");
+    void useCaseSurvivesItsPrimaryActorsPrefLabelBeingDeleted() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
 
-        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> repository.create(WORKSPACE_A, placeOrder()));
+        deletePrefLabel(WORKSPACE_A, CUSTOMER.value());
 
-        assertTrue(ex.getMessage().contains("FR-1"));
-        assertTrue(ex.getMessage().contains("req_add"));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+        Optional<UseCase> byCode = repository.findByCode(WORKSPACE_A, CODE_1);
+        assertTrue(byCode.isPresent(), "findByCode must still return the use case");
+        assertEquals(CUSTOMER, byCode.orElseThrow().primaryActor());
+
+        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        assertEquals(1, all.size(), "findAll must not silently drop the use case");
+        assertEquals(CUSTOMER, all.get(0).primaryActor());
     }
 
+    /**
+     * Same regression, but for a rename rather than a deletion: relabelling the actor after the
+     * use case was created must not affect the reference, since the edge's target IRI - not the
+     * label - is the {@link ActorRef}.
+     */
     @Test
-    void createRejectsUnknownActorLabelWithDidacticMessage() {
-        seedRequirement(WORKSPACE_A, "FR-1");
+    void useCaseSurvivesItsPrimaryActorBeingRenamed() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
 
-        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> repository.create(WORKSPACE_A, placeOrder()));
+        renamePrefLabel(WORKSPACE_A, CUSTOMER.value(), "Customer", "Kunde");
 
-        assertTrue(ex.getMessage().contains("Customer"));
-        assertTrue(ex.getMessage().contains("term_add"));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+        UseCase found = repository.findByCode(WORKSPACE_A, CODE_1).orElseThrow();
+        assertEquals(CUSTOMER, found.primaryActor());
     }
 
-    @Test
-    void createRejectsAmbiguousRequirementLabel() {
-        seedRequirement(WORKSPACE_A, "FR-1");
-        seed(WORKSPACE_A, REQUIREMENTS_GRAPH,
-                "<https://w3id.org/arknet/model/requirement/duplicate-fr-1> "
-                        + "a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
-                        + "<http://purl.org/dc/terms/identifier> \"FR-1\" .");
-        seedHumanActor(WORKSPACE_A, "customer", "Customer");
-        seedSystemActor(WORKSPACE_A, "payment-provider", "PaymentProvider");
+    private void deletePrefLabel(WorkspaceId workspace, ResourceId subject) {
+        String delete = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + subject.value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(delete);
+                return null;
+            });
+        }
+    }
 
-        UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> repository.create(WORKSPACE_A, placeOrder()));
-
-        assertTrue(ex.getMessage().contains("ambiguous"));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+    private void renamePrefLabel(WorkspaceId workspace, ResourceId subject, String oldLabel, String newLabel) {
+        String update = "DELETE { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
+                + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + oldLabel + "\" } } "
+                + "INSERT { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
+                + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + newLabel + "\" } } WHERE {}";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(update);
+                return null;
+            });
+        }
     }
 
     @Test
@@ -299,8 +336,8 @@ class KognioRdfUseCaseRepositoryTest {
 
         // stepText "ok" is non-blank (valid domain) but below the shape's minLength of 3.
         UseCase invalid = new UseCase(ID_1, CODE_1, "Bad", "Some goal", null, null,
-                new ActorRef("Customer"), List.of(), null, null,
-                List.of(new Step(1, "ok", List.of(new RequirementRef("FR-1")))), List.of());
+                CUSTOMER, List.of(), null, null,
+                List.of(new Step(1, "ok", List.of(FR_1_REF))), List.of());
 
         assertThrows(WriteConstraintViolationException.class,
                 () -> repository.create(WORKSPACE_A, invalid));
