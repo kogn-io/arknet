@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -34,16 +35,24 @@ import de.hauschel.arknet.req.domain.TermRef;
 class RequirementServiceTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ResourceId TERM_1 =
+            ResourceId.of("https://w3id.org/arknet/id/term-1");
+    private static final ResourceId TERM_2 =
+            ResourceId.of("https://w3id.org/arknet/id/term-2");
 
     private InMemoryRequirementRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
+    private InMemoryTermLookup termLookup;
     private RequirementService service;
 
     @BeforeEach
     void setUp() {
         repository = new InMemoryRequirementRepository();
         resourceIdFactory = new FakeResourceIdFactory();
-        service = new RequirementService(repository, resourceIdFactory);
+        termLookup = new InMemoryTermLookup();
+        termLookup.register("TERM-1", TERM_1);
+        termLookup.register("TERM-2", TERM_2);
+        service = new RequirementService(repository, resourceIdFactory, termLookup);
     }
 
     @Test
@@ -207,39 +216,53 @@ class RequirementServiceTest {
     void linkTermAddsTheTermToTheRequirement() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        Requirement linked = service.linkTerm(WS, code, new TermRef("TERM-1"));
+        Requirement linked = service.linkTerm(WS, code, "TERM-1");
 
-        assertEquals(List.of(new TermRef("TERM-1")), linked.usesTerms());
-        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code).orElseThrow().usesTerms());
     }
 
     @Test
     void linkTermAppendsToAlreadyLinkedTerms() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
-        service.linkTerm(WS, code, new TermRef("TERM-1"));
+        service.linkTerm(WS, code, "TERM-1");
 
-        Requirement linked = service.linkTerm(WS, code, new TermRef("TERM-2"));
+        Requirement linked = service.linkTerm(WS, code, "TERM-2");
 
-        assertEquals(List.of(new TermRef("TERM-1"), new TermRef("TERM-2")), linked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), linked.usesTerms());
     }
 
     @Test
     void linkingTheSameTermTwiceIsANoOp() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
-        service.linkTerm(WS, code, new TermRef("TERM-1"));
+        service.linkTerm(WS, code, "TERM-1");
 
-        Requirement linked = service.linkTerm(WS, code, new TermRef("TERM-1"));
+        Requirement linked = service.linkTerm(WS, code, "TERM-1");
 
-        assertEquals(List.of(new TermRef("TERM-1")), linked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
     }
 
     @Test
     void linkTermThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.linkTerm(WS, new RequirementCode("FR-42"), new TermRef("TERM-1")));
+                () -> service.linkTerm(WS, new RequirementCode("FR-42"), "TERM-1"));
 
         assertSame(WS, ex.workspaceId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Resolution of the human-typed term code happens here, via {@link InMemoryTermLookup}
+     * (issue #77) - not in the out-adapter's write path any more. A lookup failure must
+     * propagate unchanged and leave the requirement untouched.
+     */
+    @Test
+    void linkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndLinksNothing() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+
+        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
+
+        assertEquals(List.of(), service.get(WS, code).orElseThrow().usesTerms());
     }
 
     /**
@@ -250,13 +273,13 @@ class RequirementServiceTest {
     @Test
     void setStatusPreservesLinkedTerms() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
-        service.linkTerm(WS, code, new TermRef("TERM-1"));
+        service.linkTerm(WS, code, "TERM-1");
 
         Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
-        assertEquals(List.of(new TermRef("TERM-1")), accepted.usesTerms());
-        assertEquals(List.of(new TermRef("TERM-1")), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code).orElseThrow().usesTerms());
     }
 
     private static NewRequirement newFunctionalRequirement() {

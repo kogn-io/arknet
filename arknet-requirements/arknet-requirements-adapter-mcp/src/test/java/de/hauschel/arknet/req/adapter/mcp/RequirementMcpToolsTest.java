@@ -69,12 +69,12 @@ class RequirementMcpToolsTest {
     }
 
     @Test
-    void linkTermPassesIdentitiesThroughToTheInPort() {
+    void linkTermPassesTheRawTermCodeThroughToTheInPort() {
         String rendered = adapter.linkTerm("FR-1", "TERM-1");
 
         assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
-        assertEquals(new TermRef("TERM-1"), stub.lastLinkedTerm);
-        assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+        assertEquals("TERM-1", stub.lastLinkedTermCode);
+        assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/TERM-1]"), rendered);
     }
 
     /** Structural stub implementing the five driving in-ports. */
@@ -82,7 +82,7 @@ class RequirementMcpToolsTest {
             implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm {
 
         private RequirementCode lastLinkedRequirement;
-        private TermRef lastLinkedTerm;
+        private String lastLinkedTermCode;
 
         @Override
         public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
@@ -105,9 +105,10 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, TermRef term) {
+        public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode) {
             lastLinkedRequirement = code;
-            lastLinkedTerm = term;
+            lastLinkedTermCode = termCode;
+            TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + termCode));
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, List.of(term));
         }

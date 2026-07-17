@@ -13,6 +13,7 @@ import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -43,6 +44,7 @@ public class RequirementService
 
     private final RequirementRepository repository;
     private final ResourceIdFactory resourceIdFactory;
+    private final TermLookup termLookup;
 
     /**
      * Creates the service.
@@ -50,10 +52,14 @@ public class RequirementService
      * @param repository        the driven persistence port (must not be {@code null})
      * @param resourceIdFactory mints the opaque identity of a newly added requirement (must not
      *                          be {@code null})
+     * @param termLookup        resolves a human-typed glossary term code to its opaque identity
+     *                          (must not be {@code null})
      */
-    public RequirementService(RequirementRepository repository, ResourceIdFactory resourceIdFactory) {
+    public RequirementService(
+            RequirementRepository repository, ResourceIdFactory resourceIdFactory, TermLookup termLookup) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
+        this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
     }
 
     @Override
@@ -101,12 +107,13 @@ public class RequirementService
     }
 
     @Override
-    public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, TermRef term) {
+    public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
-        Objects.requireNonNull(term, "term");
+        Objects.requireNonNull(termCode, "termCode");
         Requirement current = repository.findByCode(workspaceId, code)
                 .orElseThrow(() -> new RequirementNotFoundException(workspaceId, code));
+        TermRef term = new TermRef(termLookup.resolveByCode(workspaceId, termCode));
         if (current.usesTerms().contains(term)) {
             return current;
         }

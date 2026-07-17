@@ -150,18 +150,26 @@ public final class RequirementMcpTools {
                     + "term twice is a no-op.")
     public String linkTerm(
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
-            @McpToolParam(description = "Term identity, e.g. TERM-1 (the term's identity, not its label)")
+            @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
+                    + "against the glossary - not its skos:prefLabel or its store IRI)")
             final String termId) {
         final Requirement updated =
-                linkTerm.linkTerm(workspaceId, new RequirementCode(reqId), new TermRef(termId));
+                linkTerm.linkTerm(workspaceId, new RequirementCode(reqId), termId);
         return format(updated);
     }
 
+    /**
+     * Renders a term reference for display. {@link TermRef} carries the term's opaque subject
+     * identity (issue #77), not its business code - showing the bare IRI here is a deliberate
+     * degradation rather than a joining lookup back into the glossary, so a requirement with
+     * linked terms still renders (just less prettily) even if a term's business code has since
+     * changed or disappeared.
+     */
     private static String format(final Requirement r) {
         final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
         final String terms = r.usesTerms().isEmpty()
                 ? ""
-                : " [terms: " + r.usesTerms().stream().map(TermRef::termId)
+                : " [terms: " + r.usesTerms().stream().map(t -> t.value().value())
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
         return "%s [%s] %s (%s)%s%s".formatted(
                 r.code().value(), r.type(), r.title(), r.status(), priority, terms);
