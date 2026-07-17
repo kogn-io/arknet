@@ -1,7 +1,7 @@
 {
   "name": "arknet",
-  "version": "0.3.7",
-  "description": "DDD-Architekturmodelle, die Maschinen verstehen. Validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).",
+  "version": "0.3.8",
+  "description": "DDD architecture models that machines understand. Validatable (SHACL), queryable (SPARQL), AI-ready (MCP).",
   "author": {
     "name": "Fred Hauschel"
   },
