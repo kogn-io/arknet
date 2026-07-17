@@ -99,9 +99,14 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * for the {@code arkreq:stepRealises rdfs:subPropertyOf oslc_rm:satisfies} relation and to
      * stay symmetric with the requirements adapter.</p>
      *
+     * <p>Package-private (not {@code private}) so {@code KognioRdfUseCaseRepositoryTest} can
+     * exercise the wired gate directly against synthetic candidate graphs, without a
+     * {@link UseCaseRepository} round-trip the single-valued {@code primaryActor} domain field
+     * cannot produce (issue #82).</p>
+     *
      * @return the assembled use-case SHACL write-gate
      */
-    private static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate() {
         ReadableGraph shapes = loadUseCaseShapes();
         ReadableGraph axioms = loadGraph(AXIOMS_RESOURCE);
         return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true));

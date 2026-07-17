@@ -10,6 +10,13 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.ValueFactory;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
+import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+import org.eclipse.rdf4j.model.vocabulary.DCTERMS;
+import org.eclipse.rdf4j.model.vocabulary.RDF;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,11 +24,13 @@ import org.junit.jupiter.api.Test;
 import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.rdf4j.RDF4JGraph;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -372,5 +381,36 @@ class KognioRdfUseCaseRepositoryTest {
         assertThrows(WriteConstraintViolationException.class,
                 () -> repository.create(WORKSPACE_A, invalid));
         assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+    }
+
+    /**
+     * Regression test for issue #82: {@code rshapes:UseCase-primaryActor} now carries
+     * {@code sh:maxCount 1}. A second {@code primaryActor} is unreachable through
+     * {@link UseCaseRepository#create} - {@link UseCase#primaryActor()} is a single-valued
+     * field - so this exercises the wired gate directly against a synthetic candidate graph, the
+     * way a store-first (ADR-005) write could still produce two triples.
+     */
+    @Test
+    void gateRejectsUseCaseWithTwoPrimaryActors() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/uc-two-primary-actors");
+        IRI actor1 = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI actor2 = vf.createIRI("https://w3id.org/arknet/model/term/actor-2");
+        IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
+        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
+        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+
+        Model twoPrimaryActors = new LinkedHashModel();
+        twoPrimaryActors.add(useCase, RDF.TYPE, useCaseClass);
+        twoPrimaryActors.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-TWO-PRIMARY-ACTORS"));
+        twoPrimaryActors.add(useCase, primaryActor, actor1);
+        twoPrimaryActors.add(useCase, primaryActor, actor2);
+        twoPrimaryActors.add(actor1, RDF.TYPE, actorClass);
+        twoPrimaryActors.add(actor2, RDF.TYPE, actorClass);
+
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+
+        assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(new RDF4JGraph(twoPrimaryActors)));
     }
 }
