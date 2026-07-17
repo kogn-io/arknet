@@ -24,6 +24,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
@@ -253,27 +254,31 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * Batch variant of {@link #findByCode}, keyed by opaque identity instead of business code -
-     * backs {@link de.hauschel.arknet.ul.application.port.in.ResolveTerms} (issue #77 nachtrag).
-     * One {@code VALUES}-bound query for the whole batch, not one query per id: the caller (a
-     * sibling bounded context's driving adapter, rendering several term references at once) must
-     * not pay an N+1 store round-trip.
+     * backs {@link ResolveTerms} (issue #77 nachtrag). One {@code VALUES}-bound query for the
+     * whole batch, not one query per id: the caller (a sibling bounded context's driving adapter,
+     * rendering several term references at once) must not pay an N+1 store round-trip.
      *
-     * <p><strong>Exactly one {@link Term} per resolved subject (issue #77 nachtrag 2).</strong>
-     * {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but deliberately no
-     * {@code sh:maxCount}: SKOS allows - and this glossary intends to allow - one
+     * <p>Returns the slim {@link ResolveTerms.ResolvedTerm} projection, not the full {@link Term}
+     * aggregate (issue #84): the query below therefore joins only {@code identifier}, not
+     * {@code prefLabel}/{@code definition} - fields {@link ResolveTerms} never reads. A store-first
+     * term that carries an identity and a code but happens to miss a {@code prefLabel} (which
+     * {@link #findByCode}/{@link #findAll} still require) is thus resolvable here.</p>
+     *
+     * <p><strong>Exactly one {@link ResolveTerms.ResolvedTerm} per resolved subject (issue #77
+     * nachtrag 2).</strong> {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but
+     * deliberately no {@code sh:maxCount}: SKOS allows - and this glossary intends to allow - one
      * {@code skos:prefLabel} per language on the same concept, store-first (ADR-005) legally so.
-     * The three mandatory joins below (identifier, prefLabel, definition) are therefore not
-     * guaranteed to bind exactly one row per subject; a multi-language term yields one row per
-     * label. Grouping by subject and keeping the first row's binding per predicate turns that
-     * cardinality back into "the terms" the port promises, not "one row per predicate
-     * combination" - which is what a naive per-row mapping would leak to every caller (a caller
-     * keying results by identity, e.g. via {@code Collectors.toMap}, would throw
-     * {@code IllegalStateException} on the duplicate key). Which language's label ends up chosen
-     * is deliberately unspecified - this port exists to answer "what code names this identity",
-     * not "what is this term's label in language X".</p>
+     * Its own SHACL identifier constraint carries no {@code sh:maxCount} either, so the single
+     * mandatory join below (identifier) is not guaranteed to bind exactly one row per subject.
+     * Grouping by subject and keeping the first row's binding turns that cardinality back into
+     * "the terms" the port promises, not "one row per predicate combination" - which is what a
+     * naive per-row mapping would leak to every caller (a caller keying results by identity, e.g.
+     * via {@code Collectors.toMap}, would throw {@code IllegalStateException} on the duplicate
+     * key). Which identifier ends up chosen in that (pathological, store-first-only) case is
+     * deliberately unspecified.</p>
      */
     @Override
-    public List<Term> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+    public List<ResolveTerms.ResolvedTerm> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(ids, "ids");
         if (ids.isEmpty()) {
@@ -293,29 +298,19 @@ public class KognioRdfTermRepository implements TermRepository {
                 })
                 .collect(Collectors.joining(" "));
 
-        String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole "
-                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "VALUES ?s { " + values + " } "
                 + "?s a <" + CONCEPT_TYPE + "> . "
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
-                + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
-                + "?s <" + DEFINITION_PROPERTY + "> ?definition . "
-                + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
-                + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
-                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            Map<String, Term> bySubject = new LinkedHashMap<>();
+            Map<String, ResolveTerms.ResolvedTerm> bySubject = new LinkedHashMap<>();
             handle.sparqlQuery().select(query).forEach(row -> {
                 String subjectIri = iriOf(row, "s").getIRIString();
-                // putIfAbsent, not put: the first row wins if a subject has several
-                // language-tagged prefLabels (or, symmetrically, several definitions).
-                bySubject.putIfAbsent(subjectIri, new Term(
-                        new TermId(ResourceId.of(subjectIri)),
-                        new TermCode(literalOf(row, "identifier").getLexicalForm()),
-                        literalOf(row, "prefLabel").getLexicalForm(),
-                        literalOf(row, "definition").getLexicalForm(),
-                        actorFacetOf(row)));
+                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
+                bySubject.putIfAbsent(subjectIri, new ResolveTerms.ResolvedTerm(
+                        ResourceId.of(subjectIri),
+                        new TermCode(literalOf(row, "identifier").getLexicalForm())));
             });
             return List.copyOf(bySubject.values());
         }

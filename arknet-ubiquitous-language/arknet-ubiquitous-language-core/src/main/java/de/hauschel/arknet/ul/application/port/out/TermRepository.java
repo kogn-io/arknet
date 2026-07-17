@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -72,13 +73,19 @@ public interface TermRepository {
 
     /**
      * Finds every term in a workspace whose identity is among {@code ids}, in one store
-     * round-trip - backs {@link de.hauschel.arknet.ul.application.port.in.ResolveTerms}
-     * (issue #77). This is a batch lookup, not a per-id existence check: an id absent from the
-     * workspace is simply absent from the result, never an error.
+     * round-trip - backs {@link ResolveTerms} (issue #77). This is a batch lookup, not a per-id
+     * existence check: an id absent from the workspace is simply absent from the result, never an
+     * error.
+     *
+     * <p>Returns the slim {@link ResolveTerms.ResolvedTerm} projection, not the full {@link Term}
+     * aggregate (issue #84): the only consumer of this method is {@link ResolveTerms}, which
+     * exists purely to answer "what code names this identity" for display - joining fields such
+     * as {@code prefLabel}/{@code definition} the caller never reads would needlessly exclude a
+     * store-first term that carries an identity and a code but happens to miss one of them.</p>
      *
      * @param workspaceId the workspace (architecture model) to look up terms in
      * @param ids         the opaque identities to resolve; an empty list yields an empty result
-     * @return the terms found, in no particular order, never {@code null}
+     * @return the resolved terms found, in no particular order, never {@code null}
      */
-    List<Term> findByIds(WorkspaceId workspaceId, List<ResourceId> ids);
+    List<ResolveTerms.ResolvedTerm> findByIds(WorkspaceId workspaceId, List<ResourceId> ids);
 }

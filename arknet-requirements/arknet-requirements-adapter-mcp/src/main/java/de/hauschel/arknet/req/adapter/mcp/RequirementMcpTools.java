@@ -23,7 +23,7 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
-import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
@@ -147,7 +147,7 @@ public final class RequirementMcpTools {
             return "(no requirements)";
         }
         // One batch resolution across every requirement's linked terms, not one per requirement.
-        final Map<ResourceId, Term> termsById = resolveTermsFor(all);
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(all);
         return all.stream().map(r -> format(r, termsById))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
@@ -198,7 +198,7 @@ public final class RequirementMcpTools {
      * one call total for {@code req_list}). Never throws: a {@link TermRef} missing from
      * {@code termsById} (unresolvable, or simply not looked up) falls back to its bare IRI.
      */
-    private static String format(final Requirement r, final Map<ResourceId, Term> termsById) {
+    private static String format(final Requirement r, final Map<ResourceId, ResolvedTerm> termsById) {
         final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
         final String terms = r.usesTerms().isEmpty()
                 ? ""
@@ -209,8 +209,8 @@ public final class RequirementMcpTools {
     }
 
     /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
-    private static String renderTerm(final TermRef ref, final Map<ResourceId, Term> termsById) {
-        final Term term = termsById.get(ref.value());
+    private static String renderTerm(final TermRef ref, final Map<ResourceId, ResolvedTerm> termsById) {
+        final ResolvedTerm term = termsById.get(ref.value());
         return term != null ? term.code().value() : ref.value().value();
     }
 
@@ -221,17 +221,17 @@ public final class RequirementMcpTools {
      * absent from the returned map, which {@link #renderTerm} treats as "fall back to the IRI".
      *
      * <p><strong>Structurally cannot throw on a duplicate key (issue #77, second nachtrag).</strong>
-     * {@link ResolveTerms} promises at most one {@link Term} per identity, but this method must
-     * not rely on every implementation upholding that: a plain {@code Collectors.toMap(t ->
-     * t.id().value(), t -> t)} throws {@code IllegalStateException} the moment two returned
-     * {@link Term}s share an identity, turning a display concern into a thrown exception - the
-     * very thing this rendering path exists to avoid. The merge function below keeps the first
-     * entry for a duplicate key instead; which one is kept is immaterial here, since rendering
-     * only ever reads {@link Term#code()} and any legitimate duplicate (e.g. a store-first term
-     * with more than one language-tagged {@code skos:prefLabel}, see
+     * {@link ResolveTerms} promises at most one {@link ResolvedTerm} per identity, but this method
+     * must not rely on every implementation upholding that: a plain {@code Collectors.toMap(t ->
+     * t.id(), t -> t)} throws {@code IllegalStateException} the moment two returned
+     * {@link ResolvedTerm}s share an identity, turning a display concern into a thrown exception -
+     * the very thing this rendering path exists to avoid. The merge function below keeps the
+     * first entry for a duplicate key instead; which one is kept is immaterial here, since
+     * rendering only ever reads {@link ResolvedTerm#code()} and any legitimate duplicate (e.g. a
+     * store-first term with more than one {@code dcterms:identifier}, see
      * {@code KognioRdfTermRepository#findByIds}) carries the same code on every row.</p>
      */
-    private Map<ResourceId, Term> resolveTermsFor(final List<Requirement> requirements) {
+    private Map<ResourceId, ResolvedTerm> resolveTermsFor(final List<Requirement> requirements) {
         final ResourceId[] ids = requirements.stream()
                 .flatMap(r -> r.usesTerms().stream())
                 .map(TermRef::value)
@@ -241,7 +241,7 @@ public final class RequirementMcpTools {
             return Map.of();
         }
         return resolveTerms.getById(workspaceId, ids).stream()
-                .collect(Collectors.toMap(t -> t.id().value(), t -> t, (first, second) -> first));
+                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 
     private static String blankToNull(final String value) {
