@@ -188,8 +188,9 @@ rshapes:UseCase-primaryActor
     a sh:PropertyShape ;
     sh:path     arkreq:primaryActor ;
     sh:minCount 1 ;
+    sh:maxCount 1 ;
     sh:class    arkproc:Actor ;
-    sh:message  "Use Case braucht mindestens einen arkreq:primaryActor."@de ;
+    sh:message  "Use Case braucht genau einen arkreq:primaryActor."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-satisfies
