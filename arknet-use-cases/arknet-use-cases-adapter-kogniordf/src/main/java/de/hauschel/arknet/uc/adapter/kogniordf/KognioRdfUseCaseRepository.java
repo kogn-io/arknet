@@ -83,13 +83,18 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * coarse {@code UseCase oslc_rm:satisfies Requirement} edge is derived as the union of the
  * resolved {@code stepRealises} targets.</p>
  *
- * <p><strong>Still lossy for one, narrower case.</strong> Reading {@code supportingActor}/
- * {@code stepRealises} back filters for IRI-ness only ({@code FILTER(isIRI(...))}), mirroring
- * {@code KognioRdfRequirementRepository#readUsesTerms}: neither property carries an
- * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
- * node, which {@link ResourceId} cannot represent. Such an edge is simply absent from the
- * corresponding list; this is unreachable via the MCP tools, which always resolve to a subject
- * IRI before writing.</p>
+ * <p><strong>Still lossy for one, narrower case.</strong> Reading {@code primaryActor}/
+ * {@code supportingActor}/{@code stepRealises} back filters for IRI-ness only
+ * ({@code FILTER(isIRI(...))}), mirroring {@code KognioRdfRequirementRepository#readUsesTerms}:
+ * none of the three properties carries an {@code sh:nodeKind} constraint, so a store-first
+ * (ADR-005) edge may legally target a blank node, which {@link ResourceId} cannot represent. For
+ * {@code supportingActor}/{@code stepRealises} such an edge is simply absent from the
+ * corresponding list. {@code primaryActor} is a required (non-{@code OPTIONAL}) triple pattern
+ * in the scalar read, so filtering it out there instead makes the whole use case unreadable -
+ * {@link #readBySubject} returns {@link Optional#empty()}, and {@link #findAll}/
+ * {@link #findByCode} treat it as "not found", silently skipping only that one use case rather
+ * than failing the whole result. This is unreachable via the MCP tools, which always resolve to
+ * a subject IRI before writing.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
@@ -350,12 +355,21 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
+        // FILTER(isIRI(?primaryActor)) mirrors readSupportingActors/readMainStepRealises:
+        // arkreq:primaryActor carries no sh:nodeKind constraint, so a store-first (ADR-005) edge
+        // may legally target a blank node, which ResourceId cannot represent. Unlike the other
+        // two properties, primaryActor is part of this required (non-OPTIONAL) triple pattern, so
+        // filtering it out here makes the whole scalar query yield no row for such a use case -
+        // readBySubject then returns Optional.empty() and the caller (findByCode/findAll) treats
+        // it as "not found", silently skipping only this one use case rather than crashing the
+        // caller's entire result list.
         String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryActor "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " a <" + USE_CASE_TYPE + "> ; "
                 + "<" + TITLE_PROPERTY + "> ?title ; "
                 + "<" + USE_CASE_GOAL_PROPERTY + "> ?goal ; "
                 + "<" + PRIMARY_ACTOR_PROPERTY + "> ?primaryActor . "
+                + "FILTER(isIRI(?primaryActor)) "
                 + "OPTIONAL { " + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?scope } "
                 + "OPTIONAL { " + subject + " <" + TRIGGER_PROPERTY + "> ?trigger } "
                 + "OPTIONAL { " + subject + " <" + PRECONDITION_PROPERTY + "> ?precondition } "
