@@ -3,6 +3,7 @@ package de.hauschel.arknet.ul.adapter.kogniordf;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
@@ -228,6 +229,57 @@ public class KognioRdfTermRepository implements TermRepository {
 
         String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s a <" + CONCEPT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
+                + "?s <" + DEFINITION_PROPERTY + "> ?definition . "
+                + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
+                + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
+                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> new Term(
+                            new TermId(ResourceId.of(iriOf(row, "s").getIRIString())),
+                            new TermCode(literalOf(row, "identifier").getLexicalForm()),
+                            literalOf(row, "prefLabel").getLexicalForm(),
+                            literalOf(row, "definition").getLexicalForm(),
+                            actorFacetOf(row)))
+                    .toList();
+        }
+    }
+
+    /**
+     * Batch variant of {@link #findByCode}, keyed by opaque identity instead of business code -
+     * backs {@link de.hauschel.arknet.ul.application.port.in.ResolveTerms} (issue #77 nachtrag).
+     * One {@code VALUES}-bound query for the whole batch, not one query per id: the caller (a
+     * sibling bounded context's driving adapter, rendering several term references at once) must
+     * not pay an N+1 store round-trip.
+     */
+    @Override
+    public List<Term> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        // Defense-in-depth, same rationale as the subject check in write(): reject an impossible
+        // identity before it ever reaches SPARQL string concatenation.
+        String values = ids.stream()
+                .map(id -> {
+                    String iriString = id.value();
+                    if (!SparqlTerms.isValidIriReference(iriString)) {
+                        throw new IllegalArgumentException(
+                                "term id yields an invalid IRI for SPARQL: " + iriString);
+                    }
+                    return SparqlTerms.iriRef(iriString);
+                })
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole "
+                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
                 + "?s a <" + CONCEPT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "

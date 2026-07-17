@@ -4,11 +4,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -28,7 +30,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  * workspace). Keeping identity separate from both the code and the {@code skos:prefLabel} means
  * relabeling never changes identity (a core SKOS principle).</p>
  */
-public class TermService implements AddTerm, ListTerms, GetTerm {
+public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms {
 
     private static final String ID_PREFIX = "TERM";
 
@@ -69,6 +71,16 @@ public class TermService implements AddTerm, ListTerms, GetTerm {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
         return repository.findByCode(workspaceId, code);
+    }
+
+    @Override
+    public List<Term> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.length == 0) {
+            return List.of();
+        }
+        return repository.findByIds(workspaceId, List.of(ids));
     }
 
     /**

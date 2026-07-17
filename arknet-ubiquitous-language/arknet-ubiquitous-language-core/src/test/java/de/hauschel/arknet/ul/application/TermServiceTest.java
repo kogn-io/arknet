@@ -11,6 +11,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
@@ -118,5 +119,49 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
 
         assertNull(added.actorFacet());
+    }
+
+    /**
+     * Issue #77 nachtrag: a sibling bounded context's driving adapter resolves opaque term
+     * identities back to full {@link Term}s (e.g. to render {@code TERM-N} for display) - in
+     * one batch, not per-id.
+     */
+    @Test
+    void getByIdResolvesKnownIdentitiesInOneBatch() {
+        Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term second = service.add(WS, new NewTerm("Bestellung", "def b", null));
+
+        List<Term> resolved = service.getById(WS, first.id().value(), second.id().value());
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(first));
+        assertTrue(resolved.contains(second));
+    }
+
+    /**
+     * The port never rejects an unresolvable id - it simply omits it from the result, so the
+     * caller (not this port) decides what "missing" means for its own display.
+     */
+    @Test
+    void getByIdSilentlyOmitsUnknownIdentities() {
+        Term known = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
+
+        List<Term> resolved = service.getById(WS, known.id().value(), unknown);
+
+        assertEquals(List.of(known), resolved);
+    }
+
+    @Test
+    void getByIdWithNoIdsReturnsAnEmptyList() {
+        assertEquals(List.of(), service.getById(WS));
+    }
+
+    @Test
+    void getByIdIsScopedPerWorkspace() {
+        Term inWs = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        WorkspaceId other = new WorkspaceId("other");
+
+        assertEquals(List.of(), service.getById(other, inWs.id().value()));
     }
 }

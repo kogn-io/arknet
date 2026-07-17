@@ -23,6 +23,17 @@
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-requirements-core</artifactId>
         </dependency>
+        <!-- In-Adapter -> fremder In-Port (issue #77 Nachtrag): der In-Adapter ist das Tor zum
+             requirements-BC, nicht dessen Core - eine Abhaengigkeit hierher auf einen anderen
+             BCs In-Port verletzt die Invariante "kein *-core* haengt an einem anderen BC" nicht
+             (die gilt fuer die *-core-Module, siehe arknet-architecture-tests in CLAUDE.md).
+             Genutzt nur fuer die read-only Anzeige-Aufloesung ResourceId -> TERM-N in
+             RequirementMcpTools#format; req_link_term selbst bleibt entkoppelt (TermLookup). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-mcp-annotations</artifactId>

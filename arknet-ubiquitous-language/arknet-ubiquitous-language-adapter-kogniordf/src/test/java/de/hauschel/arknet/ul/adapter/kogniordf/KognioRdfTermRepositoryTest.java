@@ -261,6 +261,59 @@ class KognioRdfTermRepositoryTest {
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
     }
 
+    // ---- findByIds: batch resolution for ResolveTerms (issue #77 nachtrag) --------------
+
+    @Test
+    void findByIdsResolvesKnownIdentitiesInOneQuery() {
+        Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
+        repository.create(WORKSPACE_A, first);
+        repository.create(WORKSPACE_A, second);
+
+        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(first.id().value(), second.id().value()));
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(first));
+        assertTrue(resolved.contains(second));
+    }
+
+    /** An id absent from the workspace is simply absent from the result, never an error. */
+    @Test
+    void findByIdsSilentlyOmitsUnknownIdentities() {
+        Term known = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        repository.create(WORKSPACE_A, known);
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
+
+        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(known.id().value(), unknown));
+
+        assertEquals(List.of(known), resolved);
+    }
+
+    @Test
+    void findByIdsWithEmptyIdsReturnsAnEmptyListWithoutQuerying() {
+        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of()));
+    }
+
+    @Test
+    void findByIdsIsScopedPerWorkspace() {
+        Term inWorkspaceA = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        repository.create(WORKSPACE_A, inWorkspaceA);
+
+        assertEquals(List.of(), repository.findByIds(WORKSPACE_B, List.of(inWorkspaceA.id().value())));
+    }
+
+    @Test
+    void findByIdsReconstructsActorFacet() {
+        Term withFacet = new Term(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
+                new ActorFacet(ActorKind.HUMAN, "Besteller"));
+        repository.create(WORKSPACE_A, withFacet);
+
+        List<Term> resolved = repository.findByIds(WORKSPACE_A, List.of(withFacet.id().value()));
+
+        assertEquals(1, resolved.size());
+        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), resolved.get(0).actorFacet());
+    }
+
     private boolean subjectHasType(WorkspaceId workspaceId, TermId id, String typeIri) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <" + typeIri + "> } }";

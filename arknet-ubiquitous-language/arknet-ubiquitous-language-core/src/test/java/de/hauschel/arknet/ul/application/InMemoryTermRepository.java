@@ -4,7 +4,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
@@ -58,5 +60,13 @@ final class InMemoryTermRepository implements TermRepository {
     @Override
     public List<Term> findAll(WorkspaceId workspaceId) {
         return List.copyOf(byWorkspace.getOrDefault(workspaceId, Map.of()).values());
+    }
+
+    @Override
+    public List<Term> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+        Set<ResourceId> wanted = Set.copyOf(ids);
+        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+                .filter(t -> wanted.contains(t.id().value()))
+                .toList();
     }
 }
