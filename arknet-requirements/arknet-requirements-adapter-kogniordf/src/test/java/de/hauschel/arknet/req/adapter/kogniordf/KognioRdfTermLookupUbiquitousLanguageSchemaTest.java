@@ -11,7 +11,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 
@@ -39,7 +38,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  * fails.</p>
  *
  * <p>Deliberately narrower than {@code CrossBoundedContextStoreWiringTest} in {@code arknet-mcp}:
- * that test proves the two contexts share a single {@link DatasetLifecycle} bean through Spring
+ * that test proves the two contexts share a single {@code DatasetLifecycle} bean through Spring
  * wiring end to end (issue #41), going through the application/service layer.
  * This test isolates the two out-adapters directly - no Spring context, no service layer, no
  * dependency on arknet-mcp - so it is the more precise place to catch a lookup/repository schema
@@ -56,11 +55,10 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
     @BeforeEach
     void setUp() throws IOException {
         Path tmp = Files.createTempDirectory("arknet-req-ul-schema-it");
-        DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
+        lifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
-        lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        ulTermRepository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
-        reqTermLookup = new KognioRdfTermLookup(datasetLifecycle);
+        ulTermRepository = KognioRdfTermRepositoryFactory.over(lifecycle);
+        reqTermLookup = new KognioRdfTermLookup(lifecycle);
     }
 
     @AfterEach
