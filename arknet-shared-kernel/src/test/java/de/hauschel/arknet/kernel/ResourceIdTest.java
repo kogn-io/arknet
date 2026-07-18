@@ -42,6 +42,56 @@ class ResourceIdTest {
     }
 
     @Test
+    void rejectsLessThan() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/<x"));
+    }
+
+    @Test
+    void rejectsGreaterThan() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/>x"));
+    }
+
+    @Test
+    void rejectsDoubleQuote() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/\"x"));
+    }
+
+    @Test
+    void rejectsOpenBrace() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/{x"));
+    }
+
+    @Test
+    void rejectsCloseBrace() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/}x"));
+    }
+
+    @Test
+    void rejectsPipe() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/|x"));
+    }
+
+    @Test
+    void rejectsCaret() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/^x"));
+    }
+
+    @Test
+    void rejectsBacktick() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/`x"));
+    }
+
+    @Test
+    void rejectsBackslash() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/\\x"));
+    }
+
+    @Test
+    void rejectsControlCharacter() {
+        assertThrows(IllegalArgumentException.class, () -> ResourceId.of("https://w3id.org/arknet/id/x"));
+    }
+
+    @Test
     void equalityIsByValue() {
         assertEquals(ResourceId.of("https://example.org/a"), ResourceId.of("https://example.org/a"));
         assertNotEquals(ResourceId.of("https://example.org/a"), ResourceId.of("https://example.org/b"));

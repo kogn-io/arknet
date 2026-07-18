@@ -181,20 +181,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(requirement, "requirement");
 
-        // Defense-in-depth: ResourceId's own validation is looser than SPARQL's IRIREF grammar.
-        // Reject an impossible identity before it ever reaches SPARQL string concatenation.
+        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so requirement.id()'s
+        // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
         String subjectIriString = requirement.id().value().value();
-        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
-            throw new IllegalArgumentException(
-                    "requirement id yields an invalid IRI for SPARQL: " + subjectIriString);
-        }
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             // 1. Every term reference already carries its resolved identity (see class-level
-            //    note) - just validate it is SPARQL-safe, the same defense-in-depth applied to
-            //    the subject above.
+            //    note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as the subject
+            //    above.
             List<IRI> termIris = requirement.usesTerms().stream()
                     .map(this::termIriFor)
                     .toList();
@@ -431,17 +427,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             return List.of();
         }
 
-        // Defense-in-depth, same rationale as the subject check in write(): reject an impossible
-        // identity before it ever reaches SPARQL string concatenation.
+        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so every id here is
+        // already guaranteed safe to embed - restores ResolveRequirements#getById's "never
+        // rejects" contract, which this used to violate by throwing on an impossible identity.
         String values = ids.stream()
-                .map(id -> {
-                    String iriString = id.value();
-                    if (!SparqlTerms.isValidIriReference(iriString)) {
-                        throw new IllegalArgumentException(
-                                "requirement id yields an invalid IRI for SPARQL: " + iriString);
-                    }
-                    return SparqlTerms.iriRef(iriString);
-                })
+                .map(id -> SparqlTerms.iriRef(id.value()))
                 .collect(Collectors.joining(" "));
 
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
@@ -547,18 +537,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Converts an already-resolved {@link TermRef} to an {@link IRI} for writing, applying the
-     * same defense-in-depth SPARQL-safety check as the subject identity in {@link #write}:
-     * {@link de.hauschel.arknet.kernel.ResourceId}'s own validation is looser than SPARQL's
-     * IRIREF grammar.
+     * Converts an already-resolved {@link TermRef} to an {@link IRI} for writing.
+     * {@link de.hauschel.arknet.kernel.ResourceId#of(String)} validates IRIREF-safety at
+     * construction (issue #83), so the wrapped IRI is already guaranteed safe here.
      */
     private IRI termIriFor(TermRef term) {
-        String termIriString = term.value().value();
-        if (!SparqlTerms.isValidIriReference(termIriString)) {
-            throw new IllegalArgumentException(
-                    "term reference yields an invalid IRI for SPARQL: " + termIriString);
-        }
-        return rdf.createIRI(termIriString);
+        return rdf.createIRI(term.value().value());
     }
 
     // ---- helpers -----------------------------------------------------------------------

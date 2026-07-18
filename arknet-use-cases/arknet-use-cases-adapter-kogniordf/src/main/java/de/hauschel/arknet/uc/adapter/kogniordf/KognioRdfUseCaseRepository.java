@@ -185,20 +185,16 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(useCase, "useCase");
 
-        // Defense-in-depth: ResourceId's own validation is looser than SPARQL's IRIREF grammar.
-        // Reject an impossible identity before it ever reaches SPARQL string concatenation.
+        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so useCase.id()'s
+        // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
         String subjectIriString = useCase.id().value().value();
-        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
-            throw new IllegalArgumentException(
-                    "use case id yields an invalid IRI for SPARQL: " + subjectIriString);
-        }
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             // 1. Every actor/requirement reference already carries its resolved identity (see
-            //    class-level note) - just validate it is SPARQL-safe, the same defense-in-depth
-            //    applied to the subject above.
+            //    class-level note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as
+            //    the subject above.
             IRI primaryActorIri = actorIriFor(useCase.primaryActor());
             List<IRI> supportingActorIris = useCase.supportingActors().stream()
                     .map(this::actorIriFor)
@@ -473,32 +469,22 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     // ---- already-resolved reference conversion -----------------------------------------
 
     /**
-     * Converts an already-resolved {@link RequirementRef} to an {@link IRI} for writing, applying
-     * the same defense-in-depth SPARQL-safety check as the subject identity in {@link #write}:
-     * {@link ResourceId}'s own validation is looser than SPARQL's IRIREF grammar. Mirrors
+     * Converts an already-resolved {@link RequirementRef} to an {@link IRI} for writing.
+     * {@link ResourceId#of(String)} validates IRIREF-safety at construction (issue #83), so the
+     * wrapped IRI is already guaranteed safe here. Mirrors
      * {@code KognioRdfRequirementRepository#termIriFor}.
      */
     private IRI requirementIriFor(RequirementRef ref) {
-        String requirementIriString = ref.value().value();
-        if (!SparqlTerms.isValidIriReference(requirementIriString)) {
-            throw new IllegalArgumentException(
-                    "requirement reference yields an invalid IRI for SPARQL: " + requirementIriString);
-        }
-        return rdf.createIRI(requirementIriString);
+        return rdf.createIRI(ref.value().value());
     }
 
     /**
-     * Converts an already-resolved {@link ActorRef} to an {@link IRI} for writing, applying the
-     * same defense-in-depth SPARQL-safety check as the subject identity in {@link #write}.
-     * Mirrors {@code KognioRdfRequirementRepository#termIriFor}.
+     * Converts an already-resolved {@link ActorRef} to an {@link IRI} for writing. Mirrors
+     * {@code KognioRdfRequirementRepository#termIriFor}; see {@link #requirementIriFor} for the
+     * IRIREF-safety rationale.
      */
     private IRI actorIriFor(ActorRef ref) {
-        String actorIriString = ref.value().value();
-        if (!SparqlTerms.isValidIriReference(actorIriString)) {
-            throw new IllegalArgumentException(
-                    "actor reference yields an invalid IRI for SPARQL: " + actorIriString);
-        }
-        return rdf.createIRI(actorIriString);
+        return rdf.createIRI(ref.value().value());
     }
 
     // ---- helpers -----------------------------------------------------------------------

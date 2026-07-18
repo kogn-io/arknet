@@ -22,10 +22,19 @@ public sealed interface ResourceId permits DefaultResourceId {
     Pattern VALID_IRI = Pattern.compile("^https://\\S+$");
 
     /**
+     * Characters an RFC 3987 IRI excludes and that every RDF surface (Turtle, N-Triples, SPARQL)
+     * rejects alike, checked one-by-one by {@link #of(String)} on top of {@link #VALID_IRI}: any
+     * codepoint {@code <= 0x20} (control characters and space - a superset of the whitespace
+     * {@link #VALID_IRI} already excludes) plus {@code < > " { } | ^ ` \}.
+     */
+    String FORBIDDEN_IRI_CHARACTERS = "<>\"{}|^`\\";
+
+    /**
      * Wraps an already-existing IRI as a {@link ResourceId}, e.g. one read back from the store.
      *
-     * @param iri the candidate IRI string; must be non-blank, start with {@code https://} and
-     *            contain no whitespace
+     * @param iri the candidate IRI string; must be non-blank, start with {@code https://},
+     *            contain no whitespace and none of {@link #FORBIDDEN_IRI_CHARACTERS} or control
+     *            characters
      * @return the wrapping {@link ResourceId}
      * @throws IllegalArgumentException if {@code iri} does not satisfy the above shape
      */

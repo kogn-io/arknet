@@ -18,5 +18,12 @@ record DefaultResourceId(String value) implements ResourceId {
             throw new IllegalArgumentException(
                     "ResourceId must be a non-blank https:// IRI without whitespace, got: " + value);
         }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c <= 0x20 || ResourceId.FORBIDDEN_IRI_CHARACTERS.indexOf(c) >= 0) {
+                throw new IllegalArgumentException(
+                        "ResourceId must be a valid IRIREF (RFC 3987 IRI) - forbidden character in: " + value);
+            }
+        }
     }
 }
