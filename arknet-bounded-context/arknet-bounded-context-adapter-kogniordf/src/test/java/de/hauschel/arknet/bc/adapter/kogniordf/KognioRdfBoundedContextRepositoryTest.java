@@ -275,6 +275,87 @@ class KognioRdfBoundedContextRepositoryTest {
         }
     }
 
+    /**
+     * Blank-node regression test for {@code arknet:ubiquitousLanguageTerm} (mirrors the
+     * requirements adapter's blank-node preservation test, issue #65): the predicate is not
+     * range-constrained to {@code IRI} at the RDF level, so a store-first edge can legally target
+     * a blank node - {@code [ a skos:Concept ]} written directly into the bounded-context graph.
+     * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent a blank node, so
+     * {@code readUsesTerms} never surfaces it as a {@link TermRef} - but
+     * {@code replaceTriples} must still capture and re-attach it across an unrelated
+     * {@code update()} - here, one that links an IRI term, exactly as {@code bc_link_term} does -
+     * instead of erasing it.
+     */
+    @Test
+    void updatePreservesABlankNodeUbiquitousLanguageTermEdge() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(WORKSPACE_A, original);
+
+        String insertBlankTerm = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + id.value().value() + "> <https://w3id.org/arknet/core#ubiquitousLanguageTerm> "
+                + "[ a <http://www.w3.org/2004/02/skos/core#Concept> ] } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertBlankTerm);
+                return null;
+            });
+        }
+
+        TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
+        BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of(term));
+        repository.update(WORKSPACE_A, changed);
+
+        String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/core#ubiquitousLanguageTerm> ?term . "
+                + "?term a <http://www.w3.org/2004/02/skos/core#Concept> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask), "blank-node edge must survive the update and still "
+                    + "point at its typed node - not merely at some blank node");
+        }
+    }
+
+    /**
+     * Blank-node regression test for {@code arknet:hasAggregate}: {@link BoundedContext} carries
+     * no field for aggregates at all, so - unlike {@code ubiquitousLanguageTerm} - there is no
+     * IRI-typed round-trip through the domain object to fall back on. This pins that a blank-node
+     * aggregate survives an unrelated {@code update()} exactly as an IRI-target one already does
+     * ({@link #updatePreservesAStoreFirstHasAggregateEdge}) - "regardless of target kind", per the
+     * {@code replaceTriples} javadoc.
+     */
+    @Test
+    void updatePreservesABlankNodeHasAggregateEdge() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(WORKSPACE_A, original);
+
+        String insertBlankAggregate = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + id.value().value() + "> <https://w3id.org/arknet/core#hasAggregate> "
+                + "[ a <https://w3id.org/arknet/core#Aggregate> ] } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertBlankAggregate);
+                return null;
+            });
+        }
+
+        BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.",
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.update(WORKSPACE_A, changed);
+
+        String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/core#hasAggregate> ?aggregate . "
+                + "?aggregate a <https://w3id.org/arknet/core#Aggregate> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask), "blank-node edge must survive the update and still "
+                    + "point at its typed node - not merely at some blank node");
+        }
+    }
+
     @Test
     void workspacesAreIsolated() {
         repository.create(WORKSPACE_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
