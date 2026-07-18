@@ -8,6 +8,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
@@ -110,8 +113,25 @@ import de.hauschel.arknet.req.domain.TermRef;
  * transaction; a violation throws {@link WriteConstraintViolationException} and nothing is
  * persisted. The gate itself is technology-neutral - only
  * {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
+ *
+ * <p><strong>Row multiplication on {@code priority}/{@code qualityCategory} (issue #81).</strong>
+ * Both properties carry no {@code sh:Violation}-severity {@code sh:maxCount} (unlike
+ * {@code title}/{@code description}/{@code motivatedBy}, hardened by #99): {@code priority}'s
+ * {@code sh:maxCount 1} is {@code sh:Warning}-severity only (never blocks a write), and
+ * {@code qualityCategory} carries no {@code sh:maxCount} at all. A store-first (ADR-005)
+ * requirement with two triples on either predicate therefore legally multiplies {@link #findAll}'s
+ * SPARQL rows for one subject. {@link #findAll} groups rows per subject (the same
+ * {@code LinkedHashMap} + {@code computeIfAbsent} pattern {@link #findByIds} already used) and
+ * takes the first-seen value deterministically for each, logging a single {@code WARN} per
+ * assembled {@link Requirement} when more than one distinct value was collected - visible instead
+ * of silently duplicating the requirement in the result list. {@link #findByCode} is unaffected:
+ * its single-row {@code findFirst()} is already internally consistent (one row = one coherent
+ * value combination), it just returns a value combination the store cannot guarantee is "the"
+ * one.</p>
  */
 public class KognioRdfRequirementRepository implements RequirementRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KognioRdfRequirementRepository.class);
 
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
@@ -319,13 +339,21 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
 
+        // The type join is filtered to the two known requirement types (same FILTER findAll
+        // already uses below), rather than an unfiltered "a ?type": a store-first (ADR-005)
+        // subject carrying a third rdf:type triple alongside its real one would otherwise bind an
+        // extra, unpredictable row, and typeFromIri throws IllegalStateException for any type
+        // that is neither FunctionalRequirement nor NonFunctionalRequirement - findFirst() below
+        // has no way to prefer the "real" row over the spurious one.
         String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory "
                 + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" ; "
-                + "a ?type ; "
-                + "<" + TITLE_PROPERTY + "> ?title ; "
-                + "<" + DESCRIPTION_PROPERTY + "> ?description ; "
-                + "<" + STATUS_PROPERTY + "> ?status . "
+                + "?s a ?type . "
+                + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
+                + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) "
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
+                + "?s <" + TITLE_PROPERTY + "> ?title . "
+                + "?s <" + DESCRIPTION_PROPERTY + "> ?description . "
+                + "?s <" + STATUS_PROPERTY + "> ?status . "
                 + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
                 + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
                 + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
@@ -374,24 +402,114 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
             Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(handle);
-            return handle.sparqlQuery().select(query)
-                    .map(row -> {
-                        String subjectIriString = iriOf(row, "s").getIRIString();
-                        return new Requirement(
-                                new RequirementId(ResourceId.of(subjectIriString)),
-                                new RequirementCode(literalOf(row, "identifier").getLexicalForm()),
-                                literalOf(row, "title").getLexicalForm(),
-                                literalOf(row, "description").getLexicalForm(),
-                                typeFromIri(iriOf(row, "type").getIRIString()),
-                                statusFromIri(iriOf(row, "status").getIRIString()),
-                                priorityOf(row),
-                                motivatedByOf(row),
-                                qualityCategoryOf(row),
-                                termsBySubject.getOrDefault(subjectIriString, List.of()),
-                                acceptanceCriteriaOrLegacyPlaceholder(
-                                        criteriaBySubject.getOrDefault(subjectIriString, List.of())));
-                    })
+            // Grouped by subject (issue #81 - see the class-level note above): priority/
+            // qualityCategory are OPTIONAL joins without an enforced sh:maxCount, so a store-first
+            // requirement with two triples on either predicate binds a cross-product of rows for
+            // the same subject. Mapping each row straight to a Requirement (the pre-#81 code)
+            // would have surfaced that subject twice in the result list instead of once.
+            Map<String, RequirementAssembly> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                RequirementAssembly assembly = assemblyFor(bySubject, row);
+                assembly.addPriorityCandidate(priorityOf(row));
+                assembly.addQualityCategoryCandidate(qualityCategoryOf(row));
+            });
+            return bySubject.entrySet().stream()
+                    .map(entry -> entry.getValue().toRequirement(
+                            termsBySubject.getOrDefault(entry.getKey(), List.of()),
+                            acceptanceCriteriaOrLegacyPlaceholder(
+                                    criteriaBySubject.getOrDefault(entry.getKey(), List.of()))))
                     .toList();
+        }
+    }
+
+    /**
+     * Groups the (potentially several) rows of one requirement - an {@code OPTIONAL} join on
+     * {@code priority}/{@code qualityCategory} without an enforced {@code sh:maxCount} multiplies a
+     * requirement into a row per candidate value combination (issue #81) - into a single
+     * {@link RequirementAssembly}, keyed by subject IRI. The single-valued fields (identity, code,
+     * title, description, type, status, motivatedBy - all either {@code sh:maxCount 1} at
+     * {@code sh:Violation} severity or otherwise guaranteed single-triple by the domain) are read
+     * once from the first row of a subject; every row contributes its {@code priority}/
+     * {@code qualityCategory} binding (if present) as a candidate via
+     * {@link RequirementAssembly#addPriorityCandidate}/{@link RequirementAssembly#addQualityCategoryCandidate},
+     * called by {@link #findAll} once per row.
+     */
+    private static RequirementAssembly assemblyFor(Map<String, RequirementAssembly> bySubject, BindingSet row) {
+        String subjectIri = iriOf(row, "s").getIRIString();
+        return bySubject.computeIfAbsent(subjectIri, iri -> new RequirementAssembly(
+                new RequirementId(ResourceId.of(iri)),
+                new RequirementCode(literalOf(row, "identifier").getLexicalForm()),
+                literalOf(row, "title").getLexicalForm(),
+                literalOf(row, "description").getLexicalForm(),
+                typeFromIri(iriOf(row, "type").getIRIString()),
+                statusFromIri(iriOf(row, "status").getIRIString()),
+                motivatedByOf(row)));
+    }
+
+    /**
+     * Mutable per-subject accumulator collecting a requirement's {@code priority} and
+     * {@code qualityCategory} candidates across rows (issue #81), then choosing one of each
+     * deterministically (first-seen) when the requirement is finally materialised, logging a
+     * {@code WARN} if more than one distinct value was collected for a field.
+     */
+    private static final class RequirementAssembly {
+
+        private final RequirementId id;
+        private final RequirementCode code;
+        private final String title;
+        private final String description;
+        private final RequirementType type;
+        private final RequirementStatus status;
+        private final String motivatedBy;
+        private final List<Priority> priorities = new ArrayList<>();
+        private final List<String> qualityCategories = new ArrayList<>();
+
+        private RequirementAssembly(RequirementId id, RequirementCode code, String title, String description,
+                RequirementType type, RequirementStatus status, String motivatedBy) {
+            this.id = id;
+            this.code = code;
+            this.title = title;
+            this.description = description;
+            this.type = type;
+            this.status = status;
+            this.motivatedBy = motivatedBy;
+        }
+
+        private void addPriorityCandidate(Priority priority) {
+            if (priority != null) {
+                priorities.add(priority);
+            }
+        }
+
+        private void addQualityCategoryCandidate(String qualityCategory) {
+            if (qualityCategory != null) {
+                qualityCategories.add(qualityCategory);
+            }
+        }
+
+        private Requirement toRequirement(List<TermRef> usesTerms, List<String> acceptanceCriteria) {
+            return new Requirement(id, code, title, description, type, status,
+                    firstDistinct(priorities, "priority"), motivatedBy,
+                    firstDistinct(qualityCategories, "qualityCategory"), usesTerms, acceptanceCriteria);
+        }
+
+        /**
+         * Returns the first-seen candidate for {@code fieldName} (stable across repeated calls,
+         * since {@link LinkedHashMap}/row order preserves insertion order), or {@code null} if the
+         * {@code OPTIONAL} join never bound - logging a single {@code WARN} when more than one
+         * distinct value was collected, issue #81's "stille Luege" this makes visible instead of
+         * silently overwriting/duplicating.
+         */
+        private <T> T firstDistinct(List<T> candidates, String fieldName) {
+            if (candidates.isEmpty()) {
+                return null;
+            }
+            long distinctCount = candidates.stream().distinct().count();
+            if (distinctCount > 1) {
+                LOG.warn("Requirement {}: field '{}' had {} distinct values, returning the first",
+                        id.value().value(), fieldName, distinctCount);
+            }
+            return candidates.get(0);
         }
     }
 
