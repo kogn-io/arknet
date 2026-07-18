@@ -55,6 +55,28 @@ public interface RequirementRepository {
     void update(WorkspaceId workspaceId, Requirement requirement);
 
     /**
+     * Replaces an existing requirement by identity, but only if the stored requirement still
+     * equals {@code expected} - an optimistic-concurrency guard against the lost-update race
+     * (issue #108): a read-modify-write round trip (e.g. {@code req_link_term}, {@code
+     * req_set_status}) that reads {@code expected}, derives {@code updated} from it, and calls
+     * this method instead of {@link #update} detects, inside the same store transaction, whether
+     * another writer committed a change to the same identity in between. Unlike {@link #update},
+     * which always overwrites, a mismatch here means the read was already stale - the caller must
+     * re-read and retry rather than silently discard the concurrent change.
+     *
+     * @param workspaceId the workspace (architecture model) the requirement lives in
+     * @param expected    the requirement state the caller last read and built {@code updated}
+     *                    from; must carry the same {@link Requirement#id()} as {@code updated}
+     * @param updated     the requirement to store in place of the current one, if it still
+     *                    matches {@code expected}
+     * @return {@code true} if the stored requirement matched {@code expected} and was replaced by
+     *         {@code updated}; {@code false} if it no longer matched (a concurrent write raced
+     *         ahead) and nothing was changed
+     * @throws RequirementNotFoundException if no requirement with this identity exists at all
+     */
+    boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated);
+
+    /**
      * Finds a requirement by its human-readable business code within a workspace.
      *
      * @param workspaceId the workspace (architecture model) to look up the requirement in

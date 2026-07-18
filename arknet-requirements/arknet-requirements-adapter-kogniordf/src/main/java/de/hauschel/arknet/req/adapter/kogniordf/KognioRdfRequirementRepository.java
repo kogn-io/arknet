@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +17,7 @@ import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -219,39 +222,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     .map(this::termIriFor)
                     .toList();
 
-            // 2. Build the candidate graph.
-            Graph graph = rdf.createGraph();
-            graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
-            graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.code().value()));
-            graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(requirement.title()));
-            graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), rdf.createLiteral(requirement.description()));
-            graph.add(subjectIri, rdf.createIRI(STATUS_PROPERTY), rdf.createIRI(statusIriFor(requirement.status())));
-            if (requirement.priority() != null) {
-                graph.add(subjectIri, rdf.createIRI(PRIORITY_PROPERTY),
-                        rdf.createIRI(priorityIriFor(requirement.priority())));
-            }
-            if (requirement.motivatedBy() != null) {
-                graph.add(subjectIri, rdf.createIRI(MOTIVATED_BY_PROPERTY), rdf.createIRI(requirement.motivatedBy()));
-            }
-            if (requirement.qualityCategory() != null) {
-                graph.add(subjectIri, rdf.createIRI(QUALITY_CATEGORY_PROPERTY),
-                        rdf.createLiteral(requirement.qualityCategory()));
-            }
-            for (IRI termIri : termIris) {
-                graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termIri);
-            }
-            for (String criterion : requirement.acceptanceCriteria()) {
-                graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), rdf.createLiteral(criterion));
-            }
-
-            // 3. Structural gate, then create/update. The usesTerm shape carries an
-            //    sh:class skos:Concept constraint, but the type triples of the referenced
-            //    terms live in the sibling terms graph, not in this candidate graph. They are
-            //    handed to the gate as a validation-only asserted context (never persisted
-            //    here). This is safe: the term was already proven to exist and be a concept at
-            //    the moment it was resolved (KognioRdfTermLookup, called once from the
+            // 2. Build the candidate graph and, from it, the structural gate check. The usesTerm
+            //    shape carries an sh:class skos:Concept constraint, but the type triples of the
+            //    referenced terms live in the sibling terms graph, not in this candidate graph.
+            //    They are handed to the gate as a validation-only asserted context (never
+            //    persisted here). This is safe: the term was already proven to exist and be a
+            //    concept at the moment it was resolved (KognioRdfTermLookup, called once from the
             //    application service when the term was linked) - the lookup, not the shape, is
             //    what keeps the edge non-dangling; this adapter no longer re-verifies it.
+            Graph graph = buildCandidateGraph(subjectIri, requirement, termIris);
             Graph assertedContext = rdf.createGraph();
             for (IRI termIri : termIris) {
                 assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
@@ -262,19 +241,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             String askCodeExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                     + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirement.code().value())
                     + "\" } }";
-            String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
-            // 4. Reduced complement (issue #77) of what readUsesTerms can now read: since reading
-            //    no longer joins into the terms graph (a usesTerm edge's target IRI *is* the
-            //    TermRef, no re-derivation needed), the only edges Requirement#usesTerms() can
-            //    never carry are ones whose target is not an IRI at all - a store-first
-            //    (ADR-005) edge may legally point at a blank node ([ a skos:Concept ]), which
-            //    ResourceId cannot represent. This finds exactly those. Only ever run on update -
-            //    see the exists-guard below, where exists == true implies expectAbsent == false
-            //    because the expectAbsent branch throws before reaching it, so create's subject
-            //    (which by contract cannot exist yet) never runs this query.
-            String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
-                    + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
-                    + "FILTER(!isIRI(?term)) }";
             IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
             handle.transactor().inTransaction(tx -> {
@@ -292,45 +258,155 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 } else if (!exists) {
                     throw new RequirementNotFoundException(workspaceId, requirement.code());
                 }
-                // Capture what a replacing update is about to destroy but could never have read
-                // (see selectUnjoinableUsesTerms above) before deleteExisting wipes it, inside
-                // this same transaction - a separate read beforehand would leave a TOCTOU window
-                // the ASKs above deliberately avoid. The binding is read as a bare RDFTerm, not
-                // cast to IRI: arkreq:usesTerm carries no sh:nodeKind constraint, so its target
-                // is RDF-legally allowed to be a blank node, and a store-first edge can and does
-                // point at one - exactly the non-IRI target selectUnjoinableUsesTerms filters
-                // for. Casting here would trade #65's silent data loss for a crash on every
-                // update of the affected requirement - a regression, not a fix.
-                List<RDFTerm> unjoinableUsesTerms = exists
-                        ? tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term")).toList()
-                        : List.of();
-                if (exists) {
-                    tx.update(deleteExisting);
-                }
-                tx.add(graphIri, graph);
-                // 5. Re-attach the preserved edges only after the gate has already run and the
-                //    rewritten graph is committed - never mixed into `graph` before
-                //    gate.enforce above. A preserved edge's target is, by construction, not an
-                //    IRI and therefore cannot appear in this write's assertedContext (built from
-                //    the termIris in requirement.usesTerms() only, which are always IRIs); feeding
-                //    it to the gate would fail the usesTerm shape's sh:class skos:Concept
-                //    constraint and block every future update of this requirement. Appending it
-                //    here instead is safe precisely because nothing new is introduced - the edge
-                //    already existed in the store and is carried forward untouched. A blank-node
-                //    target keeps its identity across this delete-and-readd cycle: deleteExisting
-                //    only removes triples whose subject is the requirement, never the target
-                //    node's own triples, and the RDFTerm captured by the select above is the same
-                //    object tx.add below writes back - RDF4J compares blank nodes by id, so this
-                //    re-attaches to the very node the store already knows, not a fresh one.
-                if (!unjoinableUsesTerms.isEmpty()) {
-                    Graph preservedEdges = rdf.createGraph();
-                    for (RDFTerm termNode : unjoinableUsesTerms) {
-                        preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
-                    }
-                    tx.add(graphIri, preservedEdges);
-                }
+                replaceTriples(tx, graphIri, subjectIri, subject, graph, exists);
                 return null;
             });
+        }
+    }
+
+    /**
+     * Optimistic-concurrency variant of {@link #update} (issue #108, Befund 1): replaces the
+     * requirement's triples only if the stored requirement, read fresh inside this same write
+     * transaction, still equals {@code expected} - closing the lost-update window a plain read
+     * (e.g. {@code findByCode}) followed by {@link #update} otherwise leaves open between the
+     * read and the write.
+     */
+    @Override
+    public boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(expected, "expected");
+        Objects.requireNonNull(updated, "updated");
+        if (!expected.id().equals(updated.id())) {
+            throw new IllegalArgumentException("expected and updated must carry the same identity");
+        }
+
+        String subjectIriString = updated.id().value().value();
+        IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            List<IRI> termIris = updated.usesTerms().stream()
+                    .map(this::termIriFor)
+                    .toList();
+            Graph graph = buildCandidateGraph(subjectIri, updated, termIris);
+            Graph assertedContext = rdf.createGraph();
+            for (IRI termIri : termIris) {
+                assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+            }
+            gate.enforce(graph, assertedContext);
+
+            String askExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
+            IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
+
+            return handle.transactor().inTransaction(tx -> {
+                if (!tx.ask(askExists)) {
+                    throw new RequirementNotFoundException(workspaceId, updated.code());
+                }
+                // Re-reads the requirement's full current state through the same tx that is
+                // about to overwrite it - not via a separate call beforehand, which would leave
+                // exactly the TOCTOU window this method exists to close. A mismatch means some
+                // other writer committed a change since expected was read; nothing is written and
+                // the caller (RequirementService's retry loop) re-reads and tries again.
+                Optional<Requirement> current = readCurrentBySubject(tx::select, subjectIriString, subject);
+                if (current.isEmpty() || !current.get().equals(expected)) {
+                    return false;
+                }
+                replaceTriples(tx, graphIri, subjectIri, subject, graph, true);
+                return true;
+            });
+        }
+    }
+
+    /**
+     * Builds the candidate graph for one requirement's triples: five mandatory triples
+     * (identifier, type, title, description, status), one or more mandatory
+     * {@code arkreq:acceptanceCriterion} literals, up to three optional triples ({@code priority},
+     * {@code motivatedBy}, {@code qualityCategory}), and zero or more {@code arkreq:usesTerm}
+     * edges to {@code termIris}. Shared by {@link #write} and {@link #compareAndUpdate} so both
+     * write paths serialise a {@link Requirement} identically.
+     */
+    private Graph buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris) {
+        Graph graph = rdf.createGraph();
+        graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
+        graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.code().value()));
+        graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(requirement.title()));
+        graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), rdf.createLiteral(requirement.description()));
+        graph.add(subjectIri, rdf.createIRI(STATUS_PROPERTY), rdf.createIRI(statusIriFor(requirement.status())));
+        if (requirement.priority() != null) {
+            graph.add(subjectIri, rdf.createIRI(PRIORITY_PROPERTY),
+                    rdf.createIRI(priorityIriFor(requirement.priority())));
+        }
+        if (requirement.motivatedBy() != null) {
+            graph.add(subjectIri, rdf.createIRI(MOTIVATED_BY_PROPERTY), rdf.createIRI(requirement.motivatedBy()));
+        }
+        if (requirement.qualityCategory() != null) {
+            graph.add(subjectIri, rdf.createIRI(QUALITY_CATEGORY_PROPERTY),
+                    rdf.createLiteral(requirement.qualityCategory()));
+        }
+        for (IRI termIri : termIris) {
+            graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termIri);
+        }
+        for (String criterion : requirement.acceptanceCriteria()) {
+            graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), rdf.createLiteral(criterion));
+        }
+        return graph;
+    }
+
+    /**
+     * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
+     * transaction - the tail shared by {@link #write} and {@link #compareAndUpdate} once each has
+     * decided (via its own existence/comparison check) that the write should proceed.
+     *
+     * <p>Reduced complement (issue #77) of what {@link #readUsesTerms} can now read: since reading
+     * no longer joins into the terms graph (a usesTerm edge's target IRI <em>is</em> the
+     * {@code TermRef}, no re-derivation needed), the only edges {@code Requirement#usesTerms()}
+     * can never carry are ones whose target is not an IRI at all - a store-first (ADR-005) edge
+     * may legally point at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
+     * cannot represent. The preservation query below finds exactly those, but only when
+     * {@code exists} (there is nothing to preserve on a fresh {@code create}).</p>
+     */
+    private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+            boolean exists) {
+        String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
+                + "FILTER(!isIRI(?term)) }";
+        String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
+
+        // Capture what a replacing write is about to destroy but could never have read (see
+        // selectUnjoinableUsesTerms above) before deleteExisting wipes it, inside this same
+        // transaction - a separate read beforehand would leave a TOCTOU window the caller's own
+        // exists/comparison check deliberately avoids. The binding is read as a bare RDFTerm, not
+        // cast to IRI: arkreq:usesTerm carries no sh:nodeKind constraint, so its target is
+        // RDF-legally allowed to be a blank node, and a store-first edge can and does point at
+        // one - exactly the non-IRI target selectUnjoinableUsesTerms filters for. Casting here
+        // would trade #65's silent data loss for a crash on every update of the affected
+        // requirement - a regression, not a fix.
+        List<RDFTerm> unjoinableUsesTerms = exists
+                ? tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term")).toList()
+                : List.of();
+        if (exists) {
+            tx.update(deleteExisting);
+        }
+        tx.add(graphIri, graph);
+        // Re-attach the preserved edges only after the gate has already run and the rewritten
+        // graph is committed - never mixed into `graph` before gate.enforce ran on it. A
+        // preserved edge's target is, by construction, not an IRI and therefore cannot appear in
+        // the write's assertedContext (built from the requirement's termIris only, which are
+        // always IRIs); feeding it to the gate would fail the usesTerm shape's sh:class
+        // skos:Concept constraint and block every future update of this requirement. Appending it
+        // here instead is safe precisely because nothing new is introduced - the edge already
+        // existed in the store and is carried forward untouched. A blank-node target keeps its
+        // identity across this delete-and-readd cycle: deleteExisting only removes triples whose
+        // subject is the requirement, never the target node's own triples, and the RDFTerm
+        // captured by the select above is the same object tx.add below writes back - RDF4J
+        // compares blank nodes by id, so this re-attaches to the very node the store already
+        // knows, not a fresh one.
+        if (!unjoinableUsesTerms.isEmpty()) {
+            Graph preservedEdges = rdf.createGraph();
+            for (RDFTerm termNode : unjoinableUsesTerms) {
+                preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
+            }
+            tx.add(graphIri, preservedEdges);
         }
     }
 
@@ -375,10 +451,52 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     priorityOf(row),
                     motivatedByOf(row),
                     qualityCategoryOf(row),
-                    readUsesTerms(handle, SparqlTerms.iriRef(subjectIriString)),
+                    readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
                     acceptanceCriteriaOrLegacyPlaceholder(
-                            readAcceptanceCriteria(handle, SparqlTerms.iriRef(subjectIriString)))));
+                            readAcceptanceCriteria(handle.sparqlQuery()::select,
+                                    SparqlTerms.iriRef(subjectIriString)))));
         }
+    }
+
+    /**
+     * Reads one requirement's full current state by subject IRI - the tx-scoped counterpart to
+     * {@link #findByCode} (which is keyed by business code and reads outside any transaction),
+     * used by {@link #compareAndUpdate} to compare the stored state against {@code expected}
+     * inside the very transaction that is about to overwrite it. Reconstructs the {@link
+     * Requirement} with the same field-by-field logic as {@link #findByCode} (including the
+     * acceptance-criteria placeholder substitution), so a {@code Requirement} obtained from
+     * {@code findByCode} compares equal here whenever nothing has changed in between.
+     */
+    private Optional<Requirement> readCurrentBySubject(
+            Function<String, Stream<BindingSet>> selectFn, String subjectIriString, String subject) {
+        String query = "SELECT ?identifier ?type ?title ?description ?status ?priority ?motivatedBy "
+                + "?qualityCategory WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + subject + " <" + IDENTIFIER_PROPERTY + "> ?identifier ; "
+                + "a ?type ; "
+                + "<" + TITLE_PROPERTY + "> ?title ; "
+                + "<" + DESCRIPTION_PROPERTY + "> ?description ; "
+                + "<" + STATUS_PROPERTY + "> ?status . "
+                + "OPTIONAL { " + subject + " <" + PRIORITY_PROPERTY + "> ?priority } "
+                + "OPTIONAL { " + subject + " <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
+                + "OPTIONAL { " + subject + " <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
+
+        Optional<BindingSet> head = selectFn.apply(query).findFirst();
+        if (head.isEmpty()) {
+            return Optional.empty();
+        }
+        BindingSet row = head.get();
+        return Optional.of(new Requirement(
+                new RequirementId(ResourceId.of(subjectIriString)),
+                new RequirementCode(literalOf(row, "identifier").getLexicalForm()),
+                literalOf(row, "title").getLexicalForm(),
+                literalOf(row, "description").getLexicalForm(),
+                typeFromIri(iriOf(row, "type").getIRIString()),
+                statusFromIri(iriOf(row, "status").getIRIString()),
+                priorityOf(row),
+                motivatedByOf(row),
+                qualityCategoryOf(row),
+                readUsesTerms(selectFn, subject),
+                acceptanceCriteriaOrLegacyPlaceholder(readAcceptanceCriteria(selectFn, subject))));
     }
 
     @Override
@@ -604,11 +722,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * rather than reconciling it: there is no second query stating a different condition, because
      * there is no resolution on the read path at all.</p>
      */
-    private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
+    private List<TermRef> readUsesTerms(Function<String, Stream<BindingSet>> selectFn, String subject) {
         String query = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(isIRI(?term)) } ORDER BY ?term";
-        return handle.sparqlQuery().select(query)
+        return selectFn.apply(query)
                 .map(row -> new TermRef(ResourceId.of(iriOf(row, "term").getIRIString())))
                 .toList();
     }
@@ -628,11 +746,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     // ---- acceptanceCriterion reading ---------------------------------------------------
 
     /** Reads the {@code arkreq:acceptanceCriterion} literals of one requirement, in lexical order. */
-    private List<String> readAcceptanceCriteria(DatasetHandle handle, String subject) {
+    private List<String> readAcceptanceCriteria(Function<String, Stream<BindingSet>> selectFn, String subject) {
         String query = "SELECT ?criterion WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY
                 + "> ?criterion } } ORDER BY ?criterion";
-        return handle.sparqlQuery().select(query)
+        return selectFn.apply(query)
                 .map(row -> literalOf(row, "criterion").getLexicalForm())
                 .toList();
     }

@@ -1,6 +1,7 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -190,6 +191,91 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
         assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
+    }
+
+    // ---- compareAndUpdate: optimistic-concurrency guard against lost updates (issue #108) ----
+
+    @Test
+    void compareAndUpdateAppliesWhenExpectedMatchesTheStoredRequirement() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement proposed = new Requirement(id, code, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of("Login succeeds with valid credentials"));
+        repository.create(WORKSPACE_A, proposed);
+        Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null,
+                List.of("Login succeeds with valid credentials"));
+
+        boolean applied = repository.compareAndUpdate(WORKSPACE_A, proposed, accepted);
+
+        assertTrue(applied);
+        assertEquals(Optional.of(accepted), repository.findByCode(WORKSPACE_A, code));
+    }
+
+    /**
+     * The core of issue #108's fix: a stale {@code expected} (no longer matching what is actually
+     * stored, because some other writer already committed a change) must be rejected without
+     * mutating the store - the caller re-reads and retries instead of silently overwriting the
+     * concurrent change.
+     */
+    @Test
+    void compareAndUpdateRejectsAndPersistsNothingWhenExpectedIsStale() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement original = new Requirement(id, code, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of("Login succeeds with valid credentials"));
+        repository.create(WORKSPACE_A, original);
+        // Simulates a concurrent writer that already committed a change since `original` was read.
+        Requirement concurrentlyAccepted = new Requirement(id, code, "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
+                null, null, null, null, List.of("Login succeeds with valid credentials"));
+        repository.update(WORKSPACE_A, concurrentlyAccepted);
+
+        Requirement staleAttempt = new Requirement(id, code, "Login renamed",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                null, null, null, null, List.of("Login succeeds with valid credentials"));
+        boolean applied = repository.compareAndUpdate(WORKSPACE_A, original, staleAttempt);
+
+        assertFalse(applied);
+        assertEquals(Optional.of(concurrentlyAccepted), repository.findByCode(WORKSPACE_A, code));
+    }
+
+    @Test
+    void compareAndUpdateThrowsWhenTheIdentityDoesNotExistAtAll() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement neverCreated = new Requirement(id, code, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of("Login succeeds with valid credentials"));
+
+        assertThrows(RequirementNotFoundException.class,
+                () -> repository.compareAndUpdate(WORKSPACE_A, neverCreated, neverCreated));
+        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+    }
+
+    /**
+     * Regression guard for the replace-by-identity write path, exercised via {@code
+     * compareAndUpdate} rather than {@code update}: linked terms and acceptance criteria must
+     * still survive the optimistic-concurrency write path, not just the plain one.
+     */
+    @Test
+    void compareAndUpdatePreservesLinkedTermsAndAcceptanceCriteria() {
+        givenTerm(WORKSPACE_A, "TERM-1");
+        Requirement created = requirementUsing(termRef("TERM-1"));
+        repository.create(WORKSPACE_A, created);
+
+        Requirement accepted = new Requirement(created.id(), created.code(), created.title(), created.description(),
+                created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
+                created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria());
+        boolean applied = repository.compareAndUpdate(WORKSPACE_A, created, accepted);
+
+        assertTrue(applied);
+        Requirement found = repository.findByCode(WORKSPACE_A, created.code()).orElseThrow();
+        assertEquals(RequirementStatus.ACCEPTED, found.status());
+        assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
+        assertEquals(List.of("Login succeeds with valid credentials"), found.acceptanceCriteria());
     }
 
     @Test

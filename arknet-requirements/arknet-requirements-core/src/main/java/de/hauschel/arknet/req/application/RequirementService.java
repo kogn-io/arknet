@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -16,8 +17,10 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -40,9 +43,28 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@code PROPOSED -> ACCEPTED}; setting the status a requirement already has is a no-op, and
  * reverting an accepted requirement is rejected. Linking a glossary term is idempotent and
  * independent of the status lifecycle - terms may be linked to a requirement in any status.</p>
+ *
+ * <p><strong>Concurrency (issue #108).</strong> {@link #add} retries its next-code computation
+ * against a fresh read whenever a concurrent caller claims the same code first, and {@link
+ * #setStatus}/{@link #linkTerm} retry their whole read-modify-write round trip via {@link
+ * RequirementRepository#compareAndUpdate} whenever a concurrent writer commits in between - see
+ * {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed caller; only
+ * sustained, pathological contention on the very same requirement surfaces as {@link
+ * RequirementConcurrentlyModifiedException}.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         SetRequirementStatus, LinkTerm, ResolveRequirements {
+
+    /**
+     * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops (issue #108).
+     * Both races this guards against - two callers computing the same next-free {@link
+     * RequirementCode}, or two callers read-modify-writing the same requirement - are resolved by
+     * a single retry in the overwhelming majority of cases, since each retry re-reads the
+     * now-current state before trying again; this bound only exists so a pathological, sustained
+     * storm of concurrent writers against the very same requirement fails loudly instead of
+     * looping forever.
+     */
+    private static final int MAX_RETRY_ATTEMPTS = 20;
 
     private final RequirementRepository repository;
     private final ResourceIdFactory resourceIdFactory;
@@ -69,12 +91,28 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
         RequirementId id = new RequirementId(resourceIdFactory.newId());
-        RequirementCode code = nextCode(workspaceId, command.type());
-        Requirement requirement = new Requirement(id, code, command.title(), command.description(),
-                command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
-                command.qualityCategory(), List.of(), command.acceptanceCriteria());
-        repository.create(workspaceId, requirement);
-        return requirement;
+        // nextCode() reads the highest running number client-side, before create()'s own
+        // in-transaction uniqueness check - so two concurrent add() calls for the same type can
+        // legitimately compute the same candidate code (issue #108). The out-adapter's ASK guard
+        // inside the write transaction still prevents two requirements from ever *persisting*
+        // under the same code; it just means one of two well-formed concurrent callers otherwise
+        // sees that guard fire as a DuplicateRequirementCodeException, even though nothing about
+        // its own request was wrong. Retrying with a freshly recomputed code turns that race into
+        // an invisible, automatic retry instead of a caller-visible failure.
+        DuplicateRequirementCodeException lastConflict = null;
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            RequirementCode code = nextCode(workspaceId, command.type());
+            Requirement requirement = new Requirement(id, code, command.title(), command.description(),
+                    command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
+                    command.qualityCategory(), List.of(), command.acceptanceCriteria());
+            try {
+                repository.create(workspaceId, requirement);
+                return requirement;
+            } catch (DuplicateRequirementCodeException conflict) {
+                lastConflict = conflict;
+            }
+        }
+        throw lastConflict;
     }
 
     @Override
@@ -95,17 +133,15 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(status, "status");
-        Requirement current = repository.findByCode(workspaceId, code)
-                .orElseThrow(() -> new RequirementNotFoundException(workspaceId, code));
-        if (current.status() == status) {
-            return current;
-        }
-        requireLegalTransition(current.status(), status);
-        Requirement updated = new Requirement(current.id(), current.code(), current.title(),
-                current.description(), current.type(), status, current.priority(), current.motivatedBy(),
-                current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria());
-        repository.update(workspaceId, updated);
-        return updated;
+        return updateWithOptimisticRetry(workspaceId, code, current -> {
+            if (current.status() == status) {
+                return current;
+            }
+            requireLegalTransition(current.status(), status);
+            return new Requirement(current.id(), current.code(), current.title(),
+                    current.description(), current.type(), status, current.priority(), current.motivatedBy(),
+                    current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria());
+        });
     }
 
     @Override
@@ -113,19 +149,54 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
-        Requirement current = repository.findByCode(workspaceId, code)
-                .orElseThrow(() -> new RequirementNotFoundException(workspaceId, code));
+        // Resolution does not depend on the requirement's current state, so it happens once,
+        // outside the retry loop below - a lookup failure must propagate immediately and leave
+        // the requirement untouched, exactly as before.
         TermRef term = new TermRef(termLookup.resolveByCode(workspaceId, termCode));
-        if (current.usesTerms().contains(term)) {
-            return current;
+        return updateWithOptimisticRetry(workspaceId, code, current -> {
+            if (current.usesTerms().contains(term)) {
+                return current;
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.add(term);
+            return new Requirement(current.id(), current.code(), current.title(),
+                    current.description(), current.type(), current.status(), current.priority(),
+                    current.motivatedBy(), current.qualityCategory(), linked, current.acceptanceCriteria());
+        });
+    }
+
+    /**
+     * Read-modify-write helper shared by {@link #setStatus} and {@link #linkTerm}: reads the
+     * current requirement, derives the next state via {@code mutation}, and writes it back via
+     * {@link RequirementRepository#compareAndUpdate} - retrying with a fresh read whenever a
+     * concurrent writer commits a change in between (issue #108, Befund 1: two parallel
+     * read-modify-write round trips on the same requirement used to silently lose whichever one
+     * committed last via plain {@link RequirementRepository#update}).
+     *
+     * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
+     * a no-op: the existing idempotency rules ({@code setStatus} to the same status, linking an
+     * already-linked term) skip the write entirely, exactly as before this fix.</p>
+     *
+     * @throws RequirementNotFoundException            if no requirement with {@code code} exists
+     * @throws RequirementConcurrentlyModifiedException if the write keeps losing the race across
+     *                                                   every retry attempt
+     */
+    private Requirement updateWithOptimisticRetry(
+            WorkspaceId workspaceId, RequirementCode code, UnaryOperator<Requirement> mutation) {
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            Requirement current = repository.findByCode(workspaceId, code)
+                    .orElseThrow(() -> new RequirementNotFoundException(workspaceId, code));
+            Requirement updated = mutation.apply(current);
+            if (updated.equals(current)) {
+                return current;
+            }
+            if (repository.compareAndUpdate(workspaceId, current, updated)) {
+                return updated;
+            }
+            // A concurrent writer replaced the requirement between our read and our write -
+            // retry against the now-current state instead of silently discarding that change.
         }
-        List<TermRef> linked = new ArrayList<>(current.usesTerms());
-        linked.add(term);
-        Requirement updated = new Requirement(current.id(), current.code(), current.title(),
-                current.description(), current.type(), current.status(), current.priority(),
-                current.motivatedBy(), current.qualityCategory(), linked, current.acceptanceCriteria());
-        repository.update(workspaceId, updated);
-        return updated;
+        throw new RequirementConcurrentlyModifiedException(workspaceId, code);
     }
 
     @Override
