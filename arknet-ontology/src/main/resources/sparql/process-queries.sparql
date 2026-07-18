@@ -98,7 +98,7 @@ SELECT ?processName ?order ?stepName ?actor WHERE {
           arkproc:stepOrder ?order .
     OPTIONAL {
         ?step arkproc:performedBy ?a .
-        ?a arkproc:actorName ?actor .
+        ?a skos:prefLabel ?actor .
     }
 }
 ORDER BY ?processName ?order
