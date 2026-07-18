@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -31,10 +30,10 @@ public final class StoreReportTools {
     private static final String REPORT_FILE_NAME = "store-report.html";
 
     private final StoreReader storeReader;
-    private final Prefixes prefixes;
     private final HtmlReportRenderer htmlRenderer;
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
+    private final HandleResolver handleResolver;
     private final WorkspaceId defaultWorkspaceId;
     private final Path reportDir;
 
@@ -52,10 +51,11 @@ public final class StoreReportTools {
             final WorkspaceId defaultWorkspaceId,
             final Path reportDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
-        this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
+        Objects.requireNonNull(prefixes, "prefixes");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
         this.digestRenderer = new DigestRenderer(prefixes);
         this.resourceRenderer = new ResourceRenderer(prefixes);
+        this.handleResolver = new HandleResolver(storeReader, prefixes);
         this.defaultWorkspaceId = Objects.requireNonNull(defaultWorkspaceId, "defaultWorkspaceId");
         this.reportDir = Objects.requireNonNull(reportDir, "reportDir");
     }
@@ -95,53 +95,10 @@ public final class StoreReportTools {
         final WorkspaceId workspaceId = blankToNull(workspace) == null
                 ? defaultWorkspaceId
                 : new WorkspaceId(workspace.trim());
-        final String iri = resolveHandle(workspaceId, id);
+        final String iri = handleResolver.resolve(workspaceId, id);
         final List<Triple> outgoing = storeReader.outgoing(workspaceId, iri);
         final List<Triple> incoming = storeReader.incoming(workspaceId, iri);
         return resourceRenderer.render(iri, outgoing, incoming);
-    }
-
-    /**
-     * Resolves a resource handle to an absolute IRI following the handle contract: a full IRI
-     * or CURIE is authoritative; a bare business id is a convenience resolved against
-     * {@code dcterms:identifier}. An unknown prefix or an ambiguous bare id is rejected with a
-     * didactic message instead of guessing.
-     */
-    private String resolveHandle(final WorkspaceId workspaceId, final String id) {
-        final String handle = Objects.requireNonNull(id, "id").strip();
-        if (handle.isEmpty()) {
-            throw new IllegalArgumentException("Empty resource handle. Pass a CURIE (req:FR-1),"
-                    + " a full IRI, or a bare business id (FR-1).");
-        }
-
-        final Optional<String> resolved = prefixes.toIri(handle);
-        if (resolved.isPresent()) {
-            return resolved.get();
-        }
-
-        // A colon that is not part of a scheme means a CURIE with an unknown prefix - do not
-        // guess, explain (the handle contract is CURIE/IRI first).
-        if (handle.contains(":") && !handle.contains("://")) {
-            final String known = prefixes.bindings().stream()
-                    .map(Prefixes.Prefix::prefix).sorted().reduce((a, b) -> a + ", " + b).orElse("");
-            throw new IllegalArgumentException("Unknown prefix in handle '" + handle + "'."
-                    + " Known prefixes: " + known + ". Pass a full IRI instead, or a bare business id.");
-        }
-
-        // Bare business id: resolve via dcterms:identifier; reject ambiguity across contexts.
-        final List<String> matches = storeReader.findByIdentifier(workspaceId, handle);
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("No resource found for id '" + handle + "'."
-                    + " Use a CURIE (req:FR-1) or full IRI, or check the id via store_overview.");
-        }
-        if (matches.size() > 1) {
-            final String candidates = matches.stream()
-                    .map(prefixes::toCurie).reduce((a, b) -> a + ", " + b).orElse("");
-            throw new IllegalArgumentException("Ambiguous id '" + handle + "' matches several resources"
-                    + " across bounded contexts: " + candidates + ". Re-call resource_get with the exact"
-                    + " CURIE or IRI of the one you mean.");
-        }
-        return matches.get(0);
     }
 
     private Path writeReport(final String html) {
