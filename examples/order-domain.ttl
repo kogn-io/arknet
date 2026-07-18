@@ -275,20 +275,20 @@
 # ═══════════════════════════════════════════════════════════
 
 :Customer a arkproc:HumanActor ;
-    arkproc:actorName "Kunde"^^xsd:string ;
+    skos:prefLabel "Kunde"^^xsd:string ;
     arkproc:actorRole "Besteller"^^xsd:string .
 
 :OrderService a arkproc:SystemActor ;
-    arkproc:actorName "Order Service"^^xsd:string .
+    skos:prefLabel "Order Service"^^xsd:string .
 
 :InventoryService a arkproc:SystemActor ;
-    arkproc:actorName "Inventory Service"^^xsd:string .
+    skos:prefLabel "Inventory Service"^^xsd:string .
 
 :PaymentService a arkproc:SystemActor ;
-    arkproc:actorName "Payment Service"^^xsd:string .
+    skos:prefLabel "Payment Service"^^xsd:string .
 
 :OrderRepository a arkproc:SystemActor ;
-    arkproc:actorName "Order Repository"^^xsd:string .
+    skos:prefLabel "Order Repository"^^xsd:string .
 
 
 # ═══════════════════════════════════════════════════════════

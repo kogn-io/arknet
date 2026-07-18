@@ -57,10 +57,6 @@ arkproc:SystemActor a owl:Class ;
     rdfs:label "System Actor"@en , "Systemakteur"@de ;
     skos:example "PaymentService, InventoryService, EmailService" .
 
-arkproc:actorName a owl:DatatypeProperty ;
-    rdfs:domain arkproc:Actor ;
-    rdfs:range  xsd:string .
-
 arkproc:actorRole a owl:DatatypeProperty ;
     rdfs:domain arkproc:Actor ;
     rdfs:range  xsd:string ;
