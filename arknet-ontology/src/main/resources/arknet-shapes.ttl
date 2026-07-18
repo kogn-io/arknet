@@ -54,8 +54,8 @@ shapes:BoundedContext-hasAggregate
     sh:path     arknet:hasAggregate ;
     sh:minCount 1 ;
     sh:class    arknet:Aggregate ;
-    sh:message  "BoundedContext muss mindestens ein 'arknet:hasAggregate' haben."@de ;
-    sh:severity sh:Violation .
+    sh:message  "BoundedContext sollte mindestens ein 'arknet:hasAggregate' haben (dessen Wert vom Typ arknet:Aggregate ist)."@de ;
+    sh:severity sh:Warning .
 
 shapes:BoundedContext-subdomain
     a sh:PropertyShape ;
