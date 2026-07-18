@@ -46,7 +46,7 @@ class ResourceIdSparqlTermsIriGrammarTest {
                 Arguments.of("backtick", PREFIX + "`thing"),
                 Arguments.of("backslash", PREFIX + "\\thing"),
                 Arguments.of("space", PREFIX + " thing"),
-                Arguments.of("control character", PREFIX + "thing"));
+                Arguments.of("control character", PREFIX + "\u0001thing"));
     }
 
     @ParameterizedTest(name = "{0}")
