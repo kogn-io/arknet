@@ -71,3 +71,25 @@ verletzen? (c) Wie lautet der Ressourcen-Handle-Vertrag?
   Domaenenerweiterung und widerspricht dem generischen Anspruch.
 - **Je Factory ein eigener Lifecycle (Status quo vor #47).** Verworfen: zwei
   `DatasetLifecycleRdf4j` auf dasselbe Verzeichnis -- Lock-Risiko.
+
+## Nachtrag 2026-07-18 (#131): Traceability-Lesepfad (`trace_matrix`/`orphan_check`/`impact_analysis`)
+
+Drei weitere readOnly-`@McpTool`s (`de.hauschel.arknet.mcp.trace`) berichten ueber dieselben
+Statements, traversieren sie aber statt sie nur zu digestieren: ein `TraceabilityGraph`, aus
+genau der `StoreReader#readSnapshot`-Momentaufnahme gebaut (kein zweiter, bespoke SPARQL-Pfad),
+folgt `arkreq:usesTerm`/`primaryActor`/`supportingActor`/`stepRealises` sowie dem
+`mainStep`/`extensionStep`-Hop, um Requirement-, Term- und UseCase-Kanten zu berichten.
+
+**Bewusste Abweichung von Entscheidung 2, nicht Bruch:** die beiden Ur-Tools kennen keinen
+Praedikat-Namen (eine `SELECT ?s ?p ?o`); `TraceabilityGraph` kennt genau die sechs
+`arkreq:`-Kanten oben und ist damit nicht mehr domaenenagnostisch im selben Sinn. Das ist derselbe
+begrenzte Kompromiss wie `StoreResource#status()`/`#priority()` (issue #111, ADR-Konsequenzen
+oben): eine vollstaendig generische "folge jedem objekt-typisierten Praedikat"-Traversierung
+wuerde Rauschen berichten, das von den tatsaechlich interessanten Kanten nicht zu unterscheiden
+waere. Composition-Root-Reinheit (Entscheidungen 1 und 3) bleibt unangetastet -- kein eigener BC,
+derselbe geteilte `DatasetLifecycle`/`StoreReader`, keine RDF4J-Abhaengigkeit.
+
+**Handle-Vertrag (Entscheidung 4) wiederverwendet, nicht dupliziert:** die
+Resolutionslogik aus `StoreReportTools#resolveHandle` wurde nach `HandleResolver` extrahiert;
+`impact_analysis`s Zielparameter und `resource_get`s `id`-Parameter teilen sich jetzt dieselbe
+Implementierung statt zweier driftender Kopien.
