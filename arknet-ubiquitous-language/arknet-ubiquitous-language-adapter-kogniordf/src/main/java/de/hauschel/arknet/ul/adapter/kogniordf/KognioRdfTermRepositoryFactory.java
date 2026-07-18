@@ -18,6 +18,7 @@ import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 
@@ -57,15 +58,35 @@ public final class KognioRdfTermRepositoryFactory {
 
     /**
      * Assembles a term repository over an already-created dataset lifecycle, wired with
-     * the ubiquitous-language SHACL write-gate. Used by {@link #persistent(Path)} and
-     * directly by tests that supply their own (e.g. in-memory) lifecycle.
+     * the ubiquitous-language SHACL write-gate and the {@link DisplayLocale#DEFAULT} display
+     * language. Used by {@link #persistent(Path)} and directly by tests that do not exercise
+     * the language fallback.
      *
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
      * @return a ready-to-use {@link TermRepository}
      */
     public static TermRepository over(DatasetLifecycle lifecycle) {
+        return over(lifecycle, DisplayLocale.DEFAULT);
+    }
+
+    /**
+     * Assembles a term repository over an already-created dataset lifecycle, wired with the
+     * ubiquitous-language SHACL write-gate and an explicit display language.
+     *
+     * <p>The {@link DisplayLocale} selects which {@code skos:prefLabel} the read paths surface
+     * when a concept carries labels in several languages (issue #80). It is a read-time display
+     * concern, so it is constructor-injected here rather than threaded through the
+     * {@link TermRepository} port signature - the composition root supplies the process-wide
+     * value (see {@code ArknetMcpConfiguration}).</p>
+     *
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for label selection
+     * @return a ready-to-use {@link TermRepository}
+     */
+    public static TermRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        return new KognioRdfTermRepository(lifecycle, buildGate());
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        return new KognioRdfTermRepository(lifecycle, buildGate(), displayLocale);
     }
 
     /**
