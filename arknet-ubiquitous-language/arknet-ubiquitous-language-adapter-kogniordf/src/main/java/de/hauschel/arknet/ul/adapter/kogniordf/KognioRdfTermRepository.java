@@ -1,5 +1,6 @@
 package de.hauschel.arknet.ul.adapter.kogniordf;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -85,6 +88,16 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * write transaction (symmetric to the requirements adapter); a violation throws
  * {@link WriteConstraintViolationException} and nothing is persisted. The gate itself is
  * technology-neutral - only {@link KognioRdfTermRepositoryFactory} names RDF4J.</p>
+ *
+ * <p><strong>Display language (issue #80).</strong> A concept may carry {@code skos:prefLabel}
+ * in several languages ({@code "Kunde"@de}, {@code "Customer"@en}) - SKOS-legal and store-first
+ * reachable (ADR-005). {@link #findByCode}/{@link #findAll} therefore join {@code prefLabel} as a
+ * <em>multi-valued</em> (but still mandatory) pattern, group the resulting rows per subject, and
+ * let the injected {@link DisplayLocale} pick the label to display through a fallback chain
+ * (requested language, system default, untagged, deterministic last resort). A concept is never
+ * dropped for lacking the requested language - only the shown language degrades. {@code findByIds}
+ * (the {@link ResolveTerms} batch) is deliberately untouched: it joins only {@code identifier},
+ * never {@code prefLabel}.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
 
@@ -105,19 +118,24 @@ public class KognioRdfTermRepository implements TermRepository {
 
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
+    private final DisplayLocale displayLocale;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from (must not be
-     *                  {@code null})
-     * @param gate      the SHACL write-gate validating candidate graphs before persistence
-     *                  (must not be {@code null})
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from (must not be
+     *                      {@code null})
+     * @param gate          the SHACL write-gate validating candidate graphs before persistence
+     *                      (must not be {@code null})
+     * @param displayLocale the display-language preference selecting which {@code skos:prefLabel}
+     *                      the read paths surface for a multilingual concept (issue #80; must not
+     *                      be {@code null})
      */
-    KognioRdfTermRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate) {
+    KognioRdfTermRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate, DisplayLocale displayLocale) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     @Override
@@ -211,14 +229,10 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .findFirst()
-                    .map(row -> new Term(
-                            new TermId(ResourceId.of(iriOf(row, "s").getIRIString())),
-                            code,
-                            literalOf(row, "prefLabel").getLexicalForm(),
-                            literalOf(row, "definition").getLexicalForm(),
-                            actorFacetOf(row)));
+            Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query)
+                    .forEach(row -> assemblyFor(bySubject, row, code).addPrefLabel(literalOf(row, "prefLabel")));
+            return bySubject.values().stream().findFirst().map(assembly -> assembly.toTerm(displayLocale));
         }
     }
 
@@ -237,14 +251,69 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> new Term(
-                            new TermId(ResourceId.of(iriOf(row, "s").getIRIString())),
-                            new TermCode(literalOf(row, "identifier").getLexicalForm()),
-                            literalOf(row, "prefLabel").getLexicalForm(),
-                            literalOf(row, "definition").getLexicalForm(),
-                            actorFacetOf(row)))
-                    .toList();
+            Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query)
+                    .forEach(row -> assemblyFor(bySubject, row, null).addPrefLabel(literalOf(row, "prefLabel")));
+            return bySubject.values().stream().map(assembly -> assembly.toTerm(displayLocale)).toList();
+        }
+    }
+
+    /**
+     * Groups the (potentially several) rows of one concept - a mandatory but now
+     * <em>multi-valued</em> {@code skos:prefLabel} join multiplies a concept into one row per
+     * language (issue #80) - into a single {@link TermAssembly}, keyed by subject IRI. The scalar
+     * fields (identity, code, definition, actor facet) are read once from the first row of a
+     * subject; every row contributes its {@code prefLabel} literal as a display candidate.
+     *
+     * <p>Only {@code prefLabel} is grouped here. {@code identifier}/{@code definition}/
+     * {@code actorRole} stay single-valued reads (their own multiplicity is #81's concern, out of
+     * scope for this issue). Keeping {@code prefLabel} a <em>required</em> (non-optional) join
+     * means a store-first concept carrying no {@code prefLabel} at all still binds nothing and is
+     * omitted exactly as before - it never reaches the {@link Term} constructor, whose non-blank
+     * {@code prefLabel} invariant stays strict.</p>
+     *
+     * @param knownCode the code when the caller already knows it ({@code findByCode}), else
+     *                  {@code null} to read it from the row's {@code identifier} ({@code findAll})
+     */
+    private static TermAssembly assemblyFor(Map<String, TermAssembly> bySubject, BindingSet row, TermCode knownCode) {
+        String subjectIri = iriOf(row, "s").getIRIString();
+        return bySubject.computeIfAbsent(subjectIri, iri -> new TermAssembly(
+                new TermId(ResourceId.of(iri)),
+                knownCode != null ? knownCode : new TermCode(literalOf(row, "identifier").getLexicalForm()),
+                literalOf(row, "definition").getLexicalForm(),
+                actorFacetOf(row)));
+    }
+
+    /**
+     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} candidates
+     * across rows, then choosing one via the {@link DisplayLocale} fallback chain when the concept
+     * is finally materialised into a {@link Term}.
+     */
+    private static final class TermAssembly {
+
+        private final TermId id;
+        private final TermCode code;
+        private final String definition;
+        private final ActorFacet actorFacet;
+        private final List<LocalizedLiteral> prefLabels = new ArrayList<>();
+
+        private TermAssembly(TermId id, TermCode code, String definition, ActorFacet actorFacet) {
+            this.id = id;
+            this.code = code;
+            this.definition = definition;
+            this.actorFacet = actorFacet;
+        }
+
+        private void addPrefLabel(Literal literal) {
+            prefLabels.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
+        }
+
+        private Term toTerm(DisplayLocale displayLocale) {
+            String prefLabel = displayLocale.select(prefLabels)
+                    .map(LocalizedLiteral::value)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "prefLabel is a required join, so at least one candidate must exist"));
+            return new Term(id, code, prefLabel, definition, actorFacet);
         }
     }
 

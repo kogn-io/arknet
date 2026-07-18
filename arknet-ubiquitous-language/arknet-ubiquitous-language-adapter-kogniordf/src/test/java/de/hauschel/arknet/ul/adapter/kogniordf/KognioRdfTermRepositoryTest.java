@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +29,7 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -260,6 +262,123 @@ class KognioRdfTermRepositoryTest {
 
         assertEquals(1, all.size());
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
+    }
+
+    // ---- display-language fallback for multilingual prefLabel (issue #80) ----------------
+
+    /**
+     * A concept with {@code @de} and {@code @en} prefLabels, read with a German display locale,
+     * surfaces the German label - step 1 of the fallback chain.
+     */
+    @Test
+    void findByCodePicksThePrefLabelInTheRequestedLanguage() {
+        TermId id = freshId();
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.",
+                "\"Kunde\"@de, \"Customer\"@en");
+        TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        Optional<Term> found = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+
+        assertEquals("Kunde", found.orElseThrow().prefLabel());
+    }
+
+    /**
+     * A concept lacking the requested language ({@code @de}) but present in the system default
+     * ({@code @en}) surfaces the English label - step 2. The term must NOT vanish (the #65 error
+     * class: a hard language filter would bind nothing).
+     */
+    @Test
+    void findByCodeFallsBackToTheSystemDefaultLanguage() {
+        TermId id = freshId();
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.",
+                "\"Customer\"@en, \"Client\"@fr");
+        TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        Optional<Term> found = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+
+        assertEquals("Customer", found.orElseThrow().prefLabel());
+    }
+
+    /** A plain, untagged prefLabel (today's term_add normal case) surfaces via step 3. */
+    @Test
+    void findByCodeFallsBackToAnUntaggedPrefLabel() {
+        TermId id = freshId();
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.", "\"Kunde\"");
+        TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        Optional<Term> found = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+
+        assertEquals("Kunde", found.orElseThrow().prefLabel());
+    }
+
+    /**
+     * Neither the requested (de) nor the default (en) language, nothing untagged: the term is
+     * still returned (never swallowed) and step 4 is deterministic - two consecutive reads yield
+     * the same label ({@code "es"} sorts before {@code "fr"}).
+     */
+    @Test
+    void findByCodeFallsBackDeterministicallyAsLastResort() {
+        TermId id = freshId();
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.",
+                "\"Client\"@fr, \"Cliente\"@es");
+        TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        String first = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel();
+        String second = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel();
+
+        assertEquals("Cliente", first);
+        assertEquals(first, second);
+    }
+
+    /** The same multilingual selection applies to findAll, not only findByCode. */
+    @Test
+    void findAllPicksThePrefLabelInTheRequestedLanguage() {
+        givenMultilingualConcept(WORKSPACE_A, freshId(), "TERM-1", "Person, die bestellt.",
+                "\"Kunde\"@de, \"Customer\"@en");
+        TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        List<Term> all = germanReader.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertEquals("Kunde", all.get(0).prefLabel());
+    }
+
+    /** Distinct display locales over the same store surface distinct labels for the same concept. */
+    @Test
+    void findByCodeHonoursTheConfiguredDisplayLocale() {
+        givenMultilingualConcept(WORKSPACE_A, freshId(), "TERM-1", "Person, die bestellt.",
+                "\"Kunde\"@de, \"Customer\"@en");
+
+        assertEquals("Kunde", readerFor(Locale.GERMAN, Locale.ENGLISH)
+                .findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel());
+        assertEquals("Customer", readerFor(Locale.ENGLISH, Locale.GERMAN)
+                .findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel());
+    }
+
+    /** A term repository reading the shared store under an explicit display-language preference. */
+    private TermRepository readerFor(Locale requested, Locale systemDefault) {
+        return KognioRdfTermRepositoryFactory.over(lifecycle, new DisplayLocale(requested, systemDefault));
+    }
+
+    /**
+     * Writes a {@code skos:Concept} with one or several {@code skos:prefLabel} literals (the
+     * {@code prefLabelList} is spliced verbatim into a SPARQL object list, e.g.
+     * {@code "\"Kunde\"@de, \"Customer\"@en"}) - the multilingual, store-first shape term_add
+     * itself never produces.
+     */
+    private void givenMultilingualConcept(
+            WorkspaceId workspaceId, TermId id, String code, String definition, String prefLabelList) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"" + definition + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> " + prefLabelList + " } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
     }
 
     // ---- findByIds: batch resolution for ResolveTerms (issue #77 nachtrag) --------------

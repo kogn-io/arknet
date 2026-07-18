@@ -1,6 +1,7 @@
 package de.hauschel.arknet.mcp;
 
 import java.nio.file.Path;
+import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -8,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 
 import io.kogn.rdf.dataset.DatasetLifecycle;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -164,9 +166,27 @@ public class ArknetMcpConfiguration {
 
     // --- Ubiquitous-language hexagon -------------------------------------------
 
+    /**
+     * The display language this server instance reads labels in - a consumer-supplied context,
+     * exactly like {@link WorkspaceId}: one value per process, injected into the bounded context
+     * (issue #80). A glossary concept may carry {@code skos:prefLabel} in several languages;
+     * {@link DisplayLocale#select} then chooses which one the read paths surface, degrading
+     * through a fixed fallback chain (requested language, {@code arknet.locale} -> system default,
+     * {@code arknet.locale.default} -> untagged literal -> a deterministic last resort) so a term
+     * is never swallowed for lacking the requested language. Both properties default to English;
+     * since {@code term_add} writes untagged labels today, the untagged step surfaces them
+     * regardless.
+     */
     @Bean
-    TermRepository termRepository(final DatasetLifecycle datasetLifecycle) {
-        return KognioRdfTermRepositoryFactory.over(datasetLifecycle);
+    DisplayLocale displayLocale(
+            @Value("${arknet.locale:en}") final String requested,
+            @Value("${arknet.locale.default:en}") final String systemDefault) {
+        return new DisplayLocale(Locale.forLanguageTag(requested), Locale.forLanguageTag(systemDefault));
+    }
+
+    @Bean
+    TermRepository termRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfTermRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
     @Bean
