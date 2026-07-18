@@ -47,6 +47,17 @@ class DisplayLocaleTest {
         assertEquals("Kunde", chosen.orElseThrow().value());
     }
 
+    @Test
+    void prefersTheExactBcp47TagOverALexicallySmallerSiblingRegion() {
+        DisplayLocale enUs = new DisplayLocale(Locale.forLanguageTag("en-US"), Locale.ENGLISH);
+
+        Optional<LocalizedLiteral> chosen = enUs.select(List.of(
+                LocalizedLiteral.tagged("Customer UK", "en-GB"),
+                LocalizedLiteral.tagged("Customer US", "en-US")));
+
+        assertEquals("Customer US", chosen.orElseThrow().value());
+    }
+
     // ---- Step 2: system default -------------------------------------------------------
 
     @Test

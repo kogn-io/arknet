@@ -2,6 +2,7 @@ package de.hauschel.arknet.kernel;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -99,19 +100,33 @@ public record DisplayLocale(Locale requested, Locale systemDefault) {
 
     /**
      * The best candidate whose language tag matches {@code locale}'s primary language subtag,
-     * compared case-insensitively (so {@code "de"} matches {@code "de"} and {@code "de-DE"}). If
-     * several qualify (store-first data breaking S14), {@link #CANONICAL_ORDER} picks one
-     * deterministically.
+     * compared case-insensitively (so {@code "de"} matches {@code "de"} and {@code "de-DE"}).
+     * Among those, an exact full-tag match (e.g. {@code "en-US"} for a requested {@code "en-US"})
+     * wins first - SKOS S14 binds to the full tag, not merely the primary subtag, so a region- or
+     * script-specific candidate must not lose to an unrelated sibling region. Only if none matches
+     * exactly does {@link #CANONICAL_ORDER} pick among the primary-language matches. If several
+     * qualify at either level (store-first data breaking S14), {@link #CANONICAL_ORDER} still picks
+     * one deterministically.
      */
     private static Optional<LocalizedLiteral> matching(Collection<LocalizedLiteral> candidates, Locale locale) {
         String language = locale.getLanguage();
         if (language.isEmpty()) {
             return Optional.empty();
         }
-        return candidates.stream()
+        List<LocalizedLiteral> sameLanguage = candidates.stream()
                 .filter(candidate -> !candidate.isUntagged())
                 .filter(candidate -> Locale.forLanguageTag(candidate.languageTag())
                         .getLanguage().equalsIgnoreCase(language))
+                .toList();
+
+        String requestedTag = locale.toLanguageTag();
+        Optional<LocalizedLiteral> exactMatch = sameLanguage.stream()
+                .filter(candidate -> Locale.forLanguageTag(candidate.languageTag())
+                        .toLanguageTag().equalsIgnoreCase(requestedTag))
                 .min(CANONICAL_ORDER);
+        if (exactMatch.isPresent()) {
+            return exactMatch;
+        }
+        return sameLanguage.stream().min(CANONICAL_ORDER);
     }
 }
