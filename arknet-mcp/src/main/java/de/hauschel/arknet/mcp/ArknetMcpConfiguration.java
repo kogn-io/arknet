@@ -15,6 +15,10 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.mcp.store.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
+import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
+import de.hauschel.arknet.bc.application.BoundedContextService;
+import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -44,7 +48,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Three hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Four hexagons are wired:</p>
  *
  * <ul>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
@@ -76,12 +80,21 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       code/name) is not a second store adapter - it is the requirements hexagon's own
  *       {@link ResolveRequirements} and the ubiquitous-language hexagon's own
  *       {@link ResolveTerms} in-ports, wired straight into {@link UseCaseMcpTools} (#89).</li>
+ *   <li><strong>bounded-context</strong> ({@link BoundedContextMcpTools} over
+ *       {@link BoundedContextService} over an RDF-persisted bounded-context repository) - the
+ *       four bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
+ *       {@code bc_link_term}), assembled through {@link KognioRdfBoundedContextRepositoryFactory}.
+ *       {@code bc_link_term}'s cross-BC code-to-identity resolution (issue #62/#66) is a separate
+ *       {@code KognioRdfTermLookup} bean over the same shared dataset lifecycle; {@code bc_get}/
+ *       {@code bc_list}'s reverse direction (identity back to a displayable term code) is the
+ *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
+ *       {@link BoundedContextMcpTools} (ADR-008).</li>
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
  * {@code arknet.rdf.storage}, no competing locks) and the single {@link WorkspaceId} bean, so
- * requirements, glossary terms and use cases of the same project land in the same
- * workspace/dataset and can reference each other.</p>
+ * requirements, glossary terms, use cases and bounded contexts of the same project land in the
+ * same workspace/dataset and can reference each other.</p>
  */
 @Configuration(proxyBeanMethods = false)
 public class ArknetMcpConfiguration {
@@ -277,6 +290,46 @@ public class ArknetMcpConfiguration {
             final UseCaseService service, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final WorkspaceId workspaceId) {
         return new UseCaseMcpTools(service, service, service, resolveTerms, resolveRequirements, workspaceId);
+    }
+
+    // --- Bounded-context hexagon -----------------------------------------------
+
+    @Bean
+    BoundedContextRepository boundedContextRepository(final DatasetLifecycle datasetLifecycle) {
+        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle);
+    }
+
+    /**
+     * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
+     * subject identity - the strict cross-BC lookup {@code bc_link_term} needs (issue #62/#66).
+     * Acquires datasets from the same shared {@link DatasetLifecycle} as
+     * {@link #termRepository}, so it reads the same workspace the ubiquitous-language hexagon
+     * writes into.
+     */
+    @Bean
+    de.hauschel.arknet.bc.application.port.out.TermLookup boundedContextTermLookup(
+            final DatasetLifecycle datasetLifecycle) {
+        return new de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfTermLookup(datasetLifecycle);
+    }
+
+    @Bean
+    BoundedContextService boundedContextService(
+            final BoundedContextRepository repository, final ResourceIdFactory resourceIdFactory,
+            final de.hauschel.arknet.bc.application.port.out.TermLookup boundedContextTermLookup) {
+        return new BoundedContextService(repository, resourceIdFactory, boundedContextTermLookup);
+    }
+
+    /**
+     * {@code resolveTerms} is the ubiquitous-language hexagon's {@link ResolveTerms} in-port
+     * (implemented by its {@code TermService} bean) - borrowed here purely so {@code bc_get}/
+     * {@code bc_list} can render a linked term's business code instead of its bare IRI (ADR-008).
+     * This wires an In-Adapter to a <em>different</em> hexagon's In-Port, not to that hexagon's
+     * core - see the "kein *-core* haengt an einem anderen BC" precision in CLAUDE.md.
+     */
+    @Bean
+    BoundedContextMcpTools boundedContextMcpTools(
+            final BoundedContextService service, final ResolveTerms resolveTerms, final WorkspaceId workspaceId) {
+        return new BoundedContextMcpTools(service, service, service, service, resolveTerms, workspaceId);
     }
 
     // --- Generic store report (domain-agnostic read path) ----------------------

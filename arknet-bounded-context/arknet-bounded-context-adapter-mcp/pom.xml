@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-bounded-context</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-bounded-context-adapter-mcp</artifactId>
+    <description>In-Adapter (driving): uebersetzt MCP-Tool-Calls auf die arknet-bounded-context-core In-Ports via Spring-AI @McpTool. Eine Composition Root (arknet-mcp) sammelt die Tools per Bean-Auto-Detection ein.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-core</artifactId>
+        </dependency>
+        <!-- In-Adapter -> fremder In-Port (ADR-008): der In-Adapter ist das Tor zum
+             bounded-context-BC, nicht dessen Core - eine Abhaengigkeit hierher auf einen anderen
+             BCs In-Port verletzt die Invariante "kein *-core* haengt an einem anderen BC" nicht
+             (die gilt fuer die *-core-Module, siehe arknet-architecture-tests in CLAUDE.md).
+             Genutzt nur fuer die read-only Anzeige-Aufloesung ResourceId -> TERM-N in
+             BoundedContextMcpTools#format; bc_link_term selbst bleibt entkoppelt (TermLookup). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
