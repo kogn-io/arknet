@@ -14,6 +14,7 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.SparqlTerms;
 
 /**
  * The single generic read path into a workspace dataset: one {@code SELECT ?s ?p ?o} over
@@ -68,8 +69,9 @@ public final class StoreReader {
     public List<Triple> outgoing(WorkspaceId workspaceId, String iri) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(iri, "iri");
-        String query = "SELECT ?p ?o WHERE { { <" + iri + "> ?p ?o } UNION { GRAPH ?g { <"
-                + iri + "> ?p ?o } } }";
+        String iriRef = SparqlTerms.iriRef(iri);
+        String query = "SELECT ?p ?o WHERE { { " + iriRef + " ?p ?o } UNION { GRAPH ?g { "
+                + iriRef + " ?p ?o } } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> outgoingTriple(iri, row))
@@ -89,8 +91,9 @@ public final class StoreReader {
     public List<Triple> incoming(WorkspaceId workspaceId, String iri) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(iri, "iri");
-        String query = "SELECT ?s ?p WHERE { { ?s ?p <" + iri + "> } UNION { GRAPH ?g { ?s ?p <"
-                + iri + "> } } }";
+        String iriRef = SparqlTerms.iriRef(iri);
+        String query = "SELECT ?s ?p WHERE { { ?s ?p " + iriRef + " } UNION { GRAPH ?g { ?s ?p "
+                + iriRef + " } } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> incomingTriple(iri, row))
