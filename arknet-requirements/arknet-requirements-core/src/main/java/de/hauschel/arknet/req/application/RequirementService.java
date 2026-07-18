@@ -11,11 +11,13 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
+import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -23,6 +25,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
@@ -53,7 +56,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  * RequirementConcurrentlyModifiedException}.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
-        SetRequirementStatus, LinkTerm, ResolveRequirements {
+        SetRequirementStatus, LinkTerm, ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops (issue #108).
@@ -69,6 +72,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     private final RequirementRepository repository;
     private final ResourceIdFactory resourceIdFactory;
     private final TermLookup termLookup;
+    private final RequirementSchemaSource schemaSource;
 
     /**
      * Creates the service.
@@ -78,12 +82,16 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                          be {@code null})
      * @param termLookup        resolves a human-typed glossary term code to its opaque identity
      *                          (must not be {@code null})
+     * @param schemaSource      supplies the {@code arkreq:} vocabulary as data, backing
+     *                          {@code req_schema} (must not be {@code null})
      */
     public RequirementService(
-            RequirementRepository repository, ResourceIdFactory resourceIdFactory, TermLookup termLookup) {
+            RequirementRepository repository, ResourceIdFactory resourceIdFactory, TermLookup termLookup,
+            RequirementSchemaSource schemaSource) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
+        this.schemaSource = Objects.requireNonNull(schemaSource, "schemaSource");
     }
 
     @Override
@@ -207,6 +215,11 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             return List.of();
         }
         return repository.findByIds(workspaceId, List.of(ids));
+    }
+
+    @Override
+    public List<RequirementSchemaTerm> schema() {
+        return schemaSource.schema();
     }
 
     /**
