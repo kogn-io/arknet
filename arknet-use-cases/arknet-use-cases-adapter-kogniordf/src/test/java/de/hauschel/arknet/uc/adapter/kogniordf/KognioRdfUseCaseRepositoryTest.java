@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
@@ -17,6 +18,7 @@ import org.eclipse.rdf4j.model.impl.LinkedHashModel;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.vocabulary.DCTERMS;
 import org.eclipse.rdf4j.model.vocabulary.RDF;
+import org.eclipse.rdf4j.model.vocabulary.XSD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -412,5 +414,98 @@ class KognioRdfUseCaseRepositoryTest {
 
         assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoPrimaryActors)));
+    }
+
+    /**
+     * Issue #99: {@code rshapes:UseCase-title} is a new shape ({@code dcterms:title} had none
+     * before). {@link UseCase#title()} is single-valued, so a second title is unreachable through
+     * {@link UseCaseRepository#create}, same rationale as
+     * {@link #gateRejectsUseCaseWithTwoPrimaryActors}.
+     */
+    @Test
+    void gateRejectsUseCaseWithTwoTitles() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
+        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
+        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+
+        Model twoTitles = new LinkedHashModel();
+        twoTitles.add(useCase, RDF.TYPE, useCaseClass);
+        twoTitles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order"));
+        twoTitles.add(useCase, primaryActor, actor);
+        twoTitles.add(actor, RDF.TYPE, actorClass);
+
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+
+        WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(new RDF4JGraph(twoTitles)));
+        assertTrue(ex.getMessage().contains("title"), ex.getMessage());
+    }
+
+    /**
+     * Issue #99: {@code rshapes:UseCase-goal-count} is a new, {@code sh:Violation} shape carrying
+     * only the {@code sh:maxCount 1} - split out from the pre-existing {@code rshapes:UseCase-goal}
+     * (which stays a {@code sh:Warning} best-practice check on presence, unchanged), for the same
+     * reason as {@code rshapes:Requirement-motivatedBy-count} in
+     * {@code KognioRdfRequirementRepositoryTest}: a {@code sh:Warning}-severity {@code maxCount}
+     * never fires {@link WriteConstraintViolationException}. {@link UseCase#goal()} is
+     * single-valued, so a second value is unreachable through {@link UseCaseRepository#create}.
+     */
+    @Test
+    void gateRejectsUseCaseWithTwoGoals() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
+        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
+        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+        IRI useCaseGoal = vf.createIRI("https://w3id.org/arknet/requirements#useCaseGoal");
+
+        Model twoGoals = new LinkedHashModel();
+        twoGoals.add(useCase, RDF.TYPE, useCaseClass);
+        twoGoals.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
+        twoGoals.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
+        twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants the order placed quickly"));
+        twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants a confirmation email"));
+        twoGoals.add(useCase, primaryActor, actor);
+        twoGoals.add(actor, RDF.TYPE, actorClass);
+
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+
+        WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(new RDF4JGraph(twoGoals)));
+        assertTrue(ex.getMessage().contains("useCaseGoal"), ex.getMessage());
+    }
+
+    /**
+     * Issue #99: {@code rshapes:Step-text} now carries {@code sh:maxCount 1}. {@link Step#text()}
+     * is single-valued, so a second {@code stepText} is unreachable through
+     * {@link UseCaseRepository#create} - exercised directly against a synthetic {@code arkreq:Step}
+     * candidate graph, since a step has no standalone read/write entry point of its own (it is
+     * only ever reached through its owning {@link UseCase}).
+     */
+    @Test
+    void gateRejectsStepWithTwoTexts() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI step = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI stepClass = vf.createIRI("https://w3id.org/arknet/requirements#Step");
+        IRI position = vf.createIRI("https://w3id.org/arknet/requirements#position");
+        IRI stepText = vf.createIRI("https://w3id.org/arknet/requirements#stepText");
+
+        Model twoTexts = new LinkedHashModel();
+        twoTexts.add(step, RDF.TYPE, stepClass);
+        twoTexts.add(step, position, vf.createLiteral("1", XSD.INTEGER));
+        twoTexts.add(step, stepText, vf.createLiteral("Customer places the order"));
+        twoTexts.add(step, stepText, vf.createLiteral("Customer submits the order"));
+
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+
+        WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(new RDF4JGraph(twoTexts)));
+        assertTrue(ex.getMessage().contains("stepText"), ex.getMessage());
     }
 }
