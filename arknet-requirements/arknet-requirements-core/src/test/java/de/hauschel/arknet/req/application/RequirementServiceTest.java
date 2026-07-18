@@ -19,11 +19,13 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
@@ -44,6 +46,7 @@ class RequirementServiceTest {
     private InMemoryRequirementRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
     private InMemoryTermLookup termLookup;
+    private FakeRequirementSchemaSource schemaSource;
     private RequirementService service;
 
     @BeforeEach
@@ -53,7 +56,8 @@ class RequirementServiceTest {
         termLookup = new InMemoryTermLookup();
         termLookup.register("TERM-1", TERM_1);
         termLookup.register("TERM-2", TERM_2);
-        service = new RequirementService(repository, resourceIdFactory, termLookup);
+        schemaSource = new FakeRequirementSchemaSource();
+        service = new RequirementService(repository, resourceIdFactory, termLookup, schemaSource);
     }
 
     @Test
@@ -358,6 +362,19 @@ class RequirementServiceTest {
         assertEquals(List.of(), service.getById(other, inWs.id().value()));
     }
 
+    /**
+     * Issue #31: {@code schema()} is pure delegation to the {@link RequirementSchemaSource}
+     * driven port - the service adds no policy of its own, only the seam between the driving
+     * and driven port.
+     */
+    @Test
+    void schemaDelegatesToTheSchemaSource() {
+        List<RequirementSchemaTerm> result = service.schema();
+
+        assertEquals(schemaSource.terms(), result);
+        assertEquals(1, schemaSource.callCount());
+    }
+
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
                 RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"));
@@ -375,6 +392,33 @@ class RequirementServiceTest {
 
         int mintedCount() {
             return counter.get();
+        }
+    }
+
+    /**
+     * Fake {@link RequirementSchemaSource}: hands back a fixed, canned list of terms and counts
+     * its own invocations, so the test can pin "schema() is exactly one delegating call" without
+     * a mocking framework.
+     */
+    private static final class FakeRequirementSchemaSource implements RequirementSchemaSource {
+
+        private final List<RequirementSchemaTerm> terms =
+                List.of(new RequirementSchemaTerm("Priority", "Priorisierung nach MoSCoW.",
+                        List.of("MUST_HAVE", "SHOULD_HAVE", "COULD_HAVE", "WONT_HAVE")));
+        private int calls;
+
+        @Override
+        public List<RequirementSchemaTerm> schema() {
+            calls++;
+            return terms;
+        }
+
+        List<RequirementSchemaTerm> terms() {
+            return terms;
+        }
+
+        int callCount() {
+            return calls;
         }
     }
 }
