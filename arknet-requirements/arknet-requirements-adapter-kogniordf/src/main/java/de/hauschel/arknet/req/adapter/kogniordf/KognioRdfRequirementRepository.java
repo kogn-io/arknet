@@ -138,14 +138,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfRequirementRepository.class);
 
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
-    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
 
-    private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String USES_TERM_PROPERTY = ArkreqVocabulary.USES_TERM;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
-    private static final String FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "FunctionalRequirement";
-    private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "NonFunctionalRequirement";
+    private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
+    private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String STATUS_PROPERTY = ARKREQ_NAMESPACE + "status";
     private static final String PROPOSED_STATUS = ARKREQ_NAMESPACE + "Proposed";
     private static final String ACCEPTED_STATUS = ARKREQ_NAMESPACE + "Accepted";

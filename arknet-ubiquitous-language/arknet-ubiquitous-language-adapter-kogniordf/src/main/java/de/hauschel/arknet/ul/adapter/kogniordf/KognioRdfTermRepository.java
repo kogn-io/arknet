@@ -27,6 +27,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -138,7 +139,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String GLOSSARY_SCHEME = "https://w3id.org/arknet/model/glossary";
     private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
 
-    private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String CONCEPT_SCHEME_TYPE = SKOS_NAMESPACE + "ConceptScheme";
     private static final String IN_SCHEME_PROPERTY = SKOS_NAMESPACE + "inScheme";
     private static final String PREF_LABEL_PROPERTY = SKOS_NAMESPACE + "prefLabel";
