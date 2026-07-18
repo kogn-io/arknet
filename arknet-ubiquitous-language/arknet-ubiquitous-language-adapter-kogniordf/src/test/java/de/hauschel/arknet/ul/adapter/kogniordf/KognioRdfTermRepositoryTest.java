@@ -174,6 +174,41 @@ class KognioRdfTermRepositoryTest {
         assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
     }
 
+    /**
+     * Issue #114: {@code update()} must reject reusing a code that already belongs to a
+     * <em>different</em> subject, exactly like {@code create()} already does - otherwise
+     * {@code findByCode} ends up with two subjects sharing one {@code dcterms:identifier} and
+     * arbitrarily picks one via {@code .findFirst()}.
+     */
+    @Test
+    void updateRejectsADuplicateCodeUnderADifferentIdentityAndPersistsNothingElse() {
+        Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
+        repository.create(WORKSPACE_A, first);
+        repository.create(WORKSPACE_A, second);
+
+        Term collidingUpdate = new Term(second.id(), new TermCode("TERM-1"), "Bestellung", "def b geaendert", null);
+
+        assertThrows(DuplicateTermCodeException.class,
+                () -> repository.update(WORKSPACE_A, collidingUpdate));
+        assertEquals(Optional.of(first), repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")));
+        assertEquals(Optional.of(second), repository.findByCode(WORKSPACE_A, new TermCode("TERM-2")));
+    }
+
+    /** A term keeping its own existing code across an update must not trip the collision check. */
+    @Test
+    void updateKeepingItsOwnExistingCodeSucceeds() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        Term original = new Term(id, code, "Gutschrift", "Erste Definition.", null);
+        Term revised = new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null);
+        repository.create(WORKSPACE_A, original);
+
+        repository.update(WORKSPACE_A, revised);
+
+        assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, code));
+    }
+
     @Test
     void findByCodeReturnsEmptyForUnknownCode() {
         assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, new TermCode("TERM-99")));

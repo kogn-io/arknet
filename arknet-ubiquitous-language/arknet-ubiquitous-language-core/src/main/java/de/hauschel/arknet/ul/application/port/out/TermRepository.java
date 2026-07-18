@@ -50,7 +50,10 @@ public interface TermRepository {
      *
      * @param workspaceId the workspace (architecture model) the term lives in
      * @param term        the term to store in place of the current one
-     * @throws TermNotFoundException if no term with this identity exists
+     * @throws TermNotFoundException      if no term with this identity exists
+     * @throws DuplicateTermCodeException if another term already carries this term's
+     *                                    {@link TermCode} - a term may keep its own existing code,
+     *                                    only a collision with a different subject is rejected
      */
     void update(WorkspaceId workspaceId, Term term);
 
