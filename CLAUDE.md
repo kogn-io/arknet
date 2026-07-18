@@ -33,13 +33,14 @@ einer eigenen `CLAUDE.md` im Modulverzeichnis -- laedt nur, wenn dort auch
 gearbeitet wird.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (stdio) + Composition Root, verdrahtet alle drei BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006). Details: `arknet-mcp/CLAUDE.md`
+- **arknet-mcp**: MCP-Server (stdio) + Composition Root, verdrahtet alle vier BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006). Details: `arknet-mcp/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- WorkspaceId, ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), SparqlTerms, UnresolvedReferenceException. Details: `arknet-persistence-support/CLAUDE.md`
 - **arknet-architecture-tests**: ArchUnit-Regeln fuer Dependency-Invarianten, die der Modulschnitt nicht erzwingen kann. Details: `arknet-architecture-tests/CLAUDE.md`
 - **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar, opake Identitaet, acceptanceCriterion. Details: `arknet-requirements/CLAUDE.md`
 - **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools) mit optionaler Actor-Facette, opake Identitaet. Details: `arknet-ubiquitous-language/CLAUDE.md`
 - **arknet-use-cases**: dritte hexagonale BC -- Cockburn-Use-Cases (`uc_*`-Tools) mit opaken Step-VOs, Actor-/Requirement-Referenzen. Details: `arknet-use-cases/CLAUDE.md`
+- **arknet-bounded-context**: vierte hexagonale BC -- BoundedContext-Lifecycle (`bc_*`-Tools), ubiquitousLanguageTerm-Kante ins Glossar (BC->Term, #62), opake Identitaet. Details: `arknet-bounded-context/CLAUDE.md`
 
 ## Ontologie-Namespaces
 
