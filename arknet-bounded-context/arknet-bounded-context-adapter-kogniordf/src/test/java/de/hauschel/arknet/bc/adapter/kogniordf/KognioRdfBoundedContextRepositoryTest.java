@@ -239,6 +239,42 @@ class KognioRdfBoundedContextRepositoryTest {
         assertEquals(List.of(term1, term2), found.usesTerms());
     }
 
+    /**
+     * Replace-by-identity regression for the field {@link BoundedContext} does not carry at all:
+     * a store-first {@code arknet:hasAggregate} edge (set directly against the store, since
+     * {@code bc_add}/{@code bc_link_term} never write one) must survive an unrelated
+     * {@code update()} - e.g. the one {@code bc_link_term} performs - instead of being silently
+     * dropped by the replace-by-identity rewrite.
+     */
+    @Test
+    void updatePreservesAStoreFirstHasAggregateEdge() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(WORKSPACE_A, original);
+
+        String aggregateIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        String insertAggregate = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + id.value().value() + "> <https://w3id.org/arknet/core#hasAggregate> <" + aggregateIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertAggregate);
+                return null;
+            });
+        }
+
+        BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.",
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.update(WORKSPACE_A, changed);
+
+        String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/core#hasAggregate> <" + aggregateIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
     @Test
     void workspacesAreIsolated() {
         repository.create(WORKSPACE_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));

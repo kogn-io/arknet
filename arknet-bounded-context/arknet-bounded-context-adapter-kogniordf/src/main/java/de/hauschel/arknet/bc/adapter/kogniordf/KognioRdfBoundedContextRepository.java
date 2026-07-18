@@ -104,6 +104,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String SUBDOMAIN_PROPERTY = ARKNET_NAMESPACE + "subdomain";
     private static final String OWNED_BY_PROPERTY = ARKNET_NAMESPACE + "ownedBy";
     private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ARKNET_NAMESPACE + "ubiquitousLanguageTerm";
+    private static final String HAS_AGGREGATE_PROPERTY = ARKNET_NAMESPACE + "hasAggregate";
 
     private static final String CORE_DOMAIN = ARKNET_NAMESPACE + "CoreDomain";
     private static final String SUPPORTING_DOMAIN = ARKNET_NAMESPACE + "SupportingDomain";
@@ -207,32 +208,52 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
     /**
      * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
-     * transaction. On an update it first captures the {@code arknet:ubiquitousLanguageTerm} edges
-     * whose target is not an IRI ({@link #readUsesTerms} can never read those, since
-     * {@link ResourceId} cannot represent a blank node) and re-attaches them after the rewrite -
-     * so a replace-by-identity write of a store-first (ADR-005) bounded context carries a
-     * blank-node edge along instead of erasing it (the same preservation the requirements adapter
-     * does for {@code arkreq:usesTerm}, issue #65).
+     * transaction. On an update it first captures two kinds of edges that {@code graph} (built
+     * from the {@link BoundedContext} record) never carries, and re-attaches both after the
+     * rewrite - so a replace-by-identity write of a store-first (ADR-005) bounded context carries
+     * them along instead of erasing them:
+     *
+     * <ul>
+     * <li>{@code arknet:ubiquitousLanguageTerm} edges whose target is not an IRI
+     * ({@link #readUsesTerms} can never read those, since {@link ResourceId} cannot represent a
+     * blank node) - the same preservation the requirements adapter does for
+     * {@code arkreq:usesTerm}, issue #65.</li>
+     * <li><strong>All</strong> {@code arknet:hasAggregate} edges, regardless of target kind:
+     * {@link BoundedContext} has no field for its aggregates at all (issue #66 lowered the shape
+     * to {@code sh:Warning} precisely so a bounded context minted before tactical design has none
+     * yet), so unlike {@code ubiquitousLanguageTerm} there is no IRI-typed round-trip through the
+     * domain object to fall back on - every edge, IRI or blank node, would otherwise be lost on
+     * the very next {@code bc_link_term} call.</li>
+     * </ul>
      */
     private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
             boolean exists) {
         String selectUnjoinableTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
                 + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } FILTER(!isIRI(?term)) }";
+        String selectAggregates = "SELECT ?aggregate WHERE { "
+                + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
+                + HAS_AGGREGATE_PROPERTY + "> ?aggregate } }";
         String deleteExisting = "DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
                 + subject + " ?p ?o } }";
 
         List<RDFTerm> unjoinableTerms = exists
                 ? tx.select(selectUnjoinableTerms).map(row -> termOf(row, "term")).toList()
                 : List.of();
+        List<RDFTerm> aggregates = exists
+                ? tx.select(selectAggregates).map(row -> termOf(row, "aggregate")).toList()
+                : List.of();
         if (exists) {
             tx.update(deleteExisting);
         }
         tx.add(graphIri, graph);
-        if (!unjoinableTerms.isEmpty()) {
+        if (!unjoinableTerms.isEmpty() || !aggregates.isEmpty()) {
             Graph preservedEdges = rdf.createGraph();
             for (RDFTerm termNode : unjoinableTerms) {
                 preservedEdges.add(subjectIri, rdf.createIRI(UBIQUITOUS_LANGUAGE_TERM_PROPERTY), termNode);
+            }
+            for (RDFTerm aggregateNode : aggregates) {
+                preservedEdges.add(subjectIri, rdf.createIRI(HAS_AGGREGATE_PROPERTY), aggregateNode);
             }
             tx.add(graphIri, preservedEdges);
         }
