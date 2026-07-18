@@ -1,3 +1,7 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "arknet": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/arknet-mcp.sh"
+    }
+  }
 }
