@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-bounded-context</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-bounded-context-adapter-kogniordf</artifactId>
+    <description>Out-Adapter: implementiert BoundedContextRepository ueber kognio-rdf (embeddable RDF-Substrat). Bounded Contexts werden als arknet:BoundedContext persistiert.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ontology</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-terms</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-rdf4j</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-shacl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-shacl-rdf4j</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.rdf4j</groupId>
+            <artifactId>rdf4j-rio-turtle</artifactId>
+        </dependency>
+        <!-- Explizit statt nur transitiv (ueber rdf4j) - #81: WARN-Log bei mehrwertigen,
+             stillschweigend auf den ersten Wert reduzierten Feldern (subdomain/ownedBy ohne
+             durchsetzbaren sh:maxCount). Version aus dem rdf4j-bom gemanaged. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- Test-only: KognioRdfTermLookup hardcodes the ubiquitous-language out-adapter's
+             private storage schema (graph IRI, skos:Concept, dcterms:identifier) with no
+             compile-time coupling between the two adapter modules. This dependency lets a schema
+             test write a term through the ul-BC's actual KognioRdfTermRepository and resolve it
+             through this module's actual KognioRdfTermLookup against the same store - the
+             substitute regression signal for a future schema drift (mirrors the requirements
+             adapter's KognioRdfTermLookupUbiquitousLanguageSchemaTest, issue #109). Transitively
+             pulls in arknet-ubiquitous-language-core (compile scope there) as a test-scope
+             dependency. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

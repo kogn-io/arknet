@@ -1,0 +1,460 @@
+package de.hauschel.arknet.bc.adapter.kogniordf;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.kogn.rdf.dataset.BindingSet;
+import io.kogn.rdf.dataset.DatasetHandle;
+import io.kogn.rdf.dataset.DatasetId;
+import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
+import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
+import io.kogn.rdf.terms.SimpleRdf;
+import io.kogn.rdf.terms.vocab.VocabDct;
+import io.kogn.rdf.terms.vocab.VocabRdf;
+
+import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.domain.BoundedContext;
+import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextId;
+import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
+import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.SparqlTerms;
+import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+
+/**
+ * Out-adapter: {@link BoundedContextRepository} backed by the kognio-rdf substrate
+ * ({@code io.kogn.rdf}, embeddable RDF dataset).
+ *
+ * <p>Maps a {@link BoundedContext} to its opaque {@link BoundedContextId} as the subject IRI
+ * (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
+ * business code), stored in one named graph shared by all bounded contexts: the type triple
+ * ({@code a arknet:BoundedContext}), the mandatory {@code dcterms:identifier} (the business code
+ * {@code BC-1}), {@code arknet:name} and {@code arknet:domainVision} literals, and up to two
+ * optional triples for {@code arknet:subdomain} (an IRI individual) and {@code arknet:ownedBy}
+ * (a literal), plus zero or more {@code arknet:ubiquitousLanguageTerm} edges. This class depends
+ * only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} -
+ * it never imports RDF4J. The backend ({@link DatasetLifecycle} implementation) is supplied by
+ * the composition root.</p>
+ *
+ * <p><strong>Create vs. update (opaque identity).</strong> {@link #create} and {@link #update}
+ * each check whether the subject already exists <em>inside</em> the write transaction (an
+ * {@code ASK}) before writing - not via a separate {@code findByCode} call beforehand, which
+ * would leave a check-then-act race. {@link #create} rejects an existing subject with
+ * {@link ResourceAlreadyExistsException} and, via a second {@code ASK} by
+ * {@code dcterms:identifier}, a business-code collision with
+ * {@link DuplicateBoundedContextCodeException}; {@link #update} rejects a missing one with
+ * {@link BoundedContextNotFoundException} and otherwise replaces the subject's triples
+ * wholesale.</p>
+ *
+ * <p><strong>Term references arrive pre-resolved (issue #62/#66).</strong> {@link TermRef}
+ * carries the term's opaque subject {@link ResourceId} directly - resolving a human-typed term
+ * code (e.g. {@code TERM-1}) against the shared workspace store, and rejecting an unknown or
+ * ambiguous code, is done once by {@link KognioRdfTermLookup} at the moment a term is linked (in
+ * the application service), not here on every write. Unlike the requirements adapter's
+ * {@code arkreq:usesTerm}, the {@code shapes:BoundedContextShape} places no {@code sh:class}
+ * constraint on {@code arknet:ubiquitousLanguageTerm}, so this adapter needs no validation-only
+ * asserted context for it - the plain {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)}
+ * suffices.</p>
+ *
+ * <p><strong>SHACL write-gate.</strong> Every write validates the candidate instance graph
+ * against the DDD SHACL shapes via {@link ShaclWriteGate} before starting the write transaction;
+ * a violation throws {@link WriteConstraintViolationException} and nothing is persisted.
+ * {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning}, not {@code sh:Violation}
+ * (issue #66): a store-first bounded context minted during analysis, before tactical design, has
+ * no aggregates yet, and that must not block the write.</p>
+ *
+ * <p><strong>Row multiplication (issue #81).</strong> {@code arknet:subdomain}'s
+ * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arknet:ownedBy} carries no
+ * {@code sh:maxCount} at all, so a store-first (ADR-005) bounded context with two triples on
+ * either predicate legally multiplies {@link #findAll}'s SPARQL rows for one subject.
+ * {@link #findAll} groups rows per subject and takes the first-seen value deterministically for
+ * each, logging a single {@code WARN} when more than one distinct value was collapsed.</p>
+ */
+public class KognioRdfBoundedContextRepository implements BoundedContextRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KognioRdfBoundedContextRepository.class);
+
+    private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
+    private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
+
+    private static final String BOUNDED_CONTEXT_TYPE = ARKNET_NAMESPACE + "BoundedContext";
+    private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
+    private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
+    private static final String DOMAIN_VISION_PROPERTY = ARKNET_NAMESPACE + "domainVision";
+    private static final String SUBDOMAIN_PROPERTY = ARKNET_NAMESPACE + "subdomain";
+    private static final String OWNED_BY_PROPERTY = ARKNET_NAMESPACE + "ownedBy";
+    private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ARKNET_NAMESPACE + "ubiquitousLanguageTerm";
+
+    private static final String CORE_DOMAIN = ARKNET_NAMESPACE + "CoreDomain";
+    private static final String SUPPORTING_DOMAIN = ARKNET_NAMESPACE + "SupportingDomain";
+    private static final String GENERIC_DOMAIN = ARKNET_NAMESPACE + "GenericDomain";
+
+    private final DatasetLifecycle lifecycle;
+    private final ShaclWriteGate gate;
+    private final RDF rdf = new SimpleRdf();
+
+    /**
+     * Creates the adapter.
+     *
+     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from (must not be
+     *                  {@code null})
+     * @param gate      the SHACL write-gate validating candidate graphs before persistence
+     *                  (must not be {@code null})
+     */
+    KognioRdfBoundedContextRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate) {
+        this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.gate = Objects.requireNonNull(gate, "gate");
+    }
+
+    @Override
+    public void create(WorkspaceId workspaceId, BoundedContext boundedContext) {
+        write(workspaceId, boundedContext, true);
+    }
+
+    @Override
+    public void update(WorkspaceId workspaceId, BoundedContext boundedContext) {
+        write(workspaceId, boundedContext, false);
+    }
+
+    private void write(WorkspaceId workspaceId, BoundedContext boundedContext, boolean expectAbsent) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(boundedContext, "boundedContext");
+
+        // ResourceId#of validates IRIREF-safety at construction, so the wrapped IRI is already
+        // guaranteed safe to embed here - no separate check needed.
+        String subjectIriString = boundedContext.id().value().value();
+        IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            List<IRI> termIris = boundedContext.usesTerms().stream()
+                    .map(this::termIriFor)
+                    .toList();
+            Graph graph = buildCandidateGraph(subjectIri, boundedContext, termIris);
+            gate.enforce(graph);
+
+            String askExists = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " ?p ?o } }";
+            String askCodeExists = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \""
+                    + SparqlTerms.escape(boundedContext.code().value()) + "\" } }";
+            IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
+
+            handle.transactor().inTransaction(tx -> {
+                boolean exists = tx.ask(askExists);
+                if (expectAbsent) {
+                    if (exists) {
+                        throw new ResourceAlreadyExistsException(workspaceId, boundedContext.id().value());
+                    }
+                    // Identity is opaque and unique by construction, but the human-readable code
+                    // is a separate triple this ASK alone cannot rule out - check it here, inside
+                    // the same write transaction, so no other create() can race in between.
+                    if (tx.ask(askCodeExists)) {
+                        throw new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code());
+                    }
+                } else if (!exists) {
+                    throw new BoundedContextNotFoundException(workspaceId, boundedContext.code());
+                }
+                replaceTriples(tx, graphIri, subjectIri, subject, graph, exists);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Builds the candidate graph for one bounded context's triples: type, identifier, name,
+     * domainVision, optional subdomain and ownedBy, and zero or more
+     * {@code arknet:ubiquitousLanguageTerm} edges to {@code termIris}.
+     */
+    private Graph buildCandidateGraph(IRI subjectIri, BoundedContext boundedContext, List<IRI> termIris) {
+        Graph graph = rdf.createGraph();
+        graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(BOUNDED_CONTEXT_TYPE));
+        graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(boundedContext.code().value()));
+        graph.add(subjectIri, rdf.createIRI(NAME_PROPERTY), rdf.createLiteral(boundedContext.name()));
+        graph.add(subjectIri, rdf.createIRI(DOMAIN_VISION_PROPERTY),
+                rdf.createLiteral(boundedContext.domainVision()));
+        if (boundedContext.subdomain() != null) {
+            graph.add(subjectIri, rdf.createIRI(SUBDOMAIN_PROPERTY),
+                    rdf.createIRI(subdomainIriFor(boundedContext.subdomain())));
+        }
+        if (boundedContext.ownedBy() != null) {
+            graph.add(subjectIri, rdf.createIRI(OWNED_BY_PROPERTY), rdf.createLiteral(boundedContext.ownedBy()));
+        }
+        for (IRI termIri : termIris) {
+            graph.add(subjectIri, rdf.createIRI(UBIQUITOUS_LANGUAGE_TERM_PROPERTY), termIri);
+        }
+        return graph;
+    }
+
+    /**
+     * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
+     * transaction. On an update it first captures the {@code arknet:ubiquitousLanguageTerm} edges
+     * whose target is not an IRI ({@link #readUsesTerms} can never read those, since
+     * {@link ResourceId} cannot represent a blank node) and re-attaches them after the rewrite -
+     * so a replace-by-identity write of a store-first (ADR-005) bounded context carries a
+     * blank-node edge along instead of erasing it (the same preservation the requirements adapter
+     * does for {@code arkreq:usesTerm}, issue #65).
+     */
+    private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
+            boolean exists) {
+        String selectUnjoinableTerms = "SELECT ?term WHERE { "
+                + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
+                + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } FILTER(!isIRI(?term)) }";
+        String deleteExisting = "DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + subject + " ?p ?o } }";
+
+        List<RDFTerm> unjoinableTerms = exists
+                ? tx.select(selectUnjoinableTerms).map(row -> termOf(row, "term")).toList()
+                : List.of();
+        if (exists) {
+            tx.update(deleteExisting);
+        }
+        tx.add(graphIri, graph);
+        if (!unjoinableTerms.isEmpty()) {
+            Graph preservedEdges = rdf.createGraph();
+            for (RDFTerm termNode : unjoinableTerms) {
+                preservedEdges.add(subjectIri, rdf.createIRI(UBIQUITOUS_LANGUAGE_TERM_PROPERTY), termNode);
+            }
+            tx.add(graphIri, preservedEdges);
+        }
+    }
+
+    @Override
+    public Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
+
+        String query = "SELECT ?s ?name ?domainVision ?subdomain ?ownedBy WHERE { GRAPH <"
+                + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
+                + "?s <" + NAME_PROPERTY + "> ?name . "
+                + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
+                + "OPTIONAL { ?s <" + SUBDOMAIN_PROPERTY + "> ?subdomain } "
+                + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
+            if (head.isEmpty()) {
+                return Optional.empty();
+            }
+            BindingSet row = head.get();
+            String subjectIriString = iriOf(row, "s").getIRIString();
+            return Optional.of(new BoundedContext(
+                    new BoundedContextId(ResourceId.of(subjectIriString)),
+                    code,
+                    literalOf(row, "name").getLexicalForm(),
+                    literalOf(row, "domainVision").getLexicalForm(),
+                    subdomainOf(row),
+                    ownedByOf(row),
+                    readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString))));
+        }
+    }
+
+    @Override
+    public List<BoundedContext> findAll(WorkspaceId workspaceId) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+
+        String query = "SELECT ?s ?identifier ?name ?domainVision ?subdomain ?ownedBy WHERE { GRAPH <"
+                + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "?s <" + NAME_PROPERTY + "> ?name . "
+                + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
+                + "OPTIONAL { ?s <" + SUBDOMAIN_PROPERTY + "> ?subdomain } "
+                + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
+            // Grouped by subject (issue #81): subdomain/ownedBy are OPTIONAL joins without an
+            // enforced sh:maxCount, so a store-first bounded context with two triples on either
+            // predicate binds a cross-product of rows for the same subject. Mapping each row
+            // straight to a BoundedContext would surface that subject more than once.
+            Map<String, BoundedContextAssembly> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                BoundedContextAssembly assembly = assemblyFor(bySubject, row);
+                assembly.addSubdomainCandidate(subdomainOf(row));
+                assembly.addOwnedByCandidate(ownedByOf(row));
+            });
+            return bySubject.entrySet().stream()
+                    .map(entry -> entry.getValue().toBoundedContext(
+                            termsBySubject.getOrDefault(entry.getKey(), List.of())))
+                    .toList();
+        }
+    }
+
+    private static BoundedContextAssembly assemblyFor(Map<String, BoundedContextAssembly> bySubject, BindingSet row) {
+        String subjectIri = iriOf(row, "s").getIRIString();
+        return bySubject.computeIfAbsent(subjectIri, iri -> new BoundedContextAssembly(
+                new BoundedContextId(ResourceId.of(iri)),
+                new BoundedContextCode(literalOf(row, "identifier").getLexicalForm()),
+                literalOf(row, "name").getLexicalForm(),
+                literalOf(row, "domainVision").getLexicalForm()));
+    }
+
+    /**
+     * Mutable per-subject accumulator collecting a bounded context's {@code subdomain} and
+     * {@code ownedBy} candidates across rows (issue #81), then choosing one of each
+     * deterministically (first-seen) when the bounded context is finally materialised, logging a
+     * {@code WARN} if more than one distinct value was collected for a field.
+     */
+    private static final class BoundedContextAssembly {
+
+        private final BoundedContextId id;
+        private final BoundedContextCode code;
+        private final String name;
+        private final String domainVision;
+        private final List<Subdomain> subdomains = new ArrayList<>();
+        private final List<String> ownedBys = new ArrayList<>();
+
+        private BoundedContextAssembly(BoundedContextId id, BoundedContextCode code, String name,
+                String domainVision) {
+            this.id = id;
+            this.code = code;
+            this.name = name;
+            this.domainVision = domainVision;
+        }
+
+        private void addSubdomainCandidate(Subdomain subdomain) {
+            if (subdomain != null) {
+                subdomains.add(subdomain);
+            }
+        }
+
+        private void addOwnedByCandidate(String ownedBy) {
+            if (ownedBy != null) {
+                ownedBys.add(ownedBy);
+            }
+        }
+
+        private BoundedContext toBoundedContext(List<TermRef> usesTerms) {
+            return new BoundedContext(id, code, name, domainVision,
+                    firstDistinct(subdomains, "subdomain"), firstDistinct(ownedBys, "ownedBy"), usesTerms);
+        }
+
+        private <T> T firstDistinct(List<T> candidates, String fieldName) {
+            if (candidates.isEmpty()) {
+                return null;
+            }
+            long distinctCount = candidates.stream().distinct().count();
+            if (distinctCount > 1) {
+                LOG.warn("BoundedContext {}: field '{}' had {} distinct values, returning the first",
+                        id.value().value(), fieldName, distinctCount);
+            }
+            return candidates.get(0);
+        }
+    }
+
+    // ---- ubiquitousLanguageTerm reading ------------------------------------------------
+
+    /**
+     * Reads the {@code arknet:ubiquitousLanguageTerm} edges of one bounded context back as term
+     * references. Ordered by target IRI (RDF has no intrinsic statement order and
+     * {@link BoundedContext} compares its {@code usesTerms} list positionally). A store-first
+     * blank-node target is excluded by {@code FILTER(isIRI(?term))} - it is preserved across an
+     * update by {@link #replaceTriples} but cannot be materialised into a {@link TermRef}.
+     */
+    private List<TermRef> readUsesTerms(Function<String, Stream<BindingSet>> selectFn, String subject) {
+        String query = "SELECT ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + subject + " <" + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } "
+                + "FILTER(isIRI(?term)) } ORDER BY ?term";
+        return selectFn.apply(query)
+                .map(row -> new TermRef(ResourceId.of(iriOf(row, "term").getIRIString())))
+                .toList();
+    }
+
+    /** Bulk variant of {@link #readUsesTerms}: all bounded contexts' term references in one query. */
+    private Map<String, List<TermRef>> readUsesTermsBySubject(DatasetHandle handle) {
+        String query = "SELECT ?s ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "?s <" + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } "
+                + "FILTER(isIRI(?term)) } ORDER BY ?s ?term";
+        Map<String, List<TermRef>> bySubject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> bySubject
+                .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
+                .add(new TermRef(ResourceId.of(iriOf(row, "term").getIRIString()))));
+        return bySubject;
+    }
+
+    /**
+     * Converts an already-resolved {@link TermRef} to an {@link IRI} for writing.
+     * {@link ResourceId#of(String)} validates IRIREF-safety at construction, so the wrapped IRI
+     * is already guaranteed safe here.
+     */
+    private IRI termIriFor(TermRef term) {
+        return rdf.createIRI(term.value().value());
+    }
+
+    // ---- helpers -----------------------------------------------------------------------
+
+    private static String subdomainIriFor(Subdomain subdomain) {
+        return switch (subdomain) {
+            case CORE_DOMAIN -> CORE_DOMAIN;
+            case SUPPORTING_DOMAIN -> SUPPORTING_DOMAIN;
+            case GENERIC_DOMAIN -> GENERIC_DOMAIN;
+        };
+    }
+
+    private static Subdomain subdomainFromIri(String iri) {
+        if (CORE_DOMAIN.equals(iri)) {
+            return Subdomain.CORE_DOMAIN;
+        }
+        if (SUPPORTING_DOMAIN.equals(iri)) {
+            return Subdomain.SUPPORTING_DOMAIN;
+        }
+        if (GENERIC_DOMAIN.equals(iri)) {
+            return Subdomain.GENERIC_DOMAIN;
+        }
+        throw new IllegalStateException("unexpected subdomain " + iri);
+    }
+
+    private static Subdomain subdomainOf(BindingSet row) {
+        return row.getValue("subdomain")
+                .map(value -> subdomainFromIri(((IRI) value).getIRIString()))
+                .orElse(null);
+    }
+
+    private static String ownedByOf(BindingSet row) {
+        return row.getValue("ownedBy")
+                .map(value -> ((Literal) value).getLexicalForm())
+                .orElse(null);
+    }
+
+    private static IRI iriOf(BindingSet row, String name) {
+        return (IRI) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    private static Literal literalOf(BindingSet row, String name) {
+        return (Literal) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /**
+     * Reads a binding as the bare {@link RDFTerm} it is, without narrowing it to {@link IRI} -
+     * used where the binding's kind is not known in advance (an
+     * {@code arknet:ubiquitousLanguageTerm} target may legally be a blank node).
+     */
+    private static RDFTerm termOf(BindingSet row, String name) {
+        return row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+}
