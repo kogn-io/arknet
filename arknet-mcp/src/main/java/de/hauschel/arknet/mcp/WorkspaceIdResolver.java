@@ -19,7 +19,10 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  *       (trimmed) if non-blank, so an operator can pin a stable workspace name in a
  *       project's {@code .mcp.json};</li>
  *   <li>otherwise the slugged directory name of the git top-level of the working
- *       directory (zero-config per git project);</li>
+ *       directory's <em>main</em> checkout - shared by every linked
+ *       {@code git worktree}, so a worktree lands on the same workspace/store as
+ *       its main checkout instead of an empty one of its own (#136) - (zero-config
+ *       per git project);</li>
  *   <li>otherwise the slugged working-directory name (non-git projects);</li>
  *   <li>otherwise {@link WorkspaceId#DEFAULT} (e.g. the filesystem root, which has no
  *       usable name).</li>
