@@ -1,0 +1,257 @@
+package de.hauschel.arknet.mcp.trace;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+
+import de.hauschel.arknet.mcp.store.RdfNode;
+import de.hauschel.arknet.mcp.store.StoreSnapshot;
+import de.hauschel.arknet.mcp.store.Triple;
+
+/**
+ * An in-memory directed multigraph over one workspace's statements, purpose-built for the
+ * cross-bounded-context edges the traceability tools traverse (issue #131):
+ * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
+ * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), and the two-hop
+ * {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
+ * (UseCase -&gt; Step -&gt; Requirement).
+ *
+ * <p>Built once per read from a {@link StoreSnapshot} - the same generic {@code SELECT ?s ?p
+ * ?o} {@link de.hauschel.arknet.mcp.store.StoreReader} already reads for {@code
+ * store_overview}/{@code resource_get} (ADR-006) - instead of three bespoke SPARQL
+ * property-path queries: at this project's single-user, local-store scale (ADR-001) an
+ * in-memory traversal over the full triple set is simpler and just as fast, and it keeps this
+ * class, like {@code StoreReader}, free of any RDF4J or further kognio-rdf dependency (it
+ * consumes only the neutral {@link Triple}/{@link RdfNode} model).</p>
+ *
+ * <p>Unlike {@code StoreReader}/{@code Prefixes}, this class is deliberately <em>not</em>
+ * domain-agnostic - it knows the {@code arkreq:}/{@code skos:} predicate and type IRIs it
+ * traverses. That is a bounded exception in the same spirit as {@code
+ * StoreResource#status()}/{@code #priority()} (issue #111): a fully generic "follow every
+ * object-typed predicate" traversal would report noise indistinguishable from the specific
+ * edges traceability cares about.</p>
+ */
+public final class TraceabilityGraph {
+
+    private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
+    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
+    private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
+    private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
+    private static final String SKOS_PREF_LABEL = SKOS_NAMESPACE + "prefLabel";
+
+    private static final String USES_TERM = ARKREQ_NAMESPACE + "usesTerm";
+    private static final String PRIMARY_ACTOR = ARKREQ_NAMESPACE + "primaryActor";
+    private static final String SUPPORTING_ACTOR = ARKREQ_NAMESPACE + "supportingActor";
+    private static final String MAIN_STEP = ARKREQ_NAMESPACE + "mainStep";
+    private static final String EXTENSION_STEP = ARKREQ_NAMESPACE + "extensionStep";
+    private static final String STEP_REALISES = ARKREQ_NAMESPACE + "stepRealises";
+
+    private static final String FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "FunctionalRequirement";
+    private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "NonFunctionalRequirement";
+    private static final String STEP_TYPE = ARKREQ_NAMESPACE + "Step";
+    private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
+
+    /**
+     * The predicates {@link #dependents(String)} follows backwards ("who references this").
+     * {@code mainStep}/{@code extensionStep} are in this set purely to hop a reached
+     * {@code arkreq:Step} back to its owning use case - a step itself is never reported (see
+     * {@link #dependents(String)}).
+     */
+    private static final Set<String> DEPENDENT_EDGE_PREDICATES =
+            Set.of(USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP);
+
+    private final Map<String, List<Triple>> outgoingBySubject;
+    private final Map<String, List<Triple>> incomingByObject;
+    private final Map<String, Set<String>> typesBySubject;
+    private final Map<String, String> identifierBySubject;
+    private final Map<String, String> labelBySubject;
+
+    private TraceabilityGraph(List<Triple> triples) {
+        Map<String, List<Triple>> outgoing = new LinkedHashMap<>();
+        Map<String, List<Triple>> incoming = new LinkedHashMap<>();
+        Map<String, Set<String>> types = new LinkedHashMap<>();
+        Map<String, String> identifiers = new LinkedHashMap<>();
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (Triple triple : triples) {
+            outgoing.computeIfAbsent(triple.subject(), s -> new ArrayList<>()).add(triple);
+            if (triple.object() instanceof RdfNode.Resource resourceObject) {
+                incoming.computeIfAbsent(resourceObject.iri(), s -> new ArrayList<>()).add(triple);
+                if (RDF_TYPE.equals(triple.predicate())) {
+                    types.computeIfAbsent(triple.subject(), s -> new LinkedHashSet<>()).add(resourceObject.iri());
+                }
+            } else if (triple.object() instanceof RdfNode.Literal literalObject) {
+                if (DCTERMS_IDENTIFIER.equals(triple.predicate())) {
+                    identifiers.putIfAbsent(triple.subject(), literalObject.lexicalForm());
+                } else if (DCTERMS_TITLE.equals(triple.predicate()) || SKOS_PREF_LABEL.equals(triple.predicate())) {
+                    labels.putIfAbsent(triple.subject(), literalObject.lexicalForm());
+                }
+            }
+        }
+        this.outgoingBySubject = Map.copyOf(outgoing);
+        this.incomingByObject = Map.copyOf(incoming);
+        Map<String, Set<String>> frozenTypes = new LinkedHashMap<>();
+        types.forEach((subject, values) -> frozenTypes.put(subject, Set.copyOf(values)));
+        this.typesBySubject = Map.copyOf(frozenTypes);
+        this.identifierBySubject = Map.copyOf(identifiers);
+        this.labelBySubject = Map.copyOf(labels);
+    }
+
+    /**
+     * Builds a graph from every statement of a workspace snapshot.
+     *
+     * @param snapshot the snapshot to traverse (as read by {@code StoreReader#readSnapshot})
+     * @return the assembled graph
+     */
+    public static TraceabilityGraph of(StoreSnapshot snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot");
+        List<Triple> triples = snapshot.resources().stream()
+                .flatMap(resource -> resource.outgoing().stream())
+                .toList();
+        return new TraceabilityGraph(triples);
+    }
+
+    /** @return the IRIs of every {@code arkreq:FunctionalRequirement}/{@code NonFunctionalRequirement}, sorted. */
+    public List<String> requirementIris() {
+        return subjectsOfType(FUNCTIONAL_REQUIREMENT_TYPE, NON_FUNCTIONAL_REQUIREMENT_TYPE);
+    }
+
+    /**
+     * @return the IRIs of every {@code skos:Concept} (glossary terms, including actor-facetted
+     *         ones - an actor remains a {@code skos:Concept}), sorted.
+     */
+    public List<String> termIris() {
+        return subjectsOfType(CONCEPT_TYPE);
+    }
+
+    /** @return the term IRIs a requirement uses via {@code arkreq:usesTerm}, sorted. */
+    public List<String> usedTerms(String requirementIri) {
+        Objects.requireNonNull(requirementIri, "requirementIri");
+        return outgoingBySubject.getOrDefault(requirementIri, List.of()).stream()
+                .filter(t -> USES_TERM.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * The use case(s) realising a requirement: hops from the requirement backwards through
+     * {@code arkreq:stepRealises} to the realising {@code arkreq:Step}(s), then backwards again
+     * through {@code arkreq:mainStep}/{@code arkreq:extensionStep} to the owning use case(s). A
+     * step is aggregate-internal (see CLAUDE.md's use-cases module note) and never itself
+     * returned - only the use case that owns it.
+     *
+     * @return the realising use-case IRIs, sorted, deduplicated
+     */
+    public List<String> realisingUseCases(String requirementIri) {
+        Objects.requireNonNull(requirementIri, "requirementIri");
+        List<String> steps = incomingByObject.getOrDefault(requirementIri, List.of()).stream()
+                .filter(t -> STEP_REALISES.equals(t.predicate()))
+                .map(Triple::subject)
+                .distinct()
+                .toList();
+        Set<String> useCases = new TreeSet<>();
+        for (String step : steps) {
+            incomingByObject.getOrDefault(step, List.of()).stream()
+                    .filter(t -> MAIN_STEP.equals(t.predicate()) || EXTENSION_STEP.equals(t.predicate()))
+                    .map(Triple::subject)
+                    .forEach(useCases::add);
+        }
+        return List.copyOf(useCases);
+    }
+
+    /**
+     * @return {@code true} if a term is used by a requirement ({@code arkreq:usesTerm}) or
+     *         plays an actor role in a use case ({@code arkreq:primaryActor}/
+     *         {@code arkreq:supportingActor})
+     */
+    public boolean isReferencedTerm(String termIri) {
+        Objects.requireNonNull(termIri, "termIri");
+        return incomingByObject.getOrDefault(termIri, List.of()).stream()
+                .anyMatch(t -> USES_TERM.equals(t.predicate()) || PRIMARY_ACTOR.equals(t.predicate())
+                        || SUPPORTING_ACTOR.equals(t.predicate()));
+    }
+
+    /**
+     * Transitive "who references this" closure: every resource reachable by following
+     * {@link #DEPENDENT_EDGE_PREDICATES} backwards from {@code targetIri} - i.e. what is
+     * affected when {@code targetIri} changes.
+     *
+     * <p>{@code arkreq:Step} nodes are traversed <em>through</em> (the
+     * {@code mainStep}/{@code extensionStep} hop needs them to reach the owning use case) but
+     * never appear in the returned set: a step is an aggregate-internal value object with no
+     * identity of its own, never a reportable "affected" artifact in its own right.</p>
+     *
+     * @return the transitively affected IRIs, sorted, deduplicated, excluding {@code targetIri}
+     *         itself and any {@code arkreq:Step}
+     */
+    public List<String> dependents(String targetIri) {
+        Objects.requireNonNull(targetIri, "targetIri");
+        Set<String> frontier = new HashSet<>();
+        frontier.add(targetIri);
+        Set<String> reported = new TreeSet<>();
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(targetIri);
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            for (Triple triple : incomingByObject.getOrDefault(current, List.of())) {
+                if (!DEPENDENT_EDGE_PREDICATES.contains(triple.predicate())) {
+                    continue;
+                }
+                String subject = triple.subject();
+                if (!frontier.add(subject)) {
+                    continue;
+                }
+                queue.add(subject);
+                if (!isType(subject, STEP_TYPE)) {
+                    reported.add(subject);
+                }
+            }
+        }
+        return List.copyOf(reported);
+    }
+
+    /** @return {@code true} if {@code iri} carries {@code typeIri} as one of its {@code rdf:type}s. */
+    public boolean isType(String iri, String typeIri) {
+        Objects.requireNonNull(iri, "iri");
+        Objects.requireNonNull(typeIri, "typeIri");
+        return typesBySubject.getOrDefault(iri, Set.of()).contains(typeIri);
+    }
+
+    /** @return every {@code rdf:type} IRI of {@code iri}, empty if untyped. */
+    public Set<String> typesOf(String iri) {
+        return typesBySubject.getOrDefault(Objects.requireNonNull(iri, "iri"), Set.of());
+    }
+
+    /** @return the {@code dcterms:identifier} of {@code iri} (its business code), if present. */
+    public Optional<String> identifierOf(String iri) {
+        return Optional.ofNullable(identifierBySubject.get(Objects.requireNonNull(iri, "iri")));
+    }
+
+    /** @return the {@code dcterms:title} or {@code skos:prefLabel} of {@code iri}, if present. */
+    public Optional<String> labelOf(String iri) {
+        return Optional.ofNullable(labelBySubject.get(Objects.requireNonNull(iri, "iri")));
+    }
+
+    private List<String> subjectsOfType(String... typeIris) {
+        Set<String> wanted = Set.of(typeIris);
+        return typesBySubject.entrySet().stream()
+                .filter(e -> !Collections.disjoint(e.getValue(), wanted))
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+    }
+}

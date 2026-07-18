@@ -21,6 +21,7 @@ import de.hauschel.arknet.bc.application.BoundedContextService;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
+import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfTermLookup;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
@@ -362,5 +363,18 @@ public class ArknetMcpConfiguration {
             @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path reportDir) {
         return new StoreReportTools(
                 storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceId, reportDir);
+    }
+
+    /**
+     * The three traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
+     * {@code impact_analysis}; issue #131). Reuses the very same {@link #storeReader}/
+     * {@link #storeReportPrefixes} beans as {@link #storeReportTools} instead of building a
+     * second {@link StoreReader} - one generic read path, two presentations over it (a
+     * full-snapshot digest vs. a graph traversal), per ADR-006.
+     */
+    @Bean
+    TraceabilityMcpTools traceabilityMcpTools(
+            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceId workspaceId) {
+        return new TraceabilityMcpTools(storeReader, prefixes, workspaceId);
     }
 }
