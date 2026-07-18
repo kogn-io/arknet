@@ -29,11 +29,12 @@ import java.util.Objects;
  *                          {@code null})
  * @param trigger           the event that starts the use case; optional (may be
  *                          {@code null})
- * @param primaryActor      the actor whose goal the use case serves, held as a
- *                          bare label reference
- * @param supportingActors  further participating actors; {@code 0..n}, held as
- *                          bare label references (never {@code null}; a
- *                          {@code null} argument is normalised to an empty list)
+ * @param primaryActor      the actor whose goal the use case serves, carried as the
+ *                          actor term's opaque subject identity - not as a business label
+ * @param supportingActors  further participating actors; {@code 0..n}, each carried as
+ *                          the actor term's opaque subject identity - not as a business
+ *                          label (never {@code null}; a {@code null} argument is
+ *                          normalised to an empty list)
  * @param precondition      what must hold before the use case runs; optional
  *                          (may be {@code null})
  * @param postcondition     what holds after a successful run; optional (may be
