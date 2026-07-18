@@ -51,6 +51,13 @@
             <groupId>org.eclipse.rdf4j</groupId>
             <artifactId>rdf4j-rio-turtle</artifactId>
         </dependency>
+        <!-- Explizit statt nur transitiv (ueber rdf4j) - #81: WARN-Log bei mehrwertigen,
+             stillschweigend auf den ersten Wert reduzierten Feldern (skos:definition ohne
+             sh:maxCount). Version aus dem rdf4j-bom gemanaged. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

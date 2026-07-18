@@ -381,6 +381,79 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
+    // ---- definition: row multiplication when skos:definition is repeated (issue #81) ----
+
+    /**
+     * Store-first regression test: {@code ulshapes:TermShape} places no {@code sh:maxCount} on
+     * {@code skos:definition}, so a subject with two definition literals (e.g. one per language)
+     * is shape-legal even though {@code term_add} never writes more than one. Before the fix,
+     * {@code assemblyFor} read {@code definition} only from the first SPARQL row bound for a
+     * subject via {@code computeIfAbsent} - correct by accident whenever the two definition rows
+     * happened to bind in insertion order, but silently dropping the second value regardless.
+     * This pins the outward-visible contract: neither read throws, and each returns one of the two
+     * values without crashing.
+     */
+    @Test
+    void findByCodeDoesNotThrowForATermWithTwoDefinitions() {
+        TermId id = freshId();
+        givenTermWithTwoDefinitions(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
+
+        Term found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow();
+
+        assertTrue(List.of("Erste Definition.", "Zweite Definition.").contains(found.definition()));
+    }
+
+    /** Same regression as above, exercised via the batch {@link TermRepository#findAll}. */
+    @Test
+    void findAllDoesNotThrowForATermWithTwoDefinitions() {
+        TermId id = freshId();
+        givenTermWithTwoDefinitions(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
+
+        List<Term> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertTrue(List.of("Erste Definition.", "Zweite Definition.").contains(all.get(0).definition()));
+    }
+
+    /**
+     * The chosen definition is deterministic across repeated reads against the same, unchanged
+     * store state - not merely "does not throw" - mirroring
+     * {@link #findByCodeFallsBackDeterministicallyAsLastResort}'s determinism check for the
+     * sibling {@code prefLabel} fallback.
+     */
+    @Test
+    void findByCodePicksTheSameDefinitionOnRepeatedReads() {
+        TermId id = freshId();
+        givenTermWithTwoDefinitions(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
+
+        String first = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().definition();
+        String second = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().definition();
+
+        assertEquals(first, second);
+    }
+
+    /**
+     * Writes a {@code skos:Concept} with two {@code skos:definition} literals straight into the
+     * terms graph - shape-legal ({@code ulshapes:TermShape} places no constraint on the property's
+     * cardinality), but unreachable via {@code term_add}/{@code term_update}, which only ever
+     * write one.
+     */
+    private void givenTermWithTwoDefinitions(
+            WorkspaceId workspaceId, TermId id, String code, String firstDefinition, String secondDefinition) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"" + firstDefinition + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"" + secondDefinition + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     // ---- findByIds: batch resolution for ResolveTerms (issue #77 nachtrag) --------------
 
     @Test
