@@ -486,6 +486,112 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
+    // ---- row multiplication on priority/qualityCategory (issue #81) ---------------------
+
+    /**
+     * Store-first regression test: {@code rshapes:Requirement-priority}'s {@code sh:maxCount 1} is
+     * {@code sh:Warning}-severity only, so it never blocks a write - a subject with two
+     * {@code arkreq:priority} triples is therefore reachable, even though {@code req_add}/
+     * {@code req_set_status} never write more than one. Before the fix, {@link #findAll} mapped
+     * every SPARQL row straight to a {@link Requirement} without grouping by subject, so the
+     * cross-product row multiplication surfaced the same {@code FR-1} twice in the result list -
+     * this pins that it now surfaces exactly once.
+     */
+    @Test
+    void findAllReturnsExactlyOneRequirementForASubjectWithTwoPriorities() {
+        RequirementId id = freshId();
+        givenRequirementWithTwoPriorities(WORKSPACE_A, id, "FR-1");
+
+        List<Requirement> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new RequirementCode("FR-1"), all.get(0).code());
+        assertTrue(List.of(Priority.MUST_HAVE, Priority.SHOULD_HAVE).contains(all.get(0).priority()));
+    }
+
+    /** The chosen priority is deterministic across repeated reads against the same store state. */
+    @Test
+    void findAllPicksTheSamePriorityOnRepeatedReads() {
+        RequirementId id = freshId();
+        givenRequirementWithTwoPriorities(WORKSPACE_A, id, "FR-1");
+
+        Priority first = repository.findAll(WORKSPACE_A).get(0).priority();
+        Priority second = repository.findAll(WORKSPACE_A).get(0).priority();
+
+        assertEquals(first, second);
+    }
+
+    /**
+     * {@code findByCode} deliberately stays untouched by the #81 fix (its single-row
+     * {@code findFirst()} is already internally consistent): this regression guard proves it still
+     * works for a requirement carrying an additional, unrelated {@code rdf:type} triple - the
+     * (store-first-only) case {@link #findByCode}'s now-explicit type {@code FILTER} was hardened
+     * against, so it must not reject or crash on a subject that is legitimately typed as a
+     * {@code FunctionalRequirement} plus something else.
+     */
+    @Test
+    void findByCodeStillWorksForARequirementWithAnAdditionalUnrelatedType() {
+        RequirementId id = freshId();
+        givenRequirementWithAnAdditionalType(WORKSPACE_A, id, "FR-1",
+                "https://w3id.org/arknet/architecture#Stakeholder");
+
+        Requirement found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertEquals(RequirementType.FUNCTIONAL, found.type());
+        assertEquals("Login", found.title());
+    }
+
+    /**
+     * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with two
+     * {@code arkreq:priority} triples - shape-legal (the property's {@code sh:maxCount 1} is
+     * {@code sh:Warning}-severity, so the write-gate never rejects it), but unreachable via
+     * {@code req_add}/{@code req_set_status}, which only ever write one.
+     */
+    private void givenRequirementWithTwoPriorities(WorkspaceId workspaceId, RequirementId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" ; "
+                + "<https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#MustHave> ; "
+                + "<https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave> "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with one
+     * additional, unrelated {@code rdf:type} triple - RDF-legal (nothing forbids a subject from
+     * carrying several types) and store-first (ADR-005) reachable, but unreachable via
+     * {@code req_add}, which types a requirement exactly once.
+     */
+    private void givenRequirementWithAnAdditionalType(
+            WorkspaceId workspaceId, RequirementId id, String code, String additionalTypeIri) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "a <" + additionalTypeIri + "> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     // ---- findByIds: batch resolution for ResolveRequirements (issue #88) ----------------
 
     @Test
