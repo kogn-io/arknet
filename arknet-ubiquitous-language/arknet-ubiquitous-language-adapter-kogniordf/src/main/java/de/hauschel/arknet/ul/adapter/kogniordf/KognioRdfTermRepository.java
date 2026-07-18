@@ -134,13 +134,9 @@ public class KognioRdfTermRepository implements TermRepository {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(term, "term");
 
-        // Defense-in-depth: ResourceId's own validation is looser than SPARQL's IRIREF grammar.
-        // Reject an impossible identity before it ever reaches SPARQL string concatenation.
+        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so term.id()'s
+        // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
         String subjectIriString = term.id().value().value();
-        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
-            throw new IllegalArgumentException(
-                    "term id yields an invalid IRI for SPARQL: " + subjectIriString);
-        }
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
         IRI schemeIri = rdf.createIRI(GLOSSARY_SCHEME);
@@ -285,17 +281,11 @@ public class KognioRdfTermRepository implements TermRepository {
             return List.of();
         }
 
-        // Defense-in-depth, same rationale as the subject check in write(): reject an impossible
-        // identity before it ever reaches SPARQL string concatenation.
+        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so every id here is
+        // already guaranteed safe to embed - restores ResolveTerms#getById's "never rejects"
+        // contract, which this used to violate by throwing on an impossible identity.
         String values = ids.stream()
-                .map(id -> {
-                    String iriString = id.value();
-                    if (!SparqlTerms.isValidIriReference(iriString)) {
-                        throw new IllegalArgumentException(
-                                "term id yields an invalid IRI for SPARQL: " + iriString);
-                    }
-                    return SparqlTerms.iriRef(iriString);
-                })
+                .map(id -> SparqlTerms.iriRef(id.value()))
                 .collect(Collectors.joining(" "));
 
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + TERMS_GRAPH + "> { "
