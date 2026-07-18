@@ -98,6 +98,19 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * dropped for lacking the requested language - only the shown language degrades. {@code findByIds}
  * (the {@link ResolveTerms} batch) is deliberately untouched: it joins only {@code identifier},
  * never {@code prefLabel}.</p>
+ *
+ * <p><strong>Blank-node subject guard (issue #104).</strong> {@code ulshapes:TermShape} carries no
+ * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first (ADR-005) concept whose
+ * subject is a blank node (e.g. {@code [] a skos:Concept ; skos:prefLabel "X" ; ...}) is
+ * SHACL-legal, even though {@link #create}/{@link #update} always mint an opaque IRI. {@code ?s} is
+ * the primary-entity subject here, not a reference-field target, but the same problem applies: the
+ * {@code IRI} cast in {@link #iriOf} throws on anything else. Unlike a reference field, though, a
+ * crashing primary subject takes the whole result list down with it - {@link #findByCode} and
+ * {@link #findAll} therefore add {@code FILTER(isIRI(?s))} (mirroring the {@code
+ * FILTER(isIRI(?target))} guard on cross-BC reference fields in the requirements/use-cases
+ * adapters) so such a concept is skipped rather than crashing every other term in the workspace.
+ * {@link #findByIds} needs no such filter: its subjects come from a {@code VALUES} clause bound to
+ * caller-supplied {@link ResourceId}s, which can never denote a blank node.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
 
@@ -224,6 +237,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" ; "
                 + "<" + PREF_LABEL_PROPERTY + "> ?prefLabel ; "
                 + "<" + DEFINITION_PROPERTY + "> ?definition . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
@@ -246,6 +260,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
                 + "?s <" + DEFINITION_PROPERTY + "> ?definition . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";

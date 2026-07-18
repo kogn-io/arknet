@@ -496,6 +496,57 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
+    // ---- blank-node subject guard (issue #104) -------------------------------------------
+
+    /**
+     * Store-first regression test (issue #104): {@code ulshapes:TermShape} carries no
+     * {@code sh:nodeKind sh:IRI} constraint on the subject, so a blank-node concept is
+     * SHACL-legal even though {@code term_add} always mints an IRI subject. Before the fix,
+     * the unguarded {@code (IRI) row.getValue("s")} cast in {@code iriOf} threw a
+     * {@code ClassCastException} that crashed {@code findAll} for the whole workspace, not just
+     * the offending term.
+     */
+    @Test
+    void findAllSkipsATermWithABlankNodeSubjectInsteadOfCrashing() {
+        Term validTerm = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        repository.create(WORKSPACE_A, validTerm);
+        givenBlankNodeTerm(WORKSPACE_A, "TERM-9", "Blinder Fleck", "def blank");
+
+        List<Term> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(List.of(validTerm), all);
+    }
+
+    /** Same guard, exercised through {@code findByCode} instead of {@code findAll}. */
+    @Test
+    void findByCodeReturnsEmptyForATermWithABlankNodeSubjectInsteadOfCrashing() {
+        givenBlankNodeTerm(WORKSPACE_A, "TERM-9", "Blinder Fleck", "def blank");
+
+        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-9"));
+
+        assertEquals(Optional.empty(), found);
+    }
+
+    /**
+     * Writes a {@code skos:Concept} with a blank-node subject straight into the terms graph -
+     * {@code ulshapes:TermShape} places no {@code sh:nodeKind sh:IRI} on the subject, so this is
+     * SHACL-legal store-first (ADR-005), even though {@code term_add} always mints an IRI
+     * subject via {@link de.hauschel.arknet.kernel.ResourceIdFactory}.
+     */
+    private void givenBlankNodeTerm(WorkspaceId workspaceId, String code, String prefLabel, String definition) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "[] a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"" + definition + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     private boolean subjectHasType(WorkspaceId workspaceId, TermId id, String typeIri) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <" + typeIri + "> } }";
