@@ -71,15 +71,21 @@ class DigestRendererTest {
 
     @Test
     void reportsDanglingReference() {
+        // Subjects and dangling targets are minted flat under the opaque /id/ base since the
+        // opaque-ResourceId refactor (#68/#71/#72) - the dead /model/ base used above is no
+        // longer produced by any write path and must not be what dangling detection keys on
+        // (#107).
+        String subject = OPAQUE + "11111111-1111-1111-1111-111111111111";
+        String danglingTarget = OPAQUE + "22222222-2222-2222-2222-222222222222";
         StoreSnapshot snapshot = StoreSnapshot.of(List.of(
-                iri(REQ + "FR-3", RDF_TYPE, ARKREQ + "FunctionalRequirement"),
-                lit(REQ + "FR-3", TITLE, "Export"),
-                iri(REQ + "FR-3", ARKREQ + "refinesTerm", TERM + "rezept")));
+                iri(subject, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(subject, TITLE, "Export"),
+                iri(subject, ARKREQ + "refinesTerm", danglingTarget)));
 
         String digest = renderer.render(new WorkspaceId("ws"), snapshot);
 
         assertThat(digest).contains("dangling reference(s)");
-        assertThat(digest).contains("req:FR-3").contains("term:rezept").contains("(missing)");
+        assertThat(digest).contains(subject).contains(danglingTarget).contains("(missing)");
     }
 
     private static Triple iri(String subject, String predicate, String objectIri) {

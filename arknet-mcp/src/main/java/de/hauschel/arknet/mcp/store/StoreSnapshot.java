@@ -129,7 +129,7 @@ public final class StoreSnapshot {
                 continue;
             }
             if (triple.object() instanceof RdfNode.Resource resource
-                    && resource.iri().startsWith(Prefixes.MODEL_INSTANCE_BASE)
+                    && resource.iri().startsWith(Prefixes.INSTANCE_BASE)
                     && !subjects.contains(resource.iri())) {
                 dangling.add(new DanglingRef(triple.subject(), triple.predicate(), resource.iri()));
             }
