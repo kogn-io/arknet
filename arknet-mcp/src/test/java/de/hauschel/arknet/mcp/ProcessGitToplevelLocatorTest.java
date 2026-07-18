@@ -3,8 +3,12 @@ package de.hauschel.arknet.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -58,6 +62,47 @@ class ProcessGitToplevelLocatorTest {
         assertThat(isProcessStillAlive(uniqueDurationMarker))
                 .as("the hanging process must have been force-killed on timeout, not merely abandoned")
                 .isFalse();
+    }
+
+    /**
+     * Regression test for #136: a linked {@code git worktree} must resolve to its
+     * <em>main</em> checkout's root, not its own worktree-local top-level - the
+     * bug that made a worktree land on an empty store of its own instead of the
+     * project's actual one.
+     */
+    @Test
+    void resolvesLinkedWorktreeToSameRootAsMainCheckout(@TempDir Path mainCheckout, @TempDir Path worktreeParent)
+            throws IOException, InterruptedException {
+        runGit(mainCheckout, "init", "--quiet");
+        runGit(mainCheckout, "config", "user.email", "test@example.invalid");
+        runGit(mainCheckout, "config", "user.name", "Test");
+        Files.writeString(mainCheckout.resolve("file.txt"), "content");
+        runGit(mainCheckout, "add", "file.txt");
+        runGit(mainCheckout, "commit", "--quiet", "-m", "initial");
+
+        Path worktree = worktreeParent.resolve("linked-worktree");
+        runGit(mainCheckout, "worktree", "add", "--quiet", worktree.toString(), "-b", "wt-branch");
+
+        ProcessGitToplevelLocator locator = new ProcessGitToplevelLocator();
+
+        assertThat(locator.toplevelOf(worktree))
+                .as("a linked worktree must resolve to its main checkout's root, not its own")
+                .isEqualTo(locator.toplevelOf(mainCheckout));
+    }
+
+    private static void runGit(Path workingDir, String... args) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of("git"));
+        command.addAll(List.of(args));
+        Process process = new ProcessBuilder(command)
+                .directory(workingDir.toFile())
+                .redirectErrorStream(true)
+                .start();
+        byte[] output = process.getInputStream().readAllBytes();
+        int exit = process.waitFor();
+        if (exit != 0) {
+            throw new IllegalStateException("git " + String.join(" ", args) + " failed with exit " + exit
+                    + ": " + new String(output, StandardCharsets.UTF_8));
+        }
     }
 
     private static boolean isProcessStillAlive(String uniqueDurationMarker) {

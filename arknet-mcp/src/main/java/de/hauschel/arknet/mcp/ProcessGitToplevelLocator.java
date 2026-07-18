@@ -9,11 +9,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * {@link GitToplevelLocator} that shells out to {@code git rev-parse --show-toplevel}.
+ * {@link GitToplevelLocator} that shells out to {@code git rev-parse --git-common-dir}.
  *
- * <p>Runs the command with {@code dir} as its working directory and returns the
- * reported top-level path. Any failure mode - {@code dir} not inside a git working
- * tree (non-zero exit), git not installed ({@link IOException} on start), or the
+ * <p>Runs the command with {@code dir} as its working directory and resolves the
+ * reported common-dir path (git prints it relative to {@code dir} when it lies
+ * beneath it, e.g. plain {@code .git} from a main checkout's own root - it prints
+ * an absolute path when invoked from a linked worktree) to an absolute path, then
+ * returns its parent: the main checkout's root. This is what makes a linked
+ * {@code git worktree} resolve to the same workspace as its main checkout instead
+ * of its own, worktree-local top-level (#136) - {@code --show-toplevel} would
+ * return the latter. Any failure mode - {@code dir} not inside a git working tree
+ * (non-zero exit), git not installed ({@link IOException} on start), or the
  * command not finishing within {@value #TIMEOUT_SECONDS} seconds - is mapped to
  * {@link Optional#empty()} so that workspace resolution degrades gracefully to a
  * directory-name fallback.</p>
@@ -36,7 +42,7 @@ public final class ProcessGitToplevelLocator implements GitToplevelLocator {
     private final List<String> command;
 
     public ProcessGitToplevelLocator() {
-        this(List.of("git", "rev-parse", "--show-toplevel"));
+        this(List.of("git", "rev-parse", "--git-common-dir"));
     }
 
     /**
@@ -77,7 +83,8 @@ public final class ProcessGitToplevelLocator implements GitToplevelLocator {
             if (process.exitValue() != 0 || output.isBlank()) {
                 return Optional.empty();
             }
-            return Optional.of(Path.of(output));
+            Path gitCommonDir = dir.resolve(output).normalize();
+            return Optional.ofNullable(gitCommonDir.getParent());
         } catch (IOException e) {
             return Optional.empty();
         } catch (InterruptedException e) {
