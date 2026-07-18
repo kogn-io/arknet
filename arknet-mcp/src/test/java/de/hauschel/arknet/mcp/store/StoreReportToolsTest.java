@@ -111,8 +111,8 @@ class StoreReportToolsTest {
      */
     @Test
     void resourceGetResolvesFullIriAndBareIdToTheSameResource() {
-        String viaIri = tools.resourceGet(FR_1_IRI);
-        String viaBareId = tools.resourceGet("FR-1");
+        String viaIri = tools.resourceGet(FR_1_IRI, null);
+        String viaBareId = tools.resourceGet("FR-1", null);
 
         assertThat(viaBareId).isEqualTo(viaIri);
         assertThat(viaIri).contains("dcterms:title").contains("\"Login\"");
@@ -121,7 +121,7 @@ class StoreReportToolsTest {
 
     @Test
     void resourceGetRejectsUnknownPrefixWithDidacticMessage() {
-        assertThatThrownBy(() -> tools.resourceGet("nope:X"))
+        assertThatThrownBy(() -> tools.resourceGet("nope:X", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown prefix")
                 .hasMessageContaining("Known prefixes");
@@ -129,8 +129,41 @@ class StoreReportToolsTest {
 
     @Test
     void resourceGetRejectsUnknownBareIdWithGuidance() {
-        assertThatThrownBy(() -> tools.resourceGet("FR-999"))
+        assertThatThrownBy(() -> tools.resourceGet("FR-999", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("No resource found");
+    }
+
+    /**
+     * Reproduces #106: {@code resource_get} used to ignore its workspace parameter entirely
+     * and always read {@code defaultWorkspaceId}, unlike {@code store_overview} which already
+     * honored an optional {@code workspace} argument. Two workspaces each carry a requirement
+     * with the SAME business code ("FR-1") but different identities/titles - a caller passing
+     * the other workspace's id must get that workspace's resource back, not a silent hit in
+     * the default workspace.
+     */
+    @Test
+    void resourceGetHonorsExplicitWorkspaceParameter() {
+        WorkspaceId otherWorkspace = new WorkspaceId("other-workspace");
+        String otherFr1Iri = "https://w3id.org/arknet/id/store-report-test-fr-1-other";
+
+        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        requirements.create(otherWorkspace, new Requirement(
+                new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
+                "The system shall authenticate a user in the other workspace.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
+                List.of("Login succeeds with valid credentials")));
+
+        try {
+            String fromOtherWorkspace = tools.resourceGet("FR-1", otherWorkspace.value());
+            String fromDefaultWorkspace = tools.resourceGet("FR-1", null);
+
+            assertThat(fromOtherWorkspace).contains("dcterms:title").contains("\"Andere Anmeldung\"");
+            assertThat(fromOtherWorkspace).doesNotContain("\"Login\"");
+            assertThat(fromDefaultWorkspace).contains("dcterms:title").contains("\"Login\"");
+            assertThat(fromDefaultWorkspace).doesNotContain("\"Andere Anmeldung\"");
+        } finally {
+            lifecycle.close(new DatasetId(otherWorkspace.value()));
+        }
     }
 }
