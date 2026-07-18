@@ -100,6 +100,17 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Persistence-Support: RDF4J-freie Technik-Bausteine. Der generische Store-Lesepfad
+             nutzt SparqlTerms (IRIREF-Serialisierung), der Traceability-Lesepfad zusaetzlich
+             ArkreqVocabulary (die geteilten arkreq:-Praedikat-IRIs, gemeinsame Quelle mit den
+             Out-Adaptern). Bislang nur transitiv ueber die *-adapter-kogniordf gezogen; hier
+             explizit deklariert, weil arknet-mcp direkt dagegen compiliert. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-support</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- kognio-rdf: nur die technologieneutralen Ports (terms + dataset). Der generische
              Store-Report-Lesepfad (store-Paket) fuehrt eine SELECT ?s ?p ?o gegen den geteilten
              DatasetLifecycle aus und liest BindingSet/RDFTerm - ohne direkte RDF4J-Abhaengigkeit.

@@ -29,6 +29,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -141,7 +142,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
 
     private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
-    private static final String USES_TERM_PROPERTY = ARKREQ_NAMESPACE + "usesTerm";
+    private static final String USES_TERM_PROPERTY = ArkreqVocabulary.USES_TERM;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "FunctionalRequirement";
     private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "NonFunctionalRequirement";

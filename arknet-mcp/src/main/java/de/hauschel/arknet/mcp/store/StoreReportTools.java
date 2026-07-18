@@ -70,9 +70,7 @@ public final class StoreReportTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = blankToNull(workspace) == null
-                ? defaultWorkspaceId
-                : new WorkspaceId(workspace.trim());
+        final WorkspaceId workspaceId = HandleResolver.resolveWorkspace(workspace, defaultWorkspaceId);
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(workspaceId);
         final String digest = digestRenderer.render(workspaceId, snapshot);
@@ -92,9 +90,7 @@ public final class StoreReportTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = blankToNull(workspace) == null
-                ? defaultWorkspaceId
-                : new WorkspaceId(workspace.trim());
+        final WorkspaceId workspaceId = HandleResolver.resolveWorkspace(workspace, defaultWorkspaceId);
         final String iri = handleResolver.resolve(workspaceId, id);
         final List<Triple> outgoing = storeReader.outgoing(workspaceId, iri);
         final List<Triple> incoming = storeReader.incoming(workspaceId, iri);
@@ -111,9 +107,5 @@ public final class StoreReportTools {
             throw new IllegalStateException("Failed to write store report to " + reportDir + ": "
                     + e.getMessage(), e);
         }
-    }
-
-    private static String blankToNull(final String value) {
-        return (value == null || value.isBlank()) ? null : value;
     }
 }

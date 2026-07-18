@@ -93,10 +93,6 @@ public final class TraceabilityMcpTools {
     }
 
     private WorkspaceId resolveWorkspace(final String workspace) {
-        return blankToNull(workspace) == null ? defaultWorkspaceId : new WorkspaceId(workspace.trim());
-    }
-
-    private static String blankToNull(final String value) {
-        return (value == null || value.isBlank()) ? null : value;
+        return HandleResolver.resolveWorkspace(workspace, defaultWorkspaceId);
     }
 }

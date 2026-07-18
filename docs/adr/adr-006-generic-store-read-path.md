@@ -89,6 +89,17 @@ wuerde Rauschen berichten, das von den tatsaechlich interessanten Kanten nicht z
 waere. Composition-Root-Reinheit (Entscheidungen 1 und 3) bleibt unangetastet -- kein eigener BC,
 derselbe geteilte `DatasetLifecycle`/`StoreReader`, keine RDF4J-Abhaengigkeit.
 
+Die sechs traversierten `arkreq:`-Praedikat-IRIs deklariert `TraceabilityGraph` **nicht** als
+eigene String-Literale, sondern bezieht sie aus `ArkreqVocabulary` in `arknet-persistence-support`
+-- derselben einzigen Quelle, aus der die `*-adapter-kogniordf`-Out-Adapter dieselben Kanten
+serialisieren (issue #134). Das sind RDF-Serialisierungskonstanten (die IRI-Form von
+Ontologie-Praedikaten), kein Domain-Vokabular: die BC-Cores sehen sie dank opaker Identitaet nie,
+sie wohnen darum bei der uebrigen RDF-Serialisierungs-Technik (`SparqlTerms`) und nicht im
+dependency-freien Kernel. Als reine `String`-Konstanten lassen sie `arknet-persistence-support`
+RDF4J-frei (ADR-007) und `TraceabilityGraph` neutral. Vorher hielt jede der drei Stellen eine
+eigene Kopie -- ein Praedikat-Rename kompilierte gruen weiter, liess die Traversierung die Kante
+aber still nicht mehr finden.
+
 **Handle-Vertrag (Entscheidung 4) wiederverwendet, nicht dupliziert:** die
 Resolutionslogik aus `StoreReportTools#resolveHandle` wurde nach `HandleResolver` extrahiert;
 `impact_analysis`s Zielparameter und `resource_get`s `id`-Parameter teilen sich jetzt dieselbe

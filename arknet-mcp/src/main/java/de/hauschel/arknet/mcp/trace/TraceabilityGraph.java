@@ -17,6 +17,7 @@ import java.util.TreeSet;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
  * An in-memory directed multigraph over one workspace's statements, purpose-built for the
@@ -50,12 +51,17 @@ public final class TraceabilityGraph {
     private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
     private static final String SKOS_PREF_LABEL = SKOS_NAMESPACE + "prefLabel";
 
-    private static final String USES_TERM = ARKREQ_NAMESPACE + "usesTerm";
-    private static final String PRIMARY_ACTOR = ARKREQ_NAMESPACE + "primaryActor";
-    private static final String SUPPORTING_ACTOR = ARKREQ_NAMESPACE + "supportingActor";
-    private static final String MAIN_STEP = ARKREQ_NAMESPACE + "mainStep";
-    private static final String EXTENSION_STEP = ARKREQ_NAMESPACE + "extensionStep";
-    private static final String STEP_REALISES = ARKREQ_NAMESPACE + "stepRealises";
+    // The traversed arkreq: object-property IRIs come from the single shared source of truth
+    // (arknet-persistence-support), the very same constants the requirements/use-cases
+    // out-adapters serialize them with - so a predicate rename cannot silently desync the
+    // write side from this read-side traversal (issue #134). The type IRIs below stay local:
+    // they are not cross-module-duplicated with a write adapter in the same way.
+    private static final String USES_TERM = ArkreqVocabulary.USES_TERM;
+    private static final String PRIMARY_ACTOR = ArkreqVocabulary.PRIMARY_ACTOR;
+    private static final String SUPPORTING_ACTOR = ArkreqVocabulary.SUPPORTING_ACTOR;
+    private static final String MAIN_STEP = ArkreqVocabulary.MAIN_STEP;
+    private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
+    private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
 
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "FunctionalRequirement";
     private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "NonFunctionalRequirement";
