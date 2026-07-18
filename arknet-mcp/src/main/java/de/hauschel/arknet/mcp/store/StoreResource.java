@@ -6,9 +6,13 @@ import java.util.Optional;
 
 /**
  * A single subject IRI together with its outgoing statements, plus a few generic display
- * helpers (rdf:type, label, status, priority). The helpers recognise well-known predicates
- * common across the arknet bounded contexts but never depend on a specific one - a resource
- * without any of them still renders, just with fewer hints.
+ * helpers (rdf:type, label, status, priority). {@link #label()} recognises well-known
+ * predicates common across the arknet bounded contexts (dcterms:title, skos:prefLabel,
+ * rdfs:label) and never depends on a specific one. {@link #status()}/{@link #priority()} are
+ * a deliberate, bounded exception: they hardcode the requirements-BC's
+ * {@code arkreq:status}/{@code arkreq:priority} predicates rather than a structural (e.g.
+ * SHACL-driven) mechanism (issue #111) - a resource without them, or a future BC's analogous
+ * field under a different namespace, still renders, just without that hint/pill.
  *
  * @param iri      the subject IRI
  * @param outgoing all statements whose subject is {@link #iri}

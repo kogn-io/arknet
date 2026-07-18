@@ -295,9 +295,13 @@ public class ArknetMcpConfiguration {
      * The two generic, read-only store tools ({@code store_overview}, {@code resource_get}).
      * They read the workspace dataset through {@link StoreReader} - a single generic
      * {@code SELECT ?s ?p ?o} - and render domain-agnostic views, so they work for every
-     * bounded context (requirements, ubiquitous-language, ...) without type-to-tool mapping.
-     * The HTML report is written into {@code arknet.report.dir} (default: the launched project
-     * root / working directory).
+     * bounded context (requirements, ubiquitous-language, ...) without type-to-tool mapping:
+     * every resource renders regardless of BC. One presentation nuance is bounded, not
+     * structural: {@link HtmlReportRenderer} and {@code StoreResource} hardcode the
+     * requirements-BC's {@code arkreq:status}/{@code arkreq:priority} predicates for "pill"
+     * styling (issue #111) - it affects only how those two predicates are styled, not which
+     * resources appear. The HTML report is written into {@code arknet.report.dir} (default:
+     * the launched project root / working directory).
      */
     @Bean
     StoreReportTools storeReportTools(
