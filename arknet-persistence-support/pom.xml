@@ -27,5 +27,10 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-shared-kernel</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
