@@ -77,14 +77,18 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@link TermNotFoundException}. An {@link #update} otherwise replaces the subject's triples
  * wholesale (the same replace-by-identity mechanic the previous save-only contract used).</p>
  *
- * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
- * {@code ASK} in the same transaction - by {@code dcterms:identifier}, not by subject - and
- * rejects a match with {@link DuplicateTermCodeException}. This is deliberately a separate check
- * and a separate exception from {@link ResourceAlreadyExistsException}: an opaque-identity
- * collision is a programming error (identities are minted once and never reused), while a
- * business-code collision (two terms both claiming {@code TERM-1}) is an expected, rejectable
- * outcome a human can cause - and one a sibling bounded context relies on being unique, since
- * {@code arkreq:usesTerm} resolves a term by its {@code dcterms:identifier} (#36).</p>
+ * <p><strong>Identity collision vs. code collision.</strong> Both {@link #create} and
+ * {@link #update} run a second {@code ASK} in the same transaction - by {@code dcterms:identifier},
+ * not by subject - and reject a match with {@link DuplicateTermCodeException} (issue #114:
+ * {@link #update} used to skip this check entirely, letting two subjects end up sharing one code).
+ * The {@code ASK} excludes the subject being written itself, so {@link #update} may always keep a
+ * term's own existing code - only a collision with an <em>other</em> subject's code is rejected.
+ * This is deliberately a separate check and a separate exception from
+ * {@link ResourceAlreadyExistsException}: an opaque-identity collision is a programming error
+ * (identities are minted once and never reused), while a business-code collision (two terms both
+ * claiming {@code TERM-1}) is an expected, rejectable outcome a human can cause - and one a
+ * sibling bounded context relies on being unique, since {@code arkreq:usesTerm} resolves a term by
+ * its {@code dcterms:identifier} (#36).</p>
  *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the ubiquitous-language SHACL shapes via {@link ShaclWriteGate} before starting the
@@ -211,8 +215,11 @@ public class KognioRdfTermRepository implements TermRepository {
         gate.enforce(graph);
 
         String askExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
+        // Excludes the subject being written itself, so a term is always allowed to keep its own
+        // existing code on update() - only a collision with an *other* subject's code is rejected.
         String askCodeExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.code().value()) + "\" } }";
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.code().value()) + "\" . "
+                + "FILTER(?s != " + subject + ") } }";
         String deleteExisting = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
         IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
@@ -223,14 +230,16 @@ public class KognioRdfTermRepository implements TermRepository {
                     if (exists) {
                         throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
                     }
-                    // Identity is opaque and unique by construction, but the human-readable code
-                    // is a separate triple this ASK alone cannot rule out - check it here, inside
-                    // the same write transaction, so no other create() can race in between.
-                    if (tx.ask(askCodeExists)) {
-                        throw new DuplicateTermCodeException(workspaceId, term.code());
-                    }
                 } else if (!exists) {
                     throw new TermNotFoundException(workspaceId, term.code());
+                }
+                // Identity is opaque and unique by construction, but the human-readable code is a
+                // separate triple this ASK alone cannot rule out - check it here, inside the same
+                // write transaction, so no other create()/update() can race in between. Applies to
+                // both create() and update(): the FILTER above excludes the subject's own (about
+                // to be replaced) code triple, so update() keeping its own code never false-trips.
+                if (tx.ask(askCodeExists)) {
+                    throw new DuplicateTermCodeException(workspaceId, term.code());
                 }
                 if (exists) {
                     tx.update(deleteExisting);
