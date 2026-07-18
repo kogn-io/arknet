@@ -3,9 +3,15 @@ package de.hauschel.arknet.req.adapter.kogniordf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Literal;
 import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+import org.eclipse.rdf4j.model.vocabulary.RDFS;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
 
@@ -19,6 +25,11 @@ import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
+import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
  * Assembles a {@link KognioRdfRequirementRepository} over a concrete kognio-rdf
@@ -38,6 +49,7 @@ public final class KognioRdfRequirementRepositoryFactory {
 
     private static final String SHAPES_RESOURCE = "/requirements-shapes.ttl";
     private static final String AXIOMS_RESOURCE = "/arknet-requirements.ttl";
+    private static final String REQUIREMENTS_NS = "https://w3id.org/arknet/requirements#";
 
     private KognioRdfRequirementRepositoryFactory() {
     }
@@ -108,11 +120,60 @@ public final class KognioRdfRequirementRepositoryFactory {
         return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true));
     }
 
+    /**
+     * Builds the {@code arkreq:} requirement vocabulary as data (issue #31): one
+     * {@link RequirementSchemaTerm} each for {@code RequirementType}, {@code RequirementStatus}
+     * and {@code Priority}, carrying its ontology-sourced ({@code arknet-requirements.ttl})
+     * class-level {@code rdfs:comment}{@code @de} as definition and the exact values the
+     * corresponding Java domain enum accepts - deliberately not the ontology's own (richer)
+     * {@code sh:in} SHACL enumeration, so a caller is never told a value
+     * {@code req_add}/{@code req_set_status} would actually reject (see
+     * {@link RequirementSchemaTerm}). There is no standalone {@code arkreq:RequirementType}
+     * class in the ontology, so the {@code RequirementType} term reuses the base
+     * {@code arkreq:Requirement} class's comment.
+     *
+     * <p>Parses the ontology once and returns an already-built, immutable list captured by a
+     * lambda that itself references no RDF4J type - this method stays the only place in the
+     * package naming RDF4J, exactly like {@link #buildGate()}.</p>
+     *
+     * @return a ready-to-use {@link RequirementSchemaSource}
+     */
+    public static RequirementSchemaSource buildSchemaSource() {
+        Model model = parseModel(AXIOMS_RESOURCE);
+        List<RequirementSchemaTerm> terms = List.of(
+                schemaTerm(model, "RequirementType", "Requirement", RequirementType.values()),
+                schemaTerm(model, "RequirementStatus", "RequirementStatus", RequirementStatus.values()),
+                schemaTerm(model, "Priority", "Priority", Priority.values()));
+        return () -> terms;
+    }
+
+    private static <E extends Enum<E>> RequirementSchemaTerm schemaTerm(
+            Model model, String term, String ontologyClassLocalName, E[] values) {
+        String definition = classComment(model, ontologyClassLocalName);
+        List<String> valueNames = Arrays.stream(values).map(Enum::name).toList();
+        return new RequirementSchemaTerm(term, definition, valueNames);
+    }
+
+    /** Looks up the (single, {@code @de}) class-level {@code rdfs:comment} of {@code arkreq:<localName>}. */
+    private static String classComment(Model model, String localName) {
+        IRI subject = SimpleValueFactory.getInstance().createIRI(REQUIREMENTS_NS, localName);
+        return model.filter(subject, RDFS.COMMENT, null).objects().stream()
+                .filter(Literal.class::isInstance)
+                .map(Literal.class::cast)
+                .filter(literal -> literal.getLanguage().map("de"::equals).orElse(false))
+                .map(Literal::stringValue)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("missing @de rdfs:comment for " + subject));
+    }
+
     private static ReadableGraph loadGraph(String classpathResource) {
+        return new RDF4JGraph(parseModel(classpathResource));
+    }
+
+    private static Model parseModel(String classpathResource) {
         try (InputStream in = KognioRdfRequirementRepositoryFactory.class.getResourceAsStream(classpathResource)) {
             Objects.requireNonNull(in, "missing classpath resource " + classpathResource);
-            Model model = Rio.parse(in, "", RDFFormat.TURTLE);
-            return new RDF4JGraph(model);
+            return Rio.parse(in, "", RDFFormat.TURTLE);
         } catch (IOException e) {
             throw new IllegalStateException("failed to load " + classpathResource, e);
         }
