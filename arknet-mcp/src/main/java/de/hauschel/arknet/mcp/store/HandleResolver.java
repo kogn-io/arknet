@@ -84,4 +84,23 @@ public final class HandleResolver {
         }
         return matches.get(0);
     }
+
+    /**
+     * Resolves the optional {@code workspace} argument every read tool accepts to a concrete
+     * {@link WorkspaceId}: the trimmed value when present, otherwise the server's default. Shared
+     * by {@link StoreReportTools} ({@code store_overview}/{@code resource_get}) and the
+     * traceability tools ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}),
+     * which each expose the same optional-workspace parameter, instead of each carrying its own
+     * copy of the blank-check-and-default fallback.
+     *
+     * @param workspace          the raw tool argument, may be {@code null} or blank
+     * @param defaultWorkspaceId the workspace used when {@code workspace} is null or blank
+     * @return the resolved workspace id
+     */
+    public static WorkspaceId resolveWorkspace(String workspace, WorkspaceId defaultWorkspaceId) {
+        Objects.requireNonNull(defaultWorkspaceId, "defaultWorkspaceId");
+        return (workspace == null || workspace.isBlank())
+                ? defaultWorkspaceId
+                : new WorkspaceId(workspace.trim());
+    }
 }
