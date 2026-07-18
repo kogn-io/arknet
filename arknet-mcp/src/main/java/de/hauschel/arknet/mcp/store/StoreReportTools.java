@@ -88,8 +88,13 @@ public final class StoreReportTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String resourceGet(
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
-            final String id) {
-        final WorkspaceId workspaceId = defaultWorkspaceId;
+            final String id,
+            @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
+                    required = false)
+            final String workspace) {
+        final WorkspaceId workspaceId = blankToNull(workspace) == null
+                ? defaultWorkspaceId
+                : new WorkspaceId(workspace.trim());
         final String iri = resolveHandle(workspaceId, id);
         final List<Triple> outgoing = storeReader.outgoing(workspaceId, iri);
         final List<Triple> incoming = storeReader.incoming(workspaceId, iri);
