@@ -399,6 +399,93 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
+    /**
+     * Store-first regression test (issue #103): two {@code arkreq:acceptanceCriterion} literals
+     * with the same lexical form but different language tags read back as duplicate strings,
+     * because {@link #readAcceptanceCriteria} reads them via {@code literalOf(...).getLexicalForm()}
+     * - which discards the language tag. {@link Requirement}'s constructor rejects duplicate
+     * acceptance criteria unconditionally, so before the fix this crashed {@code findByCode}
+     * instead of returning the requirement, exactly the way #91's all-empty case used to.
+     */
+    @Test
+    void findByCodeDeduplicatesAcceptanceCriteriaDifferingOnlyByLanguageTag() {
+        RequirementId id = freshId();
+        givenRequirementWithDuplicateAcceptanceCriterionByLanguageTag(WORKSPACE_A, id, "FR-1");
+
+        Requirement found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertEquals(List.of("Login succeeds with valid credentials"), found.acceptanceCriteria());
+    }
+
+    /**
+     * Same defect as {@link #findByCodeDeduplicatesAcceptanceCriteriaDifferingOnlyByLanguageTag},
+     * exercised via the batch {@link RequirementRepository#findAll} - a whitespace-only literal
+     * alongside a valid one is the "blank entry" half of the reachable state, rather than the
+     * "duplicate entry" half.
+     */
+    @Test
+    void findAllFiltersOutABlankAcceptanceCriterionAlongsideAValidOne() {
+        RequirementId id = freshId();
+        givenRequirementWithBlankAndValidAcceptanceCriterion(WORKSPACE_A, id, "FR-1");
+
+        List<Requirement> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertEquals(List.of("Login succeeds with valid credentials"), all.get(0).acceptanceCriteria());
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
+     * graph with two {@code arkreq:acceptanceCriterion} literals sharing one lexical form but
+     * carrying different language tags - {@code RequirementShape} places no constraint ruling
+     * this out, and {@code req_add} cannot produce it (it writes plain literals, no language
+     * tag), so this is reachable only store-first (ADR-005).
+     */
+    private void givenRequirementWithDuplicateAcceptanceCriterionByLanguageTag(WorkspaceId workspaceId,
+            RequirementId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\"@en , \"Login succeeds with valid credentials\"@de "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
+     * graph with one valid {@code arkreq:acceptanceCriterion} literal and one whitespace-only
+     * one - {@code RequirementShape} places no {@code sh:pattern}/blank-rejection on the
+     * property, and {@link Requirement}'s constructor is the only place that rejects blanks, so
+     * this is reachable only store-first (ADR-005).
+     */
+    private void givenRequirementWithBlankAndValidAcceptanceCriterion(WorkspaceId workspaceId, RequirementId id,
+            String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" , \"   \" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     // ---- findByIds: batch resolution for ResolveRequirements (issue #88) ----------------
 
     @Test

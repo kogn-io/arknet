@@ -141,6 +141,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * throw for every such pre-existing requirement instead of returning it. Substituting here,
      * at the adapter boundary, keeps that domain invariant intact (it never sees an empty list)
      * while surfacing the gap instead of crashing.
+     *
+     * <p>Since issue #103 this same substitution also catches the case where the read result is
+     * non-empty yet still constructor-illegal after {@link #sanitizeAcceptanceCriteria}
+     * filters/dedupes it down to nothing - see that method's javadoc.</p>
      */
     private static final List<String> LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER =
             List.of("(Altdatensatz vor #91 - kein Akzeptanzkriterium hinterlegt)");
@@ -528,12 +532,38 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Substitutes {@link #LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER} for an empty read result - see
-     * that constant's javadoc for why an empty list must never reach {@link Requirement}'s
-     * constructor.
+     * Substitutes {@link #LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER} for a read result that is
+     * empty, or becomes empty once {@link #sanitizeAcceptanceCriteria} has filtered/deduped it -
+     * see that method's and the placeholder constant's javadoc for why an empty list must never
+     * reach {@link Requirement}'s constructor.
      */
     private static List<String> acceptanceCriteriaOrLegacyPlaceholder(List<String> criteria) {
-        return criteria.isEmpty() ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER : criteria;
+        List<String> sanitized = sanitizeAcceptanceCriteria(criteria);
+        return sanitized.isEmpty() ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER : sanitized;
+    }
+
+    /**
+     * Filters blank entries and deduplicates by lexical form - issue #103. {@link
+     * #readAcceptanceCriteria}/{@link #readAcceptanceCriteriaBySubject} read each {@code
+     * arkreq:acceptanceCriterion} literal via {@code literalOf(...).getLexicalForm()}, which
+     * discards its language tag and datatype; {@code RequirementShape} places no {@code
+     * sh:languageIn}/uniqueness constraint on the property, so a store-first (ADR-005) requirement
+     * can legally carry two literals that normalize to the same string (e.g. the same text tagged
+     * {@code @en} and {@code @de}) or a whitespace-only literal alongside a valid one. {@link
+     * Requirement}'s constructor rejects both a duplicate and a blank entry unconditionally, so
+     * without this step {@link #findByCode}/{@link #findAll} would throw for such a requirement
+     * instead of returning it - the same read-path-crashes-on-write-time-only-invariant class of
+     * bug #91 already fixed for the all-empty case, one level deeper: here the list is non-empty
+     * yet still constructor-illegal. {@code distinct()} keeps the first occurrence in the query's
+     * {@code ORDER BY ?criterion} order, so which of two colliding literals "wins" is deterministic
+     * per read but otherwise unspecified - store-first duplicate/blank criteria are a gap to
+     * surface, not a case worth resolving more cleverly than that.
+     */
+    private static List<String> sanitizeAcceptanceCriteria(List<String> criteria) {
+        return criteria.stream()
+                .filter(criterion -> !criterion.isBlank())
+                .distinct()
+                .toList();
     }
 
     /**
