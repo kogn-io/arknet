@@ -39,8 +39,10 @@ import com.tngtech.archunit.lang.ArchRule;
  * covered: ArchUnit fails a rule whose {@code that()} clause matches nothing, so a broken
  * classpath surfaces as a failure rather than a vacuous pass. For the former, break the
  * invariant on purpose -- add a {@code private org.eclipse.rdf4j.model.Model x;} field to
- * {@code ShaclWriteGate} (rule 1) or to a {@code KognioRdf*Repository} (rule 2) -- and confirm
- * the rule fails before trusting it. All three were confirmed to fail this way when introduced.</p>
+ * {@code ShaclWriteGate} (rule 1), to a {@code KognioRdf*Repository} (rule 2), to a
+ * {@code *-core} class (rule 3), or to a {@code *-adapter-mcp} class (rule 4) -- and confirm
+ * the rule fails before trusting it. All four were confirmed to fail this way when
+ * introduced.</p>
  *
  * <p><strong>Why tests are excluded.</strong> The rules describe production code. Test code
  * legitimately reaches for concrete technology -- the {@code KognioRdf*RepositoryTest} classes
@@ -129,4 +131,27 @@ class DependencyRulesTest {
                             "org.eclipse.rdf4j..", "io.kogn..")
                     .because("domain and application layers of a bounded context are "
                             + "technology-neutral; RDF is an out-adapter concern");
+
+    /**
+     * Rule 4 -- the driving (In-) adapters stay technology-free too, mirroring rule 3's claim
+     * for the opposite side of the hexagon.
+     *
+     * <p>{@code ..adapter..} in rule 3's exclusion covers both the out-adapters (which need
+     * RDF4J -- that is their job) and the in-adapters (which do not: {@code *-adapter-mcp}
+     * translates MCP tool calls into its own bounded context's in-port, nothing more). Rule 3
+     * therefore leaves the in-adapters unguarded against reaching straight past their own
+     * hexagon into RDF4J or {@code io.kogn} instead of going through the out-port/service. This
+     * does not forbid an in-adapter depending on a neighbour bounded context's in-port (ADR-008,
+     * e.g. {@code arknet-requirements-adapter-mcp} on {@code arknet-ubiquitous-language-core}'s
+     * {@code ResolveTerms}) -- that neighbour port is domain-level, not RDF technology.</p>
+     */
+    @ArchTest
+    static final ArchRule driving_adapters_stay_free_of_rdf_technology =
+            noClasses()
+                    .that().resideInAPackage("..adapter.mcp..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.eclipse.rdf4j..", "io.kogn..")
+                    .because("a driving MCP adapter talks to its own bounded context through "
+                            + "its in-port (or, per ADR-008, a neighbour's in-port); RDF is an "
+                            + "out-adapter concern");
 }
