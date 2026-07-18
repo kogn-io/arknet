@@ -23,10 +23,16 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write # noetig fuer den Tag-Push ueber den von checkout gesetzten Token
+
 jobs:
   release:
     runs-on: main
     steps:
+      - name: git installieren (Default-Image node:lts-alpine bringt keins mit)
+        run: apk add --no-cache git
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
