@@ -370,6 +370,87 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, orphanCode));
     }
 
+    /**
+     * Regression test (issue #102, Befund 1): {@code arkreq:mainStep} is only
+     * {@code sh:Warning} severity at {@code sh:minCount 1} in the SHACL shapes, so
+     * {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case with zero main-step
+     * triples through. Reading such a use case back must not let {@link UseCase}'s "at least one
+     * step" invariant throw out of {@code readBySubject} - mirroring the blank-node
+     * {@code primaryActor} guard, the malformed use case is treated as "not found" rather than
+     * crashing the rest of {@link UseCaseRepository#findAll}'s result list.
+     */
+    @Test
+    void findAllSkipsUseCaseWithNoStepsInsteadOfFailingTheWholeList() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
+
+        UseCaseCode noStepsCode = new UseCaseCode("UC-NO-STEPS");
+        seed(WORKSPACE_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-no-steps> "
+                        + "a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/title> \"No steps use case\" ; "
+                        + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
+                        + "<https://w3id.org/arknet/requirements#primaryActor> "
+                        + "<" + CUSTOMER.value().value() + "> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + noStepsCode.value() + "\" .");
+
+        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        assertEquals(1, all.size());
+        assertEquals(CODE_1, all.get(0).code());
+
+        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, noStepsCode));
+    }
+
+    /**
+     * Regression test (issue #102, Befund 2): nothing in SHACL prevents two distinct
+     * {@code arkreq:Step} nodes under the same use case's {@code arkreq:mainStep} from sharing
+     * the same {@code arkreq:position} - uniqueness is only enforced in-process by
+     * {@code UseCase.requireConsecutiveStepPositions}, and store-first data (ADR-005) never runs
+     * through that. Correlating a step's {@code arkreq:stepRealises} edges by the derived
+     * position integer instead of the step's own IRI would silently merge the two steps'
+     * requirement references under one key, then throw a duplicate-position
+     * {@link IllegalArgumentException} out of {@link UseCase}'s constructor - crashing the rest
+     * of {@link UseCaseRepository#findAll}'s result list, the same class of bug issue #89 already
+     * fixed for {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.
+     */
+    @Test
+    void findAllSkipsUseCaseWithDuplicateStepPositionsInsteadOfFailingTheWholeList() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
+
+        UseCaseCode duplicatePositionCode = new UseCaseCode("UC-DUP-POSITION");
+        seed(WORKSPACE_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-dup-position> "
+                        + "a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/title> \"Duplicate position use case\" ; "
+                        + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Some goal\" ; "
+                        + "<https://w3id.org/arknet/requirements#primaryActor> "
+                        + "<" + CUSTOMER.value().value() + "> ; "
+                        + "<https://w3id.org/arknet/requirements#mainStep> "
+                        + "<https://w3id.org/arknet/id/uc-dup-position-step-1> , "
+                        + "<https://w3id.org/arknet/id/uc-dup-position-step-2> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + duplicatePositionCode.value() + "\" .");
+        seed(WORKSPACE_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-dup-position-step-1> "
+                        + "a <https://w3id.org/arknet/requirements#Step> ; "
+                        + "<https://w3id.org/arknet/requirements#position> \"1\"^^<"
+                        + XSD.INTEGER + "> ; "
+                        + "<https://w3id.org/arknet/requirements#stepText> \"Customer selects items\" ; "
+                        + "<https://w3id.org/arknet/requirements#stepRealises> <" + FR_1.value() + "> .");
+        seed(WORKSPACE_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-dup-position-step-2> "
+                        + "a <https://w3id.org/arknet/requirements#Step> ; "
+                        + "<https://w3id.org/arknet/requirements#position> \"1\"^^<"
+                        + XSD.INTEGER + "> ; "
+                        + "<https://w3id.org/arknet/requirements#stepText> \"Customer confirms and pays\" .");
+
+        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        assertEquals(1, all.size());
+        assertEquals(CODE_1, all.get(0).code());
+
+        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, duplicatePositionCode));
+    }
+
     @Test
     void createRejectsStepViolatingShaclShapes() {
         seedRequirement(WORKSPACE_A, "FR-1");
