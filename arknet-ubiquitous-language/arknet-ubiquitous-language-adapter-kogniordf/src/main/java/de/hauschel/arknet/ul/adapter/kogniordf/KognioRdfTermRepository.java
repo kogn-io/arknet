@@ -8,6 +8,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
@@ -111,8 +114,20 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * adapters) so such a concept is skipped rather than crashing every other term in the workspace.
  * {@link #findByIds} needs no such filter: its subjects come from a {@code VALUES} clause bound to
  * caller-supplied {@link ResourceId}s, which can never denote a blank node.</p>
+ *
+ * <p><strong>Row multiplication on {@code skos:definition} (issue #81).</strong> Like
+ * {@code prefLabel}, {@code skos:definition} carries no {@code sh:maxCount} in {@code ulshapes} -
+ * a store-first (ADR-005) concept with two definition literals (e.g. one per language) legally
+ * multiplies a subject into two SPARQL rows. Unlike {@code prefLabel}, there is no
+ * {@link DisplayLocale} guarantee for {@code definition} (deliberately out of #80's scope), so
+ * {@link #findByCode}/{@link #findAll} instead take the first-seen value deterministically (stable
+ * because the grouping map preserves row insertion order) and log a single {@code WARN} per
+ * assembled {@link Term} when more than one distinct value was seen - visible instead of silently
+ * dropped, without inventing a second display-selection mechanism next to {@link DisplayLocale}.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KognioRdfTermRepository.class);
 
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
@@ -244,8 +259,11 @@ public class KognioRdfTermRepository implements TermRepository {
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query)
-                    .forEach(row -> assemblyFor(bySubject, row, code).addPrefLabel(literalOf(row, "prefLabel")));
+            handle.sparqlQuery().select(query).forEach(row -> {
+                TermAssembly assembly = assemblyFor(bySubject, row, code);
+                assembly.addPrefLabel(literalOf(row, "prefLabel"));
+                assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            });
             return bySubject.values().stream().findFirst().map(assembly -> assembly.toTerm(displayLocale));
         }
     }
@@ -267,25 +285,32 @@ public class KognioRdfTermRepository implements TermRepository {
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query)
-                    .forEach(row -> assemblyFor(bySubject, row, null).addPrefLabel(literalOf(row, "prefLabel")));
+            handle.sparqlQuery().select(query).forEach(row -> {
+                TermAssembly assembly = assemblyFor(bySubject, row, null);
+                assembly.addPrefLabel(literalOf(row, "prefLabel"));
+                assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            });
             return bySubject.values().stream().map(assembly -> assembly.toTerm(displayLocale)).toList();
         }
     }
 
     /**
      * Groups the (potentially several) rows of one concept - a mandatory but now
-     * <em>multi-valued</em> {@code skos:prefLabel} join multiplies a concept into one row per
-     * language (issue #80) - into a single {@link TermAssembly}, keyed by subject IRI. The scalar
-     * fields (identity, code, definition, actor facet) are read once from the first row of a
-     * subject; every row contributes its {@code prefLabel} literal as a display candidate.
+     * <em>multi-valued</em> {@code skos:prefLabel}/{@code skos:definition} join multiplies a
+     * concept into one row per candidate value (issues #80, #81) - into a single
+     * {@link TermAssembly}, keyed by subject IRI. The remaining scalar fields (identity, code,
+     * actor facet) are read once from the first row of a subject; every row contributes its
+     * {@code prefLabel}/{@code definition} literal as a candidate via
+     * {@link TermAssembly#addPrefLabel}/{@link TermAssembly#addDefinition}, called by the two
+     * callers ({@link #findByCode}/{@link #findAll}) once per row.
      *
-     * <p>Only {@code prefLabel} is grouped here. {@code identifier}/{@code definition}/
-     * {@code actorRole} stay single-valued reads (their own multiplicity is #81's concern, out of
-     * scope for this issue). Keeping {@code prefLabel} a <em>required</em> (non-optional) join
-     * means a store-first concept carrying no {@code prefLabel} at all still binds nothing and is
-     * omitted exactly as before - it never reaches the {@link Term} constructor, whose non-blank
-     * {@code prefLabel} invariant stays strict.</p>
+     * <p>{@code identifier}/{@code actorRole} stay single-valued reads - {@code identifier} is
+     * already narrowed by the {@code knownCode}/query filter to the code being looked up, and
+     * {@code actorRole} is out of scope for #81 (no reported store-first multiplicity vector).
+     * Keeping {@code prefLabel} a <em>required</em> (non-optional) join means a store-first concept
+     * carrying no {@code prefLabel} at all still binds nothing and is omitted exactly as before -
+     * it never reaches the {@link Term} constructor, whose non-blank {@code prefLabel} invariant
+     * stays strict.</p>
      *
      * @param knownCode the code when the caller already knows it ({@code findByCode}), else
      *                  {@code null} to read it from the row's {@code identifier} ({@code findAll})
@@ -295,27 +320,28 @@ public class KognioRdfTermRepository implements TermRepository {
         return bySubject.computeIfAbsent(subjectIri, iri -> new TermAssembly(
                 new TermId(ResourceId.of(iri)),
                 knownCode != null ? knownCode : new TermCode(literalOf(row, "identifier").getLexicalForm()),
-                literalOf(row, "definition").getLexicalForm(),
                 actorFacetOf(row)));
     }
 
     /**
-     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} candidates
-     * across rows, then choosing one via the {@link DisplayLocale} fallback chain when the concept
-     * is finally materialised into a {@link Term}.
+     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} and
+     * {@code skos:definition} candidates across rows, then choosing one of each when the concept
+     * is finally materialised into a {@link Term}: {@code prefLabel} via the {@link DisplayLocale}
+     * fallback chain (issue #80), {@code definition} deterministically as the first-seen value
+     * (issue #81 - no display-language guarantee for this field), logging a {@code WARN} if more
+     * than one distinct definition was collected.
      */
     private static final class TermAssembly {
 
         private final TermId id;
         private final TermCode code;
-        private final String definition;
         private final ActorFacet actorFacet;
         private final List<LocalizedLiteral> prefLabels = new ArrayList<>();
+        private final List<String> definitions = new ArrayList<>();
 
-        private TermAssembly(TermId id, TermCode code, String definition, ActorFacet actorFacet) {
+        private TermAssembly(TermId id, TermCode code, ActorFacet actorFacet) {
             this.id = id;
             this.code = code;
-            this.definition = definition;
             this.actorFacet = actorFacet;
         }
 
@@ -323,12 +349,31 @@ public class KognioRdfTermRepository implements TermRepository {
             prefLabels.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
         }
 
+        private void addDefinition(String definition) {
+            definitions.add(definition);
+        }
+
         private Term toTerm(DisplayLocale displayLocale) {
             String prefLabel = displayLocale.select(prefLabels)
                     .map(LocalizedLiteral::value)
                     .orElseThrow(() -> new IllegalStateException(
                             "prefLabel is a required join, so at least one candidate must exist"));
-            return new Term(id, code, prefLabel, definition, actorFacet);
+            return new Term(id, code, prefLabel, firstDistinctDefinition(), actorFacet);
+        }
+
+        /**
+         * Returns the first-seen {@code skos:definition} candidate (stable across repeated calls,
+         * since {@link LinkedHashMap}/row order preserves insertion order), logging a single
+         * {@code WARN} when the subject carried more than one distinct value - issue #81's
+         * "stille Luege" this makes visible instead of silently swallowing.
+         */
+        private String firstDistinctDefinition() {
+            long distinctCount = definitions.stream().distinct().count();
+            if (distinctCount > 1) {
+                LOG.warn("Term {}: field 'definition' had {} distinct values, returning the first",
+                        id.value().value(), distinctCount);
+            }
+            return definitions.get(0);
         }
     }
 
