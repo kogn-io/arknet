@@ -44,18 +44,17 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  */
 public final class TraceabilityGraph {
 
-    private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
     private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
     private static final String SKOS_PREF_LABEL = SKOS_NAMESPACE + "prefLabel";
 
-    // The traversed arkreq: object-property IRIs come from the single shared source of truth
-    // (arknet-persistence-support), the very same constants the requirements/use-cases
-    // out-adapters serialize them with - so a predicate rename cannot silently desync the
-    // write side from this read-side traversal (issue #134). The type IRIs below stay local:
-    // they are not cross-module-duplicated with a write adapter in the same way.
+    // The traversed arkreq: object-property IRIs and the type IRIs below come from the single
+    // shared source of truth (arknet-persistence-support), the very same constants the
+    // requirements/ubiquitous-language/use-cases out-adapters serialize them with - so a
+    // predicate or type rename cannot silently desync the write side from this read-side
+    // traversal (issue #134).
     private static final String USES_TERM = ArkreqVocabulary.USES_TERM;
     private static final String PRIMARY_ACTOR = ArkreqVocabulary.PRIMARY_ACTOR;
     private static final String SUPPORTING_ACTOR = ArkreqVocabulary.SUPPORTING_ACTOR;
@@ -63,10 +62,10 @@ public final class TraceabilityGraph {
     private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
 
-    private static final String FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "FunctionalRequirement";
-    private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "NonFunctionalRequirement";
-    private static final String STEP_TYPE = ARKREQ_NAMESPACE + "Step";
-    private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
+    private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
+    private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE;
+    private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
 
     /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").

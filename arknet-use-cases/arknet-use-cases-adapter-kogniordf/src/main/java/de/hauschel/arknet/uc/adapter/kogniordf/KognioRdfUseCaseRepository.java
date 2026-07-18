@@ -139,7 +139,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
 
     private static final String USE_CASE_TYPE = ARKREQ_NAMESPACE + "UseCase";
-    private static final String STEP_TYPE = ARKREQ_NAMESPACE + "Step";
+    private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "Requirement";
     private static final String ACTOR_TYPE = ARKPROC_NAMESPACE + "Actor";
     private static final String USE_CASE_GOAL_PROPERTY = ARKREQ_NAMESPACE + "useCaseGoal";
