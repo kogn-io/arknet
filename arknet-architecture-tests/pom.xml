@@ -31,7 +31,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Regel 2: die drei Out-Adapter, in denen nur die Repository-Factory RDF4J nennen darf.
+        <!-- Regel 2: die Out-Adapter, in denen nur die Repository-Factory RDF4J nennen darf.
              Sie ziehen die *-core transitiv mit, die Regel 3 prueft. Diese sind unten trotzdem
              explizit deklariert: ein Architektur-Test-Modul soll benennen, worueber es urteilt,
              statt sich auf Transitivitaet zu verlassen. -->
@@ -50,6 +50,12 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-use-cases-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -73,8 +79,14 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
 
-        <!-- Regel 4: die drei In-Adapter (MCP), die trotz ADR-008-Nachbar-In-Port-Erlaubnis
+        <!-- Regel 4: die In-Adapter (MCP), die trotz ADR-008-Nachbar-In-Port-Erlaubnis
              keine RDF-Technologie sehen duerfen. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
@@ -91,6 +103,12 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-use-cases-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-adapter-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

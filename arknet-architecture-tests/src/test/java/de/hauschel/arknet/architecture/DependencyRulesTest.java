@@ -67,11 +67,12 @@ class DependencyRulesTest {
             "io.kogn.rdf.rdf4j.."
     };
 
-    /** The three bounded contexts, by their package abbreviation (see CLAUDE.md). */
+    /** The four bounded contexts, by their package abbreviation (see CLAUDE.md). */
     private static final String[] BOUNDED_CONTEXT_PACKAGES = {
             "de.hauschel.arknet.req..",
             "de.hauschel.arknet.ul..",
-            "de.hauschel.arknet.uc.."
+            "de.hauschel.arknet.uc..",
+            "de.hauschel.arknet.bc.."
     };
 
     /**
