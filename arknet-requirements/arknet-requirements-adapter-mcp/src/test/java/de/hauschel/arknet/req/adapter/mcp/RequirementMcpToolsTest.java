@@ -16,6 +16,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
+import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
@@ -23,6 +24,7 @@ import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
@@ -31,7 +33,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the five requirement
+ * Scaffold-level check that the adapter declares exactly the six requirement
  * tools and guards its in-port dependencies, plus the term-display-resolution
  * contract added in the #77 nachtrag ({@link ResolveTerms}): renders the resolved
  * business code, falls back to the bare IRI for an id it cannot resolve, and never
@@ -45,35 +47,50 @@ class RequirementMcpToolsTest {
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT);
+            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT);
 
     @Test
-    void declaresTheFiveRequirementTools() {
+    void declaresTheSixRequirementTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(5, names.size());
-        assertTrue(names.containsAll(
-                List.of("req_add", "req_list", "req_get", "req_set_status", "req_link_term")));
+        assertEquals(6, names.size());
+        assertTrue(names.containsAll(List.of(
+                "req_add", "req_list", "req_get", "req_set_status", "req_link_term", "req_schema")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(null, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT));
+                () -> new RequirementMcpTools(
+                        null, stub, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT));
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, null, resolveTerms, WorkspaceId.DEFAULT));
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, null, stub, resolveTerms, WorkspaceId.DEFAULT));
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, null, resolveTerms, WorkspaceId.DEFAULT));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
     }
 
     @Test
     void rejectsNullWorkspace() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, resolveTerms, null));
+                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, null));
+    }
+
+    /** Issue #31: {@code req_schema} delegates to {@link GetRequirementSchema} and renders every term. */
+    @Test
+    void schemaRendersEveryTermFromTheInPort() {
+        String rendered = adapter.schema();
+
+        assertTrue(rendered.contains("Priority: Priorisierung nach MoSCoW. "
+                + "(values: MUST_HAVE, SHOULD_HAVE, COULD_HAVE, WONT_HAVE)"), rendered);
     }
 
     /** Issue #91: the mandatory acceptance criteria reach {@link AddRequirement} and are rendered. */
@@ -212,9 +229,10 @@ class RequirementMcpToolsTest {
                 List.of("Login succeeds with valid credentials"));
     }
 
-    /** Structural stub implementing the five driving in-ports. */
+    /** Structural stub implementing the six driving in-ports. */
     private static final class Stub
-            implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm {
+            implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm,
+            GetRequirementSchema {
 
         private RequirementCode lastLinkedRequirement;
         private String lastLinkedTermCode;
@@ -260,6 +278,12 @@ class RequirementMcpToolsTest {
             List<TermRef> terms = ids.stream().map(TermRef::new).toList();
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, terms, List.of("Login succeeds with valid credentials"));
+        }
+
+        @Override
+        public List<RequirementSchemaTerm> schema() {
+            return List.of(new RequirementSchemaTerm("Priority", "Priorisierung nach MoSCoW.",
+                    List.of("MUST_HAVE", "SHOULD_HAVE", "COULD_HAVE", "WONT_HAVE")));
         }
     }
 

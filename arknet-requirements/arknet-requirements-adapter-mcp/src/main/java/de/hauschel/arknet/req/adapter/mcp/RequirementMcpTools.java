@@ -13,12 +13,14 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
+import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
@@ -28,8 +30,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
  * use-cases as MCP tools ({@code req_add}, {@code req_list}, {@code req_get},
- * {@code req_set_status}, {@code req_link_term}) and delegates each tool call to the
- * corresponding in-port.
+ * {@code req_set_status}, {@code req_link_term}, {@code req_schema}) and delegates each tool
+ * call to the corresponding in-port.
  *
  * <p>This adapter belongs to the requirements hexagon (symmetric to the out-adapter
  * {@code arknet-requirements-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -79,21 +81,23 @@ public final class RequirementMcpTools {
     private final GetRequirement getRequirement;
     private final SetRequirementStatus setRequirementStatus;
     private final LinkTerm linkTerm;
+    private final GetRequirementSchema getRequirementSchema;
     private final ResolveTerms resolveTerms;
     private final WorkspaceId workspaceId;
 
     /**
-     * Creates the adapter with its five driving in-ports, the borrowed ubiquitous-language
+     * Creates the adapter with its six driving in-ports, the borrowed ubiquitous-language
      * display port and the workspace it serves.
      *
-     * @param addRequirement       in-port backing {@code req_add}
-     * @param listRequirements     in-port backing {@code req_list}
-     * @param getRequirement       in-port backing {@code req_get}
-     * @param setRequirementStatus in-port backing {@code req_set_status}
-     * @param linkTerm             in-port backing {@code req_link_term}
-     * @param resolveTerms         ubiquitous-language driving port used only to render a linked
-     *                             term's business code instead of its bare IRI
-     * @param workspaceId          the single workspace all tool calls route to
+     * @param addRequirement        in-port backing {@code req_add}
+     * @param listRequirements      in-port backing {@code req_list}
+     * @param getRequirement        in-port backing {@code req_get}
+     * @param setRequirementStatus  in-port backing {@code req_set_status}
+     * @param linkTerm              in-port backing {@code req_link_term}
+     * @param getRequirementSchema  in-port backing {@code req_schema}
+     * @param resolveTerms          ubiquitous-language driving port used only to render a linked
+     *                              term's business code instead of its bare IRI
+     * @param workspaceId           the single workspace all tool calls route to
      */
     public RequirementMcpTools(
             final AddRequirement addRequirement,
@@ -101,6 +105,7 @@ public final class RequirementMcpTools {
             final GetRequirement getRequirement,
             final SetRequirementStatus setRequirementStatus,
             final LinkTerm linkTerm,
+            final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
             final WorkspaceId workspaceId) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
@@ -108,6 +113,7 @@ public final class RequirementMcpTools {
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
     }
@@ -191,6 +197,18 @@ public final class RequirementMcpTools {
         return format(updated);
     }
 
+    @McpTool(name = "req_schema",
+            description = "Describe the arkreq: requirement vocabulary as data: for RequirementType, "
+                    + "RequirementStatus and Priority, its ontology-sourced definition and the exact "
+                    + "values req_add/req_set_status accept - so a client does not have to guess them.",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+    public String schema() {
+        return getRequirementSchema.schema().stream()
+                .map(RequirementMcpTools::formatSchemaTerm)
+                .reduce((a, b) -> a + "\n" + b)
+                .orElse("");
+    }
+
     /** Renders a single requirement, resolving its own linked terms in one batch call. */
     private String format(final Requirement r) {
         return format(r, resolveTermsFor(List.of(r)));
@@ -211,6 +229,11 @@ public final class RequirementMcpTools {
         final String criteria = " [done when: " + String.join("; ", r.acceptanceCriteria()) + "]";
         return "%s [%s] %s (%s)%s%s%s".formatted(
                 r.code().value(), r.type(), r.title(), r.status(), priority, terms, criteria);
+    }
+
+    /** Renders one schema term as {@code term: definition (values: A, B, ...)}. */
+    private static String formatSchemaTerm(final RequirementSchemaTerm t) {
+        return "%s: %s (values: %s)".formatted(t.term(), t.definition(), String.join(", ", t.values()));
     }
 
     /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */

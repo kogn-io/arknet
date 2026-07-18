@@ -23,6 +23,7 @@ import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
@@ -48,7 +49,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * <ul>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
  *       {@link RequirementService} over an RDF-persisted requirement repository) - the
- *       four requirement tools are registered, callable and backed by kognio-rdf
+ *       requirement tools are registered, callable and backed by kognio-rdf
  *       persistence. The repository is assembled through
  *       {@link KognioRdfRequirementRepositoryFactory} so this composition root stays
  *       free of any direct RDF4J dependency; it only supplies the storage directory
@@ -57,7 +58,10 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       shared dataset lifecycle. {@code req_get}/{@code req_list}'s reverse direction (identity
  *       back to a displayable business code) is not a second store adapter - it is the
  *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
- *       {@link RequirementMcpTools} (#77 nachtrag).</li>
+ *       {@link RequirementMcpTools} (#77 nachtrag). {@code req_schema} (issue #31) is backed by
+ *       a third {@link KognioRdfRequirementRepositoryFactory} product,
+ *       {@link RequirementSchemaSource} - it reads only the classpath ontology, not the
+ *       workspace store, so it needs no {@link DatasetLifecycle}.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
  *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
  *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
@@ -121,6 +125,17 @@ public class ArknetMcpConfiguration {
     }
 
     /**
+     * Supplies the {@code arkreq:} requirement vocabulary as data, backing {@code req_schema}
+     * (issue #31). Reads only the classpath ontology ({@code arknet-requirements.ttl}), not the
+     * workspace store, so unlike every other bean in this hexagon it takes no
+     * {@link DatasetLifecycle}.
+     */
+    @Bean
+    RequirementSchemaSource requirementSchemaSource() {
+        return KognioRdfRequirementRepositoryFactory.buildSchemaSource();
+    }
+
+    /**
      * Mints the opaque {@link de.hauschel.arknet.kernel.ResourceId} of newly added resources
      * (requirements, glossary terms, use cases and their derived step nodes). A single bean so
      * every write path mints from the same kernel-owned scheme (see {@link UuidResourceIdFactory}).
@@ -133,8 +148,8 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementService requirementService(
             final RequirementRepository repository, final ResourceIdFactory resourceIdFactory,
-            final TermLookup requirementTermLookup) {
-        return new RequirementService(repository, resourceIdFactory, requirementTermLookup);
+            final TermLookup requirementTermLookup, final RequirementSchemaSource requirementSchemaSource) {
+        return new RequirementService(repository, resourceIdFactory, requirementTermLookup, requirementSchemaSource);
     }
 
     /**
@@ -161,7 +176,8 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementMcpTools requirementMcpTools(
             final RequirementService service, final ResolveTerms resolveTerms, final WorkspaceId workspaceId) {
-        return new RequirementMcpTools(service, service, service, service, service, resolveTerms, workspaceId);
+        return new RequirementMcpTools(
+                service, service, service, service, service, service, resolveTerms, workspaceId);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------
