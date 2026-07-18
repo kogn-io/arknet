@@ -85,6 +85,21 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Bounded-Context-Hexagon: vierte hexagonale BC, gleiche Verdrahtung wie die uebrigen
+             (In-Adapter mit @McpTool-Beans + Out-Adapter Repository) ueber den geteilten
+             DatasetLifecycle. bc_link_term loest Term-Referenzen gegen denselben Workspace-Store
+             auf (Cross-BC-Lookup), die Anzeige-Rueckrichtung nutzt den ul-In-Port ResolveTerms. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-bounded-context-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- kognio-rdf: nur die technologieneutralen Ports (terms + dataset). Der generische
              Store-Report-Lesepfad (store-Paket) fuehrt eine SELECT ?s ?p ?o gegen den geteilten
              DatasetLifecycle aus und liest BindingSet/RDFTerm - ohne direkte RDF4J-Abhaengigkeit.
