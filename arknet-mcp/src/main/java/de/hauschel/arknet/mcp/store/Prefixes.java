@@ -27,6 +27,16 @@ public final class Prefixes {
     /** Base of arknet instance-data IRIs (model resources, as opposed to vocabulary terms). */
     public static final String MODEL_INSTANCE_BASE = "https://w3id.org/arknet/model/";
 
+    /**
+     * Base of arknet's opaque resource identities as minted by {@code UuidResourceIdFactory}
+     * (arknet-shared-kernel) since the opaque-{@code ResourceId} refactor (#68/#71/#72): a
+     * flat {@code https://w3id.org/arknet/id/<uuid>}, no bounded-context or type segment - the
+     * type lives in {@code rdf:type}. This has been the only IRI base every write path mints
+     * under since that refactor; {@link #MODEL_INSTANCE_BASE} predates it and is no longer
+     * produced.
+     */
+    public static final String INSTANCE_BASE = "https://w3id.org/arknet/id/";
+
     /** A single {@code prefix -> namespace} binding. */
     public record Prefix(String prefix, String namespace) {
         public Prefix {
