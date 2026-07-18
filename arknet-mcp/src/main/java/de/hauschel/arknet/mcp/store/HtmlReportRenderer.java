@@ -14,8 +14,14 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * type index (left) and one card per resource grouped by {@code rdf:type} (main), with
  * clickable IRI objects, status/priority pills and a filter box.
  *
- * <p>Pure and domain-agnostic: consumes only a {@link StoreSnapshot}, the digest text and a
- * {@link Prefixes} resolver.</p>
+ * <p>Structurally domain-agnostic: consumes only a {@link StoreSnapshot}, the digest text and a
+ * {@link Prefixes} resolver, and renders every resource/triple from every bounded context the
+ * same generic way (CURIE, label, cross-links). This does <b>not</b> extend to
+ * {@link #STATUS_PREDICATE}/{@link #PRIORITY_PREDICATE} below: those two are hardcoded
+ * requirements-BC IRIs, a deliberate, bounded exception kept for "pill" styling rather than a
+ * SHACL-driven generic mechanism (issue #111 - not worth the machinery while only one BC has an
+ * enum-like field; a future BC's analogous field renders as a plain value/literal until this list
+ * is extended).</p>
  */
 public final class HtmlReportRenderer {
 
