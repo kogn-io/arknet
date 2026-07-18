@@ -96,6 +96,15 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * than failing the whole result. This is unreachable via the MCP tools, which always resolve to
  * a subject IRI before writing.</p>
  *
+ * <p><strong>A use case with zero main steps is handled the same way (issue #102).</strong>
+ * {@code arkreq:mainStep} is only {@code sh:Warning} severity at {@code sh:minCount 1} (not
+ * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case
+ * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
+ * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
+ * case the same way it skips a blank-node {@code primaryActor}, rather than letting the
+ * constructor's exception propagate out of {@link #findAll}/{@link #findByCode} and crash every
+ * read for the whole workspace.</p>
+ *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
  * backend-specific type. The backend ({@link DatasetLifecycle} implementation) is supplied
@@ -379,6 +388,24 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
         List<ActorRef> supportingActors = readSupportingActors(handle, subject);
         List<Step> steps = readMainSteps(handle, subject);
+        if (steps.isEmpty()) {
+            // arkreq:mainStep is only sh:Warning severity at sh:minCount 1 (not sh:Violation), so
+            // ShaclWriteGate#enforce lets a store-first (ADR-005) use case through with zero main
+            // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
+            // mirror the primaryActor blank-node guard above: skip this one use case instead of
+            // letting the constructor throw out of findByCode/findAll for the whole workspace
+            // (issue #102).
+            return Optional.empty();
+        }
+        if (!hasConsecutiveStepPositions(steps)) {
+            // Nothing in SHACL forbids two arkreq:Step nodes under the same mainStep sharing an
+            // arkreq:position - uniqueness is only enforced in-process by
+            // UseCase.requireConsecutiveStepPositions, and store-first data (ADR-005) never runs
+            // through that. Mirror the empty-steps guard above rather than letting the
+            // constructor's IllegalArgumentException propagate out of findByCode/findAll for the
+            // whole workspace (issue #102).
+            return Optional.empty();
+        }
         List<String> extensions = readExtensions(handle, subject);
 
         return Optional.of(new UseCase(
@@ -416,16 +443,17 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     private List<Step> readMainSteps(DatasetHandle handle, String subject) {
-        String stepsQuery = "SELECT ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+        String stepsQuery = "SELECT ?step ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
                 + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } } "
                 + "ORDER BY ?position";
-        Map<Integer, List<RequirementRef>> realisesByPosition = readMainStepRealises(handle, subject);
+        Map<String, List<RequirementRef>> realisesByStep = readMainStepRealises(handle, subject);
         return handle.sparqlQuery().select(stepsQuery)
                 .map(row -> {
                     int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+                    String stepIri = iriOf(row, "step").getIRIString();
                     return new Step(position, literalOf(row, "text").getLexicalForm(),
-                            realisesByPosition.getOrDefault(position, List.of()));
+                            realisesByStep.getOrDefault(stepIri, List.of()));
                 })
                 .toList();
     }
@@ -441,19 +469,44 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
      * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
      * tools.</p>
+     *
+     * <p><strong>Keyed by the step's own IRI, not its derived {@code arkreq:position} (issue
+     * #102).</strong> Nothing in SHACL forbids two distinct {@code arkreq:Step} nodes under the
+     * same use case's {@code arkreq:mainStep} from sharing the same {@code arkreq:position} -
+     * uniqueness is only enforced in-process by {@code UseCase.requireConsecutiveStepPositions},
+     * and store-first data (ADR-005) never runs through that. Grouping by the derived position
+     * integer instead of step identity would silently merge two such steps' {@code stepRealises}
+     * targets under one key, the same class of bug issue #89 already fixed for
+     * {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.</p>
      */
-    private Map<Integer, List<RequirementRef>> readMainStepRealises(DatasetHandle handle, String subject) {
-        String query = "SELECT ?position ?req WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+    private Map<String, List<RequirementRef>> readMainStepRealises(DatasetHandle handle, String subject) {
+        String query = "SELECT ?step ?req WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
-                + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_REALISES_PROPERTY + "> ?req } "
-                + "FILTER(isIRI(?req)) } ORDER BY ?position";
-        Map<Integer, List<RequirementRef>> byPosition = new LinkedHashMap<>();
+                + "?step <" + STEP_REALISES_PROPERTY + "> ?req } "
+                + "FILTER(isIRI(?req)) }";
+        Map<String, List<RequirementRef>> byStep = new LinkedHashMap<>();
         handle.sparqlQuery().select(query).forEach(row -> {
-            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
-            byPosition.computeIfAbsent(position, k -> new ArrayList<>())
+            String stepIri = iriOf(row, "step").getIRIString();
+            byStep.computeIfAbsent(stepIri, k -> new ArrayList<>())
                     .add(new RequirementRef(ResourceId.of(iriOf(row, "req").getIRIString())));
         });
-        return byPosition;
+        return byStep;
+    }
+
+    /**
+     * Mirrors {@code UseCase.requireConsecutiveStepPositions} as a non-throwing predicate: the
+     * step at list index {@code i} must carry position {@code i + 1}. {@code steps} is read
+     * ordered by {@code arkreq:position} (see {@link #readMainSteps}), so a store-first (ADR-005)
+     * gap, duplicate or descending position is detected here before it ever reaches
+     * {@link UseCase}'s constructor (issue #102).
+     */
+    private static boolean hasConsecutiveStepPositions(List<Step> steps) {
+        for (int i = 0; i < steps.size(); i++) {
+            if (steps.get(i).position() != i + 1) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<String> readExtensions(DatasetHandle handle, String subject) {
