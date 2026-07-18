@@ -17,6 +17,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -41,6 +42,8 @@ class RequirementServiceConcurrencyTest {
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
+    /** These concurrency races are orthogonal to {@code req_schema} - never exercised here. */
+    private static final RequirementSchemaSource UNUSED_SCHEMA_SOURCE = List::of;
 
     private InMemoryRequirementRepository store;
     private InMemoryTermLookup termLookup;
@@ -61,7 +64,7 @@ class RequirementServiceConcurrencyTest {
         termLookup.register("TERM-1", TERM_1);
         termLookup.register("TERM-2", TERM_2);
         resourceIdFactory = new SequentialResourceIdFactory();
-        otherCaller = new RequirementService(store, resourceIdFactory, termLookup);
+        otherCaller = new RequirementService(store, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
     }
 
     /**
@@ -75,7 +78,8 @@ class RequirementServiceConcurrencyTest {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-2"));
-        RequirementService underTest = new RequirementService(racing, resourceIdFactory, termLookup);
+        RequirementService underTest =
+                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.linkTerm(WS, code, "TERM-1");
 
@@ -94,7 +98,8 @@ class RequirementServiceConcurrencyTest {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1"));
-        RequirementService underTest = new RequirementService(racing, resourceIdFactory, termLookup);
+        RequirementService underTest =
+                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.setStatus(WS, code, RequirementStatus.ACCEPTED);
 
@@ -115,7 +120,7 @@ class RequirementServiceConcurrencyTest {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
         RequirementService underTest =
                 new RequirementService(new AlwaysConflictingRepository(store), resourceIdFactory,
-                        termLookup);
+                        termLookup, UNUSED_SCHEMA_SOURCE);
 
         assertThrows(RequirementConcurrentlyModifiedException.class,
                 () -> underTest.linkTerm(WS, code, "TERM-1"));
@@ -133,7 +138,8 @@ class RequirementServiceConcurrencyTest {
     void concurrentAddCallsForTheSameTypeBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllRepository racing = new RaceOnFirstFindAllRepository(store,
                 () -> otherCaller.add(WS, newFunctionalRequirement()));
-        RequirementService underTest = new RequirementService(racing, resourceIdFactory, termLookup);
+        RequirementService underTest =
+                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.add(WS, newFunctionalRequirement());
 
