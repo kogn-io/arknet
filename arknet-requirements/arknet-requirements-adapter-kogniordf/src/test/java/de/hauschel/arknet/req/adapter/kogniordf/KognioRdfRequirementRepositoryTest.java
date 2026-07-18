@@ -608,6 +608,102 @@ class KognioRdfRequirementRepositoryTest {
         assertTrue(ex.getMessage().contains("usesTerm"), ex.getMessage());
     }
 
+    /**
+     * Issue #99: {@code rshapes:Requirement-title} is a new shape ({@code dcterms:title} had none
+     * before). {@link Requirement#title()} is single-valued, so a second title is unreachable via
+     * {@link RequirementRepository#create} - this exercises the gate directly against a synthetic
+     * candidate graph, the way a store-first (ADR-005) write could still produce two triples.
+     */
+    @Test
+    void gateRejectsRequirementWithTwoTitles() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE,
+                rdf.createIRI("https://w3id.org/arknet/requirements#FunctionalRequirement"));
+        candidate.add(subject, VocabDct.IDENTIFIER, rdf.createLiteral("FR-1"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/title"), rdf.createLiteral("Login"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/title"), rdf.createLiteral("Sign in"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/description"),
+                rdf.createLiteral("The system shall authenticate a user."));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#status"),
+                rdf.createIRI("https://w3id.org/arknet/requirements#Proposed"));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#acceptanceCriterion"),
+                rdf.createLiteral("Login succeeds with valid credentials"));
+
+        WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
+                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+
+        assertTrue(ex.getMessage().contains("title"), ex.getMessage());
+    }
+
+    /**
+     * Issue #99: {@code rshapes:Requirement-description} now carries {@code sh:maxCount 1},
+     * mirroring {@link #gateRejectsRequirementWithTwoTitles}. {@link Requirement#description()}
+     * is single-valued, so a second description is unreachable via
+     * {@link RequirementRepository#create}.
+     */
+    @Test
+    void gateRejectsRequirementWithTwoDescriptions() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE,
+                rdf.createIRI("https://w3id.org/arknet/requirements#FunctionalRequirement"));
+        candidate.add(subject, VocabDct.IDENTIFIER, rdf.createLiteral("FR-1"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/title"), rdf.createLiteral("Login"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/description"),
+                rdf.createLiteral("The system shall authenticate a user."));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/description"),
+                rdf.createLiteral("Das System soll einen Benutzer authentifizieren."));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#status"),
+                rdf.createIRI("https://w3id.org/arknet/requirements#Proposed"));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#acceptanceCriterion"),
+                rdf.createLiteral("Login succeeds with valid credentials"));
+
+        WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
+                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+
+        assertTrue(ex.getMessage().contains("description"), ex.getMessage());
+    }
+
+    /**
+     * Issue #99: {@code rshapes:Requirement-motivatedBy-count} is a new, {@code sh:Violation}
+     * shape carrying only the {@code sh:maxCount 1} - split out from the pre-existing
+     * {@code rshapes:Requirement-motivatedBy} (which stays a {@code sh:Warning} best-practice
+     * check on {@code sh:class arkreq:Goal}, unchanged). A {@code sh:Warning}-severity
+     * {@code maxCount} would never fire {@link WriteConstraintViolationException} - a SHACL
+     * report only "does not conform" on a {@code sh:Violation} result - so multiplicity had to
+     * become its own, separately-severed property shape rather than a field added to the
+     * existing one. {@link Requirement#motivatedBy()} is single-valued, so a second value is
+     * unreachable via {@link RequirementRepository#create}.
+     */
+    @Test
+    void gateRejectsRequirementWithTwoMotivatedBy() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI goal1 = rdf.createIRI("https://w3id.org/arknet/model/goal/fast-ux");
+        IRI goal2 = rdf.createIRI("https://w3id.org/arknet/model/goal/secure-login");
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE,
+                rdf.createIRI("https://w3id.org/arknet/requirements#FunctionalRequirement"));
+        candidate.add(subject, VocabDct.IDENTIFIER, rdf.createLiteral("FR-1"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/title"), rdf.createLiteral("Login"));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/description"),
+                rdf.createLiteral("The system shall authenticate a user."));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#status"),
+                rdf.createIRI("https://w3id.org/arknet/requirements#Proposed"));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#motivatedBy"), goal1);
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#motivatedBy"), goal2);
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/requirements#acceptanceCriterion"),
+                rdf.createLiteral("Login succeeds with valid credentials"));
+
+        WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
+                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+
+        assertTrue(ex.getMessage().contains("motivatedBy"), ex.getMessage());
+    }
+
     // ---- usesTerm: reading is identity-based, not join-based, since #77 -----------------
 
     /**

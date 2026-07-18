@@ -28,10 +28,12 @@ rshapes:RequirementShape
     a sh:NodeShape ;
     sh:targetClass arkreq:Requirement ;
     sh:property rshapes:Requirement-identifier ;
+    sh:property rshapes:Requirement-title ;
     sh:property rshapes:Requirement-description ;
     sh:property rshapes:Requirement-priority ;
     sh:property rshapes:Requirement-status ;
     sh:property rshapes:Requirement-motivatedBy ;
+    sh:property rshapes:Requirement-motivatedBy-count ;
     sh:property rshapes:Requirement-usesTerm ;
     sh:property rshapes:Requirement-acceptanceCriterion .
 
@@ -46,13 +48,24 @@ rshapes:Requirement-identifier
     sh:message  "Requirement braucht genau eine dcterms:identifier (z.B. FR-12), Format: Buchstabe gefolgt von Buchstaben/Ziffern/_.-"@de ;
     sh:severity sh:Violation .
 
+rshapes:Requirement-title
+    a sh:PropertyShape ;
+    sh:path     dcterms:title ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "Requirement braucht genau eine dcterms:title."@de ;
+    sh:severity sh:Violation .
+
 rshapes:Requirement-description
     a sh:PropertyShape ;
     sh:path     dcterms:description ;
     sh:minCount 1 ;
+    sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "Requirement braucht eine dcterms:description (die normative Aussage, min. 5 Zeichen)."@de ;
+    sh:message  "Requirement braucht genau eine dcterms:description (die normative Aussage, min. 5 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-priority
@@ -78,6 +91,13 @@ rshapes:Requirement-motivatedBy
     sh:class    arkreq:Goal ;
     sh:message  "Best Practice: Verknuepfe die Anforderung ueber arkreq:motivatedBy mit einem Goal (Traceability zum WARUM)."@de ;
     sh:severity sh:Warning .
+
+rshapes:Requirement-motivatedBy-count
+    a sh:PropertyShape ;
+    sh:path     arkreq:motivatedBy ;
+    sh:maxCount 1 ;
+    sh:message  "Requirement darf hoechstens ein arkreq:motivatedBy haben (Domain-Feld ist einwertig)."@de ;
+    sh:severity sh:Violation .
 
 rshapes:Requirement-usesTerm
     a sh:PropertyShape ;
@@ -161,7 +181,9 @@ rshapes:UseCaseShape
     a sh:NodeShape ;
     sh:targetClass arkreq:UseCase ;
     sh:property rshapes:UseCase-identifier ;
+    sh:property rshapes:UseCase-title ;
     sh:property rshapes:UseCase-goal ;
+    sh:property rshapes:UseCase-goal-count ;
     sh:property rshapes:UseCase-primaryActor ;
     sh:property rshapes:UseCase-satisfies ;
     sh:property rshapes:UseCase-mainStep .
@@ -176,6 +198,16 @@ rshapes:UseCase-identifier
     sh:message  "Use Case braucht genau eine dcterms:identifier (z.B. UC-3)."@de ;
     sh:severity sh:Violation .
 
+rshapes:UseCase-title
+    a sh:PropertyShape ;
+    sh:path     dcterms:title ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "Use Case braucht genau eine dcterms:title."@de ;
+    sh:severity sh:Violation .
+
 rshapes:UseCase-goal
     a sh:PropertyShape ;
     sh:path     arkreq:useCaseGoal ;
@@ -183,6 +215,13 @@ rshapes:UseCase-goal
     sh:datatype xsd:string ;
     sh:message  "Use Case sollte ein arkreq:useCaseGoal (goal-in-context) nennen."@de ;
     sh:severity sh:Warning .
+
+rshapes:UseCase-goal-count
+    a sh:PropertyShape ;
+    sh:path     arkreq:useCaseGoal ;
+    sh:maxCount 1 ;
+    sh:message  "Use Case darf hoechstens ein arkreq:useCaseGoal haben (Domain-Feld ist einwertig)."@de ;
+    sh:severity sh:Violation .
 
 rshapes:UseCase-primaryActor
     a sh:PropertyShape ;
@@ -235,9 +274,10 @@ rshapes:Step-text
     a sh:PropertyShape ;
     sh:path     arkreq:stepText ;
     sh:minCount 1 ;
+    sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 3 ;
-    sh:message  "Step braucht einen arkreq:stepText (min. 3 Zeichen)."@de ;
+    sh:message  "Step braucht genau einen arkreq:stepText (min. 3 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Step-realises
