@@ -17,8 +17,9 @@
          wird im arknet-parent zuerst importiert und zieht ueber ihren rdf4j-Parent veraltete
          Transitiv-Versionen herein, die den Spring-Boot-4.1-Stack sprengen:
          - SLF4J 1.7.36 / Logback 1.2.13 -> NoClassDefFoundError StatusPrinter2 beim Log-Start.
-         - jackson-annotations 2.13.5 -> jackson3 (tools.jackson 3.1.4, vom Spring-AI-MCP-
-           JsonMapper genutzt) braucht >= 2.21 (JsonSerializeAs), sonst NoClassDefFoundError.
+         jackson-annotations ist NICHT mehr Teil dieser Liste: die rdf4j-bom-Exclusion im
+         arknet-parent (#117) laesst die Version von selbst auf die von RDF4J 6.0.0 und
+         jackson-databind (jackson3) gemeinsam getragene resolven, kein Hand-Pin mehr noetig.
          Nur dieses Modul ist eine Spring-Boot-Anwendung, deshalb bleiben die Anhebungen lokal. -->
     <dependencyManagement>
         <dependencies>
@@ -36,11 +37,6 @@
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-core</artifactId>
                 <version>1.5.34</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-annotations</artifactId>
-                <version>2.21</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

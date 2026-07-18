@@ -88,12 +88,25 @@
                 <artifactId>arknet-persistence-support</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- jackson-annotations ausgeschlossen: rdf4j-bom managed selbst 2.21, obwohl
+                 RDF4J 6.0.0s eigene Module (z.B. rdf4j-rio-api) transitiv 2.22 anfordern;
+                 RDF4J-intern-inkonsistent, niemand im Reaktor braucht das gemanagte 2.21.
+                 Ohne die BOM-Bevormundung resolved jackson-annotations von selbst auf 2.22
+                 (aus RDF4J 6.0.0s eigenem Transitivgraphen), was jackson-databind 3.2.0
+                 (jackson3, vom Spring-AI-MCP-JsonMapper genutzt) braucht (JsonApplyView),
+                 sonst NoClassDefFoundError beim ersten MCP-JSON-Response (#117). -->
             <dependency>
                 <groupId>org.eclipse.rdf4j</groupId>
                 <artifactId>rdf4j-bom</artifactId>
                 <version>${rdf4j.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>jackson-annotations</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.junit</groupId>
