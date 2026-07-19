@@ -12,7 +12,6 @@ W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar
 ## Claude Code Plugin
 
 ```bash
-# Als Plugin verwenden (baut automatisch beim ersten Start)
 claude --plugin-dir /path/to/arknet
 ```
 
@@ -21,17 +20,18 @@ claude --plugin-dir /path/to/arknet
 Der arknet-MCP-Server ist ein einzelner, langlebiger Prozess pro Workspace (Streamable HTTP auf
 `127.0.0.1:47331`) -- **kein** Subprozess, den Claude Code selbst startet. Ein HTTP-Eintrag in
 `.mcp.json` ist bei Claude Code rein passiv: es verbindet sich nur zur URL, startet oder verwaltet
-aber nichts. Vor der ersten Nutzung also einmalig selbst starten:
+aber nichts. Vor der ersten Nutzung also einmalig selbst starten, z.B.:
 
 ```bash
-scripts/arknet-mcp.sh
+mvn -pl arknet-mcp -am package -DskipTests
+java -jar arknet-mcp/target/arknet-mcp-*.jar
 ```
 
-Das baut die JAR beim ersten Lauf und startet danach den Daemon im Vordergrund -- fuer dauerhaften
-Betrieb in einem Terminal/tmux-Fenster laufen lassen oder als systemd-/launchd-Unit einrichten.
-Solange der Prozess laeuft, koennen beliebig viele Claude-Code-Sessions (auch parallele Worktrees
-desselben Workspace) sich denselben Store teilen, ohne sich am NativeStore-Verzeichnis-Lock zu
-blockieren. Laeuft der Daemon nicht, meldet Claude Code die MCP-Verbindung als fehlgeschlagen.
+Ein fertiges Docker-Image (kein lokales Java/Maven noetig) ist als Zieldistribution geplant, aber
+noch nicht gebaut. Solange der Prozess laeuft, koennen beliebig viele Claude-Code-Sessions (auch
+parallele Worktrees desselben Workspace) sich denselben Store teilen, ohne sich am
+NativeStore-Verzeichnis-Lock zu blockieren. Laeuft der Daemon nicht, meldet Claude Code die
+MCP-Verbindung als fehlgeschlagen.
 
 Mehrere arknet-Workspaces auf derselben Maschine beanspruchen aktuell denselben festen Port und
 kollidieren -- workspace-spezifische Ports sind noch nicht automatisiert.
