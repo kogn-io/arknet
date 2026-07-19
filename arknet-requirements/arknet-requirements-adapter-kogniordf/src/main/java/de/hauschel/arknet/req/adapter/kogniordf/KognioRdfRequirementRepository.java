@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -89,6 +90,21 @@ import de.hauschel.arknet.req.domain.TermRef;
  * opaque-identity collision is a programming error (identities are minted once and never
  * reused), while a business-code collision (two requirements both claiming {@code FR-1}) is an
  * expected, rejectable outcome a human can cause and must be told about by name.</p>
+ *
+ * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
+ * catches two callers racing to {@link #create} the same code only when one fully commits before
+ * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
+ * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
+ * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
+ * rejected as a conflict - surfacing not as {@link DuplicateRequirementCodeException} but as the
+ * RDF4J-backed store's own commit-time exception. That technology-specific exception must not
+ * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
+ * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
+ * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
+ * it "was this a write conflict?" and translates a positive answer into the same
+ * {@link DuplicateRequirementCodeException} the synchronous check throws - so
+ * {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) catches both interleavings the
+ * same way, without ever importing an RDF4J type here.</p>
  *
  * <p><strong>Term references arrive pre-resolved (issue #36, identity-carrying since #77).</strong>
  * {@link TermRef} carries the term's opaque subject {@link ResourceId} directly - resolving a
@@ -179,19 +195,25 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
+    private final Predicate<RuntimeException> isWriteConflict;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from (must not be
-     *                  {@code null})
-     * @param gate      the SHACL write-gate validating candidate graphs before persistence
-     *                  (must not be {@code null})
+     * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
+     *                        be {@code null})
+     * @param gate            the SHACL write-gate validating candidate graphs before persistence
+     *                        (must not be {@code null})
+     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
+     *                        class ever naming the RDF4J type itself (must not be {@code null})
      */
-    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate) {
+    KognioRdfRequirementRepository(
+            DatasetLifecycle lifecycle, ShaclWriteGate gate, Predicate<RuntimeException> isWriteConflict) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
+        this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
     }
 
     @Override
@@ -243,24 +265,36 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     + "\" } }";
             IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
-            handle.transactor().inTransaction(tx -> {
-                boolean exists = tx.ask(askExists);
-                if (expectAbsent) {
-                    if (exists) {
-                        throw new ResourceAlreadyExistsException(workspaceId, requirement.id().value());
+            try {
+                handle.transactor().inTransaction(tx -> {
+                    boolean exists = tx.ask(askExists);
+                    if (expectAbsent) {
+                        if (exists) {
+                            throw new ResourceAlreadyExistsException(workspaceId, requirement.id().value());
+                        }
+                        // Identity is opaque and unique by construction, but the human-readable
+                        // code is a separate triple this ASK alone cannot rule out - check it
+                        // here, inside the same write transaction, so no other create() can race
+                        // in between.
+                        if (tx.ask(askCodeExists)) {
+                            throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
+                        }
+                    } else if (!exists) {
+                        throw new RequirementNotFoundException(workspaceId, requirement.code());
                     }
-                    // Identity is opaque and unique by construction, but the human-readable code
-                    // is a separate triple this ASK alone cannot rule out - check it here, inside
-                    // the same write transaction, so no other create() can race in between.
-                    if (tx.ask(askCodeExists)) {
-                        throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
-                    }
-                } else if (!exists) {
-                    throw new RequirementNotFoundException(workspaceId, requirement.code());
+                    replaceTriples(tx, graphIri, subjectIri, subject, graph, exists);
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                // The synchronous ASK above only catches a concurrent create() that already fully
+                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
+                // here, as the store's own commit-time conflict (issue #144) - translated to the
+                // same signal CodeAssignment's retry already handles.
+                if (expectAbsent && isWriteConflict.test(e)) {
+                    throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
                 }
-                replaceTriples(tx, graphIri, subjectIri, subject, graph, exists);
-                return null;
-            });
+                throw e;
+            }
         }
     }
 
