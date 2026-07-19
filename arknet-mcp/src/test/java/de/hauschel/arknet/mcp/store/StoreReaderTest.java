@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,5 +87,32 @@ class StoreReaderTest {
 
         assertThat(outgoing).isNotEmpty();
         assertThat(outgoing).allMatch(triple -> triple.subject().equals(FR_1_IRI));
+    }
+
+    /**
+     * Regression test: the requirement adapter writes into a named graph
+     * ({@code REQUIREMENTS_GRAPH}), and {@link StoreReader}'s queries union a plain triple
+     * pattern with an explicit {@code GRAPH ?g} pattern to also reach named-graph data. Without
+     * {@code DISTINCT}, a backend whose plain pattern already spans every context (as the
+     * RDF4J-based adapter does) matches each named-graph triple twice, doubling every row in
+     * the generated store report.
+     */
+    @Test
+    void outgoingDoesNotDuplicateStatementsLivingInANamedGraph() {
+        List<Triple> outgoing = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+
+        Set<Triple> distinct = new HashSet<>(outgoing);
+        assertThat(outgoing).hasSameSizeAs(distinct);
+    }
+
+    @Test
+    void readSnapshotDoesNotDuplicateStatementsLivingInANamedGraph() {
+        StoreSnapshot snapshot = storeReader.readSnapshot(WORKSPACE);
+
+        List<Triple> triples = snapshot.resources().stream()
+                .flatMap(resource -> resource.outgoing().stream())
+                .toList();
+        Set<Triple> distinct = new HashSet<>(triples);
+        assertThat(triples).hasSameSizeAs(distinct);
     }
 }
