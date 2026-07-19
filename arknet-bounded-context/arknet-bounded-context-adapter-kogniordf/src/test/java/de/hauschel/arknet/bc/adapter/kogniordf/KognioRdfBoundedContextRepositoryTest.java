@@ -62,7 +62,8 @@ class KognioRdfBoundedContextRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = new KognioRdfBoundedContextRepository(
-                datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate());
+                datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate(),
+                KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
     }
 
     @AfterEach
