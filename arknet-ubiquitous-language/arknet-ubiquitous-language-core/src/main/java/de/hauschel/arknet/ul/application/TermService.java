@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -12,6 +13,7 @@ import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
@@ -29,6 +31,12 @@ import de.hauschel.arknet.ul.domain.TermId;
  * highest running number currently used in the target workspace (numbering is independent per
  * workspace). Keeping identity separate from both the code and the {@code skos:prefLabel} means
  * relabeling never changes identity (a core SKOS principle).</p>
+ *
+ * <p><strong>Concurrency (issue #144).</strong> {@link #add} recomputes its next code against a
+ * fresh read whenever a concurrent {@code term_add} claims the same {@code TERM-N} first, via
+ * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
+ * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
+ * multi-writer concern (ADR-001).</p>
  */
 public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms {
 
@@ -53,11 +61,17 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms {
     public Term add(WorkspaceId workspaceId, NewTerm command) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
+        // Identity is opaque and stable, so it is minted once, outside the retry: only the
+        // business code is recomputed when a concurrent term_add claims the same candidate first
+        // (issue #144). See CodeAssignment for why that race exists and why it must retry rather
+        // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         TermId id = new TermId(resourceIdFactory.newId());
-        TermCode code = nextCode(workspaceId);
-        Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
-        repository.create(workspaceId, term);
-        return term;
+        return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
+            TermCode code = nextCode(workspaceId);
+            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
+            repository.create(workspaceId, term);
+            return term;
+        });
     }
 
     @Override

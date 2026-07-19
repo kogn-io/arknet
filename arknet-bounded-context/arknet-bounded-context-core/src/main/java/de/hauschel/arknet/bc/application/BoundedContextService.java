@@ -15,7 +15,9 @@ import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
@@ -33,6 +35,12 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * independent per workspace, starting at 1). Linking a glossary term is idempotent - a term may
  * be linked to a bounded context at any time; the edge lives inside the aggregate and is
  * therefore carried along by every subsequent replace-by-identity write.</p>
+ *
+ * <p><strong>Concurrency (issue #144).</strong> {@link #add} recomputes its next code against a
+ * fresh read whenever a concurrent {@code bc_add} claims the same {@code BC-N} first, via
+ * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
+ * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
+ * multi-writer concern (ADR-001).</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
         GetBoundedContext, LinkTerm {
@@ -63,12 +71,19 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     public BoundedContext add(WorkspaceId workspaceId, NewBoundedContext command) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
+        // Identity is opaque and stable, so it is minted once, outside the retry: only the
+        // business code is recomputed when a concurrent bc_add claims the same candidate first
+        // (issue #144). See CodeAssignment for why that race exists and why it must retry rather
+        // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         BoundedContextId id = new BoundedContextId(resourceIdFactory.newId());
-        BoundedContextCode code = nextCode(workspaceId);
-        BoundedContext boundedContext = new BoundedContext(id, code, command.name(),
-                command.domainVision(), command.subdomain(), command.ownedBy(), List.of());
-        repository.create(workspaceId, boundedContext);
-        return boundedContext;
+        return CodeAssignment.createRetryingOnCodeCollision(
+                DuplicateBoundedContextCodeException.class, () -> {
+                    BoundedContextCode code = nextCode(workspaceId);
+                    BoundedContext boundedContext = new BoundedContext(id, code, command.name(),
+                            command.domainVision(), command.subdomain(), command.ownedBy(), List.of());
+                    repository.create(workspaceId, boundedContext);
+                    return boundedContext;
+                });
     }
 
     @Override

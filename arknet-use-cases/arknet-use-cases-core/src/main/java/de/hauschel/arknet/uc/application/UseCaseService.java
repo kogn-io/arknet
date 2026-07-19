@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
@@ -14,6 +15,7 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
@@ -39,6 +41,12 @@ import de.hauschel.arknet.uc.domain.UseCaseId;
  * {@link RequirementLookup} ports, once per {@link #add}, before the real {@link UseCase} and its
  * {@link Step}s are constructed. An unknown or ambiguous reference propagates as a didactic
  * runtime exception from the lookup, rejecting the write; nothing is persisted.</p>
+ *
+ * <p><strong>Concurrency (issue #144).</strong> {@link #add} recomputes its next code against a
+ * fresh read whenever a concurrent {@code uc_add} claims the same {@code UCn} first, via
+ * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
+ * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
+ * multi-writer concern (ADR-001).</p>
  */
 public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases {
 
@@ -72,8 +80,12 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases {
     public UseCase add(WorkspaceId workspaceId, NewUseCase command) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
+        // Identity is opaque and stable, so it is minted once, outside the retry. Reference
+        // resolution likewise happens once, before the retry: an unknown/ambiguous actor or
+        // requirement must fail immediately and is not a code collision to retry on. Only the
+        // business code is recomputed when a concurrent uc_add claims the same candidate first
+        // (issue #144) - see CodeAssignment for why that race exists.
         UseCaseId id = new UseCaseId(resourceIdFactory.newId());
-        UseCaseCode code = nextCode(workspaceId);
         ActorRef primaryActor = new ActorRef(actorLookup.resolveByName(workspaceId, command.primaryActor()));
         List<ActorRef> supportingActors = command.supportingActors() == null
                 ? List.of()
@@ -85,12 +97,15 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases {
                 : command.steps().stream()
                         .map(step -> toStep(workspaceId, step))
                         .toList();
-        UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
-                command.trigger(), primaryActor, supportingActors,
-                command.precondition(), command.postcondition(), steps,
-                command.extensions());
-        repository.create(workspaceId, useCase);
-        return useCase;
+        return CodeAssignment.createRetryingOnCodeCollision(DuplicateUseCaseCodeException.class, () -> {
+            UseCaseCode code = nextCode(workspaceId);
+            UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
+                    command.trigger(), primaryActor, supportingActors,
+                    command.precondition(), command.postcondition(), steps,
+                    command.extensions());
+            repository.create(workspaceId, useCase);
+            return useCase;
+        });
     }
 
     private Step toStep(WorkspaceId workspaceId, NewStep step) {
