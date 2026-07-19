@@ -1,0 +1,26 @@
+# Convenience wiring for the arknet-mcp daemon (issue #140).
+#
+#     docker compose up --build
+#
+# This encodes the two non-obvious flags so you don't have to remember them:
+#
+#   * The published port binds to HOST LOOPBACK ONLY (127.0.0.1:47331). The
+#     daemon has no authentication (loopback-only trust boundary, ADR-009); the
+#     image binds 0.0.0.0 *inside* the container (see arknet-mcp/Dockerfile), so
+#     the host-side bind is what keeps it off the LAN. Do NOT change this to a
+#     bare "47331:47331" -- that would expose it to every host on your network.
+#
+#   * The RDF store is mounted from the same host path the plain-jar / other
+#     tooling uses (~/.arknet/rdf), so the model survives container restarts and
+#     is shared with a non-Docker run.
+services:
+  arknet-mcp:
+    build:
+      context: .
+      dockerfile: arknet-mcp/Dockerfile
+    # image: arknet-mcp:latest   # swap for a pre-built tag once one is published
+    ports:
+      - "127.0.0.1:47331:47331"
+    volumes:
+      - "${HOME}/.arknet/rdf:/data/rdf"
+    restart: unless-stopped
