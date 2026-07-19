@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -22,6 +23,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
@@ -76,7 +78,15 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * instead of a flaky race. The decorator disarms itself after firing once per caller, so {@code
  * CodeAssignment}'s retry transaction (a fresh {@code create()} call with a freshly recomputed
  * code) runs unsynchronised, straight through to a normal commit.</p>
+ *
+ * <p><strong>Timeout.</strong> {@link CyclicBarrier#await()}/{@link CountDownLatch#await()} block
+ * indefinitely by default; a future regression that stops one caller from ever reaching its
+ * barrier/latch would otherwise hang {@code join()} forever, so neither {@code @AfterEach} nor
+ * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project has
+ * no {@code junit-platform.properties}/Surefire-level timeout, so this class-level {@link Timeout}
+ * is the only backstop; the interleaving itself normally resolves in well under a second.</p>
  */
+@Timeout(value = 10, unit = TimeUnit.SECONDS)
 class BoundedContextServiceRealStoreConcurrencyTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
