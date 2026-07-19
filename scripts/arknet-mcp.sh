@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Wrapper script for arknet MCP server.
-# Builds the fat JAR on first run, then starts it.
+# Starts the arknet MCP server daemon: a single, long-running process per workspace,
+# reachable over Streamable HTTP on 127.0.0.1:47331 (issue #137).
+#
+# Unlike earlier versions, Claude Code no longer spawns this per session (.mcp.json now
+# points at the HTTP endpoint directly) - you start this once, yourself, and keep it
+# running (foreground in a terminal/tmux, or as a systemd/launchd service) for as long as
+# you want to use arknet against this workspace. Builds the fat JAR on first run.
 # Prerequisites: Java 21+, Maven 3.9+
 
 set -euo pipefail
