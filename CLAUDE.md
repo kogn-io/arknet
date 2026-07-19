@@ -13,6 +13,7 @@
 - Editionen/Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar (kognio-rdf lokal = Community/OSS <-> kognio-memory remote = Closed). Siehe `docs/adr/adr-001-local-client-and-swappable-store.md` (Client+Store), `adr-002-open-core-editions.md` (Editionen), `adr-003-adapter-b-remote-store.md` (Adapter B), `adr-004-spring-ai-mcp-tech-line.md` (Spring-AI-Tech-Linie fuer MCP), `adr-005-store-first-model-lifecycle.md` (Store-first: der Store ist der primaere Modell-Ort; Datei-Pipeline / `arknet_*`-Tools aussterbend), `adr-006-generic-store-read-path.md` (generischer BC-uebergreifender Store-Lesepfad `store_overview`/`resource_get` im Composition Root), `adr-007-shared-shacl-write-gate-module.md` (geteiltes SHACL-Write-Gate als eigenes technisches Modul statt Shared Kernel; grenzt gegen ADR-006 ab), `adr-008-in-adapter-as-bc-gateway.md` (In-Adapter darf einen Nachbar-BC-In-Port konsumieren -- Tor zum BC, nicht Teil von dessen Core; die "kein BC am anderen"-Invariante bindet nur noch die `*-core`; grenzt gegen ADR-006 und ADR-007 ab)
 - CLI: **nicht implementiert**. Produktvision haelt an einem CLI als CI/CD-Convenience-Layer fest -- ein store-first-Neuschnitt, wenn der CI-Bedarf konkret wird.
 - Keine Datei-Pipeline: `arknet-core`, `arknet-projection` und die datei-basierten `arknet_*`-MCP-Tools existieren nicht mehr. Store-first (die BC-Tools) ist der einzige Modell-Lebenszyklus (ADR-005). Einziger generierender Ausgabepfad ist das self-contained `store-report.html`.
+- MCP-Betriebsmodell: ein langlebiger Daemon pro Workspace (Streamable HTTP, `127.0.0.1:47331`), nicht mehr ein Claude-Code-Subprozess pro Session -- Grund: mehrere Sessions/Worktrees teilen seit der git-common-dir-basierten WorkspaceId denselben Store, und jeder Subprozess kollidierte am NativeStore-Verzeichnis-Lock, sobald zwei davon gleichzeitig liefen. Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`. ADR-001/ADR-004 beschreiben noch das alte stdio-Modell -- Nachtrag offen.
 
 ## Tech-Stack
 
@@ -33,7 +34,7 @@ einer eigenen `CLAUDE.md` im Modulverzeichnis -- laedt nur, wenn dort auch
 gearbeitet wird.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (stdio) + Composition Root, verdrahtet alle vier BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006). Details: `arknet-mcp/CLAUDE.md`
+- **arknet-mcp**: MCP-Server (Streamable HTTP, ein lokaler Daemon pro Workspace auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess mehr) + Composition Root, verdrahtet alle vier BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006). Details: `arknet-mcp/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- WorkspaceId, ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), SparqlTerms, UnresolvedReferenceException. Details: `arknet-persistence-support/CLAUDE.md`
 - **arknet-architecture-tests**: ArchUnit-Regeln fuer Dependency-Invarianten, die der Modulschnitt nicht erzwingen kann. Details: `arknet-architecture-tests/CLAUDE.md`
