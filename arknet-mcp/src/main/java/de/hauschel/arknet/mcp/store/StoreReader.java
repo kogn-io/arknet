@@ -48,7 +48,7 @@ public final class StoreReader {
      */
     public StoreSnapshot readSnapshot(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        String query = "SELECT ?s ?p ?o WHERE { { ?s ?p ?o } UNION { GRAPH ?g { ?s ?p ?o } } }";
+        String query = "SELECT DISTINCT ?s ?p ?o WHERE { { ?s ?p ?o } UNION { GRAPH ?g { ?s ?p ?o } } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             List<Triple> triples = handle.sparqlQuery().select(query)
                     .map(StoreReader::toTriple)
@@ -70,7 +70,7 @@ public final class StoreReader {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
-        String query = "SELECT ?p ?o WHERE { { " + iriRef + " ?p ?o } UNION { GRAPH ?g { "
+        String query = "SELECT DISTINCT ?p ?o WHERE { { " + iriRef + " ?p ?o } UNION { GRAPH ?g { "
                 + iriRef + " ?p ?o } } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -92,7 +92,7 @@ public final class StoreReader {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
-        String query = "SELECT ?s ?p WHERE { { ?s ?p " + iriRef + " } UNION { GRAPH ?g { ?s ?p "
+        String query = "SELECT DISTINCT ?s ?p WHERE { { ?s ?p " + iriRef + " } UNION { GRAPH ?g { ?s ?p "
                 + iriRef + " } } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -116,8 +116,7 @@ public final class StoreReader {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(identifier, "identifier");
         String literal = "\"" + identifier.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-        String query = "SELECT DISTINCT ?s WHERE { { ?s <" + DCTERMS_IDENTIFIER + "> " + literal
-                + " } UNION { GRAPH ?g { ?s <" + DCTERMS_IDENTIFIER + "> " + literal + " } } }";
+        String query = "SELECT DISTINCT ?s WHERE { ?s <" + DCTERMS_IDENTIFIER + "> " + literal + " }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> row.getValue("s").orElse(null))
