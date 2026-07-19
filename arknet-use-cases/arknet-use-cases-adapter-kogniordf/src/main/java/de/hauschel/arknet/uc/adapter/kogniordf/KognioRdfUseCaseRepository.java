@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
@@ -125,6 +126,21 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@link #update} rejects a missing subject with {@link UseCaseNotFoundException}. Either write
  * otherwise replaces the subject and all its derived step resources wholesale.</p>
  *
+ * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
+ * catches two callers racing to {@link #create} the same code only when one fully commits before
+ * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
+ * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
+ * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
+ * rejected as a conflict - surfacing not as {@link DuplicateUseCaseCodeException} but as the
+ * RDF4J-backed store's own commit-time exception. That technology-specific exception must not
+ * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
+ * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
+ * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
+ * it "was this a write conflict?" and translates a positive answer into the same
+ * {@link DuplicateUseCaseCodeException} the synchronous check throws - so {@code CodeAssignment}'s
+ * retry (see {@code arknet-shared-kernel}) catches both interleavings the same way, without ever
+ * importing an RDF4J type here.</p>
+ *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the use-case SHACL shapes via {@link ShaclWriteGate} before starting the write
  * transaction; a violation throws {@link WriteConstraintViolationException} and nothing is
@@ -161,6 +177,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
     private final ResourceIdFactory resourceIdFactory;
+    private final Predicate<RuntimeException> isWriteConflict;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -173,12 +190,17 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * @param resourceIdFactory mints the opaque IRI of each derived step resource (must not be
      *                          {@code null}); the use-case root's own identity is minted above
      *                          the store and arrives on the {@link UseCase}
+     * @param isWriteConflict   recognises the technology-specific commit-time exception of a lost
+     *                          {@code SERIALIZABLE} transaction conflict (issue #144), without
+     *                          this class ever naming the RDF4J type itself (must not be
+     *                          {@code null})
      */
     KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate,
-            ResourceIdFactory resourceIdFactory) {
+            ResourceIdFactory resourceIdFactory, Predicate<RuntimeException> isWriteConflict) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
+        this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
     }
 
     @Override
@@ -291,27 +313,39 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     + ">) ?s . ?s ?p ?o } } }";
             IRI graphIri = rdf.createIRI(USE_CASES_GRAPH);
 
-            handle.transactor().inTransaction(tx -> {
-                boolean exists = tx.ask(askExists);
-                if (expectAbsent) {
+            try {
+                handle.transactor().inTransaction(tx -> {
+                    boolean exists = tx.ask(askExists);
+                    if (expectAbsent) {
+                        if (exists) {
+                            throw new ResourceAlreadyExistsException(workspaceId, useCase.id().value());
+                        }
+                        // Identity is opaque and unique by construction, but the human-readable
+                        // code is a separate triple this ASK alone cannot rule out - check it
+                        // here, inside the same write transaction, so no other create() can race
+                        // in between.
+                        if (tx.ask(askCodeExists)) {
+                            throw new DuplicateUseCaseCodeException(workspaceId, useCase.code());
+                        }
+                    } else if (!exists) {
+                        throw new UseCaseNotFoundException(workspaceId, useCase.code());
+                    }
                     if (exists) {
-                        throw new ResourceAlreadyExistsException(workspaceId, useCase.id().value());
+                        tx.update(deleteExisting);
                     }
-                    // Identity is opaque and unique by construction, but the human-readable code
-                    // is a separate triple this ASK alone cannot rule out - check it here, inside
-                    // the same write transaction, so no other create() can race in between.
-                    if (tx.ask(askCodeExists)) {
-                        throw new DuplicateUseCaseCodeException(workspaceId, useCase.code());
-                    }
-                } else if (!exists) {
-                    throw new UseCaseNotFoundException(workspaceId, useCase.code());
+                    tx.add(graphIri, graph);
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                // The synchronous ASK above only catches a concurrent create() that already fully
+                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
+                // here, as the store's own commit-time conflict (issue #144) - translated to the
+                // same signal CodeAssignment's retry already handles.
+                if (expectAbsent && isWriteConflict.test(e)) {
+                    throw new DuplicateUseCaseCodeException(workspaceId, useCase.code());
                 }
-                if (exists) {
-                    tx.update(deleteExisting);
-                }
-                tx.add(graphIri, graph);
-                return null;
-            });
+                throw e;
+            }
         }
     }
 
