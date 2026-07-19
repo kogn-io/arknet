@@ -12,20 +12,32 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
+import org.eclipse.rdf4j.repository.RepositoryException;
+import org.eclipse.rdf4j.sail.SailConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.DatasetTransactor;
+import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.dataset.GraphStore;
+import io.kogn.rdf.dataset.SparqlQuery;
+import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
@@ -207,6 +219,152 @@ class KognioRdfTermRepositoryTest {
         repository.update(WORKSPACE_A, revised);
 
         assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, code));
+    }
+
+    /**
+     * Regression test for the second review pass on #144/PR #147: {@code update()} - unlike
+     * {@code create()} - used to let a genuine store-level write conflict (issue #144,
+     * kogn-io/rdf-core#18) propagate as the raw RDF4J exception instead of translating it into
+     * {@link DuplicateTermCodeException}, even though {@code update()} runs the same
+     * {@code askCodeExists} guard {@code create()} does (issue #114, unlike the req/bc/uc
+     * siblings). No real overlapping threads are needed to prove the translation itself - only
+     * {@link KognioRdfTermRepository#write}'s catch block is under test here, not the store's
+     * {@code SERIALIZABLE} isolation mechanics (those are covered by
+     * {@code TermServiceRealStoreConcurrencyTest}) - so a decorator simply forces the store's
+     * commit-time conflict signal on the next write.
+     */
+    @Test
+    void updateTranslatesAGenuineWriteConflictIntoDuplicateTermCodeException() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+
+        TermRepository conflicting = KognioRdfTermRepositoryFactory.over(new ConflictingWriteLifecycle(lifecycle));
+        Term revised = new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null);
+
+        assertThrows(DuplicateTermCodeException.class, () -> conflicting.update(WORKSPACE_A, revised));
+        assertEquals(Optional.of(new Term(id, code, "Gutschrift", "Erste Definition.", null)),
+                repository.findByCode(WORKSPACE_A, code));
+    }
+
+    /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */
+    private static final class ConflictingWriteLifecycle implements DatasetLifecycle {
+
+        private final DatasetLifecycle delegate;
+
+        ConflictingWriteLifecycle(DatasetLifecycle delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public DatasetHandle acquire(DatasetId id) {
+            return new ConflictingWriteHandle(delegate.acquire(id));
+        }
+
+        @Override
+        public void close(DatasetId id) {
+            delegate.close(id);
+        }
+
+        @Override
+        public void delete(DatasetId id) {
+            delegate.delete(id);
+        }
+
+        @Override
+        public Set<DatasetId> list() {
+            return delegate.list();
+        }
+    }
+
+    private static final class ConflictingWriteHandle implements DatasetHandle {
+
+        private final DatasetHandle delegate;
+
+        ConflictingWriteHandle(DatasetHandle delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public GraphStore graphStore() {
+            return delegate.graphStore();
+        }
+
+        @Override
+        public SparqlQuery sparqlQuery() {
+            return delegate.sparqlQuery();
+        }
+
+        @Override
+        public SparqlUpdate sparqlUpdate() {
+            return delegate.sparqlUpdate();
+        }
+
+        @Override
+        public DatasetTransactor transactor() {
+            DatasetTransactor real = delegate.transactor();
+            return new DatasetTransactor() {
+                @Override
+                public <T> T inTransaction(Function<DatasetTx, T> fn) {
+                    return real.inTransaction(tx -> fn.apply(new ConflictingWriteTx(tx)));
+                }
+            };
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+    }
+
+    /**
+     * Simulates the store's commit-time write-conflict signal (a {@link RepositoryException}
+     * whose cause chain carries a {@link SailConflictException}, issue #144) on the write path's
+     * {@code add} call - the point at which {@link KognioRdfTermRepository#write} has already
+     * passed both in-transaction {@code ASK} guards and is about to persist.
+     */
+    private static final class ConflictingWriteTx implements DatasetTx {
+
+        private final DatasetTx delegate;
+
+        ConflictingWriteTx(DatasetTx delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean ask(String query) {
+            return delegate.ask(query);
+        }
+
+        @Override
+        public void add(IRI graph, ReadableGraph data) {
+            throw new RepositoryException(new SailConflictException("simulated overlapping-transaction conflict"));
+        }
+
+        @Override
+        public void remove(IRI graph, ReadableGraph data) {
+            delegate.remove(graph, data);
+        }
+
+        @Override
+        public void clear(IRI graph) {
+            delegate.clear(graph);
+        }
+
+        @Override
+        public void update(String sparqlUpdate) {
+            delegate.update(sparqlUpdate);
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query) {
+            return delegate.select(query);
+        }
+
+        @Override
+        public ReadableGraph construct(String query) {
+            return delegate.construct(query);
+        }
     }
 
     @Test
