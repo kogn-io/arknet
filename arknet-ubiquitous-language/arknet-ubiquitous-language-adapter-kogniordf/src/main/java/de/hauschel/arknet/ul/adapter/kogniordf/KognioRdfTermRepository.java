@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -91,6 +92,21 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * sibling bounded context relies on being unique, since {@code arkreq:usesTerm} resolves a term by
  * its {@code dcterms:identifier} (#36).</p>
  *
+ * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
+ * catches two callers racing to {@link #create} the same code only when one fully commits before
+ * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
+ * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
+ * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
+ * rejected as a conflict - surfacing not as {@link DuplicateTermCodeException} but as the
+ * RDF4J-backed store's own commit-time exception. That technology-specific exception must not
+ * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
+ * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
+ * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
+ * it "was this a write conflict?" and translates a positive answer into the same
+ * {@link DuplicateTermCodeException} the synchronous check throws (only on {@link #create}, the
+ * only path {@code CodeAssignment}'s retry - see {@code arknet-shared-kernel} - wraps), without
+ * ever importing an RDF4J type here.</p>
+ *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the ubiquitous-language SHACL shapes via {@link ShaclWriteGate} before starting the
  * write transaction (symmetric to the requirements adapter); a violation throws
@@ -152,23 +168,29 @@ public class KognioRdfTermRepository implements TermRepository {
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
     private final DisplayLocale displayLocale;
+    private final Predicate<RuntimeException> isWriteConflict;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from (must not be
-     *                      {@code null})
-     * @param gate          the SHACL write-gate validating candidate graphs before persistence
-     *                      (must not be {@code null})
-     * @param displayLocale the display-language preference selecting which {@code skos:prefLabel}
-     *                      the read paths surface for a multilingual concept (issue #80; must not
-     *                      be {@code null})
+     * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
+     *                        be {@code null})
+     * @param gate            the SHACL write-gate validating candidate graphs before persistence
+     *                        (must not be {@code null})
+     * @param displayLocale   the display-language preference selecting which
+     *                        {@code skos:prefLabel} the read paths surface for a multilingual
+     *                        concept (issue #80; must not be {@code null})
+     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
+     *                        class ever naming the RDF4J type itself (must not be {@code null})
      */
-    KognioRdfTermRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate, DisplayLocale displayLocale) {
+    KognioRdfTermRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate, DisplayLocale displayLocale,
+            Predicate<RuntimeException> isWriteConflict) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
+        this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
     }
 
     @Override
@@ -225,29 +247,42 @@ public class KognioRdfTermRepository implements TermRepository {
         IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                boolean exists = tx.ask(askExists);
-                if (expectAbsent) {
-                    if (exists) {
-                        throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
+            try {
+                handle.transactor().inTransaction(tx -> {
+                    boolean exists = tx.ask(askExists);
+                    if (expectAbsent) {
+                        if (exists) {
+                            throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
+                        }
+                    } else if (!exists) {
+                        throw new TermNotFoundException(workspaceId, term.code());
                     }
-                } else if (!exists) {
-                    throw new TermNotFoundException(workspaceId, term.code());
-                }
-                // Identity is opaque and unique by construction, but the human-readable code is a
-                // separate triple this ASK alone cannot rule out - check it here, inside the same
-                // write transaction, so no other create()/update() can race in between. Applies to
-                // both create() and update(): the FILTER above excludes the subject's own (about
-                // to be replaced) code triple, so update() keeping its own code never false-trips.
-                if (tx.ask(askCodeExists)) {
+                    // Identity is opaque and unique by construction, but the human-readable code
+                    // is a separate triple this ASK alone cannot rule out - check it here, inside
+                    // the same write transaction, so no other create()/update() can race in
+                    // between. Applies to both create() and update(): the FILTER above excludes
+                    // the subject's own (about to be replaced) code triple, so update() keeping
+                    // its own code never false-trips.
+                    if (tx.ask(askCodeExists)) {
+                        throw new DuplicateTermCodeException(workspaceId, term.code());
+                    }
+                    if (exists) {
+                        tx.update(deleteExisting);
+                    }
+                    tx.add(graphIri, graph);
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                // The synchronous ASK above only catches a concurrent create() that already fully
+                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
+                // here, as the store's own commit-time conflict (issue #144) - translated to the
+                // same signal CodeAssignment's retry already handles. Only create() is wrapped by
+                // that retry, so update() lets a real conflict propagate unchanged.
+                if (expectAbsent && isWriteConflict.test(e)) {
                     throw new DuplicateTermCodeException(workspaceId, term.code());
                 }
-                if (exists) {
-                    tx.update(deleteExisting);
-                }
-                tx.add(graphIri, graph);
-                return null;
-            });
+                throw e;
+            }
         }
     }
 
