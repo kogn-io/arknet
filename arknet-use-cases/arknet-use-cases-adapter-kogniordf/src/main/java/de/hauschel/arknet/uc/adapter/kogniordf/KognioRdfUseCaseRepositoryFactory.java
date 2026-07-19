@@ -12,8 +12,10 @@ import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.vocabulary.SHACL;
+import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
+import org.eclipse.rdf4j.sail.SailConflictException;
 
 import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetStoreConfig;
@@ -87,7 +89,31 @@ public final class KognioRdfUseCaseRepositoryFactory {
     public static UseCaseRepository over(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
-        return new KognioRdfUseCaseRepository(lifecycle, buildGate(), resourceIdFactory);
+        return new KognioRdfUseCaseRepository(lifecycle, buildGate(), resourceIdFactory,
+                KognioRdfUseCaseRepositoryFactory::isWriteConflict);
+    }
+
+    /**
+     * Recognises the RDF4J-backed store's commit-time signal for a lost {@code SERIALIZABLE}
+     * transaction conflict (issue #144, kogn-io/rdf-core#18): a {@link RepositoryException} whose
+     * cause chain carries a {@link SailConflictException}. Like {@link #buildGate()}, this method
+     * stays the only place in this package naming those RDF4J types (ArchUnit rule 2) - the
+     * method reference passed to {@link KognioRdfUseCaseRepository} above hands it over as a
+     * technology-neutral {@code Predicate} that references no RDF4J type itself.
+     *
+     * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
+     * same reason {@link #buildGate()} is.</p>
+     */
+    static boolean isWriteConflict(RuntimeException candidate) {
+        if (!(candidate instanceof RepositoryException)) {
+            return false;
+        }
+        for (Throwable cause = candidate.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof SailConflictException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
