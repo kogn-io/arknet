@@ -9,8 +9,12 @@ import java.util.Objects;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 
 /**
  * Generic, read-only store tools exposed over MCP: {@code store_overview} and
@@ -34,30 +38,32 @@ public final class StoreReportTools {
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
     private final HandleResolver handleResolver;
-    private final WorkspaceId defaultWorkspaceId;
-    private final Path reportDir;
+    private final WorkspaceResolver workspaces;
+    private final Path fallbackReportDir;
 
     /**
-     * @param storeReader        the generic store read path
-     * @param prefixes           the CURIE / IRI resolver
-     * @param htmlRenderer       the self-contained HTML report renderer
-     * @param defaultWorkspaceId the workspace used when a tool call omits one
-     * @param reportDir          the directory the HTML report is written into
+     * @param storeReader       the generic store read path
+     * @param prefixes          the CURIE / IRI resolver
+     * @param htmlRenderer      the self-contained HTML report renderer
+     * @param workspaces        resolves each call's default workspace from its origin directory (an
+     *                          explicit {@code workspace} tool argument still overrides it)
+     * @param fallbackReportDir the directory the HTML report is written into when a call carries no
+     *                          origin directory (the report otherwise lands in the calling project)
      */
     public StoreReportTools(
             final StoreReader storeReader,
             final Prefixes prefixes,
             final HtmlReportRenderer htmlRenderer,
-            final WorkspaceId defaultWorkspaceId,
-            final Path reportDir) {
+            final WorkspaceResolver workspaces,
+            final Path fallbackReportDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         Objects.requireNonNull(prefixes, "prefixes");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
         this.digestRenderer = new DigestRenderer(prefixes);
         this.resourceRenderer = new ResourceRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
-        this.defaultWorkspaceId = Objects.requireNonNull(defaultWorkspaceId, "defaultWorkspaceId");
-        this.reportDir = Objects.requireNonNull(reportDir, "reportDir");
+        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+        this.fallbackReportDir = Objects.requireNonNull(fallbackReportDir, "fallbackReportDir");
     }
 
     @McpTool(name = "store_overview",
@@ -67,15 +73,18 @@ public final class StoreReportTools {
                     + " written to disk (its path is returned). Works for every bounded context.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeOverview(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = HandleResolver.resolveWorkspace(workspace, defaultWorkspaceId);
+        final String originDir = originDir(context);
+        final WorkspaceId workspaceId =
+                HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir));
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(workspaceId);
         final String digest = digestRenderer.render(workspaceId, snapshot);
         final String html = htmlRenderer.render(workspaceId, snapshot, digest);
-        final Path written = writeReport(html);
+        final Path written = writeReport(html, reportDirFor(originDir));
         return digest + "\n# HTML report: " + written + "\n";
     }
 
@@ -85,27 +94,52 @@ public final class StoreReportTools {
                     + " as a convenience a bare business id (e.g. FR-1) is resolved via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String resourceGet(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
             final String id,
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = HandleResolver.resolveWorkspace(workspace, defaultWorkspaceId);
+        final WorkspaceId workspaceId =
+                HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir(context)));
         final String iri = handleResolver.resolve(workspaceId, id);
         final List<Triple> outgoing = storeReader.outgoing(workspaceId, iri);
         final List<Triple> incoming = storeReader.incoming(workspaceId, iri);
         return resourceRenderer.render(iri, outgoing, incoming);
     }
 
-    private Path writeReport(final String html) {
+    /**
+     * The directory the HTML report is written into: the calling client's origin directory when
+     * it supplied one (so the report lands in the project the call came from, issue #137), else
+     * the server's {@link #fallbackReportDir}.
+     */
+    private Path reportDirFor(final String originDir) {
+        return (originDir == null || originDir.isBlank()) ? fallbackReportDir : Path.of(originDir);
+    }
+
+    private Path writeReport(final String html, final Path targetDir) {
         try {
-            Files.createDirectories(reportDir);
-            final Path target = reportDir.resolve(REPORT_FILE_NAME);
+            Files.createDirectories(targetDir);
+            final Path target = targetDir.resolve(REPORT_FILE_NAME);
             Files.writeString(target, html, StandardCharsets.UTF_8);
             return target.toAbsolutePath();
         } catch (final IOException e) {
-            throw new IllegalStateException("Failed to write store report to " + reportDir + ": "
+            throw new IllegalStateException("Failed to write store report to " + targetDir + ": "
                     + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Extracts the calling client's origin directory from the per-call transport context (issue
+     * #137). Null-tolerant on every hop; used both to resolve the default workspace and to place
+     * the written report.
+     */
+    private static String originDir(final McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        return dir == null ? null : dir.toString();
     }
 }

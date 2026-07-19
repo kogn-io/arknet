@@ -7,9 +7,13 @@ import java.util.stream.Collectors;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
@@ -53,13 +57,15 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * The identity itself is a store-internal detail that never needs to cross the MCP boundary;
  * responses render the code back to the caller, not the underlying resource identity.</p>
  *
- * <p><strong>Workspace (one server = one workspace).</strong> Every in-port takes a
- * {@link WorkspaceId} routing key. This adapter is single-user/local: it operates
- * against exactly one workspace - the {@code workspaceId} injected at construction -
- * and does not expose the workspace as a tool argument. The composition root resolves
- * that id per project (explicit config, else the git/working-directory name); see
- * {@code WorkspaceIdResolver}. TODO: a remote/team mode may instead expose the
- * workspace as an explicit tool argument or via MCP session context.</p>
+ * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
+ * {@link WorkspaceId} routing key. arknet-mcp runs as one shared server for every
+ * workspace on the machine (issue #137), so there is no single injected workspace any
+ * more: each tool call resolves its own workspace from the request's origin directory,
+ * carried in the MCP transport context under {@link WorkspaceResolver#WORKSPACE_DIR_KEY}.
+ * The framework hands this adapter that context as an {@link McpSyncRequestContext}
+ * parameter - a framework type, excluded from the generated tool input schema, so it is
+ * not a caller-facing argument. The concrete resolution (git top-level, slugging,
+ * explicit-id override) stays behind {@link WorkspaceResolver} in the composition root.</p>
  *
  * <p><strong>Term display resolution (issue #77 nachtrag).</strong> {@link TermRef} carries a
  * linked term's opaque subject identity, not its business code - but a human who typed
@@ -83,11 +89,11 @@ public final class RequirementMcpTools {
     private final LinkTerm linkTerm;
     private final GetRequirementSchema getRequirementSchema;
     private final ResolveTerms resolveTerms;
-    private final WorkspaceId workspaceId;
+    private final WorkspaceResolver workspaces;
 
     /**
      * Creates the adapter with its six driving in-ports, the borrowed ubiquitous-language
-     * display port and the workspace it serves.
+     * display port and the resolver that maps each call's origin directory to a workspace.
      *
      * @param addRequirement        in-port backing {@code req_add}
      * @param listRequirements      in-port backing {@code req_list}
@@ -97,7 +103,7 @@ public final class RequirementMcpTools {
      * @param getRequirementSchema  in-port backing {@code req_schema}
      * @param resolveTerms          ubiquitous-language driving port used only to render a linked
      *                              term's business code instead of its bare IRI
-     * @param workspaceId           the single workspace all tool calls route to
+     * @param workspaces            resolves each call's target workspace from its origin directory
      */
     public RequirementMcpTools(
             final AddRequirement addRequirement,
@@ -107,7 +113,7 @@ public final class RequirementMcpTools {
             final LinkTerm linkTerm,
             final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
-            final WorkspaceId workspaceId) {
+            final WorkspaceResolver workspaces) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
@@ -115,13 +121,30 @@ public final class RequirementMcpTools {
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
-        this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
+        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+    }
+
+    /**
+     * Extracts the calling client's origin directory from the per-call transport context -
+     * the value the server's context extractor placed there off the request header (issue
+     * #137). Null-tolerant on every hop: a call without a context, without a transport
+     * context, or without the key resolves to {@code null}, which {@link WorkspaceResolver}
+     * turns into the server's default workspace.
+     */
+    private static String originDir(final McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        return dir == null ? null : dir.toString();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "req_add", description = "Register a new requirement (functional or non-functional).")
     public String add(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Short human-readable summary of the requirement") final String title,
             @McpToolParam(description = "The normative statement, e.g. 'The system shall ...'")
             final String description,
@@ -138,6 +161,7 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Free-text quality category (optional, e.g. performance, security, "
                     + "reliability); only meaningful for NON_FUNCTIONAL requirements", required = false)
             final String qualityCategory) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final RequirementType requirementType = RequirementType.valueOf(type);
         final Priority requirementPriority = blankToNull(priority) == null
                 ? null
@@ -146,18 +170,19 @@ public final class RequirementMcpTools {
                 new NewRequirement(title, description, requirementType, requirementPriority,
                         blankToNull(motivatedBy), blankToNull(qualityCategory),
                         acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria)));
-        return format(created);
+        return format(workspaceId, created);
     }
 
     @McpTool(name = "req_list", description = "List all managed requirements.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String list() {
+    public String list(final McpSyncRequestContext context) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final List<Requirement> all = listRequirements.list(workspaceId);
         if (all.isEmpty()) {
             return "(no requirements)";
         }
         // One batch resolution across every requirement's linked terms, not one per requirement.
-        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(all);
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(workspaceId, all);
         return all.stream().map(r -> format(r, termsById))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
@@ -165,22 +190,26 @@ public final class RequirementMcpTools {
     @McpTool(name = "req_get", description = "Fetch a single requirement by its identity (e.g. FR-1, NFR-7).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final RequirementCode code = new RequirementCode(id);
         return getRequirement.get(workspaceId, code)
-                .map(this::format)
+                .map(r -> format(workspaceId, r))
                 .orElse("Requirement not found: " + code.value());
     }
 
     @McpTool(name = "req_set_status", description = "Change the lifecycle status of a requirement.")
     public String setStatus(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
             @McpToolParam(description = "Target status: PROPOSED or ACCEPTED") final String status) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final RequirementCode code = new RequirementCode(id);
         final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
         final Requirement updated =
                 setRequirementStatus.setStatus(workspaceId, code, requirementStatus);
-        return format(updated);
+        return format(workspaceId, updated);
     }
 
     @McpTool(name = "req_link_term",
@@ -188,13 +217,15 @@ public final class RequirementMcpTools {
                     + "The term must already exist (create it with term_add first). Linking the same "
                     + "term twice is a no-op.")
     public String linkTerm(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
             @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
                     + "against the glossary - not its skos:prefLabel or its store IRI)")
             final String termId) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final Requirement updated =
                 linkTerm.linkTerm(workspaceId, new RequirementCode(reqId), termId);
-        return format(updated);
+        return format(workspaceId, updated);
     }
 
     @McpTool(name = "req_schema",
@@ -210,8 +241,8 @@ public final class RequirementMcpTools {
     }
 
     /** Renders a single requirement, resolving its own linked terms in one batch call. */
-    private String format(final Requirement r) {
-        return format(r, resolveTermsFor(List.of(r)));
+    private String format(final WorkspaceId workspaceId, final Requirement r) {
+        return format(r, resolveTermsFor(workspaceId, List.of(r)));
     }
 
     /**
@@ -259,7 +290,8 @@ public final class RequirementMcpTools {
      * store-first term with more than one {@code dcterms:identifier}, see
      * {@code KognioRdfTermRepository#findByIds}) carries the same code on every row.</p>
      */
-    private Map<ResourceId, ResolvedTerm> resolveTermsFor(final List<Requirement> requirements) {
+    private Map<ResourceId, ResolvedTerm> resolveTermsFor(
+            final WorkspaceId workspaceId, final List<Requirement> requirements) {
         final ResourceId[] ids = requirements.stream()
                 .flatMap(r -> r.usesTerms().stream())
                 .map(TermRef::value)

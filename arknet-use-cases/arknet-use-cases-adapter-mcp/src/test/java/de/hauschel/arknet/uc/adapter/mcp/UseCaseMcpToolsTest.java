@@ -16,6 +16,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -51,11 +52,14 @@ class UseCaseMcpToolsTest {
         return new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/" + slug));
     }
 
+    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final UseCaseMcpTools adapter =
-            new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, WorkspaceId.DEFAULT);
+            new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, WORKSPACES);
 
     @Test
     void declaresTheThreeUseCaseTools() {
@@ -79,22 +83,22 @@ class UseCaseMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, resolveTerms, resolveRequirements, WorkspaceId.DEFAULT));
+                () -> new UseCaseMcpTools(null, stub, stub, resolveTerms, resolveRequirements, WORKSPACES));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveRequirements, WorkspaceId.DEFAULT));
+                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveRequirements, WORKSPACES));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, null, WorkspaceId.DEFAULT));
+                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, null, WORKSPACES));
     }
 
     @Test
-    void rejectsNullWorkspace() {
+    void rejectsNullWorkspaceResolver() {
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, null));
     }
 
     @Test
     void addMapsNestedStepsAndReferencesToCommand() {
-        adapter.add("Place order", "Customer places an order", "Webshop", "Customer opens the cart",
+        adapter.add(null, "Place order", "Customer places an order", "Webshop", "Customer opens the cart",
                 "Customer", List.of("PaymentProvider"), "Customer is logged in", "Order is recorded",
                 List.of(new StepInput(1, "Customer selects items", List.of("FR-1")),
                         new StepInput(2, "Customer confirms and pays", List.of())),
@@ -117,7 +121,7 @@ class UseCaseMcpToolsTest {
 
     @Test
     void addNormalizesOmittedOptionalsToNullAndEmpty() {
-        adapter.add("Reset password", "User resets password", null, null, "Customer", null, null, null,
+        adapter.add(null, "Reset password", "User resets password", null, null, "Customer", null, null, null,
                 List.of(new StepInput(1, "User requests a reset link", null)), null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
@@ -146,7 +150,7 @@ class UseCaseMcpToolsTest {
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure")));
 
-        String rendered = adapter.get("UC1");
+        String rendered = adapter.get(null, "UC1");
 
         assertTrue(rendered.contains("UC1 Place order"));
         assertTrue(rendered.contains("primaryActor: Customer"));
@@ -172,7 +176,7 @@ class UseCaseMcpToolsTest {
                 "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
                 List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of()));
 
-        String rendered = adapter.get("UC1");
+        String rendered = adapter.get(null, "UC1");
 
         assertTrue(rendered.contains("primaryActor: https://w3id.org/arknet/id/unknown-actor"), rendered);
         assertTrue(rendered.contains("realises https://w3id.org/arknet/id/unknown-req"), rendered);
@@ -181,7 +185,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucGetReturnsNotFoundMessageForUnknownCode() {
         stub.getResult = Optional.empty();
-        assertEquals("Use case not found: UC99", adapter.get("UC99"));
+        assertEquals("Use case not found: UC99", adapter.get(null, "UC99"));
     }
 
     @Test
@@ -197,7 +201,7 @@ class UseCaseMcpToolsTest {
                         customer, List.of(), null, null,
                         List.of(new Step(1, "request link", List.of())), List.of()));
 
-        String rendered = adapter.list();
+        String rendered = adapter.list(null);
 
         assertEquals("UC1 | Place order | Customer places an order\n"
                 + "UC2 | Reset password | User resets password", rendered);
@@ -206,7 +210,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucListReturnsPlaceholderWhenEmpty() {
         stub.listResult = List.of();
-        assertEquals("(no use cases)", adapter.list());
+        assertEquals("(no use cases)", adapter.list(null));
     }
 
     @Test
@@ -216,7 +220,7 @@ class UseCaseMcpToolsTest {
                         + "Create it first with req_add before a use-case step realises it.");
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
-                () -> adapter.add("Place order", "goal", null, null, "Customer", null, null, null,
+                () -> adapter.add(null, "Place order", "goal", null, null, "Customer", null, null, null,
                         List.of(new StepInput(1, "select items", List.of("FR-1"))), null));
 
         assertTrue(thrown.getMessage().contains("FR-1"));

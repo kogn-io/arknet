@@ -1,19 +1,23 @@
 package de.hauschel.arknet.req.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
@@ -44,10 +48,13 @@ class RequirementMcpToolsTest {
     private static final RequirementId ID =
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
+    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT);
+            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES);
 
     @Test
     void declaresTheSixRequirementTools() {
@@ -66,22 +73,43 @@ class RequirementMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        null, stub, stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT));
+                        null, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, null, stub, resolveTerms, WorkspaceId.DEFAULT));
+                        stub, stub, stub, stub, null, stub, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, null, resolveTerms, WorkspaceId.DEFAULT));
+                        stub, stub, stub, stub, stub, null, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
+                        stub, stub, stub, stub, stub, stub, null, WORKSPACES));
     }
 
     @Test
-    void rejectsNullWorkspace() {
+    void rejectsNullWorkspaceResolver() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, null));
+    }
+
+    /**
+     * The per-call {@link org.springframework.ai.mcp.annotation.context.McpSyncRequestContext}
+     * parameter (issue #137) is a framework type, not a caller-facing tool argument: Spring AI
+     * must exclude it from the generated tool input schema. Proven against the real annotation
+     * scanner ({@link SyncMcpToolProvider}), not just asserted - {@code req_add}'s schema carries
+     * its documented business inputs and no {@code context} property.
+     */
+    @Test
+    void perCallContextParameterIsExcludedFromTheGeneratedToolSchema() {
+        Map<String, Object> addSchema = new SyncMcpToolProvider(List.of(adapter)).getToolSpecifications().stream()
+                .filter(s -> s.tool().name().equals("req_add"))
+                .findFirst().orElseThrow()
+                .tool().inputSchema();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) addSchema.get("properties");
+        assertTrue(properties.containsKey("title"), properties::toString);
+        assertTrue(properties.containsKey("acceptanceCriteria"), properties::toString);
+        assertFalse(properties.containsKey("context"), properties::toString);
     }
 
     /** Issue #31: {@code req_schema} delegates to {@link GetRequirementSchema} and renders every term. */
@@ -98,7 +126,7 @@ class RequirementMcpToolsTest {
     void addPassesAcceptanceCriteriaThroughAndRendersThem() {
         List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
 
-        String rendered = adapter.add("t", "d", "FUNCTIONAL", criteria, null, null, null);
+        String rendered = adapter.add(null, "t", "d", "FUNCTIONAL", criteria, null, null, null);
 
         assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
         assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
@@ -113,7 +141,7 @@ class RequirementMcpToolsTest {
     @Test
     void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add("t", "d", "FUNCTIONAL", null, null, null, null));
+                () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null));
     }
 
     @Test
@@ -122,7 +150,7 @@ class RequirementMcpToolsTest {
         // the code the human typed is what they see rendered back (issue #77 nachtrag).
         resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-1"), new TermCode("TERM-1"));
 
-        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
 
         assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
@@ -136,7 +164,7 @@ class RequirementMcpToolsTest {
         resolveTerms.register(termResourceId, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = termResourceId;
 
-        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -151,7 +179,7 @@ class RequirementMcpToolsTest {
         stub.nextLinkedTermResourceId = unresolvable;
         // Deliberately not registered with resolveTerms - simulates a missing/deleted term.
 
-        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
 
         assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
     }
@@ -173,7 +201,7 @@ class RequirementMcpToolsTest {
         resolveTerms.register(duplicated, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = duplicated;
 
-        String rendered = adapter.linkTerm("FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -187,7 +215,7 @@ class RequirementMcpToolsTest {
         resolveTerms.register(second, new TermCode("TERM-2"));
         stub.nextLinkedTerms = List.of(first, second);
 
-        adapter.linkTerm("FR-1", "TERM-1");
+        adapter.linkTerm(null, "FR-1", "TERM-1");
 
         assertEquals(1, resolveTerms.callCount());
     }
@@ -206,7 +234,7 @@ class RequirementMcpToolsTest {
                 requirementWithTerms("FR-1", termA),
                 requirementWithTerms("FR-2", termB));
 
-        String rendered = adapter.list();
+        String rendered = adapter.list(null);
 
         assertEquals(1, resolveTerms.callCount());
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
@@ -217,7 +245,7 @@ class RequirementMcpToolsTest {
     void listOfRequirementsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
         stub.allRequirements = List.of(requirementWithTerms("FR-1"));
 
-        adapter.list();
+        adapter.list(null);
 
         assertEquals(0, resolveTerms.callCount());
     }

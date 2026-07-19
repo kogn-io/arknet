@@ -23,6 +23,7 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -38,10 +39,13 @@ class BoundedContextMcpToolsTest {
     private static final BoundedContextId ID =
             new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
+    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final BoundedContextMcpTools adapter =
-            new BoundedContextMcpTools(stub, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT);
+            new BoundedContextMcpTools(stub, stub, stub, stub, resolveTerms, WORKSPACES);
 
     @Test
     void declaresTheFourBoundedContextTools() {
@@ -58,22 +62,22 @@ class BoundedContextMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(null, stub, stub, stub, resolveTerms, WorkspaceId.DEFAULT));
+                () -> new BoundedContextMcpTools(null, stub, stub, stub, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, null, resolveTerms, WorkspaceId.DEFAULT));
+                () -> new BoundedContextMcpTools(stub, stub, stub, null, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, stub, null, WorkspaceId.DEFAULT));
+                () -> new BoundedContextMcpTools(stub, stub, stub, stub, null, WORKSPACES));
     }
 
     @Test
-    void rejectsNullWorkspace() {
+    void rejectsNullWorkspaceResolver() {
         assertThrows(NullPointerException.class,
                 () -> new BoundedContextMcpTools(stub, stub, stub, stub, resolveTerms, null));
     }
 
     @Test
     void addPassesTheFieldsThroughAndRendersThem() {
-        String rendered = adapter.add("OrderManagement", "Owns the customer order lifecycle end to end.",
+        String rendered = adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.",
                 "CORE_DOMAIN", "orders-team");
 
         assertEquals("OrderManagement", stub.lastAddCommand.name());
@@ -86,7 +90,7 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
-        adapter.add("OrderManagement", "Owns the customer order lifecycle end to end.", "  ", "");
+        adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.", "  ", "");
 
         assertEquals(null, stub.lastAddCommand.subdomain());
         assertEquals(null, stub.lastAddCommand.ownedBy());
@@ -96,7 +100,7 @@ class BoundedContextMcpToolsTest {
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
         resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-1"), new TermCode("TERM-1"));
 
-        String rendered = adapter.linkTerm("BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
 
         assertEquals(new BoundedContextCode("BC-1"), stub.lastLinkedBoundedContext);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
@@ -109,7 +113,7 @@ class BoundedContextMcpToolsTest {
         resolveTerms.register(termResourceId, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = termResourceId;
 
-        String rendered = adapter.linkTerm("BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -119,7 +123,7 @@ class BoundedContextMcpToolsTest {
         ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-term");
         stub.nextLinkedTermResourceId = unresolvable;
 
-        String rendered = adapter.linkTerm("BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
 
         assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
     }
@@ -131,7 +135,7 @@ class BoundedContextMcpToolsTest {
         resolveTerms.register(duplicated, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = duplicated;
 
-        String rendered = adapter.linkTerm("BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -146,7 +150,7 @@ class BoundedContextMcpToolsTest {
                 boundedContextWithTerms("BC-1", termA),
                 boundedContextWithTerms("BC-2", termB));
 
-        String rendered = adapter.list();
+        String rendered = adapter.list(null);
 
         assertEquals(1, resolveTerms.callCount());
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
@@ -157,14 +161,14 @@ class BoundedContextMcpToolsTest {
     void listOfBoundedContextsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
         stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"));
 
-        adapter.list();
+        adapter.list(null);
 
         assertEquals(0, resolveTerms.callCount());
     }
 
     @Test
     void getRendersUnknownBoundedContextMessage() {
-        String rendered = adapter.get("BC-99");
+        String rendered = adapter.get(null, "BC-99");
 
         assertTrue(rendered.contains("Bounded context not found: BC-99"), rendered);
     }
