@@ -4,7 +4,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
+
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 
 /**
  * Resolves a resource handle - CURIE, full IRI, or bare business id - to an absolute IRI.
@@ -102,5 +107,24 @@ public final class HandleResolver {
         return (workspace == null || workspace.isBlank())
                 ? defaultWorkspaceId
                 : new WorkspaceId(workspace.trim());
+    }
+
+    /**
+     * Extracts the calling client's origin directory from the per-call transport context (issue
+     * #137). Null-tolerant on every hop; a {@code null} result is turned into the server's
+     * default workspace by {@link WorkspaceResolver}. Shared by {@link StoreReportTools} and
+     * {@code de.hauschel.arknet.mcp.trace.TraceabilityMcpTools} instead of each carrying its own
+     * copy, the same reasoning as {@link #resolveWorkspace}.
+     *
+     * @param context the per-call request context, may itself be {@code null}
+     * @return the origin directory, or {@code null} if none was supplied
+     */
+    public static String originDir(McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        return dir == null ? null : dir.toString();
     }
 }

@@ -44,7 +44,15 @@ pro Session und nicht als ein Daemon pro Workspace.
    stdio-Subprozess (nur lokale Prozesse derselben Maschine haben Zugriff). Der Herkunfts-Header
    ist ausdruecklich KEINE Authentifizierung: ein lokaler Client koennte ein fremdes
    Workspace-Verzeichnis behaupten -- an dieser Single-User-/Loopback-Grenze eine bewusst
-   akzeptierte Annahme.
+   akzeptierte Annahme. Diese Annahme deckt nicht nur Workspace-*Routing*, sondern auch eine
+   konkrete Dateisystem-Capability: `store_overview` schreibt `store-report.html` unvalidiert in
+   den vom Header behaupteten Pfad (`Path.of(originDir)`, `Files.createDirectories`) -- vor #137
+   schrieb es nur in ein fest konfiguriertes, admin-kontrolliertes Verzeichnis. Jeder lokale
+   Aufrufer, der den Loopback-Port erreicht, kann den Daemon-Prozess damit veranlassen, ein
+   beliebiges Verzeichnis anzulegen und hineinzuschreiben -- kein neuer Zugriffsvektor gegenueber
+   dem bereits akzeptierten "kann Workspace X vortaeuschen" (Store-Lesezugriff war genauso offen),
+   aber eine zusaetzliche, hier bewusst mitakzeptierte Capability (Schreibzugriff statt nur
+   Store-Zugriff), keine Einschraenkung auf ein Unterverzeichnis des Workspace vorgesehen.
 5. Der Prozess-Lifecycle liegt beim Menschen, nicht bei Claude Code: Claude Code verbindet sich
    nur gegen die konfigurierte HTTP-URL und setzt den Header, spawnt und verwaltet aber keinen
    Prozess mehr (fuer HTTP-Eintraege in `.mcp.json` gibt es dafuer keinen Mechanismus).

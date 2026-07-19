@@ -35,7 +35,7 @@ gearbeitet wird.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
 - **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Workspaces auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess mehr; Workspace pro Aufruf aus dem `${PWD}`-Header, ADR-009) + Composition Root, verdrahtet alle vier BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006). Details: `arknet-mcp/CLAUDE.md`
-- **arknet-shared-kernel**: DDD Shared Kernel -- WorkspaceId, ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
+- **arknet-shared-kernel**: DDD Shared Kernel -- WorkspaceId, WorkspaceResolver-Port (Per-Aufruf-Aufloesung, ADR-009), ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), SparqlTerms, UnresolvedReferenceException. Details: `arknet-persistence-support/CLAUDE.md`
 - **arknet-architecture-tests**: ArchUnit-Regeln fuer Dependency-Invarianten, die der Modulschnitt nicht erzwingen kann. Details: `arknet-architecture-tests/CLAUDE.md`
 - **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar, opake Identitaet, acceptanceCriterion. Details: `arknet-requirements/CLAUDE.md`
