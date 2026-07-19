@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "arknet": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/arknet-mcp.sh"
+      "type": "http",
+      "url": "http://127.0.0.1:47331/mcp"
     }
   }
 }

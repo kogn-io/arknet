@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-mcp</artifactId>
-    <description>Composition Root: Spring-Boot-MCP-Server (stdio), buendelt die Tools der hexagonalen BCs (requirements, ubiquitous-language, use-cases) ueber einen geteilten DatasetLifecycle sowie den generischen Store-Lesepfad (store_overview/resource_get)</description>
+    <description>Composition Root: Spring-Boot-MCP-Server (Streamable HTTP, Loopback), buendelt die Tools der hexagonalen BCs (requirements, ubiquitous-language, use-cases) ueber einen geteilten DatasetLifecycle sowie den generischen Store-Lesepfad (store_overview/resource_get)</description>
 
     <!-- Lokale Versions-Anhebungen fuer diese (einzige) Spring-Boot-Anwendung. Die rdf4j-BOM
          wird im arknet-parent zuerst importiert und zieht ueber ihren rdf4j-Parent veraltete
@@ -124,11 +124,15 @@
             <artifactId>rdf-dataset</artifactId>
         </dependency>
 
-        <!-- Spring AI 2.0 MCP-Server (NON-web = stdio-Variante). Version aus spring-ai-bom.
-             Zieht spring-boot-starter (inkl. logback) transitiv; slf4j-simple entfaellt. -->
+        <!-- Spring AI 2.0 MCP-Server ueber Streamable HTTP (webmvc), gebunden auf Loopback
+             (issue #137: ein langlebiger, vom Admin gestarteter Prozess pro Workspace statt
+             ein stdio-Spawn pro Claude-Code-Session, letzteres kollidierte am
+             NativeStore-Verzeichnis-Lock, sobald mehrere Sessions/Worktrees denselben
+             Workspace teilen). Version aus spring-ai-bom. Zieht spring-boot-starter-web
+             (eingebetteter Tomcat) transitiv. -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-server</artifactId>
+            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
         </dependency>
 
         <dependency>

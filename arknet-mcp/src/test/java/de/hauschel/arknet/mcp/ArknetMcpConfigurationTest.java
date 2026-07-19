@@ -28,7 +28,7 @@ import de.hauschel.arknet.ul.domain.Term;
  * wired stack must actually persist and read a requirement back.
  *
  * <p>Uses {@link ApplicationContextRunner} to load only this configuration - the full
- * Spring AI MCP server auto-configuration and stdio transport are out of scope here
+ * Spring AI MCP server auto-configuration and its HTTP transport are out of scope here
  * (their tool registration was established in #27).</p>
  */
 class ArknetMcpConfigurationTest {

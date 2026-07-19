@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  stdio MCP server: stdout is the transport channel, so every log line must go
-  to stderr instead. A single ConsoleAppender targeting System.err achieves that.
+  Long-running daemon (issue #137): logs go to stderr so a foreground/nohup-launched
+  process keeps its stdout free for shell redirection, e.g. into a log file.
 -->
 <configuration>
     <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
