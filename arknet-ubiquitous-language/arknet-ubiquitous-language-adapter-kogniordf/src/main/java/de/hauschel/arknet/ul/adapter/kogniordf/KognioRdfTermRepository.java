@@ -103,9 +103,11 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
  * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
  * it "was this a write conflict?" and translates a positive answer into the same
- * {@link DuplicateTermCodeException} the synchronous check throws (only on {@link #create}, the
- * only path {@code CodeAssignment}'s retry - see {@code arknet-shared-kernel} - wraps), without
- * ever importing an RDF4J type here.</p>
+ * {@link DuplicateTermCodeException} the synchronous check throws - on both {@link #create} and
+ * {@link #update}, since (unlike the req/bc/uc siblings) {@code askCodeExists} runs on both paths
+ * here (issue #114). {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) only wraps
+ * {@link #create} today - {@link #update} has no caller yet, no {@code term_update} tool exists -
+ * but the translation stays symmetric regardless, without ever importing an RDF4J type here.</p>
  *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the ubiquitous-language SHACL shapes via {@link ShaclWriteGate} before starting the
@@ -273,12 +275,16 @@ public class KognioRdfTermRepository implements TermRepository {
                     return null;
                 });
             } catch (RuntimeException e) {
-                // The synchronous ASK above only catches a concurrent create() that already fully
-                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
-                // here, as the store's own commit-time conflict (issue #144) - translated to the
-                // same signal CodeAssignment's retry already handles. Only create() is wrapped by
-                // that retry, so update() lets a real conflict propagate unchanged.
-                if (expectAbsent && isWriteConflict.test(e)) {
+                // The synchronous ASK above only catches a concurrent create()/update() that
+                // already fully committed; two genuinely overlapping SERIALIZABLE transactions
+                // instead surface here, as the store's own commit-time conflict (issue #144) -
+                // translated to the same signal CodeAssignment's retry already handles. Unlike the
+                // req/bc/uc siblings, askCodeExists above runs on both create() and update() (issue
+                // #114), so a genuine conflict is reachable on either path; translate both rather
+                // than only the one CodeAssignment's retry currently wraps (create()) - update()
+                // has no caller today (no term_update tool exists), but a raw technology exception
+                // must never be the contract this class exposes.
+                if (isWriteConflict.test(e)) {
                     throw new DuplicateTermCodeException(workspaceId, term.code());
                 }
                 throw e;
