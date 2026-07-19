@@ -21,18 +21,49 @@ Der arknet-MCP-Server ist ein einzelner, langlebiger Prozess, der ueber Streamab
 `127.0.0.1:47331` **alle** arknet-Workspaces der Maschine bedient -- **kein** Subprozess, den
 Claude Code selbst startet. Ein HTTP-Eintrag in `.mcp.json` ist bei Claude Code rein passiv: es
 verbindet sich nur zur URL, startet oder verwaltet aber nichts. Vor der ersten Nutzung also
-einmalig selbst starten, z.B.:
+einmalig selbst starten. Es gibt drei Wege; **Docker ist der empfohlene** (kein lokales Java/Maven
+noetig).
+
+#### Option A: Docker (empfohlen)
+
+Image aus dem Repo-Root bauen -- der Build-Kontext MUSS das Repo-Root sein, weil `arknet-mcp` ein
+Multi-Modul-Reaktor ist und seine Nachbar-Module braucht:
+
+```bash
+docker build -f arknet-mcp/Dockerfile -t arknet-mcp .
+docker run --rm -d --name arknet-mcp \
+  -p 127.0.0.1:47331:47331 \
+  -v ~/.arknet/rdf:/data/rdf \
+  arknet-mcp
+```
+
+Das `-p 127.0.0.1:47331:47331` ist **kein Zufall, nicht vereinfachen**: Im Container bindet der
+Server auf `0.0.0.0` (per `SERVER_ADDRESS`-Env im Image), weil Dockers Port-Publish-NAT eingehende
+Verbindungen an die Container-`eth0` zustellt, nicht ans Loopback -- ein reiner `127.0.0.1`-Bind
+waere von aussen unerreichbar. Damit wandert die Vertrauensgrenze auf die **Host-Seite**: der
+Publish MUSS explizit an Host-Loopback binden (`127.0.0.1:47331:47331`). Ein blosses `-p
+47331:47331` wuerde den **nicht authentifizierten** Daemon im ganzen LAN exponieren (ADR-009). Das
+Volume mappt denselben Host-Pfad, den auch der Bare-Jar-Lauf nutzt (`~/.arknet/rdf`,
+`arknet.rdf.storage`), damit das Modell Container-Restarts ueberlebt.
+
+#### Option B: Docker Compose
+
+Verdrahtet Port-Publish (Host-Loopback) und Volume-Mount vor:
+
+```bash
+docker compose up --build
+```
+
+#### Option C: aus dem Quellcode (fuer Contributor, lokales JDK 25 + Maven noetig)
 
 ```bash
 mvn -pl arknet-mcp -am package -DskipTests
 java -jar arknet-mcp/target/arknet-mcp-*.jar
 ```
 
-Ein fertiges Docker-Image (kein lokales Java/Maven noetig) ist als Zieldistribution geplant, aber
-noch nicht gebaut. Solange der Prozess laeuft, koennen beliebig viele Claude-Code-Sessions (auch
-parallele Worktrees desselben Workspace) sich denselben Store teilen, ohne sich am
-NativeStore-Verzeichnis-Lock zu blockieren. Laeuft der Daemon nicht, meldet Claude Code die
-MCP-Verbindung als fehlgeschlagen.
+Solange der Prozess laeuft, koennen beliebig viele Claude-Code-Sessions (auch parallele Worktrees
+desselben Workspace) sich denselben Store teilen, ohne sich am NativeStore-Verzeichnis-Lock zu
+blockieren. Laeuft der Daemon nicht, meldet Claude Code die MCP-Verbindung als fehlgeschlagen.
 
 Welchen Workspace ein Aufruf trifft, entscheidet das Verzeichnis, aus dem die Claude-Code-Session
 gestartet wurde: die `.mcp.json` sendet es im Header `X-Arknet-Workspace-Dir: ${PWD}` mit, und der

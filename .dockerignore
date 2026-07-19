@@ -1,0 +1,17 @@
+# Keep the Docker build context small and reproducible. The build stage compiles
+# from source, so build outputs, VCS metadata and IDE state are all noise here.
+**/target/
+**/bin/
+.git/
+.claude/
+.settings/
+.classpath
+.project
+*.iml
+.idea/
+.vscode/
+dependency-reduced-pom.xml
+.flattened-pom.xml
+recherche/
+store-report.html
+*.log
