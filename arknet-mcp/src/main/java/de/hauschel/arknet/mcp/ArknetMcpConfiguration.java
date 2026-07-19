@@ -13,6 +13,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.mcp.store.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
@@ -93,9 +94,12 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
- * {@code arknet.rdf.storage}, no competing locks) and the single {@link WorkspaceId} bean, so
- * requirements, glossary terms, use cases and bounded contexts of the same project land in the
- * same workspace/dataset and can reference each other.</p>
+ * {@code arknet.rdf.storage}, no competing locks) and the single {@link WorkspaceResolver} bean.
+ * Every tool call resolves its {@link WorkspaceId} per request from the caller's origin directory
+ * (issue #137: one shared HTTP server for every workspace on the machine, see
+ * {@link WorkspaceHttpTransportConfiguration}), so requirements, glossary terms, use cases and
+ * bounded contexts of the <em>same</em> project land in the same workspace/dataset and can
+ * reference each other, while different projects stay isolated.</p>
  */
 @Configuration(proxyBeanMethods = false)
 public class ArknetMcpConfiguration {
@@ -167,16 +171,20 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The single workspace this server instance operates against. Resolved once at
-     * startup from the explicit {@code arknet.workspace.id} property, else derived from
-     * the git top-level / working-directory name (defaulting to {@code arknet.workspace.dir},
-     * i.e. the launched project root). See {@link WorkspaceIdResolver}.
+     * Resolves each tool call's target workspace from the calling client's origin directory
+     * (issue #137). arknet-mcp is one shared server for every workspace on the machine, so there
+     * is no longer a single workspace fixed at boot; the {@link WorkspaceResolver} maps a
+     * per-call origin directory - carried in the request header (see
+     * {@link WorkspaceHttpTransportConfiguration}) - to a {@link WorkspaceId} via
+     * {@link WorkspaceIdResolver} (explicit {@code arknet.workspace.id} override, else the git
+     * top-level / working-directory name). A call without an origin falls back to
+     * {@code arknet.workspace.dir} (the daemon's own working directory).
      */
     @Bean
-    WorkspaceId workspaceId(
+    WorkspaceResolver workspaceResolver(
             @Value("${arknet.workspace.id:}") final String explicitId,
-            @Value("${arknet.workspace.dir:${user.dir}}") final Path workingDir) {
-        return new WorkspaceIdResolver().resolve(explicitId, workingDir);
+            @Value("${arknet.workspace.dir:${user.dir}}") final Path fallbackDir) {
+        return new GitWorkspaceResolver(new WorkspaceIdResolver(), explicitId, fallbackDir);
     }
 
     /**
@@ -189,9 +197,10 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     RequirementMcpTools requirementMcpTools(
-            final RequirementService service, final ResolveTerms resolveTerms, final WorkspaceId workspaceId) {
+            final RequirementService service, final ResolveTerms resolveTerms,
+            final WorkspaceResolver workspaceResolver) {
         return new RequirementMcpTools(
-                service, service, service, service, service, service, resolveTerms, workspaceId);
+                service, service, service, service, service, service, resolveTerms, workspaceResolver);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------
@@ -226,8 +235,8 @@ public class ArknetMcpConfiguration {
 
     @Bean
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
-            final TermService service, final WorkspaceId workspaceId) {
-        return new UbiquitousLanguageMcpTools(service, service, service, workspaceId);
+            final TermService service, final WorkspaceResolver workspaceResolver) {
+        return new UbiquitousLanguageMcpTools(service, service, service, workspaceResolver);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------
@@ -289,8 +298,9 @@ public class ArknetMcpConfiguration {
     @Bean
     UseCaseMcpTools useCaseMcpTools(
             final UseCaseService service, final ResolveTerms resolveTerms,
-            final ResolveRequirements resolveRequirements, final WorkspaceId workspaceId) {
-        return new UseCaseMcpTools(service, service, service, resolveTerms, resolveRequirements, workspaceId);
+            final ResolveRequirements resolveRequirements, final WorkspaceResolver workspaceResolver) {
+        return new UseCaseMcpTools(
+                service, service, service, resolveTerms, resolveRequirements, workspaceResolver);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------
@@ -329,8 +339,9 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     BoundedContextMcpTools boundedContextMcpTools(
-            final BoundedContextService service, final ResolveTerms resolveTerms, final WorkspaceId workspaceId) {
-        return new BoundedContextMcpTools(service, service, service, service, resolveTerms, workspaceId);
+            final BoundedContextService service, final ResolveTerms resolveTerms,
+            final WorkspaceResolver workspaceResolver) {
+        return new BoundedContextMcpTools(service, service, service, service, resolveTerms, workspaceResolver);
     }
 
     // --- Generic store report (domain-agnostic read path) ----------------------
@@ -359,10 +370,10 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     StoreReportTools storeReportTools(
-            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceId workspaceId,
-            @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path reportDir) {
+            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaceResolver,
+            @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path fallbackReportDir) {
         return new StoreReportTools(
-                storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceId, reportDir);
+                storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceResolver, fallbackReportDir);
     }
 
     /**
@@ -374,7 +385,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     TraceabilityMcpTools traceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceId workspaceId) {
-        return new TraceabilityMcpTools(storeReader, prefixes, workspaceId);
+            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaceResolver) {
+        return new TraceabilityMcpTools(storeReader, prefixes, workspaceResolver);
     }
 }

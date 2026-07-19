@@ -4,8 +4,12 @@ import java.util.Objects;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.mcp.store.HandleResolver;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreReader;
@@ -29,19 +33,20 @@ public final class TraceabilityMcpTools {
     private final StoreReader storeReader;
     private final TraceabilityRenderer renderer;
     private final HandleResolver handleResolver;
-    private final WorkspaceId defaultWorkspaceId;
+    private final WorkspaceResolver workspaces;
 
     /**
-     * @param storeReader        the generic store read path
-     * @param prefixes           the CURIE / IRI resolver
-     * @param defaultWorkspaceId the workspace used when a tool call omits one
+     * @param storeReader the generic store read path
+     * @param prefixes    the CURIE / IRI resolver
+     * @param workspaces  resolves each call's default workspace from its origin directory (an
+     *                    explicit {@code workspace} tool argument still overrides it)
      */
     public TraceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceId defaultWorkspaceId) {
+            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaces) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         this.renderer = new TraceabilityRenderer(Objects.requireNonNull(prefixes, "prefixes"));
         this.handleResolver = new HandleResolver(storeReader, prefixes);
-        this.defaultWorkspaceId = Objects.requireNonNull(defaultWorkspaceId, "defaultWorkspaceId");
+        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
     }
 
     @McpTool(name = "trace_matrix",
@@ -50,10 +55,11 @@ public final class TraceabilityMcpTools {
                     + " step flow's arkreq:stepRealises). One line per requirement, business codes not IRIs.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String traceMatrix(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = resolveWorkspace(workspace);
+        final WorkspaceId workspaceId = resolveWorkspace(context, workspace);
         return renderer.traceMatrix(workspaceId, readGraph(workspaceId));
     }
 
@@ -63,10 +69,11 @@ public final class TraceabilityMcpTools {
                     + " case). Reported as two lists.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = resolveWorkspace(workspace);
+        final WorkspaceId workspaceId = resolveWorkspace(context, workspace);
         return renderer.orphanCheck(workspaceId, readGraph(workspaceId));
     }
 
@@ -78,12 +85,13 @@ public final class TraceabilityMcpTools {
                     + " via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String impactAnalysis(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
             final String id,
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = resolveWorkspace(workspace);
+        final WorkspaceId workspaceId = resolveWorkspace(context, workspace);
         final String targetIri = handleResolver.resolve(workspaceId, id);
         return renderer.impactAnalysis(workspaceId, readGraph(workspaceId), targetIri);
     }
@@ -92,7 +100,25 @@ public final class TraceabilityMcpTools {
         return TraceabilityGraph.of(storeReader.readSnapshot(workspaceId));
     }
 
-    private WorkspaceId resolveWorkspace(final String workspace) {
-        return HandleResolver.resolveWorkspace(workspace, defaultWorkspaceId);
+    /**
+     * The workspace a call targets: an explicit {@code workspace} tool argument if given, else
+     * the one resolved from the request's origin directory (issue #137).
+     */
+    private WorkspaceId resolveWorkspace(final McpSyncRequestContext context, final String workspace) {
+        return HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir(context)));
+    }
+
+    /**
+     * Extracts the calling client's origin directory from the per-call transport context (issue
+     * #137). Null-tolerant on every hop; {@link WorkspaceResolver} turns a {@code null} into the
+     * server's default workspace.
+     */
+    private static String originDir(final McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        return dir == null ? null : dir.toString();
     }
 }

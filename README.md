@@ -17,10 +17,11 @@ claude --plugin-dir /path/to/arknet
 
 ### Voraussetzung: MCP-Server-Daemon starten
 
-Der arknet-MCP-Server ist ein einzelner, langlebiger Prozess pro Workspace (Streamable HTTP auf
-`127.0.0.1:47331`) -- **kein** Subprozess, den Claude Code selbst startet. Ein HTTP-Eintrag in
-`.mcp.json` ist bei Claude Code rein passiv: es verbindet sich nur zur URL, startet oder verwaltet
-aber nichts. Vor der ersten Nutzung also einmalig selbst starten, z.B.:
+Der arknet-MCP-Server ist ein einzelner, langlebiger Prozess, der ueber Streamable HTTP auf
+`127.0.0.1:47331` **alle** arknet-Workspaces der Maschine bedient -- **kein** Subprozess, den
+Claude Code selbst startet. Ein HTTP-Eintrag in `.mcp.json` ist bei Claude Code rein passiv: es
+verbindet sich nur zur URL, startet oder verwaltet aber nichts. Vor der ersten Nutzung also
+einmalig selbst starten, z.B.:
 
 ```bash
 mvn -pl arknet-mcp -am package -DskipTests
@@ -33,8 +34,14 @@ parallele Worktrees desselben Workspace) sich denselben Store teilen, ohne sich 
 NativeStore-Verzeichnis-Lock zu blockieren. Laeuft der Daemon nicht, meldet Claude Code die
 MCP-Verbindung als fehlgeschlagen.
 
-Mehrere arknet-Workspaces auf derselben Maschine beanspruchen aktuell denselben festen Port und
-kollidieren -- workspace-spezifische Ports sind noch nicht automatisiert.
+Welchen Workspace ein Aufruf trifft, entscheidet das Verzeichnis, aus dem die Claude-Code-Session
+gestartet wurde: die `.mcp.json` sendet es im Header `X-Arknet-Workspace-Dir: ${PWD}` mit, und der
+Server leitet daraus (per git-common-dir, wie in einer stdio-Session) die WorkspaceId ab. Darum
+**Claude Code aus dem Projektverzeichnis starten** -- `${PWD}` traegt Umgebungsvariablen-Semantik,
+kein dynamisches Arbeitsverzeichnis. Ein Aufruf ohne diesen Header faellt auf den Workspace des
+Daemon-Arbeitsverzeichnisses zurueck. Der Header ist keine Authentifizierung, sondern nur
+Workspace-Routing an einer Loopback-/Single-User-Grenze (ADR-009). Weil der Workspace pro Aufruf
+aus dem Header kommt, teilen sich alle Projekte diesen einen Port ohne Kollision.
 
 ### MCP-Tools
 

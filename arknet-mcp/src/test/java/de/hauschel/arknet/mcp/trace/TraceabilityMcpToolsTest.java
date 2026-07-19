@@ -80,7 +80,7 @@ class TraceabilityMcpToolsTest {
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of()));
 
-            String matrix = tools.traceMatrix(null);
+            String matrix = tools.traceMatrix(null, null);
 
             assertThat(matrix).contains("# Traceability matrix -- workspace " + WS.value());
             assertThat(matrix).contains(fr1.code().value()).contains(fr2.code().value());
@@ -117,7 +117,7 @@ class TraceabilityMcpToolsTest {
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of()));
 
-            String report = tools.orphanCheck(null);
+            String report = tools.orphanCheck(null, null);
 
             assertThat(report).contains("# Orphan check -- workspace " + WS.value());
             assertThat(report).contains("## Requirements without a realising use case (1)");
@@ -155,7 +155,7 @@ class TraceabilityMcpToolsTest {
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of()));
 
-            String impact = tools.impactAnalysis(term.code().value(), null);
+            String impact = tools.impactAnalysis(null, term.code().value(), null);
 
             assertThat(impact).contains("# Impact analysis -- workspace " + WS.value());
             assertThat(impact).contains("target: " + term.code().value());
@@ -170,7 +170,7 @@ class TraceabilityMcpToolsTest {
             assertThat(context).hasNotFailed();
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            assertThatThrownBy(() -> tools.impactAnalysis("FR-999", null))
+            assertThatThrownBy(() -> tools.impactAnalysis(null, "FR-999", null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("No resource found");
         });

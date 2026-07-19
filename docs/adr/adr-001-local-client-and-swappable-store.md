@@ -1,20 +1,23 @@
 # ADR-001: Lokaler Single-User-Client und austauschbarer Store
 
 - Status: Proposed (2026-07-13)
-- Verwandt: ADR-002, ADR-003, ADR-005
+- Verwandt: ADR-002, ADR-003, ADR-005, ADR-009 (MCP-Transport -- praezisiert, wie der
+  lokale MCP-Server erreichbar ist, ohne die Single-User-Client-Entscheidung hier zu
+  aendern)
 
 ## Kontext
 
 arknet verwaltet Architekturmodelle (DDD, Requirements, ...) als RDF und exponiert sie
 MCP-first fuer KI-Agenten. Zwei Nutzungsszenarien stehen im Raum: ein einzelner Architekt
 arbeitet lokal an einem oder mehreren Modellen; oder ein Team arbeitet gemeinsam an einem
-Modell. arknet soll dabei schlank und lokal bleiben (stdio-MCP, embeddable), aber der Weg
+Modell. arknet soll dabei schlank und lokal bleiben (lokaler MCP-Server, embeddable Store), aber der Weg
 zum Team-Szenario darf nicht verbaut werden. Fuer das Team-Szenario existiert ein remote
 Backend (kognio-memory), das Team / Multi-Project / Auth selbst traegt.
 
 ## Entscheidung
 
-1. **arknet ist ein lokaler Single-User-Client** (stdio-MCP + CLI). `arknet-core` und die
+1. **arknet ist ein lokaler Single-User-Client** (lokaler MCP-Server + CLI; der konkrete
+   MCP-Transport ist ADR-009s Entscheidung, nicht diese). `arknet-core` und die
    Komponenten-Cores kennen KEINEN Auth-, Tenancy- oder Team-Begriff; Nutzer-Identitaet und
    Zugriffskontrolle sind kein Belang von arknet.
 

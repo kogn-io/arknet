@@ -17,6 +17,7 @@ import io.kogn.rdf.dataset.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -69,7 +70,11 @@ class StoreReportToolsTest {
 
         Prefixes prefixes = Prefixes.defaults();
         StoreReader reader = new StoreReader(lifecycle);
-        tools = new StoreReportTools(reader, prefixes, new HtmlReportRenderer(prefixes), WORKSPACE, reportDir);
+        // Shared server: the default workspace is resolved per call. This test drives calls with a
+        // null context (no origin), so the resolver returns the fixed test workspace and the report
+        // lands in the fallback reportDir - exactly the pre-#137 single-workspace behaviour.
+        WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        tools = new StoreReportTools(reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, reportDir);
     }
 
     @AfterEach
@@ -79,7 +84,7 @@ class StoreReportToolsTest {
 
     @Test
     void storeOverviewDigestSpansBothBoundedContextsAndWritesHtml() throws Exception {
-        String result = tools.storeOverview(null);
+        String result = tools.storeOverview(null, null);
 
         // Digest is generic and contains resources from both BCs. Both identities are opaque
         // IRIs (requirement since #68, term since #71), unbound to any CURIE prefix, so the
@@ -111,8 +116,8 @@ class StoreReportToolsTest {
      */
     @Test
     void resourceGetResolvesFullIriAndBareIdToTheSameResource() {
-        String viaIri = tools.resourceGet(FR_1_IRI, null);
-        String viaBareId = tools.resourceGet("FR-1", null);
+        String viaIri = tools.resourceGet(null, FR_1_IRI, null);
+        String viaBareId = tools.resourceGet(null, "FR-1", null);
 
         assertThat(viaBareId).isEqualTo(viaIri);
         assertThat(viaIri).contains("dcterms:title").contains("\"Login\"");
@@ -121,7 +126,7 @@ class StoreReportToolsTest {
 
     @Test
     void resourceGetRejectsUnknownPrefixWithDidacticMessage() {
-        assertThatThrownBy(() -> tools.resourceGet("nope:X", null))
+        assertThatThrownBy(() -> tools.resourceGet(null, "nope:X", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown prefix")
                 .hasMessageContaining("Known prefixes");
@@ -129,7 +134,7 @@ class StoreReportToolsTest {
 
     @Test
     void resourceGetRejectsUnknownBareIdWithGuidance() {
-        assertThatThrownBy(() -> tools.resourceGet("FR-999", null))
+        assertThatThrownBy(() -> tools.resourceGet(null, "FR-999", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("No resource found");
     }
@@ -155,8 +160,8 @@ class StoreReportToolsTest {
                 List.of("Login succeeds with valid credentials")));
 
         try {
-            String fromOtherWorkspace = tools.resourceGet("FR-1", otherWorkspace.value());
-            String fromDefaultWorkspace = tools.resourceGet("FR-1", null);
+            String fromOtherWorkspace = tools.resourceGet(null, "FR-1", otherWorkspace.value());
+            String fromDefaultWorkspace = tools.resourceGet(null, "FR-1", null);
 
             assertThat(fromOtherWorkspace).contains("dcterms:title").contains("\"Andere Anmeldung\"");
             assertThat(fromOtherWorkspace).doesNotContain("\"Login\"");

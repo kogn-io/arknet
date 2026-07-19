@@ -1,7 +1,9 @@
 # ADR-003: Adapter B -- remote Store gegen kognio-memory (+ Security-Richtung)
 
 - Status: Proposed (2026-07-14) -- Richtungsentscheidung; kein Code in arknet, bis Adapter B ansteht
-- Verwandt: ADR-001, ADR-002, ADR-004
+- Verwandt: ADR-001, ADR-002, ADR-004, ADR-009 (MCP-Transport -- prueft Adapter B explizit
+  als Alternative fuer arknet-mcps lokales Mehrprozess-Problem und verwirft sie, weil sie
+  ADR-001 Punkt 1 fuer die Community Edition braeche)
 
 ## Kontext
 

@@ -14,6 +14,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
@@ -29,9 +30,12 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class UbiquitousLanguageMcpToolsTest {
 
+    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
-            new UbiquitousLanguageMcpTools(stub, stub, stub, WorkspaceId.DEFAULT);
+            new UbiquitousLanguageMcpTools(stub, stub, stub, WORKSPACES);
 
     @Test
     void declaresTheThreeTermTools() {
@@ -48,25 +52,25 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(null, stub, stub, WorkspaceId.DEFAULT));
+                () -> new UbiquitousLanguageMcpTools(null, stub, stub, WORKSPACES));
     }
 
     @Test
-    void rejectsNullWorkspace() {
+    void rejectsNullWorkspaceResolver() {
         assertThrows(NullPointerException.class,
                 () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null));
     }
 
     @Test
     void addPassesThroughActorFacet() {
-        adapter.add("Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller");
+        adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller");
 
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), stub.lastCommand.actorFacet());
     }
 
     @Test
     void addWithoutActorKindLeavesFacetNull() {
-        adapter.add("Gutschrift", "def a", null, null);
+        adapter.add(null, "Gutschrift", "def a", null, null);
 
         assertNull(stub.lastCommand.actorFacet());
     }
@@ -74,7 +78,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void addRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add("Gutschrift", "def a", "NOT_A_KIND", null));
+                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null));
     }
 
     /** Structural stub implementing the three driving in-ports. */

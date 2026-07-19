@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -82,6 +83,11 @@ class ArknetMcpConfigurationTest {
                 });
     }
 
+    /**
+     * With an explicit {@code arknet.workspace.id} pinned, the per-call {@link WorkspaceResolver}
+     * (issue #137) resolves every call to that fixed workspace regardless of the call's origin
+     * directory - the override wins over any directory-derived name.
+     */
     @Test
     void resolvesWorkspaceIdFromExplicitProperty() {
         contextRunner
@@ -90,8 +96,9 @@ class ArknetMcpConfigurationTest {
                         "arknet.workspace.id=noistill")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).getBean(WorkspaceId.class)
-                            .isEqualTo(new WorkspaceId("noistill"));
+                    WorkspaceResolver resolver = context.getBean(WorkspaceResolver.class);
+                    assertThat(resolver.resolve(null)).isEqualTo(new WorkspaceId("noistill"));
+                    assertThat(resolver.resolve("/some/other/dir")).isEqualTo(new WorkspaceId("noistill"));
                 });
     }
 }

@@ -1,7 +1,9 @@
 # ADR-004: Spring AI 2.0 als Tech-Linie fuer den MCP-Layer
 
 - Status: Proposed (2026-07-13)
-- Verwandt: ADR-002, ADR-003
+- Verwandt: ADR-002, ADR-003, ADR-009 (MCP-Transport -- wechselt den Transport-Baustein
+  innerhalb dieser Tech-Linie von stdio auf HTTP, aendert nichts an der Annotation-basierten
+  SDK-Generation, die diese ADR entscheidet)
 
 ## Kontext
 
@@ -22,9 +24,10 @@ obsolet.
 1. MCP-Tools werden als `@McpTool`/`@McpToolParam` auf Spring-Beans deklariert; Tool-Name,
    Beschreibung und JSON-Input-Schema werden aus Annotation und Methodensignatur abgeleitet,
    nicht handgebaut.
-2. `arknet-mcp` ist die Spring-Boot-Composition-Root (stdio, `web-application-type=none`).
-   Springs Annotation-Scanner sammelt die `@McpTool`-Beans aller BC-Adapter ein; die
-   Composition Root verdrahtet die Hexagone als Beans. Kein manuelles Tool-Spec-Bridging.
+2. `arknet-mcp` ist die Spring-Boot-Composition-Root. Springs Annotation-Scanner sammelt
+   die `@McpTool`-Beans aller BC-Adapter ein; die Composition Root verdrahtet die Hexagone
+   als Beans. Kein manuelles Tool-Spec-Bridging. Der konkrete Transport (stdio vs. HTTP)
+   ist ADR-009s Entscheidung, nicht dieser.
 3. Kein rohes MCP SDK mehr. Nur die Spring-AI-BOM managed `mcp-core` -- eine Version im
    gesamten Reaktor.
 

@@ -5,8 +5,12 @@ import java.util.Objects;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
@@ -36,36 +40,57 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * identity itself is a store-internal detail that never needs to cross the MCP boundary;
  * responses render the code back to the caller, not the underlying resource identity.</p>
  *
- * <p><strong>Workspace (one server = one workspace).</strong> Every in-port takes a
- * {@link WorkspaceId} routing key. This adapter is single-user/local: it operates
- * against exactly one workspace - the {@code workspaceId} injected at construction -
- * and does not expose the workspace as a tool argument. The composition root resolves
- * that id per project; see {@code WorkspaceIdResolver}.</p>
+ * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
+ * {@link WorkspaceId} routing key. arknet-mcp runs as one shared server for every
+ * workspace on the machine (issue #137), so there is no single injected workspace any
+ * more: each tool call resolves its own workspace from the request's origin directory,
+ * carried in the MCP transport context under {@link WorkspaceResolver#WORKSPACE_DIR_KEY}.
+ * The framework hands this adapter that context as an {@link McpSyncRequestContext}
+ * parameter - a framework type, excluded from the generated tool input schema, so it is
+ * not a caller-facing argument. The concrete resolution (git top-level, slugging,
+ * explicit-id override) stays behind {@link WorkspaceResolver} in the composition root.</p>
  */
 public final class UbiquitousLanguageMcpTools {
 
     private final AddTerm addTerm;
     private final ListTerms listTerms;
     private final GetTerm getTerm;
-    private final WorkspaceId workspaceId;
+    private final WorkspaceResolver workspaces;
 
     /**
-     * Creates the adapter with its three driving in-ports and the workspace it serves.
+     * Creates the adapter with its three driving in-ports and the resolver that maps each
+     * call's origin directory to a workspace.
      *
      * @param addTerm     in-port backing {@code term_add}
      * @param listTerms   in-port backing {@code term_list}
      * @param getTerm     in-port backing {@code term_get}
-     * @param workspaceId the single workspace all tool calls route to
+     * @param workspaces  resolves each call's target workspace from its origin directory
      */
     public UbiquitousLanguageMcpTools(
             final AddTerm addTerm,
             final ListTerms listTerms,
             final GetTerm getTerm,
-            final WorkspaceId workspaceId) {
+            final WorkspaceResolver workspaces) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
-        this.workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
+        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+    }
+
+    /**
+     * Extracts the calling client's origin directory from the per-call transport context -
+     * the value the server's context extractor placed there off the request header (issue
+     * #137). Null-tolerant on every hop: a call without a context, without a transport
+     * context, or without the key resolves to {@code null}, which {@link WorkspaceResolver}
+     * turns into the server's default workspace.
+     */
+    private static String originDir(final McpSyncRequestContext context) {
+        if (context == null) {
+            return null;
+        }
+        final McpTransportContext transport = context.transportContext();
+        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        return dir == null ? null : dir.toString();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -73,6 +98,7 @@ public final class UbiquitousLanguageMcpTools {
     @McpTool(name = "term_add",
             description = "Register a new ubiquitous-language term (minted as a SKOS concept in the glossary).")
     public String add(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "The term itself (its preferred label), e.g. 'Gutschrift'")
             final String label,
             @McpToolParam(description = "The meaning of the term (its definition)") final String definition,
@@ -82,6 +108,7 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
             final String actorRole) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final ActorFacet facet = blankToNull(actorKind) == null
                 ? null
                 : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
@@ -91,7 +118,8 @@ public final class UbiquitousLanguageMcpTools {
 
     @McpTool(name = "term_list", description = "List all glossary terms.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String list() {
+    public String list(final McpSyncRequestContext context) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final List<Term> all = listTerms.list(workspaceId);
         return all.stream().map(UbiquitousLanguageMcpTools::format)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no terms)");
@@ -100,7 +128,9 @@ public final class UbiquitousLanguageMcpTools {
     @McpTool(name = "term_get", description = "Fetch a single glossary term by its identity (e.g. TERM-1).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
+            final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final TermCode code = new TermCode(id);
         return getTerm.get(workspaceId, code)
                 .map(UbiquitousLanguageMcpTools::format)
