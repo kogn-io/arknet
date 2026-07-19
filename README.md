@@ -16,6 +16,26 @@ W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar
 claude --plugin-dir /path/to/arknet
 ```
 
+### Voraussetzung: MCP-Server-Daemon starten
+
+Der arknet-MCP-Server ist ein einzelner, langlebiger Prozess pro Workspace (Streamable HTTP auf
+`127.0.0.1:47331`) -- **kein** Subprozess, den Claude Code selbst startet. Ein HTTP-Eintrag in
+`.mcp.json` ist bei Claude Code rein passiv: es verbindet sich nur zur URL, startet oder verwaltet
+aber nichts. Vor der ersten Nutzung also einmalig selbst starten:
+
+```bash
+scripts/arknet-mcp.sh
+```
+
+Das baut die JAR beim ersten Lauf und startet danach den Daemon im Vordergrund -- fuer dauerhaften
+Betrieb in einem Terminal/tmux-Fenster laufen lassen oder als systemd-/launchd-Unit einrichten.
+Solange der Prozess laeuft, koennen beliebig viele Claude-Code-Sessions (auch parallele Worktrees
+desselben Workspace) sich denselben Store teilen, ohne sich am NativeStore-Verzeichnis-Lock zu
+blockieren. Laeuft der Daemon nicht, meldet Claude Code die MCP-Verbindung als fehlgeschlagen.
+
+Mehrere arknet-Workspaces auf derselben Maschine beanspruchen aktuell denselben festen Port und
+kollidieren -- workspace-spezifische Ports sind noch nicht automatisiert.
+
 ### MCP-Tools
 
 Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
@@ -82,7 +102,7 @@ Die vormals geduldeten datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_v
 | Modul | Beschreibung |
 |-------|-------------|
 | `arknet-ontology` | OWL-Ontologie und SHACL-Shapes (nur .ttl Ressourcen, kein Java) |
-| `arknet-mcp` | MCP-Server (stdio) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases / bounded-context) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) + den Traceability-Lesepfad (`trace_matrix`/`orphan_check`/`impact_analysis`) |
+| `arknet-mcp` | MCP-Server (Streamable HTTP, lokaler Daemon) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases / bounded-context) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) + den Traceability-Lesepfad (`trace_matrix`/`orphan_check`/`impact_analysis`) |
 | `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`, opake `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technischer Support der kognio-rdf-Out-Adapter: das geteilte SHACL-Write-Gate (validate-before-commit) |
 | `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
