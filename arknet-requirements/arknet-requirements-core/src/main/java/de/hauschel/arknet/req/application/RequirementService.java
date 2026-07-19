@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
+import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -98,29 +99,24 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(command, "command");
+        // Identity is opaque and stable, so it is minted once, outside the retry: only the
+        // business code is recomputed when a concurrent add() claims the same candidate first
+        // (issue #108, generalised to all four bounded contexts in issue #144). nextCode() reads
+        // the highest running number client-side, before create()'s own in-transaction uniqueness
+        // check, so two concurrent req_add calls for the same type can legitimately compute the
+        // same candidate code; CodeAssignment turns that race into an invisible, automatic retry
+        // instead of surfacing the out-adapter's guard as a caller-visible failure.
         RequirementId id = new RequirementId(resourceIdFactory.newId());
-        // nextCode() reads the highest running number client-side, before create()'s own
-        // in-transaction uniqueness check - so two concurrent add() calls for the same type can
-        // legitimately compute the same candidate code (issue #108). The out-adapter's ASK guard
-        // inside the write transaction still prevents two requirements from ever *persisting*
-        // under the same code; it just means one of two well-formed concurrent callers otherwise
-        // sees that guard fire as a DuplicateRequirementCodeException, even though nothing about
-        // its own request was wrong. Retrying with a freshly recomputed code turns that race into
-        // an invisible, automatic retry instead of a caller-visible failure.
-        DuplicateRequirementCodeException lastConflict = null;
-        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            RequirementCode code = nextCode(workspaceId, command.type());
-            Requirement requirement = new Requirement(id, code, command.title(), command.description(),
-                    command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
-                    command.qualityCategory(), List.of(), command.acceptanceCriteria());
-            try {
-                repository.create(workspaceId, requirement);
-                return requirement;
-            } catch (DuplicateRequirementCodeException conflict) {
-                lastConflict = conflict;
-            }
-        }
-        throw lastConflict;
+        return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
+                DuplicateRequirementCodeException.class, () -> {
+                    RequirementCode code = nextCode(workspaceId, command.type());
+                    Requirement requirement = new Requirement(id, code, command.title(),
+                            command.description(), command.type(), RequirementStatus.PROPOSED,
+                            command.priority(), command.motivatedBy(), command.qualityCategory(),
+                            List.of(), command.acceptanceCriteria());
+                    repository.create(workspaceId, requirement);
+                    return requirement;
+                });
     }
 
     @Override
