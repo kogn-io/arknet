@@ -56,9 +56,16 @@ git-Toplevel-Verzeichnisname -> geslugter Arbeitsverzeichnis-Name -> `WorkspaceI
 Damit isoliert jedes Claude-/git-Projekt seine Daten ohne Konfigurationszwang, explizit
 ueberschreibbar in der `.mcp.json`. Kein Actor/Provenance-Feld am
 `Requirement` (generatedBy = Agent additiv spaeter, PROV-konform). SHACL-Validierung auf
-dem Schreibpfad ist auch lokal ein Ziel, nicht nur ein Team-Belang; im Single-Writer-Betrieb
-genuegt dafuer standalone Validierung -- transaktionale Validierung wird erst mit Adapter B
-(Multi-Writer, ADR-003) noetig.
+dem Schreibpfad ist auch lokal ein Ziel, nicht nur ein Team-Belang.
+**Single-User ist nicht gleichbedeutend mit Single-Writer:** ein einzelner Nutzer treibt
+ueblicherweise mehrere parallele Sessions/Agenten-Aufrufe gegen denselben lokalen
+Adapter-A-Store -- das ist der Normalfall, kein Randfall, und gilt unabhaengig von Auth/
+Tenancy. Nebenlaeufigkeitssicherheit fuer geteilten veraenderlichen Zustand (z.B. atomare
+Vergabe menschenlesbarer Business-Codes, konfliktsichere Schreiboperationen) ist deshalb
+bereits im Single-User-Bau notwendig, nicht erst mit Adapter B. Adapter B (ADR-003) addiert
+zusaetzlich echte Multi-Tenant-Nebenlaeufigkeit (mehrere Nutzer/Teams) und verlangt dafuer
+transaktionale SHACL-Validierung -- eine staerkere, aber andere Anforderung als die
+Nebenlaeufigkeit innerhalb eines einzelnen Nutzers.
 
 ## Alternativen
 
