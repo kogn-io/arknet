@@ -11,8 +11,6 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import io.modelcontextprotocol.common.McpTransportContext;
-
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.kernel.WorkspaceResolver;
 
@@ -77,7 +75,7 @@ public final class StoreReportTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final String originDir = originDir(context);
+        final String originDir = HandleResolver.originDir(context);
         final WorkspaceId workspaceId =
                 HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir));
 
@@ -101,7 +99,7 @@ public final class StoreReportTools {
                     required = false)
             final String workspace) {
         final WorkspaceId workspaceId =
-                HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir(context)));
+                HandleResolver.resolveWorkspace(workspace, workspaces.resolve(HandleResolver.originDir(context)));
         final String iri = handleResolver.resolve(workspaceId, id);
         final List<Triple> outgoing = storeReader.outgoing(workspaceId, iri);
         final List<Triple> incoming = storeReader.incoming(workspaceId, iri);
@@ -127,19 +125,5 @@ public final class StoreReportTools {
             throw new IllegalStateException("Failed to write store report to " + targetDir + ": "
                     + e.getMessage(), e);
         }
-    }
-
-    /**
-     * Extracts the calling client's origin directory from the per-call transport context (issue
-     * #137). Null-tolerant on every hop; used both to resolve the default workspace and to place
-     * the written report.
-     */
-    private static String originDir(final McpSyncRequestContext context) {
-        if (context == null) {
-            return null;
-        }
-        final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
-        return dir == null ? null : dir.toString();
     }
 }

@@ -6,8 +6,6 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import io.modelcontextprotocol.common.McpTransportContext;
-
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.kernel.WorkspaceResolver;
 import de.hauschel.arknet.mcp.store.HandleResolver;
@@ -105,20 +103,6 @@ public final class TraceabilityMcpTools {
      * the one resolved from the request's origin directory (issue #137).
      */
     private WorkspaceId resolveWorkspace(final McpSyncRequestContext context, final String workspace) {
-        return HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir(context)));
-    }
-
-    /**
-     * Extracts the calling client's origin directory from the per-call transport context (issue
-     * #137). Null-tolerant on every hop; {@link WorkspaceResolver} turns a {@code null} into the
-     * server's default workspace.
-     */
-    private static String originDir(final McpSyncRequestContext context) {
-        if (context == null) {
-            return null;
-        }
-        final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
-        return dir == null ? null : dir.toString();
+        return HandleResolver.resolveWorkspace(workspace, workspaces.resolve(HandleResolver.originDir(context)));
     }
 }
