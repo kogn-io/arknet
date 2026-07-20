@@ -12,8 +12,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
  * Renders the self-contained human HTML report for {@code store_overview}: a single file
- * with inline CSS and JS and no external dependencies. Structure follows the design mockup
- * {@code docs/mockups/store-report-sample.html} - an agent-digest panel on top, then a
+ * with inline CSS and JS and no external dependencies. Structure: an agent-digest panel on top, then a
  * type index (left) and one card per resource grouped by {@code rdf:type} (main), with
  * clickable IRI objects, status/priority pills and a filter box.
  *
