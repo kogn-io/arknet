@@ -3,7 +3,8 @@
 - Status: Accepted (2026-07-17)
 - Verwandt: ADR-006 (generischer Store-Lesepfad -- dieselbe Grundfrage "wo lebt geteilte
   Logik", andere Antwort), ADR-007 (geteiltes Write-Gate -- der Nachbarfall auf der
-  Schreib-/Technik-Seite)
+  Schreib-/Technik-Seite), ADR-010 (Review-UI -- ein lesender Adapter, der mehrere
+  BC-In-Ports fuer die Anzeige zieht)
 - Issue: #77
 
 ## Kontext

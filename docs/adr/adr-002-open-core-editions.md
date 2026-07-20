@@ -1,7 +1,7 @@
 # ADR-002: Open-Core-Editions-Modell
 
 - Status: Proposed (2026-07-14) -- wird Accepted, sobald die OSS-Lizenz festgelegt ist
-- Verwandt: ADR-001, ADR-003, ADR-004
+- Verwandt: ADR-001, ADR-003, ADR-004, ADR-010
 
 ## Kontext
 
