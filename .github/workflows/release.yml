@@ -1,0 +1,71 @@
+name: Release (manual, version-gated)
+
+# Release = one MANUAL run of this workflow on main (Actions tab -> "Run workflow",
+# or via `gh workflow run` with version=X.Y.Z). A hand-pushed `vX.Y.Z` tag triggers
+# NOTHING -- that is deliberate: a marker/bookmark tag can never accidentally cut a
+# release. The tag is created only AFTER successful validation, never before.
+#
+# arknet has no build artifact (no Maven deploy) -- "release" here means: main HEAD is
+# version-gated, tagged, and referenceable in the marketplace as exactly what
+# .claude-plugin/plugin.json claims.
+#
+# Uses the built-in GITHUB_TOKEN (contents: write below) for both the tag push and the
+# GitHub release object -- no dedicated release secret needed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 0.3.12 (no leading v)'
+        required: true
+        type: string
+
+permissions:
+  contents: write # tag push + GitHub release object
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags needed to reject an already-released version
+
+      - name: Validate ref, version and plugin.json
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${{ github.ref_name }}" != 'main' ]; then
+            echo "::error::Releases are cut from main only -- this run targets '${{ github.ref_name }}'."
+            exit 1
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$VERSION' is not a SemVer version (expected X.Y.Z, no leading v)."
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::Tag v$VERSION already exists -- a released version is never rebuilt."
+            exit 1
+          fi
+          PLUGIN_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' .claude-plugin/plugin.json | head -1)
+          if [ "$PLUGIN_VERSION" != "$VERSION" ]; then
+            echo "::error::plugin.json is at '$PLUGIN_VERSION', expected '$VERSION' -- forgot the version bump?"
+            exit 1
+          fi
+
+      - name: Tag the released commit and push
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Create GitHub release object
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v$VERSION" --title "v$VERSION" --verify-tag --notes "Release v$VERSION"
