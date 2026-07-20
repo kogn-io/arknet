@@ -1,0 +1,35 @@
+# Dependabot *version* updates -- the "is there a newer one?" pass, on a schedule.
+# Security updates (the "is there a known CVE?" pass) are a separate feature and
+# are enabled in the repository settings, not here.
+#
+# Dependency and plugin versions live as properties in the root pom.xml, and
+# dependencyManagement sits there too, so pointing Maven at "/" covers every
+# module -- the module POMs only carry ${revision} for themselves.
+#
+# Monthly and grouped on purpose: one PR per ecosystem instead of a dozen. Major
+# bumps are deliberately left out of the groups so they arrive one by one and get
+# looked at.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - '*'
+
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      maven:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch

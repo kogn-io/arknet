@@ -1,18 +1,21 @@
 # arknet -- Architecture Knowledge Net
 
-DDD-Architekturmodelle, die Maschinen verstehen.
+DDD architecture models that machines can understand.
 
-W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).
+W3C standards (RDF/OWL) instead of a proprietary DSL -- validatable (SHACL),
+queryable (SPARQL), AI-ready (MCP).
 
 ## Repository
 
-Der Code lebt primaer auf GitHub ([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet),
-aktuell privat). Issues und Diskussion bleiben bewusst auf Forgejo
-([`internal-tracker/kogn-io/arknet`](https://internal-tracker/kogn-io/arknet/issues)) --
-dort laeuft der eingespielte Issue-Tracker mit allen Konventionen weiter. GitHub Issues wird fuer
-dieses Repo nicht genutzt; Bugs/Feature-Wuensche bitte auf Forgejo melden.
+Code lives on GitHub
+([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). Issues and
+discussion intentionally stay on Forgejo
+([`internal-tracker/kogn-io/arknet`](https://internal-tracker/kogn-io/arknet/issues))
+-- that is where the established issue tracker with all its conventions
+continues to run. GitHub Issues is **not** used for this repository; please
+report bugs and feature requests on Forgejo.
 
-## Voraussetzungen
+## Requirements
 
 - Java 25+
 - Maven 3.9+
@@ -23,19 +26,20 @@ dieses Repo nicht genutzt; Bugs/Feature-Wuensche bitte auf Forgejo melden.
 claude --plugin-dir /path/to/arknet
 ```
 
-### Voraussetzung: MCP-Server-Daemon starten
+### Prerequisite: start the MCP server daemon
 
-Der arknet-MCP-Server ist ein einzelner, langlebiger Prozess, der ueber Streamable HTTP auf
-`127.0.0.1:47331` **alle** arknet-Workspaces der Maschine bedient -- **kein** Subprozess, den
-Claude Code selbst startet. Ein HTTP-Eintrag in `.mcp.json` ist bei Claude Code rein passiv: es
-verbindet sich nur zur URL, startet oder verwaltet aber nichts. Vor der ersten Nutzung also
-einmalig selbst starten. Es gibt drei Wege; **Docker ist der empfohlene** (kein lokales Java/Maven
-noetig).
+The arknet MCP server is a single, long-lived process that serves **all** arknet
+workspaces on the machine over Streamable HTTP at `127.0.0.1:47331` -- it is
+**not** a subprocess that Claude Code starts. An HTTP entry in `.mcp.json` is
+purely passive in Claude Code: it only connects to the URL, it does not start or
+manage anything. So you start the daemon yourself once before first use. There
+are three ways; **Docker is the recommended one** (no local Java/Maven needed).
 
-#### Option A: Docker (empfohlen)
+#### Option A: Docker (recommended)
 
-Image aus dem Repo-Root bauen -- der Build-Kontext MUSS das Repo-Root sein, weil `arknet-mcp` ein
-Multi-Modul-Reaktor ist und seine Nachbar-Module braucht:
+Build the image from the repo root -- the build context MUST be the repo root,
+because `arknet-mcp` is a multi-module reactor and needs its neighbouring
+modules:
 
 ```bash
 docker build -f arknet-mcp/Dockerfile -t arknet-mcp .
@@ -45,149 +49,168 @@ docker run --rm -d --name arknet-mcp \
   arknet-mcp
 ```
 
-Das `-p 127.0.0.1:47331:47331` ist **kein Zufall, nicht vereinfachen**: Im Container bindet der
-Server auf `0.0.0.0` (per `SERVER_ADDRESS`-Env im Image), weil Dockers Port-Publish-NAT eingehende
-Verbindungen an die Container-`eth0` zustellt, nicht ans Loopback -- ein reiner `127.0.0.1`-Bind
-waere von aussen unerreichbar. Damit wandert die Vertrauensgrenze auf die **Host-Seite**: der
-Publish MUSS explizit an Host-Loopback binden (`127.0.0.1:47331:47331`). Ein blosses `-p
-47331:47331` wuerde den **nicht authentifizierten** Daemon im ganzen LAN exponieren (ADR-009). Das
-Volume mappt denselben Host-Pfad, den auch der Bare-Jar-Lauf nutzt (`~/.arknet/rdf`,
-`arknet.rdf.storage`), damit das Modell Container-Restarts ueberlebt.
+The `-p 127.0.0.1:47331:47331` is **deliberate, do not simplify it**: inside the
+container the server binds to `0.0.0.0` (via the `SERVER_ADDRESS` env in the
+image), because Docker's port-publish NAT delivers inbound connections to the
+container's `eth0`, not to loopback -- a plain `127.0.0.1` bind would be
+unreachable from outside. That moves the trust boundary to the **host side**: the
+publish MUST explicitly bind to host loopback (`127.0.0.1:47331:47331`). A bare
+`-p 47331:47331` would expose the **unauthenticated** daemon to the whole LAN
+(ADR-009). The volume maps the same host path the bare-jar run uses
+(`~/.arknet/rdf`, `arknet.rdf.storage`), so the model survives container
+restarts.
 
 #### Option B: Docker Compose
 
-Verdrahtet Port-Publish (Host-Loopback) und Volume-Mount vor:
+Wires up the port publish (host loopback) and volume mount for you:
 
 ```bash
 docker compose up --build
 ```
 
-#### Option C: aus dem Quellcode (fuer Contributor, lokales JDK 25 + Maven noetig)
+#### Option C: from source (for contributors, local JDK 25 + Maven needed)
 
 ```bash
 mvn -pl arknet-mcp -am package -DskipTests
 java -jar arknet-mcp/target/arknet-mcp-*.jar
 ```
 
-Solange der Prozess laeuft, koennen beliebig viele Claude-Code-Sessions (auch parallele Worktrees
-desselben Workspace) sich denselben Store teilen, ohne sich am NativeStore-Verzeichnis-Lock zu
-blockieren. Laeuft der Daemon nicht, meldet Claude Code die MCP-Verbindung als fehlgeschlagen.
+As long as the process runs, any number of Claude Code sessions (including
+parallel worktrees of the same workspace) can share the same store without
+blocking each other on the NativeStore directory lock. If the daemon is not
+running, Claude Code reports the MCP connection as failed.
 
-Welchen Workspace ein Aufruf trifft, entscheidet das Verzeichnis, aus dem die Claude-Code-Session
-gestartet wurde: die `.mcp.json` sendet es im Header `X-Arknet-Workspace-Dir: ${PWD}` mit, und der
-Server leitet daraus (per git-common-dir, wie in einer stdio-Session) die WorkspaceId ab. Darum
-**Claude Code aus dem Projektverzeichnis starten** -- `${PWD}` traegt Umgebungsvariablen-Semantik,
-kein dynamisches Arbeitsverzeichnis. Ein Aufruf ohne diesen Header faellt auf den Workspace des
-Daemon-Arbeitsverzeichnisses zurueck. Der Header ist keine Authentifizierung, sondern nur
-Workspace-Routing an einer Loopback-/Single-User-Grenze (ADR-009). Weil der Workspace pro Aufruf
-aus dem Header kommt, teilen sich alle Projekte diesen einen Port ohne Kollision.
+Which workspace a call hits is decided by the directory the Claude Code session
+was started from: `.mcp.json` sends it in the header
+`X-Arknet-Workspace-Dir: ${PWD}`, and the server derives the WorkspaceId from it
+(via git-common-dir, just as in a stdio session). So **start Claude Code from
+the project directory** -- `${PWD}` carries environment-variable semantics, not
+a dynamic working directory. A call without that header falls back to the
+workspace of the daemon's working directory. The header is not authentication,
+only workspace routing at a loopback / single-user boundary (ADR-009). Because
+the workspace comes per call from the header, all projects share this one port
+without collision.
 
-### MCP-Tools
+### MCP tools
 
-Requirements-BC (`arknet-requirements`) -- Requirement-Lifecycle:
+Requirements BC (`arknet-requirements`) -- requirement lifecycle:
 
-| Tool | Beschreibung |
+| Tool | Description |
 |------|-------------|
-| `req_add` | Requirement anlegen (funktional / nicht-funktional) |
-| `req_list` | Alle verwalteten Requirements auflisten |
-| `req_get` | Einzelnes Requirement per Identitaet holen (z.B. FR-1, NFR-7) |
-| `req_set_status` | Lebenszyklus-Status aendern (PROPOSED / ACCEPTED) |
-| `req_link_term` | Requirement mit einem Glossar-Begriff verknuepfen (`arkreq:usesTerm`; Term muss existieren) |
-| `req_schema` | `arkreq:`-Vokabular (RequirementType, RequirementStatus, Priority) als Daten -- Definition + zulaessige Werte, damit ein Client nicht raten muss |
+| `req_add` | Create a requirement (functional / non-functional) |
+| `req_list` | List all managed requirements |
+| `req_get` | Fetch a single requirement by identity (e.g. FR-1, NFR-7) |
+| `req_set_status` | Change lifecycle status (PROPOSED / ACCEPTED) |
+| `req_link_term` | Link a requirement to a glossary term (`arkreq:usesTerm`; the term must exist) |
+| `req_schema` | The `arkreq:` vocabulary (RequirementType, RequirementStatus, Priority) as data -- definition + allowed values, so a client need not guess |
 
-Ubiquitous-Language-BC -- Glossar-Begriffe (SKOS Concepts):
+Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 
-| Tool | Beschreibung |
+| Tool | Description |
 |------|-------------|
-| `term_add` | Neuen Glossar-Begriff anlegen (mintet ein SKOS Concept; optional als Actor markierbar via `actorKind`/`actorRole`) |
-| `term_list` | Alle Glossar-Begriffe auflisten |
-| `term_get` | Einzelnen Begriff per Identitaet holen (z.B. TERM-1) |
+| `term_add` | Create a new glossary term (mints a SKOS Concept; optionally markable as an actor via `actorKind`/`actorRole`) |
+| `term_list` | List all glossary terms |
+| `term_get` | Fetch a single term by identity (e.g. TERM-1) |
 
-Use-Cases-BC (`arknet-use-cases`) -- flow-orientierte Cockburn-Use-Cases (binden FR ueber einen Interaktionsablauf):
+Use Cases BC (`arknet-use-cases`) -- flow-oriented Cockburn use cases (bind FRs via an interaction flow):
 
-| Tool | Beschreibung |
+| Tool | Description |
 |------|-------------|
-| `uc_add` | Kompletten Use Case in einem Call anlegen (Goal, Actor, Trigger, nummerierter Step-Flow mit FR-Referenzen) |
-| `uc_list` | Alle Use Cases auflisten |
-| `uc_get` | Einzelnen Use Case mit aufgeloesten Steps und FR-/Actor-Kanten holen (z.B. UC1) |
+| `uc_add` | Create a complete use case in one call (goal, actor, trigger, numbered step flow with FR references) |
+| `uc_list` | List all use cases |
+| `uc_get` | Fetch a single use case with resolved steps and FR/actor edges (e.g. UC1) |
 
-Bounded-Context-BC (`arknet-bounded-context`) -- BoundedContext-Lifecycle (ordnet Glossar-Begriffe einem fachlichen Schnitt zu):
+Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assigns glossary terms to a domain cut):
 
-| Tool | Beschreibung |
+| Tool | Description |
 |------|-------------|
-| `bc_add` | Neuen Bounded Context anlegen |
-| `bc_list` | Alle Bounded Contexts auflisten |
-| `bc_get` | Einzelnen Bounded Context mit verlinkten Glossar-Begriffen holen |
-| `bc_link_term` | Bounded Context mit einem Glossar-Begriff verknuepfen (`arknet:hasAggregate`; Term muss existieren) |
+| `bc_add` | Create a new bounded context |
+| `bc_list` | List all bounded contexts |
+| `bc_get` | Fetch a single bounded context with its linked glossary terms |
+| `bc_link_term` | Link a bounded context to a glossary term (`arknet:hasAggregate`; the term must exist) |
 
-Store-Report -- generischer, BC-uebergreifender Lesepfad (readOnly; funktioniert fuer jede BC ohne Typ-Mapping):
+Store report -- generic, cross-BC read path (readOnly; works for any BC without type mapping):
 
-| Tool | Beschreibung |
+| Tool | Description |
 |------|-------------|
-| `store_overview` | Kompakter Text-Digest des Workspace-Stores (Prefix-Legende, Typ-Zaehler, Entity-Zeilen mit `resource_get`-Drill-down, Integritaets-Hinweis) + schreibt einen self-contained HTML-Resource-Browser und gibt den Pfad zurueck |
-| `resource_get` | Alle Triples einer Ressource (aus- und eingehend); Handle als CURIE (`req:FR-1`), volle IRI oder bare Business-Id (`FR-1`) |
+| `store_overview` | Compact text digest of the workspace store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML resource browser and returns its path |
+| `resource_get` | All triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, or bare business id (`FR-1`) |
 
-Traceability -- readOnly Graph-Traversierung ueber denselben Store-Snapshot (kein zweiter SPARQL-Pfad):
+Traceability -- readOnly graph traversal over the same store snapshot (no second SPARQL path):
 
-| Tool | Beschreibung |
+| Tool | Description |
 |------|-------------|
-| `trace_matrix` | Pro Requirement (FR/NFR): genutzte Glossar-Begriffe (`arkreq:usesTerm`) und realisierende Use Case(s) (ueber den Step-Flow) |
-| `orphan_check` | Verwaiste Artefakte: Requirements ohne realisierenden Use Case, Glossar-Begriffe ohne jede Verwendung |
-| `impact_analysis` | Transitive "wer referenziert das"-Huelle fuer einen Ressourcen-Handle -- was ist betroffen, wenn sich X aendert |
+| `trace_matrix` | Per requirement (FR/NFR): the glossary terms used (`arkreq:usesTerm`) and the realizing use case(s) (via the step flow) |
+| `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms without any usage |
+| `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes |
 
-### Speichermodell (store-first)
+### Storage model (store-first)
 
-Das Modell lebt primaer im lokalen RDF-Store (kognio-rdf), **persistent ueber Sessions hinweg** -- nicht in-memory und nicht in einer Turtle-Datei. Pro Workspace (= Projekt, abgeleitet aus dem Git-Top-Level bzw. Arbeitsverzeichnis) haelt der Store ein isoliertes Dataset; Default-Ablage `~/.arknet/rdf`, konfigurierbar via `arknet.rdf.storage`.
+The model lives primarily in the local RDF store (kognio-rdf), **persistent
+across sessions** -- not in-memory and not in a Turtle file. Per workspace
+(= project, derived from the git top level or working directory) the store keeps
+an isolated dataset; default location `~/.arknet/rdf`, configurable via
+`arknet.rdf.storage`.
 
-**Modell verwalten:** ueber die store-basierten BC-Tools (`req_*`, `term_*`, `uc_*`) -- nicht durch Text-Edits an einer `.ttl`. SHACL-Validierung greift einheitlich am Write-Gate des Stores: ein ungueltiger Schreibvorgang wird abgelehnt, nichts wird persistiert.
+**Managing the model:** through the store-based BC tools (`req_*`, `term_*`,
+`uc_*`) -- not by text-editing a `.ttl`. SHACL validation applies uniformly at
+the store's write gate: an invalid write is rejected and nothing is persisted.
 
-Die vormals geduldeten datei-basierten `arknet_*`-Tools (`arknet_load`/`arknet_validate`/`arknet_query`/`arknet_generate` aus einer `.ttl`) wurden entfernt -- store-first ist der einzige Modell-Lebenszyklus, keine parallele Datei-Wahrheit mehr. Hintergrund: [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md) inkl. Nachtrag.
+The formerly tolerated file-based `arknet_*` tools
+(`arknet_load`/`arknet_validate`/`arknet_query`/`arknet_generate` from a `.ttl`)
+have been removed -- store-first is the only model lifecycle, no parallel file
+truth anymore. Background:
+[ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md) including its
+addendum.
 
-## Module
+## Modules
 
-| Modul | Beschreibung |
-|-------|-------------|
-| `arknet-ontology` | OWL-Ontologie und SHACL-Shapes (nur .ttl Ressourcen, kein Java) |
-| `arknet-mcp` | MCP-Server (Streamable HTTP, lokaler Daemon) + Composition Root: verdrahtet die BC-Hexagons (requirements / ubiquitous-language / use-cases / bounded-context) ueber einen geteilten DatasetLifecycle + den generischen Store-Report (`store_overview`/`resource_get`) + den Traceability-Lesepfad (`trace_matrix`/`orphan_check`/`impact_analysis`) |
-| `arknet-shared-kernel` | DDD Shared Kernel: von mehreren BCs geteilte Domain-Bausteine (`WorkspaceId`, opake `ResourceId`/`ResourceIdFactory`) |
-| `arknet-persistence-support` | Technischer Support der kognio-rdf-Out-Adapter: das geteilte SHACL-Write-Gate (validate-before-commit) |
-| `arknet-requirements` | Erste hexagonale BC: Requirement-Lifecycle (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
-| `arknet-ubiquitous-language` | Zweite hexagonale BC: Glossar-Begriffe als SKOS-Concepts (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
-| `arknet-use-cases` | Dritte hexagonale BC: flow-orientierte Cockburn-Use-Cases (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
-| `arknet-bounded-context` | Vierte hexagonale BC: BoundedContext-Lifecycle, ordnet Glossar-Begriffe einem fachlichen Schnitt zu (core + Out-Adapter kognio-rdf + In-Adapter MCP/Spring AI) |
-| `arknet-architecture-tests` | ArchUnit-Regeln fuer die Dependency-Invarianten, die der Modulschnitt nicht erzwingen kann (nur `src/test`, kein Produktivcode) |
+| Module | Description |
+|--------|-------------|
+| `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
+| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context) via a shared DatasetLifecycle + the generic store report (`store_overview`/`resource_get`) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
+| `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`WorkspaceId`, opaque `ResourceId`/`ResourceIdFactory`) |
+| `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) |
+| `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
+| `arknet-ubiquitous-language` | Second hexagonal BC: glossary terms as SKOS Concepts (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
+| `arknet-use-cases` | Third hexagonal BC: flow-oriented Cockburn use cases (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
+| `arknet-bounded-context` | Fourth hexagonal BC: BoundedContext lifecycle, assigns glossary terms to a domain cut (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
+| `arknet-architecture-tests` | ArchUnit rules for the dependency invariants the module cut cannot enforce (only `src/test`, no production code) |
 
-## Ontologie
+## Ontology
 
-Modularer Aufbau unter dem Namespace `https://w3id.org/arknet/`:
+Modular layout under the namespace `https://w3id.org/arknet/`:
 
-| Modul | Prefix | Konzepte |
-|-------|--------|----------|
+| Module | Prefix | Concepts |
+|--------|--------|----------|
 | `arknet-core.ttl` | `arknet:` | BoundedContext, Aggregate, Entity, ValueObject, Command, DomainEvent, ContextMap |
 | `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome, Actor |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder, Concern |
-| `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (geplant) |
+| `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (planned) |
 | `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
 
-## Architektur
+## Architecture
 
-Pipes & Filters (Produktvision, siehe `docs/produktvision.adoc`; **nicht implementiert** -- kein generierender Ausgabepfad, siehe [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md)):
+Pipes & Filters (product vision, see `docs/produktvision.adoc`; **not
+implemented** -- no generating output path, see
+[ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md)):
 
 ```
 Turtle (.ttl) -> Parse -> Validate (SHACL) -> Triple Store (RDF4J) -> SPARQL -> Mustache -> AsciiDoc -> HTML/PDF
 ```
 
-Gelebt wird heute store-first (MCP-Write-Tools -> RDF4J-Store -> generischer Lesepfad `store_overview`/`resource_get`, s.o.).
+What is actually lived today is store-first (MCP write tools -> RDF4J store ->
+generic read path `store_overview`/`resource_get`, see above).
 
-## Herkunft
+## Origin
 
-Konsolidiert aus drei Projekten:
+Consolidated from three projects:
 
-- **doc42** -- Walking Skeleton (Java/RDF4J Pipeline)
-- **dddprocess** -- DDD Process Ontology (Zustandsmaschinen, Gap Analysis)
-- **ddd-forge** -- Claude Plugin (DSGVO-Ontologie, AI-Skills)
+- **doc42** -- walking skeleton (Java/RDF4J pipeline)
+- **dddprocess** -- DDD process ontology (state machines, gap analysis)
+- **ddd-forge** -- Claude plugin (privacy ontology, AI skills)
 
-## Lizenz
+## License
 
-Proprietary. All rights reserved.
+Licensed under the [Apache License, Version 2.0](LICENSE).
