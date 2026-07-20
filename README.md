@@ -7,13 +7,10 @@ queryable (SPARQL), AI-ready (MCP).
 
 ## Repository
 
-Code lives on GitHub
-([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). Issues and
-discussion intentionally stay on Forgejo
-([`internal-tracker/kogn-io/arknet`](https://internal-tracker/kogn-io/arknet/issues))
--- that is where the established issue tracker with all its conventions
-continues to run. GitHub Issues is **not** used for this repository; please
-report bugs and feature requests on Forgejo.
+Code and pull requests live on GitHub
+([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). For bugs,
+feature requests, and questions, please open a thread in
+[GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
 
 ## Requirements
 
