@@ -1,7 +1,8 @@
 # ADR-006: Generischer Store-Lesepfad als Composition-Root-Werkzeug, nicht als Bounded Context
 
 - Status: Accepted (2026-07-14)
-- Verwandt: ADR-001 (austauschbarer Store), ADR-005 (Store-first)
+- Verwandt: ADR-001 (austauschbarer Store), ADR-005 (Store-first), ADR-010 (Review-UI --
+  konsumiert diesen Lesepfad in-process)
 
 ## Kontext
 
