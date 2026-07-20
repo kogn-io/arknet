@@ -11,6 +11,28 @@
 
     <name>arknet - Architecture Knowledge Net</name>
     <description>DDD-Architekturmodelle, die Maschinen verstehen.</description>
+    <url>https://github.com/kogn-io/arknet</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Fred Hauschel</name>
+            <email>info@hauschel.de</email>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/kogn-io/arknet.git</connection>
+        <developerConnection>scm:git:git@github.com:kogn-io/arknet.git</developerConnection>
+        <url>https://github.com/kogn-io/arknet</url>
+    </scm>
 
     <properties>
         <revision>0.1.0-SNAPSHOT</revision>
