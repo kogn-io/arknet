@@ -4,7 +4,6 @@
 
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
-- Produktvision: `docs/produktvision.adoc`
 
 ## Architektur
 

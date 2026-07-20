@@ -20,3 +20,6 @@ dependency-reduced-pom.xml
 
 # Lokale Recherche / Notizen (nicht ins Repo)
 recherche/
+
+# Generierte Doku-Artefakte (aus dem Build, nicht ins Repo)
+docs/generated/

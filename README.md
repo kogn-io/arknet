@@ -189,8 +189,7 @@ Modular layout under the namespace `https://w3id.org/arknet/`:
 
 ## Architecture
 
-Pipes & Filters (product vision, see `docs/produktvision.adoc`; **not
-implemented** -- no generating output path, see
+Pipes & Filters (**not implemented** -- no generating output path, see
 [ADR-005](docs/adr/adr-005-store-first-model-lifecycle.md)):
 
 ```
