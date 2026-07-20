@@ -6,7 +6,7 @@
     "name": "Fred Hauschel"
   },
   "homepage": "https://hauschel.de",
-  "repository": "https://internal-tracker/kogn-io/arknet",
-  "license": "Proprietary",
+  "repository": "https://github.com/kogn-io/arknet",
+  "license": "Apache-2.0",
   "keywords": ["ddd", "architecture", "rdf", "owl", "shacl", "sparql", "mcp"]
 }

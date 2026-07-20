@@ -12,17 +12,17 @@ time.
 
 ## Where things live
 
-- **Code** lives on GitHub: [`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet).
-  Pull requests go here.
-- **Issues and discussion** live on Forgejo:
-  [`internal-tracker/kogn-io/arknet`](https://internal-tracker/kogn-io/arknet/issues).
-  GitHub Issues is intentionally **not** used for this repository -- please file
-  bugs and feature requests on Forgejo.
+- **Code and pull requests** live on GitHub:
+  [`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet). Pull requests
+  go here.
+- **Bugs, feature requests, and questions** go to
+  [GitHub Discussions](https://github.com/kogn-io/arknet/discussions). The
+  maintainer triages from there.
 
 ## Before you open a pull request
 
-For anything beyond a trivial fix (typo, obvious one-line bug), **open an issue
-first** (on Forgejo) and wait for a short go-ahead. This protects your time as
+For anything beyond a trivial fix (typo, obvious one-line bug), **start a
+discussion first** and wait for a short go-ahead. This protects your time as
 much as the maintainer's: a large or unsolicited PR that does not fit the
 project's scope or design may not be merged, and it is frustrating for everyone
 to discover that after the work is done.
@@ -32,7 +32,7 @@ Good candidates that rarely need discussion:
 - Fixing a clearly wrong behaviour, with a failing test that the fix makes pass.
 - Correcting documentation.
 
-Things to raise in an issue first:
+Things to raise in a discussion first:
 
 - New MCP tools, ports, or store backends.
 - Anything touching a bounded context's domain model or its ontology
@@ -81,6 +81,6 @@ contribute under that license.
 
 ## Reporting bugs
 
-Open an issue on Forgejo with a minimal reproduction and the expected vs. actual
-behaviour. For anything security-sensitive, do **not** file a public issue -- see
-[SECURITY.md](SECURITY.md).
+Open a thread in [GitHub Discussions](https://github.com/kogn-io/arknet/discussions)
+with a minimal reproduction and the expected vs. actual behaviour. For anything
+security-sensitive, do **not** post publicly -- see [SECURITY.md](SECURITY.md).
