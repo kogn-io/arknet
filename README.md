@@ -4,6 +4,14 @@ DDD-Architekturmodelle, die Maschinen verstehen.
 
 W3C-Standards (RDF/OWL) statt proprietaerer DSL -- validierbar (SHACL), querybar (SPARQL), AI-ready (MCP).
 
+## Repository
+
+Der Code lebt primaer auf GitHub ([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet),
+aktuell privat). Issues und Diskussion bleiben bewusst auf Forgejo
+([`internal-tracker/kogn-io/arknet`](https://internal-tracker/kogn-io/arknet/issues)) --
+dort laeuft der eingespielte Issue-Tracker mit allen Konventionen weiter. GitHub Issues wird fuer
+dieses Repo nicht genutzt; Bugs/Feature-Wuensche bitte auf Forgejo melden.
+
 ## Voraussetzungen
 
 - Java 25+
