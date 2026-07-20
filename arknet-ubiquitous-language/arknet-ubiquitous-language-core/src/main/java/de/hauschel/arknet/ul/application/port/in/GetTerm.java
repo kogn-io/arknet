@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
 package de.hauschel.arknet.ul.application.port.in;
 
 import java.util.Optional;
