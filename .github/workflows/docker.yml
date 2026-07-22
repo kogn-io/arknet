@@ -1,9 +1,8 @@
 name: Docker image (arknet-mcp)
 
 # Builds and publishes the arknet-mcp daemon image to GHCR. Not part of the
-# plugin-marketplace release gate (.forgejo/workflows/release.yml, still on
-# Forgejo) -- this is the container distribution path for #140, independent
-# of the plugin SemVer tag.
+# plugin-marketplace release gate (release.yml) -- this is the container
+# distribution path for #140, independent of the plugin SemVer tag.
 
 on:
   push:

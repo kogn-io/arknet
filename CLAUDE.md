@@ -4,9 +4,10 @@
 
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
-- Repository: Code lebt primaer auf GitHub (`github.com/kogn-io/arknet`, Stand 2026-07-20 noch
-  privat, OSS-Vorbereitung mit Apache-2.0-Lizenz laeuft). Forgejo (`internal-tracker/kogn-io/arknet`)
-  ist nur noch Issue-Tracker, `main` dort branch-protected (kein Code-Push mehr). Siehe README
+- Repository: Code, Pull Requests und **neue Issues** leben auf GitHub
+  (`github.com/kogn-io/arknet`, Apache-2.0; Sichtbarkeit derzeit privat). Forgejo
+  (`internal-tracker/kogn-io/arknet`) haelt nur noch den **Altbestand an Issues** und ist
+  branch-protected (kein Code-Push mehr) -- dort wird nichts Neues mehr angelegt. Siehe README
   "Repository"-Abschnitt.
 
 ## Architektur
@@ -84,9 +85,9 @@ gearbeitet wird.
 - `skills/adr/` (ADR-Pflege) und `skills/req-interview/` (Requirements/Use-Cases/Glossar-Interview,
   zwei Einstiege Greenfield+Bestandscode).
 - Geshippter Plugin-Inhalt (Skill-Text, `plugin.json`-Description, Repo-Description) ist
-  **Englisch** -- Zielgruppe ist englischsprachig, sobald arknet im oeffentlichen GitHub-Marketplace
-  gelistet ist (Stand 2026-07-20: noch nicht -- bislang nur im privaten Forgejo-Marketplace, der
-  fuer Aussenstehende unerreichbar ist). Was **in den Store** geschrieben wird (Requirement-/
+  **Englisch** -- Zielgruppe ist englischsprachig, sobald arknet im oeffentlichen
+  GitHub-Marketplace gelistet ist (bislang nur im privaten Forgejo-Marketplace, der fuer
+  Aussenstehende unerreichbar ist). Was **in den Store** geschrieben wird (Requirement-/
   Use-Case-/Term-Text) bleibt **Deutsch** -- arknets eigene Ubiquitous Language, unberuehrt von
   dieser Regel.
 - Geshippte Artefakte referenzieren keine externen Quellprojekte (Herkunft/Inspiration gehoert in

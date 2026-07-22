@@ -64,7 +64,7 @@ Concretely, NEVER put these in an ADR:
 3. **Commit-Refs / PR-Nummern / Datei-Zeilen** -- "siehe Commit fcfaf29", "in
    ModelLoader.java Zeile 42". Fluechtig; gehoert in Git/Issue, nicht ins ADR.
 4. **"Umsetzung" / "Status" / "Naechste Schritte"-Sektion** -- kein Metamodell-Slot.
-5. **Der Agent entscheidet selbst** -- ein ADR haelt *Freds* Entscheidung fest, nicht deine.
+5. **Der Agent entscheidet selbst** -- ein ADR haelt die Entscheidung *des Nutzers* fest, nicht deine.
    Ist die Entscheidung noch nicht getroffen: Status `Proposed` und im Kontext offen benennen
    -- nicht eine Entscheidung erfinden, um den Slot zu fuellen.
 6. **Leere / Pflicht-Alternativen** -- "Keine Alternativen erwogen" ist ein Geruch. Wenn
@@ -75,10 +75,10 @@ Concretely, NEVER put these in an ADR:
 
 Schnappschuss rausnehmen heisst nicht Information wegwerfen -- nur am richtigen Ort ablegen:
 
-- **Verdrahtungsstand / "warum steht der Code so"** -> Javadoc am betroffenen Typ, oder eine
-  `Note` im Wissensgraphen (kogn).
-- **Offene Arbeit** -> Forgejo-Issue (siehe reference_forgejo im Memory).
-- **Projekt-Fortschritt / "erledigt in Commit X"** -> Memory (`project_*`), Git-Historie.
+- **Verdrahtungsstand / "warum steht der Code so"** -> Javadoc am betroffenen Typ.
+- **Offene Arbeit** -> der Issue-Tracker des Projekts.
+- **Projekt-Fortschritt / "erledigt in Commit X"** -> Git-Historie, Release Notes, projekteigene
+  Notizen (z.B. `CLAUDE.md`).
 
 Wenn du einen Schnappschuss aus einem ADR entfernst, pruefe kurz, ob er anderswo schon
 festgehalten ist; wenn nicht, weise darauf hin (nicht stillschweigend loeschen).
