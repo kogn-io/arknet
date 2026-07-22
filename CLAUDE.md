@@ -5,8 +5,8 @@
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
 - Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0;
-  Sichtbarkeit derzeit privat). **Issues bleiben komplett im Forgejo**
-  (`internal-tracker/kogn-io/arknet`, branch-protected, kein Code-Push mehr) -- der
+  Sichtbarkeit derzeit privat). **Issues bleiben komplett im internen Tracker**
+  (branch-protected, kein Code-Push mehr; Zugang via `forgejo`-Remote bzw. Forgejo-MCP) -- der
   GitHub-Issue-Tracker ist bewusst abgeschaltet, Aussenstehende bekommen GitHub Discussions.
   Siehe README "Repository"-Abschnitt.
 
@@ -86,7 +86,7 @@ gearbeitet wird.
   zwei Einstiege Greenfield+Bestandscode).
 - Geshippter Plugin-Inhalt (Skill-Text, `plugin.json`-Description, Repo-Description) ist
   **Englisch** -- Zielgruppe ist englischsprachig, sobald arknet im oeffentlichen
-  GitHub-Marketplace gelistet ist (bislang nur im privaten Forgejo-Marketplace, der fuer
+  GitHub-Marketplace gelistet ist (bislang nur in einem privaten Marketplace, der fuer
   Aussenstehende unerreichbar ist). Was **in den Store** geschrieben wird (Requirement-/
   Use-Case-/Term-Text) bleibt **Deutsch** -- arknets eigene Ubiquitous Language, unberuehrt von
   dieser Regel.
