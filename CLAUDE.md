@@ -4,11 +4,11 @@
 
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
-- Repository: Code, Pull Requests und **neue Issues** leben auf GitHub
-  (`github.com/kogn-io/arknet`, Apache-2.0; Sichtbarkeit derzeit privat). Forgejo
-  (`internal-tracker/kogn-io/arknet`) haelt nur noch den **Altbestand an Issues** und ist
-  branch-protected (kein Code-Push mehr) -- dort wird nichts Neues mehr angelegt. Siehe README
-  "Repository"-Abschnitt.
+- Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0;
+  Sichtbarkeit derzeit privat). **Issues bleiben komplett im Forgejo**
+  (`internal-tracker/kogn-io/arknet`, branch-protected, kein Code-Push mehr) -- der
+  GitHub-Issue-Tracker ist bewusst abgeschaltet, Aussenstehende bekommen GitHub Discussions.
+  Siehe README "Repository"-Abschnitt.
 
 ## Architektur
 
