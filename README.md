@@ -8,11 +8,11 @@ queryable (SPARQL), AI-ready (MCP).
 ## Repository
 
 Code and pull requests live on GitHub
-([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). Report bugs
-and request features in
-[GitHub Issues](https://github.com/kogn-io/arknet/issues); for open-ended
-questions and design discussion, use
-[GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
+([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). For bugs,
+feature requests, and questions, please open a thread in
+[GitHub Discussions](https://github.com/kogn-io/arknet/discussions) -- the issue
+tracker is closed while the project is pre-1.0 and planned by a single
+maintainer.
 
 ## Requirements
 

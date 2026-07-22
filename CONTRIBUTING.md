@@ -15,11 +15,11 @@ time.
 - **Code and pull requests** live on GitHub:
   [`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet). Pull requests
   go here.
-- **Bugs and feature requests** go to
-  [GitHub Issues](https://github.com/kogn-io/arknet/issues). The maintainer
-  triages from there.
-- **Open-ended questions and design discussion** go to
-  [GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
+- **Bugs, feature requests, and questions** go to
+  [GitHub Discussions](https://github.com/kogn-io/arknet/discussions). The
+  maintainer triages from there. The issue tracker is deliberately closed: the
+  project is pre-1.0 and planned in a private backlog, so an open tracker would
+  only look like a queue nobody works.
 
 ## Before you open a pull request
 
@@ -83,6 +83,6 @@ contribute under that license.
 
 ## Reporting bugs
 
-Open an issue in [GitHub Issues](https://github.com/kogn-io/arknet/issues) with a
-minimal reproduction and the expected vs. actual behaviour. For anything
+Open a thread in [GitHub Discussions](https://github.com/kogn-io/arknet/discussions)
+with a minimal reproduction and the expected vs. actual behaviour. For anything
 security-sensitive, do **not** post publicly -- see [SECURITY.md](SECURITY.md).
