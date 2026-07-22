@@ -8,8 +8,10 @@ queryable (SPARQL), AI-ready (MCP).
 ## Repository
 
 Code and pull requests live on GitHub
-([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). For bugs,
-feature requests, and questions, please open a thread in
+([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). Report bugs
+and request features in
+[GitHub Issues](https://github.com/kogn-io/arknet/issues); for open-ended
+questions and design discussion, use
 [GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
 
 ## Requirements
@@ -30,9 +32,24 @@ workspaces on the machine over Streamable HTTP at `127.0.0.1:47331` -- it is
 **not** a subprocess that Claude Code starts. An HTTP entry in `.mcp.json` is
 purely passive in Claude Code: it only connects to the URL, it does not start or
 manage anything. So you start the daemon yourself once before first use. There
-are three ways; **Docker is the recommended one** (no local Java/Maven needed).
+are four ways; **Docker is the recommended one** (no local Java/Maven needed).
 
-#### Option A: Docker (recommended)
+#### Option A: pre-built image from GHCR (recommended)
+
+Every push to `main` publishes the daemon image, so nothing has to be built
+locally:
+
+```bash
+docker run --rm -d --name arknet-mcp \
+  -p 127.0.0.1:47331:47331 \
+  -v ~/.arknet/rdf:/data/rdf \
+  ghcr.io/kogn-io/arknet:latest
+```
+
+Read the note under Option B on why the port publish must stay bound to
+`127.0.0.1` -- it applies here just the same.
+
+#### Option B: Docker, built from source
 
 Build the image from the repo root -- the build context MUST be the repo root,
 because `arknet-mcp` is a multi-module reactor and needs its neighbouring
@@ -57,7 +74,7 @@ publish MUST explicitly bind to host loopback (`127.0.0.1:47331:47331`). A bare
 (`~/.arknet/rdf`, `arknet.rdf.storage`), so the model survives container
 restarts.
 
-#### Option B: Docker Compose
+#### Option C: Docker Compose
 
 Wires up the port publish (host loopback) and volume mount for you:
 
@@ -65,7 +82,7 @@ Wires up the port publish (host loopback) and volume mount for you:
 docker compose up --build
 ```
 
-#### Option C: from source (for contributors, local JDK 25 + Maven needed)
+#### Option D: from source (for contributors, local JDK 25 + Maven needed)
 
 ```bash
 mvn -pl arknet-mcp -am package -DskipTests
