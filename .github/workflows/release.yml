@@ -67,5 +67,11 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # --generate-notes lists the pull requests merged since the previous tag,
+        # instead of the one-line placeholder this used to write. A release page is
+        # the one place an outside reader checks whether anything is moving, so an
+        # empty one is worse than no release at all. Note that it reports every
+        # merged PR, not only plugin changes -- the plugin version and the repo's
+        # commit stream are not the same count (see #152).
         run: |
-          gh release create "v$VERSION" --title "v$VERSION" --verify-tag --notes "Release v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --verify-tag --generate-notes
