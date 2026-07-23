@@ -69,7 +69,7 @@
              IsolationLevels.SERIALIZABLE statt dem alten SNAPSHOT_READ-Default, wodurch
              echt ueberlappende Schreibtransaktionen beim commit() mit einer
              RepositoryException (Ursache SailConflictException) statt still kollidieren (#144). -->
-        <kognio-rdf.version>0.1.1</kognio-rdf.version>
+        <kognio-rdf.version>0.2.0-SNAPSHOT</kognio-rdf.version>
         <spotless-maven-plugin.version>3.8.0</spotless-maven-plugin.version>
     </properties>
 
