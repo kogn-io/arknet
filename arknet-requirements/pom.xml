@@ -12,7 +12,7 @@
 
     <artifactId>arknet-requirements</artifactId>
     <packaging>pom</packaging>
-    <description>Requirements-Engineering-Komponente (hexagonal): Requirement Lifecycle als eigenes Hexagon</description>
+    <description>Requirements engineering component (hexagonal): the requirement lifecycle as its own hexagon</description>
 
     <modules>
         <module>arknet-requirements-core</module>

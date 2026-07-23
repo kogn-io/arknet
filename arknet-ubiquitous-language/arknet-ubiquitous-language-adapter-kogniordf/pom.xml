@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-ubiquitous-language-adapter-kogniordf</artifactId>
-    <description>Out-Adapter: implementiert TermRepository ueber kognio-rdf (embeddable RDF-Substrat). Begriffe werden als SKOS-Concepts persistiert.</description>
+    <description>Out-adapter: implements TermRepository on top of kognio-rdf (embeddable RDF substrate). Terms are persisted as SKOS concepts.</description>
 
     <dependencies>
         <dependency>

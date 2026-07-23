@@ -14,13 +14,13 @@
 
     <name>arknet - Architecture Tests</name>
     <description>
-        ArchUnit-Regeln fuer die Dependency-Invarianten, die der Maven-Modulschnitt NICHT
-        erzwingen kann und die sonst nur durch Reviewer-Aufmerksamkeit gelten (#60).
-        Bewusst KEIN Produktivcode: das Modul hat nur src/test und wird von niemandem
-        konsumiert. Es haengt (test-scope) auf die Module, ueber die es Aussagen trifft.
-        Das ist der Preis fuer den eigenen Schnitt; die Alternative waere gewesen, die
-        Regeln in arknet-mcp zu legen, das als Composition Root ohnehin breit haengt,
-        aber Verdrahtung beherbergt und nicht Architektur-Kontrolle.
+        ArchUnit rules for the dependency invariants that the Maven module cut can NOT
+        enforce and that would otherwise rest on reviewer attention alone (#60).
+        Deliberately NO production code: the module has only src/test and nobody
+        consumes it. It depends (test scope) on the modules it makes claims about.
+        That is the price of its own module cut; the alternative would have been to
+        put the rules into arknet-mcp, which as the composition root depends broadly
+        anyway, but hosts wiring rather than architectural control.
     </description>
 
     <dependencies>

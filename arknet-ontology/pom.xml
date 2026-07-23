@@ -11,5 +11,5 @@
     </parent>
 
     <artifactId>arknet-ontology</artifactId>
-    <description>OWL-Ontologie und SHACL-Shapes fuer arknet</description>
+    <description>OWL ontology and SHACL shapes for arknet</description>
 </project>

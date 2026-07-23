@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-mcp</artifactId>
-    <description>Composition Root: Spring-Boot-MCP-Server (Streamable HTTP, Loopback), buendelt die Tools der hexagonalen BCs (requirements, ubiquitous-language, use-cases) ueber einen geteilten DatasetLifecycle sowie den generischen Store-Lesepfad (store_overview/resource_get)</description>
+    <description>Composition root: Spring Boot MCP server (Streamable HTTP, loopback) that bundles the tools of the hexagonal BCs (requirements, ubiquitous-language, use-cases) behind a shared DatasetLifecycle, plus the generic store read path (store_overview/resource_get)</description>
 
     <!-- Lokale Versions-Anhebungen fuer diese (einzige) Spring-Boot-Anwendung. Die rdf4j-BOM
          wird im arknet-parent zuerst importiert und zieht ueber ihren rdf4j-Parent veraltete

@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-ubiquitous-language-adapter-mcp</artifactId>
-    <description>In-Adapter (driving): uebersetzt MCP-Tool-Calls auf die arknet-ubiquitous-language-core In-Ports via Spring-AI @McpTool. Die Composition Root (arknet-mcp) sammelt die Tools per Bean-Auto-Detection ein.</description>
+    <description>In-adapter (driving): translates MCP tool calls into the arknet-ubiquitous-language-core in-ports via Spring AI @McpTool. The composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
 
     <dependencies>
         <dependency>

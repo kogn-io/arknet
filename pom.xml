@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <name>arknet - Architecture Knowledge Net</name>
-    <description>DDD-Architekturmodelle, die Maschinen verstehen.</description>
+    <description>DDD architectural models that machines can understand.</description>
     <url>https://github.com/kogn-io/arknet</url>
 
     <licenses>

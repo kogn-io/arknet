@@ -12,7 +12,7 @@
 
     <artifactId>arknet-ubiquitous-language</artifactId>
     <packaging>pom</packaging>
-    <description>Ubiquitous-Language-Komponente (hexagonal, Shared Kernel): Fachbegriffe als SKOS-Concepts (Glossar). Zweite hexagonale BC nach requirements, gleiche Bauart. Dogfood: arknet verwaltet seine eigene Fachsprache.</description>
+    <description>Ubiquitous Language component (hexagonal, Shared Kernel): domain terms as SKOS concepts (glossary). Second hexagonal BC after requirements, same build. Dogfooding: arknet manages its own domain language.</description>
 
     <modules>
         <module>arknet-ubiquitous-language-core</module>

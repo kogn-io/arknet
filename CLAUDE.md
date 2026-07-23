@@ -4,17 +4,15 @@
 
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
-- Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0;
-  Sichtbarkeit derzeit privat). **Issues bleiben komplett im internen Tracker**
-  (branch-protected, kein Code-Push mehr; Zugang via `forgejo`-Remote bzw. Forgejo-MCP) -- der
-  GitHub-Issue-Tracker ist bewusst abgeschaltet, Aussenstehende bekommen GitHub Discussions.
-  Siehe README "Repository"-Abschnitt.
+- Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0).
+  Der GitHub-Issue-Tracker ist bewusst abgeschaltet; Fragen und Vorschlaege laufen ueber
+  GitHub Discussions. Siehe README "Repository"-Abschnitt.
 
 ## Architektur
 
 - Pipes & Filters: Turtle → Parse → Validate (SHACL) → Triple Store (RDF4J) → SPARQL → Template → AsciiDoc → HTML/PDF
 - Delivery: **MCP-first** + CLI als Convenience-Layer
-- Editionen/Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar (kognio-rdf lokal = Community/OSS <-> kognio-memory remote = Closed). Siehe `docs/adr/adr-001-local-client-and-swappable-store.md` (Client+Store), `adr-002-open-core-editions.md` (Editionen), `adr-003-adapter-b-remote-store.md` (Adapter B), `adr-004-spring-ai-mcp-tech-line.md` (Spring-AI-Tech-Linie fuer MCP), `adr-005-store-first-model-lifecycle.md` (Store-first: der Store ist der primaere Modell-Ort; Datei-Pipeline / `arknet_*`-Tools aussterbend), `adr-006-generic-store-read-path.md` (generischer BC-uebergreifender Store-Lesepfad `store_overview`/`resource_get` im Composition Root), `adr-007-shared-shacl-write-gate-module.md` (geteiltes SHACL-Write-Gate als eigenes technisches Modul statt Shared Kernel; grenzt gegen ADR-006 ab), `adr-008-in-adapter-as-bc-gateway.md` (In-Adapter darf einen Nachbar-BC-In-Port konsumieren -- Tor zum BC, nicht Teil von dessen Core; die "kein BC am anderen"-Invariante bindet nur noch die `*-core`; grenzt gegen ADR-006 und ADR-007 ab)
+- Store: lokaler Single-User-Client, Store hinter domaennahem Out-Port austauschbar. Siehe `docs/adr/adr-001-local-client-and-swappable-store.md` (Client+Store), `adr-003-adapter-b-remote-store.md` (Adapter B), `adr-004-spring-ai-mcp-tech-line.md` (Spring-AI-Tech-Linie fuer MCP), `adr-005-store-first-model-lifecycle.md` (Store-first: der Store ist der primaere Modell-Ort; Datei-Pipeline / `arknet_*`-Tools aussterbend), `adr-006-generic-store-read-path.md` (generischer BC-uebergreifender Store-Lesepfad `store_overview`/`resource_get` im Composition Root), `adr-007-shared-shacl-write-gate-module.md` (geteiltes SHACL-Write-Gate als eigenes technisches Modul statt Shared Kernel; grenzt gegen ADR-006 ab), `adr-008-in-adapter-as-bc-gateway.md` (In-Adapter darf einen Nachbar-BC-In-Port konsumieren -- Tor zum BC, nicht Teil von dessen Core; die "kein BC am anderen"-Invariante bindet nur noch die `*-core`; grenzt gegen ADR-006 und ADR-007 ab)
 - CLI: **nicht implementiert**. Produktvision haelt an einem CLI als CI/CD-Convenience-Layer fest -- ein store-first-Neuschnitt, wenn der CI-Bedarf konkret wird.
 - Keine Datei-Pipeline: `arknet-core`, `arknet-projection` und die datei-basierten `arknet_*`-MCP-Tools existieren nicht mehr. Store-first (die BC-Tools) ist der einzige Modell-Lebenszyklus (ADR-005). Einziger generierender Ausgabepfad ist das self-contained `store-report.html`.
 - MCP-Betriebsmodell: EIN geteilter, langlebiger Daemon fuer alle Workspaces der Maschine (Streamable HTTP, `127.0.0.1:47331`), nicht mehr ein Claude-Code-Subprozess pro Session -- Grund: mehrere Sessions/Worktrees teilen seit der git-common-dir-basierten WorkspaceId denselben Store, und jeder Subprozess kollidierte am NativeStore-Verzeichnis-Lock, sobald zwei davon gleichzeitig liefen. Welchen Workspace ein Aufruf trifft, kommt pro Aufruf aus dem Startverzeichnis der Session (`.mcp.json`-Header `X-Arknet-Workspace-Dir: ${PWD}`), nicht mehr aus einem beim Boot fixierten Singleton -- darum genuegt ein Port fuer alle Projekte (ADR-009). Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
@@ -84,21 +82,23 @@ gearbeitet wird.
 
 - `skills/adr/` (ADR-Pflege) und `skills/req-interview/` (Requirements/Use-Cases/Glossar-Interview,
   zwei Einstiege Greenfield+Bestandscode).
-- Geshippter Plugin-Inhalt (Skill-Text, `plugin.json`-Description, Repo-Description) ist
-  **Englisch** -- Zielgruppe ist englischsprachig, sobald arknet im oeffentlichen
-  GitHub-Marketplace gelistet ist (bislang nur in einem privaten Marketplace, der fuer
-  Aussenstehende unerreichbar ist). Was **in den Store** geschrieben wird (Requirement-/
-  Use-Case-/Term-Text) bleibt **Deutsch** -- arknets eigene Ubiquitous Language, unberuehrt von
+- Geshippter Inhalt (Skill-Text, `plugin.json`-Description, Maven-`<description>`,
+  SHACL-`sh:message`, Ontologie-Labels) ist **Englisch** -- die Zielgruppe ist
+  englischsprachig. Was **in den Store** geschrieben wird (Requirement-/Use-Case-/
+  Term-Text) bleibt **Deutsch** -- arknets eigene Ubiquitous Language, unberuehrt von
   dieser Regel.
 - Geshippte Artefakte referenzieren keine externen Quellprojekte (Herkunft/Inspiration gehoert in
   PR-Beschreibung/Memory, nicht in den ausgelieferten Text -- er muss fuer sich stehen).
-- `skills/adr/` ist noch Deutsch (Altfall von vor dieser Entscheidung, 2026-07-17) -- kein
-  Nachziehen ohne explizite Entscheidung.
+- Noch nicht nachgezogen: `skills/adr/` und die ADRs unter `docs/adr/` sind Deutsch
+  (Altfaelle von vor dieser Entscheidung), ebenso die SHACL-`sh:message` und ein Teil der
+  Ontologie-Labels.
 
-## Herkunft
+## Regel fuer diese Datei
 
-Konsolidiert aus drei Vorprojekten (doc42, dddprocess, ddd-forge) in
-`arknet-ontology` (Kern-/Process-/Privacy-Module) und der fruehen
-Pipeline-Bauart. Das Original-Archiv (`doc42-origin/`) ist nicht mehr im
-Baum, aber ueber die Git-Historie wiederherstellbar (Import-Commit
-`139bb86`).
+`CLAUDE.md` wird mit ausgeliefert. Hier steht nur, was ein Fremder auch aus dem
+Code ableiten koennte: Struktur, Konventionen, Invarianten, Bauanleitung.
+**Nicht hierher gehoeren:** Repo-Sichtbarkeit und Zugangswege, interne
+Infrastruktur (Hostnames, Tracker, Marketplaces), Editions-/Preis-/
+Monetarisierungsfragen, Herkunft aus nicht-oeffentlichen Vorprojekten sowie
+alles mit Status- oder Zeitbezug ("derzeit", "noch nicht gepusht"). Das gilt
+fuer die Modul-`CLAUDE.md` genauso.
