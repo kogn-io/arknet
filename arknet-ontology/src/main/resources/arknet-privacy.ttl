@@ -3,7 +3,7 @@
 #  Privacy / GDPR Ontology  ·  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/privacy#
-#  License    : Proprietary. All rights reserved.
+#  License    : Apache-2.0
 #
 #  Migrated from: ddd-forge.ttl (ddd-forge.org), TEIL 4 "DSGVO / Privacy by
 #                 Design". Re-licensed by the sole author into arknet.
@@ -37,7 +37,7 @@
     dcterms:description "DSGVO / Privacy-by-Design als OWL: Datenkategorien, Rechtsgrundlagen, Verarbeitungszwecke, Betroffenenrechte, technische Massnahmen und Datenschutz-Folgenabschaetzung."@de ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
-    dcterms:rights   "Proprietary. All rights reserved." ;
+    dcterms:rights   "Apache-2.0" ;
     dcterms:source   "ddd-forge.ttl (ddd-forge.org), TEIL 4" ;
     vann:preferredNamespacePrefix "arkpriv" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/privacy#" ;

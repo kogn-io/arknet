@@ -3,7 +3,7 @@
 #  Core Ontology  ·  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/core#
-#  License    : Proprietary. All rights reserved.
+#  License    : Apache-2.0
 #
 #  Consolidated from:
 #    - doc42-ontology.ttl  (doc42.ddd-forge.dev)
@@ -38,7 +38,7 @@
     dcterms:description "DDD-Architekturmodelle, die Maschinen verstehen. Strategisches und taktisches Domain-Driven Design als OWL."@de ;
     dcterms:version     "0.1.0" ;
     dcterms:created     "2026-03-23"^^xsd:date ;
-    dcterms:rights      "Proprietary. All rights reserved." ;
+    dcterms:rights      "Apache-2.0" ;
     vann:preferredNamespacePrefix "arknet" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/core#" ;
     owl:versionInfo     "0.1.0" .
