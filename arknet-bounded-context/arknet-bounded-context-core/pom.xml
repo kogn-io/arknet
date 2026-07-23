@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-bounded-context-core</artifactId>
-    <description>Reines Hexagon-Inneres: Domaene, Use-Cases (In-Ports), Out-Ports. Technologieneutral.</description>
+    <description>Pure hexagon interior: domain, use cases (in-ports), out-ports. Technology-neutral.</description>
 
     <dependencies>
         <dependency>

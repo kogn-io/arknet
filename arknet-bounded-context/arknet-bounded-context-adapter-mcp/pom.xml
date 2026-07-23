@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-bounded-context-adapter-mcp</artifactId>
-    <description>In-Adapter (driving): uebersetzt MCP-Tool-Calls auf die arknet-bounded-context-core In-Ports via Spring-AI @McpTool. Eine Composition Root (arknet-mcp) sammelt die Tools per Bean-Auto-Detection ein.</description>
+    <description>In-adapter (driving): translates MCP tool calls into the arknet-bounded-context-core in-ports via Spring AI @McpTool. A composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
 
     <dependencies>
         <dependency>

@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-use-cases-adapter-kogniordf</artifactId>
-    <description>Out-Adapter: implementiert UseCaseRepository ueber kognio-rdf (embeddable RDF-Substrat).</description>
+    <description>Out-adapter: implements UseCaseRepository on top of kognio-rdf (embeddable RDF substrate).</description>
 
     <dependencies>
         <dependency>

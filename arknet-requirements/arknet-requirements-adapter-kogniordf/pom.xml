@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-requirements-adapter-kogniordf</artifactId>
-    <description>Out-Adapter: implementiert RequirementRepository ueber kognio-rdf (embeddable RDF-Substrat).</description>
+    <description>Out-adapter: implements RequirementRepository on top of kognio-rdf (embeddable RDF substrate).</description>
 
     <dependencies>
         <dependency>

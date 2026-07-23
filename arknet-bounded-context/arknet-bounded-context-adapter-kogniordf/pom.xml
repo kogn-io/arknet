@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-bounded-context-adapter-kogniordf</artifactId>
-    <description>Out-Adapter: implementiert BoundedContextRepository ueber kognio-rdf (embeddable RDF-Substrat). Bounded Contexts werden als arknet:BoundedContext persistiert.</description>
+    <description>Out-adapter: implements BoundedContextRepository on top of kognio-rdf (embeddable RDF substrate). Bounded contexts are persisted as arknet:BoundedContext.</description>
 
     <dependencies>
         <dependency>
