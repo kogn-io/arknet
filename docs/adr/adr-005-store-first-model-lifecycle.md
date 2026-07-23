@@ -1,7 +1,8 @@
 # ADR-005: Store-first -- das Modell lebt im Store, nicht in der Datei-Pipeline
 
 - Status: Proposed (2026-07-14)
-- Verwandt: ADR-001
+- Verwandt: ADR-001, ADR-011 (entscheidet, dass der hier entfallene Datei-Pfad nicht als
+  diffbarer Export zurueckkehrt)
 
 ## Kontext
 

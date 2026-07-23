@@ -3,7 +3,7 @@
 - Status: Proposed (2026-07-13)
 - Verwandt: ADR-002, ADR-003, ADR-005, ADR-009 (MCP-Transport -- praezisiert, wie der
   lokale MCP-Server erreichbar ist, ohne die Single-User-Client-Entscheidung hier zu
-  aendern)
+  aendern), ADR-011 (loest die hier deferrierte Provenance ein)
 
 ## Kontext
 
