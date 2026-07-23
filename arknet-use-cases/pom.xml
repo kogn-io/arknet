@@ -12,7 +12,7 @@
 
     <artifactId>arknet-use-cases</artifactId>
     <packaging>pom</packaging>
-    <description>Use-Cases-Komponente (hexagonal): flow-orientierte Cockburn-Use-Cases als eigenes Hexagon. Dritte hexagonale BC nach requirements und ubiquitous-language, gleiche Bauart.</description>
+    <description>Use Cases component (hexagonal): flow-oriented Cockburn use cases as their own hexagon. Third hexagonal BC after requirements and ubiquitous-language, same build.</description>
 
     <modules>
         <module>arknet-use-cases-core</module>

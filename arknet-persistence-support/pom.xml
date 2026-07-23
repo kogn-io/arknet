@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-persistence-support</artifactId>
-    <description>Technischer Support fuer die kognio-rdf-Out-Adapter: das SHACL-Write-Gate (validate-before-commit) samt Ablehnungs-Signal, geteilt von allen Bounded Contexts. Kein Shared Kernel - hier wohnt Technik, kein Domain-Vokabular.</description>
+    <description>Technical support for the kognio-rdf out-adapters: the SHACL write gate (validate-before-commit) including its rejection signal, shared by every bounded context. Not a Shared Kernel - technology lives here, not domain vocabulary.</description>
 
     <dependencies>
         <dependency>

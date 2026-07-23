@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-use-cases-adapter-mcp</artifactId>
-    <description>In-Adapter (driving): uebersetzt MCP-Tool-Calls (uc_add/uc_list/uc_get) auf die arknet-use-cases-core In-Ports via Spring-AI @McpTool. Eine Composition Root (arknet-mcp) sammelt die Tools per Bean-Auto-Detection ein.</description>
+    <description>In-adapter (driving): translates MCP tool calls (uc_add/uc_list/uc_get) into the arknet-use-cases-core in-ports via Spring AI @McpTool. A composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
 
     <dependencies>
         <dependency>
