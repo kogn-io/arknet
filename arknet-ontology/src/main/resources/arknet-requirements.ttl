@@ -3,7 +3,7 @@
 #  Requirements Ontology  :  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/requirements#
-#  License    : Proprietary. All rights reserved.
+#  License    : Apache-2.0
 #
 #  Scope: Requirements Engineering (ISO/IEC/IEEE 29148) als Metamodell.
 #         Goals, funktionale und nicht-funktionale Requirements, Constraints,
@@ -62,7 +62,7 @@
     dcterms:description "Requirements Engineering nach ISO 29148: Goals, Requirements, Constraints, Use Cases und Release-Planung; OSLC-RM-aligned und mit der DDD-Schicht verknuepft."@de ;
     dcterms:version  "0.2.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
-    dcterms:rights   "Proprietary. All rights reserved." ;
+    dcterms:rights   "Apache-2.0" ;
     vann:preferredNamespacePrefix "arkreq" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/requirements#" ;
     owl:versionInfo  "0.2.0" .
