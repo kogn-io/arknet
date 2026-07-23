@@ -89,9 +89,11 @@ gearbeitet wird.
   dieser Regel.
 - Geshippte Artefakte referenzieren keine externen Quellprojekte (Herkunft/Inspiration gehoert in
   PR-Beschreibung/Memory, nicht in den ausgelieferten Text -- er muss fuer sich stehen).
-- Noch nicht nachgezogen: `skills/adr/` und die ADRs unter `docs/adr/` sind Deutsch
-  (Altfaelle von vor dieser Entscheidung), ebenso die SHACL-`sh:message` und ein Teil der
-  Ontologie-Labels.
+- Die ADRs unter `docs/adr/` sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle,
+  keine geshippte Ausliefer-Flaeche im Plugin-Sinn) -- kein Uebersetzungs-Rueckstand.
+- Offener Englisch-Rueckstand auf geshippten Flaechen: die SHACL-`sh:message` und ein Teil
+  der Ontologie-Labels. Dazu der Plugin-Altfall `skills/adr/` (Deutsch von vor dieser
+  Entscheidung) -- kein Nachziehen ohne explizite Entscheidung.
 
 ## Regel fuer diese Datei
 
