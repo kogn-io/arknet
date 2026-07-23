@@ -180,3 +180,27 @@ den **niemand** geprueft hat, macht das Gate fuer genau diese Bedingung blind. F
 `readUsesTerms` gelesenen Kanten trifft das zu (der Read stellt keine Typ-Bedingung); erreichbar
 ist der Fall nur store-first, nicht ueber die Tools. Kein eigenes Issue -- bewusste Entscheidung,
 festgehalten im Klassen-Javadoc von `KognioRdfRequirementRepository`.
+
+## Nachtrag 2026-07-23 (kogn-io/rdf-core#20): neue Abhaengigkeit zum Shared Kernel
+
+Seit `io.kogn.rdf` 0.2.0 liefert der SHACL-Port jede `sh:message` einer Shape mit intaktem
+Sprachtag aus (`ShaclResult.messages()`, vorher ein nackter, zeilenordnungs-abhaengiger
+`String`) und waehlt bewusst keine -- Sprachwahl ist Policy, nicht RDF (arknets eigener
+Feature-Request, PR kogn-io/rdf-core#21). Diese Policy landet jetzt im Gate: `ShaclWriteGate`
+nimmt einen fuenften Konstruktor-Parameter `DisplayLocale` und rendert genau eine Meldung pro
+Verletzung ueber dessen Fallback-Kette.
+
+Das aendert die in Entscheidung 1 gezogene Abhaengigkeitsgrenze: `arknet-persistence-support`
+haengt jetzt (compile-Scope, vorher nur test) am `arknet-shared-kernel`, der `DisplayLocale`
+und `LocalizedLiteral` traegt. Kein Widerspruch zur damaligen Entscheidung -- die richtete sich
+gegen den *Merge* der beiden Module (der die kognio-rdf-Ports in den Classpath der drei `*-core`
+gezogen haette), nicht gegen eine Abhaengigkeit in dieser Richtung. Der Kernel bleibt
+dependency-frei, zieht also nichts nach; ArchUnit-Regel 1 (RDF4J-Freiheit) bleibt unberuehrt,
+weil `DisplayLocale`/`LocalizedLiteral` selbst technologieneutral sind. Trotzdem eine neue,
+bisher unerwaehnte Kante im Abhaengigkeitsgraphen dieser ADR -- deshalb der Nachtrag.
+
+Kontextunterschiede bleiben Konstruktor-Zustand (Entscheidung 3): der ul-Adapter reicht seine
+echte, Nutzer-konfigurierte `DisplayLocale` durch (die Read-Pfade brauchen sie ohnehin fuer die
+Label-Auswahl), req/uc/bc fuehren heute keine Sprachpraeferenz und uebergeben sichtbar
+`DisplayLocale.DEFAULT` an ihrer jeweiligen `buildGate()`-Stelle -- keine Policy-Entscheidung
+*im* Gate, sondern eine explizite Wahl an der Stelle, die sie trifft.

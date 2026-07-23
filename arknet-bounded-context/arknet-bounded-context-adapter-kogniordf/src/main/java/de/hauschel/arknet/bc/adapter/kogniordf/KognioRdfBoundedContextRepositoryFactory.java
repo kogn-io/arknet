@@ -24,6 +24,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 
 /**
@@ -112,12 +113,19 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      * <p>Package-private (not private) so {@code KognioRdfBoundedContextRepositoryTest} can drive
      * the gate directly, at gate level, without duplicating this shapes-loading logic.</p>
      *
+     * <p>The gate reports violations in {@link DisplayLocale#DEFAULT}: this bounded context
+     * threads no display-language preference through its factory (unlike the
+     * ubiquitous-language one, whose read paths need it for label selection), so there is no
+     * caller preference to honour here. Stated explicitly rather than defaulted inside the
+     * gate, so the choice is visible at the site that makes it.</p>
+     *
      * @return the assembled DDD SHACL write-gate
      */
     static ShaclWriteGate buildGate() {
         ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
         ReadableGraph axioms = new SimpleRdf().createGraph();
-        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults());
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults(),
+                DisplayLocale.DEFAULT);
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {

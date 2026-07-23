@@ -28,6 +28,7 @@ import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -133,12 +134,19 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * {@link UseCaseRepository} round-trip the single-valued {@code primaryActor} domain field
      * cannot produce (issue #82).</p>
      *
+     * <p>The gate reports violations in {@link DisplayLocale#DEFAULT}: this bounded context
+     * threads no display-language preference through its factory (unlike the
+     * ubiquitous-language one, whose read paths need it for label selection), so there is no
+     * caller preference to honour here. Stated explicitly rather than defaulted inside the
+     * gate, so the choice is visible at the site that makes it.</p>
+     *
      * @return the assembled use-case SHACL write-gate
      */
     static ShaclWriteGate buildGate() {
         ReadableGraph shapes = loadUseCaseShapes();
         ReadableGraph axioms = loadGraph(AXIOMS_RESOURCE);
-        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true));
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true),
+                DisplayLocale.DEFAULT);
     }
 
     /**

@@ -394,7 +394,7 @@ class KognioRdfTermRepositoryTest {
      */
     @Test
     void gateRejectsConceptWithoutPrefLabel() {
-        ShaclWriteGate gate = KognioRdfTermRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfTermRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         RDF rdf = new SimpleRdf();
         IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         Graph invalidConcept = rdf.createGraph();

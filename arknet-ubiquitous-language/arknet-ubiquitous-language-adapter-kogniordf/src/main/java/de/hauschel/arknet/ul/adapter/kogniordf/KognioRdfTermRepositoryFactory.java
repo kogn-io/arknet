@@ -91,7 +91,7 @@ public final class KognioRdfTermRepositoryFactory {
     public static TermRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        return new KognioRdfTermRepository(lifecycle, buildGate(), displayLocale,
+        return new KognioRdfTermRepository(lifecycle, buildGate(displayLocale), displayLocale,
                 KognioRdfTermRepositoryFactory::isWriteConflict);
     }
 
@@ -129,12 +129,19 @@ public final class KognioRdfTermRepositoryFactory {
      * <p>Package-private (not private) so {@code KognioRdfTermRepositoryTest} can drive the
      * gate directly, at gate level, without duplicating this shapes-loading logic.</p>
      *
+     * <p>The {@code displayLocale} handed in is the same one the read paths select labels
+     * with: a caller that asked to read this glossary in one language is told in that language
+     * why a write was refused, whenever the violated shape carries its {@code sh:message} in
+     * more than one.</p>
+     *
+     * @param displayLocale the language a rejected write is reported in
      * @return the assembled ubiquitous-language SHACL write-gate
      */
-    static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate(DisplayLocale displayLocale) {
         ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
         ReadableGraph axioms = new SimpleRdf().createGraph();
-        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults());
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults(),
+                displayLocale);
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {
