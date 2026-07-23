@@ -25,6 +25,12 @@ RUN mvn -pl arknet-mcp -am package -DskipTests -B
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:25-jre-alpine AS runtime
 
+# GHCR links a package to its source repository via this label. Without it the
+# pushed package stays unlinked, "inherit access from source repository" cannot
+# apply, and the workflow's GITHUB_TOKEN is denied write_package on the very
+# first push -- even though Actions granted it `packages: write`.
+LABEL org.opencontainers.image.source=https://github.com/kogn-io/arknet
+
 # Non-root runtime user; the RDF store lives on a mounted volume it must own.
 RUN addgroup -S arknet && adduser -S arknet -G arknet
 
