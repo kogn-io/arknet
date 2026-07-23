@@ -5,8 +5,10 @@ package de.hauschel.arknet.persistence;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+import io.kogn.rdf.shacl.ShaclMessage;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclResult;
 import io.kogn.rdf.shacl.ShaclValidation;
@@ -16,6 +18,9 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
+
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LocalizedLiteral;
 
 /**
  * SHACL write-gate: rejects a candidate instance graph before persistence if it violates the
@@ -39,6 +44,15 @@ import io.kogn.rdf.terms.SimpleRdf;
  * the only RDF4J-aware collaborator. That is why this module carries no RDF4J dependency even
  * though every one of its callers does.</p>
  *
+ * <p><strong>One shape, several languages.</strong> A shape may carry {@code sh:message} once
+ * per language, and since {@code io.kogn.rdf} 0.2.0 every one of them reaches the caller with
+ * its tag intact ({@link ShaclResult#messages()}) - the port deliberately picks none, because
+ * choosing a language is policy, not RDF. The gate is where that policy lands for arknet: it
+ * renders exactly one message per violation, selected by the {@link DisplayLocale} it was
+ * built with. Rendering all of them would hand a user the same complaint twice in languages
+ * they did not ask for; rendering {@code messages().get(0)} would be worse still, since that
+ * order is an artifact of the parse order of the shapes file and carries no meaning.</p>
+ *
  * <p><strong>Validation-only asserted context (issue #63).</strong>
  * {@link #enforce(ReadableGraph, ReadableGraph)} accepts a second graph of triples that are
  * merged into the validated data alongside {@code candidate} and {@code axioms}, but are never
@@ -55,24 +69,29 @@ public final class ShaclWriteGate {
     private final ReadableGraph shapes;
     private final ReadableGraph axioms;
     private final ValidationOptions options;
+    private final DisplayLocale displayLocale;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the gate.
      *
-     * @param validation the SHACL validation port implementation
-     * @param shapes     the SHACL shapes to validate candidate graphs against
-     * @param axioms     ontology axioms (e.g. {@code rdfs:subClassOf} / {@code subPropertyOf})
-     *                   merged into the validated data graph so that shapes targeting a
-     *                   superclass fire (an empty graph if no axioms are needed)
-     * @param options    validation options (e.g. whether to reason over {@code axioms})
+     * @param validation    the SHACL validation port implementation
+     * @param shapes        the SHACL shapes to validate candidate graphs against
+     * @param axioms        ontology axioms (e.g. {@code rdfs:subClassOf} /
+     *                      {@code subPropertyOf}) merged into the validated data graph so that
+     *                      shapes targeting a superclass fire (an empty graph if no axioms are
+     *                      needed)
+     * @param options       validation options (e.g. whether to reason over {@code axioms})
+     * @param displayLocale the language a rejected write is reported in, when the violated
+     *                      shape carries its {@code sh:message} in more than one
      */
     public ShaclWriteGate(ShaclValidation validation, ReadableGraph shapes, ReadableGraph axioms,
-            ValidationOptions options) {
+            ValidationOptions options, DisplayLocale displayLocale) {
         this.validation = Objects.requireNonNull(validation, "validation");
         this.shapes = Objects.requireNonNull(shapes, "shapes");
         this.axioms = Objects.requireNonNull(axioms, "axioms");
         this.options = Objects.requireNonNull(options, "options");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     /**
@@ -112,21 +131,36 @@ public final class ShaclWriteGate {
         }
     }
 
-    private static String violationMessage(List<ShaclResult> results) {
+    private String violationMessage(List<ShaclResult> results) {
         return results.stream()
                 .filter(result -> result.severity() == Severity.VIOLATION)
-                .map(ShaclWriteGate::describe)
+                .map(this::describe)
                 .collect(Collectors.joining("; "));
     }
 
-    private static String describe(ShaclResult result) {
+    private String describe(ShaclResult result) {
         StringBuilder description = new StringBuilder("focusNode=").append(result.focusNode());
         if (result.path() != null) {
             description.append(", path=").append(result.path());
         }
-        if (result.message() != null) {
-            description.append(", message=").append(result.message());
-        }
+        selectMessage(result).ifPresent(message -> description.append(", message=").append(message));
         return description.toString();
+    }
+
+    /**
+     * Picks the one message to report from the (possibly multilingual, possibly empty) messages
+     * of a result, per the {@link DisplayLocale} fallback chain. Empty exactly when the violated
+     * shape carried no {@code sh:message} at all - which is legal in SHACL, and stays as silent
+     * here as a {@code null} message was before.
+     */
+    private Optional<String> selectMessage(ShaclResult result) {
+        List<LocalizedLiteral> candidates = result.messages().stream()
+                .map(ShaclWriteGate::toLocalizedLiteral)
+                .toList();
+        return displayLocale.select(candidates).map(LocalizedLiteral::value);
+    }
+
+    private static LocalizedLiteral toLocalizedLiteral(ShaclMessage message) {
+        return new LocalizedLiteral(message.text(), message.language());
     }
 }
