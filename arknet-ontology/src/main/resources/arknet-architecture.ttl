@@ -3,7 +3,7 @@
 #  Architecture Ontology  :  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/architecture#
-#  License    : Proprietary. All rights reserved.
+#  License    : Apache-2.0
 #
 #  Scope: Architecture Description nach ISO/IEC/IEEE 42010 als Metamodell:
 #         Architecture, ArchitectureDescription, Stakeholder, Concern,
@@ -56,7 +56,7 @@
     dcterms:description "Architekturbeschreibung nach ISO/IEC/IEEE 42010: Stakeholder, Concerns, Views, Viewpoints und ADRs; verknuepft mit Requirements und der DDD-Schicht."@de ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
-    dcterms:rights   "Proprietary. All rights reserved." ;
+    dcterms:rights   "Apache-2.0" ;
     vann:preferredNamespacePrefix "arkarch" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/architecture#" ;
     owl:versionInfo  "0.1.0" .
