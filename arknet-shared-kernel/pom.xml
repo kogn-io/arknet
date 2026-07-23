@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-shared-kernel</artifactId>
-    <description>Shared Kernel (DDD): technologieneutrale Domain-Bausteine, die mehrere Bounded Contexts teilen (z.B. WorkspaceId als Routing-Key). Bewusst winzig gehalten - nur wirklich geteiltes Vokabular.</description>
+    <description>Shared Kernel (DDD): technology-neutral domain building blocks shared by several bounded contexts (e.g. WorkspaceId as the routing key). Deliberately kept tiny - only genuinely shared vocabulary.</description>
 
     <dependencies>
         <dependency>

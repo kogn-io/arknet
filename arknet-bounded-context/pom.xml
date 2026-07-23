@@ -12,7 +12,7 @@
 
     <artifactId>arknet-bounded-context</artifactId>
     <packaging>pom</packaging>
-    <description>Bounded-Context-Komponente (hexagonal): arknet:BoundedContext store-first mintbar (bc_add/bc_link_term/bc_get/bc_list) als eigenes Hexagon</description>
+    <description>Bounded Context component (hexagonal): arknet:BoundedContext mintable store-first (bc_add/bc_link_term/bc_get/bc_list) as its own hexagon</description>
 
     <modules>
         <module>arknet-bounded-context-core</module>

@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-ubiquitous-language-core</artifactId>
-    <description>Reines Hexagon-Inneres: Domaene (Term = skos:Concept, Glossary = ConceptScheme), Use-Cases (In-Ports), Out-Ports. Technologieneutral.</description>
+    <description>Pure hexagon interior: domain (Term = skos:Concept, Glossary = ConceptScheme), use cases (in-ports), out-ports. Technology-neutral.</description>
 
     <dependencies>
         <dependency>
