@@ -52,7 +52,7 @@ import de.hauschel.arknet.req.domain.TermRef;
 
 /**
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate
- * ({@code io.kogn.rdf}, embeddable RDF dataset).
+ * ({@code io.kogn.rdf}, embeddable RDF store).
  *
  * <p>Maps a {@link Requirement} to its opaque {@link RequirementId} as the subject IRI (minted
  * once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the

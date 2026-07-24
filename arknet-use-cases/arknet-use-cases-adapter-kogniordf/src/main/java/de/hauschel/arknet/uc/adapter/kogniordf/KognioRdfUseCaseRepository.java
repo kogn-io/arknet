@@ -44,7 +44,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
  * Out-adapter: {@link UseCaseRepository} backed by the kognio-rdf substrate
- * ({@code io.kogn.rdf}, embeddable RDF dataset).
+ * ({@code io.kogn.rdf}, embeddable RDF store).
  *
  * <p>Maps a {@link UseCase} to an {@code arkreq:UseCase} whose subject IRI is the opaque
  * {@link UseCaseId} (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never
