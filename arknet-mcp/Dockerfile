@@ -44,6 +44,15 @@ COPY --from=build /build/arknet-mcp/target/arknet-mcp-*.jar app.jar
 COPY arknet-mcp/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# serverInfo.version for the MCP initialize handshake (issue #159): the caller passes
+# the real released version (release.yml: vX.Y.Z) or a commit sha (docker.yml: continuous
+# :latest/:sha build) as a build-arg; application.properties' ARKNET_VERSION placeholder
+# picks up this baked-in env var at runtime. Defaults to "dev" for a manual, un-parameterized
+# `docker build` -- an empty ARKNET_VERSION would otherwise win over application.properties'
+# own "dev" fallback, since Spring treats a present-but-empty env var as a real value.
+ARG ARKNET_VERSION=dev
+ENV ARKNET_VERSION=${ARKNET_VERSION}
+
 # --- Container networking, read this before changing the run command ---------
 # application.properties hardcodes server.address=127.0.0.1 on purpose: on the
 # bare-jar path that loopback bind IS the trust boundary (no auth, ADR-009).
