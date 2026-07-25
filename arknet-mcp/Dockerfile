@@ -71,6 +71,18 @@ ENV ARKNET_RDF_STORAGE=/data/rdf
 RUN mkdir -p /data/rdf && chown -R arknet:arknet /data/rdf
 VOLUME /data/rdf
 
+# store_overview's HTML report location (arknet.report.dir). Without this, the
+# fallback report dir defaults to WORKDIR (/app), which is root-owned and not
+# writable by the non-root uid the JVM runs as -- store_overview would fail to
+# write a report for every caller whose own project directory isn't reachable
+# from inside this container either (the normal case; issue #158). Mounting it
+# also lets a human actually open the generated store-report.html from the
+# host, which a container-only path never would:
+#     -v ~/.arknet/report:/data/report
+ENV ARKNET_REPORT_DIR=/data/report
+RUN mkdir -p /data/report && chown -R arknet:arknet /data/report
+VOLUME /data/report
+
 # No USER here: entrypoint.sh needs root to reconcile arknet's uid/gid with the
 # mounted store's owner (optionally via PUID/PGID) and chown accordingly, then
 # drops to arknet itself via su-exec before exec-ing the JVM.
