@@ -83,7 +83,7 @@ class StoreReportToolsTest {
         // null context (no origin), so the resolver returns the fixed test workspace and the report
         // lands in the fallback reportDir - exactly the pre-#137 single-workspace behaviour.
         WorkspaceResolver workspaces = originDir -> WORKSPACE;
-        tools = new StoreReportTools(reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, reportDir);
+        tools = new StoreReportTools(reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, reportDir, null);
     }
 
     @AfterEach
@@ -158,13 +158,37 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final WorkspaceResolver workspaces = originDir -> WORKSPACE;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, blockedFallbackDir);
+                reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, blockedFallbackDir, null);
 
         final String result = toolsWithBrokenFallback.storeOverview(null, null);
 
         assertThat(result).contains("# Workspace noistill").contains("FR-1");
         assertThat(result).contains("# HTML report: FAILED to write to " + blockedFallbackDir);
         assertThat(result).contains("FileAlreadyExistsException");
+    }
+
+    /**
+     * #160: a containerized daemon's {@code fallbackReportDir} is a mount point
+     * (e.g. {@code /data/report}) the calling agent, running outside the container, cannot
+     * reach. When {@code reportHostDir} names that mount's host-side path, the digest must
+     * report the host path instead of the path the file was actually written to.
+     */
+    @Test
+    void storeOverviewReportsTheHostMountPathInsteadOfTheContainerInternalWriteTarget(@TempDir final Path hostDir)
+            throws Exception {
+        final Prefixes prefixes = Prefixes.defaults();
+        final StoreReader reader = new StoreReader(lifecycle);
+        final WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        final StoreReportTools toolsWithHostDir = new StoreReportTools(
+                reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, reportDir, hostDir);
+
+        final String result = toolsWithHostDir.storeOverview(null, null);
+
+        final Path writtenHtml = reportDir.resolve("store-report.html");
+        assertThat(writtenHtml).exists();
+        assertThat(result)
+                .contains("# HTML report: " + hostDir.resolve("store-report.html"))
+                .doesNotContain(reportDir.toString());
     }
 
     /**
