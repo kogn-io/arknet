@@ -71,6 +71,7 @@ jobs:
           file: arknet-mcp/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:v${{ inputs.version }}
+          build-args: ARKNET_VERSION=v${{ inputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
