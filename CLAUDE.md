@@ -78,22 +78,21 @@ gearbeitet wird.
 - SHACL-Validierung bei jedem Load (RDF4J SHACL Sail)
 - Projektionen als Plugin: `.sparql` + Template-Datei-Paar
 
-## Skills (Claude Code Plugin)
+## Claude Code Plugin
 
-- `skills/adr/` (ADR-Pflege) und `skills/req-interview/` (Requirements/Use-Cases/Glossar-Interview,
-  zwei Einstiege Greenfield+Bestandscode).
-- Geshippter Inhalt (Skill-Text, `plugin.json`-Description, Maven-`<description>`,
-  SHACL-`sh:message`, Ontologie-Labels) ist **Englisch** -- die Zielgruppe ist
-  englischsprachig. Was **in den Store** geschrieben wird (Requirement-/Use-Case-/
-  Term-Text) bleibt **Deutsch** -- arknets eigene Ubiquitous Language, unberuehrt von
-  dieser Regel.
-- Geshippte Artefakte referenzieren keine externen Quellprojekte (Herkunft/Inspiration gehoert in
-  PR-Beschreibung/Memory, nicht in den ausgelieferten Text -- er muss fuer sich stehen).
-- Die ADRs unter `docs/adr/` sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle,
-  keine geshippte Ausliefer-Flaeche im Plugin-Sinn) -- kein Uebersetzungs-Rueckstand.
-- Offener Englisch-Rueckstand auf geshippten Flaechen: die SHACL-`sh:message` und ein Teil
-  der Ontologie-Labels. Dazu der Plugin-Altfall `skills/adr/` (Deutsch von vor dieser
-  Entscheidung) -- kein Nachziehen ohne explizite Entscheidung.
+Skills (`/arknet:adr`, `/arknet:req-interview`) live in a separate repository,
+[`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin) -- plugin and
+service release independently. This repo's root `.mcp.json` stays for local
+dogfooding against the MCP server built here.
+
+Language convention for artefacts this repo ships that are not code (SHACL
+`sh:message`, ontology labels, Maven `<description>`): **English** -- the
+audience is English-speaking. What is written **into the store** (requirement/
+use-case/term text) stays **German** -- arknet's own ubiquitous language,
+unaffected by this rule. The ADRs under `docs/adr/` are **German by
+convention** (decision records, not a shipped plugin surface) -- no
+translation backlog. Open English backlog on shipped surfaces: the SHACL
+`sh:message` and part of the ontology labels.
 
 ## Regel fuer diese Datei
 
