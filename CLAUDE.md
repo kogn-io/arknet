@@ -16,6 +16,7 @@
 - CLI: **nicht implementiert**. Produktvision haelt an einem CLI als CI/CD-Convenience-Layer fest -- ein store-first-Neuschnitt, wenn der CI-Bedarf konkret wird.
 - Keine Datei-Pipeline: `arknet-core`, `arknet-projection` und die datei-basierten `arknet_*`-MCP-Tools existieren nicht mehr. Store-first (die BC-Tools) ist der einzige Modell-Lebenszyklus (ADR-005). Einziger generierender Ausgabepfad ist das self-contained `store-report.html`.
 - MCP-Betriebsmodell: EIN geteilter, langlebiger Daemon fuer alle Workspaces der Maschine (Streamable HTTP, `127.0.0.1:47331`), nicht mehr ein Claude-Code-Subprozess pro Session -- Grund: mehrere Sessions/Worktrees teilen seit der git-common-dir-basierten WorkspaceId denselben Store, und jeder Subprozess kollidierte am NativeStore-Verzeichnis-Lock, sobald zwei davon gleichzeitig liefen. Welchen Workspace ein Aufruf trifft, kommt pro Aufruf aus dem Startverzeichnis der Session (`.mcp.json`-Header `X-Arknet-Workspace-Dir: ${PWD}`), nicht mehr aus einem beim Boot fixierten Singleton -- darum genuegt ein Port fuer alle Projekte (ADR-009). Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
+- Repo-Schnitt: `kogn-io/arknet` (dieses Repo, der Service) und `kogn-io/arknet-plugin` (das Claude Code Plugin) sind getrennte Repositories mit unabhaengigen Release-Zyklen/Versionsachsen (ADR-012).
 
 ## Tech-Stack
 
