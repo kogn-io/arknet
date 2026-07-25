@@ -78,6 +78,13 @@ restarts. The second volume (`arknet.report.dir`) is where `store_overview`
 writes its self-contained HTML report -- without it, the report write has no
 filesystem it shares with the calling client to fall back to and fails.
 
+The container adopts that volume's existing owner automatically at startup (a
+fresh, container-only volume falls back to the image's own non-root user) --
+no host-side `chown`/`chmod` needed, even when reusing a directory the
+bare-jar path already wrote to. Set `PUID`/`PGID` (`-e PUID=... -e PGID=...`)
+only if you want to force a specific uid:gid regardless of what currently owns
+the volume.
+
 #### Option C: Docker Compose
 
 Wires up the port publish (host loopback) and volume mount for you:
