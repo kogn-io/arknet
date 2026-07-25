@@ -85,8 +85,7 @@ public final class StoreReportTools {
         final StoreSnapshot snapshot = storeReader.readSnapshot(workspaceId);
         final String digest = digestRenderer.render(workspaceId, snapshot);
         final String html = htmlRenderer.render(workspaceId, snapshot, digest);
-        final Path written = writeReport(html, reportDirFor(originDir));
-        return digest + "\n# HTML report: " + written + "\n";
+        return digest + "\n" + writeReportLine(html, reportDirFor(originDir)) + "\n";
     }
 
     @McpTool(name = "resource_get",
@@ -118,15 +117,40 @@ public final class StoreReportTools {
         return (originDir == null || originDir.isBlank()) ? fallbackReportDir : Path.of(originDir);
     }
 
-    private Path writeReport(final String html, final Path targetDir) {
+    /**
+     * Writes the HTML report and renders the digest's trailing "# HTML report: ..." line -
+     * never by throwing. A daemon shared across workspaces (issue #137/ADR-009) cannot assume
+     * it shares a filesystem with every calling client (issue #158: a containerized daemon has
+     * no access to a client's {@code originDir} at all), so a preferred target that turns out
+     * unwritable falls back to {@link #fallbackReportDir}; if that fails too, the digest is
+     * still returned with a failure line instead of losing the whole tool response to an
+     * opaque {@link java.nio.file.AccessDeniedException} whose {@code getMessage()} is only a
+     * bare path fragment.
+     */
+    private String writeReportLine(final String html, final Path preferredDir) {
         try {
-            Files.createDirectories(targetDir);
-            final Path target = targetDir.resolve(REPORT_FILE_NAME);
-            Files.writeString(target, html, StandardCharsets.UTF_8);
-            return target.toAbsolutePath();
-        } catch (final IOException e) {
-            throw new IllegalStateException("Failed to write store report to " + targetDir + ": "
-                    + e.getMessage(), e);
+            return "# HTML report: " + writeReport(html, preferredDir);
+        } catch (final IOException preferredFailure) {
+            if (preferredDir.equals(fallbackReportDir)) {
+                return reportFailureLine(preferredDir, preferredFailure);
+            }
+            try {
+                return "# HTML report: " + writeReport(html, fallbackReportDir);
+            } catch (final IOException fallbackFailure) {
+                return reportFailureLine(fallbackReportDir, fallbackFailure);
+            }
         }
+    }
+
+    private static String reportFailureLine(final Path targetDir, final IOException e) {
+        return "# HTML report: FAILED to write to " + targetDir + " (" + e.getClass().getSimpleName()
+                + ": " + e.getMessage() + ") - digest above is unaffected.";
+    }
+
+    private Path writeReport(final String html, final Path targetDir) throws IOException {
+        Files.createDirectories(targetDir);
+        final Path target = targetDir.resolve(REPORT_FILE_NAME);
+        Files.writeString(target, html, StandardCharsets.UTF_8);
+        return target.toAbsolutePath();
     }
 }
