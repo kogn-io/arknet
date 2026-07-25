@@ -1,27 +1,32 @@
-name: Release (manual, version-gated)
+name: Release (manual, version-gated Docker image)
 
 # Release = one MANUAL run of this workflow on main (Actions tab -> "Run workflow",
 # or via `gh workflow run` with version=X.Y.Z). A hand-pushed `vX.Y.Z` tag triggers
 # NOTHING -- that is deliberate: a marker/bookmark tag can never accidentally cut a
 # release. The tag is created only AFTER successful validation, never before.
 #
-# arknet has no build artifact (no Maven deploy) -- "release" here means: main HEAD is
-# version-gated, tagged, and referenceable in the marketplace as exactly what
-# .claude-plugin/plugin.json claims.
+# Publishes an immutable, SemVer-tagged Docker image for external consumers, on top
+# of docker.yml's continuous `:latest`/`:<sha>` publish on every push to main.
+# `:latest` moves; `vX.Y.Z` never does -- a consumer pins to `vX.Y.Z` and gets a
+# fixed, reproducible daemon. Independent of the Maven `<revision>` property (stays
+# SNAPSHOT decoration -- no Maven artifact is deployed) and independent of the
+# plugin-marketplace release, which lives in its own repository now.
 #
-# Uses the built-in GITHUB_TOKEN (contents: write below) for both the tag push and the
-# GitHub release object -- no dedicated release secret needed.
+# Uses the built-in GITHUB_TOKEN (contents: write, packages: write below) for the
+# image push, the tag push and the GitHub release object -- no dedicated release
+# secret needed.
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 0.3.12 (no leading v)'
+        description: 'Release version, e.g. 0.1.0 (no leading v)'
         required: true
         type: string
 
 permissions:
   contents: write # tag push + GitHub release object
+  packages: write # versioned image push to GHCR
 
 jobs:
   release:
@@ -32,7 +37,7 @@ jobs:
         with:
           fetch-depth: 0 # tags needed to reject an already-released version
 
-      - name: Validate ref, version and plugin.json
+      - name: Validate ref and version
         env:
           VERSION: ${{ inputs.version }}
         run: |
@@ -48,11 +53,26 @@ jobs:
             echo "::error::Tag v$VERSION already exists -- a released version is never rebuilt."
             exit 1
           fi
-          PLUGIN_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' .claude-plugin/plugin.json | head -1)
-          if [ "$PLUGIN_VERSION" != "$VERSION" ]; then
-            echo "::error::plugin.json is at '$PLUGIN_VERSION', expected '$VERSION' -- forgot the version bump?"
-            exit 1
-          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push versioned image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: arknet-mcp/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}:v${{ inputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Tag the released commit and push
         env:
@@ -67,11 +87,8 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # --generate-notes lists the pull requests merged since the previous tag,
-        # instead of the one-line placeholder this used to write. A release page is
-        # the one place an outside reader checks whether anything is moving, so an
-        # empty one is worse than no release at all. Note that it reports every
-        # merged PR, not only plugin changes -- the plugin version and the repo's
-        # commit stream are not the same count (see #152).
+        # --generate-notes lists the pull requests merged since the previous tag --
+        # a release page is the one place an outside reader checks whether anything
+        # is moving, so an empty one is worse than no release at all.
         run: |
           gh release create "v$VERSION" --title "v$VERSION" --verify-tag --generate-notes

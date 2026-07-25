@@ -1,8 +1,9 @@
 name: Docker image (arknet-mcp)
 
-# Builds and publishes the arknet-mcp daemon image to GHCR. Not part of the
-# plugin-marketplace release gate (release.yml) -- this is the container
-# distribution path for #140, independent of the plugin SemVer tag.
+# Continuously builds and publishes the arknet-mcp daemon image to GHCR as
+# `:latest`/`:<sha>` on every push to main -- unversioned, always moving. The
+# immutable, SemVer-tagged `vX.Y.Z` image is a separate, manual publish; see
+# release.yml.
 
 on:
   push:
