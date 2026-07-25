@@ -369,14 +369,19 @@ public class ArknetMcpConfiguration {
      * requirements-BC's {@code arkreq:status}/{@code arkreq:priority} predicates for "pill"
      * styling (issue #111) - it affects only how those two predicates are styled, not which
      * resources appear. The HTML report is written into {@code arknet.report.dir} (default:
-     * the launched project root / working directory).
+     * the launched project root / working directory). {@code arknet.report.host-dir} is the
+     * host-reachable equivalent of that directory when it is a container-internal mount point
+     * the calling agent cannot reach directly (issue #160); unset on the non-containerized path,
+     * where {@code fallbackReportDir} is already host-reachable.
      */
     @Bean
     StoreReportTools storeReportTools(
             final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaceResolver,
-            @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path fallbackReportDir) {
+            @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path fallbackReportDir,
+            @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
-                storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceResolver, fallbackReportDir);
+                storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceResolver, fallbackReportDir,
+                reportHostDir);
     }
 
     /**

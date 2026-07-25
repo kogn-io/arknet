@@ -20,6 +20,13 @@
 #     daemon has no filesystem it shares with its callers to fall back to
 #     (issue #158).
 #
+#   * ARKNET_REPORT_HOST_DIR tells the daemon the HOST-side path of that same
+#     mount, so store_overview's digest line names a path the calling agent
+#     (running outside the container) can actually reach, instead of the
+#     container-internal /data/report (issue #160). The YAML anchor below
+#     keeps the host path defined in exactly one place -- the volume mount and
+#     the env var both reference it, so they cannot drift out of sync.
+#
 # Container/host ownership of the mounted store and report dir: arknet-mcp/entrypoint.sh
 # adopts the store directory's EXISTING owner automatically at every start (a
 # fresh, container-only volume falls back to the image's own non-root user),
@@ -28,18 +35,23 @@
 # is left untouched. Set PUID/PGID below only if you want to force a specific
 # uid:gid regardless of what currently owns the store (e.g. provisioning a
 # fresh volume ahead of first use).
+x-report-host-dir: &report-host-dir "${HOME}/.arknet/report"
+
 services:
   arknet-mcp:
     build:
       context: .
       dockerfile: arknet-mcp/Dockerfile
     image: ghcr.io/kogn-io/arknet:latest
-    # environment:
-    #   PUID: "1000"
-    #   PGID: "1000"
+    environment:
+      ARKNET_REPORT_HOST_DIR: *report-host-dir
+      # PUID: "1000"
+      # PGID: "1000"
     ports:
       - "127.0.0.1:47331:47331"
     volumes:
       - "${HOME}/.arknet/rdf:/data/rdf"
-      - "${HOME}/.arknet/report:/data/report"
+      - type: bind
+        source: *report-host-dir
+        target: /data/report
     restart: unless-stopped

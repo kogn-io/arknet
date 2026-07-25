@@ -83,6 +83,14 @@ ENV ARKNET_REPORT_DIR=/data/report
 RUN mkdir -p /data/report && chown -R arknet:arknet /data/report
 VOLUME /data/report
 
+# The container cannot discover its own bind mount's HOST-side path (Docker
+# does not expose that to the process inside), so store_overview's digest
+# would otherwise name the unreachable /data/report to a caller running
+# outside the container (issue #160). Not set here -- it's host-specific, not
+# an image default -- pass it at `docker run`/compose time naming the same
+# path as the -v/volumes source for /data/report, e.g.
+# -e ARKNET_REPORT_HOST_DIR=~/.arknet/report. Maps to arknet.report.host-dir.
+
 # No USER here: entrypoint.sh needs root to reconcile arknet's uid/gid with the
 # mounted store's owner (optionally via PUID/PGID) and chown accordingly, then
 # drops to arknet itself via su-exec before exec-ing the JVM.

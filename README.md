@@ -46,11 +46,13 @@ docker run --rm -d --name arknet-mcp \
   -p 127.0.0.1:47331:47331 \
   -v ~/.arknet/rdf:/data/rdf \
   -v ~/.arknet/report:/data/report \
+  -e ARKNET_REPORT_HOST_DIR=$HOME/.arknet/report \
   ghcr.io/kogn-io/arknet:latest
 ```
 
 Read the note under Option B on why the port publish must stay bound to
-`127.0.0.1` -- it applies here just the same.
+`127.0.0.1` and what `ARKNET_REPORT_HOST_DIR` is for -- both apply here just
+the same.
 
 #### Option B: Docker, built from source
 
@@ -64,6 +66,7 @@ docker run --rm -d --name arknet-mcp \
   -p 127.0.0.1:47331:47331 \
   -v ~/.arknet/rdf:/data/rdf \
   -v ~/.arknet/report:/data/report \
+  -e ARKNET_REPORT_HOST_DIR=$HOME/.arknet/report \
   arknet-mcp
 ```
 
@@ -79,6 +82,11 @@ publish MUST explicitly bind to host loopback (`127.0.0.1:47331:47331`). A bare
 restarts. The second volume (`arknet.report.dir`) is where `store_overview`
 writes its self-contained HTML report -- without it, the report write has no
 filesystem it shares with the calling client to fall back to and fails.
+`ARKNET_REPORT_HOST_DIR` must name the same path as that volume's host side
+(`arknet.report.host-dir`): the container cannot discover its own bind mount's
+host-side path on its own, so without this the digest's `# HTML report: ...`
+line would name the container-internal `/data/report`, which the calling
+agent -- running outside the container -- cannot reach (issue #160).
 
 The container adopts that volume's existing owner automatically at startup (a
 fresh, container-only volume falls back to the image's own non-root user) --
