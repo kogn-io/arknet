@@ -14,13 +14,20 @@
 #     tooling uses (~/.arknet/rdf), so the model survives container restarts and
 #     is shared with a non-Docker run.
 #
-# Container/host ownership of that mounted store: arknet-mcp/entrypoint.sh
+#   * store_overview's HTML report is mounted too (~/.arknet/report), so it
+#     lands somewhere a human can actually open it -- and so the write itself
+#     succeeds at all: without a writable, mounted report dir, a containerized
+#     daemon has no filesystem it shares with its callers to fall back to
+#     (issue #158).
+#
+# Container/host ownership of the mounted store and report dir: arknet-mcp/entrypoint.sh
 # adopts the store directory's EXISTING owner automatically at every start (a
-# fresh, container-only volume falls back to the image's own non-root user) --
-# no manual chown/chmod on the host is needed, and a prior bare-jar run's
-# ownership of ~/.arknet/rdf is left untouched. Set PUID/PGID below only if you
-# want to force a specific uid:gid regardless of what currently owns the store
-# (e.g. provisioning a fresh volume ahead of first use).
+# fresh, container-only volume falls back to the image's own non-root user),
+# then applies that same identity to the report dir -- no manual chown/chmod
+# on the host is needed, and a prior bare-jar run's ownership of ~/.arknet/rdf
+# is left untouched. Set PUID/PGID below only if you want to force a specific
+# uid:gid regardless of what currently owns the store (e.g. provisioning a
+# fresh volume ahead of first use).
 services:
   arknet-mcp:
     build:
@@ -34,4 +41,5 @@ services:
       - "127.0.0.1:47331:47331"
     volumes:
       - "${HOME}/.arknet/rdf:/data/rdf"
+      - "${HOME}/.arknet/report:/data/report"
     restart: unless-stopped

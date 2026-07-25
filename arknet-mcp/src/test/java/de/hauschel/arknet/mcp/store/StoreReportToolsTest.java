@@ -5,18 +5,24 @@ package de.hauschel.arknet.mcp.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -109,6 +115,56 @@ class StoreReportToolsTest {
         assertThat(content).doesNotContain("http://cdn").doesNotContain("<script src");
         // Status renders as a pill (stored as vocabulary IRI arkreq:Proposed -> local name).
         assertThat(content).contains("class=\"pill status-proposed\">Proposed<");
+    }
+
+    /**
+     * Reproduces #158: a shared daemon cannot assume it shares a filesystem with every calling
+     * client (e.g. containerized, only {@code /data/rdf} mounted) - the origin dir the caller's
+     * {@code X-Arknet-Workspace-Dir} header names may not be writable (or even exist) from the
+     * daemon's own filesystem. The write must fall back to the server's report dir instead of
+     * failing the whole tool call.
+     */
+    @Test
+    void storeOverviewFallsBackToServerReportDirWhenTheOriginDirCannotBeWritten(@TempDir final Path root)
+            throws Exception {
+        final Path blockedOriginDir = root.resolve("not-a-directory");
+        Files.writeString(blockedOriginDir, "a plain file blocking directory creation");
+
+        final McpTransportContext transportContext = McpTransportContext.create(
+                Map.of(WorkspaceResolver.WORKSPACE_DIR_KEY, blockedOriginDir.toString()));
+        final McpSyncRequestContext context = mock(McpSyncRequestContext.class);
+        when(context.transportContext()).thenReturn(transportContext);
+
+        final String result = tools.storeOverview(context, null);
+
+        assertThat(result).contains("# Workspace noistill").doesNotContain("FAILED");
+        final Path fallbackHtml = reportDir.resolve("store-report.html");
+        assertThat(fallbackHtml).exists();
+        assertThat(result).contains("# HTML report: " + fallbackHtml.toAbsolutePath());
+    }
+
+    /**
+     * The other half of #158: when even the fallback report dir is unwritable, {@code
+     * store_overview} must still return the digest - the whole point of the fallback is
+     * resilience, so a client that gets neither writable dir must not lose the digest too.
+     */
+    @Test
+    void storeOverviewReturnsDigestWithFailureLineWhenNoReportDirIsWritable(@TempDir final Path root)
+            throws Exception {
+        final Path blockedFallbackDir = root.resolve("not-a-directory");
+        Files.writeString(blockedFallbackDir, "a plain file blocking directory creation");
+
+        final Prefixes prefixes = Prefixes.defaults();
+        final StoreReader reader = new StoreReader(lifecycle);
+        final WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
+                reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, blockedFallbackDir);
+
+        final String result = toolsWithBrokenFallback.storeOverview(null, null);
+
+        assertThat(result).contains("# Workspace noistill").contains("FR-1");
+        assertThat(result).contains("# HTML report: FAILED to write to " + blockedFallbackDir);
+        assertThat(result).contains("FileAlreadyExistsException");
     }
 
     /**

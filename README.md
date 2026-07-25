@@ -43,6 +43,7 @@ locally:
 docker run --rm -d --name arknet-mcp \
   -p 127.0.0.1:47331:47331 \
   -v ~/.arknet/rdf:/data/rdf \
+  -v ~/.arknet/report:/data/report \
   ghcr.io/kogn-io/arknet:latest
 ```
 
@@ -60,6 +61,7 @@ docker build -f arknet-mcp/Dockerfile -t arknet-mcp .
 docker run --rm -d --name arknet-mcp \
   -p 127.0.0.1:47331:47331 \
   -v ~/.arknet/rdf:/data/rdf \
+  -v ~/.arknet/report:/data/report \
   arknet-mcp
 ```
 
@@ -70,9 +72,11 @@ container's `eth0`, not to loopback -- a plain `127.0.0.1` bind would be
 unreachable from outside. That moves the trust boundary to the **host side**: the
 publish MUST explicitly bind to host loopback (`127.0.0.1:47331:47331`). A bare
 `-p 47331:47331` would expose the **unauthenticated** daemon to the whole LAN
-(ADR-009). The volume maps the same host path the bare-jar run uses
+(ADR-009). The first volume maps the same host path the bare-jar run uses
 (`~/.arknet/rdf`, `arknet.rdf.storage`), so the model survives container
-restarts.
+restarts. The second volume (`arknet.report.dir`) is where `store_overview`
+writes its self-contained HTML report -- without it, the report write has no
+filesystem it shares with the calling client to fall back to and fails.
 
 #### Option C: Docker Compose
 
