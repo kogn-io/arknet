@@ -74,6 +74,13 @@ publish MUST explicitly bind to host loopback (`127.0.0.1:47331:47331`). A bare
 (`~/.arknet/rdf`, `arknet.rdf.storage`), so the model survives container
 restarts.
 
+The container adopts that volume's existing owner automatically at startup (a
+fresh, container-only volume falls back to the image's own non-root user) --
+no host-side `chown`/`chmod` needed, even when reusing a directory the
+bare-jar path already wrote to. Set `PUID`/`PGID` (`-e PUID=... -e PGID=...`)
+only if you want to force a specific uid:gid regardless of what currently owns
+the volume.
+
 #### Option C: Docker Compose
 
 Wires up the port publish (host loopback) and volume mount for you:
