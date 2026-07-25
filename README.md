@@ -19,11 +19,13 @@ maintainer.
 - Java 25+
 - Maven 3.9+
 
-## Claude Code Plugin
+## MCP Server
 
-```bash
-claude --plugin-dir /path/to/arknet
-```
+The arknet MCP server exposes the model as tools over the Model Context
+Protocol. To use it from Claude Code together with the maintained skills
+(`/arknet:adr`, `/arknet:req-interview`), install the
+[`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin) plugin --
+this repository builds and ships only the server itself.
 
 ### Prerequisite: start the MCP server daemon
 
