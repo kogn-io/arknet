@@ -32,10 +32,17 @@ FROM eclipse-temurin:25-jre-alpine AS runtime
 LABEL org.opencontainers.image.source=https://github.com/kogn-io/arknet
 
 # Non-root runtime user; the RDF store lives on a mounted volume it must own.
-RUN addgroup -S arknet && adduser -S arknet -G arknet
+# su-exec drops root to a target uid:gid at startup -- entrypoint.sh passes it
+# a bare numeric spec, so no /etc/passwd entry is needed for the identity the
+# JVM actually runs as; the named arknet user below is only its documented
+# fallback identity for a fresh, container-only store.
+RUN apk add --no-cache su-exec \
+    && addgroup -S arknet && adduser -S arknet -G arknet
 
 WORKDIR /app
 COPY --from=build /build/arknet-mcp/target/arknet-mcp-*.jar app.jar
+COPY arknet-mcp/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # --- Container networking, read this before changing the run command ---------
 # application.properties hardcodes server.address=127.0.0.1 on purpose: on the
@@ -56,11 +63,17 @@ ENV SERVER_ADDRESS=0.0.0.0
 # RDF store location inside the container. Maps to arknet.rdf.storage
 # (application.properties). Mount the host path other tooling already uses:
 #     -v ~/.arknet/rdf:/data/rdf
+# A chown here only reaches the image's own filesystem layer -- a bind-mounted
+# host directory (the normal case) covers it at runtime and keeps whatever
+# ownership it already has. entrypoint.sh reconciles that at every container
+# start instead, which is why the image stays root until then.
 ENV ARKNET_RDF_STORAGE=/data/rdf
 RUN mkdir -p /data/rdf && chown -R arknet:arknet /data/rdf
 VOLUME /data/rdf
 
-USER arknet
+# No USER here: entrypoint.sh needs root to reconcile arknet's uid/gid with the
+# mounted store's owner (optionally via PUID/PGID) and chown accordingly, then
+# drops to arknet itself via su-exec before exec-ing the JVM.
 EXPOSE 47331
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/entrypoint.sh"]
