@@ -41,6 +41,7 @@ public final class StoreReportTools {
     private final HandleResolver handleResolver;
     private final WorkspaceResolver workspaces;
     private final Path fallbackReportDir;
+    private final Path reportHostDir;
 
     /**
      * @param storeReader       the generic store read path
@@ -50,13 +51,19 @@ public final class StoreReportTools {
      *                          explicit {@code workspace} tool argument still overrides it)
      * @param fallbackReportDir the directory the HTML report is written into when a call carries no
      *                          origin directory (the report otherwise lands in the calling project)
+     * @param reportHostDir     the host-reachable path that {@code fallbackReportDir} is bind-mounted
+     *                          from, or {@code null} when the process runs directly on the machine it
+     *                          reports to (bare jar) and no translation is needed. Set on a
+     *                          containerized daemon (issue #160) whose {@code fallbackReportDir} is a
+     *                          container-internal mount point the calling agent cannot reach.
      */
     public StoreReportTools(
             final StoreReader storeReader,
             final Prefixes prefixes,
             final HtmlReportRenderer htmlRenderer,
             final WorkspaceResolver workspaces,
-            final Path fallbackReportDir) {
+            final Path fallbackReportDir,
+            final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         Objects.requireNonNull(prefixes, "prefixes");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
@@ -65,6 +72,7 @@ public final class StoreReportTools {
         this.handleResolver = new HandleResolver(storeReader, prefixes);
         this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
         this.fallbackReportDir = Objects.requireNonNull(fallbackReportDir, "fallbackReportDir");
+        this.reportHostDir = reportHostDir;
     }
 
     @McpTool(name = "store_overview",
@@ -125,21 +133,30 @@ public final class StoreReportTools {
      * unwritable falls back to {@link #fallbackReportDir}; if that fails too, the digest is
      * still returned with a failure line instead of losing the whole tool response to an
      * opaque {@link java.nio.file.AccessDeniedException} whose {@code getMessage()} is only a
-     * bare path fragment.
+     * bare path fragment. When the report lands in {@link #fallbackReportDir} and
+     * {@link #reportHostDir} is set, the reported path is translated to the host-reachable
+     * equivalent (issue #160) - the write itself still targets {@code fallbackReportDir}, only
+     * the path shown to the caller changes.
      */
     private String writeReportLine(final String html, final Path preferredDir) {
         try {
-            return "# HTML report: " + writeReport(html, preferredDir);
+            return "# HTML report: " + displayPath(writeReport(html, preferredDir), preferredDir);
         } catch (final IOException preferredFailure) {
             if (preferredDir.equals(fallbackReportDir)) {
                 return reportFailureLine(preferredDir, preferredFailure);
             }
             try {
-                return "# HTML report: " + writeReport(html, fallbackReportDir);
+                return "# HTML report: " + displayPath(writeReport(html, fallbackReportDir), fallbackReportDir);
             } catch (final IOException fallbackFailure) {
                 return reportFailureLine(fallbackReportDir, fallbackFailure);
             }
         }
+    }
+
+    private String displayPath(final Path written, final Path writtenDir) {
+        return writtenDir.equals(fallbackReportDir) && reportHostDir != null
+                ? reportHostDir.resolve(REPORT_FILE_NAME).toString()
+                : written.toString();
     }
 
     private static String reportFailureLine(final Path targetDir, final IOException e) {
