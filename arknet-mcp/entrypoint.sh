@@ -47,4 +47,14 @@ fi
 
 chown -R "$TARGET_UID:$TARGET_GID" "$STORE"
 
+# store_overview's HTML report dir (issue #158) follows the same target
+# identity as the store -- it has no independent "shared with a non-Docker
+# run" ownership concern of its own, so unlike $STORE it needs no adopt-vs-PUID
+# branch, just a directory and matching ownership.
+REPORT_DIR="${ARKNET_REPORT_DIR:-}"
+if [ -n "$REPORT_DIR" ]; then
+  mkdir -p "$REPORT_DIR"
+  chown -R "$TARGET_UID:$TARGET_GID" "$REPORT_DIR"
+fi
+
 exec su-exec "$TARGET_UID:$TARGET_GID" java -jar app.jar "$@"
