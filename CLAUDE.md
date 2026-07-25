@@ -81,19 +81,19 @@ gearbeitet wird.
 
 ## Claude Code Plugin
 
-Skills (`/arknet:adr`, `/arknet:req-interview`) live in a separate repository,
-[`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin) -- plugin and
-service release independently. This repo's root `.mcp.json` stays for local
-dogfooding against the MCP server built here.
+Skills (`/arknet:adr`, `/arknet:req-interview`) leben in einem separaten Repository,
+[`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin) -- Plugin und
+Service releasen unabhaengig voneinander (ADR-012). Die Root-`.mcp.json` dieses
+Repos bleibt fuers eigene Dogfooding gegen den hier gebauten MCP-Server bestehen.
 
-Language convention for artefacts this repo ships that are not code (SHACL
-`sh:message`, ontology labels, Maven `<description>`): **English** -- the
-audience is English-speaking. What is written **into the store** (requirement/
-use-case/term text) stays **German** -- arknet's own ubiquitous language,
-unaffected by this rule. The ADRs under `docs/adr/` are **German by
-convention** (decision records, not a shipped plugin surface) -- no
-translation backlog. Open English backlog on shipped surfaces: the SHACL
-`sh:message` and part of the ontology labels.
+Sprachkonvention fuer nicht-code Artefakte, die dieses Repo ausliefert (SHACL
+`sh:message`, Ontologie-Labels, Maven-`<description>`): **Englisch** -- die
+Zielgruppe ist englischsprachig. Was **in den Store** geschrieben wird
+(Requirement-/Use-Case-/Term-Text) bleibt **Deutsch** -- arknets eigene
+Ubiquitous Language, unberuehrt von dieser Regel. Die ADRs unter `docs/adr/`
+sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
+Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand. Offener Englisch-Rueckstand auf
+geshippten Flaechen: die SHACL-`sh:message` und ein Teil der Ontologie-Labels.
 
 ## Regel fuer diese Datei
 
