@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Predicate;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.DatasetHandle;
@@ -31,6 +30,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
@@ -119,35 +119,21 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are fully isolated datasets.</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
- * minted once, "insert or replace by identity" is no longer one coherent operation.
- * {@link #create} and {@link #update} each check whether the subject already exists
- * <em>inside</em> the write transaction (an {@code ASK}) before writing - not via a separate
- * {@code findByCode} call beforehand, which would leave a check-then-act race between the check
- * and the write. {@link #create} rejects an existing subject with
- * {@link ResourceAlreadyExistsException} and, via a second {@code ASK} by
- * {@code dcterms:identifier}, a colliding business code with {@link DuplicateUseCaseCodeException};
- * {@link #update} rejects a missing subject with {@link UseCaseNotFoundException}. Either write
- * otherwise replaces the subject and all its derived step resources wholesale.</p>
+ * minted once, "insert or replace by identity" is no longer one coherent operation. The
+ * transactional mechanics of that distinction - the in-transaction {@code ASK}s, the SHACL gate,
+ * the commit-conflict translation (issue #144) - live in the shared {@link WriteFunnel}
+ * (ADR-013), not here: {@link #create} only builds the candidate graph and rejects an existing
+ * subject with {@link ResourceAlreadyExistsException} or a colliding business code with
+ * {@link DuplicateUseCaseCodeException}; {@link #update} rejects a missing subject with
+ * {@link UseCaseNotFoundException}. Either write otherwise replaces the subject and all its
+ * derived step resources wholesale - the {@code deleteExisting} query below stays this adapter's
+ * own business, since {@link WriteFunnel#update} only knows a generic {@code body}, not the
+ * step-following delete a use case's opaque steps need.</p>
  *
- * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
- * catches two callers racing to {@link #create} the same code only when one fully commits before
- * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
- * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
- * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
- * rejected as a conflict - surfacing not as {@link DuplicateUseCaseCodeException} but as the
- * RDF4J-backed store's own commit-time exception. That technology-specific exception must not
- * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
- * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
- * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
- * it "was this a write conflict?" and translates a positive answer into the same
- * {@link DuplicateUseCaseCodeException} the synchronous check throws - so {@code CodeAssignment}'s
- * retry (see {@code arknet-shared-kernel}) catches both interleavings the same way, without ever
- * importing an RDF4J type here.</p>
- *
- * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
- * against the use-case SHACL shapes via {@link ShaclWriteGate} before starting the write
- * transaction; a violation throws {@link WriteConstraintViolationException} and nothing is
- * persisted.</p>
+ * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write
+ * transaction opens, {@link WriteConstraintViolationException} on a violation, nothing
+ * persisted - also live in {@link WriteFunnel}; {@link ShaclWriteGate} itself is no longer named
+ * here.</p>
  */
 public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
@@ -178,32 +164,28 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
 
     private final DatasetLifecycle lifecycle;
-    private final ShaclWriteGate gate;
     private final ResourceIdFactory resourceIdFactory;
-    private final Predicate<RuntimeException> isWriteConflict;
+    private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from (must
-     *                          not be {@code null})
-     * @param gate              the SHACL write-gate validating candidate graphs before
-     *                          persistence (must not be {@code null})
+     *                          not be {@code null}); used by the read paths, {@link #write}
+     *                          delegates its own acquisition to {@code funnel}
      * @param resourceIdFactory mints the opaque IRI of each derived step resource (must not be
      *                          {@code null}); the use-case root's own identity is minted above
      *                          the store and arrives on the {@link UseCase}
-     * @param isWriteConflict   recognises the technology-specific commit-time exception of a lost
-     *                          {@code SERIALIZABLE} transaction conflict (issue #144), without
-     *                          this class ever naming the RDF4J type itself (must not be
-     *                          {@code null})
+     * @param funnel            the shared write funnel (ADR-013) both {@link #create} and
+     *                          {@link #update} run through - SHACL gate, dataset acquisition,
+     *                          the in-transaction existence checks and the commit-conflict
+     *                          translation (must not be {@code null})
      */
-    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate,
-            ResourceIdFactory resourceIdFactory, Predicate<RuntimeException> isWriteConflict) {
+    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.gate = Objects.requireNonNull(gate, "gate");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
-        this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
+        this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
@@ -226,129 +208,104 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            // 1. Every actor/requirement reference already carries its resolved identity (see
-            //    class-level note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as
-            //    the subject above.
-            IRI primaryActorIri = actorIriFor(useCase.primaryActor());
-            List<IRI> supportingActorIris = useCase.supportingActors().stream()
-                    .map(this::actorIriFor)
-                    .toList();
+        // 1. Every actor/requirement reference already carries its resolved identity (see
+        //    class-level note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as
+        //    the subject above.
+        IRI primaryActorIri = actorIriFor(useCase.primaryActor());
+        List<IRI> supportingActorIris = useCase.supportingActors().stream()
+                .map(this::actorIriFor)
+                .toList();
 
-            // 2. Build the candidate graph.
-            Graph graph = rdf.createGraph();
-            graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(USE_CASE_TYPE));
-            graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(useCase.code().value()));
-            graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(useCase.title()));
-            graph.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), rdf.createLiteral(useCase.goal()));
-            addOptional(graph, subjectIri, DESIGN_SCOPE_PROPERTY, useCase.scope());
-            addOptional(graph, subjectIri, TRIGGER_PROPERTY, useCase.trigger());
-            addOptional(graph, subjectIri, PRECONDITION_PROPERTY, useCase.precondition());
-            addOptional(graph, subjectIri, POSTCONDITION_PROPERTY, useCase.postcondition());
-            graph.add(subjectIri, rdf.createIRI(PRIMARY_ACTOR_PROPERTY), primaryActorIri);
-            for (IRI supporting : supportingActorIris) {
-                graph.add(subjectIri, rdf.createIRI(SUPPORTING_ACTOR_PROPERTY), supporting);
-            }
+        // 2. Build the candidate graph.
+        Graph graph = rdf.createGraph();
+        graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(USE_CASE_TYPE));
+        graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(useCase.code().value()));
+        graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(useCase.title()));
+        graph.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), rdf.createLiteral(useCase.goal()));
+        addOptional(graph, subjectIri, DESIGN_SCOPE_PROPERTY, useCase.scope());
+        addOptional(graph, subjectIri, TRIGGER_PROPERTY, useCase.trigger());
+        addOptional(graph, subjectIri, PRECONDITION_PROPERTY, useCase.precondition());
+        addOptional(graph, subjectIri, POSTCONDITION_PROPERTY, useCase.postcondition());
+        graph.add(subjectIri, rdf.createIRI(PRIMARY_ACTOR_PROPERTY), primaryActorIri);
+        for (IRI supporting : supportingActorIris) {
+            graph.add(subjectIri, rdf.createIRI(SUPPORTING_ACTOR_PROPERTY), supporting);
+        }
 
-            // 3. Main-flow steps (own opaque resources) + the coarse UC->Requirement satisfies edge.
-            Map<String, IRI> satisfies = new LinkedHashMap<>();
-            for (Step step : useCase.steps()) {
-                IRI stepIri = mintStepIri();
-                graph.add(subjectIri, rdf.createIRI(MAIN_STEP_PROPERTY), stepIri);
-                graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
-                graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
-                        rdf.createLiteral(Integer.toString(step.position()), VocabXsd.INTEGER));
-                graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(step.text()));
-                for (RequirementRef ref : step.realises()) {
-                    IRI reqIri = requirementIriFor(ref);
-                    graph.add(stepIri, rdf.createIRI(STEP_REALISES_PROPERTY), reqIri);
-                    satisfies.putIfAbsent(reqIri.getIRIString(), reqIri);
-                }
+        // 3. Main-flow steps (own opaque resources) + the coarse UC->Requirement satisfies edge.
+        Map<String, IRI> satisfies = new LinkedHashMap<>();
+        for (Step step : useCase.steps()) {
+            IRI stepIri = mintStepIri();
+            graph.add(subjectIri, rdf.createIRI(MAIN_STEP_PROPERTY), stepIri);
+            graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
+            graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
+                    rdf.createLiteral(Integer.toString(step.position()), VocabXsd.INTEGER));
+            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(step.text()));
+            for (RequirementRef ref : step.realises()) {
+                IRI reqIri = requirementIriFor(ref);
+                graph.add(stepIri, rdf.createIRI(STEP_REALISES_PROPERTY), reqIri);
+                satisfies.putIfAbsent(reqIri.getIRIString(), reqIri);
             }
-            for (IRI reqIri : satisfies.values()) {
-                graph.add(subjectIri, rdf.createIRI(SATISFIES_PROPERTY), reqIri);
-            }
+        }
+        for (IRI reqIri : satisfies.values()) {
+            graph.add(subjectIri, rdf.createIRI(SATISFIES_PROPERTY), reqIri);
+        }
 
-            // 4. Extensions: free-text alternative/exception flows as opaque extensionStep resources.
-            int extensionPosition = 1;
-            for (String extension : useCase.extensions()) {
-                IRI stepIri = mintStepIri();
-                graph.add(subjectIri, rdf.createIRI(EXTENSION_STEP_PROPERTY), stepIri);
-                graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
-                graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
-                        rdf.createLiteral(Integer.toString(extensionPosition), VocabXsd.INTEGER));
-                graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(extension));
-                extensionPosition++;
-            }
+        // 4. Extensions: free-text alternative/exception flows as opaque extensionStep resources.
+        int extensionPosition = 1;
+        for (String extension : useCase.extensions()) {
+            IRI stepIri = mintStepIri();
+            graph.add(subjectIri, rdf.createIRI(EXTENSION_STEP_PROPERTY), stepIri);
+            graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
+            graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
+                    rdf.createLiteral(Integer.toString(extensionPosition), VocabXsd.INTEGER));
+            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(extension));
+            extensionPosition++;
+        }
 
-            // 5. Structural gate, then create/update (use case + all its derived steps).
-            //    The shapes carry sh:class constraints on primaryActor (arkproc:Actor) and
-            //    stepRealises (arkreq:Requirement). The type triples for those referenced nodes
-            //    live in the sibling requirements/terms graphs, not in this candidate graph.
-            //    They are handed to the gate as a validation-only asserted context (never
-            //    persisted here). This is safe: the reference was already proven to exist and be
-            //    of the right kind at the moment it was resolved (KognioRdfRequirementLookup /
-            //    KognioRdfActorLookup, called once from the application service) - the lookup,
-            //    not the shape, is what keeps the edge non-dangling; this adapter no longer
-            //    re-verifies it.
-            Graph assertedContext = rdf.createGraph();
-            assertedContext.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
-            for (IRI supporting : supportingActorIris) {
-                assertedContext.add(supporting, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
-            }
-            for (IRI reqIri : satisfies.values()) {
-                assertedContext.add(reqIri, VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
-            }
-            gate.enforce(graph, assertedContext);
+        // 5. The shapes carry sh:class constraints on primaryActor (arkproc:Actor) and
+        //    stepRealises (arkreq:Requirement). The type triples for those referenced nodes
+        //    live in the sibling requirements/terms graphs, not in this candidate graph.
+        //    They are handed to the funnel's gate as a validation-only asserted context (never
+        //    persisted here). This is safe: the reference was already proven to exist and be
+        //    of the right kind at the moment it was resolved (KognioRdfRequirementLookup /
+        //    KognioRdfActorLookup, called once from the application service) - the lookup,
+        //    not the shape, is what keeps the edge non-dangling; this adapter no longer
+        //    re-verifies it.
+        Graph assertedContext = rdf.createGraph();
+        assertedContext.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
+        for (IRI supporting : supportingActorIris) {
+            assertedContext.add(supporting, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
+        }
+        for (IRI reqIri : satisfies.values()) {
+            assertedContext.add(reqIri, VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
+        }
 
-            // The step IRIs are opaque and not under the use-case IRI, so the old
-            // "delete everything whose subject STRSTARTS the use-case IRI" no longer reaches
-            // them. Delete the use-case subject's own triples and, following the
-            // mainStep/extensionStep edges, each step resource's triples.
-            String askExists = "ASK { GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " ?p ?o } }";
-            String askCodeExists = "ASK { GRAPH <" + USE_CASES_GRAPH + "> { "
-                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(useCase.code().value())
-                    + "\" } }";
-            String deleteExisting = "DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
-                    + "GRAPH <" + USE_CASES_GRAPH + "> { "
-                    + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
-                    + "{ " + subject + " (<" + MAIN_STEP_PROPERTY + ">|<" + EXTENSION_STEP_PROPERTY
-                    + ">) ?s . ?s ?p ?o } } }";
-            IRI graphIri = rdf.createIRI(USE_CASES_GRAPH);
+        // The step IRIs are opaque and not under the use-case IRI, so the old
+        // "delete everything whose subject STRSTARTS the use-case IRI" no longer reaches
+        // them. Delete the use-case subject's own triples and, following the
+        // mainStep/extensionStep edges, each step resource's triples. Only ever run by the
+        // update branch below - a create() by construction has no prior triples to delete.
+        String deleteExisting = "DELETE { GRAPH <" + USE_CASES_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                + "GRAPH <" + USE_CASES_GRAPH + "> { "
+                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                + "{ " + subject + " (<" + MAIN_STEP_PROPERTY + ">|<" + EXTENSION_STEP_PROPERTY
+                + ">) ?s . ?s ?p ?o } } }";
+        IRI graphIri = rdf.createIRI(USE_CASES_GRAPH);
 
-            try {
-                handle.transactor().inTransaction(tx -> {
-                    boolean exists = tx.ask(askExists);
-                    if (expectAbsent) {
-                        if (exists) {
-                            throw new ResourceAlreadyExistsException(workspaceId, useCase.id().value());
-                        }
-                        // Identity is opaque and unique by construction, but the human-readable
-                        // code is a separate triple this ASK alone cannot rule out - check it
-                        // here, inside the same write transaction, so no other create() can race
-                        // in between.
-                        if (tx.ask(askCodeExists)) {
-                            throw new DuplicateUseCaseCodeException(workspaceId, useCase.code());
-                        }
-                    } else if (!exists) {
-                        throw new UseCaseNotFoundException(workspaceId, useCase.code());
-                    }
-                    if (exists) {
+        if (expectAbsent) {
+            funnel.create(new DatasetId(workspaceId.value()), USE_CASES_GRAPH, subjectIriString,
+                    useCase.code().value(), graph, assertedContext,
+                    () -> new ResourceAlreadyExistsException(workspaceId, useCase.id().value()),
+                    () -> new DuplicateUseCaseCodeException(workspaceId, useCase.code()),
+                    tx -> tx.add(graphIri, graph));
+        } else {
+            funnel.update(new DatasetId(workspaceId.value()), USE_CASES_GRAPH, subjectIriString,
+                    graph, assertedContext,
+                    () -> new UseCaseNotFoundException(workspaceId, useCase.code()),
+                    tx -> {
                         tx.update(deleteExisting);
-                    }
-                    tx.add(graphIri, graph);
-                    return null;
-                });
-            } catch (RuntimeException e) {
-                // The synchronous ASK above only catches a concurrent create() that already fully
-                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
-                // here, as the store's own commit-time conflict (issue #144) - translated to the
-                // same signal CodeAssignment's retry already handles.
-                if (expectAbsent && isWriteConflict.test(e)) {
-                    throw new DuplicateUseCaseCodeException(workspaceId, useCase.code());
-                }
-                throw e;
-            }
+                        tx.add(graphIri, graph);
+                    });
         }
     }
 

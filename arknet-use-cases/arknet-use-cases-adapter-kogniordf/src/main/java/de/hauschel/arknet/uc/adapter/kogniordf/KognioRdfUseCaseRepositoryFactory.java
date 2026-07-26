@@ -31,6 +31,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 
 /**
@@ -92,8 +93,9 @@ public final class KognioRdfUseCaseRepositoryFactory {
     public static UseCaseRepository over(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
-        return new KognioRdfUseCaseRepository(lifecycle, buildGate(), resourceIdFactory,
-                KognioRdfUseCaseRepositoryFactory::isWriteConflict);
+        ShaclWriteGate gate = buildGate();
+        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfUseCaseRepositoryFactory::isWriteConflict);
+        return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, funnel);
     }
 
     /**

@@ -43,6 +43,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.WriteFunnel;
 
 /**
  * Integration test for {@link KognioRdfBoundedContextRepository} against an in-memory
@@ -64,9 +65,9 @@ class KognioRdfBoundedContextRepositoryTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        repository = new KognioRdfBoundedContextRepository(
-                datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate(),
+        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate(),
                 KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
+        repository = new KognioRdfBoundedContextRepository(datasetLifecycle, funnel);
     }
 
     @AfterEach
