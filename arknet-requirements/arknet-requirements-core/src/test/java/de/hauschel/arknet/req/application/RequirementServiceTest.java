@@ -215,6 +215,73 @@ class RequirementServiceTest {
     }
 
     @Test
+    void updateChangesTitleDescriptionAndAcceptanceCriteria() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+
+        Requirement updated = service.update(WS, code, "New title", "New description",
+                List.of("New done-when criterion"));
+
+        assertEquals("New title", updated.title());
+        assertEquals("New description", updated.description());
+        assertEquals(List.of("New done-when criterion"), updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code).orElseThrow());
+    }
+
+    @Test
+    void updateWithNullFieldsLeavesThemUnchanged() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+
+        Requirement updated = service.update(WS, code, null, "New description", null);
+
+        assertEquals("User can log in", updated.title());
+        assertEquals("New description", updated.description());
+        assertEquals(List.of("Done when it works"), updated.acceptanceCriteria());
+    }
+
+    @Test
+    void updateWithAllNullFieldsIsANoOp() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        Requirement before = service.get(WS, code).orElseThrow();
+
+        Requirement result = service.update(WS, code, null, null, null);
+
+        assertEquals(before, result);
+    }
+
+    @Test
+    void updatePreservesStatusLinkedTermsAndOtherFields() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
+                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security",
+                List.of("Done when it works"))).code();
+        service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        service.linkTerm(WS, code, "TERM-1");
+
+        Requirement updated = service.update(WS, code, "New title", null, null);
+
+        assertEquals(RequirementStatus.ACCEPTED, updated.status());
+        assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
+        assertEquals(Priority.COULD_HAVE, updated.priority());
+        assertEquals("https://w3id.org/arknet/model/goal/g", updated.motivatedBy());
+        assertEquals("security", updated.qualityCategory());
+    }
+
+    @Test
+    void updateRejectsABlankTitleViaTheDomainInvariant() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+
+        assertThrows(IllegalArgumentException.class, () -> service.update(WS, code, " ", null, null));
+    }
+
+    @Test
+    void updateThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null));
+
+        assertSame(WS, ex.workspaceId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    @Test
     void addStartsWithoutLinkedTerms() {
         Requirement added = service.add(WS, newFunctionalRequirement());
 

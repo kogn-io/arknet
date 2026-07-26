@@ -203,7 +203,7 @@ public class ArknetMcpConfiguration {
             final RequirementService service, final ResolveTerms resolveTerms,
             final WorkspaceResolver workspaceResolver) {
         return new RequirementMcpTools(
-                service, service, service, service, service, service, resolveTerms, workspaceResolver);
+                service, service, service, service, service, service, service, resolveTerms, workspaceResolver);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------
