@@ -2,7 +2,8 @@
 
 - Status: Accepted (2026-07-26)
 - Verwandt: ADR-007 (Modul und Write-Gate), ADR-011 (Revision je Schreibpfad -- gegen diesen
-  Trichter zu lesen), ADR-005
+  Trichter zu lesen), ADR-005, ADR-014 (loest den hier offengehaltenen Revisions-Ansatzpunkt
+  und die in Entscheidung 5 vertagte Sonderpfad-Frage ein)
 
 ## Kontext
 
