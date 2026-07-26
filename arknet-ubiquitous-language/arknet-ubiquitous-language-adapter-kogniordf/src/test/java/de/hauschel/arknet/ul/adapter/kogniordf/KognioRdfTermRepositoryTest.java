@@ -47,6 +47,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
@@ -869,6 +870,42 @@ class KognioRdfTermRepositoryTest {
                 + "<" + id.value().value() + "> a <" + typeIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+
+    /**
+     * ADR-014 revision basis for this bounded context's funnel write path: {@code create}
+     * records exactly one immutable revision and the head is queryable per resource. (The
+     * unmigrated patch-{@code update} special path is deliberately not covered - its revision
+     * recording arrives with its dissolution into the funnel's compare-and-set, ADR-014
+     * decision 4.)
+     */
+    @Test
+    void createRecordsExactlyOneRevisionWithAQueryableHead() {
+        TermId id = freshId();
+        repository.create(WORKSPACE_A, new Term(id, new TermCode("TERM-1"), "Gutschrift",
+                "Eine dem Kundenkonto gutgeschriebene Erstattung.", null));
+        String subject = id.value().value();
+
+        List<String> revisions = selectIris("SELECT ?v WHERE { GRAPH <"
+                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
+                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subject + "> } }");
+        assertEquals(1, revisions.size(), "create must record exactly one revision");
+
+        List<String> heads = selectIris("SELECT ?v WHERE { GRAPH <"
+                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <" + subject + "> <"
+                + ArkprovVocabulary.HEAD + "> ?v } }");
+        assertEquals(revisions, heads, "the head must point at the sole revision");
+    }
+
+    private List<String> selectIris(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
         }
     }
 }

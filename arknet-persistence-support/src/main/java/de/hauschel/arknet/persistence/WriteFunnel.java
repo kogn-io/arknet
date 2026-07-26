@@ -3,7 +3,10 @@
 
 package de.hauschel.arknet.persistence;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -12,8 +15,14 @@ import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
+import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.terms.vocab.VocabXsd;
 
 /**
  * The shared write funnel of the kognio-rdf out-adapters (ADR-013): the transactional
@@ -57,9 +66,17 @@ import io.kogn.rdf.terms.vocab.VocabDct;
  *
  * <p><strong>Owning the transaction is the point.</strong> The funnel, not the adapter, opens
  * and commits the write transaction and hands the {@code body} only the live {@link DatasetTx}.
- * That makes it the single place where a later per-write revision record (ADR-011) can be
- * appended <em>atomically with the model write</em> - kept open by this design, deliberately
- * not implemented by it (ADR-013).</p>
+ * That makes it the single place where the per-write revision record (ADR-011) is appended
+ * <em>atomically with the model write</em> - the attachment point ADR-013 kept open,
+ * implemented per ADR-014: after the {@code body} ran, and still inside the same transaction,
+ * the funnel records exactly one immutable PROV-O revision (see {@link ArkprovVocabulary} for
+ * the exact triple shape) and rewrites the resource's {@code arkprov:head} pointer to it,
+ * chaining the superseded head via {@code prov:wasRevisionOf}. A rejected or failing write
+ * therefore never leaves a revision behind - the transaction aborts as a whole. The head is
+ * the resource's queryable concurrency token; comparing it inside the transaction
+ * (compare-and-set) is the next step ADR-014 describes, deliberately not implemented here.
+ * The write activity carries no resolved agent yet - agent attribution is additive
+ * (ADR-014 decision 5).</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same
@@ -69,9 +86,18 @@ public final class WriteFunnel {
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
 
+    /**
+     * Base IRIs the funnel mints revision/activity identities under - flat and opaque like the
+     * kernel's resource identities, but deliberately under their own bases: a revision is
+     * infrastructure the funnel owns, not a model resource a bounded context minted.
+     */
+    private static final String REVISION_IRI_BASE = "https://w3id.org/arknet/revision/";
+    private static final String ACTIVITY_IRI_BASE = "https://w3id.org/arknet/activity/";
+
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
     private final Predicate<RuntimeException> isWriteConflict;
+    private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the funnel. Per bounded context one instance, built by that context's repository
@@ -144,6 +170,7 @@ public final class WriteFunnel {
                         throw duplicateCode.get();
                     }
                     body.accept(tx);
+                    recordRevision(tx, subjectIri);
                     return null;
                 });
             } catch (RuntimeException e) {
@@ -189,9 +216,50 @@ public final class WriteFunnel {
                     throw notFound.get();
                 }
                 body.accept(tx);
+                recordRevision(tx, subjectIri);
                 return null;
             });
         }
+    }
+
+    /**
+     * Records the write's revision (ADR-014): one {@code prov:Activity}, one immutable
+     * {@code arkprov:Revision} entity chained to the superseded head via
+     * {@code prov:wasRevisionOf}, and the rewritten {@code arkprov:head} pointer - all inside
+     * the caller's still-open write transaction, so the revision commits or aborts with the
+     * model write. Runs after the {@code body} so a failing body never reaches it.
+     */
+    private void recordRevision(DatasetTx tx, String subjectIri) {
+        String subject = SparqlTerms.iriRef(subjectIri);
+        String headPattern = "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head }";
+
+        List<IRI> previousHeads = tx.select("SELECT ?head WHERE { " + headPattern + " }")
+                .map(row -> row.getValue("head").orElse(null))
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .toList();
+        if (!previousHeads.isEmpty()) {
+            tx.update("DELETE WHERE { " + headPattern + " }");
+        }
+
+        IRI revision = rdf.createIRI(REVISION_IRI_BASE + UUID.randomUUID());
+        IRI activity = rdf.createIRI(ACTIVITY_IRI_BASE + UUID.randomUUID());
+        IRI resource = rdf.createIRI(subjectIri);
+
+        Graph provenance = rdf.createGraph();
+        provenance.add(activity, VocabRdf.TYPE, rdf.createIRI(ArkprovVocabulary.ACTIVITY_TYPE));
+        provenance.add(revision, VocabRdf.TYPE, rdf.createIRI(ArkprovVocabulary.ENTITY_TYPE));
+        provenance.add(revision, VocabRdf.TYPE, rdf.createIRI(ArkprovVocabulary.REVISION_TYPE));
+        provenance.add(revision, rdf.createIRI(ArkprovVocabulary.SPECIALIZATION_OF), resource);
+        provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_GENERATED_BY), activity);
+        provenance.add(revision, rdf.createIRI(ArkprovVocabulary.GENERATED_AT_TIME),
+                rdf.createLiteral(Instant.now().toString(), VocabXsd.DATETIME));
+        for (IRI previousHead : previousHeads) {
+            provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), previousHead);
+        }
+        provenance.add(resource, rdf.createIRI(ArkprovVocabulary.HEAD), revision);
+        tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), provenance);
     }
 
     private void enforceGate(ReadableGraph candidate, ReadableGraph assertedContext) {
