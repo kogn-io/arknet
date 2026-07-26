@@ -50,6 +50,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.out.TermFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
@@ -74,6 +75,13 @@ class KognioRdfTermRepositoryTest {
     private DatasetLifecycleRdf4j lifecycle;
     private TermRepository repository;
 
+    /**
+     * The graph-backed {@link TermFactory} paired with {@link #repository} (spike, issue #168).
+     * Every term this test writes has to come from here - {@code create} rejects any other
+     * implementation, which is precisely the unwritten precondition the pattern introduces.
+     */
+    private TermFactory terms;
+
     @BeforeEach
     void setUp() throws IOException {
         Path tmp = Files.createTempDirectory("arknet-ul-it");
@@ -81,6 +89,7 @@ class KognioRdfTermRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
+        terms = KognioRdfTermRepositoryFactory.termFactory(DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -95,7 +104,7 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void createsAndFindsTermByCode() {
-        Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift",
+        Term term = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift",
                 "Rueckerstattung eines bereits gezahlten Betrags.", null);
 
         repository.create(WORKSPACE_A, term);
@@ -108,11 +117,11 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void findAllContainsAllCreatedTerms() {
-        Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term first = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
         repository.create(WORKSPACE_A, first);
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
 
-        Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
+        Term second = terms.newTerm(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
         repository.create(WORKSPACE_A, second);
 
         List<Term> all = repository.findAll(WORKSPACE_A);
@@ -124,10 +133,10 @@ class KognioRdfTermRepositoryTest {
     @Test
     void createRejectsAnAlreadyExistingIdentityAndPersistsNothingElse() {
         TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term term = terms.newTerm(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
         repository.create(WORKSPACE_A, term);
 
-        Term collidingId = new Term(id, new TermCode("TERM-2"), "Bestellung", "def b", null);
+        Term collidingId = terms.newTerm(id, new TermCode("TERM-2"), "Bestellung", "def b", null);
 
         assertThrows(ResourceAlreadyExistsException.class,
                 () -> repository.create(WORKSPACE_A, collidingId));
@@ -143,10 +152,10 @@ class KognioRdfTermRepositoryTest {
     @Test
     void createRejectsADuplicateCodeUnderADifferentIdentityAndPersistsNothingElse() {
         TermCode code = new TermCode("TERM-1");
-        Term first = new Term(freshId(), code, "Gutschrift", "def a", null);
+        Term first = terms.newTerm(freshId(), code, "Gutschrift", "def a", null);
         repository.create(WORKSPACE_A, first);
 
-        Term collidingCode = new Term(freshId(), code, "Bestellung", "def b", null);
+        Term collidingCode = terms.newTerm(freshId(), code, "Bestellung", "def b", null);
 
         assertThrows(DuplicateTermCodeException.class,
                 () -> repository.create(WORKSPACE_A, collidingCode));
@@ -165,7 +174,7 @@ class KognioRdfTermRepositoryTest {
     void updateChangesOnlyTheGivenFieldAndPersistsTheChange() {
         TermCode code = new TermCode("TERM-1");
         repository.create(WORKSPACE_A,
-                new Term(freshId(), code, "Gutschrift", "Erste Definition.", null));
+                terms.newTerm(freshId(), code, "Gutschrift", "Erste Definition.", null));
 
         Term result = repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
 
@@ -180,7 +189,7 @@ class KognioRdfTermRepositoryTest {
     void updatePreservesTheOpaqueIdentity() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        repository.create(WORKSPACE_A, terms.newTerm(id, code, "Gutschrift", "Erste Definition.", null));
 
         repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
 
@@ -241,7 +250,7 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(WORKSPACE_A,
-                new Term(id, code, "Kunde", "def a", new ActorFacet(ActorKind.HUMAN, "Besteller")));
+                terms.newTerm(id, code, "Kunde", "def a", new ActorFacet(ActorKind.HUMAN, "Besteller")));
 
         Term result = repository.update(WORKSPACE_A, code, null, null, new ActorFacet(ActorKind.SYSTEM, null));
 
@@ -278,14 +287,98 @@ class KognioRdfTermRepositoryTest {
     void updateTranslatesAGenuineWriteConflictIntoTermConcurrentlyModifiedException() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        repository.create(WORKSPACE_A, terms.newTerm(id, code, "Gutschrift", "Erste Definition.", null));
 
         TermRepository conflicting = KognioRdfTermRepositoryFactory.over(new ConflictingWriteLifecycle(lifecycle));
 
         assertThrows(TermConcurrentlyModifiedException.class,
                 () -> conflicting.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null));
-        assertEquals(Optional.of(new Term(id, code, "Gutschrift", "Erste Definition.", null)),
+        assertEquals(Optional.of(terms.newTerm(id, code, "Gutschrift", "Erste Definition.", null)),
                 repository.findByCode(WORKSPACE_A, code));
+    }
+
+    /**
+     * The core's own invariants still bite through an implementation that lives in this adapter
+     * (spike, issue #168) - {@code GraphBackedTermFactory} routes through the setters, which call
+     * {@link Term#requireLabel}/{@link Term#requireDefinition}. Worth pinning explicitly: an
+     * interface cannot force an implementation to call them the way a record's compact
+     * constructor forced itself, so this is the check that the pilot did not quietly drop them.
+     */
+    @Test
+    void theGraphBackedFactoryStillRejectsABlankLabelAndABlankDefinition() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+
+        assertThrows(IllegalArgumentException.class, () -> terms.newTerm(id, code, "  ", "def a", null));
+        assertThrows(IllegalArgumentException.class, () -> terms.newTerm(id, code, "Kunde", "  ", null));
+        assertThrows(NullPointerException.class, () -> terms.newTerm(id, code, null, "def a", null));
+    }
+
+    /**
+     * The read path, by contrast, no longer runs those invariants at all - a wrapped subject is
+     * whatever the store holds. The predecessor pushed every read through the {@link Term} record
+     * constructor, so a store-first (ADR-005) concept with a blank {@code skos:prefLabel} used to
+     * take the whole workspace listing down with it, the same failure mode issue #104 fixed for
+     * blank-node subjects. This pins the new, more forgiving behaviour so the change is a
+     * decision on record rather than an accident.
+     */
+    @Test
+    void aStoreFirstTermWithABlankPrefLabelIsReturnedRatherThanCrashingTheListing() {
+        TermId id = freshId();
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Eine Definition.", "\"\"");
+
+        List<Term> all = repository.findAll(WORKSPACE_A);
+
+        assertEquals(1, all.size());
+        assertEquals("", all.get(0).prefLabel());
+    }
+
+    /**
+     * The graph-backed pattern's load-bearing claim (spike, issue #168): a predicate the Java
+     * model does not model at all survives a whole-subject rewrite, because it never left the
+     * object - the object <em>is</em> the subject's graph.
+     *
+     * <p>{@code skos:altLabel} is store-first-reachable (ADR-005), shape-legal, and no field of
+     * {@link Term} maps to it. The predecessor's per-predicate patch preserved it too, by never
+     * touching it; this update <em>deletes the whole subject and writes it back</em> and still
+     * preserves it. That difference is what would let ADR-014 Phase 2 move the field merge into
+     * the service without reintroducing the #80/#81 data loss that forced the patch in the first
+     * place - a plain-field {@link Term} handed through the service could not carry the altLabel
+     * back down.</p>
+     */
+    @Test
+    void updatePreservesAPredicateNoTermFieldModels() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A, terms.newTerm(id, code, "Kunde", "Person, die bestellt.", null));
+        insertRawTriple(WORKSPACE_A, id, "http://www.w3.org/2004/02/skos/core#altLabel", "Auftraggeber");
+
+        repository.update(WORKSPACE_A, code, "Bestandskunde", null, null);
+
+        assertTrue(subjectHasLiteral(WORKSPACE_A, id, "http://www.w3.org/2004/02/skos/core#altLabel",
+                "Auftraggeber"), "a predicate no Term field models must survive a whole-subject rewrite");
+        assertEquals("Bestandskunde", repository.findByCode(WORKSPACE_A, code).orElseThrow().prefLabel());
+    }
+
+    /** Adds one literal-valued triple to an existing subject, store-first style. */
+    private void insertRawTriple(WorkspaceId workspaceId, TermId id, String predicateIri, String literal) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <" + predicateIri + "> \"" + literal + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /** Whether {@code id} carries {@code predicateIri} with exactly this plain literal value. */
+    private boolean subjectHasLiteral(WorkspaceId workspaceId, TermId id, String predicateIri, String literal) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <" + predicateIri + "> \"" + literal + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
     }
 
     /** Whether {@code subjectIri} carries a {@code skos:prefLabel} literal with exactly this value and tag. */
@@ -425,7 +518,7 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void workspacesAreIsolated() {
-        Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term term = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
         repository.create(WORKSPACE_A, term);
 
@@ -454,7 +547,7 @@ class KognioRdfTermRepositoryTest {
     @Test
     void createsAndFindsTermWithHumanActorFacet() {
         TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
+        Term term = terms.newTerm(id, new TermCode("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
 
         repository.create(WORKSPACE_A, term);
@@ -470,7 +563,7 @@ class KognioRdfTermRepositoryTest {
     @Test
     void createsAndFindsTermWithSystemActorFacet() {
         TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
+        Term term = terms.newTerm(id, new TermCode("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
                 new ActorFacet(ActorKind.SYSTEM, "PaymentService"));
 
         repository.create(WORKSPACE_A, term);
@@ -486,7 +579,7 @@ class KognioRdfTermRepositoryTest {
     @Test
     void createsAndFindsTermWithoutActorFacet() {
         TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term term = terms.newTerm(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
         repository.create(WORKSPACE_A, term);
         Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
@@ -498,7 +591,7 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void findAllReconstructsActorFacet() {
-        Term withFacet = new Term(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
+        Term withFacet = terms.newTerm(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
         repository.create(WORKSPACE_A, withFacet);
 
@@ -702,8 +795,8 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void findByIdsResolvesKnownIdentitiesInOneQuery() {
-        Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
+        Term first = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term second = terms.newTerm(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
         repository.create(WORKSPACE_A, first);
         repository.create(WORKSPACE_A, second);
 
@@ -718,7 +811,7 @@ class KognioRdfTermRepositoryTest {
     /** An id absent from the workspace is simply absent from the result, never an error. */
     @Test
     void findByIdsSilentlyOmitsUnknownIdentities() {
-        Term known = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term known = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
         repository.create(WORKSPACE_A, known);
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
@@ -735,7 +828,7 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void findByIdsIsScopedPerWorkspace() {
-        Term inWorkspaceA = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term inWorkspaceA = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
         repository.create(WORKSPACE_A, inWorkspaceA);
 
         assertEquals(List.of(), repository.findByIds(WORKSPACE_B, List.of(inWorkspaceA.id().value())));
@@ -825,7 +918,7 @@ class KognioRdfTermRepositoryTest {
      */
     @Test
     void findAllSkipsATermWithABlankNodeSubjectInsteadOfCrashing() {
-        Term validTerm = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term validTerm = terms.newTerm(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
         repository.create(WORKSPACE_A, validTerm);
         givenBlankNodeTerm(WORKSPACE_A, "TERM-9", "Blinder Fleck", "def blank");
 

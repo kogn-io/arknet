@@ -23,7 +23,7 @@ class TermTest {
 
     @Test
     void holdsItsValues() {
-        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null);
+        Term term = Term.of(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null);
 
         assertEquals(ID, term.id());
         assertEquals(CODE, term.code());
@@ -34,38 +34,38 @@ class TermTest {
 
     @Test
     void rejectsNullId() {
-        assertThrows(NullPointerException.class, () -> new Term(null, CODE, "Gutschrift", "def", null));
+        assertThrows(NullPointerException.class, () -> Term.of(null, CODE, "Gutschrift", "def", null));
     }
 
     @Test
     void rejectsNullCode() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, null, "Gutschrift", "def", null));
+        assertThrows(NullPointerException.class, () -> Term.of(ID, null, "Gutschrift", "def", null));
     }
 
     @Test
     void rejectsNullPrefLabel() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, null, "def", null));
+        assertThrows(NullPointerException.class, () -> Term.of(ID, CODE, null, "def", null));
     }
 
     @Test
     void rejectsBlankPrefLabel() {
-        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, " ", "def", null));
+        assertThrows(IllegalArgumentException.class, () -> Term.of(ID, CODE, " ", "def", null));
     }
 
     @Test
     void rejectsNullDefinition() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, "Gutschrift", null, null));
+        assertThrows(NullPointerException.class, () -> Term.of(ID, CODE, "Gutschrift", null, null));
     }
 
     @Test
     void rejectsBlankDefinition() {
-        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, "Gutschrift", " ", null));
+        assertThrows(IllegalArgumentException.class, () -> Term.of(ID, CODE, "Gutschrift", " ", null));
     }
 
     @Test
     void holdsActorFacetWhenPresent() {
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
-        Term term = new Term(ID, CODE, "Kunde", "Person, die eine Bestellung aufgibt.", facet);
+        Term term = Term.of(ID, CODE, "Kunde", "Person, die eine Bestellung aufgibt.", facet);
 
         assertEquals(facet, term.actorFacet());
     }
