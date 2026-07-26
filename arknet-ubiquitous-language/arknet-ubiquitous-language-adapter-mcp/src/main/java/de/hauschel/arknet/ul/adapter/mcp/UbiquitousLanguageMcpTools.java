@@ -160,7 +160,9 @@ public final class UbiquitousLanguageMcpTools {
                     + "Leaves an already-set actor facette unchanged if omitted", required = false)
             final String actorKind,
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
-                    + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
+                    + "(arkproc:actorRole); only meaningful together with actorKind. Omitting it while "
+                    + "giving actorKind leaves an already-set role unchanged (it does not clear it)",
+                    required = false)
             final String actorRole) {
         final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final TermCode code = new TermCode(id);

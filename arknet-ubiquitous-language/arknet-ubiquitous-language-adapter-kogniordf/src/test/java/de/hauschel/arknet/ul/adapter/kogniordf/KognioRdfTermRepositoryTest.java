@@ -230,6 +230,26 @@ class KognioRdfTermRepositoryTest {
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), result.actorFacet());
     }
 
+    /**
+     * Bug 3 (data loss, found reviewing the same PR): correcting only {@code actorKind} (e.g. a
+     * miscategorised {@code HUMAN} actor that should have been {@code SYSTEM}) without restating
+     * {@code actorRole} must not wipe the role already on record - a {@code null} role means
+     * "unchanged", not "clear", exactly like every other field {@link #update} takes.
+     */
+    @Test
+    void updateChangingOnlyActorKindPreservesTheExistingActorRole() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A,
+                new Term(id, code, "Kunde", "def a", new ActorFacet(ActorKind.HUMAN, "Besteller")));
+
+        Term result = repository.update(WORKSPACE_A, code, null, null, new ActorFacet(ActorKind.SYSTEM, null));
+
+        assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"), result.actorFacet());
+        assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"),
+                repository.findByCode(WORKSPACE_A, code).orElseThrow().actorFacet());
+    }
+
     /** Explicitly replacing {@code prefLabel} does collapse every prior variant to the one new value. */
     @Test
     void updateGivenAPrefLabelReplacesEveryPriorVariantWithTheSingleNewValue() {

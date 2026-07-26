@@ -88,7 +88,9 @@ public interface TermRepository {
      * @param definition  the new definition, or {@code null} to leave every existing
      *                    {@code skos:definition} triple untouched
      * @param actorFacet  the new Actor facette, or {@code null} to leave an already-set facette
-     *                    (its type and role triples) untouched
+     *                    (its type and role triples) untouched. Within a non-{@code null} facette,
+     *                    a {@code null} {@link ActorFacet#role()} likewise leaves an already-set
+     *                    role triple untouched - only the type is always replaced
      * @return the term's up-to-date state after the correction
      * @throws TermNotFoundException             if no term with this code exists
      * @throws TermConcurrentlyModifiedException if a concurrent writer's overlapping change to the

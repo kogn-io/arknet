@@ -34,7 +34,11 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * already-set facette untouched - it is not itself a "replace with null" signal, since {@code
  * null} is already the sentinel for every other field here. Explicitly removing a term's Actor
  * facette once set is out of this MVP's scope (no caller need has surfaced yet); it would need a
- * distinct signal (e.g. a wrapper type) rather than overloading {@code null}.</p>
+ * distinct signal (e.g. a wrapper type) rather than overloading {@code null}. The same
+ * null-means-unchanged rule applies one level down: within a non-{@code null} {@link ActorFacet},
+ * a {@code null} {@link ActorFacet#role() role} leaves an already-set role untouched too, so
+ * correcting only the kind (e.g. {@code HUMAN} to {@code SYSTEM}) never has to restate the role to
+ * avoid losing it.</p>
  */
 public interface UpdateTerm {
 
