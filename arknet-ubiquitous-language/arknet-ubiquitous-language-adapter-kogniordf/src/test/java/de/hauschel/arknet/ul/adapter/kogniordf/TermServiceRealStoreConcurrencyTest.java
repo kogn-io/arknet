@@ -42,7 +42,6 @@ import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
-import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.TermService;
@@ -182,8 +181,7 @@ class TermServiceRealStoreConcurrencyTest {
             return tx;
         });
         TermRepository repository = KognioRdfTermRepositoryFactory.over(guarded);
-        return new TermService(repository, new UuidResourceIdFactory(),
-                KognioRdfTermRepositoryFactory.termFactory(DisplayLocale.DEFAULT));
+        return new TermService(repository, new UuidResourceIdFactory());
     }
 
     /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */

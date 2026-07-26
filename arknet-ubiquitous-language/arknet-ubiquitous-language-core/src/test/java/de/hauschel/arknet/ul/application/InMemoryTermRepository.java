@@ -58,7 +58,7 @@ final class InMemoryTermRepository implements TermRepository {
                 .filter(t -> t.code().equals(code))
                 .findFirst()
                 .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
-        Term updated = Term.of(current.id(), current.code(),
+        Term updated = new Term(current.id(), current.code(),
                 prefLabel != null ? prefLabel : current.prefLabel(),
                 definition != null ? definition : current.definition(),
                 actorFacet != null ? actorFacet : current.actorFacet());

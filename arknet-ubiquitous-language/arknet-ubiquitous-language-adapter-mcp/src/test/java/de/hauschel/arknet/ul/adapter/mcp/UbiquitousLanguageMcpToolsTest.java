@@ -132,7 +132,7 @@ class UbiquitousLanguageMcpToolsTest {
         @Override
         public Term add(WorkspaceId workspaceId, NewTerm command) {
             lastCommand = command;
-            return Term.of(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")),
+            return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")),
                     new TermCode("TERM-1"), command.prefLabel(), command.definition(),
                     command.actorFacet());
         }
@@ -154,7 +154,7 @@ class UbiquitousLanguageMcpToolsTest {
             lastUpdatePrefLabel = prefLabel;
             lastUpdateDefinition = definition;
             lastUpdateActorFacet = actorFacet;
-            return Term.of(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code,
+            return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code,
                     prefLabel != null ? prefLabel : "p", definition != null ? definition : "d", actorFacet);
         }
     }

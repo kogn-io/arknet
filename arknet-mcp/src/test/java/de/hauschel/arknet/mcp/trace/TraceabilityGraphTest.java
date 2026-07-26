@@ -38,7 +38,6 @@ import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
-import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
@@ -78,13 +77,13 @@ class TraceabilityGraphTest {
 
         // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
         // referenced as UC1's primary actor - must NOT count as an orphan term.
-        terms.create(WORKSPACE, KognioRdfTermRepositoryFactory.termFactory(DisplayLocale.DEFAULT).newTerm(
+        terms.create(WORKSPACE, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null));
-        terms.create(WORKSPACE, KognioRdfTermRepositoryFactory.termFactory(DisplayLocale.DEFAULT).newTerm(
+        terms.create(WORKSPACE, new Term(
                 new TermId(ResourceId.of(TERM_2_IRI)), new TermCode("TERM-2"), "Passwort",
                 "A secret credential.", null));
-        terms.create(WORKSPACE, KognioRdfTermRepositoryFactory.termFactory(DisplayLocale.DEFAULT).newTerm(
+        terms.create(WORKSPACE, new Term(
                 new TermId(ResourceId.of(ACTOR_IRI)), new TermCode("TERM-3"), "Customer",
                 "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")));
 
