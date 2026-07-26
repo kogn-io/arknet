@@ -24,6 +24,7 @@ import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
+import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -37,8 +38,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 /**
  * Driving (in) adapter of the requirements component: exposes the requirement
  * use-cases as MCP tools ({@code req_add}, {@code req_list}, {@code req_get},
- * {@code req_set_status}, {@code req_link_term}, {@code req_schema}) and delegates each tool
- * call to the corresponding in-port.
+ * {@code req_set_status}, {@code req_link_term}, {@code req_update}, {@code req_schema}) and
+ * delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the requirements hexagon (symmetric to the out-adapter
  * {@code arknet-requirements-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -90,12 +91,13 @@ public final class RequirementMcpTools {
     private final GetRequirement getRequirement;
     private final SetRequirementStatus setRequirementStatus;
     private final LinkTerm linkTerm;
+    private final UpdateRequirement updateRequirement;
     private final GetRequirementSchema getRequirementSchema;
     private final ResolveTerms resolveTerms;
     private final WorkspaceResolver workspaces;
 
     /**
-     * Creates the adapter with its six driving in-ports, the borrowed ubiquitous-language
+     * Creates the adapter with its seven driving in-ports, the borrowed ubiquitous-language
      * display port and the resolver that maps each call's origin directory to a workspace.
      *
      * @param addRequirement        in-port backing {@code req_add}
@@ -103,6 +105,7 @@ public final class RequirementMcpTools {
      * @param getRequirement        in-port backing {@code req_get}
      * @param setRequirementStatus  in-port backing {@code req_set_status}
      * @param linkTerm              in-port backing {@code req_link_term}
+     * @param updateRequirement     in-port backing {@code req_update}
      * @param getRequirementSchema  in-port backing {@code req_schema}
      * @param resolveTerms          ubiquitous-language driving port used only to render a linked
      *                              term's business code instead of its bare IRI
@@ -114,6 +117,7 @@ public final class RequirementMcpTools {
             final GetRequirement getRequirement,
             final SetRequirementStatus setRequirementStatus,
             final LinkTerm linkTerm,
+            final UpdateRequirement updateRequirement,
             final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
             final WorkspaceResolver workspaces) {
@@ -122,6 +126,7 @@ public final class RequirementMcpTools {
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
@@ -228,6 +233,29 @@ public final class RequirementMcpTools {
         final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final Requirement updated =
                 linkTerm.linkTerm(workspaceId, new RequirementCode(reqId), termId);
+        return format(workspaceId, updated);
+    }
+
+    @McpTool(name = "req_update",
+            description = "Correct an already-created requirement's title, description and/or acceptance "
+                    + "criteria. Every argument is optional - an omitted one leaves that field unchanged. "
+                    + "Does not touch status (use req_set_status) or linked terms (use req_link_term).")
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
+            @McpToolParam(description = "New short human-readable summary (optional, unchanged if omitted)",
+                    required = false)
+            final String title,
+            @McpToolParam(description = "New normative statement, e.g. 'The system shall ...' (optional, "
+                    + "unchanged if omitted)", required = false)
+            final String description,
+            @McpToolParam(description = "New testable 'Done when ...' criteria, replacing the existing ones "
+                    + "wholesale (optional, unchanged if omitted)", required = false)
+            final List<String> acceptanceCriteria) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final RequirementCode code = new RequirementCode(id);
+        final Requirement updated = updateRequirement.update(workspaceId, code, blankToNull(title),
+                blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria));
         return format(workspaceId, updated);
     }
 
