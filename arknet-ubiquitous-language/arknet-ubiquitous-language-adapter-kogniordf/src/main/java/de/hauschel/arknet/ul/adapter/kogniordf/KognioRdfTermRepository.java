@@ -356,6 +356,11 @@ public class KognioRdfTermRepository implements TermRepository {
                         if (actorFacet.role() != null) {
                             writeCandidate.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
                                     rdf.createLiteral(actorFacet.role()));
+                        } else if (current.actorFacet != null && current.actorFacet.role() != null) {
+                            // A null role is "unchanged", not "cleared" (same contract as every other
+                            // field here) - assert the untouched existing role for the gate only.
+                            assertedContext.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
+                                    rdf.createLiteral(current.actorFacet.role()));
                         }
                     }
                     // skos:definition carries no ulshapes PropertyShape at all (see class-level
@@ -374,11 +379,14 @@ public class KognioRdfTermRepository implements TermRepository {
                     if (actorFacet != null) {
                         tx.update(deleteType(subject, HUMAN_ACTOR_TYPE));
                         tx.update(deleteType(subject, SYSTEM_ACTOR_TYPE));
-                        tx.update(deleteAllTriplesOf(subject, ACTOR_ROLE_PROPERTY));
                         Graph actorGraph = rdf.createGraph();
                         String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
                         actorGraph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+                        // A null role leaves the existing arkproc:actorRole triple (if any) alone,
+                        // instead of deleting it - correcting only the kind must not silently wipe an
+                        // already-set role the caller never mentioned (issue #163 follow-up 2).
                         if (actorFacet.role() != null) {
+                            tx.update(deleteAllTriplesOf(subject, ACTOR_ROLE_PROPERTY));
                             actorGraph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
                                     rdf.createLiteral(actorFacet.role()));
                         }
@@ -434,8 +442,25 @@ public class KognioRdfTermRepository implements TermRepository {
         Term currentProjection = current.toTerm(displayLocale);
         String prefLabel = newPrefLabel != null ? newPrefLabel : currentProjection.prefLabel();
         String definition = newDefinition != null ? newDefinition : currentProjection.definition();
-        ActorFacet actorFacet = newActorFacet != null ? newActorFacet : current.actorFacet;
+        ActorFacet actorFacet = resultingActorFacet(current.actorFacet, newActorFacet);
         return new Term(current.id, current.code, prefLabel, definition, actorFacet);
+    }
+
+    /**
+     * Merges the caller's {@code newActorFacet} onto {@code current}: a {@code null} facet leaves
+     * {@code current} entirely unchanged; a non-{@code null} facet always replaces the kind, but a
+     * {@code null} role within it keeps {@code current}'s own role rather than reporting it as
+     * cleared - matching what {@link #update} actually persists (issue #163 follow-up 2).
+     */
+    private static ActorFacet resultingActorFacet(ActorFacet current, ActorFacet newActorFacet) {
+        if (newActorFacet == null) {
+            return current;
+        }
+        if (newActorFacet.role() != null) {
+            return newActorFacet;
+        }
+        String preservedRole = current != null ? current.role() : null;
+        return new ActorFacet(newActorFacet.kind(), preservedRole);
     }
 
     @Override
