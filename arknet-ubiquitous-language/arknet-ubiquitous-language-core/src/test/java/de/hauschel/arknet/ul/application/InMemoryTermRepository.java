@@ -13,6 +13,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
@@ -25,9 +26,13 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p>A hand-rolled fake (not a mock): it actually stores terms, keyed by workspace
  * then opaque identity, so the service's policy can be exercised end-to-end. Insertion
- * order is preserved to make {@link #findAll(WorkspaceId)} assertions deterministic. It honours
- * the same create/update contract as the real adapter (create rejects an existing identity or a
- * duplicate code; update rejects a missing identity), so tests exercise the true port semantics.</p>
+ * order is preserved to make {@link #findAll(WorkspaceId)} assertions deterministic. {@link
+ * #create} honours the same contract as the real adapter (rejects an existing identity or a
+ * duplicate code). {@link #update} resolves by code and replaces only the fields the caller
+ * actually supplied - it cannot reproduce the real adapter's triple-level preservation of a
+ * multi-valued {@code skos:prefLabel}/{@code skos:definition} (there is nothing multi-valued to
+ * preserve in a plain in-memory {@link Term}), but it does exercise the same "{@code null} leaves
+ * a field unchanged" contract, so {@link TermService}'s policy can be tested without a real store.</p>
  */
 final class InMemoryTermRepository implements TermRepository {
 
@@ -46,12 +51,19 @@ final class InMemoryTermRepository implements TermRepository {
     }
 
     @Override
-    public void update(WorkspaceId workspaceId, Term term) {
+    public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+            ActorFacet actorFacet) {
         Map<TermId, Term> terms = byWorkspace.getOrDefault(workspaceId, Map.of());
-        if (!terms.containsKey(term.id())) {
-            throw new TermNotFoundException(workspaceId, term.code());
-        }
-        terms.put(term.id(), term);
+        Term current = terms.values().stream()
+                .filter(t -> t.code().equals(code))
+                .findFirst()
+                .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
+        Term updated = new Term(current.id(), current.code(),
+                prefLabel != null ? prefLabel : current.prefLabel(),
+                definition != null ? definition : current.definition(),
+                actorFacet != null ? actorFacet : current.actorFacet());
+        terms.put(updated.id(), updated);
+        return updated;
     }
 
     @Override

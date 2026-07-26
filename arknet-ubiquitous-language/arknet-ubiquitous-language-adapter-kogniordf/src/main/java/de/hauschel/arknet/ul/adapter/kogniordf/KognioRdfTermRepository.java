@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +25,7 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -43,6 +46,7 @@ import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
@@ -73,27 +77,35 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
- * minted once, "insert or replace by identity" is no longer one coherent operation.
- * {@link #create} and {@link #update} each check whether the subject already exists
- * <em>inside</em> the write transaction (an {@code ASK}) before writing - not via a separate
- * {@code findByCode} call beforehand, which would leave a check-then-act race between the check
- * and the write. {@link #create} rejects an existing subject with
- * {@link ResourceAlreadyExistsException}; {@link #update} rejects a missing one with
- * {@link TermNotFoundException}. An {@link #update} otherwise replaces the subject's triples
- * wholesale (the same replace-by-identity mechanic the previous save-only contract used).</p>
+ * minted once, "insert or replace by identity" was never one coherent operation for
+ * {@link #create}: it checks whether the subject already exists <em>inside</em> the write
+ * transaction (an {@code ASK}) before writing - not via a separate {@code findByCode} call
+ * beforehand, which would leave a check-then-act race between the check and the write - and
+ * rejects an existing subject with {@link ResourceAlreadyExistsException}.</p>
  *
- * <p><strong>Identity collision vs. code collision.</strong> Both {@link #create} and
- * {@link #update} run a second {@code ASK} in the same transaction - by {@code dcterms:identifier},
- * not by subject - and reject a match with {@link DuplicateTermCodeException} (issue #114:
- * {@link #update} used to skip this check entirely, letting two subjects end up sharing one code).
- * The {@code ASK} excludes the subject being written itself, so {@link #update} may always keep a
- * term's own existing code - only a collision with an <em>other</em> subject's code is rejected.
- * This is deliberately a separate check and a separate exception from
- * {@link ResourceAlreadyExistsException}: an opaque-identity collision is a programming error
- * (identities are minted once and never reused), while a business-code collision (two terms both
- * claiming {@code TERM-1}) is an expected, rejectable outcome a human can cause - and one a
- * sibling bounded context relies on being unique, since {@code arkreq:usesTerm} resolves a term by
- * its {@code dcterms:identifier} (#36).</p>
+ * <p><strong>Update is a targeted correction by code, not a replace by identity (issue #163
+ * follow-up).</strong> {@link #update} used to take a full {@link Term} and wholesale-replace the
+ * subject's triples the same way {@link #create} inserts them - which meant every field the
+ * caller did not intend to touch had to be read back first and merged into that full replacement,
+ * destroying any triple the read could not faithfully round-trip (most severely a multi-valued
+ * {@code skos:prefLabel}/{@code skos:definition}, see the display-language and row-multiplication
+ * notes below). {@link #update} instead resolves the subject by its unchanged {@link TermCode}
+ * and, inside that same write transaction, deletes-and-reinserts only the predicate(s) whose new
+ * value the caller actually supplied - {@code null} means the predicate is never touched at all,
+ * at the triple level, not "read back and rewritten identically". A missing code throws
+ * {@link TermNotFoundException}.</p>
+ *
+ * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
+ * {@code ASK} in the same transaction - by {@code dcterms:identifier}, not by subject - and
+ * rejects a match with {@link DuplicateTermCodeException}. This is deliberately a separate check
+ * and a separate exception from {@link ResourceAlreadyExistsException}: an opaque-identity
+ * collision is a programming error (identities are minted once and never reused), while a
+ * business-code collision (two terms both claiming {@code TERM-1}) is an expected, rejectable
+ * outcome a human can cause - and one a sibling bounded context relies on being unique, since
+ * {@code arkreq:usesTerm} resolves a term by its {@code dcterms:identifier} (#36).
+ * {@link #update} needs no such check (issue #114's original concern, now moot): it never rewrites
+ * {@code dcterms:identifier} at all, so it cannot itself introduce a code collision - a stronger,
+ * structural guarantee rather than a checked one.</p>
  *
  * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
  * catches two callers racing to {@link #create} the same code only when one fully commits before
@@ -105,18 +117,22 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
  * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
  * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
- * it "was this a write conflict?" and translates a positive answer into the same
- * {@link DuplicateTermCodeException} the synchronous check throws - on both {@link #create} and
- * {@link #update}, since (unlike the req/bc/uc siblings) {@code askCodeExists} runs on both paths
- * here (issue #114). {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) only wraps
- * {@link #create} today - {@link #update} has no caller yet, no {@code term_update} tool exists -
- * but the translation stays symmetric regardless, without ever importing an RDF4J type here.</p>
+ * it "was this a write conflict?" - {@link #create} translates a positive answer into
+ * {@link DuplicateTermCodeException} (the same signal {@code CodeAssignment}'s retry consumes,
+ * see {@code arknet-shared-kernel}), while {@link #update} translates it into the unrelated
+ * {@link TermConcurrentlyModifiedException} instead (see that method's own javadoc) - never
+ * importing an RDF4J type into either path.</p>
  *
  * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
  * against the ubiquitous-language SHACL shapes via {@link ShaclWriteGate} before starting the
  * write transaction (symmetric to the requirements adapter); a violation throws
  * {@link WriteConstraintViolationException} and nothing is persisted. The gate itself is
- * technology-neutral - only {@link KognioRdfTermRepositoryFactory} names RDF4J.</p>
+ * technology-neutral - only {@link KognioRdfTermRepositoryFactory} names RDF4J. {@link #update}
+ * uses the gate's validation-only {@code assertedContext} overload (mirroring how the sibling
+ * requirements adapter asserts a referenced term's type): a predicate {@link #update} is not
+ * touching this call is asserted there for validation only, from what was just read inside the
+ * same transaction, so {@code ulshapes:TermShape}'s {@code prefLabel} shape still sees the
+ * resulting state truthfully without this class ever persisting that assertion again.</p>
  *
  * <p><strong>Display language (issue #80).</strong> A concept may carry {@code skos:prefLabel}
  * in several languages ({@code "Kunde"@de}, {@code "Customer"@en}) - SKOS-legal and store-first
@@ -131,7 +147,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * <p><strong>Blank-node subject guard (issue #104).</strong> {@code ulshapes:TermShape} carries no
  * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first (ADR-005) concept whose
  * subject is a blank node (e.g. {@code [] a skos:Concept ; skos:prefLabel "X" ; ...}) is
- * SHACL-legal, even though {@link #create}/{@link #update} always mint an opaque IRI. {@code ?s} is
+ * SHACL-legal, even though {@link #create} always mints an opaque IRI subject. {@code ?s} is
  * the primary-entity subject here, not a reference-field target, but the same problem applies: the
  * {@code IRI} cast in {@link #iriOf} throws on anything else. Unlike a reference field, though, a
  * crashing primary subject takes the whole result list down with it - {@link #findByCode} and
@@ -200,15 +216,6 @@ public class KognioRdfTermRepository implements TermRepository {
 
     @Override
     public void create(WorkspaceId workspaceId, Term term) {
-        write(workspaceId, term, true);
-    }
-
-    @Override
-    public void update(WorkspaceId workspaceId, Term term) {
-        write(workspaceId, term, false);
-    }
-
-    private void write(WorkspaceId workspaceId, Term term, boolean expectAbsent) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(term, "term");
 
@@ -243,50 +250,30 @@ public class KognioRdfTermRepository implements TermRepository {
         gate.enforce(graph);
 
         String askExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
-        // Excludes the subject being written itself, so a term is always allowed to keep its own
-        // existing code on update() - only a collision with an *other* subject's code is rejected.
         String askCodeExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.code().value()) + "\" . "
-                + "FILTER(?s != " + subject + ") } }";
-        String deleteExisting = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.code().value()) + "\" } }";
         IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             try {
                 handle.transactor().inTransaction(tx -> {
-                    boolean exists = tx.ask(askExists);
-                    if (expectAbsent) {
-                        if (exists) {
-                            throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
-                        }
-                    } else if (!exists) {
-                        throw new TermNotFoundException(workspaceId, term.code());
+                    if (tx.ask(askExists)) {
+                        throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
                     }
                     // Identity is opaque and unique by construction, but the human-readable code
                     // is a separate triple this ASK alone cannot rule out - check it here, inside
-                    // the same write transaction, so no other create()/update() can race in
-                    // between. Applies to both create() and update(): the FILTER above excludes
-                    // the subject's own (about to be replaced) code triple, so update() keeping
-                    // its own code never false-trips.
+                    // the same write transaction, so no concurrent create() can race in between.
                     if (tx.ask(askCodeExists)) {
                         throw new DuplicateTermCodeException(workspaceId, term.code());
-                    }
-                    if (exists) {
-                        tx.update(deleteExisting);
                     }
                     tx.add(graphIri, graph);
                     return null;
                 });
             } catch (RuntimeException e) {
-                // The synchronous ASK above only catches a concurrent create()/update() that
-                // already fully committed; two genuinely overlapping SERIALIZABLE transactions
-                // instead surface here, as the store's own commit-time conflict (issue #144) -
-                // translated to the same signal CodeAssignment's retry already handles. Unlike the
-                // req/bc/uc siblings, askCodeExists above runs on both create() and update() (issue
-                // #114), so a genuine conflict is reachable on either path; translate both rather
-                // than only the one CodeAssignment's retry currently wraps (create()) - update()
-                // has no caller today (no term_update tool exists), but a raw technology exception
-                // must never be the contract this class exposes.
+                // The synchronous ASK above only catches a concurrent create() that already fully
+                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
+                // here, as the store's own commit-time conflict (issue #144) - translated to the
+                // same signal CodeAssignment's retry already handles.
                 if (isWriteConflict.test(e)) {
                     throw new DuplicateTermCodeException(workspaceId, term.code());
                 }
@@ -295,11 +282,206 @@ public class KognioRdfTermRepository implements TermRepository {
         }
     }
 
+    /**
+     * Corrects specific fields of an existing term by business code (issue #163 follow-up),
+     * touching only the predicate(s) whose new value the caller actually supplied.
+     *
+     * <p><strong>No more read-then-merge.</strong> The pre-fix version resolved the term via
+     * {@link #findByCode} (a plain read, outside any transaction), folded every omitted argument's
+     * value from that read into a freshly-built {@link Term}, and handed the whole thing to a
+     * replace-by-identity write - which silently destroyed every triple the read had to collapse
+     * away to fit {@link Term}'s single-{@code String} fields (issues #80/#81: a store-first term
+     * can legally carry several language-tagged {@code skos:prefLabel}s or several
+     * {@code skos:definition} literals). This method instead resolves the subject and reads
+     * exactly what it needs to preserve <em>inside</em> the very write transaction, and only ever
+     * deletes-and-reinserts the predicate(s) the caller is actually replacing - every other
+     * predicate, and every other value of a multi-valued predicate the caller does not touch,
+     * survives completely untouched at the triple level.</p>
+     *
+     * <p><strong>No code collision to guard against.</strong> {@code dcterms:identifier} is never
+     * among the fields this method can change - the code is how the subject is found, not
+     * something it rewrites - so unlike the pre-fix version (issue #114's original concern) there
+     * is no {@code askCodeExists} check here at all: it is structurally impossible for this method
+     * to introduce a duplicate code, not merely checked and rejected.</p>
+     *
+     * <p><strong>Concurrency (issue #163 follow-up, part 2).</strong> Because the read of whatever
+     * is being preserved and the write of whatever is being changed happen inside one transaction,
+     * there is no application-level gap in which a concurrent writer's committed change to a
+     * <em>different</em> field could be silently lost - two callers changing different fields at
+     * the same time simply both succeed, each touching only its own predicate(s). What remains is
+     * narrower: two overlapping writers patching the <em>identical</em> predicate at the same
+     * time, which the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18) itself rejects
+     * as a commit-time conflict - translated here into {@link TermConcurrentlyModifiedException}
+     * via {@link #isWriteConflict}, deliberately not {@link DuplicateTermCodeException} (that
+     * exception means a business-code collision, an unrelated failure mode this method can no
+     * longer even reach).</p>
+     */
+    @Override
+    public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+            ActorFacet actorFacet) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
+
+        IRI graphIri = rdf.createIRI(TERMS_GRAPH);
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            try {
+                return handle.transactor().inTransaction(tx -> {
+                    TermAssembly current = readAssemblyByCode(tx::select, code)
+                            .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
+                    IRI subjectIri = rdf.createIRI(current.id.value().value());
+                    String subject = SparqlTerms.iriRef(current.id.value().value());
+
+                    // Only the predicate(s) actually being replaced go into the gate's candidate;
+                    // an untouched-but-shape-relevant predicate (the type triple always, the
+                    // caller's own existing prefLabel candidates when prefLabel is not being
+                    // replaced) is asserted instead - validation-only, never written again, so the
+                    // gate still sees the resulting state truthfully without this class ever
+                    // rewriting a triple nobody asked to change (see class-level SHACL note).
+                    Graph writeCandidate = rdf.createGraph();
+                    Graph assertedContext = rdf.createGraph();
+                    assertedContext.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+                    if (prefLabel != null) {
+                        writeCandidate.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY),
+                                rdf.createLiteral(prefLabel));
+                    } else {
+                        for (LocalizedLiteral existing : current.prefLabels) {
+                            assertedContext.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY),
+                                    toLiteral(existing));
+                        }
+                    }
+                    if (actorFacet != null) {
+                        String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
+                        writeCandidate.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+                        if (actorFacet.role() != null) {
+                            writeCandidate.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
+                                    rdf.createLiteral(actorFacet.role()));
+                        } else if (current.actorFacet != null && current.actorFacet.role() != null) {
+                            // A null role is "unchanged", not "cleared" (same contract as every other
+                            // field here) - assert the untouched existing role for the gate only.
+                            assertedContext.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
+                                    rdf.createLiteral(current.actorFacet.role()));
+                        }
+                    }
+                    // skos:definition carries no ulshapes PropertyShape at all (see class-level
+                    // note) - nothing to assert either way when it is left untouched.
+
+                    gate.enforce(writeCandidate, assertedContext);
+
+                    if (prefLabel != null) {
+                        tx.update(deleteAllTriplesOf(subject, PREF_LABEL_PROPERTY));
+                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, rdf.createLiteral(prefLabel)));
+                    }
+                    if (definition != null) {
+                        tx.update(deleteAllTriplesOf(subject, DEFINITION_PROPERTY));
+                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, rdf.createLiteral(definition)));
+                    }
+                    if (actorFacet != null) {
+                        tx.update(deleteType(subject, HUMAN_ACTOR_TYPE));
+                        tx.update(deleteType(subject, SYSTEM_ACTOR_TYPE));
+                        Graph actorGraph = rdf.createGraph();
+                        String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
+                        actorGraph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+                        // A null role leaves the existing arkproc:actorRole triple (if any) alone,
+                        // instead of deleting it - correcting only the kind must not silently wipe an
+                        // already-set role the caller never mentioned (issue #163 follow-up 2).
+                        if (actorFacet.role() != null) {
+                            tx.update(deleteAllTriplesOf(subject, ACTOR_ROLE_PROPERTY));
+                            actorGraph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
+                                    rdf.createLiteral(actorFacet.role()));
+                        }
+                        tx.add(graphIri, actorGraph);
+                    }
+
+                    return resultingTerm(current, prefLabel, definition, actorFacet);
+                });
+            } catch (RuntimeException e) {
+                // Unlike create(), a genuine write conflict here can only be about a predicate this
+                // call actually patched - never about dcterms:identifier, which update() never
+                // touches - so it is always translated to the dedicated concurrency signal, never
+                // to DuplicateTermCodeException (issue #163 follow-up).
+                if (isWriteConflict.test(e)) {
+                    throw new TermConcurrentlyModifiedException(workspaceId, code);
+                }
+                throw e;
+            }
+        }
+    }
+
+    /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
+    private static String deleteAllTriplesOf(String subject, String predicateIri) {
+        return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
+    }
+
+    /** Deletes {@code subject a <typeIri>} if present - a no-op if the subject does not carry it. */
+    private static String deleteType(String subject, String typeIri) {
+        return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " a <" + typeIri + "> } }";
+    }
+
+    /** A one-triple graph, for the common "insert exactly one new value" case in {@link #update}. */
+    private Graph singleTriple(IRI subject, String predicateIri, RDFTerm object) {
+        Graph graph = rdf.createGraph();
+        graph.add(subject, rdf.createIRI(predicateIri), object);
+        return graph;
+    }
+
+    /** Converts a {@link LocalizedLiteral} back to the RDF {@link Literal} it was read from. */
+    private Literal toLiteral(LocalizedLiteral literal) {
+        return literal.languageTag() == null
+                ? rdf.createLiteral(literal.value())
+                : rdf.createLiteral(literal.value(), literal.languageTag());
+    }
+
+    /**
+     * Builds the {@link Term} {@link #update} returns: {@code newXxx} where the caller actually
+     * supplied one, otherwise {@code current}'s own already-selected/materialised value - so the
+     * caller sees exactly the state {@link #update} just wrote, without a second read.
+     */
+    private Term resultingTerm(TermAssembly current, String newPrefLabel, String newDefinition,
+            ActorFacet newActorFacet) {
+        Term currentProjection = current.toTerm(displayLocale);
+        String prefLabel = newPrefLabel != null ? newPrefLabel : currentProjection.prefLabel();
+        String definition = newDefinition != null ? newDefinition : currentProjection.definition();
+        ActorFacet actorFacet = resultingActorFacet(current.actorFacet, newActorFacet);
+        return new Term(current.id, current.code, prefLabel, definition, actorFacet);
+    }
+
+    /**
+     * Merges the caller's {@code newActorFacet} onto {@code current}: a {@code null} facet leaves
+     * {@code current} entirely unchanged; a non-{@code null} facet always replaces the kind, but a
+     * {@code null} role within it keeps {@code current}'s own role rather than reporting it as
+     * cleared - matching what {@link #update} actually persists (issue #163 follow-up 2).
+     */
+    private static ActorFacet resultingActorFacet(ActorFacet current, ActorFacet newActorFacet) {
+        if (newActorFacet == null) {
+            return current;
+        }
+        if (newActorFacet.role() != null) {
+            return newActorFacet;
+        }
+        String preservedRole = current != null ? current.role() : null;
+        return new ActorFacet(newActorFacet.kind(), preservedRole);
+    }
+
     @Override
     public Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
 
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return readAssemblyByCode(handle.sparqlQuery()::select, code).map(assembly -> assembly.toTerm(displayLocale));
+        }
+    }
+
+    /**
+     * Reads one term's full current state by business code - shared by {@link #findByCode} (reads
+     * outside any transaction) and {@link #update} (reads inside the very transaction that then
+     * patches only the caller-specified predicates, issue #163 follow-up), so both see the exact
+     * same mandatory-join semantics: a term missing either {@code skos:prefLabel} or
+     * {@code skos:definition} entirely is invisible to both, exactly as before.
+     */
+    private Optional<TermAssembly> readAssemblyByCode(
+            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
         String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
                 + "?s a <" + CONCEPT_TYPE + "> ; "
@@ -311,15 +493,13 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
-                TermAssembly assembly = assemblyFor(bySubject, row, code);
-                assembly.addPrefLabel(literalOf(row, "prefLabel"));
-                assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
-            });
-            return bySubject.values().stream().findFirst().map(assembly -> assembly.toTerm(displayLocale));
-        }
+        Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+        selectFn.apply(query).forEach(row -> {
+            TermAssembly assembly = assemblyFor(bySubject, row, code);
+            assembly.addPrefLabel(literalOf(row, "prefLabel"));
+            assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+        });
+        return bySubject.values().stream().findFirst();
     }
 
     @Override

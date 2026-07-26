@@ -9,9 +9,11 @@ import java.util.Optional;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 
@@ -31,8 +33,23 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
  * longer a coherent single operation: an identity either already exists (an update) or it does
  * not (a create), and conflating the two would hide a caller bug (writing to an id nobody
- * minted, or an id that was already used). {@link #create} and {@link #update} therefore make
- * that distinction explicit at the port.</p>
+ * minted, or an id that was already used). {@link #create} makes that distinction explicit for a
+ * brand-new term.</p>
+ *
+ * <p><strong>Update is a targeted correction, not a replace (issue #163 follow-up).</strong>
+ * {@link #update} used to take a full {@link Term} and replace the subject's triples wholesale -
+ * which silently destroyed every triple the caller never meant to touch, most severely a
+ * multi-valued {@code skos:prefLabel}/{@code skos:definition} (issues #80/#81: a store-first term
+ * can legally carry several language-tagged {@code prefLabel}s or several {@code definition}
+ * literals, which {@link Term}'s single-{@code String} fields can only ever hold one of at a
+ * time). {@link #update} instead takes the term's unchanged business {@link TermCode} plus one
+ * nullable argument per correctable field, exactly mirroring {@code UpdateTerm}'s own "{@code
+ * null} leaves that field unchanged" contract: only the predicate(s) whose new value is actually
+ * supplied are ever deleted-and-reinserted at the triple level, so an untouched field's other
+ * language variants, duplicate values, or the whole field itself if never touched at all survive
+ * unconditionally. The code itself is never among the correctable fields and is therefore never
+ * rewritten - a code collision (issue #114's original concern) is now structurally unreachable via
+ * this method, not merely checked.</p>
  */
 public interface TermRepository {
 
@@ -49,16 +66,37 @@ public interface TermRepository {
     void create(WorkspaceId workspaceId, Term term);
 
     /**
-     * Replaces an existing term by identity.
+     * Corrects specific fields of the term identified by {@code code}, leaving every field the
+     * caller did not ask to change - including any other language-tagged {@code skos:prefLabel}
+     * variant or duplicate {@code skos:definition} a store-first (issues #80/#81) term may legally
+     * carry - completely untouched at the triple level.
+     *
+     * <p>Resolves the subject and reads whatever it needs to preserve inside the very transaction
+     * that then writes, so there is no application-level read-then-write gap in which a
+     * concurrent writer's change could be silently lost (contrast the pre-#163-follow-up
+     * contract, which took a full {@link Term} the caller had to read and merge beforehand). The
+     * narrower race that remains - two overlapping writers patching the identical predicate at the
+     * same time - is caught by the store's own {@code SERIALIZABLE} isolation and surfaces as
+     * {@link TermConcurrentlyModifiedException}, never as a silent overwrite.</p>
      *
      * @param workspaceId the workspace (architecture model) the term lives in
-     * @param term        the term to store in place of the current one
-     * @throws TermNotFoundException      if no term with this identity exists
-     * @throws DuplicateTermCodeException if another term already carries this term's
-     *                                    {@link TermCode} - a term may keep its own existing code,
-     *                                    only a collision with a different subject is rejected
+     * @param code        the term's own, unchanged business code - {@code update} never rewrites
+     *                    {@code dcterms:identifier}, so this can never itself introduce a code
+     *                    collision
+     * @param prefLabel   the new preferred label, or {@code null} to leave every existing
+     *                    {@code skos:prefLabel} triple untouched
+     * @param definition  the new definition, or {@code null} to leave every existing
+     *                    {@code skos:definition} triple untouched
+     * @param actorFacet  the new Actor facette, or {@code null} to leave an already-set facette
+     *                    (its type and role triples) untouched. Within a non-{@code null} facette,
+     *                    a {@code null} {@link ActorFacet#role()} likewise leaves an already-set
+     *                    role triple untouched - only the type is always replaced
+     * @return the term's up-to-date state after the correction
+     * @throws TermNotFoundException             if no term with this code exists
+     * @throws TermConcurrentlyModifiedException if a concurrent writer's overlapping change to the
+     *                                            same predicate(s) won the store's write conflict
      */
-    void update(WorkspaceId workspaceId, Term term);
+    Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
 
     /**
      * Finds a term by its human-readable business code within a workspace.
