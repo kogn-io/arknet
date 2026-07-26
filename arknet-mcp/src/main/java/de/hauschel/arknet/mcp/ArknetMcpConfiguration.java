@@ -38,6 +38,7 @@ import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.adapter.mcp.UbiquitousLanguageMcpTools;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.out.TermFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfActorLookup;
 import de.hauschel.arknet.uc.adapter.kogniordf.KognioRdfRequirementLookup;
@@ -231,9 +232,20 @@ public class ArknetMcpConfiguration {
         return KognioRdfTermRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
+    /**
+     * The graph-backed {@link TermFactory} paired with {@link #termRepository} - the repository
+     * only persists terms this factory made (spike, issue #168). Both beans must be built from
+     * the same {@link DisplayLocale}, an obligation the type system does not express.
+     */
     @Bean
-    TermService termService(final TermRepository repository, final ResourceIdFactory resourceIdFactory) {
-        return new TermService(repository, resourceIdFactory);
+    TermFactory termFactory(final DisplayLocale displayLocale) {
+        return KognioRdfTermRepositoryFactory.termFactory(displayLocale);
+    }
+
+    @Bean
+    TermService termService(final TermRepository repository, final ResourceIdFactory resourceIdFactory,
+            final TermFactory termFactory) {
+        return new TermService(repository, resourceIdFactory, termFactory);
     }
 
     @Bean

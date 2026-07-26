@@ -16,6 +16,7 @@ import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
+import de.hauschel.arknet.ul.application.port.out.TermFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
@@ -70,6 +71,19 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
 
     private final TermRepository repository;
     private final ResourceIdFactory resourceIdFactory;
+    private final TermFactory termFactory;
+
+    /**
+     * Creates the service over the core's own plain {@link TermFactory} - the shape every test
+     * and every in-memory wiring wants.
+     *
+     * @param repository        the driven persistence port (must not be {@code null})
+     * @param resourceIdFactory mints the opaque identity of a newly added term (must not be
+     *                          {@code null})
+     */
+    public TermService(TermRepository repository, ResourceIdFactory resourceIdFactory) {
+        this(repository, resourceIdFactory, TermFactory.plain());
+    }
 
     /**
      * Creates the service.
@@ -77,10 +91,14 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
      * @param repository        the driven persistence port (must not be {@code null})
      * @param resourceIdFactory mints the opaque identity of a newly added term (must not be
      *                          {@code null})
+     * @param termFactory       creates the {@link Term} instances {@code repository} can persist
+     *                          without translating them first (spike, issue #168; must not be
+     *                          {@code null})
      */
-    public TermService(TermRepository repository, ResourceIdFactory resourceIdFactory) {
+    public TermService(TermRepository repository, ResourceIdFactory resourceIdFactory, TermFactory termFactory) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
+        this.termFactory = Objects.requireNonNull(termFactory, "termFactory");
     }
 
     @Override
@@ -94,7 +112,8 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         TermId id = new TermId(resourceIdFactory.newId());
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
             TermCode code = nextCode(workspaceId);
-            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
+            Term term = termFactory.newTerm(id, code, command.prefLabel(), command.definition(),
+                    command.actorFacet());
             repository.create(workspaceId, term);
             return term;
         });
