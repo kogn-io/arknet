@@ -20,6 +20,16 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * leaves that field unchanged, so a caller can correct only the definition without having to
  * restate the label.</p>
  *
+ * <p>Every argument here passes straight through to {@link
+ * de.hauschel.arknet.ul.application.port.out.TermRepository#update} unmerged - this port's
+ * implementation must not pre-read the current term and fold an omitted field's old value into a
+ * fresh {@link Term} before writing it, which would round-trip that field through {@link Term}'s
+ * single-{@code String} projection and silently collapse a multi-valued {@code skos:prefLabel}/
+ * {@code skos:definition} (issues #80/#81) down to one value even though the caller never asked
+ * to change it. "Not provided" and "provided" must stay distinguishable all the way to the
+ * out-adapter, which is the only place that knows how to leave an untouched predicate's triples
+ * alone.</p>
+ *
  * <p><strong>Actor facette.</strong> A {@code null} {@code actorFacet} argument leaves an
  * already-set facette untouched - it is not itself a "replace with null" signal, since {@code
  * null} is already the sentinel for every other field here. Explicitly removing a term's Actor

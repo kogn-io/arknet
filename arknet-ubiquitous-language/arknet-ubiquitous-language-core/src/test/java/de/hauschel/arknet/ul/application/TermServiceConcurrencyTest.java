@@ -19,6 +19,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 
@@ -112,8 +113,9 @@ class TermServiceConcurrencyTest {
         }
 
         @Override
-        public void update(WorkspaceId workspaceId, Term term) {
-            delegate.update(workspaceId, term);
+        public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+                ActorFacet actorFacet) {
+            return delegate.update(workspaceId, code, prefLabel, definition, actorFacet);
         }
 
         @Override
