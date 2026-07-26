@@ -21,7 +21,6 @@ import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
@@ -69,7 +68,7 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
     @Test
     void bcResolvesATermWrittenByTheRealUbiquitousLanguageOutAdapter() {
         TermId id = new TermId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
-        Term term = KognioRdfTermRepositoryFactory.termFactory(DisplayLocale.DEFAULT).newTerm(id, new TermCode("TERM-1"), "Kunde",
+        Term term = new Term(id, new TermCode("TERM-1"), "Kunde",
                 "Person, die eine Bestellung aufgibt.", null);
 
         ulTermRepository.create(WORKSPACE, term);

@@ -26,7 +26,6 @@ import io.kogn.rdf.terms.SimpleRdf;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteFunnel;
-import de.hauschel.arknet.ul.application.port.out.TermFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 
 /**
@@ -97,25 +96,6 @@ public final class KognioRdfTermRepositoryFactory {
         WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfTermRepositoryFactory::isWriteConflict);
         return new KognioRdfTermRepository(lifecycle, gate, displayLocale,
                 KognioRdfTermRepositoryFactory::isWriteConflict, funnel);
-    }
-
-    /**
-     * The paired {@link TermFactory} the composition root must wire into the {@code TermService}
-     * alongside {@link #over(DatasetLifecycle, DisplayLocale)} (spike, issue #168).
-     *
-     * <p>Pairing is a real, unchecked obligation: {@link KognioRdfTermRepository#create} only
-     * accepts terms this factory made. Two factory methods that must be called together are the
-     * shape the graph-backed pattern forces on the wiring - a single method returning both would
-     * need a tuple type, and the repository cannot create the factory itself because the service,
-     * not the repository, is the one that needs it.</p>
-     *
-     * @param displayLocale the display-language preference the created terms resolve a
-     *                      multilingual {@code skos:prefLabel} with (issue #80)
-     * @return the factory producing persistable, graph-backed terms
-     */
-    public static TermFactory termFactory(DisplayLocale displayLocale) {
-        Objects.requireNonNull(displayLocale, "displayLocale");
-        return new GraphBackedTermFactory(displayLocale);
     }
 
     /**
