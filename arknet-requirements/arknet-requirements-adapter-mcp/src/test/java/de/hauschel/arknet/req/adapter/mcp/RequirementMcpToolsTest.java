@@ -41,7 +41,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the six requirement
+ * Scaffold-level check that the adapter declares exactly the seven requirement
  * tools and guards its in-port dependencies, plus the term-display-resolution
  * contract added in the #77 nachtrag ({@link ResolveTerms}): renders the resolved
  * business code, falls back to the bare IRI for an id it cannot resolve, and never
