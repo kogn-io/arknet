@@ -27,6 +27,7 @@ import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
+import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -57,41 +58,45 @@ class RequirementMcpToolsTest {
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES);
+            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES);
 
     @Test
-    void declaresTheSixRequirementTools() {
+    void declaresTheSevenRequirementTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(6, names.size());
+        assertEquals(7, names.size());
         assertTrue(names.containsAll(List.of(
-                "req_add", "req_list", "req_get", "req_set_status", "req_link_term", "req_schema")));
+                "req_add", "req_list", "req_get", "req_set_status", "req_link_term", "req_update",
+                "req_schema")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        null, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES));
+                        null, stub, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, null, stub, resolveTerms, WORKSPACES));
+                        stub, stub, stub, stub, null, stub, stub, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, null, resolveTerms, WORKSPACES));
+                        stub, stub, stub, stub, stub, null, stub, resolveTerms, WORKSPACES));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, null, WORKSPACES));
+                        stub, stub, stub, stub, stub, stub, null, resolveTerms, WORKSPACES));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, null, WORKSPACES));
     }
 
     @Test
     void rejectsNullWorkspaceResolver() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, null));
+                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, null));
     }
 
     /**
@@ -158,6 +163,35 @@ class RequirementMcpToolsTest {
         assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+    }
+
+    /** Issue #162: {@code req_update} passes every given field through to the in-port. */
+    @Test
+    void updatePassesAllGivenFieldsThroughToTheInPort() {
+        List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
+
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
+        assertEquals("Neuer Titel", stub.lastUpdateTitle);
+        assertEquals("Neue Beschreibung", stub.lastUpdateDescription);
+        assertEquals(criteria, stub.lastUpdateAcceptanceCriteria);
+        assertTrue(rendered.contains("Neuer Titel"), rendered);
+    }
+
+    /**
+     * An omitted field must reach {@link UpdateRequirement} as {@code null} - so the port (not
+     * this adapter) decides that "unchanged" means "leave the existing value" rather than the
+     * adapter silently substituting a blank or empty value.
+     */
+    @Test
+    void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
+        adapter.update(null, "FR-1", null, null, null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
+        assertEquals(null, stub.lastUpdateTitle);
+        assertEquals(null, stub.lastUpdateDescription);
+        assertEquals(null, stub.lastUpdateAcceptanceCriteria);
     }
 
     /** The resolvable case: a linked term shows its business code, not the raw IRI (issue #77). */
@@ -260,10 +294,10 @@ class RequirementMcpToolsTest {
                 List.of("Login succeeds with valid credentials"));
     }
 
-    /** Structural stub implementing the six driving in-ports. */
+    /** Structural stub implementing the seven driving in-ports. */
     private static final class Stub
             implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm,
-            GetRequirementSchema {
+            UpdateRequirement, GetRequirementSchema {
 
         private RequirementCode lastLinkedRequirement;
         private String lastLinkedTermCode;
@@ -271,6 +305,10 @@ class RequirementMcpToolsTest {
         private List<ResourceId> nextLinkedTerms = List.of();
         private List<Requirement> allRequirements = List.of();
         private NewRequirement lastAddCommand;
+        private RequirementCode lastUpdatedRequirement;
+        private String lastUpdateTitle;
+        private String lastUpdateDescription;
+        private List<String> lastUpdateAcceptanceCriteria;
 
         @Override
         public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
@@ -315,6 +353,18 @@ class RequirementMcpToolsTest {
         public List<RequirementSchemaTerm> schema() {
             return List.of(new RequirementSchemaTerm("Priority", "Priorisierung nach MoSCoW.",
                     List.of("MUST_HAVE", "SHOULD_HAVE", "COULD_HAVE", "WONT_HAVE")));
+        }
+
+        @Override
+        public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
+                List<String> acceptanceCriteria) {
+            lastUpdatedRequirement = code;
+            lastUpdateTitle = title;
+            lastUpdateDescription = description;
+            lastUpdateAcceptanceCriteria = acceptanceCriteria;
+            return new Requirement(ID, code, title != null ? title : "t", description != null ? description : "d",
+                    RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
+                    List.of(), acceptanceCriteria != null ? acceptanceCriteria : List.of("Done when it works"));
         }
     }
 
