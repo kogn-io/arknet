@@ -207,7 +207,7 @@ addendum.
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
 | `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context) via a shared DatasetLifecycle + the generic store report (`store_overview`/`resource_get`) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`WorkspaceId`, opaque `ResourceId`/`ResourceIdFactory`) |
-| `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) |
+| `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-ubiquitous-language` | Second hexagonal BC: glossary terms as SKOS Concepts (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-use-cases` | Third hexagonal BC: flow-oriented Cockburn use cases (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
