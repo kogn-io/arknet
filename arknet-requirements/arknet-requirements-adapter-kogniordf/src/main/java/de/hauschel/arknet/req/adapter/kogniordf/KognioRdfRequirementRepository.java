@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,6 +36,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
@@ -76,38 +76,24 @@ import de.hauschel.arknet.req.domain.TermRef;
  * selector), but the local embedded adapter already keeps workspaces separate.</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
- * minted once, "insert or replace by identity" is no longer one coherent operation.
- * {@link #create} and {@link #update} each check whether the subject already exists
- * <em>inside</em> the write transaction (an {@code ASK}) before writing - not via a separate
- * {@code findByCode} call beforehand, which would leave a check-then-act race between the check
- * and the write. {@link #create} rejects an existing subject with
- * {@link ResourceAlreadyExistsException}; {@link #update} rejects a missing one with
- * {@link RequirementNotFoundException}. An {@link #update} otherwise replaces the subject's
- * triples wholesale (the same replace-by-identity mechanic the previous save-only contract
- * used).</p>
+ * minted once, "insert or replace by identity" is no longer one coherent operation for
+ * {@link #write}. The transactional mechanics of that check - the in-transaction {@code ASK}s
+ * for identity and business-code collision, the SHACL gate, the commit-conflict translation -
+ * live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel} (ADR-013), not here:
+ * {@link #write} only builds the candidate graph and, via {@code alreadyExists}/
+ * {@code duplicateCode}/{@code notFound}, supplies the exceptions the funnel throws -
+ * {@link ResourceAlreadyExistsException} for an identity collision on create,
+ * {@link DuplicateRequirementCodeException} for a business-code collision on create (also
+ * thrown when a genuinely overlapping {@code SERIALIZABLE} transaction loses the commit itself,
+ * issue #144, see the funnel's own javadoc), {@link RequirementNotFoundException} for a missing
+ * subject on update. {@link #update} otherwise replaces the subject's triples wholesale (the
+ * same replace-by-identity mechanic the previous save-only contract used).</p>
  *
- * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
- * {@code ASK} in the same transaction - by {@code dcterms:identifier}, not by subject - and
- * rejects a match with {@link DuplicateRequirementCodeException}. This is deliberately a
- * separate check and a separate exception from {@link ResourceAlreadyExistsException}: an
- * opaque-identity collision is a programming error (identities are minted once and never
- * reused), while a business-code collision (two requirements both claiming {@code FR-1}) is an
- * expected, rejectable outcome a human can cause and must be told about by name.</p>
- *
- * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
- * catches two callers racing to {@link #create} the same code only when one fully commits before
- * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
- * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
- * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
- * rejected as a conflict - surfacing not as {@link DuplicateRequirementCodeException} but as the
- * RDF4J-backed store's own commit-time exception. That technology-specific exception must not
- * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
- * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
- * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
- * it "was this a write conflict?" and translates a positive answer into the same
- * {@link DuplicateRequirementCodeException} the synchronous check throws - so
- * {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) catches both interleavings the
- * same way, without ever importing an RDF4J type here.</p>
+ * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance
+ * graph against the requirements SHACL shapes before the write transaction opens,
+ * {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
+ * shared {@link de.hauschel.arknet.persistence.WriteFunnel} (ADR-013). The gate itself is
+ * technology-neutral - only {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  *
  * <p><strong>Term references arrive pre-resolved (issue #36, identity-carrying since #77).</strong>
  * {@link TermRef} carries the term's opaque subject {@link ResourceId} directly - resolving a
@@ -130,12 +116,6 @@ import de.hauschel.arknet.req.domain.TermRef;
  * no worse than before #77 (such an edge survived there too, preserved by #65 and equally
  * unscrutinised) - but what makes it safe is that it is unreachable, not that anything checked
  * it.</p>
- *
- * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
- * against the requirements SHACL shapes via {@link ShaclWriteGate} before starting the write
- * transaction; a violation throws {@link WriteConstraintViolationException} and nothing is
- * persisted. The gate itself is technology-neutral - only
- * {@link KognioRdfRequirementRepositoryFactory} names RDF4J.</p>
  *
  * <p><strong>Row multiplication on {@code priority}/{@code qualityCategory} (issue #81).</strong>
  * Both properties carry no {@code sh:Violation}-severity {@code sh:maxCount} (unlike
@@ -198,25 +178,24 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
-    private final Predicate<RuntimeException> isWriteConflict;
+    private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
-     *                        be {@code null})
-     * @param gate            the SHACL write-gate validating candidate graphs before persistence
-     *                        (must not be {@code null})
-     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
-     *                        class ever naming the RDF4J type itself (must not be {@code null})
+     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - used by the
+     *                   read paths and {@link #compareAndUpdate} (must not be {@code null})
+     * @param gate       the SHACL write-gate validating candidate graphs before persistence -
+     *                   used by {@link #compareAndUpdate}, which runs outside {@code funnel}
+     *                   (must not be {@code null})
+     * @param funnel     the shared write funnel (ADR-013) {@link #write} runs through; not used
+     *                   by {@link #compareAndUpdate} or the read paths (must not be {@code null})
      */
-    KognioRdfRequirementRepository(
-            DatasetLifecycle lifecycle, ShaclWriteGate gate, Predicate<RuntimeException> isWriteConflict) {
+    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
-        this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
+        this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
@@ -239,65 +218,40 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            // 1. Every term reference already carries its resolved identity (see class-level
-            //    note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as the subject
-            //    above.
-            List<IRI> termIris = requirement.usesTerms().stream()
-                    .map(this::termIriFor)
-                    .toList();
+        // 1. Every term reference already carries its resolved identity (see class-level
+        //    note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as the subject
+        //    above.
+        List<IRI> termIris = requirement.usesTerms().stream()
+                .map(this::termIriFor)
+                .toList();
 
-            // 2. Build the candidate graph and, from it, the structural gate check. The usesTerm
-            //    shape carries an sh:class skos:Concept constraint, but the type triples of the
-            //    referenced terms live in the sibling terms graph, not in this candidate graph.
-            //    They are handed to the gate as a validation-only asserted context (never
-            //    persisted here). This is safe: the term was already proven to exist and be a
-            //    concept at the moment it was resolved (KognioRdfTermLookup, called once from the
-            //    application service when the term was linked) - the lookup, not the shape, is
-            //    what keeps the edge non-dangling; this adapter no longer re-verifies it.
-            Graph graph = buildCandidateGraph(subjectIri, requirement, termIris);
-            Graph assertedContext = rdf.createGraph();
-            for (IRI termIri : termIris) {
-                assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
-            }
-            gate.enforce(graph, assertedContext);
+        // 2. Build the candidate graph and, from it, the structural gate check. The usesTerm
+        //    shape carries an sh:class skos:Concept constraint, but the type triples of the
+        //    referenced terms live in the sibling terms graph, not in this candidate graph.
+        //    They are handed to the gate as a validation-only asserted context (never
+        //    persisted here). This is safe: the term was already proven to exist and be a
+        //    concept at the moment it was resolved (KognioRdfTermLookup, called once from the
+        //    application service when the term was linked) - the lookup, not the shape, is
+        //    what keeps the edge non-dangling; this adapter no longer re-verifies it.
+        Graph graph = buildCandidateGraph(subjectIri, requirement, termIris);
+        Graph assertedContext = rdf.createGraph();
+        for (IRI termIri : termIris) {
+            assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+        }
 
-            String askExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
-            String askCodeExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirement.code().value())
-                    + "\" } }";
-            IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
+        IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
-            try {
-                handle.transactor().inTransaction(tx -> {
-                    boolean exists = tx.ask(askExists);
-                    if (expectAbsent) {
-                        if (exists) {
-                            throw new ResourceAlreadyExistsException(workspaceId, requirement.id().value());
-                        }
-                        // Identity is opaque and unique by construction, but the human-readable
-                        // code is a separate triple this ASK alone cannot rule out - check it
-                        // here, inside the same write transaction, so no other create() can race
-                        // in between.
-                        if (tx.ask(askCodeExists)) {
-                            throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
-                        }
-                    } else if (!exists) {
-                        throw new RequirementNotFoundException(workspaceId, requirement.code());
-                    }
-                    replaceTriples(tx, graphIri, subjectIri, subject, graph, exists);
-                    return null;
-                });
-            } catch (RuntimeException e) {
-                // The synchronous ASK above only catches a concurrent create() that already fully
-                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
-                // here, as the store's own commit-time conflict (issue #144) - translated to the
-                // same signal CodeAssignment's retry already handles.
-                if (expectAbsent && isWriteConflict.test(e)) {
-                    throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
-                }
-                throw e;
-            }
+        if (expectAbsent) {
+            funnel.create(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
+                    requirement.code().value(), graph, assertedContext,
+                    () -> new ResourceAlreadyExistsException(workspaceId, requirement.id().value()),
+                    () -> new DuplicateRequirementCodeException(workspaceId, requirement.code()),
+                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
+        } else {
+            funnel.update(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
+                    graph, assertedContext,
+                    () -> new RequirementNotFoundException(workspaceId, requirement.code()),
+                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
         }
     }
 

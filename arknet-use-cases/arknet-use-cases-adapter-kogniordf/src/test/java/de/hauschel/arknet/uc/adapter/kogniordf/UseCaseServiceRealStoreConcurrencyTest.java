@@ -60,8 +60,8 @@ import de.hauschel.arknet.uc.domain.UseCase;
  * commits its whole write before this one's transaction even begins") with a repository decorator
  * and no real transactions at all.
  *
- * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: {@link
- * KognioRdfUseCaseRepository#isWriteConflict} translates a genuine store-level commit conflict
+ * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
+ * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit conflict
  * (two callers' code-uniqueness guards both passing before either commits, under {@code
  * SERIALIZABLE} isolation, kogn-io/rdf-core#18) into the same {@link
  * de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException} the synchronous guard throws, so

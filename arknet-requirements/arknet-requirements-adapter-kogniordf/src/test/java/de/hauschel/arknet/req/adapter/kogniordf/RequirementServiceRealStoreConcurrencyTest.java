@@ -59,8 +59,8 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * caller commits its whole write before this one's transaction even begins") with a repository
  * decorator and no real transactions at all.
  *
- * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: {@link
- * KognioRdfRequirementRepository#isWriteConflict} translates a genuine store-level commit
+ * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
+ * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit
  * conflict (two callers' code-uniqueness guards both passing before either commits, under {@code
  * SERIALIZABLE} isolation, kogn-io/rdf-core#18) into the same {@link
  * de.hauschel.arknet.req.domain.DuplicateRequirementCodeException} the synchronous guard throws,

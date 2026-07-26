@@ -1,7 +1,8 @@
 # ADR-011: Traceability ueber Commit-Provenance statt diffbarem Datei-Export
 
 - Status: Proposed (2026-07-23)
-- Verwandt: ADR-001, ADR-005
+- Verwandt: ADR-001, ADR-005, ADR-013 (geteilter Schreibtrichter -- Ansatzpunkt der
+  Revisions-Erfassung; dessen ausgenommene Sonderpfade sind gegen Entscheidung 2 zu lesen)
 
 ## Kontext
 

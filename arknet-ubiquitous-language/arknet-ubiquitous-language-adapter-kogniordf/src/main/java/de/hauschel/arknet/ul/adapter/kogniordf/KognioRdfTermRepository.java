@@ -38,6 +38,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
@@ -78,10 +79,10 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" was never one coherent operation for
- * {@link #create}: it checks whether the subject already exists <em>inside</em> the write
- * transaction (an {@code ASK}) before writing - not via a separate {@code findByCode} call
- * beforehand, which would leave a check-then-act race between the check and the write - and
- * rejects an existing subject with {@link ResourceAlreadyExistsException}.</p>
+ * {@link #create}. The transactional mechanics of that check - the in-transaction {@code ASK},
+ * the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel}
+ * (ADR-013), not here; {@link #create} only builds the candidate graph and rejects an existing
+ * subject with {@link ResourceAlreadyExistsException}.</p>
  *
  * <p><strong>Update is a targeted correction by code, not a replace by identity (issue #163
  * follow-up).</strong> {@link #update} used to take a full {@link Term} and wholesale-replace the
@@ -107,32 +108,24 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@code dcterms:identifier} at all, so it cannot itself introduce a code collision - a stronger,
  * structural guarantee rather than a checked one.</p>
  *
- * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
- * catches two callers racing to {@link #create} the same code only when one fully commits before
- * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
- * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
- * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
- * rejected as a conflict - surfacing not as {@link DuplicateTermCodeException} but as the
- * RDF4J-backed store's own commit-time exception. That technology-specific exception must not
- * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
- * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
- * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
- * it "was this a write conflict?" - {@link #create} translates a positive answer into
- * {@link DuplicateTermCodeException} (the same signal {@code CodeAssignment}'s retry consumes,
- * see {@code arknet-shared-kernel}), while {@link #update} translates it into the unrelated
- * {@link TermConcurrentlyModifiedException} instead (see that method's own javadoc) - never
- * importing an RDF4J type into either path.</p>
+ * <p><strong>The second interleaving (issue #144).</strong> A concurrent {@link #create} racing
+ * on the same code is guarded by the shared {@link WriteFunnel} (ADR-013), whose own javadoc
+ * documents the {@code SERIALIZABLE}-conflict mechanics and the technology-neutral
+ * {@link #isWriteConflict} predicate in full. {@link #update} runs outside that funnel and
+ * translates the identical low-level signal into a different, unrelated exception: not
+ * {@link DuplicateTermCodeException} (a business-code collision {@link #update} can no longer even
+ * provoke, see above) but {@link TermConcurrentlyModifiedException} (see that method's own
+ * javadoc) - never importing an RDF4J type into either path.</p>
  *
- * <p><strong>SHACL write-gate.</strong> Every write call validates the candidate instance graph
- * against the ubiquitous-language SHACL shapes via {@link ShaclWriteGate} before starting the
- * write transaction (symmetric to the requirements adapter); a violation throws
- * {@link WriteConstraintViolationException} and nothing is persisted. The gate itself is
- * technology-neutral - only {@link KognioRdfTermRepositoryFactory} names RDF4J. {@link #update}
- * uses the gate's validation-only {@code assertedContext} overload (mirroring how the sibling
- * requirements adapter asserts a referenced term's type): a predicate {@link #update} is not
- * touching this call is asserted there for validation only, from what was just read inside the
- * same transaction, so {@code ulshapes:TermShape}'s {@code prefLabel} shape still sees the
- * resulting state truthfully without this class ever persisting that assertion again.</p>
+ * <p><strong>SHACL write-gate.</strong> The gate mechanics for {@link #create} - validate before
+ * the write transaction opens, {@link WriteConstraintViolationException} on a violation, nothing
+ * persisted - live in the shared {@link WriteFunnel} (ADR-013). {@link #update} runs outside that
+ * funnel and enforces {@link ShaclWriteGate} itself, using its validation-only
+ * {@code assertedContext} overload (mirroring how the sibling requirements adapter asserts a
+ * referenced term's type): a predicate {@link #update} is not touching this call is asserted
+ * there for validation only, from what was just read inside the same transaction, so
+ * {@code ulshapes:TermShape}'s {@code prefLabel} shape still sees the resulting state truthfully
+ * without this class ever persisting that assertion again.</p>
  *
  * <p><strong>Display language (issue #80).</strong> A concept may carry {@code skos:prefLabel}
  * in several languages ({@code "Kunde"@de}, {@code "Customer"@en}) - SKOS-legal and store-first
@@ -190,6 +183,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private final ShaclWriteGate gate;
     private final DisplayLocale displayLocale;
     private final Predicate<RuntimeException> isWriteConflict;
+    private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
@@ -205,13 +199,16 @@ public class KognioRdfTermRepository implements TermRepository {
      * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
      *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
      *                        class ever naming the RDF4J type itself (must not be {@code null})
+     * @param funnel          the shared write funnel (ADR-013) {@link #create} runs through; not
+     *                        used by {@link #update} or the read paths (must not be {@code null})
      */
     KognioRdfTermRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate, DisplayLocale displayLocale,
-            Predicate<RuntimeException> isWriteConflict) {
+            Predicate<RuntimeException> isWriteConflict, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
+        this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
@@ -223,7 +220,6 @@ public class KognioRdfTermRepository implements TermRepository {
         // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
         String subjectIriString = term.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
-        String subject = SparqlTerms.iriRef(subjectIriString);
         IRI schemeIri = rdf.createIRI(GLOSSARY_SCHEME);
 
         Graph graph = rdf.createGraph();
@@ -247,39 +243,13 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         }
 
-        gate.enforce(graph);
-
-        String askExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }";
-        String askCodeExists = "ASK { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(term.code().value()) + "\" } }";
         IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            try {
-                handle.transactor().inTransaction(tx -> {
-                    if (tx.ask(askExists)) {
-                        throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
-                    }
-                    // Identity is opaque and unique by construction, but the human-readable code
-                    // is a separate triple this ASK alone cannot rule out - check it here, inside
-                    // the same write transaction, so no concurrent create() can race in between.
-                    if (tx.ask(askCodeExists)) {
-                        throw new DuplicateTermCodeException(workspaceId, term.code());
-                    }
-                    tx.add(graphIri, graph);
-                    return null;
-                });
-            } catch (RuntimeException e) {
-                // The synchronous ASK above only catches a concurrent create() that already fully
-                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
-                // here, as the store's own commit-time conflict (issue #144) - translated to the
-                // same signal CodeAssignment's retry already handles.
-                if (isWriteConflict.test(e)) {
-                    throw new DuplicateTermCodeException(workspaceId, term.code());
-                }
-                throw e;
-            }
-        }
+        funnel.create(new DatasetId(workspaceId.value()), TERMS_GRAPH, subjectIriString, term.code().value(),
+                graph, null,
+                () -> new ResourceAlreadyExistsException(workspaceId, term.id().value()),
+                () -> new DuplicateTermCodeException(workspaceId, term.code()),
+                tx -> tx.add(graphIri, graph));
     }
 
     /**
