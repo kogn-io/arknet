@@ -114,6 +114,28 @@ class RequirementServiceConcurrencyTest {
     }
 
     /**
+     * Same race, exercised via {@code req_update} (issue #162) racing against a concurrent
+     * {@code req_link_term}: correcting a requirement's description must not silently drop a
+     * concurrently linked term.
+     */
+    @Test
+    void updateSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
+        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
+        RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
+                () -> otherCaller.linkTerm(WS, code, "TERM-1"));
+        RequirementService underTest =
+                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+
+        Requirement result = underTest.update(WS, code, null, "Corrected description", null);
+
+        assertEquals("Corrected description", result.description());
+        assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
+        Requirement stored = store.findByCode(WS, code).orElseThrow();
+        assertEquals("Corrected description", stored.description());
+        assertEquals(List.of(new TermRef(TERM_1)), stored.usesTerms());
+    }
+
+    /**
      * A read-modify-write that keeps losing the race on every single attempt (a repository whose
      * {@code compareAndUpdate} always reports a conflict) must fail loudly with {@link
      * RequirementConcurrentlyModifiedException} instead of looping forever.

@@ -20,6 +20,7 @@ import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
+import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
@@ -53,14 +54,24 @@ import de.hauschel.arknet.req.domain.TermRef;
  *
  * <p><strong>Concurrency (issue #108).</strong> {@link #add} retries its next-code computation
  * against a fresh read whenever a concurrent caller claims the same code first, and {@link
- * #setStatus}/{@link #linkTerm} retry their whole read-modify-write round trip via {@link
- * RequirementRepository#compareAndUpdate} whenever a concurrent writer commits in between - see
- * {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed caller; only
- * sustained, pathological contention on the very same requirement surfaces as {@link
- * RequirementConcurrentlyModifiedException}.</p>
+ * #setStatus}/{@link #linkTerm}/{@link #update} retry their whole read-modify-write round trip
+ * via {@link RequirementRepository#compareAndUpdate} whenever a concurrent writer commits in
+ * between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed
+ * caller; only sustained, pathological contention on the very same requirement surfaces as
+ * {@link RequirementConcurrentlyModifiedException}.</p>
+ *
+ * <p><strong>Correction (issue #162).</strong> {@link #update} lets a caller correct a
+ * requirement's title, description and/or acceptance criteria after the fact - e.g. once an
+ * interview sharpens a domain fact the original wording missed. Every argument is optional
+ * ({@code null} leaves that field unchanged); a non-{@code null} value still has to satisfy
+ * {@link Requirement}'s own invariants (non-blank title/description, a non-empty,
+ * duplicate-free acceptance-criteria list), so a caller cannot use {@code update} to put the
+ * requirement into a state {@code req_add} itself could never have created. Status and linked
+ * terms are untouched - {@link #setStatus} and {@link #linkTerm} remain the only way to change
+ * those.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
-        SetRequirementStatus, LinkTerm, ResolveRequirements, GetRequirementSchema {
+        SetRequirementStatus, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops (issue #108).
@@ -172,8 +183,21 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         });
     }
 
+    @Override
+    public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
+            List<String> acceptanceCriteria) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
+        return updateWithOptimisticRetry(workspaceId, code, current -> new Requirement(current.id(), current.code(),
+                title != null ? title : current.title(),
+                description != null ? description : current.description(),
+                current.type(), current.status(), current.priority(), current.motivatedBy(),
+                current.qualityCategory(), current.usesTerms(),
+                acceptanceCriteria != null ? List.copyOf(acceptanceCriteria) : current.acceptanceCriteria()));
+    }
+
     /**
-     * Read-modify-write helper shared by {@link #setStatus} and {@link #linkTerm}: reads the
+     * Read-modify-write helper shared by {@link #setStatus}, {@link #linkTerm} and {@link #update}: reads the
      * current requirement, derives the next state via {@code mutation}, and writes it back via
      * {@link RequirementRepository#compareAndUpdate} - retrying with a fresh read whenever a
      * concurrent writer commits a change in between (issue #108, Befund 1: two parallel
