@@ -29,6 +29,7 @@ import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.domain.Priority;
@@ -103,8 +104,9 @@ public final class KognioRdfRequirementRepositoryFactory {
      */
     public static RequirementRepository over(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        return new KognioRdfRequirementRepository(lifecycle, buildGate(),
-                KognioRdfRequirementRepositoryFactory::isWriteConflict);
+        ShaclWriteGate gate = buildGate();
+        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfRequirementRepositoryFactory::isWriteConflict);
+        return new KognioRdfRequirementRepository(lifecycle, gate, funnel);
     }
 
     /**

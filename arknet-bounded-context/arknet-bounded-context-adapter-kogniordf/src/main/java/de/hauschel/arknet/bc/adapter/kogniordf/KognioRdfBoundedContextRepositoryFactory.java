@@ -25,6 +25,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
+import de.hauschel.arknet.persistence.WriteFunnel;
 
 /**
  * Assembles a {@link KognioRdfBoundedContextRepository} over a concrete kognio-rdf dataset
@@ -70,8 +71,9 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      */
     public static BoundedContextRepository over(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        return new KognioRdfBoundedContextRepository(lifecycle, buildGate(),
+        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(),
                 KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
+        return new KognioRdfBoundedContextRepository(lifecycle, funnel);
     }
 
     /**
@@ -79,8 +81,8 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      * transaction conflict (issue #144, kogn-io/rdf-core#18): a {@link RepositoryException} whose
      * cause chain carries a {@link SailConflictException}. Like {@link #buildGate()}, this method
      * stays the only place in this package naming those RDF4J types (ArchUnit rule 2) - the
-     * method reference passed to {@link KognioRdfBoundedContextRepository} above hands it over as
-     * a technology-neutral {@code Predicate} that references no RDF4J type itself.
+     * method reference passed to the shared {@link WriteFunnel} above hands it over as a
+     * technology-neutral {@code Predicate} that references no RDF4J type itself.
      *
      * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
      * same reason {@link #buildGate()} is.</p>

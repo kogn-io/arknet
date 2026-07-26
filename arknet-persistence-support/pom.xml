@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>arknet-persistence-support</artifactId>
-    <description>Technical support for the kognio-rdf out-adapters: the SHACL write gate (validate-before-commit) including its rejection signal, shared by every bounded context. Not a Shared Kernel - technology lives here, not domain vocabulary.</description>
+    <description>Technical support for the kognio-rdf out-adapters: the SHACL write gate (validate-before-commit) including its rejection signal, and the shared write funnel (the transactional skeleton of every guarded graph write), shared by every bounded context. Not a Shared Kernel - technology lives here, not domain vocabulary.</description>
 
     <dependencies>
         <dependency>
@@ -21,6 +21,10 @@
         <dependency>
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-shacl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

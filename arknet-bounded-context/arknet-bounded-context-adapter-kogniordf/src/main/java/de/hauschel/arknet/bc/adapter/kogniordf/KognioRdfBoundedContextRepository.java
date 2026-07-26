@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -44,6 +43,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.persistence.WriteFunnel;
 
 /**
  * Out-adapter: {@link BoundedContextRepository} backed by the kognio-rdf substrate
@@ -60,30 +60,20 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
  * it never imports RDF4J. The backend ({@link DatasetLifecycle} implementation) is supplied by
  * the composition root.</p>
  *
- * <p><strong>Create vs. update (opaque identity).</strong> {@link #create} and {@link #update}
- * each check whether the subject already exists <em>inside</em> the write transaction (an
- * {@code ASK}) before writing - not via a separate {@code findByCode} call beforehand, which
- * would leave a check-then-act race. {@link #create} rejects an existing subject with
- * {@link ResourceAlreadyExistsException} and, via a second {@code ASK} by
- * {@code dcterms:identifier}, a business-code collision with
- * {@link DuplicateBoundedContextCodeException}; {@link #update} rejects a missing one with
- * {@link BoundedContextNotFoundException} and otherwise replaces the subject's triples
- * wholesale.</p>
+ * <p><strong>Create vs. update (opaque identity).</strong> The transactional mechanics of the
+ * existence check - the in-transaction {@code ASK}, the SHACL gate, the commit-conflict
+ * translation - live in the shared {@link WriteFunnel} (ADR-013), not here. {@link #create}
+ * rejects an existing subject with {@link ResourceAlreadyExistsException} and a business-code
+ * collision (by {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
+ * {@link #update} rejects a missing subject with {@link BoundedContextNotFoundException} and
+ * otherwise replaces the subject's triples wholesale (see {@link #replaceTriples}).</p>
  *
- * <p><strong>The second interleaving (issue #144).</strong> The in-transaction {@code ASK} above
- * catches two callers racing to {@link #create} the same code only when one fully commits before
- * the other's transaction begins. Two <em>genuinely overlapping</em> transactions instead run
- * under the store's {@code SERIALIZABLE} isolation (kogn-io/rdf-core#18): neither sees the
- * other's uncommitted write, both {@code ASK}s pass, and the loser's {@code commit()} itself is
- * rejected as a conflict - surfacing not as {@link DuplicateBoundedContextCodeException} but as
- * the RDF4J-backed store's own commit-time exception. That technology-specific exception must not
- * reach this class (ArchUnit rule 2 in {@code arknet-architecture-tests} - only the
- * {@code *RepositoryFactory} may name RDF4J types), so {@link #isWriteConflict} is a
- * technology-neutral {@link Predicate} the factory builds and injects: this class only ever asks
- * it "was this a write conflict?" and translates a positive answer into the same
- * {@link DuplicateBoundedContextCodeException} the synchronous check throws - so
+ * <p><strong>The second interleaving (issue #144).</strong> {@link WriteFunnel#create} translates
+ * a lost {@code SERIALIZABLE} write conflict on {@link #create} into the same
+ * {@link DuplicateBoundedContextCodeException} its synchronous code check throws - so
  * {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) catches both interleavings the
- * same way, without ever importing an RDF4J type here.</p>
+ * same way. {@link WriteFunnel#update} runs no such translation (see its own javadoc): a conflict
+ * on {@link #update} is not a code collision.</p>
  *
  * <p><strong>Term references arrive pre-resolved (issue #62/#66).</strong> {@link TermRef}
  * carries the term's opaque subject {@link ResourceId} directly - resolving a human-typed term
@@ -95,12 +85,12 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
  * asserted context for it - the plain {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)}
  * suffices.</p>
  *
- * <p><strong>SHACL write-gate.</strong> Every write validates the candidate instance graph
- * against the DDD SHACL shapes via {@link ShaclWriteGate} before starting the write transaction;
- * a violation throws {@link WriteConstraintViolationException} and nothing is persisted.
- * {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning}, not {@code sh:Violation}
- * (issue #66): a store-first bounded context minted during analysis, before tactical design, has
- * no aggregates yet, and that must not block the write.</p>
+ * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
+ * against the DDD SHACL shapes before the write transaction opens, throw
+ * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
+ * {@link WriteFunnel} (ADR-013). {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning},
+ * not {@code sh:Violation} (issue #66): a store-first bounded context minted during analysis,
+ * before tactical design, has no aggregates yet, and that must not block the write.</p>
  *
  * <p><strong>Row multiplication (issue #81).</strong> {@code arknet:subdomain}'s
  * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arknet:ownedBy} carries no
@@ -130,26 +120,21 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String GENERIC_DOMAIN = ARKNET_NAMESPACE + "GenericDomain";
 
     private final DatasetLifecycle lifecycle;
-    private final ShaclWriteGate gate;
-    private final Predicate<RuntimeException> isWriteConflict;
+    private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
-     *                        be {@code null})
-     * @param gate            the SHACL write-gate validating candidate graphs before persistence
-     *                        (must not be {@code null})
-     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
-     *                        class ever naming the RDF4J type itself (must not be {@code null})
+     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - read paths
+     *                  only, the write path goes through {@code funnel} (must not be {@code null})
+     * @param funnel    the shared write funnel (ADR-013) running the SHACL gate, dataset
+     *                  acquisition and existence checks for every {@link #create}/{@link #update}
+     *                  (must not be {@code null})
      */
-    KognioRdfBoundedContextRepository(
-            DatasetLifecycle lifecycle, ShaclWriteGate gate, Predicate<RuntimeException> isWriteConflict) {
+    KognioRdfBoundedContextRepository(DatasetLifecycle lifecycle, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.gate = Objects.requireNonNull(gate, "gate");
-        this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
+        this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
@@ -171,50 +156,24 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         String subjectIriString = boundedContext.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
+        IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            List<IRI> termIris = boundedContext.usesTerms().stream()
-                    .map(this::termIriFor)
-                    .toList();
-            Graph graph = buildCandidateGraph(subjectIri, boundedContext, termIris);
-            gate.enforce(graph);
+        List<IRI> termIris = boundedContext.usesTerms().stream()
+                .map(this::termIriFor)
+                .toList();
+        Graph graph = buildCandidateGraph(subjectIri, boundedContext, termIris);
 
-            String askExists = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " ?p ?o } }";
-            String askCodeExists = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
-                    + "?s <" + IDENTIFIER_PROPERTY + "> \""
-                    + SparqlTerms.escape(boundedContext.code().value()) + "\" } }";
-            IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
-
-            try {
-                handle.transactor().inTransaction(tx -> {
-                    boolean exists = tx.ask(askExists);
-                    if (expectAbsent) {
-                        if (exists) {
-                            throw new ResourceAlreadyExistsException(workspaceId, boundedContext.id().value());
-                        }
-                        // Identity is opaque and unique by construction, but the human-readable
-                        // code is a separate triple this ASK alone cannot rule out - check it
-                        // here, inside the same write transaction, so no other create() can race
-                        // in between.
-                        if (tx.ask(askCodeExists)) {
-                            throw new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code());
-                        }
-                    } else if (!exists) {
-                        throw new BoundedContextNotFoundException(workspaceId, boundedContext.code());
-                    }
-                    replaceTriples(tx, graphIri, subjectIri, subject, graph, exists);
-                    return null;
-                });
-            } catch (RuntimeException e) {
-                // The synchronous ASK above only catches a concurrent create() that already fully
-                // committed; two genuinely overlapping SERIALIZABLE transactions instead surface
-                // here, as the store's own commit-time conflict (issue #144) - translated to the
-                // same signal CodeAssignment's retry already handles.
-                if (expectAbsent && isWriteConflict.test(e)) {
-                    throw new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code());
-                }
-                throw e;
-            }
+        if (expectAbsent) {
+            funnel.create(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
+                    boundedContext.code().value(), graph, null,
+                    () -> new ResourceAlreadyExistsException(workspaceId, boundedContext.id().value()),
+                    () -> new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code()),
+                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
+        } else {
+            funnel.update(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
+                    graph, null,
+                    () -> new BoundedContextNotFoundException(workspaceId, boundedContext.code()),
+                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
         }
     }
 

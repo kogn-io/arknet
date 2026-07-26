@@ -62,7 +62,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * genuinely <em>overlap</em>: both pass the in-transaction {@code ASK} code-uniqueness guard
  * before either commits (neither sees the other's uncommitted write under {@code SERIALIZABLE}
  * isolation, kogn-io/rdf-core#18), and only the second commit is rejected as a conflict - by the
- * store itself, not by the guard. {@link KognioRdfBoundedContextRepository#isWriteConflict}
+ * store itself, not by the guard. The shared {@link de.hauschel.arknet.persistence.WriteFunnel}
  * translates that commit-time rejection into the same {@link
  * de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException} the synchronous guard
  * throws, so {@code CodeAssignment}'s retry (in {@link BoundedContextService#add}) catches this

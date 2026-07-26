@@ -2,7 +2,8 @@
 
 - Status: Accepted (2026-07-15)
 - Verwandt: ADR-006 (generischer Store-Lesepfad -- **gegenteilige Antwort auf dieselbe Frage**),
-  ADR-001 (austauschbarer Store), ADR-005 (Store-first)
+  ADR-001 (austauschbarer Store), ADR-005 (Store-first), ADR-013 (geteilter Schreibtrichter im
+  selben Modul)
 - Issue: #52
 
 ## Kontext
