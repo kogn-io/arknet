@@ -57,6 +57,7 @@ import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
@@ -154,27 +155,24 @@ class KognioRdfTermRepositoryTest {
     }
 
     @Test
-    void updateRejectsAMissingIdentity() {
-        Term neverCreated = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-
+    void updateRejectsAnUnknownCode() {
         assertThrows(TermNotFoundException.class,
-                () -> repository.update(WORKSPACE_A, neverCreated));
+                () -> repository.update(WORKSPACE_A, new TermCode("TERM-1"), "Erstattung", null, null));
         assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
     }
 
     @Test
-    void updateReplacesByIdentityInsteadOfDuplicating() {
-        TermId id = freshId();
+    void updateChangesOnlyTheGivenFieldAndPersistsTheChange() {
         TermCode code = new TermCode("TERM-1");
-        Term original = new Term(id, code, "Gutschrift", "Erste Definition.", null);
-        Term revised = new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null);
+        repository.create(WORKSPACE_A,
+                new Term(freshId(), code, "Gutschrift", "Erste Definition.", null));
 
-        repository.create(WORKSPACE_A, original);
-        repository.update(WORKSPACE_A, revised);
+        Term result = repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
 
-        assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, code));
+        assertEquals("Gutschrift", result.prefLabel());
+        assertEquals("Ueberarbeitete Definition.", result.definition());
+        assertEquals(Optional.of(result), repository.findByCode(WORKSPACE_A, code));
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        assertEquals(revised, repository.findAll(WORKSPACE_A).get(0));
     }
 
     /** The opaque identity is preserved across an update - only the term's state changes. */
@@ -184,70 +182,120 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
 
-        repository.update(WORKSPACE_A, new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null));
+        repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
 
         assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
     }
 
     /**
-     * Issue #114: {@code update()} must reject reusing a code that already belongs to a
-     * <em>different</em> subject, exactly like {@code create()} already does - otherwise
-     * {@code findByCode} ends up with two subjects sharing one {@code dcterms:identifier} and
-     * arbitrarily picks one via {@code .findFirst()}.
+     * Bug 1 (data loss, found reviewing the {@code term_update} PR): a store-first term can
+     * legally carry {@code skos:prefLabel} in several languages (issues #80/#81). Before the fix,
+     * {@code update()} took a full {@link Term} - already collapsed to a single label by whichever
+     * read produced it - and wholesale-replaced the subject's triples with it, silently deleting
+     * every other language variant even when the caller only touched {@code definition}. This
+     * pins the fixed contract directly against the raw store: both original {@code prefLabel}
+     * variants must still be present after an update that never mentions {@code prefLabel} at all.
      */
     @Test
-    void updateRejectsADuplicateCodeUnderADifferentIdentityAndPersistsNothingElse() {
-        Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
-        repository.create(WORKSPACE_A, first);
-        repository.create(WORKSPACE_A, second);
-
-        Term collidingUpdate = new Term(second.id(), new TermCode("TERM-1"), "Bestellung", "def b geaendert", null);
-
-        assertThrows(DuplicateTermCodeException.class,
-                () -> repository.update(WORKSPACE_A, collidingUpdate));
-        assertEquals(Optional.of(first), repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")));
-        assertEquals(Optional.of(second), repository.findByCode(WORKSPACE_A, new TermCode("TERM-2")));
-    }
-
-    /** A term keeping its own existing code across an update must not trip the collision check. */
-    @Test
-    void updateKeepingItsOwnExistingCodeSucceeds() {
+    void updateChangingOnlyDefinitionPreservesEveryPrefLabelLanguageVariant() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        Term original = new Term(id, code, "Gutschrift", "Erste Definition.", null);
-        Term revised = new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null);
-        repository.create(WORKSPACE_A, original);
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Customer\"@en");
 
-        repository.update(WORKSPACE_A, revised);
+        repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
 
-        assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, code));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Kunde", "de"),
+                "the German prefLabel variant must survive an update that never touches prefLabel");
+        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Customer", "en"),
+                "the English prefLabel variant must survive an update that never touches prefLabel");
+        assertEquals("Ueberarbeitete Definition.", repository.findByCode(WORKSPACE_A, code).orElseThrow().definition());
     }
 
     /**
-     * Regression test for the second review pass on #144/PR #147: {@code update()} - unlike
-     * {@code create()} - used to let a genuine store-level write conflict (issue #144,
-     * kogn-io/rdf-core#18) propagate as the raw RDF4J exception instead of translating it into
-     * {@link DuplicateTermCodeException}, even though {@code update()} runs the same
-     * {@code askCodeExists} guard {@code create()} does (issue #114, unlike the req/bc/uc
-     * siblings). No real overlapping threads are needed to prove the translation itself - only
-     * {@link KognioRdfTermRepository#write}'s catch block is under test here, not the store's
-     * {@code SERIALIZABLE} isolation mechanics (those are covered by
-     * {@code TermServiceRealStoreConcurrencyTest}) - so a decorator simply forces the store's
-     * commit-time conflict signal on the next write.
+     * Same bug 1 regression, exercised the way the PR review actually found it: an update that
+     * only touches the Actor facette (never {@code prefLabel} or {@code definition} at all) must
+     * not disturb either of them, including a store-first multi-valued {@code prefLabel}.
      */
     @Test
-    void updateTranslatesAGenuineWriteConflictIntoDuplicateTermCodeException() {
+    void updateChangingOnlyActorFacetPreservesMultiValuedPrefLabelAndDefinition() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Eine Definition.", "\"Kunde\"@de, \"Customer\"@en");
+
+        Term result = repository.update(WORKSPACE_A, code, null, null, new ActorFacet(ActorKind.HUMAN, "Besteller"));
+
+        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Kunde", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Customer", "en"));
+        assertEquals("Eine Definition.", result.definition());
+        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), result.actorFacet());
+    }
+
+    /**
+     * Bug 3 (data loss, found reviewing the same PR): correcting only {@code actorKind} (e.g. a
+     * miscategorised {@code HUMAN} actor that should have been {@code SYSTEM}) without restating
+     * {@code actorRole} must not wipe the role already on record - a {@code null} role means
+     * "unchanged", not "clear", exactly like every other field {@link #update} takes.
+     */
+    @Test
+    void updateChangingOnlyActorKindPreservesTheExistingActorRole() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A,
+                new Term(id, code, "Kunde", "def a", new ActorFacet(ActorKind.HUMAN, "Besteller")));
+
+        Term result = repository.update(WORKSPACE_A, code, null, null, new ActorFacet(ActorKind.SYSTEM, null));
+
+        assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"), result.actorFacet());
+        assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"),
+                repository.findByCode(WORKSPACE_A, code).orElseThrow().actorFacet());
+    }
+
+    /** Explicitly replacing {@code prefLabel} does collapse every prior variant to the one new value. */
+    @Test
+    void updateGivenAPrefLabelReplacesEveryPriorVariantWithTheSingleNewValue() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
+
+        Term result = repository.update(WORKSPACE_A, code, "Bestandskunde", null, null);
+
+        assertEquals("Bestandskunde", result.prefLabel());
+        assertFalse(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Kunde", "de"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Customer", "en"));
+    }
+
+    /**
+     * Bug 2 (concurrency, found reviewing the same PR): a genuine store-level write conflict
+     * (issue #144, kogn-io/rdf-core#18) during {@code update()} must surface as the dedicated
+     * {@link TermConcurrentlyModifiedException} - never as {@link DuplicateTermCodeException},
+     * which {@code update()} can no longer even provoke since it never rewrites
+     * {@code dcterms:identifier}, and never as the raw RDF4J exception. No real overlapping
+     * threads are needed to prove the translation itself - only {@link
+     * KognioRdfTermRepository#update}'s catch block is under test here - so a decorator simply
+     * forces the store's commit-time conflict signal on the next write.
+     */
+    @Test
+    void updateTranslatesAGenuineWriteConflictIntoTermConcurrentlyModifiedException() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
         repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
 
         TermRepository conflicting = KognioRdfTermRepositoryFactory.over(new ConflictingWriteLifecycle(lifecycle));
-        Term revised = new Term(id, code, "Gutschrift", "Ueberarbeitete Definition.", null);
 
-        assertThrows(DuplicateTermCodeException.class, () -> conflicting.update(WORKSPACE_A, revised));
+        assertThrows(TermConcurrentlyModifiedException.class,
+                () -> conflicting.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null));
         assertEquals(Optional.of(new Term(id, code, "Gutschrift", "Erste Definition.", null)),
                 repository.findByCode(WORKSPACE_A, code));
+    }
+
+    /** Whether {@code subjectIri} carries a {@code skos:prefLabel} literal with exactly this value and tag. */
+    private boolean subjectHasLanguageTaggedPrefLabel(WorkspaceId workspaceId, TermId id, String value, String tag) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \""
+                + value + "\"@" + tag + " } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
     }
 
     /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */
@@ -323,8 +371,8 @@ class KognioRdfTermRepositoryTest {
     /**
      * Simulates the store's commit-time write-conflict signal (a {@link RepositoryException}
      * whose cause chain carries a {@link SailConflictException}, issue #144) on the write path's
-     * {@code add} call - the point at which {@link KognioRdfTermRepository#write} has already
-     * passed both in-transaction {@code ASK} guards and is about to persist.
+     * {@code add} call - the point at which {@link KognioRdfTermRepository#update} has already
+     * resolved the subject and is about to persist the patched predicate(s).
      */
     private static final class ConflictingWriteTx implements DatasetTx {
 

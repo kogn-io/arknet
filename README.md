@@ -145,6 +145,7 @@ Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 | Tool | Description |
 |------|-------------|
 | `term_add` | Create a new glossary term (mints a SKOS Concept; optionally markable as an actor via `actorKind`/`actorRole`) |
+| `term_update` | Correct a term's preferred label, definition and/or actor facette, keeping its identity (and all links into it) unchanged (each argument optional, unchanged if omitted) |
 | `term_list` | List all glossary terms |
 | `term_get` | Fetch a single term by identity (e.g. TERM-1) |
 
