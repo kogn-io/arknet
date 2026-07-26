@@ -18,6 +18,7 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
+import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
@@ -25,8 +26,8 @@ import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Driving (in) adapter of the ubiquitous-language component: exposes the glossary
- * use-cases as MCP tools ({@code term_add}, {@code term_list}, {@code term_get})
- * and delegates each tool call to the corresponding in-port.
+ * use-cases as MCP tools ({@code term_add}, {@code term_list}, {@code term_get},
+ * {@code term_update}) and delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the ubiquitous-language hexagon (symmetric to the
  * out-adapter {@code arknet-ubiquitous-language-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -58,25 +59,29 @@ public final class UbiquitousLanguageMcpTools {
     private final AddTerm addTerm;
     private final ListTerms listTerms;
     private final GetTerm getTerm;
+    private final UpdateTerm updateTerm;
     private final WorkspaceResolver workspaces;
 
     /**
-     * Creates the adapter with its three driving in-ports and the resolver that maps each
+     * Creates the adapter with its four driving in-ports and the resolver that maps each
      * call's origin directory to a workspace.
      *
      * @param addTerm     in-port backing {@code term_add}
      * @param listTerms   in-port backing {@code term_list}
      * @param getTerm     in-port backing {@code term_get}
+     * @param updateTerm  in-port backing {@code term_update}
      * @param workspaces  resolves each call's target workspace from its origin directory
      */
     public UbiquitousLanguageMcpTools(
             final AddTerm addTerm,
             final ListTerms listTerms,
             final GetTerm getTerm,
+            final UpdateTerm updateTerm,
             final WorkspaceResolver workspaces) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
+        this.updateTerm = Objects.requireNonNull(updateTerm, "updateTerm");
         this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
     }
 
@@ -138,6 +143,33 @@ public final class UbiquitousLanguageMcpTools {
         return getTerm.get(workspaceId, code)
                 .map(UbiquitousLanguageMcpTools::format)
                 .orElse("Term not found: " + code.value());
+    }
+
+    @McpTool(name = "term_update",
+            description = "Correct an already-created term's preferred label, definition and/or actor facette, "
+                    + "keeping its identity and every existing link into it (e.g. arkreq:usesTerm) unchanged. "
+                    + "Every argument is optional - an omitted one leaves that field unchanged.")
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
+            @McpToolParam(description = "New preferred label (optional, unchanged if omitted)", required = false)
+            final String label,
+            @McpToolParam(description = "New definition (optional, unchanged if omitted)", required = false)
+            final String definition,
+            @McpToolParam(description = "Optional: (re-)mark this term as an actor. Actor kind: HUMAN or SYSTEM. "
+                    + "Leaves an already-set actor facette unchanged if omitted", required = false)
+            final String actorKind,
+            @McpToolParam(description = "Optional: the actor's role in the bounded context "
+                    + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
+            final String actorRole) {
+        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final TermCode code = new TermCode(id);
+        final ActorFacet facet = blankToNull(actorKind) == null
+                ? null
+                : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
+        final Term updated = updateTerm.update(
+                workspaceId, code, blankToNull(label), blankToNull(definition), facet);
+        return format(updated);
     }
 
     private static String format(final Term t) {

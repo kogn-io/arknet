@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -23,6 +24,7 @@ import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
  * Policy tests for {@link TermService}: opaque identity minting, code assignment, listing and
@@ -167,5 +169,84 @@ class TermServiceTest {
         WorkspaceId other = new WorkspaceId("other");
 
         assertEquals(List.of(), service.getById(other, inWs.id().value()));
+    }
+
+    @Test
+    void updateChangesOnlyPrefLabel() {
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+
+        Term updated = service.update(WS, added.code(), "Erstattung", null, null);
+
+        assertEquals("Erstattung", updated.prefLabel());
+        assertEquals("def a", updated.definition());
+    }
+
+    @Test
+    void updateChangesOnlyDefinition() {
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+
+        Term updated = service.update(WS, added.code(), null, "def b", null);
+
+        assertEquals("Gutschrift", updated.prefLabel());
+        assertEquals("def b", updated.definition());
+    }
+
+    @Test
+    void updateChangesOnlyActorFacet() {
+        Term added = service.add(WS, new NewTerm("Kunde", "def a", null));
+        ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
+
+        Term updated = service.update(WS, added.code(), null, null, facet);
+
+        assertEquals("Kunde", updated.prefLabel());
+        assertEquals("def a", updated.definition());
+        assertEquals(facet, updated.actorFacet());
+    }
+
+    @Test
+    void updateWithNullActorFacetLeavesAnAlreadySetOneUnchanged() {
+        ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
+        Term added = service.add(WS, new NewTerm("Kunde", "def a", facet));
+
+        Term updated = service.update(WS, added.code(), "Bestandskunde", null, null);
+
+        assertEquals(facet, updated.actorFacet());
+    }
+
+    @Test
+    void updateChangesAllFieldsAtOnce() {
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        ActorFacet facet = new ActorFacet(ActorKind.SYSTEM, "Zahlungsdienst");
+
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", facet);
+
+        assertEquals("Erstattung", updated.prefLabel());
+        assertEquals("def b", updated.definition());
+        assertEquals(facet, updated.actorFacet());
+    }
+
+    @Test
+    void updateKeepsIdentityAndCodeUnchanged() {
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null);
+
+        assertEquals(added.id(), updated.id());
+        assertEquals(added.code(), updated.code());
+    }
+
+    @Test
+    void updatePersistsTheChange() {
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+
+        service.update(WS, added.code(), "Erstattung", null, null);
+
+        assertEquals("Erstattung", repository.findByCode(WS, added.code()).orElseThrow().prefLabel());
+    }
+
+    @Test
+    void updateThrowsWhenCodeIsUnknown() {
+        assertThrows(TermNotFoundException.class,
+                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null));
     }
 }

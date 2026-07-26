@@ -239,7 +239,7 @@ public class ArknetMcpConfiguration {
     @Bean
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
             final TermService service, final WorkspaceResolver workspaceResolver) {
-        return new UbiquitousLanguageMcpTools(service, service, service, workspaceResolver);
+        return new UbiquitousLanguageMcpTools(service, service, service, service, workspaceResolver);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------

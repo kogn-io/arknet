@@ -15,11 +15,14 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
+import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
  * Application service implementing the glossary-term use cases.
@@ -40,8 +43,15 @@ import de.hauschel.arknet.ul.domain.TermId;
  * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
  * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
  * multi-writer concern (ADR-001).</p>
+ *
+ * <p><strong>Correction (issue #163).</strong> {@link #update} lets a caller correct a term's
+ * preferred label, definition and/or Actor facette after the fact, keeping its identity (and thus
+ * every existing link into it) unchanged. Unlike {@link #add}, {@link TermRepository#update} is a
+ * plain replace-by-identity with no compare-and-update contract, so {@link #update} does not need
+ * {@link #add}'s {@code CodeAssignment} retry apparatus - that only guards the code's
+ * <em>assignment</em>, and a correction never changes the code.</p>
  */
-public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms {
+public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm {
 
     private static final String ID_PREFIX = "TERM";
 
@@ -88,6 +98,21 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
         return repository.findByCode(workspaceId, code);
+    }
+
+    @Override
+    public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+            ActorFacet actorFacet) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
+        Term current = repository.findByCode(workspaceId, code)
+                .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
+        Term updated = new Term(current.id(), current.code(),
+                prefLabel != null ? prefLabel : current.prefLabel(),
+                definition != null ? definition : current.definition(),
+                actorFacet != null ? actorFacet : current.actorFacet());
+        repository.update(workspaceId, updated);
+        return updated;
     }
 
     @Override
