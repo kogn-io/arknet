@@ -46,10 +46,23 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p><strong>Correction (issue #163).</strong> {@link #update} lets a caller correct a term's
  * preferred label, definition and/or Actor facette after the fact, keeping its identity (and thus
- * every existing link into it) unchanged. Unlike {@link #add}, {@link TermRepository#update} is a
- * plain replace-by-identity with no compare-and-update contract, so {@link #update} does not need
+ * every existing link into it) unchanged. Unlike {@link #add}, {@link #update} does not need
  * {@link #add}'s {@code CodeAssignment} retry apparatus - that only guards the code's
  * <em>assignment</em>, and a correction never changes the code.</p>
+ *
+ * <p><strong>{@link #update} is a pure pass-through (issue #163 follow-up).</strong> An earlier
+ * version of this method first read the current term via {@link TermRepository#findByCode} and
+ * folded every omitted ({@code null}) argument's current value into a freshly-built {@link Term}
+ * before handing that merged object to the repository - which, because {@code findByCode} itself
+ * has to collapse a possibly multi-valued {@code skos:prefLabel}/{@code skos:definition} (issues
+ * #80/#81) down to a single value for the {@link Term} projection, meant an update that only
+ * touched {@code actorKind} silently rewrote {@code prefLabel}/{@code definition} down to
+ * whichever one value the read happened to pick - destroying every other language-tagged label or
+ * duplicate definition a store-first term legally carried, even though the caller never asked to
+ * change either field. {@link #update} therefore no longer reads or merges anything: it passes
+ * {@code null}-means-unchanged straight through to {@link TermRepository#update}, which resolves
+ * the term and decides, per predicate, what to leave alone entirely at the triple level - the only
+ * layer that can do so without first collapsing it through {@link Term}.</p>
  */
 public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm {
 
@@ -105,14 +118,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
             ActorFacet actorFacet) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
-        Term current = repository.findByCode(workspaceId, code)
-                .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
-        Term updated = new Term(current.id(), current.code(),
-                prefLabel != null ? prefLabel : current.prefLabel(),
-                definition != null ? definition : current.definition(),
-                actorFacet != null ? actorFacet : current.actorFacet());
-        repository.update(workspaceId, updated);
-        return updated;
+        return repository.update(workspaceId, code, prefLabel, definition, actorFacet);
     }
 
     @Override
