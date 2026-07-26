@@ -17,6 +17,7 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 
 /**
@@ -29,6 +30,14 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * neutral {@link Triple} / {@link RdfNode} model so the snapshot and renderers stay free of
  * backend types. This class depends solely on the technology-neutral kognio-rdf ports, never
  * on RDF4J.</p>
+ *
+ * <p><strong>The provenance graph is excluded from the snapshot.</strong> Every guarded write
+ * also records a PROV-O revision into {@link ArkprovVocabulary#PROVENANCE_GRAPH} (ADR-014),
+ * a trail that grows with every write, forever. The snapshot feeds the store report - a view
+ * of the model, not of its change history - so those statements are filtered out; this is an
+ * infrastructure-graph exclusion, not domain knowledge. The targeted reads
+ * ({@link #outgoing}/{@link #incoming}) stay unfiltered: on a concrete resource, its head
+ * revision is signal, not noise.</p>
  */
 public final class StoreReader {
 
@@ -51,7 +60,14 @@ public final class StoreReader {
      */
     public StoreSnapshot readSnapshot(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        String query = "SELECT DISTINCT ?s ?p ?o WHERE { { ?s ?p ?o } UNION { GRAPH ?g { ?s ?p ?o } } }";
+        // The plain pattern may span every context on some backends (see the DISTINCT note in
+        // StoreReaderTest), so excluding the provenance graph needs both branches guarded: the
+        // GRAPH branch by graph IRI, the plain branch by "this triple only lives in the
+        // provenance graph" (a triple also present in a model graph stays via the GRAPH branch).
+        String provenanceGraph = "<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">";
+        String query = "SELECT DISTINCT ?s ?p ?o WHERE { "
+                + "{ ?s ?p ?o FILTER NOT EXISTS { GRAPH " + provenanceGraph + " { ?s ?p ?o } } } "
+                + "UNION { GRAPH ?g { ?s ?p ?o } FILTER(?g != " + provenanceGraph + ") } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             List<Triple> triples = handle.sparqlQuery().select(query)
                     .map(StoreReader::toTriple)

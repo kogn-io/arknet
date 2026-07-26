@@ -21,6 +21,7 @@ import io.kogn.rdf.dataset.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -106,6 +107,30 @@ class StoreReaderTest {
 
         Set<Triple> distinct = new HashSet<>(outgoing);
         assertThat(outgoing).hasSameSizeAs(distinct);
+    }
+
+    /**
+     * Every guarded write also records a PROV-O revision into the provenance graph (ADR-014),
+     * and that trail grows with every write, forever. The snapshot feeds the store report - a
+     * view of the model, not of its change history - so the provenance graph is excluded from
+     * it, while the targeted reads ({@code outgoing}/{@code incoming}) still reach the head
+     * pointer of a concrete resource.
+     */
+    @Test
+    void readSnapshotExcludesTheProvenanceGraphButOutgoingStillSeesTheHead() {
+        List<Triple> outgoing = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+        assertThat(outgoing)
+                .as("the write in setUp must have recorded a head pointer")
+                .anyMatch(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD));
+
+        StoreSnapshot snapshot = storeReader.readSnapshot(WORKSPACE);
+        List<Triple> triples = snapshot.resources().stream()
+                .flatMap(resource -> resource.outgoing().stream())
+                .toList();
+        assertThat(triples)
+                .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD));
+        assertThat(triples)
+                .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF));
     }
 
     @Test
