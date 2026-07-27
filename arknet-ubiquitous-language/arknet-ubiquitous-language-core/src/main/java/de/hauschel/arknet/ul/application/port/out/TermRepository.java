@@ -80,6 +80,10 @@ public interface TermRepository {
      * discarded. Only once every retry attempt keeps losing the race does
      * {@link TermConcurrentlyModifiedException} reach the caller.</p>
      *
+     * <p>A call with {@code prefLabel}, {@code definition} and {@code actorFacet} all {@code null}
+     * is a no-op: nothing is written, no revision is recorded, and the revision head does not
+     * move.</p>
+     *
      * @param workspaceId the workspace (architecture model) the term lives in
      * @param code        the term's own, unchanged business code - {@code update} never rewrites
      *                    {@code dcterms:identifier}, so this can never itself introduce a code

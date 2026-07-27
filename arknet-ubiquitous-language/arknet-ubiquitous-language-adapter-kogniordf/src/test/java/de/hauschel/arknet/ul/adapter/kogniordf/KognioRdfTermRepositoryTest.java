@@ -924,6 +924,30 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * The complement of the previous test (issue #167 review finding): every field {@code update}
+     * takes is {@code required = false} on the {@code term_update} MCP tool, so a caller can
+     * legally invoke it with nothing but the identifying {@code code}. Such a call must be a true
+     * no-op - no write, no revision, no head movement - exactly like the symmetric guard in
+     * {@code RequirementService#updateWithOptimisticRetry}: a revision documents a model change
+     * (ADR-011/ADR-014), and recording one for an empty patch would both grow the immutable
+     * provenance trail without cause and hand a concurrent CAS writer a spurious conflict.
+     */
+    @Test
+    void updateWithNoFieldsIsANoOpThatRecordsNoRevision() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A,
+                new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        List<String> headAfterCreate = headsOf(id);
+
+        Term result = repository.update(WORKSPACE_A, code, null, null, null);
+
+        assertEquals(1, revisionsOf(id).size(), "a field-less update must record no further revision");
+        assertEquals(headAfterCreate, headsOf(id), "a field-less update must not move the head");
+        assertEquals(new Term(id, code, "Gutschrift", "Erste Definition.", null), result);
+    }
+
+    /**
      * The retry half of ADR-014 decision 4 (issue #167): a concurrent writer that advances the
      * term's shared head between this caller's read and its write must cost the caller nothing.
      * The losing attempt is retried against a fresh read, so both changes survive - the caller's
