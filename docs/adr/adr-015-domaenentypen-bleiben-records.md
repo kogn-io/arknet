@@ -86,7 +86,9 @@ zurueckschreiben, ohne dass der Kern seinen Typ aendert.
    Patch-`update` behoben hat (ein store-first Concept traegt mehrsprachige oder mehrfache
    Literale, die ein einwertiges Feld nicht halten kann). Das graph-backed Objekt war die
    einzige gemessene Bauart, die einen Voll-Snapshot-Merge verlustfrei gemacht haette; mit
-   Entscheidung 1 entfaellt sie, und der Delta-Weg wird verbindlich.
+   Entscheidung 1 entfaellt sie, und der Delta-Weg wird verbindlich. Praezisiert durch ADR-014,
+   Nachtrag 2026-07-27 (#167): gemeint ist oberhalb der Schreibtransaktion, nicht die
+   Hexagon-Schicht; die Schleife wohnt im Out-Adapter.
 
 ## Konsequenzen
 

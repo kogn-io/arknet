@@ -106,7 +106,7 @@ public final class KognioRdfRequirementRepositoryFactory {
         Objects.requireNonNull(lifecycle, "lifecycle");
         ShaclWriteGate gate = buildGate();
         WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfRequirementRepositoryFactory::isWriteConflict);
-        return new KognioRdfRequirementRepository(lifecycle, gate, funnel);
+        return new KognioRdfRequirementRepository(lifecycle, funnel);
     }
 
     /**

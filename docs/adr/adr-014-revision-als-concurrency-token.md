@@ -115,3 +115,53 @@ die Revisions-Mechanik in arknet oder als Hook in kognio-rdf lebt, war offen.
   Revision ist ueberwiegend arknet-Policy auf neutralen Ports; ein Mechanik-/
   Policy-Schnitt lohnt erst mit einem zweiten Konsumenten ausserhalb arknets -- dieselbe
   Abwaegung wie in ADR-013.
+
+## Nachtrag 2026-07-27 (#167): Ort der Retry-Schleife
+
+Entscheidung 4 benennt als Ziel des ul-Feld-Merges den Service. Dieser Teil ihres Wortlauts
+ist zu eng: verlangt ist, dass Lesen und SHACL-Gate vor der Schreibtransaktion liegen statt
+darin -- nicht, dass die Schleife eine bestimmte Hexagon-Schicht bewohnt.
+
+**Praezisierung:** Die Lesen-Mergen-bedingt-Schreiben-Schleife der ul-BC gehoert in den
+Out-Adapter. Der Service reicht die Feld-Delta-Signatur unveraendert durch.
+
+Begruendung: was hier gemerged wird, ist keine Feldrechnung auf einem Domaenenobjekt, sondern
+Graph-Mechanik -- welche Praedikate ersetzt werden, welche unangetastet bleiben, welche dem
+Gate nur behauptet und nie geschrieben werden. ADR-015 Entscheidung 3 weist genau diese
+Bewahrungsarbeit dem Out-Adapter zu, Entscheidung 4 desselben ADR haelt die Feld-Delta-Semantik
+am Out-Port fest. Eine Schleife im Service muesste beides ueber den Port ziehen: das
+Head-Token als Parameter und die Praedikat-Auswahl als Aufrufer-Wissen. Der Port verlore seine
+Feld-Semantik, und der Kern kaeme in Beruehrung mit einer Unterscheidung -- geschrieben gegen
+nur behauptet --, die allein in der RDF-Repraesentation existiert.
+
+ADR-015 Entscheidung 4 spricht vom "Service-seitigen Merge der ul-BC" und uebernimmt damit
+denselben zu engen Wortlaut. Gemeint ist dort die Lage oberhalb der Schreibtransaktion, nicht
+die Hexagon-Schicht; die Delta-Regel, die jene Entscheidung festschreibt, bindet den Merge
+unabhaengig davon, wer ihn ausfuehrt.
+
+Was Entscheidung 4 substanziell fordert, bleibt unberuehrt und gilt: das SHACL-Gate laeuft
+wieder vor der Transaktion, jeder bewachte Schreibpfad laeuft durch den Trichter, und ein
+Head-Mismatch ist in allen Kontexten dasselbe Signalmuster. Die requirements-BC behaelt ihre
+Schleife im Service, weil sie dort eine fachliche Wiederholung des Lesens ist und kein
+Wiederaufbau eines Graph-Patches. Die verbleibende Asymmetrie zwischen den beiden BCs liegt
+damit im Ort der Wiederholung, nicht mehr im Konflikt-Signal -- und sie folgt aus dem
+Zuschnitt des jeweiligen Out-Ports (Replace-by-Identity gegen Feld-Patch), nicht aus einer
+freien Wahl.
+
+## Nachtrag 2026-07-27 (#167): der Head schuetzt nur gegen den Trichter, nicht gegen store-first
+
+Entscheidung 4 degeneriert `RequirementRepository#compareAndUpdate` vom Voll-Snapshot-Vergleich
+zum Head-Vergleich. Das aendert, was der Vergleich erkennt: vorher verglich `compareAndUpdate`
+den kompletten Requirement-Zustand innerhalb der Schreibtransaktion, also auch eine Abweichung,
+die per direktem SPARQL am Store vorgenommen wurde (store-first, ADR-005 nennt den Store den
+primaeren Modellort). Jetzt bewegt ausschliesslich der Trichter den Head; ein store-first
+geaendertes Feld (z.B. `title`) laesst den Head unberuehrt, das nachfolgende `compareAndUpdate`
+sieht keinen Mismatch und die naechste Trichter-Schreibung ueberschreibt den Fremd-Edit
+wortlos.
+
+Das ist keine Fehlimplementierung, sondern die direkte Konsequenz aus Entscheidung 1: der Head
+ist ein Trichter-internes Token, kein Abbild des gesamten Ressourcen-Zustands. Das Token schuetzt
+also den Lost-Update zwischen zwei Trichter-Schreibern -- den Fall, den ADR-011/#108 adressieren
+-- und nicht den Fall eines Schreibers, der den Trichter umgeht. Store-first bleibt der primaere
+Modellort (ADR-005); wer ihn nutzt, gibt fuer per Tool verwaltete Ressourcen den Verlustschutz
+auf, den der Head fuer Tool-Tool-Konflikte bietet.
