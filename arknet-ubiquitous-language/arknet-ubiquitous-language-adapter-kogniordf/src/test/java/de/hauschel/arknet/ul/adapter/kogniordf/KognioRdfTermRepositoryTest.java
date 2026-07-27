@@ -5,6 +5,7 @@ package de.hauschel.arknet.ul.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,6 +18,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -271,9 +273,15 @@ class KognioRdfTermRepositoryTest {
      * {@link TermConcurrentlyModifiedException} - never as {@link DuplicateTermCodeException},
      * which {@code update()} can no longer even provoke since it never rewrites
      * {@code dcterms:identifier}, and never as the raw RDF4J exception. No real overlapping
-     * threads are needed to prove the translation itself - only {@link
-     * KognioRdfTermRepository#update}'s catch block is under test here - so a decorator simply
-     * forces the store's commit-time conflict signal on the next write.
+     * threads are needed - a decorator forces the store's commit-time conflict signal on every
+     * write instead.
+     *
+     * <p>Since issue #167 this is the <em>exhaustion</em> path, not a single catch block: the
+     * decorator fails every attempt, so {@link KognioRdfTermRepository#update}'s bounded retry
+     * loop runs all of its attempts (each one re-reading and re-validating) before the last
+     * conflict reaches the caller. The transient, self-healing case - one losing attempt, then a
+     * successful one - is covered by
+     * {@link #updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead()}.</p>
      */
     @Test
     void updateTranslatesAGenuineWriteConflictIntoTermConcurrentlyModifiedException() {
@@ -372,8 +380,9 @@ class KognioRdfTermRepositoryTest {
     /**
      * Simulates the store's commit-time write-conflict signal (a {@link RepositoryException}
      * whose cause chain carries a {@link SailConflictException}, issue #144) on the write path's
-     * {@code add} call - the point at which {@link KognioRdfTermRepository#update} has already
-     * resolved the subject and is about to persist the patched predicate(s).
+     * {@code add} call - the point at which the funnel has already resolved the subject and
+     * compared the head, and is about to persist the patched predicate(s). Unconditional by
+     * design: every one of {@link KognioRdfTermRepository#update}'s retry attempts loses.
      */
     private static final class ConflictingWriteTx implements DatasetTx {
 
@@ -876,29 +885,172 @@ class KognioRdfTermRepositoryTest {
     // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
 
     /**
-     * ADR-014 revision basis for this bounded context's funnel write path: {@code create}
-     * records exactly one immutable revision and the head is queryable per resource. (The
-     * unmigrated patch-{@code update} special path is deliberately not covered - its revision
-     * recording arrives with its dissolution into the funnel's compare-and-set, ADR-014
-     * decision 4.)
+     * ADR-014 revision basis for this bounded context's funnel write paths: {@code create}
+     * records exactly one immutable revision and the head is queryable per resource.
      */
     @Test
     void createRecordsExactlyOneRevisionWithAQueryableHead() {
         TermId id = freshId();
         repository.create(WORKSPACE_A, new Term(id, new TermCode("TERM-1"), "Gutschrift",
                 "Eine dem Kundenkonto gutgeschriebene Erstattung.", null));
-        String subject = id.value().value();
 
-        List<String> revisions = selectIris("SELECT ?v WHERE { GRAPH <"
-                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
-                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subject + "> } }");
+        List<String> revisions = revisionsOf(id);
         assertEquals(1, revisions.size(), "create must record exactly one revision");
+        assertEquals(revisions, headsOf(id), "the head must point at the sole revision");
+    }
 
-        List<String> heads = selectIris("SELECT ?v WHERE { GRAPH <"
-                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <" + subject + "> <"
-                + ArkprovVocabulary.HEAD + "> ?v } }");
-        assertEquals(revisions, heads, "the head must point at the sole revision");
+    /**
+     * The other half of the same ADR-014 guarantee, for the write path that only joined the
+     * funnel with issue #167 (ADR-014 decision 4): the patch-{@code update} is no longer a
+     * special path outside the revision trail - it records exactly one further revision and
+     * moves the head, so every user-reachable {@code term_update} is now provenanced and its
+     * head usable as the next writer's concurrency token.
+     */
+    @Test
+    void updateRecordsExactlyOneFurtherRevisionAndAdvancesTheHead() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        List<String> headAfterCreate = headsOf(id);
+
+        repository.update(WORKSPACE_A, code, null, "Zweite Definition.", null);
+
+        List<String> revisions = revisionsOf(id);
+        assertEquals(2, revisions.size(), "update must record exactly one more revision");
+        List<String> heads = headsOf(id);
+        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
+        assertNotEquals(headAfterCreate, heads, "the head must advance to the update's revision");
+        assertTrue(revisions.contains(heads.get(0)), "the head must be one of the term's revisions");
+    }
+
+    /**
+     * The retry half of ADR-014 decision 4 (issue #167): a concurrent writer that advances the
+     * term's shared head between this caller's read and its write must cost the caller nothing.
+     * The losing attempt is retried against a fresh read, so both changes survive - the caller's
+     * own patched predicate and the other writer's change to a <em>different</em> predicate,
+     * which the pre-#167 predicate-scoped conflict detection would not even have noticed.
+     *
+     * <p>The interleaving is pinned by a decorator that lets exactly one other write commit right
+     * before the funnel's compare-and-set transaction opens, rather than by real threads, which
+     * would make this flaky. The proof that the retry actually re-read: {@code update} builds its
+     * return value from the state it read <em>before</em> the write, so a caller that never
+     * re-read would return the pre-race definition and disagree with the store.</p>
+     */
+    @Test
+    void updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        TermRepository racing = KognioRdfTermRepositoryFactory.over(
+                new HeadAdvancingLifecycle(lifecycle, () -> {
+                    if (pending.compareAndSet(true, false)) {
+                        repository.update(WORKSPACE_A, code, null, "Definition des Konkurrenten.", null);
+                    }
+                }));
+
+        Term result = racing.update(WORKSPACE_A, code, "Gutschriftsbeleg", null, null);
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        Term expected = new Term(id, code, "Gutschriftsbeleg", "Definition des Konkurrenten.", null);
+        assertEquals(expected, result, "the retry must return the state it re-read, not its stale first read");
+        assertEquals(Optional.of(expected), repository.findByCode(WORKSPACE_A, code),
+                "both writers' changes must survive - neither patch is silently lost");
+        assertEquals(3, revisionsOf(id).size(),
+                "create, the concurrent update and the retried update - the losing attempt records none");
+        assertTrue(revisionsOf(id).contains(headsOf(id).get(0)), "the head must be one of the term's revisions");
+    }
+
+    /**
+     * Wraps a real {@link DatasetLifecycle} and runs {@code beforeTransaction} right before every
+     * write transaction opens - the exact point at which a concurrent writer's commit turns this
+     * caller's already-taken read (state plus {@code arkprov:head}) stale. The one-shot guard
+     * lives in the {@link Runnable} the test supplies, so a retried attempt runs unimpeded.
+     */
+    private static final class HeadAdvancingLifecycle implements DatasetLifecycle {
+
+        private final DatasetLifecycle delegate;
+        private final Runnable beforeTransaction;
+
+        HeadAdvancingLifecycle(DatasetLifecycle delegate, Runnable beforeTransaction) {
+            this.delegate = delegate;
+            this.beforeTransaction = beforeTransaction;
+        }
+
+        @Override
+        public DatasetHandle acquire(DatasetId id) {
+            return new HeadAdvancingHandle(delegate.acquire(id), beforeTransaction);
+        }
+
+        @Override
+        public void close(DatasetId id) {
+            delegate.close(id);
+        }
+
+        @Override
+        public void delete(DatasetId id) {
+            delegate.delete(id);
+        }
+
+        @Override
+        public Set<DatasetId> list() {
+            return delegate.list();
+        }
+    }
+
+    private static final class HeadAdvancingHandle implements DatasetHandle {
+
+        private final DatasetHandle delegate;
+        private final Runnable beforeTransaction;
+
+        HeadAdvancingHandle(DatasetHandle delegate, Runnable beforeTransaction) {
+            this.delegate = delegate;
+            this.beforeTransaction = beforeTransaction;
+        }
+
+        @Override
+        public GraphStore graphStore() {
+            return delegate.graphStore();
+        }
+
+        @Override
+        public SparqlQuery sparqlQuery() {
+            return delegate.sparqlQuery();
+        }
+
+        @Override
+        public SparqlUpdate sparqlUpdate() {
+            return delegate.sparqlUpdate();
+        }
+
+        @Override
+        public DatasetTransactor transactor() {
+            DatasetTransactor real = delegate.transactor();
+            return new DatasetTransactor() {
+                @Override
+                public <T> T inTransaction(Function<DatasetTx, T> fn) {
+                    beforeTransaction.run();
+                    return real.inTransaction(fn);
+                }
+            };
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+    }
+
+    private List<String> revisionsOf(TermId id) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
+                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + id.value().value() + "> } }");
+    }
+
+    private List<String> headsOf(TermId id) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
     }
 
     private List<String> selectIris(String query) {

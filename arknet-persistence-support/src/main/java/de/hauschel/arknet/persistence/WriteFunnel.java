@@ -5,7 +5,6 @@ package de.hauschel.arknet.persistence;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -310,12 +309,13 @@ public final class WriteFunnel {
                     if (!tx.ask(askExists)) {
                         throw notFound.get();
                     }
-                    String currentHead = readHead(tx, subjectIri).map(IRI::getIRIString).orElse(null);
-                    if (!Objects.equals(currentHead, expectedHead)) {
+                    Optional<IRI> currentHead = readHead(tx, subjectIri);
+                    String currentHeadIri = currentHead.map(IRI::getIRIString).orElse(null);
+                    if (!Objects.equals(currentHeadIri, expectedHead)) {
                         throw headMismatch.get();
                     }
                     body.accept(tx);
-                    recordRevision(tx, subjectIri);
+                    recordRevision(tx, subjectIri, currentHead);
                     return null;
                 });
             } catch (RuntimeException e) {
@@ -332,17 +332,27 @@ public final class WriteFunnel {
      * {@code arkprov:Revision} entity chained to the superseded head via
      * {@code prov:wasRevisionOf}, and the rewritten {@code arkprov:head} pointer - all inside
      * the caller's still-open write transaction, so the revision commits or aborts with the
-     * model write. Runs after the {@code body} so a failing body never reaches it.
+     * model write. Runs after the {@code body} so a failing body never reaches it. Reads the
+     * current head itself; used by {@link #create} and {@link #update}, which have not read it
+     * beforehand.
      */
     private void recordRevision(DatasetTx tx, String subjectIri) {
+        recordRevision(tx, subjectIri, readHead(tx, subjectIri));
+    }
+
+    /**
+     * Same as {@link #recordRevision(DatasetTx, String)}, but takes the current head as already
+     * read by the caller instead of reading it again - used by {@link #compareAndUpdate}, whose
+     * CAS check already read it in the same transaction, saving a second {@code SELECT} for the
+     * same value.
+     */
+    private void recordRevision(DatasetTx tx, String subjectIri, Optional<IRI> previousHead) {
         String subject = SparqlTerms.iriRef(subjectIri);
-        Optional<IRI> previousHead = readHead(tx, subjectIri);
         if (previousHead.isPresent()) {
             String headPattern = "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                     + subject + " <" + ArkprovVocabulary.HEAD + "> ?head }";
             tx.update("DELETE WHERE { " + headPattern + " }");
         }
-        List<IRI> previousHeads = previousHead.map(List::of).orElseGet(List::of);
 
         IRI revision = rdf.createIRI(REVISION_IRI_BASE + UUID.randomUUID());
         IRI activity = rdf.createIRI(ACTIVITY_IRI_BASE + UUID.randomUUID());
@@ -356,9 +366,8 @@ public final class WriteFunnel {
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_GENERATED_BY), activity);
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.GENERATED_AT_TIME),
                 rdf.createLiteral(Instant.now(clock).toString(), VocabXsd.DATETIME));
-        for (IRI predecessor : previousHeads) {
-            provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), predecessor);
-        }
+        previousHead.ifPresent(predecessor ->
+                provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), predecessor));
         provenance.add(resource, rdf.createIRI(ArkprovVocabulary.HEAD), revision);
         tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), provenance);
     }
