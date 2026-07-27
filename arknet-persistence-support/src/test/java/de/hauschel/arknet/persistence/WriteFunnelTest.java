@@ -257,7 +257,8 @@ class WriteFunnelTest {
         fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, head,
                 candidate(), null, Signals::unexpected, Signals::unexpected, bodyCalls::add);
 
-        assertEquals(List.of(ASK_SUBJECT), fixture.tx.askQueries, "compareAndUpdate runs no code check");
+        assertEquals(1, fixture.tx.containsCalls.size(), "compareAndUpdate runs no code check");
+        assertSubjectExistenceCheck(fixture.tx.containsCalls.get(0), GRAPH_IRI, SUBJECT_IRI);
         assertEquals(1, bodyCalls.size());
         assertTrue(fixture.handle.closed);
     }

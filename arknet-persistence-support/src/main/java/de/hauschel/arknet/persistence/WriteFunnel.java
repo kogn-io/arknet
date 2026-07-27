@@ -311,12 +311,13 @@ public final class WriteFunnel {
 
         enforceGate(candidate, assertedContext);
 
-        String askExists = askSubjectExists(graphIri, subjectIri);
+        IRI graph = rdf.createIRI(graphIri);
+        IRI subject = rdf.createIRI(subjectIri);
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             try {
                 handle.transactor().inTransaction(tx -> {
-                    if (!tx.ask(askExists)) {
+                    if (!tx.contains(graph, subject, null, null)) {
                         throw notFound.get();
                     }
                     Optional<IRI> currentHead = readHead(tx, subjectIri);

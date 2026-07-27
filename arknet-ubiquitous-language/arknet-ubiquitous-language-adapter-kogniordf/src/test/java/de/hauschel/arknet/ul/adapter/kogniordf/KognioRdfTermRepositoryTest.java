@@ -1225,13 +1225,30 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
+                public Stream<BindingSet> select(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                    List<BindingSet> rows = real.select(sparql, bindings).toList();
+                    afterSelect.run();
+                    return rows.stream();
+                }
+
+                @Override
                 public ReadableGraph construct(String sparql) {
                     return real.construct(sparql);
                 }
 
                 @Override
+                public ReadableGraph construct(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                    return real.construct(sparql, bindings);
+                }
+
+                @Override
                 public boolean ask(String sparql) {
                     return real.ask(sparql);
+                }
+
+                @Override
+                public boolean ask(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                    return real.ask(sparql, bindings);
                 }
             };
         }
