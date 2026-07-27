@@ -64,7 +64,9 @@ arknet:Subdomain
 
 arknet:SubdomainType
     a owl:Class ;
-    rdfs:label "Subdomain Type"@en .
+    rdfs:label "Subdomain Type"@en ;
+    rdfs:comment "The category of strategic classification for a subdomain: core, supporting, or generic."@en ,
+                 "Die Kategorie der strategischen Einordnung einer Teildomaene: Core, Supporting oder Generic."@de .
 
 arknet:CoreDomain
     a owl:NamedIndividual , arknet:SubdomainType ;
@@ -105,7 +107,9 @@ arknet:ContextRelationship
 
 arknet:RelationshipType
     a owl:Class ;
-    rdfs:label "Relationship Type"@en .
+    rdfs:label "Relationship Type"@en ;
+    rdfs:comment "The kind of integration relationship between two bounded contexts, following DDD context mapping patterns."@en ,
+                 "Die Art der Integrationsbeziehung zwischen zwei Bounded Contexts nach den DDD-Context-Mapping-Mustern."@de .
 
 arknet:Partnership
     a owl:NamedIndividual , arknet:RelationshipType ;
@@ -159,7 +163,9 @@ arknet:name
 arknet:description
     a owl:DatatypeProperty ;
     rdfs:range   xsd:string ;
-    rdfs:label   "description"@en .
+    rdfs:label   "description"@en ;
+    rdfs:comment "A free-text description of a concept."@en ,
+                 "Eine Freitext-Beschreibung eines Konzepts."@de .
 
 arknet:domainVision
     a owl:DatatypeProperty ;
@@ -193,26 +199,34 @@ arknet:partOf
     a owl:ObjectProperty ;
     rdfs:domain  arknet:BoundedContext ;
     rdfs:range   arknet:Domain ;
-    rdfs:label   "part of"@en .
+    rdfs:label   "part of"@en ;
+    rdfs:comment "The domain this bounded context is part of."@en ,
+                 "Die Domaene, zu der dieser Bounded Context gehoert."@de .
 
 arknet:hasContext
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Domain ;
     rdfs:range   arknet:BoundedContext ;
     rdfs:label   "has context"@en ;
+    rdfs:comment "A bounded context that is part of this domain. Inverse of partOf."@en ,
+                 "Ein Bounded Context, der zu dieser Domaene gehoert. Inverse von partOf."@de ;
     owl:inverseOf arknet:partOf .
 
 arknet:hasSubdomain
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Domain ;
     rdfs:range   arknet:Subdomain ;
-    rdfs:label   "has subdomain"@en .
+    rdfs:label   "has subdomain"@en ;
+    rdfs:comment "A subdomain that is part of this domain."@en ,
+                 "Eine Teildomaene, die zu dieser Domaene gehoert."@de .
 
 arknet:hasRelationship
     a owl:ObjectProperty ;
     rdfs:domain  arknet:ContextMap ;
     rdfs:range   arknet:ContextRelationship ;
-    rdfs:label   "has relationship"@en .
+    rdfs:label   "has relationship"@en ;
+    rdfs:comment "A context relationship that is part of this context map."@en ,
+                 "Eine Kontextbeziehung, die Teil dieser Kontextkarte ist."@de .
 
 arknet:upstream
     a owl:ObjectProperty ;
@@ -232,7 +246,9 @@ arknet:relationshipType
     a owl:ObjectProperty ;
     rdfs:domain  arknet:ContextRelationship ;
     rdfs:range   arknet:RelationshipType ;
-    rdfs:label   "relationship type"@en .
+    rdfs:label   "relationship type"@en ;
+    rdfs:comment "The relationship type that classifies this context relationship."@en ,
+                 "Der Beziehungstyp, der diese Kontextbeziehung klassifiziert."@de .
 
 
 ##############################################################################
@@ -317,7 +333,9 @@ arknet:hasAggregate
     a owl:ObjectProperty ;
     rdfs:domain  arknet:BoundedContext ;
     rdfs:range   arknet:Aggregate ;
-    rdfs:label   "has aggregate"@en .
+    rdfs:label   "has aggregate"@en ;
+    rdfs:comment "An aggregate that belongs to this bounded context."@en ,
+                 "Ein Aggregate, das zu diesem Bounded Context gehoert."@de .
 
 arknet:aggregateRoot
     a owl:ObjectProperty ;
@@ -330,31 +348,41 @@ arknet:hasEntity
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Aggregate ;
     rdfs:range   arknet:Entity ;
-    rdfs:label   "has entity"@en .
+    rdfs:label   "has entity"@en ;
+    rdfs:comment "An entity that is part of this aggregate."@en ,
+                 "Eine Entity, die Teil dieses Aggregates ist."@de .
 
 arknet:hasValueObject
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Aggregate ;
     rdfs:range   arknet:ValueObject ;
-    rdfs:label   "has value object"@en .
+    rdfs:label   "has value object"@en ;
+    rdfs:comment "A value object that is part of this aggregate."@en ,
+                 "Ein Value Object, das Teil dieses Aggregates ist."@de .
 
 arknet:hasEvent
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Aggregate ;
     rdfs:range   arknet:DomainEvent ;
-    rdfs:label   "has event"@en .
+    rdfs:label   "has event"@en ;
+    rdfs:comment "A domain event raised by this aggregate."@en ,
+                 "Ein Domain Event, das von diesem Aggregate ausgeloest wird."@de .
 
 arknet:hasCommand
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Aggregate ;
     rdfs:range   arknet:Command ;
-    rdfs:label   "has command"@en .
+    rdfs:label   "has command"@en ;
+    rdfs:comment "A command handled by this aggregate."@en ,
+                 "Ein Command, das von diesem Aggregate behandelt wird."@de .
 
 arknet:hasInvariant
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Aggregate ;
     rdfs:range   arknet:Invariant ;
-    rdfs:label   "has invariant"@en .
+    rdfs:label   "has invariant"@en ;
+    rdfs:comment "An invariant that must always hold within this aggregate."@en ,
+                 "Eine Invariante, die innerhalb dieses Aggregates immer gelten muss."@de .
 
 arknet:invariantExpression
     a owl:DatatypeProperty ;
@@ -367,31 +395,41 @@ arknet:triggeredBy
     a owl:ObjectProperty ;
     rdfs:domain  arknet:DomainEvent ;
     rdfs:range   arknet:Command ;
-    rdfs:label   "triggered by"@en .
+    rdfs:label   "triggered by"@en ;
+    rdfs:comment "The command that triggered this domain event."@en ,
+                 "Das Command, das dieses Domain Event ausgeloest hat."@de .
 
 arknet:triggers
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Command ;
     rdfs:range   arknet:DomainEvent ;
-    rdfs:label   "triggers"@en .
+    rdfs:label   "triggers"@en ;
+    rdfs:comment "The domain event triggered by this command."@en ,
+                 "Das Domain Event, das durch dieses Command ausgeloest wird."@de .
 
 arknet:reactsTo
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Policy ;
     rdfs:range   arknet:DomainEvent ;
-    rdfs:label   "reacts to"@en .
+    rdfs:label   "reacts to"@en ;
+    rdfs:comment "The domain event this policy reacts to."@en ,
+                 "Das Domain Event, auf das diese Policy reagiert."@de .
 
 arknet:issues
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Policy ;
     rdfs:range   arknet:Command ;
-    rdfs:label   "issues"@en .
+    rdfs:label   "issues"@en ;
+    rdfs:comment "The command issued by this policy in reaction to an event."@en ,
+                 "Das Command, das diese Policy als Reaktion auf ein Event ausloest."@de .
 
 arknet:handledBy
     a owl:ObjectProperty ;
     rdfs:domain  arknet:Command ;
     rdfs:range   arknet:Aggregate ;
-    rdfs:label   "handled by"@en .
+    rdfs:label   "handled by"@en ;
+    rdfs:comment "The aggregate that handles this command."@en ,
+                 "Das Aggregate, das dieses Command behandelt."@de .
 
 arknet:publishedTo
     a owl:ObjectProperty ;
@@ -414,12 +452,16 @@ arknet:since
 arknet:deprecated
     a owl:DatatypeProperty ;
     rdfs:range   xsd:boolean ;
-    rdfs:label   "deprecated"@en .
+    rdfs:label   "deprecated"@en ;
+    rdfs:comment "Marks this concept as deprecated."@en ,
+                 "Markiert dieses Konzept als veraltet."@de .
 
 arknet:externalDoc
     a owl:DatatypeProperty ;
     rdfs:range   xsd:anyURI ;
-    rdfs:label   "external documentation"@en .
+    rdfs:label   "external documentation"@en ;
+    rdfs:comment "A link to external documentation for this concept."@en ,
+                 "Ein Verweis auf externe Dokumentation zu diesem Konzept."@de .
 
 arknet:ownedBy
     a owl:DatatypeProperty ;

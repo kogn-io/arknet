@@ -79,7 +79,9 @@ arkarch:describes a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDescription ;
     rdfs:range  arkarch:Architecture ;
     a owl:FunctionalProperty ;
-    rdfs:label  "describes"@en .
+    rdfs:label  "describes"@en ;
+    rdfs:comment "The architecture this architecture description describes."@en ,
+                 "Die Architektur, die diese Architekturbeschreibung beschreibt."@de .
 
 arkarch:hasDomain a owl:ObjectProperty ;
     rdfs:domain arkarch:Architecture ;
@@ -90,17 +92,23 @@ arkarch:hasDomain a owl:ObjectProperty ;
 arkarch:hasStakeholder a owl:ObjectProperty ;
     rdfs:domain arkarch:Architecture ;
     rdfs:range  arkarch:Stakeholder ;
-    rdfs:label  "has stakeholder"@en .
+    rdfs:label  "has stakeholder"@en ;
+    rdfs:comment "A stakeholder with an interest in this architecture."@en ,
+                 "Ein Stakeholder mit Interesse an dieser Architektur."@de .
 
 arkarch:hasView a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDescription ;
     rdfs:range  arkarch:View ;
-    rdfs:label  "has view"@en .
+    rdfs:label  "has view"@en ;
+    rdfs:comment "A view that is part of this architecture description."@en ,
+                 "Eine View, die Teil dieser Architekturbeschreibung ist."@de .
 
 arkarch:hasADR a owl:ObjectProperty ;
     rdfs:domain arkarch:Architecture ;
     rdfs:range  arkarch:ArchitectureDecisionRecord ;
-    rdfs:label  "has ADR"@en .
+    rdfs:label  "has ADR"@en ;
+    rdfs:comment "An architecture decision record made for this architecture."@en ,
+                 "Eine Architekturentscheidung, die fuer diese Architektur getroffen wurde."@de .
 
 
 ##############################################################################
@@ -124,7 +132,9 @@ arkarch:Concern a owl:Class ;
 arkarch:hasConcern a owl:ObjectProperty ;
     rdfs:domain arkarch:Stakeholder ;
     rdfs:range  arkarch:Concern ;
-    rdfs:label  "has concern"@en .
+    rdfs:label  "has concern"@en ;
+    rdfs:comment "A concern held by this stakeholder."@en ,
+                 "Ein Anliegen, das dieser Stakeholder hat."@de .
 
 arkarch:concernMotivates a owl:ObjectProperty ;
     rdfs:domain arkarch:Concern ;
@@ -181,7 +191,9 @@ arkarch:conformsToViewpoint a owl:ObjectProperty ;
     rdfs:domain arkarch:View ;
     rdfs:range  arkarch:Viewpoint ;
     a owl:FunctionalProperty ;
-    rdfs:label  "conforms to viewpoint"@en .
+    rdfs:label  "conforms to viewpoint"@en ;
+    rdfs:comment "The viewpoint this view conforms to."@en ,
+                 "Der Viewpoint, dem diese View entspricht."@de .
 
 arkarch:addresses a owl:ObjectProperty ;
     rdfs:domain arkarch:View ;
@@ -234,7 +246,9 @@ arkarch:adrAlternatives a owl:DatatypeProperty ;
 arkarch:decisionDate a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  xsd:date ;
-    rdfs:label  "decision date"@en .
+    rdfs:label  "decision date"@en ;
+    rdfs:comment "The date on which this decision was made."@en ,
+                 "Das Datum, an dem diese Entscheidung getroffen wurde."@de .
 
 # -- ADR relationships -------------------------------------------------------
 
@@ -248,7 +262,9 @@ arkarch:supersededBy a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  arkarch:ArchitectureDecisionRecord ;
     owl:inverseOf arkarch:supersedes ;
-    rdfs:label  "superseded by"@en .
+    rdfs:label  "superseded by"@en ;
+    rdfs:comment "The newer decision that replaces this one. Inverse of supersedes."@en ,
+                 "Die neuere Entscheidung, die diese ersetzt. Inverse von supersedes."@de .
 
 arkarch:relatedTo a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
@@ -302,7 +318,9 @@ arkarch:adrStatus a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  arkarch:ADRStatus ;
     a owl:FunctionalProperty ;
-    rdfs:label  "status"@en .
+    rdfs:label  "status"@en ;
+    rdfs:comment "The current lifecycle status of this architecture decision record."@en ,
+                 "Der aktuelle Lebenszyklus-Status dieser Architekturentscheidung."@de .
 
 
 ##############################################################################
