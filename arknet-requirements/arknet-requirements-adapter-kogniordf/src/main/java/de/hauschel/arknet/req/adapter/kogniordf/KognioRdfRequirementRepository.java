@@ -277,7 +277,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * (identifier, type, title, description, status), one or more mandatory
      * {@code arkreq:acceptanceCriterion} literals, up to three optional triples ({@code priority},
      * {@code motivatedBy}, {@code qualityCategory}), and zero or more {@code arkreq:usesTerm}
-     * edges to {@code termIris}. Shared by {@link #write} and {@link #compareAndUpdate} so both
+     * edges to {@code termIris}. Shared by {@link #create} and {@link #compareAndUpdate} so both
      * write paths serialise a {@link Requirement} identically.
      */
     private Graph buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris) {
@@ -309,7 +309,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
-     * transaction - the tail shared by {@link #write} and {@link #compareAndUpdate} once each has
+     * transaction - the tail shared by {@link #create} and {@link #compareAndUpdate} once each has
      * decided (via its own existence/comparison check) that the write should proceed.
      *
      * <p>Reduced complement (issue #77) of what {@link #readUsesTerms} can now read: since reading
@@ -446,14 +446,22 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Reads a requirement's current state together with its concurrency token in one query
-     * (issue #167) - the head must come from the exact same read as the state it accompanies, so
-     * {@link RequirementRepository#compareAndUpdate}'s caller can trust the two are still
-     * consistent with each other. Builds the {@link Requirement} the same way {@link #findByCode}
-     * does - both call {@link #requirementOf} on their row, so the two read paths cannot drift
-     * apart field-by-field the way two near-identical read paths in this class already did twice
-     * before (issues #80/#81) - plus one {@code OPTIONAL} join into
-     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head.
+     * Reads a requirement's current state together with its concurrency token. Only the row built
+     * from {@link #requirementByCodeWhereClause} (the core fields) plus the head itself come from
+     * this method's one query (issue #167) - {@link #requirementOf} then issues two further,
+     * independent queries, via {@link #readUsesTerms} and {@link #readAcceptanceCriteria}, to fill
+     * in {@code usesTerms} and {@code acceptanceCriteria}. This is still safe because of the
+     * order, not because everything is one query: the head is read first, so it is never fresher
+     * than any part of the state it is paired with - a concurrent funnel write landing between the
+     * queries moves the head, so {@link RequirementRepository#compareAndUpdate} then fails its
+     * comparison and the caller re-reads instead of silently overwriting a state it never actually
+     * saw. Reading the head later, or joining any field before it, would risk the opposite - a
+     * fresh head paired with a stale state, reopening the lost-update race this method exists to
+     * close. Builds the {@link Requirement} the same way {@link #findByCode} does - both call
+     * {@link #requirementOf} on their row, so the two read paths cannot drift apart field-by-field
+     * the way two near-identical read paths in this class already did twice before (issues
+     * #80/#81) - plus one {@code OPTIONAL} join into {@link ArkprovVocabulary#PROVENANCE_GRAPH}
+     * for the head.
      */
     @Override
     public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
@@ -690,18 +698,19 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
      * node - which {@link de.hauschel.arknet.kernel.ResourceId} cannot represent. The
      * {@code FILTER(isIRI(?term))} below excludes exactly that case; {@link
-     * Requirement#usesTerms()} never reflects such an edge. {@link #write} nonetheless survives
-     * it: on an update it separately queries, inside the same write transaction, for exactly the
-     * edges that are not IRIs and re-attaches them after rewriting the subject's triples (issue
-     * #65) - so a read-modify-write ({@code req_set_status}, {@code req_link_term}) carries the
-     * dropped edge along instead of erasing it. Every edge written through {@code req_link_term}
-     * targets a resolved subject IRI by construction, so this cannot bite via the MCP tools.</p>
+     * Requirement#usesTerms()} never reflects such an edge. {@link #replaceTriples}, reached via
+     * {@link #compareAndUpdate}, nonetheless survives it: when {@code exists} it separately
+     * queries, inside the same write transaction, for exactly the edges that are not IRIs and
+     * re-attaches them after rewriting the subject's triples (issue #65) - so a read-modify-write
+     * ({@code req_set_status}, {@code req_link_term}) carries the dropped edge along instead of
+     * erasing it. Every edge written through {@code req_link_term} targets a resolved subject IRI
+     * by construction, so this cannot bite via the MCP tools.</p>
      *
      * <p><strong>The "identifier but no {@code skos:Concept} type" category is gone (issue
      * #77).</strong> While this read still joined the terms graph by {@code dcterms:identifier},
      * a target carrying an identifier but not the type bound a row here, yet the resolution query
-     * demanded the type and so rejected, on the next {@link #update}, the very {@link TermRef}
-     * this read had produced - the requirement became unwritable, and #65 could not preserve the
+     * demanded the type and so rejected, on the next {@link #compareAndUpdate}, the very
+     * {@link TermRef} this read had produced - the requirement became unwritable, and #65 could not preserve the
      * edge because the read did bind it. Carrying identity removes that mismatch at its root
      * rather than reconciling it: there is no second query stating a different condition, because
      * there is no resolution on the read path at all.</p>

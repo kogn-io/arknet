@@ -95,10 +95,18 @@ public interface RequirementRepository {
 
     /**
      * Reads a requirement's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014), in one read -
-     * the head must come from the exact same read as the state it accompanies, or a caller could
-     * not tell whether the two are still consistent with each other. Backs the read side of the
-     * read-modify-write round trip {@link #compareAndUpdate} guards the write side of.
+     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). Only the core
+     * fields (type, title, description, status, priority, motivatedBy, qualityCategory) and the
+     * head itself are guaranteed to come from one read; {@code usesTerms} and
+     * {@code acceptanceCriteria} are filled in by separate, independent follow-up reads. This is
+     * still safe because of the order: the head is read first, so it is never fresher than any
+     * part of the state it is paired with - a concurrent funnel write landing between the reads
+     * moves the head, so the subsequent {@link #compareAndUpdate} then fails its comparison and
+     * the caller re-reads instead of overwriting a state it never actually saw. The pairing is
+     * deliberately conservative, never optimistic; reading the head later, or any field before it,
+     * would risk the opposite - a fresh head paired with stale state, reopening the lost-update
+     * race this method exists to close. Backs the read side of the read-modify-write round trip
+     * {@link #compareAndUpdate} guards the write side of.
      *
      * @param workspaceId the workspace (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
