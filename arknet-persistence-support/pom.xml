@@ -26,15 +26,25 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset</artifactId>
         </dependency>
+        <!-- DatasetLifecycle/DatasetHandle/DatasetId live in this dedicated hosting port module
+             since kognio-rdf 0.2.x (#173); DatasetTx (used above) stays in rdf-dataset. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- compile-Scope (nicht mehr nur test): das Write-Gate waehlt die Sprache der
+             Verletzungsmeldung ueber DisplayLocale, seit io.kogn.rdf 0.2.0 jede sh:message
+             mit ihrem Sprachtag ausliefert (kogn-io/rdf-core#20). Der Kernel ist
+             dependency-frei, zieht also nichts nach; ADR-007s Trennung bleibt intakt, denn
+             sie richtet sich gegen den Merge von Gate und Kernel, nicht gegen diese Kante. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-shared-kernel</artifactId>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

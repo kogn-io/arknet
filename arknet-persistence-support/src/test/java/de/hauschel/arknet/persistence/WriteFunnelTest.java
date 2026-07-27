@@ -6,6 +6,7 @@ package de.hauschel.arknet.persistence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,19 +26,22 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
+import io.kogn.rdf.shacl.ShaclMessage;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclResult;
 import io.kogn.rdf.shacl.ShaclValidation;
 import io.kogn.rdf.shacl.Severity;
 import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -49,26 +53,24 @@ import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
+
 /**
  * Unit test for the shared {@link WriteFunnel}.
  *
  * <p>Drives the funnel against hand-rolled fakes of the kognio-rdf dataset port (recording
  * lifecycle/transactor/tx) and a recording {@link ShaclValidation} behind a real
  * {@link ShaclWriteGate} - what is under test is the funnel's own contract: gate before
- * transaction, both {@code ASK} checks inside the transaction, the caller-supplied signals for
- * each rejection, and the create-only commit-conflict translation (issue #144). Whether a real
- * store honours that contract is the business of each adapter's own tests.</p>
+ * transaction, both {@code contains} existence checks inside the transaction, the caller-supplied
+ * signals for each rejection, and the create-only commit-conflict translation (issue #144).
+ * Whether a real store honours that contract is the business of each adapter's own tests.</p>
  */
 class WriteFunnelTest {
 
     private static final String GRAPH_IRI = "https://example.org/graph";
     private static final String SUBJECT_IRI = "https://example.org/thing/1";
     private static final String CODE = "THING-1";
-
-    private static final String ASK_SUBJECT =
-            "ASK { GRAPH <" + GRAPH_IRI + "> { <" + SUBJECT_IRI + "> ?p ?o } }";
-    private static final String ASK_CODE = "ASK { GRAPH <" + GRAPH_IRI + "> { "
-            + "?s <http://purl.org/dc/terms/identifier> \"" + CODE + "\" } }";
+    private static final String IDENTIFIER_PROPERTY_IRI = "http://purl.org/dc/terms/identifier";
 
     private final RDF rdf = new SimpleRdf();
 
@@ -80,7 +82,9 @@ class WriteFunnelTest {
         fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
                 candidate(), null, Signals::unexpected, Signals::unexpected, bodyCalls::add);
 
-        assertEquals(List.of(ASK_SUBJECT, ASK_CODE), fixture.tx.askQueries);
+        assertEquals(2, fixture.tx.containsCalls.size());
+        assertSubjectExistenceCheck(fixture.tx.containsCalls.get(0), GRAPH_IRI, SUBJECT_IRI);
+        assertCodeExistenceCheck(fixture.tx.containsCalls.get(1), GRAPH_IRI, CODE);
         assertEquals(1, bodyCalls.size());
         assertSame(fixture.tx, bodyCalls.get(0), "body must run on the live transaction");
         assertTrue(fixture.handle.closed, "handle must be released");
@@ -115,8 +119,9 @@ class WriteFunnelTest {
 
     /**
      * Issue #144: two genuinely overlapping {@code SERIALIZABLE} transactions both pass the
-     * {@code ASK}s, and the loser fails at commit with the store's own exception - the funnel
-     * must translate exactly the recognised conflict into the {@code duplicateCode} signal.
+     * existence checks, and the loser fails at commit with the store's own exception - the
+     * funnel must translate exactly the recognised conflict into the {@code duplicateCode}
+     * signal.
      */
     @Test
     void createTranslatesRecognisedCommitConflictIntoDuplicateCode() {
@@ -132,6 +137,22 @@ class WriteFunnelTest {
         assertTrue(fixture.handle.closed, "handle must be released even on a conflict");
     }
 
+    /**
+     * The predicate the four out-adapters actually inject carries the #144 invariant: point it at
+     * the wrong type (a superclass, a {@code RuntimeException} wrapper) and a lost race would stop
+     * being translated - visible only in a real race, which is exactly what the
+     * {@code *RealStoreConcurrencyTest}s cover flakily (issue #171). Pinned here directly instead.
+     */
+    @Test
+    void defaultWriteConflictRecognisesOnlyTheStoresConcurrencyConflict() {
+        assertTrue(WriteFunnel.DEFAULT_WRITE_CONFLICT.test(
+                new ConcurrencyConflictException("lost SERIALIZABLE conflict", null)));
+        assertFalse(WriteFunnel.DEFAULT_WRITE_CONFLICT.test(new IllegalStateException("unrelated")));
+        assertFalse(WriteFunnel.DEFAULT_WRITE_CONFLICT.test(
+                new RuntimeException("wrapper", new ConcurrencyConflictException("cause", null))),
+                "a merely wrapped conflict is not the store's own signal");
+    }
+
     @Test
     void createRethrowsUnrecognisedFailureUntranslated() {
         RuntimeException unrelated = new RuntimeException("something else broke");
@@ -144,15 +165,21 @@ class WriteFunnelTest {
         assertSame(unrelated, thrown);
     }
 
+    /**
+     * The code-uniqueness check compares an {@code io.kogn.rdf.terms.Literal} directly via
+     * {@link DatasetTx#contains} - no SPARQL string is built for it, so a code containing
+     * characters that would need escaping in a hand-rolled {@code ASK} query (quotes, newlines)
+     * must reach the check verbatim, unescaped.
+     */
     @Test
-    void createEscapesCodeInAskQuery() {
+    void createPassesCodeVerbatimToExistenceCheck() {
         Fixture fixture = new Fixture(List.of(false, false));
+        String code = "TH\"ING\n1";
 
-        fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, "TH\"ING\n1",
+        fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, code,
                 candidate(), null, Signals::unexpected, Signals::unexpected, tx -> { });
 
-        assertTrue(fixture.tx.askQueries.get(1).contains("\"TH\\\"ING\\n1\""),
-                "code must be SPARQL-escaped, got: " + fixture.tx.askQueries.get(1));
+        assertCodeExistenceCheck(fixture.tx.containsCalls.get(1), GRAPH_IRI, code);
     }
 
     @Test
@@ -163,7 +190,8 @@ class WriteFunnelTest {
         fixture.funnel().update(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
                 candidate(), null, Signals::unexpected, bodyCalls::add);
 
-        assertEquals(List.of(ASK_SUBJECT), fixture.tx.askQueries, "update runs no code check");
+        assertEquals(1, fixture.tx.containsCalls.size(), "update runs no code check");
+        assertSubjectExistenceCheck(fixture.tx.containsCalls.get(0), GRAPH_IRI, SUBJECT_IRI);
         assertEquals(1, bodyCalls.size());
         assertTrue(fixture.handle.closed);
     }
@@ -205,7 +233,8 @@ class WriteFunnelTest {
     @Test
     void gateViolationPreventsAcquisition() {
         ShaclReport violation = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT_IRI, null, Severity.VIOLATION, "bad")));
+                List.of(new ShaclResult(SUBJECT_IRI, null, Severity.VIOLATION,
+                        List.of(ShaclMessage.untagged("bad")))));
         Fixture fixture = new Fixture(List.of(), violation, null, e -> false);
 
         assertThrows(WriteConstraintViolationException.class,
@@ -245,7 +274,8 @@ class WriteFunnelTest {
         fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, head,
                 candidate(), null, Signals::unexpected, Signals::unexpected, bodyCalls::add);
 
-        assertEquals(List.of(ASK_SUBJECT), fixture.tx.askQueries, "compareAndUpdate runs no code check");
+        assertEquals(1, fixture.tx.containsCalls.size(), "compareAndUpdate runs no code check");
+        assertSubjectExistenceCheck(fixture.tx.containsCalls.get(0), GRAPH_IRI, SUBJECT_IRI);
         assertEquals(1, bodyCalls.size());
         assertTrue(fixture.handle.closed);
     }
@@ -492,6 +522,25 @@ class WriteFunnelTest {
         return graph;
     }
 
+    /** Asserts a {@code contains} call checking whether {@code subject} exists at all (issue #173). */
+    private static void assertSubjectExistenceCheck(FakeTx.ContainsCall call, String graph, String subject) {
+        assertEquals(graph, call.namedGraph().getIRIString());
+        assertEquals(subject, ((IRI) call.subject()).getIRIString());
+        assertNull(call.predicate(), "a subject existence check leaves the predicate wildcarded");
+        assertNull(call.object(), "a subject existence check leaves the object wildcarded");
+    }
+
+    /**
+     * Asserts a {@code contains} call checking whether any subject already carries {@code code}
+     * on {@code dcterms:identifier} (issue #173).
+     */
+    private static void assertCodeExistenceCheck(FakeTx.ContainsCall call, String graph, String code) {
+        assertEquals(graph, call.namedGraph().getIRIString());
+        assertNull(call.subject(), "a code existence check leaves the subject wildcarded");
+        assertEquals(IDENTIFIER_PROPERTY_IRI, call.predicate().getIRIString());
+        assertEquals(code, ((Literal) call.object()).getLexicalForm());
+    }
+
     private static boolean containsSubject(ReadableGraph graph, String subject) {
         return graph.stream()
                 .map(Triple::getSubject)
@@ -528,18 +577,18 @@ class WriteFunnelTest {
         private final Predicate<RuntimeException> isWriteConflict;
         private boolean bodyRan;
 
-        private Fixture(List<Boolean> askAnswers) {
-            this(askAnswers, null, e -> false);
+        private Fixture(List<Boolean> containsAnswers) {
+            this(containsAnswers, null, e -> false);
         }
 
-        private Fixture(List<Boolean> askAnswers, RuntimeException commitFailure,
+        private Fixture(List<Boolean> containsAnswers, RuntimeException commitFailure,
                 Predicate<RuntimeException> isWriteConflict) {
-            this(askAnswers, new ShaclReport(true, List.of()), commitFailure, isWriteConflict);
+            this(containsAnswers, new ShaclReport(true, List.of()), commitFailure, isWriteConflict);
         }
 
-        private Fixture(List<Boolean> askAnswers, ShaclReport gateReport,
+        private Fixture(List<Boolean> containsAnswers, ShaclReport gateReport,
                 RuntimeException commitFailure, Predicate<RuntimeException> isWriteConflict) {
-            this.tx = new FakeTx(askAnswers);
+            this.tx = new FakeTx(containsAnswers);
             this.handle = new FakeHandle(new FakeTransactor(tx, commitFailure));
             this.lifecycle = new FakeLifecycle(handle);
             this.validation = new RecordingValidation(gateReport);
@@ -553,7 +602,7 @@ class WriteFunnelTest {
         private WriteFunnel funnelAt(Clock clock) {
             RDF graphs = new SimpleRdf();
             ShaclWriteGate gate = new ShaclWriteGate(validation, graphs.createGraph(),
-                    graphs.createGraph(), ValidationOptions.defaults());
+                    graphs.createGraph(), ValidationOptions.defaults(), DisplayLocale.DEFAULT);
             return new WriteFunnel(lifecycle, gate, isWriteConflict, clock);
         }
     }
@@ -646,44 +695,49 @@ class WriteFunnelTest {
     }
 
     /**
-     * Records every {@code ASK} (answered from a scripted queue), every {@code SELECT} (answered
-     * with the scripted {@code headAnswers} IRIs bound to {@code ?head} - the funnel's only
-     * in-transaction {@code SELECT} is the previous-head lookup), every {@code update} and every
-     * {@code add} - so the tests can assert exactly what the revision recording wrote.
+     * Records every {@code contains} existence check (answered from a scripted queue), every
+     * {@code SELECT} (answered with the scripted {@code headAnswers} IRIs bound to {@code ?head}
+     * - the funnel's only in-transaction {@code SELECT} is the previous-head lookup), every
+     * {@code update} and every {@code add} - so the tests can assert exactly what the revision
+     * recording wrote.
      */
     private static final class FakeTx implements DatasetTx {
 
         private record RecordedAdd(IRI graph, ReadableGraph triples) {
         }
 
-        private final List<String> askQueries = new ArrayList<>();
-        private final Deque<Boolean> askAnswers;
+        private record ContainsCall(IRI namedGraph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
+        }
+
+        private final List<ContainsCall> containsCalls = new ArrayList<>();
+        private final Deque<Boolean> containsAnswers;
         private final List<String> selectQueries = new ArrayList<>();
         private final List<String> headAnswers = new ArrayList<>();
         private final List<String> updates = new ArrayList<>();
         private final List<RecordedAdd> adds = new ArrayList<>();
 
-        private FakeTx(List<Boolean> askAnswers) {
-            this.askAnswers = new ArrayDeque<>(askAnswers);
+        private FakeTx(List<Boolean> containsAnswers) {
+            this.containsAnswers = new ArrayDeque<>(containsAnswers);
         }
 
         @Override
         public boolean ask(String sparql) {
-            askQueries.add(sparql);
-            Boolean answer = askAnswers.poll();
-            if (answer == null) {
-                throw new AssertionError("unscripted ASK: " + sparql);
-            }
-            return answer;
+            throw new UnsupportedOperationException();
         }
 
         @Override
-        public void add(IRI namedGraph, ReadableGraph triples) {
+        public boolean ask(String sparql, java.util.Map<String, RDFTerm> bindings) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long add(IRI namedGraph, ReadableGraph triples) {
             adds.add(new RecordedAdd(namedGraph, triples));
+            return triples.stream().count();
         }
 
         @Override
-        public void remove(IRI namedGraph, ReadableGraph triples) {
+        public long remove(IRI namedGraph, ReadableGraph triples) {
             throw new UnsupportedOperationException();
         }
 
@@ -693,8 +747,40 @@ class WriteFunnelTest {
         }
 
         @Override
+        public ReadableGraph export(IRI namedGraph) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long count(IRI namedGraph) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long count() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean contains(IRI namedGraph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
+            containsCalls.add(new ContainsCall(namedGraph, subject, predicate, object));
+            Boolean answer = containsAnswers.poll();
+            if (answer == null) {
+                throw new AssertionError(
+                        "unscripted contains() check: " + namedGraph + " " + subject + " " + predicate + " "
+                                + object);
+            }
+            return answer;
+        }
+
+        @Override
         public void update(String sparql) {
             updates.add(sparql);
+        }
+
+        @Override
+        public void update(String sparql, java.util.Map<String, RDFTerm> bindings) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -706,7 +792,17 @@ class WriteFunnelTest {
         }
 
         @Override
+        public Stream<BindingSet> select(String sparql, java.util.Map<String, RDFTerm> bindings) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public ReadableGraph construct(String sparql) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ReadableGraph construct(String sparql, java.util.Map<String, RDFTerm> bindings) {
             throw new UnsupportedOperationException();
         }
 

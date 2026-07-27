@@ -9,21 +9,20 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
-import org.eclipse.rdf4j.sail.SailConflictException;
 
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteFunnel;
 
@@ -49,54 +48,35 @@ public final class KognioRdfBoundedContextRepositoryFactory {
 
     /**
      * Creates a persistent, RDF4J-backed bounded-context repository storing its datasets under
-     * {@code storageDir}.
+     * {@code storageDir}, wired for the given display language.
      *
-     * @param storageDir the directory the embedded RDF store persists into
+     * @param storageDir    the directory the embedded RDF store persists into
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link BoundedContextRepository}
      */
-    public static BoundedContextRepository persistent(Path storageDir) {
+    public static BoundedContextRepository persistent(Path storageDir, DisplayLocale displayLocale) {
         Objects.requireNonNull(storageDir, "storageDir");
         DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle);
+        return over(lifecycle, displayLocale);
     }
 
     /**
-     * Assembles a bounded-context repository over an already-created dataset lifecycle, wired with
-     * the DDD SHACL write-gate. Used by {@link #persistent(Path)} and directly by tests that
-     * supply their own (e.g. in-memory) lifecycle.
+     * Assembles a bounded-context repository over an already-created dataset lifecycle, wired
+     * with the DDD SHACL write-gate and an explicit display language. Used by
+     * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own
+     * (e.g. in-memory) lifecycle.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link BoundedContextRepository}
      */
-    public static BoundedContextRepository over(DatasetLifecycle lifecycle) {
+    public static BoundedContextRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(),
-                KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale),
+                WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfBoundedContextRepository(lifecycle, funnel);
-    }
-
-    /**
-     * Recognises the RDF4J-backed store's commit-time signal for a lost {@code SERIALIZABLE}
-     * transaction conflict (issue #144, kogn-io/rdf-core#18): a {@link RepositoryException} whose
-     * cause chain carries a {@link SailConflictException}. Like {@link #buildGate()}, this method
-     * stays the only place in this package naming those RDF4J types (ArchUnit rule 2) - the
-     * method reference passed to the shared {@link WriteFunnel} above hands it over as a
-     * technology-neutral {@code Predicate} that references no RDF4J type itself.
-     *
-     * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
-     * same reason {@link #buildGate()} is.</p>
-     */
-    static boolean isWriteConflict(RuntimeException candidate) {
-        if (!(candidate instanceof RepositoryException)) {
-            return false;
-        }
-        for (Throwable cause = candidate.getCause(); cause != null; cause = cause.getCause()) {
-            if (cause instanceof SailConflictException) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -114,12 +94,19 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      * <p>Package-private (not private) so {@code KognioRdfBoundedContextRepositoryTest} can drive
      * the gate directly, at gate level, without duplicating this shapes-loading logic.</p>
      *
+     * <p>The {@code displayLocale} handed in is the same one the composition root configures
+     * process-wide: a caller gets told why a write was refused in the same language regardless of
+     * which bounded context rejected it, whenever the violated shape carries its {@code sh:message}
+     * in more than one.</p>
+     *
+     * @param displayLocale the language a rejected write is reported in
      * @return the assembled DDD SHACL write-gate
      */
-    static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate(DisplayLocale displayLocale) {
         ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
         ReadableGraph axioms = new SimpleRdf().createGraph();
-        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults());
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults(),
+                displayLocale);
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {

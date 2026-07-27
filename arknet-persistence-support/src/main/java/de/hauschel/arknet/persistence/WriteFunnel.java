@@ -12,12 +12,14 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
@@ -33,25 +35,25 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * context, no domain type and no domain exception.
  *
  * <p><strong>Create vs. update (opaque identity).</strong> {@link #create} and {@link #update}
- * check whether the subject already exists <em>inside</em> the write transaction (an
- * {@code ASK}) - not via a separate read beforehand, which would leave a check-then-act race
- * between the check and the write. {@link #create} rejects an existing subject via
- * {@code alreadyExists} and, through a second {@code ASK} by {@code dcterms:identifier}, a
- * business-code collision via {@code duplicateCode} - deliberately two different signals: an
- * opaque-identity collision is a programming error (identities are minted once and never
- * reused), a code collision is an expected, rejectable outcome a human can cause.
- * {@link #update} rejects a missing subject via {@code notFound}.</p>
+ * check whether the subject already exists <em>inside</em> the write transaction (a
+ * {@link DatasetTx#contains} existence check) - not via a separate read beforehand, which would
+ * leave a check-then-act race between the check and the write. {@link #create} rejects an
+ * existing subject via {@code alreadyExists} and, through a second {@code contains} check by
+ * {@code dcterms:identifier}, a business-code collision via {@code duplicateCode} - deliberately
+ * two different signals: an opaque-identity collision is a programming error (identities are
+ * minted once and never reused), a code collision is an expected, rejectable outcome a human can
+ * cause. {@link #update} rejects a missing subject via {@code notFound}.</p>
  *
- * <p><strong>The second interleaving (issue #144).</strong> The synchronous {@code ASK}s only
+ * <p><strong>The second interleaving (issue #144).</strong> The synchronous existence checks only
  * catch a concurrent create that already fully committed; two <em>genuinely overlapping</em>
  * transactions instead run under the store's {@code SERIALIZABLE} isolation
- * (kogn-io/rdf-core#18), both {@code ASK}s pass, and the loser's {@code commit()} itself is
- * rejected as a conflict - surfacing as the RDF4J-backed store's own commit-time exception.
- * That technology-specific exception must not reach this class or any adapter (ArchUnit rule 2
- * in {@code arknet-architecture-tests}), so {@code isWriteConflict} is a technology-neutral
- * {@link Predicate} each repository factory builds and injects. {@link #create} translates a
- * positive answer into the same {@code duplicateCode} signal the synchronous check throws (the
- * signal {@code CodeAssignment}'s retry consumes, see {@code arknet-shared-kernel}).
+ * (kogn-io/rdf-core#18), both existence checks pass, and the loser's {@code commit()} itself is
+ * rejected as a conflict. Which exception that surfaces as is a property of the store behind the
+ * ports, not of this class, so {@code isWriteConflict} stays an injected, technology-neutral
+ * {@link Predicate} (ADR-001: the store is swappable); {@link #DEFAULT_WRITE_CONFLICT} is the
+ * ready-made one for the kognio-rdf-backed store every adapter here uses. {@link #create}
+ * translates a positive answer into the same {@code duplicateCode} signal the synchronous check
+ * throws (the signal {@code CodeAssignment}'s retry consumes, see {@code arknet-shared-kernel}).
  * {@link #update} deliberately does <em>not</em> translate: a conflict there is not a code
  * collision, and the pre-funnel adapters rethrew it raw - preserved as-is, not repaired in
  * passing (the ul adapter's unmigrated patch-update, which translates into its own
@@ -102,6 +104,20 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  */
 public final class WriteFunnel {
 
+    /**
+     * Recognises a lost {@code SERIALIZABLE} write conflict (issue #144) as the kognio-rdf ports
+     * report it: since {@code io.kogn.rdf} 0.2.x (kogn-io/rdf-core#30) the RDF4J-backed
+     * transactor translates the store's own commit-time exception into the neutral
+     * {@link ConcurrencyConflictException} itself, so recognising it needs no RDF4J type and
+     * therefore no longer has to live in the repository factories - the one place ArchUnit lets
+     * an adapter name RDF4J. This is the predicate every adapter in this codebase wants; it is
+     * offered as a default rather than hard-wired, because a different store behind
+     * {@link DatasetLifecycle} (ADR-001) may fail its writers differently, and the funnel would
+     * then be the wrong place to encode that.
+     */
+    public static final Predicate<RuntimeException> DEFAULT_WRITE_CONFLICT =
+            ConcurrencyConflictException.class::isInstance;
+
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
 
     /**
@@ -126,9 +142,10 @@ public final class WriteFunnel {
      *                        be {@code null})
      * @param gate            the SHACL write-gate validating every candidate graph before the
      *                        write transaction opens (must not be {@code null})
-     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
-     *                        class ever naming the RDF4J type (must not be {@code null})
+     * @param isWriteConflict recognises the store's commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144) - pass
+     *                        {@link #DEFAULT_WRITE_CONFLICT} for the kognio-rdf-backed store
+     *                        (must not be {@code null})
      */
     public WriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate,
             Predicate<RuntimeException> isWriteConflict) {
@@ -146,9 +163,10 @@ public final class WriteFunnel {
      *                        be {@code null})
      * @param gate            the SHACL write-gate validating every candidate graph before the
      *                        write transaction opens (must not be {@code null})
-     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
-     *                        class ever naming the RDF4J type (must not be {@code null})
+     * @param isWriteConflict recognises the store's commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144) - pass
+     *                        {@link #DEFAULT_WRITE_CONFLICT} for the kognio-rdf-backed store
+     *                        (must not be {@code null})
      * @param clock           the clock each revision's generation instant is read from (must not
      *                        be {@code null})
      */
@@ -194,21 +212,22 @@ public final class WriteFunnel {
 
         enforceGate(candidate, assertedContext);
 
-        String askExists = askSubjectExists(graphIri, subjectIri);
-        String askCodeExists = "ASK { GRAPH <" + graphIri + "> { "
-                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code) + "\" } }";
+        IRI graph = rdf.createIRI(graphIri);
+        IRI subject = rdf.createIRI(subjectIri);
+        IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
+        Literal codeLiteral = rdf.createLiteral(code);
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             try {
                 handle.transactor().inTransaction(tx -> {
-                    if (tx.ask(askExists)) {
+                    if (tx.contains(graph, subject, null, null)) {
                         throw alreadyExists.get();
                     }
                     // Identity is opaque and unique by construction, but the human-readable code
-                    // is a separate triple the subject ASK alone cannot rule out - checked here,
-                    // inside the same write transaction, so no concurrent create can race in
-                    // between.
-                    if (tx.ask(askCodeExists)) {
+                    // is a separate triple the subject existence check alone cannot rule out -
+                    // checked here, inside the same write transaction, so no concurrent create
+                    // can race in between.
+                    if (tx.contains(graph, null, identifierProperty, codeLiteral)) {
                         throw duplicateCode.get();
                     }
                     body.accept(tx);
@@ -250,11 +269,12 @@ public final class WriteFunnel {
 
         enforceGate(candidate, assertedContext);
 
-        String askExists = askSubjectExists(graphIri, subjectIri);
+        IRI graph = rdf.createIRI(graphIri);
+        IRI subject = rdf.createIRI(subjectIri);
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             handle.transactor().inTransaction(tx -> {
-                if (!tx.ask(askExists)) {
+                if (!tx.contains(graph, subject, null, null)) {
                     throw notFound.get();
                 }
                 body.accept(tx);
@@ -308,12 +328,13 @@ public final class WriteFunnel {
 
         enforceGate(candidate, assertedContext);
 
-        String askExists = askSubjectExists(graphIri, subjectIri);
+        IRI graph = rdf.createIRI(graphIri);
+        IRI subject = rdf.createIRI(subjectIri);
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             try {
                 handle.transactor().inTransaction(tx -> {
-                    if (!tx.ask(askExists)) {
+                    if (!tx.contains(graph, subject, null, null)) {
                         throw notFound.get();
                     }
                     Optional<IRI> currentHead = readHead(tx, subjectIri);
@@ -401,9 +422,5 @@ public final class WriteFunnel {
         } else {
             gate.enforce(candidate, assertedContext);
         }
-    }
-
-    private static String askSubjectExists(String graphIri, String subjectIri) {
-        return "ASK { GRAPH <" + graphIri + "> { " + SparqlTerms.iriRef(subjectIri) + " ?p ?o } }";
     }
 }

@@ -64,12 +64,13 @@
         <spring-boot.version>4.1.0</spring-boot.version>
         <!-- kognio-rdf (io.kogn.rdf): embeddable RDF-Substrat hinter den Out-Ports.
              OSS auf github.com/kogn-io/rdf-core; kein BOM-Artefakt -> Version hier gepinnt.
-             0.1.1 ist ein Release (Maven Central, kein Snapshot mehr) und bringt
-             kogn-io/rdf-core#18: Transaktionen oeffnen jetzt explizit mit
+             0.1.1 brachte kogn-io/rdf-core#18: Transaktionen oeffnen jetzt explizit mit
              IsolationLevels.SERIALIZABLE statt dem alten SNAPSHOT_READ-Default, wodurch
              echt ueberlappende Schreibtransaktionen beim commit() mit einer
-             RepositoryException (Ursache SailConflictException) statt still kollidieren (#144). -->
-        <kognio-rdf.version>0.1.1</kognio-rdf.version>
+             RepositoryException (Ursache SailConflictException) statt still kollidieren (#144).
+             0.2.1 ist ein Release (Maven Central, kein Snapshot); Breaking Changes gegenueber
+             0.1.1 und ihre arknet-seitige Migration: #173. -->
+        <kognio-rdf.version>0.2.1</kognio-rdf.version>
         <spotless-maven-plugin.version>3.8.0</spotless-maven-plugin.version>
     </properties>
 
@@ -184,6 +185,18 @@
             <dependency>
                 <groupId>io.kogn.rdf</groupId>
                 <artifactId>rdf-dataset-rdf4j</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <!-- 0.2.x split DatasetLifecycle/DatasetHandle/DatasetId/DatasetStoreConfig out of
+                 rdf-dataset into this dedicated hosting port module (#173). -->
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-dataset-hosting</artifactId>
+                <version>${kognio-rdf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.kogn.rdf</groupId>
+                <artifactId>rdf-dataset-hosting-rdf4j</artifactId>
                 <version>${kognio-rdf.version}</version>
             </dependency>
             <dependency>

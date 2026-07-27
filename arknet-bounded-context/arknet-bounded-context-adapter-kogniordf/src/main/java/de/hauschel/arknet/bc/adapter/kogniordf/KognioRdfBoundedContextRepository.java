@@ -16,9 +16,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
@@ -61,7 +61,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * the composition root.</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> The transactional mechanics of the
- * existence check - the in-transaction {@code ASK}, the SHACL gate, the commit-conflict
+ * existence check - the in-transaction {@code contains} check, the SHACL gate, the commit-conflict
  * translation - live in the shared {@link WriteFunnel} (ADR-013), not here. {@link #create}
  * rejects an existing subject with {@link ResourceAlreadyExistsException} and a business-code
  * collision (by {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};

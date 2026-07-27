@@ -20,11 +20,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -39,6 +39,7 @@ import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -66,8 +67,8 @@ class KognioRdfBoundedContextRepositoryTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate(),
-                KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
+        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfBoundedContextRepository(datasetLifecycle, funnel);
     }
 
@@ -191,7 +192,7 @@ class KognioRdfBoundedContextRepositoryTest {
         candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#domainVision"),
                 rdf.createLiteral("A vision long enough to satisfy the ten-character minimum."));
 
-        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 

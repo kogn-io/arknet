@@ -11,9 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
+import io.kogn.rdf.shacl.ShaclMessage;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclResult;
 import io.kogn.rdf.shacl.ShaclValidation;
@@ -25,6 +27,8 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
+
+import de.hauschel.arknet.kernel.DisplayLocale;
 
 /**
  * Unit test for the shared {@link ShaclWriteGate}.
@@ -53,7 +57,7 @@ class ShaclWriteGateTest {
     void rejectsNonConformingCandidate() {
         ShaclReport report = new ShaclReport(false,
                 List.of(new ShaclResult(SUBJECT, "https://example.org/label", Severity.VIOLATION,
-                        "missing label")));
+                        List.of(ShaclMessage.untagged("missing label")))));
         ShaclWriteGate gate = gateReturning(report);
 
         WriteConstraintViolationException thrown = assertThrows(WriteConstraintViolationException.class,
@@ -66,7 +70,7 @@ class ShaclWriteGateTest {
     @Test
     void messageOmitsAbsentPathAndMessage() {
         ShaclReport report = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION, null)));
+                List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION, List.of())));
         ShaclWriteGate gate = gateReturning(report);
 
         WriteConstraintViolationException thrown = assertThrows(WriteConstraintViolationException.class,
@@ -78,10 +82,14 @@ class ShaclWriteGateTest {
     @Test
     void messageReportsOnlyViolationsAndJoinsThem() {
         ShaclReport report = new ShaclReport(false, List.of(
-                new ShaclResult("https://example.org/warn", null, Severity.WARNING, "just a warning"),
-                new ShaclResult("https://example.org/a", null, Severity.VIOLATION, "first"),
-                new ShaclResult("https://example.org/info", null, Severity.INFO, "just info"),
-                new ShaclResult("https://example.org/b", null, Severity.VIOLATION, "second")));
+                new ShaclResult("https://example.org/warn", null, Severity.WARNING,
+                        List.of(ShaclMessage.untagged("just a warning"))),
+                new ShaclResult("https://example.org/a", null, Severity.VIOLATION,
+                        List.of(ShaclMessage.untagged("first"))),
+                new ShaclResult("https://example.org/info", null, Severity.INFO,
+                        List.of(ShaclMessage.untagged("just info"))),
+                new ShaclResult("https://example.org/b", null, Severity.VIOLATION,
+                        List.of(ShaclMessage.untagged("second")))));
         ShaclWriteGate gate = gateReturning(report);
 
         WriteConstraintViolationException thrown = assertThrows(WriteConstraintViolationException.class,
@@ -101,7 +109,7 @@ class ShaclWriteGateTest {
         ReadableGraph shapes = graphWith("https://example.org/shape");
         ReadableGraph axioms = graphWith(AXIOM_SUBJECT);
         ValidationOptions options = new ValidationOptions(true);
-        ShaclWriteGate gate = new ShaclWriteGate(validation, shapes, axioms, options);
+        ShaclWriteGate gate = new ShaclWriteGate(validation, shapes, axioms, options, DisplayLocale.DEFAULT);
 
         gate.enforce(graphWith(SUBJECT));
 
@@ -123,7 +131,7 @@ class ShaclWriteGateTest {
     void mergesAssertedContextIntoValidatedData() {
         RecordingValidation validation = new RecordingValidation(new ShaclReport(true, List.of()));
         ShaclWriteGate gate = new ShaclWriteGate(validation, emptyGraph(), emptyGraph(),
-                ValidationOptions.defaults());
+                ValidationOptions.defaults(), DisplayLocale.DEFAULT);
         String contextSubject = "https://example.org/context";
 
         gate.enforce(graphWith(SUBJECT), graphWith(contextSubject));
@@ -143,7 +151,7 @@ class ShaclWriteGateTest {
     void enforceWithoutContextEqualsEnforceWithEmptyContext() {
         RecordingValidation validation = new RecordingValidation(new ShaclReport(true, List.of()));
         ShaclWriteGate gate = new ShaclWriteGate(validation, emptyGraph(), emptyGraph(),
-                ValidationOptions.defaults());
+                ValidationOptions.defaults(), DisplayLocale.DEFAULT);
 
         gate.enforce(graphWith(SUBJECT));
 
@@ -160,7 +168,7 @@ class ShaclWriteGateTest {
     void doesNotLeakCandidateBetweenCalls() {
         RecordingValidation validation = new RecordingValidation(new ShaclReport(true, List.of()));
         ShaclWriteGate gate = new ShaclWriteGate(validation, emptyGraph(), emptyGraph(),
-                ValidationOptions.defaults());
+                ValidationOptions.defaults(), DisplayLocale.DEFAULT);
 
         gate.enforce(graphWith(SUBJECT));
         gate.enforce(graphWith("https://example.org/other"));
@@ -174,14 +182,17 @@ class ShaclWriteGateTest {
         ShaclValidation validation = new RecordingValidation(new ShaclReport(true, List.of()));
         ValidationOptions options = ValidationOptions.defaults();
 
+        DisplayLocale locale = DisplayLocale.DEFAULT;
         assertThrows(NullPointerException.class,
-                () -> new ShaclWriteGate(null, emptyGraph(), emptyGraph(), options));
+                () -> new ShaclWriteGate(null, emptyGraph(), emptyGraph(), options, locale));
         assertThrows(NullPointerException.class,
-                () -> new ShaclWriteGate(validation, null, emptyGraph(), options));
+                () -> new ShaclWriteGate(validation, null, emptyGraph(), options, locale));
         assertThrows(NullPointerException.class,
-                () -> new ShaclWriteGate(validation, emptyGraph(), null, options));
+                () -> new ShaclWriteGate(validation, emptyGraph(), null, options, locale));
         assertThrows(NullPointerException.class,
-                () -> new ShaclWriteGate(validation, emptyGraph(), emptyGraph(), null));
+                () -> new ShaclWriteGate(validation, emptyGraph(), emptyGraph(), null, locale));
+        assertThrows(NullPointerException.class,
+                () -> new ShaclWriteGate(validation, emptyGraph(), emptyGraph(), options, null));
 
         ShaclWriteGate gate = gateReturning(new ShaclReport(true, List.of()));
         assertThrows(NullPointerException.class, () -> gate.enforce(null));
@@ -189,9 +200,66 @@ class ShaclWriteGateTest {
         assertThrows(NullPointerException.class, () -> gate.enforce(graphWith(SUBJECT), null));
     }
 
+    /**
+     * The point of kogn-io/rdf-core#20: a shape carrying its {@code sh:message} once per
+     * language reaches the gate with all of them, and the gate reports exactly one - the one
+     * the consumer asked to read in. Reporting all would hand the user the same complaint
+     * twice in languages they did not ask for.
+     */
+    @Test
+    void reportsTheMessageInTheRequestedLanguage() {
+        ShaclReport report = new ShaclReport(false, List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION,
+                List.of(new ShaclMessage("Name fehlt.", "de"), new ShaclMessage("Name is required.", "en")))));
+        ShaclWriteGate gate = gateReturning(report, new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
+
+        WriteConstraintViolationException thrown = assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(graphWith(SUBJECT)));
+
+        assertEquals("focusNode=" + SUBJECT + ", message=Name fehlt.", thrown.getMessage());
+    }
+
+    /**
+     * The same report read by a consumer with the other preference must yield the other
+     * message - otherwise the selection is decoration, not selection.
+     */
+    @Test
+    void theSameViolationIsReportedInWhicheverLanguageWasRequested() {
+        List<ShaclMessage> bilingual =
+                List.of(new ShaclMessage("Name fehlt.", "de"), new ShaclMessage("Name is required.", "en"));
+        ShaclReport report =
+                new ShaclReport(false, List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION, bilingual)));
+
+        assertEquals("focusNode=" + SUBJECT + ", message=Name is required.",
+                assertThrows(WriteConstraintViolationException.class,
+                        () -> gateReturning(report, new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH))
+                                .enforce(graphWith(SUBJECT))).getMessage());
+    }
+
+    /**
+     * A shape that carries no message in the requested language must not fall silent: the
+     * {@link DisplayLocale} chain degrades to the system default and then to an untagged
+     * literal, so the user is told <em>something</em> - possibly in the wrong language, never
+     * nothing.
+     */
+    @Test
+    void fallsBackWhenTheRequestedLanguageIsMissing() {
+        ShaclReport report = new ShaclReport(false, List.of(new ShaclResult(SUBJECT, null, Severity.VIOLATION,
+                List.of(ShaclMessage.untagged("Plain."), new ShaclMessage("Name is required.", "en")))));
+        ShaclWriteGate gate = gateReturning(report, new DisplayLocale(Locale.ITALIAN, Locale.ENGLISH));
+
+        WriteConstraintViolationException thrown = assertThrows(WriteConstraintViolationException.class,
+                () -> gate.enforce(graphWith(SUBJECT)));
+
+        assertEquals("focusNode=" + SUBJECT + ", message=Name is required.", thrown.getMessage());
+    }
+
     private ShaclWriteGate gateReturning(ShaclReport report) {
+        return gateReturning(report, DisplayLocale.DEFAULT);
+    }
+
+    private ShaclWriteGate gateReturning(ShaclReport report, DisplayLocale displayLocale) {
         return new ShaclWriteGate(new RecordingValidation(report), emptyGraph(), emptyGraph(),
-                ValidationOptions.defaults());
+                ValidationOptions.defaults(), displayLocale);
     }
 
     private Graph emptyGraph() {

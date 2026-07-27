@@ -17,9 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
@@ -78,7 +78,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity, issue #167).</strong> Because
  * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent
- * operation. The transactional mechanics - the in-transaction {@code ASK}s for identity and
+ * operation. The transactional mechanics - the in-transaction existence checks for identity and
  * business-code collision, the SHACL gate, the commit-conflict translation, and (since #167) the
  * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel}
  * (ADR-013/ADR-014), not here: {@link #create} and {@link #compareAndUpdate} only build the
