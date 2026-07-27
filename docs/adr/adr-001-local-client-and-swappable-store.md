@@ -3,7 +3,9 @@
 - Status: Proposed (2026-07-13)
 - Verwandt: ADR-003, ADR-005, ADR-009 (MCP-Transport -- praezisiert, wie der
   lokale MCP-Server erreichbar ist, ohne die Single-User-Client-Entscheidung hier zu
-  aendern), ADR-011 (loest die hier deferrierte Provenance ein)
+  aendern), ADR-011 (loest die hier deferrierte Provenance ein), ADR-016 (loest die unten
+  festgehaltene Herkunft der WorkspaceId ab und loest das hier deferrierte
+  Workspace-Management ein)
 
 ## Kontext
 
@@ -53,7 +55,9 @@ eine MCP-Serverinstanz = genau ein Workspace, einmal beim Start aufgeloest ueber
 `WorkspaceIdResolver` (explizites Property `arknet.workspace.id` verbatim -> geslugter
 git-Toplevel-Verzeichnisname -> geslugter Arbeitsverzeichnis-Name -> `WorkspaceId.DEFAULT`).
 Damit isoliert jedes Claude-/git-Projekt seine Daten ohne Konfigurationszwang, explizit
-ueberschreibbar in der `.mcp.json`. Kein Actor/Provenance-Feld am
+ueberschreibbar in der `.mcp.json`. Diese Herkunft ist inzwischen zweifach abgeloest: ADR-009
+verlegt die Aufloesung vom Serverstart auf den einzelnen Aufruf, ADR-016 ersetzt die Ableitung
+durch registrierte Anker und loest damit zugleich das oben deferrierte Workspace-Management ein. Kein Actor/Provenance-Feld am
 `Requirement` (generatedBy = Agent additiv spaeter, PROV-konform). SHACL-Validierung auf
 dem Schreibpfad ist auch lokal ein Ziel, nicht nur ein Team-Belang.
 **Single-User ist nicht gleichbedeutend mit Single-Writer:** ein einzelner Nutzer treibt
