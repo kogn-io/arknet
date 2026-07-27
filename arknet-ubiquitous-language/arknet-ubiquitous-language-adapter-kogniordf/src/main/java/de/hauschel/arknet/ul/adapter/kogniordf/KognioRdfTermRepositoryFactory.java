@@ -9,15 +9,13 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
-import org.eclipse.rdf4j.sail.SailConflictException;
 
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
@@ -92,32 +90,9 @@ public final class KognioRdfTermRepositoryFactory {
     public static TermRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        ShaclWriteGate gate = buildGate();
-        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfTermRepositoryFactory::isWriteConflict);
+        ShaclWriteGate gate = buildGate(displayLocale);
+        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfTermRepository(lifecycle, displayLocale, funnel);
-    }
-
-    /**
-     * Recognises the RDF4J-backed store's commit-time signal for a lost {@code SERIALIZABLE}
-     * transaction conflict (issue #144, kogn-io/rdf-core#18): a {@link RepositoryException} whose
-     * cause chain carries a {@link SailConflictException}. Like {@link #buildGate()}, this method
-     * stays the only place in this package naming those RDF4J types (ArchUnit rule 2) - the
-     * method reference passed to {@link KognioRdfTermRepository} above hands it over as a
-     * technology-neutral {@code Predicate} that references no RDF4J type itself.
-     *
-     * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
-     * same reason {@link #buildGate()} is.</p>
-     */
-    static boolean isWriteConflict(RuntimeException candidate) {
-        if (!(candidate instanceof RepositoryException)) {
-            return false;
-        }
-        for (Throwable cause = candidate.getCause(); cause != null; cause = cause.getCause()) {
-            if (cause instanceof SailConflictException) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -131,12 +106,19 @@ public final class KognioRdfTermRepositoryFactory {
      * <p>Package-private (not private) so {@code KognioRdfTermRepositoryTest} can drive the
      * gate directly, at gate level, without duplicating this shapes-loading logic.</p>
      *
+     * <p>The {@code displayLocale} handed in is the same one the read paths select labels
+     * with: a caller that asked to read this glossary in one language is told in that language
+     * why a write was refused, whenever the violated shape carries its {@code sh:message} in
+     * more than one.</p>
+     *
+     * @param displayLocale the language a rejected write is reported in
      * @return the assembled ubiquitous-language SHACL write-gate
      */
-    static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate(DisplayLocale displayLocale) {
         ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
         ReadableGraph axioms = new SimpleRdf().createGraph();
-        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults());
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults(),
+                displayLocale);
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {

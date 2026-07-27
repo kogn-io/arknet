@@ -22,23 +22,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import org.eclipse.rdf4j.repository.RepositoryException;
-import org.eclipse.rdf4j.sail.SailConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -378,11 +377,11 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * Simulates the store's commit-time write-conflict signal (a {@link RepositoryException}
-     * whose cause chain carries a {@link SailConflictException}, issue #144) on the write path's
-     * {@code add} call - the point at which the funnel has already resolved the subject and
-     * compared the head, and is about to persist the patched predicate(s). Unconditional by
-     * design: every one of {@link KognioRdfTermRepository#update}'s retry attempts loses.
+     * Simulates the store's commit-time write-conflict signal (a {@link ConcurrencyConflictException},
+     * issue #144, #173) on the write path's {@code add} call - the point at which the funnel has
+     * already resolved the subject and compared the head, and is about to persist the patched
+     * predicate(s). Unconditional by design: every one of {@link KognioRdfTermRepository#update}'s
+     * retry attempts loses.
      */
     private static final class ConflictingWriteTx implements DatasetTx {
 
@@ -398,13 +397,18 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
-        public void add(IRI graph, ReadableGraph data) {
-            throw new RepositoryException(new SailConflictException("simulated overlapping-transaction conflict"));
+        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.ask(query, bindings);
         }
 
         @Override
-        public void remove(IRI graph, ReadableGraph data) {
-            delegate.remove(graph, data);
+        public long add(IRI graph, ReadableGraph data) {
+            throw new ConcurrencyConflictException("simulated overlapping-transaction conflict", null);
+        }
+
+        @Override
+        public long remove(IRI graph, ReadableGraph data) {
+            return delegate.remove(graph, data);
         }
 
         @Override
@@ -413,8 +417,34 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
+        public ReadableGraph export(IRI graph) {
+            return delegate.export(graph);
+        }
+
+        @Override
+        public long count(IRI graph) {
+            return delegate.count(graph);
+        }
+
+        @Override
+        public long count() {
+            return delegate.count();
+        }
+
+        @Override
+        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.contains(graph, subject, predicate, object);
+        }
+
+        @Override
         public void update(String sparqlUpdate) {
             delegate.update(sparqlUpdate);
+        }
+
+        @Override
+        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            delegate.update(sparqlUpdate, bindings);
         }
 
         @Override
@@ -423,8 +453,18 @@ class KognioRdfTermRepositoryTest {
         }
 
         @Override
+        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.select(query, bindings);
+        }
+
+        @Override
         public ReadableGraph construct(String query) {
             return delegate.construct(query);
+        }
+
+        @Override
+        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.construct(query, bindings);
         }
     }
 
@@ -452,7 +492,7 @@ class KognioRdfTermRepositoryTest {
      */
     @Test
     void gateRejectsConceptWithoutPrefLabel() {
-        ShaclWriteGate gate = KognioRdfTermRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfTermRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         RDF rdf = new SimpleRdf();
         IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         Graph invalidConcept = rdf.createGraph();
@@ -1185,13 +1225,30 @@ class KognioRdfTermRepositoryTest {
                 }
 
                 @Override
+                public Stream<BindingSet> select(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                    List<BindingSet> rows = real.select(sparql, bindings).toList();
+                    afterSelect.run();
+                    return rows.stream();
+                }
+
+                @Override
                 public ReadableGraph construct(String sparql) {
                     return real.construct(sparql);
                 }
 
                 @Override
+                public ReadableGraph construct(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                    return real.construct(sparql, bindings);
+                }
+
+                @Override
                 public boolean ask(String sparql) {
                     return real.ask(sparql);
+                }
+
+                @Override
+                public boolean ask(String sparql, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+                    return real.ask(sparql, bindings);
                 }
             };
         }

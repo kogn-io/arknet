@@ -29,19 +29,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -152,8 +153,8 @@ class UseCaseServiceRealStoreConcurrencyTest {
         assertNotNull(loserResult.get());
         assertNotEquals(winnerResult.get().code(), loserResult.get().code());
 
-        List<UseCase> stored =
-                KognioRdfUseCaseRepositoryFactory.over(realLifecycle, new UuidResourceIdFactory()).findAll(WS);
+        List<UseCase> stored = KognioRdfUseCaseRepositoryFactory.over(
+                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS);
         assertEquals(2, stored.size());
         assertTrue(stored.stream().map(UseCase::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())));
@@ -187,17 +188,18 @@ class UseCaseServiceRealStoreConcurrencyTest {
     }
 
     // ---- DatasetLifecycle decoration: pauses each caller's transaction right after its second
-    //      ASK (the code-uniqueness guard), exactly once, then gets out of the way -------------
+    //      contains() guard (the code-uniqueness guard), exactly once, then gets out of the way --
 
-    private UseCaseService guardedService(Runnable afterSecondAsk) {
+    private UseCaseService guardedService(Runnable afterSecondGuard) {
         AtomicBoolean armed = new AtomicBoolean(true);
         DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
             if (armed.compareAndSet(true, false)) {
-                return new AskGuardSyncTx(tx, afterSecondAsk);
+                return new GuardSyncTx(tx, afterSecondGuard);
             }
             return tx;
         });
-        UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(guarded, new UuidResourceIdFactory());
+        UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
+                guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
                 CUSTOMER_ACTOR_LOOKUP);
     }
@@ -277,39 +279,39 @@ class UseCaseServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Runs {@code afterSecondAsk} exactly once its delegate's second {@code ask()} call returns -
-     * {@link KognioRdfUseCaseRepository#write} issues exactly two on the create path: the identity
-     * guard, then the code-uniqueness guard.
+     * Runs {@code afterSecondGuard} exactly once its delegate's second {@code contains()} call
+     * returns - {@link KognioRdfUseCaseRepository#write} issues exactly two on the create path:
+     * the identity guard, then the code-uniqueness guard.
      */
-    private static final class AskGuardSyncTx implements DatasetTx {
+    private static final class GuardSyncTx implements DatasetTx {
 
         private final DatasetTx delegate;
-        private final Runnable afterSecondAsk;
-        private int askCount;
+        private final Runnable afterSecondGuard;
+        private int guardCount;
 
-        AskGuardSyncTx(DatasetTx delegate, Runnable afterSecondAsk) {
+        GuardSyncTx(DatasetTx delegate, Runnable afterSecondGuard) {
             this.delegate = delegate;
-            this.afterSecondAsk = afterSecondAsk;
+            this.afterSecondGuard = afterSecondGuard;
         }
 
         @Override
         public boolean ask(String query) {
-            boolean result = delegate.ask(query);
-            askCount++;
-            if (askCount == 2) {
-                afterSecondAsk.run();
-            }
-            return result;
+            return delegate.ask(query);
         }
 
         @Override
-        public void add(IRI graph, ReadableGraph data) {
-            delegate.add(graph, data);
+        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.ask(query, bindings);
         }
 
         @Override
-        public void remove(IRI graph, ReadableGraph data) {
-            delegate.remove(graph, data);
+        public long add(IRI graph, ReadableGraph data) {
+            return delegate.add(graph, data);
+        }
+
+        @Override
+        public long remove(IRI graph, ReadableGraph data) {
+            return delegate.remove(graph, data);
         }
 
         @Override
@@ -318,8 +320,39 @@ class UseCaseServiceRealStoreConcurrencyTest {
         }
 
         @Override
+        public ReadableGraph export(IRI graph) {
+            return delegate.export(graph);
+        }
+
+        @Override
+        public long count(IRI graph) {
+            return delegate.count(graph);
+        }
+
+        @Override
+        public long count() {
+            return delegate.count();
+        }
+
+        @Override
+        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            boolean result = delegate.contains(graph, subject, predicate, object);
+            guardCount++;
+            if (guardCount == 2) {
+                afterSecondGuard.run();
+            }
+            return result;
+        }
+
+        @Override
         public void update(String sparqlUpdate) {
             delegate.update(sparqlUpdate);
+        }
+
+        @Override
+        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            delegate.update(sparqlUpdate, bindings);
         }
 
         @Override
@@ -328,8 +361,18 @@ class UseCaseServiceRealStoreConcurrencyTest {
         }
 
         @Override
+        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.select(query, bindings);
+        }
+
+        @Override
         public ReadableGraph construct(String query) {
             return delegate.construct(query);
+        }
+
+        @Override
+        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.construct(query, bindings);
         }
     }
 }

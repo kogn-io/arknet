@@ -11,9 +11,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -120,8 +120,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
- * transactional mechanics of that distinction - the in-transaction {@code ASK}s, the SHACL gate,
- * the commit-conflict translation (issue #144) - live in the shared {@link WriteFunnel}
+ * transactional mechanics of that distinction - the in-transaction {@code contains} checks, the
+ * SHACL gate, the commit-conflict translation (issue #144) - live in the shared {@link WriteFunnel}
  * (ADR-013), not here: {@link #create} only builds the candidate graph and rejects an existing
  * subject with {@link ResourceAlreadyExistsException} or a colliding business code with
  * {@link DuplicateUseCaseCodeException}; {@link #update} rejects a missing subject with

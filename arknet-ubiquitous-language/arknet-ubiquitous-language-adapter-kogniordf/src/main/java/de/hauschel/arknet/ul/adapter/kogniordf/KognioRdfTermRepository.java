@@ -17,9 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -78,8 +78,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" was never one coherent operation for
- * {@link #create}. The transactional mechanics of that check - the in-transaction {@code ASK},
- * the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel}
+ * {@link #create}. The transactional mechanics of that check - the in-transaction {@code contains}
+ * check, the SHACL gate, the commit-conflict translation - live in the shared {@link WriteFunnel}
  * (ADR-013), not here; {@link #create} only builds the candidate graph and rejects an existing
  * subject with {@link ResourceAlreadyExistsException}.</p>
  *
@@ -95,7 +95,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * and rewritten identically". A missing code throws {@link TermNotFoundException}.</p>
  *
  * <p><strong>Identity collision vs. code collision.</strong> {@link #create} runs a second
- * {@code ASK} in the same transaction - by {@code dcterms:identifier}, not by subject - and
+ * {@code contains} check in the same transaction - by {@code dcterms:identifier}, not by subject - and
  * rejects a match with {@link DuplicateTermCodeException}. This is deliberately a separate check
  * and a separate exception from {@link ResourceAlreadyExistsException}: an opaque-identity
  * collision is a programming error (identities are minted once and never reused), while a

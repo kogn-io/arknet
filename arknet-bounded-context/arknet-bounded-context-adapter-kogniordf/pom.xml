@@ -39,6 +39,17 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset-rdf4j</artifactId>
         </dependency>
+        <!-- DatasetLifecycle/DatasetHandle/DatasetId/DatasetStoreConfig and their RDF4J
+             implementation live in these dedicated hosting port/adapter modules since
+             kognio-rdf 0.2.x (#173). -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting-rdf4j</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-shacl</artifactId>

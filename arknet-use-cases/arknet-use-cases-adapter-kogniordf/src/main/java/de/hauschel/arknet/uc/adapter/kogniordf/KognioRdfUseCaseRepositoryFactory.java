@@ -15,19 +15,18 @@ import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.vocabulary.SHACL;
-import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
-import org.eclipse.rdf4j.sail.SailConflictException;
 
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -62,21 +61,24 @@ public final class KognioRdfUseCaseRepositoryFactory {
 
     /**
      * Creates a persistent, RDF4J-backed use-case repository storing its datasets under
-     * {@code storageDir}.
+     * {@code storageDir}, wired for the given display language.
      *
-     * @param storageDir the directory the embedded RDF store persists into
+     * @param storageDir    the directory the embedded RDF store persists into
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link UseCaseRepository}
      */
-    public static UseCaseRepository persistent(Path storageDir) {
+    public static UseCaseRepository persistent(Path storageDir, DisplayLocale displayLocale) {
         Objects.requireNonNull(storageDir, "storageDir");
         final DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle, new UuidResourceIdFactory());
+        return over(lifecycle, new UuidResourceIdFactory(), displayLocale);
     }
 
     /**
-     * Assembles a use-case repository over an already-created dataset lifecycle, wired with
-     * the use-case SHACL write-gate.
+     * Assembles a use-case repository over an already-created dataset lifecycle, wired with the
+     * use-case SHACL write-gate and an explicit display language. Used by
+     * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own
+     * (e.g. in-memory) lifecycle.
      *
      * <p>This is the seam the composition root (arknet-mcp) uses: it passes the single shared
      * {@link DatasetLifecycle} bean so the use-case repository reads and writes the <em>same</em>
@@ -88,37 +90,17 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
      * @param resourceIdFactory mints the opaque IRI of each derived step resource; the same
      *                          kernel-owned scheme the composition root uses everywhere else
+     * @param displayLocale     the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link UseCaseRepository}
      */
-    public static UseCaseRepository over(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory) {
+    public static UseCaseRepository over(
+            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
-        ShaclWriteGate gate = buildGate();
-        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfUseCaseRepositoryFactory::isWriteConflict);
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        ShaclWriteGate gate = buildGate(displayLocale);
+        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, funnel);
-    }
-
-    /**
-     * Recognises the RDF4J-backed store's commit-time signal for a lost {@code SERIALIZABLE}
-     * transaction conflict (issue #144, kogn-io/rdf-core#18): a {@link RepositoryException} whose
-     * cause chain carries a {@link SailConflictException}. Like {@link #buildGate()}, this method
-     * stays the only place in this package naming those RDF4J types (ArchUnit rule 2) - the
-     * method reference passed to {@link KognioRdfUseCaseRepository} above hands it over as a
-     * technology-neutral {@code Predicate} that references no RDF4J type itself.
-     *
-     * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
-     * same reason {@link #buildGate()} is.</p>
-     */
-    static boolean isWriteConflict(RuntimeException candidate) {
-        if (!(candidate instanceof RepositoryException)) {
-            return false;
-        }
-        for (Throwable cause = candidate.getCause(); cause != null; cause = cause.getCause()) {
-            if (cause instanceof SailConflictException) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -135,12 +117,19 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * {@link UseCaseRepository} round-trip the single-valued {@code primaryActor} domain field
      * cannot produce (issue #82).</p>
      *
+     * <p>The {@code displayLocale} handed in is the same one the composition root configures
+     * process-wide: a caller gets told why a write was refused in the same language regardless of
+     * which bounded context rejected it, whenever the violated shape carries its {@code sh:message}
+     * in more than one.</p>
+     *
+     * @param displayLocale the language a rejected write is reported in
      * @return the assembled use-case SHACL write-gate
      */
-    static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate(DisplayLocale displayLocale) {
         ReadableGraph shapes = loadUseCaseShapes();
         ReadableGraph axioms = loadGraph(AXIOMS_RESOURCE);
-        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true));
+        return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true),
+                displayLocale);
     }
 
     /**

@@ -13,9 +13,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -71,9 +72,11 @@ class TraceabilityGraphTest {
     @BeforeEach
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        RequirementRepository requirements =
+                KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
-        UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(lifecycle, new UuidResourceIdFactory());
+        UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
 
         // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
         // referenced as UC1's primary actor - must NOT count as an orphan term.

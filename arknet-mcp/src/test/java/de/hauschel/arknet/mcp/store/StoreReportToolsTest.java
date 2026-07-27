@@ -20,10 +20,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.modelcontextprotocol.common.McpTransportContext;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.kernel.WorkspaceResolver;
@@ -65,7 +66,8 @@ class StoreReportToolsTest {
     @BeforeEach
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        RequirementRepository requirements =
+                KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
 
         requirements.create(WORKSPACE, new Requirement(
@@ -261,7 +263,8 @@ class StoreReportToolsTest {
         WorkspaceId otherWorkspace = new WorkspaceId("other-workspace");
         String otherFr1Iri = "https://w3id.org/arknet/id/store-report-test-fr-1-other";
 
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        RequirementRepository requirements =
+                KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         requirements.create(otherWorkspace, new Requirement(
                 new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
                 "The system shall authenticate a user in the other workspace.",
