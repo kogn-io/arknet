@@ -171,7 +171,7 @@ Store report -- generic, cross-BC read path (readOnly; works for any BC without 
 | Tool | Description |
 |------|-------------|
 | `store_overview` | Compact text digest of the workspace store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML resource browser and returns its path |
-| `resource_get` | All triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, or bare business id (`FR-1`) |
+| `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, or bare business id (`FR-1`). The revision trail is left out -- it is change history, not model ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 
 Traceability -- readOnly graph traversal over the same store snapshot (no second SPARQL path):
 
@@ -226,6 +226,7 @@ Modular layout under the namespace `https://w3id.org/arknet/`:
 | `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder, Concern |
 | `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (planned) |
 | `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
+| `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 
 ## Architecture
 
