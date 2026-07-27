@@ -1204,6 +1204,13 @@ class KognioRdfRequirementRepositoryTest {
      * resource. (The unmigrated {@code compareAndUpdate} special path is deliberately not
      * covered - its revision recording arrives with its dissolution into the funnel's
      * compare-and-set, ADR-014 decision 4.)
+     *
+     * <p><strong>How far this evidence reaches.</strong> {@code update} is called here directly
+     * on the out-port. Today no in-port reaches it: {@code RequirementService} routes every
+     * state change ({@code req_update}, {@code req_set_status}, {@code req_link_term}) through
+     * {@code compareAndUpdate} instead, so no user-reachable requirement write moves the head
+     * after the initial {@code create}. This test proves the funnel records a revision on
+     * {@code update} - not that requirements accumulate a revision trail in practice.</p>
      */
     @Test
     void createAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {

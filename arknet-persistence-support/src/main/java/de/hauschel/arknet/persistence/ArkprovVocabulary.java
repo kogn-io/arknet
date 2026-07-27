@@ -23,10 +23,15 @@ package de.hauschel.arknet.persistence;
  * &lt;resource&gt; arkprov:head &lt;revision&gt; .
  * </pre>
  *
- * <p>The head triple is the resource's queryable concurrency token (ADR-014): exactly one
- * {@code arkprov:head} per resource, rewritten with every write. The activity carries no
- * resolved agent yet - agent attribution ({@code prov:wasAssociatedWith}) is deliberately
- * additive and out of scope here (ADR-014 decision 5).</p>
+ * <p>The head triple is the resource's queryable pointer to its latest revision (ADR-014):
+ * exactly one {@code arkprov:head} per resource, rewritten with every write <em>through the
+ * funnel</em>. It is not yet a complete history: {@code req_update}, {@code req_set_status},
+ * {@code req_link_term} and {@code term_update} write past the funnel and move neither
+ * revision nor head (ADR-014 decision 4 resolves them), so the head is the intended
+ * concurrency token, not yet a usable one - see {@link WriteFunnel} for why compare-and-set
+ * must wait for that resolution. The activity carries no resolved agent yet - agent
+ * attribution ({@code prov:wasAssociatedWith}) is deliberately additive and out of scope here
+ * (ADR-014 decision 5).</p>
  *
  * <p><strong>Why here.</strong> Like {@link ArkreqVocabulary} these are RDF serialization
  * constants, not domain vocabulary - the bounded-context cores never see them (opaque
@@ -49,7 +54,7 @@ public final class ArkprovVocabulary {
     /** {@code arkprov:Revision} - the type of one immutable revision (a {@code prov:Entity}). */
     public static final String REVISION_TYPE = NAMESPACE + "Revision";
 
-    /** {@code arkprov:head} - resource -&gt; its most recent revision (the concurrency token). */
+    /** {@code arkprov:head} - resource -&gt; its most recent revision written through the funnel. */
     public static final String HEAD = NAMESPACE + "head";
 
     /** {@code prov:Entity} - every revision is dually typed as a plain PROV entity. */

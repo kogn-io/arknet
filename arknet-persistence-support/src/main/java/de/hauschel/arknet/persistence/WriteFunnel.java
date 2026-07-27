@@ -72,11 +72,22 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * the funnel records exactly one immutable PROV-O revision (see {@link ArkprovVocabulary} for
  * the exact triple shape) and rewrites the resource's {@code arkprov:head} pointer to it,
  * chaining the superseded head via {@code prov:wasRevisionOf}. A rejected or failing write
- * therefore never leaves a revision behind - the transaction aborts as a whole. The head is
- * the resource's queryable concurrency token; comparing it inside the transaction
- * (compare-and-set) is the next step ADR-014 describes, deliberately not implemented here.
- * The write activity carries no resolved agent yet - agent attribution is additive
- * (ADR-014 decision 5).</p>
+ * therefore never leaves a revision behind - the transaction aborts as a whole. The write
+ * activity carries no resolved agent yet - agent attribution is additive (ADR-014
+ * decision 5).</p>
+ *
+ * <p><strong>What the head does and does not promise today.</strong> Revision and head follow
+ * the write <em>through this funnel</em> - and only writes that come through here. Four write
+ * paths still bypass it and therefore move neither: the requirements context's
+ * {@code compareAndUpdate} (behind {@code req_update}, {@code req_set_status} and
+ * {@code req_link_term}) and the glossary's patch-{@code update} (behind {@code term_update}),
+ * both kept outside on purpose for their own transaction semantics (ADR-013 decision 5). Their
+ * resolution into the funnel is ADR-014 decision 4. Until then a resource's head marks its last
+ * funnel write, not necessarily its last state change - so it is the <em>intended</em>
+ * concurrency token, not yet a usable one. Comparing it inside the transaction
+ * (compare-and-set, ADR-014 decision 3) is the next step, deliberately not implemented here,
+ * and must not be built before those paths are resolved: against a head that silently stands
+ * still, a compare-and-set would wave through exactly the lost update it is meant to stop.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same

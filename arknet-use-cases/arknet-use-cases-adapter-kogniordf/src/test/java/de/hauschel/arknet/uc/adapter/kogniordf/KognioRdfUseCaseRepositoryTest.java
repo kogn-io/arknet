@@ -601,6 +601,12 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code update} each record exactly one immutable revision of the use case, and the head
      * is queryable per resource. The step resources the body writes alongside get no revisions
      * of their own - the revision hangs off the funnel's subject, the use case.
+     *
+     * <p><strong>How far this evidence reaches.</strong> {@code update} is called here directly
+     * on the out-port. This bounded context has no in-port reaching it at all - {@code
+     * UseCaseService} only ever calls {@code create}, and there is no {@code uc_update} tool -
+     * so today every use case's head stays on its create revision. This test proves the funnel
+     * behaves on {@code update}, ahead of a write path that would use it.</p>
      */
     @Test
     void createAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
