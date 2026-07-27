@@ -310,22 +310,34 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * One attempt of {@link #update}'s CAS retry loop: reads the term's current state and head
-     * together (outside any transaction), builds the same candidate/context {@code update} always
-     * built, and hands the granular patch to {@link WriteFunnel#compareAndUpdate} as the write
-     * body - the funnel checks the head again inside its own transaction and runs the body only if
-     * it still matches.
+     * together, from a single query ({@link #readCurrentByCode}), outside any transaction, builds
+     * the same candidate/context {@code update} always built, and hands the granular patch to
+     * {@link WriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
+     * inside its own transaction and runs the body only if it still matches.
+     *
+     * <p><strong>Why one combined read, not two (issue #167's original bug).</strong> An earlier
+     * version read the assembly via {@link #readAssemblyByCode} and the head via a separate,
+     * second {@code SparqlQuery#select} call. That port's contract only guarantees that each
+     * individual call is a self-contained read against the store's current committed state -
+     * nothing ties two separate calls to the same snapshot. A concurrent writer's commit landing
+     * exactly between the two calls therefore left the first call's assembly stale (read before
+     * the commit) while the second call's head was already fresh (read after it): the funnel's
+     * head comparison then wrongly succeeded against a state that was no longer current, and the
+     * retry loop never noticed - the caller ended up reporting a field value the store no longer
+     * held. Reading both from one query makes that impossible: the assembly and the head are
+     * always the same snapshot, so a concurrent commit either lands entirely before or entirely
+     * after this read, never in between it.</p>
      */
     private Term attemptUpdate(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
         DatasetId dataset = new DatasetId(workspaceId.value());
-        TermAssembly current;
-        String currentHead;
+        CurrentTerm currentTerm;
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            current = readAssemblyByCode(handle.sparqlQuery()::select, code)
+            currentTerm = readCurrentByCode(handle.sparqlQuery()::select, code)
                     .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
-            currentHead = readHead(handle.sparqlQuery()::select, current.id.value().value())
-                    .map(IRI::getIRIString).orElse(null);
         }
+        TermAssembly current = currentTerm.assembly();
+        String currentHead = currentTerm.head();
 
         String subjectIriString = current.id.value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
@@ -398,18 +410,6 @@ public class KognioRdfTermRepository implements TermRepository {
         return resultingTerm(current, prefLabel, definition, actorFacet);
     }
 
-    /** Reads a subject's current {@code arkprov:head} pointer, if it has one (issue #167). */
-    private Optional<IRI> readHead(Function<String, Stream<BindingSet>> selectFn, String subjectIri) {
-        String subject = SparqlTerms.iriRef(subjectIri);
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        return selectFn.apply(query)
-                .map(row -> row.getValue("head").orElse(null))
-                .filter(IRI.class::isInstance)
-                .map(IRI.class::cast)
-                .findFirst();
-    }
-
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
     private static String deleteAllTriplesOf(String subject, String predicateIri) {
         return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
@@ -476,24 +476,38 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Reads one term's full current state by business code - shared by {@link #findByCode} (reads
-     * outside any transaction) and {@link #update} (reads inside the very transaction that then
-     * patches only the caller-specified predicates, issue #163 follow-up), so both see the exact
-     * same mandatory-join semantics: a term missing either {@code skos:prefLabel} or
-     * {@code skos:definition} entirely is invisible to both, exactly as before.
+     * Builds the WHERE-clause body (inside {@code GRAPH <TERMS_GRAPH>}) shared by
+     * {@link #readAssemblyByCode} and {@link #readCurrentByCode}: the mandatory joins (type,
+     * identifier, prefLabel, definition) plus the blank-node subject guard and the three optional
+     * actor-facet joins that scope a single-term read to one {@code code}. Extracted because both
+     * callers build a {@link TermAssembly} from the same row shape - drift between two
+     * near-identical read paths in this class was a real bug twice before (issues #80/#81), so
+     * this text now lives in one place. The caller supplies the surrounding
+     * {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in {@link #readCurrentByCode}'s
+     * case, the additional provenance-graph join - only the WHERE body itself is common.
      */
-    private Optional<TermAssembly> readAssemblyByCode(
-            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
-        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
-                + TERMS_GRAPH + "> { "
-                + "?s a <" + CONCEPT_TYPE + "> ; "
+    private static String termByCodeWhereClause(TermCode code) {
+        return "?s a <" + CONCEPT_TYPE + "> ; "
                 + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" ; "
                 + "<" + PREF_LABEL_PROPERTY + "> ?prefLabel ; "
                 + "<" + DEFINITION_PROPERTY + "> ?definition . "
                 + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
-                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
+                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } ";
+    }
+
+    /**
+     * Reads one term's full current state by business code - used by {@link #findByCode} (reads
+     * outside any transaction). A term missing either {@code skos:prefLabel} or
+     * {@code skos:definition} entirely is invisible, exactly as before.
+     */
+    private Optional<TermAssembly> readAssemblyByCode(
+            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
+        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
+                + TERMS_GRAPH + "> { "
+                + termByCodeWhereClause(code)
+                + "} }";
 
         Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
         selectFn.apply(query).forEach(row -> {
@@ -502,6 +516,80 @@ public class KognioRdfTermRepository implements TermRepository {
             assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
         });
         return bySubject.values().stream().findFirst();
+    }
+
+    /**
+     * One term's current state ({@link TermAssembly}) together with its {@code arkprov:head}
+     * concurrency token, read from a single query (issue #167) - see {@link #readCurrentByCode}
+     * for why this must be one query, not two.
+     */
+    private record CurrentTerm(TermAssembly assembly, String head) {
+    }
+
+    /**
+     * Reads one term's full current state together with its {@code arkprov:head} concurrency
+     * token in a single query (issue #167, mirroring
+     * {@code KognioRdfRequirementRepository#findCurrentByCode}) - used by {@link #attemptUpdate},
+     * whose compare-and-set write must know both the state to patch and the token to check.
+     * Shares {@link #termByCodeWhereClause} with {@link #readAssemblyByCode} so the two
+     * single-term read paths cannot drift apart field-by-field (issues #80/#81 already taught
+     * this lesson once).
+     *
+     * <p><strong>Why the state and the head must come from the same query.</strong>
+     * {@code SparqlQuery#select}'s port contract guarantees only that each individual call is a
+     * self-contained read against the store's current committed state - two separate calls are
+     * two independent snapshots, with no guarantee that nothing committed in between them. An
+     * earlier version read the assembly and the head via two separate calls; a concurrent
+     * writer's commit landing between them left the first call's assembly stale (pre-commit)
+     * paired with the second call's head, which was already fresh (post-commit) - the funnel's
+     * head comparison in {@link #attemptUpdate} then wrongly matched against a state that was no
+     * longer current, and the bounded retry loop in {@link #update} never got a chance to catch
+     * it. Joining {@code ?head} into this query instead makes the pairing atomic: both values
+     * always come from the same snapshot, so a concurrent commit either precedes or follows this
+     * whole read, never falls inside it.</p>
+     *
+     * <p>The head is single-valued and therefore identical on every row this query binds for one
+     * subject (the mandatory {@code prefLabel}/{@code definition} joins in
+     * {@link #termByCodeWhereClause} can still multiply a subject into several rows, issues
+     * #80/#81) - it is kept <em>per subject</em> and paired with the assembly this method
+     * actually returns, exactly as the row grouping into {@link TermAssembly} already does for
+     * the other per-subject fields. Keying it by subject rather than taking the first head seen
+     * matters because {@code dcterms:identifier} carries no {@code sh:maxCount}: a store-first
+     * store (ADR-005) can hold two subjects under the same code, and the returned token must be
+     * the token of the subject whose state is returned with it - a head belonging to the other
+     * subject would make {@link #attemptUpdate}'s compare-and-set check a foreign resource's
+     * revision.</p>
+     */
+    private Optional<CurrentTerm> readCurrentByCode(
+            Function<String, Stream<BindingSet>> selectFn, TermCode code) {
+        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole ?head WHERE { GRAPH <"
+                + TERMS_GRAPH + "> { "
+                + termByCodeWhereClause(code)
+                + "} "
+                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+
+        Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
+        Map<String, String> headBySubject = new LinkedHashMap<>();
+        selectFn.apply(query).forEach(row -> {
+            TermAssembly assembly = assemblyFor(bySubject, row, code);
+            assembly.addPrefLabel(literalOf(row, "prefLabel"));
+            assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            String head = headOf(row);
+            if (head != null) {
+                headBySubject.putIfAbsent(assembly.id.value().value(), head);
+            }
+        });
+        return bySubject.values().stream().findFirst()
+                .map(assembly -> new CurrentTerm(assembly, headBySubject.get(assembly.id.value().value())));
+    }
+
+    /** Extracts a row's {@code ?head} binding as an IRI string, or {@code null} if absent or not an IRI. */
+    private static String headOf(BindingSet row) {
+        return row.getValue("head")
+                .filter(IRI.class::isInstance)
+                .map(value -> ((IRI) value).getIRIString())
+                .orElse(null);
     }
 
     @Override

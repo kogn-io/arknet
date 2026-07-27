@@ -147,3 +147,21 @@ Wiederaufbau eines Graph-Patches. Die verbleibende Asymmetrie zwischen den beide
 damit im Ort der Wiederholung, nicht mehr im Konflikt-Signal -- und sie folgt aus dem
 Zuschnitt des jeweiligen Out-Ports (Replace-by-Identity gegen Feld-Patch), nicht aus einer
 freien Wahl.
+
+## Nachtrag 2026-07-27 (#167): der Head schuetzt nur gegen den Trichter, nicht gegen store-first
+
+Entscheidung 4 degeneriert `RequirementRepository#compareAndUpdate` vom Voll-Snapshot-Vergleich
+zum Head-Vergleich. Das aendert, was der Vergleich erkennt: vorher verglich `compareAndUpdate`
+den kompletten Requirement-Zustand innerhalb der Schreibtransaktion, also auch eine Abweichung,
+die per direktem SPARQL am Store vorgenommen wurde (store-first, ADR-005 nennt den Store den
+primaeren Modellort). Jetzt bewegt ausschliesslich der Trichter den Head; ein store-first
+geaendertes Feld (z.B. `title`) laesst den Head unberuehrt, das nachfolgende `compareAndUpdate`
+sieht keinen Mismatch und die naechste Trichter-Schreibung ueberschreibt den Fremd-Edit
+wortlos.
+
+Das ist keine Fehlimplementierung, sondern die direkte Konsequenz aus Entscheidung 1: der Head
+ist ein Trichter-internes Token, kein Abbild des gesamten Ressourcen-Zustands. Das Token schuetzt
+also den Lost-Update zwischen zwei Trichter-Schreibern -- den Fall, den ADR-011/#108 adressieren
+-- und nicht den Fall eines Schreibers, der den Trichter umgeht. Store-first bleibt der primaere
+Modellort (ADR-005); wer ihn nutzt, gibt fuer per Tool verwaltete Ressourcen den Verlustschutz
+auf, den der Head fuer Tool-Tool-Konflikte bietet.

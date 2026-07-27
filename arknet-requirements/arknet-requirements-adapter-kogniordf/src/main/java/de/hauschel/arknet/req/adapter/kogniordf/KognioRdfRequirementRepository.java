@@ -34,7 +34,6 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
-import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
