@@ -25,19 +25,21 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 import io.kogn.rdf.dataset.BindingSet;
-import io.kogn.rdf.dataset.DatasetHandle;
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
 import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.dataset.SparqlUpdate;
+import io.kogn.rdf.shacl.ShaclMessage;
 import io.kogn.rdf.shacl.ShaclReport;
 import io.kogn.rdf.shacl.ShaclResult;
 import io.kogn.rdf.shacl.ShaclValidation;
 import io.kogn.rdf.shacl.Severity;
 import io.kogn.rdf.shacl.ValidationOptions;
+import io.kogn.rdf.terms.BlankNodeOrIRI;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -48,6 +50,8 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
+
+import de.hauschel.arknet.kernel.DisplayLocale;
 
 /**
  * Unit test for the shared {@link WriteFunnel}.
@@ -205,7 +209,8 @@ class WriteFunnelTest {
     @Test
     void gateViolationPreventsAcquisition() {
         ShaclReport violation = new ShaclReport(false,
-                List.of(new ShaclResult(SUBJECT_IRI, null, Severity.VIOLATION, "bad")));
+                List.of(new ShaclResult(SUBJECT_IRI, null, Severity.VIOLATION,
+                        List.of(ShaclMessage.untagged("bad")))));
         Fixture fixture = new Fixture(List.of(), violation, null, e -> false);
 
         assertThrows(WriteConstraintViolationException.class,
@@ -553,7 +558,7 @@ class WriteFunnelTest {
         private WriteFunnel funnelAt(Clock clock) {
             RDF graphs = new SimpleRdf();
             ShaclWriteGate gate = new ShaclWriteGate(validation, graphs.createGraph(),
-                    graphs.createGraph(), ValidationOptions.defaults());
+                    graphs.createGraph(), ValidationOptions.defaults(), DisplayLocale.DEFAULT);
             return new WriteFunnel(lifecycle, gate, isWriteConflict, clock);
         }
     }
@@ -678,12 +683,18 @@ class WriteFunnelTest {
         }
 
         @Override
-        public void add(IRI namedGraph, ReadableGraph triples) {
-            adds.add(new RecordedAdd(namedGraph, triples));
+        public boolean ask(String sparql, java.util.Map<String, RDFTerm> bindings) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
-        public void remove(IRI namedGraph, ReadableGraph triples) {
+        public long add(IRI namedGraph, ReadableGraph triples) {
+            adds.add(new RecordedAdd(namedGraph, triples));
+            return triples.stream().count();
+        }
+
+        @Override
+        public long remove(IRI namedGraph, ReadableGraph triples) {
             throw new UnsupportedOperationException();
         }
 
@@ -693,8 +704,33 @@ class WriteFunnelTest {
         }
 
         @Override
+        public ReadableGraph export(IRI namedGraph) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long count(IRI namedGraph) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long count() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean contains(IRI namedGraph, BlankNodeOrIRI subject, IRI predicate, RDFTerm object) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void update(String sparql) {
             updates.add(sparql);
+        }
+
+        @Override
+        public void update(String sparql, java.util.Map<String, RDFTerm> bindings) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -706,7 +742,17 @@ class WriteFunnelTest {
         }
 
         @Override
+        public Stream<BindingSet> select(String sparql, java.util.Map<String, RDFTerm> bindings) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public ReadableGraph construct(String sparql) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ReadableGraph construct(String sparql, java.util.Map<String, RDFTerm> bindings) {
             throw new UnsupportedOperationException();
         }
 

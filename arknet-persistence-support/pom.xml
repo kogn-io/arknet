@@ -26,6 +26,12 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset</artifactId>
         </dependency>
+        <!-- DatasetLifecycle/DatasetHandle/DatasetId live in this dedicated hosting port module
+             since kognio-rdf 0.2.x (#173); DatasetTx (used above) stays in rdf-dataset. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
