@@ -34,9 +34,12 @@ public final class Prefixes {
      * Base of arknet's opaque resource identities as minted by {@code UuidResourceIdFactory}
      * (arknet-shared-kernel) since the opaque-{@code ResourceId} refactor (#68/#71/#72): a
      * flat {@code https://w3id.org/arknet/id/<uuid>}, no bounded-context or type segment - the
-     * type lives in {@code rdf:type}. This has been the only IRI base every write path mints
+     * type lives in {@code rdf:type}. This is the only base <em>model resources</em> are minted
      * under since that refactor; {@link #MODEL_INSTANCE_BASE} predates it and is no longer
-     * produced.
+     * produced. It is not the only base anything is minted under: the shared write funnel mints
+     * revision and activity identities under its own bases (ADR-014), deliberately outside this
+     * one because a revision is infrastructure rather than a model resource - which is also why
+     * no reader here ever renders them (see {@code StoreReader}).
      */
     public static final String INSTANCE_BASE = "https://w3id.org/arknet/id/";
 
@@ -60,11 +63,15 @@ public final class Prefixes {
     }
 
     /**
-     * The default arknet bindings: instance namespaces (requirement, term, actor, plus the
-     * revision/activity bases the write funnel mints under) and the standard vocabularies the
-     * bounded contexts write (arkreq, arkproc, arknet core, arkprov, prov, skos, dcterms, rdf,
-     * rdfs, xsd). The provenance bindings are here so a resource's {@code arkprov:head} line
-     * renders as a CURIE like every other statement instead of as two raw IRIs (ADR-014).
+     * The default arknet bindings: instance namespaces (requirement, term, actor) plus the
+     * standard vocabularies the bounded contexts write (arkreq, arkproc, arknet core, skos,
+     * dcterms, rdf, rdfs, xsd).
+     *
+     * <p>No {@code arkprov:}/{@code prov:}/revision bindings: {@code StoreReader} excludes the
+     * provenance graph from every read path (ADR-014), so no provenance IRI ever reaches a
+     * renderer or the prefix legend. They belong here the day the head pointer becomes visible,
+     * not before - a binding for something unreachable is a promise the read path does not
+     * keep.</p>
      *
      * @return the default resolver
      */
@@ -73,14 +80,10 @@ public final class Prefixes {
                 new Prefix("req", MODEL_INSTANCE_BASE + "requirement/"),
                 new Prefix("term", MODEL_INSTANCE_BASE + "term/"),
                 new Prefix("act", MODEL_INSTANCE_BASE + "actor/"),
-                new Prefix("rev", "https://w3id.org/arknet/revision/"),
-                new Prefix("activity", "https://w3id.org/arknet/activity/"),
                 new Prefix("arknet", "https://w3id.org/arknet/core#"),
                 new Prefix("arkreq", "https://w3id.org/arknet/requirements#"),
                 new Prefix("arkproc", "https://w3id.org/arknet/process#"),
                 new Prefix("arkarch", "https://w3id.org/arknet/architecture#"),
-                new Prefix("arkprov", "https://w3id.org/arknet/provenance#"),
-                new Prefix("prov", "http://www.w3.org/ns/prov#"),
                 new Prefix("skos", "http://www.w3.org/2004/02/skos/core#"),
                 new Prefix("dcterms", "http://purl.org/dc/terms/"),
                 new Prefix("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"),

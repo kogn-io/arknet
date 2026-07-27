@@ -70,23 +70,6 @@ class PrefixesTest {
                 .isEqualTo("req:FR-9");
     }
 
-    /**
-     * Every funnel-written resource carries an {@code arkprov:head} statement (ADR-014); both
-     * its predicate and its revision object must shorten like any other statement instead of
-     * rendering as raw IRIs in {@code resource_get}.
-     */
-    @Test
-    void shortensTheProvenanceHeadStatementToCuries() {
-        assertThat(prefixes.toCurie("https://w3id.org/arknet/provenance#head"))
-                .isEqualTo("arkprov:head");
-        assertThat(prefixes.toCurie("https://w3id.org/arknet/revision/9f2c"))
-                .isEqualTo("rev:9f2c");
-        assertThat(prefixes.toCurie("https://w3id.org/arknet/activity/9f2c"))
-                .isEqualTo("activity:9f2c");
-        assertThat(prefixes.toCurie("http://www.w3.org/ns/prov#wasRevisionOf"))
-                .isEqualTo("prov:wasRevisionOf");
-    }
-
     @Test
     void unknownIriIsReturnedUnchanged() {
         String iri = "https://example.org/thing/1";

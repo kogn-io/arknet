@@ -16,8 +16,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.terms.IRI;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -115,57 +117,91 @@ class StoreReaderTest {
     }
 
     /**
-     * Every guarded write also records a PROV-O revision into the provenance graph (ADR-014),
-     * and that trail grows with every write, forever. The snapshot feeds the store report - a
-     * view of the model, not of its change history - so the provenance graph is excluded from
-     * it, while {@code outgoing} still reaches the head pointer of a concrete resource.
+     * Every guarded write records a PROV-O revision plus a head pointer into the provenance
+     * graph (ADR-014), and that trail grows with every write, forever. None of the three read
+     * paths surfaces it: the snapshot feeds the store report, a view of the model rather than
+     * of its change history, and the head pointer is hidden for the same reason it must not be
+     * trusted yet - it only moves on writes through the write funnel, while {@code req_update},
+     * {@code req_set_status}, {@code req_link_term} and {@code term_update} bypass it (ADR-014
+     * decision 4).
      */
     @Test
-    void readSnapshotExcludesTheProvenanceGraphButOutgoingStillSeesTheHead() {
-        List<Triple> outgoing = storeReader.outgoing(WORKSPACE, FR_1_IRI);
-        assertThat(outgoing)
-                .as("the write in setUp must have recorded a head pointer")
-                .anyMatch(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD));
+    void noReadPathSurfacesTheProvenanceGraph() {
+        assertThat(provenanceStatementCount())
+                .as("the write in setUp must have recorded a revision - else this test is vacuous")
+                .isPositive();
 
-        StoreSnapshot snapshot = storeReader.readSnapshot(WORKSPACE);
-        List<Triple> triples = snapshot.resources().stream()
-                .flatMap(resource -> resource.outgoing().stream())
-                .toList();
-        assertThat(triples)
-                .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD));
-        assertThat(triples)
-                .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF));
+        assertThat(storeReader.outgoing(WORKSPACE, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
+        assertThat(storeReader.incoming(WORKSPACE, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
+        assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProvenance);
     }
 
     /**
-     * The neighbour list must not grow with the revision trail: every revision names its
-     * resource via {@code prov:specializationOf}, so an unfiltered {@code incoming} would add
-     * one row per write, without bound. The head pointer stays visible - on the revision it
-     * points at, which is where that statement actually says something.
+     * The generic read path must not grow with the revision trail: every revision names its
+     * resource via {@code prov:specializationOf} and rewrites its head, so an unfiltered view
+     * would add rows per write, without bound. The revisions themselves are not model resources
+     * either - reaching one by its IRI yields nothing.
      */
     @Test
-    void incomingIgnoresTheRevisionTrailButStillShowsTheHeadPointer() {
-        List<Triple> afterOneWrite = storeReader.incoming(WORKSPACE, FR_1_IRI);
+    void furtherWritesGrowTheTrailInTheStoreButNotTheReadPath() {
+        List<Triple> incomingAfterOneWrite = storeReader.incoming(WORKSPACE, FR_1_IRI);
+        List<Triple> outgoingAfterOneWrite = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+        long trailAfterOneWrite = provenanceStatementCount();
+        String firstHead = headIri();
 
         requirements.update(WORKSPACE, requirementTitled("Login v2"));
         requirements.update(WORKSPACE, requirementTitled("Login v3"));
 
-        List<Triple> afterThreeWrites = storeReader.incoming(WORKSPACE, FR_1_IRI);
-        assertThat(afterThreeWrites)
-                .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF));
-        assertThat(afterThreeWrites)
-                .as("two further writes must not add neighbour rows")
-                .hasSameSizeAs(afterOneWrite);
+        assertThat(provenanceStatementCount())
+                .as("the two updates must have extended the trail in the store")
+                .isGreaterThan(trailAfterOneWrite);
+        assertThat(headIri())
+                .as("and moved the head - so the read path is hiding something that really changed")
+                .isNotEqualTo(firstHead);
 
-        String headIri = storeReader.outgoing(WORKSPACE, FR_1_IRI).stream()
-                .filter(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD))
-                .map(triple -> ((RdfNode.Resource) triple.object()).iri())
-                .findFirst()
-                .orElseThrow();
-        assertThat(storeReader.incoming(WORKSPACE, headIri))
-                .as("the head statement is signal on the revision it points at")
-                .anyMatch(triple -> triple.subject().equals(FR_1_IRI)
-                        && triple.predicate().equals(ArkprovVocabulary.HEAD));
+        assertThat(storeReader.incoming(WORKSPACE, FR_1_IRI))
+                .as("two further writes must not add neighbour rows")
+                .hasSameSizeAs(incomingAfterOneWrite);
+        assertThat(storeReader.outgoing(WORKSPACE, FR_1_IRI))
+                .as("nor statement rows")
+                .hasSameSizeAs(outgoingAfterOneWrite);
+        assertThat(storeReader.outgoing(WORKSPACE, headIri()))
+                .as("a revision is not a model resource - the generic read path does not reach it")
+                .isEmpty();
+    }
+
+    private static boolean isProvenance(Triple triple) {
+        return triple.predicate().equals(ArkprovVocabulary.HEAD)
+                || triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF);
+    }
+
+    private List<Triple> snapshotTriples() {
+        return storeReader.readSnapshot(WORKSPACE).resources().stream()
+                .flatMap(resource -> resource.outgoing().stream())
+                .toList();
+    }
+
+    /** Reads the trail straight from the store - the read path under test cannot show it. */
+    private long provenanceStatementCount() {
+        return selectCount("SELECT ?s ?p ?o WHERE { GRAPH <"
+                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { ?s ?p ?o } }");
+    }
+
+    private String headIri() {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + FR_1_IRI + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .findFirst()
+                    .orElseThrow();
+        }
+    }
+
+    private long selectCount(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+            return handle.sparqlQuery().select(query).count();
+        }
     }
 
     @Test
