@@ -129,8 +129,9 @@ public class ArknetMcpConfiguration {
     // --- Requirements hexagon --------------------------------------------------
 
     @Bean
-    RequirementRepository requirementRepository(final DatasetLifecycle datasetLifecycle) {
-        return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle);
+    RequirementRepository requirementRepository(
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
     /**
@@ -254,8 +255,9 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     UseCaseRepository useCaseRepository(
-            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory) {
-        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle, resourceIdFactory);
+            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
+            final DisplayLocale displayLocale) {
+        return KognioRdfUseCaseRepositoryFactory.over(datasetLifecycle, resourceIdFactory, displayLocale);
     }
 
     /**
@@ -309,8 +311,9 @@ public class ArknetMcpConfiguration {
     // --- Bounded-context hexagon -----------------------------------------------
 
     @Bean
-    BoundedContextRepository boundedContextRepository(final DatasetLifecycle datasetLifecycle) {
-        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle);
+    BoundedContextRepository boundedContextRepository(
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle, displayLocale);
     }
 
     /**

@@ -42,6 +42,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.req.application.RequirementService;
@@ -146,7 +147,8 @@ class RequirementServiceRealStoreConcurrencyTest {
         assertNotNull(loserResult.get());
         assertNotEquals(winnerResult.get().code(), loserResult.get().code());
 
-        List<Requirement> stored = KognioRdfRequirementRepositoryFactory.over(realLifecycle).findAll(WS);
+        List<Requirement> stored =
+                KognioRdfRequirementRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS);
         assertEquals(2, stored.size());
         assertTrue(stored.stream().map(Requirement::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())));
@@ -190,7 +192,7 @@ class RequirementServiceRealStoreConcurrencyTest {
             }
             return tx;
         });
-        RequirementRepository repository = KognioRdfRequirementRepositoryFactory.over(guarded);
+        RequirementRepository repository = KognioRdfRequirementRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
         return new RequirementService(repository, new UuidResourceIdFactory(), UNUSED_TERM_LOOKUP,
                 UNUSED_SCHEMA_SOURCE);
     }

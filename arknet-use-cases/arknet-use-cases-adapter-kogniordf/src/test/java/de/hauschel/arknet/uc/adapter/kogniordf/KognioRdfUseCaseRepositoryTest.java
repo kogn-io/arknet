@@ -32,6 +32,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -98,7 +99,8 @@ class KognioRdfUseCaseRepositoryTest {
         Path tmp = Files.createTempDirectory("arknet-uc-it");
         lifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
-        repository = KognioRdfUseCaseRepositoryFactory.over(lifecycle, new UuidResourceIdFactory());
+        repository = KognioRdfUseCaseRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -495,7 +497,7 @@ class KognioRdfUseCaseRepositoryTest {
         twoPrimaryActors.add(actor1, RDF.TYPE, actorClass);
         twoPrimaryActors.add(actor2, RDF.TYPE, actorClass);
 
-        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoPrimaryActors)));
@@ -524,7 +526,7 @@ class KognioRdfUseCaseRepositoryTest {
         twoTitles.add(useCase, primaryActor, actor);
         twoTitles.add(actor, RDF.TYPE, actorClass);
 
-        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoTitles)));
@@ -559,7 +561,7 @@ class KognioRdfUseCaseRepositoryTest {
         twoGoals.add(useCase, primaryActor, actor);
         twoGoals.add(actor, RDF.TYPE, actorClass);
 
-        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoGoals)));
@@ -587,7 +589,7 @@ class KognioRdfUseCaseRepositoryTest {
         twoTexts.add(step, stepText, vf.createLiteral("Customer places the order"));
         twoTexts.add(step, stepText, vf.createLiteral("Customer submits the order"));
 
-        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoTexts)));

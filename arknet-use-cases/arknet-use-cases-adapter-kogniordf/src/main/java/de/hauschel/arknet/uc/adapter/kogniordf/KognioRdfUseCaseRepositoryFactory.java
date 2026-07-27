@@ -61,21 +61,24 @@ public final class KognioRdfUseCaseRepositoryFactory {
 
     /**
      * Creates a persistent, RDF4J-backed use-case repository storing its datasets under
-     * {@code storageDir}.
+     * {@code storageDir}, wired for the given display language.
      *
-     * @param storageDir the directory the embedded RDF store persists into
+     * @param storageDir    the directory the embedded RDF store persists into
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link UseCaseRepository}
      */
-    public static UseCaseRepository persistent(Path storageDir) {
+    public static UseCaseRepository persistent(Path storageDir, DisplayLocale displayLocale) {
         Objects.requireNonNull(storageDir, "storageDir");
         final DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle, new UuidResourceIdFactory());
+        return over(lifecycle, new UuidResourceIdFactory(), displayLocale);
     }
 
     /**
-     * Assembles a use-case repository over an already-created dataset lifecycle, wired with
-     * the use-case SHACL write-gate.
+     * Assembles a use-case repository over an already-created dataset lifecycle, wired with the
+     * use-case SHACL write-gate and an explicit display language. Used by
+     * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own
+     * (e.g. in-memory) lifecycle.
      *
      * <p>This is the seam the composition root (arknet-mcp) uses: it passes the single shared
      * {@link DatasetLifecycle} bean so the use-case repository reads and writes the <em>same</em>
@@ -87,16 +90,18 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
      * @param resourceIdFactory mints the opaque IRI of each derived step resource; the same
      *                          kernel-owned scheme the composition root uses everywhere else
+     * @param displayLocale     the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link UseCaseRepository}
      */
-    public static UseCaseRepository over(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory) {
+    public static UseCaseRepository over(
+            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
-        ShaclWriteGate gate = buildGate();
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        ShaclWriteGate gate = buildGate(displayLocale);
         WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, funnel);
     }
-
 
     /**
      * Builds the use-case write-gate with RDFS reasoning enabled.
@@ -112,19 +117,19 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * {@link UseCaseRepository} round-trip the single-valued {@code primaryActor} domain field
      * cannot produce (issue #82).</p>
      *
-     * <p>The gate reports violations in {@link DisplayLocale#DEFAULT}: this bounded context
-     * threads no display-language preference through its factory (unlike the
-     * ubiquitous-language one, whose read paths need it for label selection), so there is no
-     * caller preference to honour here. Stated explicitly rather than defaulted inside the
-     * gate, so the choice is visible at the site that makes it.</p>
+     * <p>The {@code displayLocale} handed in is the same one the composition root configures
+     * process-wide: a caller gets told why a write was refused in the same language regardless of
+     * which bounded context rejected it, whenever the violated shape carries its {@code sh:message}
+     * in more than one.</p>
      *
+     * @param displayLocale the language a rejected write is reported in
      * @return the assembled use-case SHACL write-gate
      */
-    static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate(DisplayLocale displayLocale) {
         ReadableGraph shapes = loadUseCaseShapes();
         ReadableGraph axioms = loadGraph(AXIOMS_RESOURCE);
         return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, new ValidationOptions(true),
-                DisplayLocale.DEFAULT);
+                displayLocale);
     }
 
     /**

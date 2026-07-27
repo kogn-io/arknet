@@ -95,7 +95,6 @@ public final class KognioRdfTermRepositoryFactory {
         return new KognioRdfTermRepository(lifecycle, displayLocale, funnel);
     }
 
-
     /**
      * Builds the ubiquitous-language write-gate.
      *

@@ -48,33 +48,36 @@ public final class KognioRdfBoundedContextRepositoryFactory {
 
     /**
      * Creates a persistent, RDF4J-backed bounded-context repository storing its datasets under
-     * {@code storageDir}.
+     * {@code storageDir}, wired for the given display language.
      *
-     * @param storageDir the directory the embedded RDF store persists into
+     * @param storageDir    the directory the embedded RDF store persists into
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link BoundedContextRepository}
      */
-    public static BoundedContextRepository persistent(Path storageDir) {
+    public static BoundedContextRepository persistent(Path storageDir, DisplayLocale displayLocale) {
         Objects.requireNonNull(storageDir, "storageDir");
         DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle);
+        return over(lifecycle, displayLocale);
     }
 
     /**
-     * Assembles a bounded-context repository over an already-created dataset lifecycle, wired with
-     * the DDD SHACL write-gate. Used by {@link #persistent(Path)} and directly by tests that
-     * supply their own (e.g. in-memory) lifecycle.
+     * Assembles a bounded-context repository over an already-created dataset lifecycle, wired
+     * with the DDD SHACL write-gate and an explicit display language. Used by
+     * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own
+     * (e.g. in-memory) lifecycle.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link BoundedContextRepository}
      */
-    public static BoundedContextRepository over(DatasetLifecycle lifecycle) {
+    public static BoundedContextRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
-        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(),
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale),
                 WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfBoundedContextRepository(lifecycle, funnel);
     }
-
 
     /**
      * Builds the bounded-context write-gate.
@@ -91,19 +94,19 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      * <p>Package-private (not private) so {@code KognioRdfBoundedContextRepositoryTest} can drive
      * the gate directly, at gate level, without duplicating this shapes-loading logic.</p>
      *
-     * <p>The gate reports violations in {@link DisplayLocale#DEFAULT}: this bounded context
-     * threads no display-language preference through its factory (unlike the
-     * ubiquitous-language one, whose read paths need it for label selection), so there is no
-     * caller preference to honour here. Stated explicitly rather than defaulted inside the
-     * gate, so the choice is visible at the site that makes it.</p>
+     * <p>The {@code displayLocale} handed in is the same one the composition root configures
+     * process-wide: a caller gets told why a write was refused in the same language regardless of
+     * which bounded context rejected it, whenever the violated shape carries its {@code sh:message}
+     * in more than one.</p>
      *
+     * @param displayLocale the language a rejected write is reported in
      * @return the assembled DDD SHACL write-gate
      */
-    static ShaclWriteGate buildGate() {
+    static ShaclWriteGate buildGate(DisplayLocale displayLocale) {
         ReadableGraph shapes = loadGraph(SHAPES_RESOURCE);
         ReadableGraph axioms = new SimpleRdf().createGraph();
         return new ShaclWriteGate(new ShaclValidationRdf4j(), shapes, axioms, ValidationOptions.defaults(),
-                DisplayLocale.DEFAULT);
+                displayLocale);
     }
 
     private static ReadableGraph loadGraph(String classpathResource) {

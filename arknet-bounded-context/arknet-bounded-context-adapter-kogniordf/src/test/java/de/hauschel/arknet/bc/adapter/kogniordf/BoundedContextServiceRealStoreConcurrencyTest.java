@@ -48,6 +48,7 @@ import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
@@ -157,7 +158,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertNotNull(loserResult.get());
         assertNotEquals(winnerResult.get().code(), loserResult.get().code());
 
-        List<BoundedContext> stored = KognioRdfBoundedContextRepositoryFactory.over(realLifecycle).findAll(WS);
+        List<BoundedContext> stored =
+                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS);
         assertEquals(2, stored.size());
         assertTrue(stored.stream().map(BoundedContext::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())));
@@ -202,7 +204,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             }
             return tx;
         });
-        BoundedContextRepository repository = KognioRdfBoundedContextRepositoryFactory.over(guarded);
+        BoundedContextRepository repository =
+                KognioRdfBoundedContextRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
         TermLookup unusedTermLookup = (workspaceId, termCode) -> {
             throw new UnsupportedOperationException("not exercised by this test");
         };
