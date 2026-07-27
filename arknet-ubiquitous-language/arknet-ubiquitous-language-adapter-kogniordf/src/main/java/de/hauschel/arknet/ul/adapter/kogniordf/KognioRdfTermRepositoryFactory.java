@@ -94,8 +94,7 @@ public final class KognioRdfTermRepositoryFactory {
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate();
         WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfTermRepositoryFactory::isWriteConflict);
-        return new KognioRdfTermRepository(lifecycle, gate, displayLocale,
-                KognioRdfTermRepositoryFactory::isWriteConflict, funnel);
+        return new KognioRdfTermRepository(lifecycle, displayLocale, funnel);
     }
 
     /**

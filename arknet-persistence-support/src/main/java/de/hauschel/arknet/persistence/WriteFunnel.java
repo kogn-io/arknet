@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -77,18 +78,17 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * activity carries no resolved agent yet - agent attribution is additive (ADR-014
  * decision 5).</p>
  *
- * <p><strong>What the head does and does not promise today.</strong> Revision and head follow
- * the write <em>through this funnel</em> - and only writes that come through here. Four write
- * paths still bypass it and therefore move neither: the requirements context's
- * {@code compareAndUpdate} (behind {@code req_update}, {@code req_set_status} and
- * {@code req_link_term}) and the glossary's patch-{@code update} (behind {@code term_update}),
- * both kept outside on purpose for their own transaction semantics (ADR-013 decision 5). Their
- * resolution into the funnel is ADR-014 decision 4. Until then a resource's head marks its last
- * funnel write, not necessarily its last state change - so it is the <em>intended</em>
- * concurrency token, not yet a usable one. Comparing it inside the transaction
- * (compare-and-set, ADR-014 decision 3) is the next step, deliberately not implemented here,
- * and must not be built before those paths are resolved: against a head that silently stands
- * still, a compare-and-set would wave through exactly the lost update it is meant to stop.</p>
+ * <p><strong>What the head promises now (ADR-014 decisions 3+4, issue #167).</strong> Revision
+ * and head follow the write <em>through this funnel</em> - and, since this method, that is every
+ * guarded write: the requirements context's {@code compareAndUpdate} (behind {@code req_update},
+ * {@code req_set_status} and {@code req_link_term}) and the glossary's patch-{@code update}
+ * (behind {@code term_update}), both kept outside on purpose for their own transaction semantics
+ * by ADR-013 decision 5, are resolved into {@link #compareAndUpdate} rather than integrated
+ * unchanged - a full-snapshot comparison (requirements) or an in-adapter-transaction field merge
+ * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. A
+ * resource's head is therefore a usable concurrency token: it moves with every write a caller can
+ * reach, and {@link #compareAndUpdate} closes the lost-update window a plain {@link #update}
+ * cannot.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same
@@ -259,6 +259,75 @@ public final class WriteFunnel {
     }
 
     /**
+     * Runs a guarded compare-and-set update (ADR-014 decision 3): the subject must already
+     * exist and its current {@code arkprov:head} - read inside this same write transaction -
+     * must equal {@code expectedHead}; only then does {@code body} run. This is the resolution
+     * of the two special paths ADR-013 kept outside the funnel (issue #167): a stale caller (one
+     * whose read is no longer current) is rejected via {@code headMismatch}, exactly like a
+     * missing subject is rejected via {@code notFound} - the same supplier-signal shape, so a
+     * head conflict is now the same pattern in every bounded context.
+     *
+     * <p><strong>Two ways to observe a conflict, one signal.</strong> A caller whose read is
+     * already stale by the time this method's transaction opens is caught by the synchronous
+     * head comparison below. A caller whose read was current but loses a genuinely overlapping
+     * {@code SERIALIZABLE} transaction at commit time (the same "second interleaving" issue #144
+     * documents for {@link #create}) is caught by {@code isWriteConflict} in the surrounding
+     * catch and translated into the identical {@code headMismatch} signal - the caller cannot
+     * tell, and does not need to, which of the two actually happened.</p>
+     *
+     * @param dataset         the dataset (workspace) to write into
+     * @param graphIri        the named graph the check is scoped to
+     * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
+     * @param expectedHead    the {@code arkprov:head} revision IRI the caller last observed for
+     *                        this subject, or {@code null} if the caller expects no revision to
+     *                        exist yet (the subject predates the funnel's revision recording)
+     * @param candidate       the instance graph handed to the SHACL gate before the transaction
+     * @param assertedContext validation-only context triples for the gate (issue #63), or
+     *                        {@code null} if the shapes need none
+     * @param notFound        the bounded context's signal for a missing subject
+     * @param headMismatch    the bounded context's signal for a stale {@code expectedHead}
+     * @param body            the write itself, given the live transaction after both checks passed
+     */
+    public void compareAndUpdate(DatasetId dataset, String graphIri, String subjectIri,
+            String expectedHead, ReadableGraph candidate, ReadableGraph assertedContext,
+            Supplier<RuntimeException> notFound, Supplier<RuntimeException> headMismatch,
+            Consumer<DatasetTx> body) {
+        Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(graphIri, "graphIri");
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        Objects.requireNonNull(candidate, "candidate");
+        Objects.requireNonNull(notFound, "notFound");
+        Objects.requireNonNull(headMismatch, "headMismatch");
+        Objects.requireNonNull(body, "body");
+
+        enforceGate(candidate, assertedContext);
+
+        String askExists = askSubjectExists(graphIri, subjectIri);
+
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            try {
+                handle.transactor().inTransaction(tx -> {
+                    if (!tx.ask(askExists)) {
+                        throw notFound.get();
+                    }
+                    String currentHead = readHead(tx, subjectIri).map(IRI::getIRIString).orElse(null);
+                    if (!Objects.equals(currentHead, expectedHead)) {
+                        throw headMismatch.get();
+                    }
+                    body.accept(tx);
+                    recordRevision(tx, subjectIri);
+                    return null;
+                });
+            } catch (RuntimeException e) {
+                if (isWriteConflict.test(e)) {
+                    throw headMismatch.get();
+                }
+                throw e;
+            }
+        }
+    }
+
+    /**
      * Records the write's revision (ADR-014): one {@code prov:Activity}, one immutable
      * {@code arkprov:Revision} entity chained to the superseded head via
      * {@code prov:wasRevisionOf}, and the rewritten {@code arkprov:head} pointer - all inside
@@ -267,17 +336,13 @@ public final class WriteFunnel {
      */
     private void recordRevision(DatasetTx tx, String subjectIri) {
         String subject = SparqlTerms.iriRef(subjectIri);
-        String headPattern = "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head }";
-
-        List<IRI> previousHeads = tx.select("SELECT ?head WHERE { " + headPattern + " }")
-                .map(row -> row.getValue("head").orElse(null))
-                .filter(IRI.class::isInstance)
-                .map(IRI.class::cast)
-                .toList();
-        if (!previousHeads.isEmpty()) {
+        Optional<IRI> previousHead = readHead(tx, subjectIri);
+        if (previousHead.isPresent()) {
+            String headPattern = "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                    + subject + " <" + ArkprovVocabulary.HEAD + "> ?head }";
             tx.update("DELETE WHERE { " + headPattern + " }");
         }
+        List<IRI> previousHeads = previousHead.map(List::of).orElseGet(List::of);
 
         IRI revision = rdf.createIRI(REVISION_IRI_BASE + UUID.randomUUID());
         IRI activity = rdf.createIRI(ACTIVITY_IRI_BASE + UUID.randomUUID());
@@ -291,11 +356,27 @@ public final class WriteFunnel {
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_GENERATED_BY), activity);
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.GENERATED_AT_TIME),
                 rdf.createLiteral(Instant.now(clock).toString(), VocabXsd.DATETIME));
-        for (IRI previousHead : previousHeads) {
-            provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), previousHead);
+        for (IRI predecessor : previousHeads) {
+            provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), predecessor);
         }
         provenance.add(resource, rdf.createIRI(ArkprovVocabulary.HEAD), revision);
         tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), provenance);
+    }
+
+    /**
+     * Reads a resource's current {@code arkprov:head} pointer, if it has ever been written
+     * through this funnel - shared by {@link #recordRevision} (chaining the new revision to its
+     * predecessor) and {@link #compareAndUpdate} (the compare-and-set check itself).
+     */
+    private Optional<IRI> readHead(DatasetTx tx, String subjectIri) {
+        String subject = SparqlTerms.iriRef(subjectIri);
+        String headPattern = "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head }";
+        return tx.select("SELECT ?head WHERE { " + headPattern + " }")
+                .map(row -> row.getValue("head").orElse(null))
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .findFirst();
     }
 
     private void enforceGate(ReadableGraph candidate, ReadableGraph assertedContext) {

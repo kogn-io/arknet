@@ -194,9 +194,10 @@ class RequirementServiceConcurrencyTest {
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
-     * {@link #findByCode} call returns - simulating a concurrent caller whose own complete
+     * {@link #findCurrentByCode} call returns - simulating a concurrent caller whose own complete
      * read-modify-write round trip commits in the window between this caller's read and its own
-     * write. Every other call, including every subsequent {@code findByCode}, delegates unchanged.
+     * write. Every other call, including every subsequent {@code findCurrentByCode}, delegates
+     * unchanged.
      */
     private static final class RaceOnFirstReadRepository implements RequirementRepository {
 
@@ -215,18 +216,18 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void update(WorkspaceId workspaceId, Requirement requirement) {
-            delegate.update(workspaceId, requirement);
-        }
-
-        @Override
-        public boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated) {
-            return delegate.compareAndUpdate(workspaceId, expected, updated);
+        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
+            delegate.compareAndUpdate(workspaceId, expectedHead, updated);
         }
 
         @Override
         public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-            Optional<Requirement> result = delegate.findByCode(workspaceId, code);
+            return delegate.findByCode(workspaceId, code);
+        }
+
+        @Override
+        public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
+            Optional<CurrentRequirement> result = delegate.findCurrentByCode(workspaceId, code);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -269,18 +270,18 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void update(WorkspaceId workspaceId, Requirement requirement) {
-            delegate.update(workspaceId, requirement);
-        }
-
-        @Override
-        public boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated) {
-            return delegate.compareAndUpdate(workspaceId, expected, updated);
+        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
+            delegate.compareAndUpdate(workspaceId, expectedHead, updated);
         }
 
         @Override
         public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
             return delegate.findByCode(workspaceId, code);
+        }
+
+        @Override
+        public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
+            return delegate.findCurrentByCode(workspaceId, code);
         }
 
         @Override
@@ -315,22 +316,23 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void update(WorkspaceId workspaceId, Requirement requirement) {
-            delegate.update(workspaceId, requirement);
-        }
-
-        @Override
-        public boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated) {
-            // Still enforce "must exist", same as the real contract - only ever return a conflict.
-            delegate.findByCode(workspaceId, expected.code())
+        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
+            // Still enforce "must exist", same as the real contract - only ever report a conflict.
+            delegate.findByCode(workspaceId, updated.code())
                     .orElseThrow(() -> new de.hauschel.arknet.req.domain.RequirementNotFoundException(
-                            workspaceId, expected.code()));
-            return false;
+                            workspaceId, updated.code()));
+            throw new de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException(
+                    workspaceId, updated.code());
         }
 
         @Override
         public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
             return delegate.findByCode(workspaceId, code);
+        }
+
+        @Override
+        public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
+            return delegate.findCurrentByCode(workspaceId, code);
         }
 
         @Override
