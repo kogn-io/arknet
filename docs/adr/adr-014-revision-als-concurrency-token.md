@@ -47,6 +47,14 @@ die Revisions-Mechanik in arknet oder als Hook in kognio-rdf lebt, war offen.
    Supplier-Bauart wie `notFound`. Der Body bleibt ein rueckgabewertfreier Consumer; die
    API waechst um einen Parameter, nicht um Modi oder Zusatztypen.
 
+   **Reihenfolge-Auflage:** Entscheidung 3 darf nicht vor Entscheidung 4 ausgeliefert
+   werden. Solange Schreibpfade am Trichter vorbeilaufen, steht der Head einer Ressource
+   still, waehrend sich ihr Zustand aendert -- ein Compare-and-Set auf diesen Head winkt
+   dann genau den Lost Update durch, den er verhindern soll, und ist damit schaedlicher
+   als gar kein Token. Aus demselben Grund darf der Head vorher auch in keinem
+   generischen Lesepfad erscheinen: ein Client, der ihn als Version liest, wuerde
+   getaeuscht.
+
 4. **Die Sonderpfade werden aufgeloest, nicht integriert.** `compareAndUpdate`
    degeneriert zum Head-Vergleich im Trichter; der Feld-Merge der ul-BC verlaesst die
    Adapter-Transaktion und wandert als Lesen-Mergen-bedingt-Schreiben (mit Retry) in den
