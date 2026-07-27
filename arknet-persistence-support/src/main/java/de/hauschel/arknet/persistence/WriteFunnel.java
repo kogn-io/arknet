@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.persistence;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -108,11 +109,12 @@ public final class WriteFunnel {
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
     private final Predicate<RuntimeException> isWriteConflict;
+    private final Clock clock;
     private final RDF rdf = new SimpleRdf();
 
     /**
-     * Creates the funnel. Per bounded context one instance, built by that context's repository
-     * factory - exactly like the {@link ShaclWriteGate} it wraps.
+     * Creates the funnel on the system UTC clock. Per bounded context one instance, built by
+     * that context's repository factory - exactly like the {@link ShaclWriteGate} it wraps.
      *
      * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
      *                        be {@code null})
@@ -124,9 +126,32 @@ public final class WriteFunnel {
      */
     public WriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate,
             Predicate<RuntimeException> isWriteConflict) {
+        this(lifecycle, gate, isWriteConflict, Clock.systemUTC());
+    }
+
+    /**
+     * Creates the funnel on an explicit clock - the one the revision's
+     * {@code prov:generatedAtTime} is read from. Every other collaborator arrives by
+     * constructor, and the timestamp is the only externally observable value a revision carries
+     * that is not derived from its inputs; a fixed clock is what makes it assertable and what
+     * gives a later "revisions between T1 and T2" read path deterministic fixtures.
+     *
+     * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
+     *                        be {@code null})
+     * @param gate            the SHACL write-gate validating every candidate graph before the
+     *                        write transaction opens (must not be {@code null})
+     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
+     *                        class ever naming the RDF4J type (must not be {@code null})
+     * @param clock           the clock each revision's generation instant is read from (must not
+     *                        be {@code null})
+     */
+    public WriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate,
+            Predicate<RuntimeException> isWriteConflict, Clock clock) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     /**
@@ -265,7 +290,7 @@ public final class WriteFunnel {
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.SPECIALIZATION_OF), resource);
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_GENERATED_BY), activity);
         provenance.add(revision, rdf.createIRI(ArkprovVocabulary.GENERATED_AT_TIME),
-                rdf.createLiteral(Instant.now().toString(), VocabXsd.DATETIME));
+                rdf.createLiteral(Instant.now(clock).toString(), VocabXsd.DATETIME));
         for (IRI previousHead : previousHeads) {
             provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), previousHead);
         }

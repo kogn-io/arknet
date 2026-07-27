@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -37,12 +40,14 @@ import io.kogn.rdf.shacl.Severity;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.terms.vocab.VocabXsd;
 
 /**
  * Unit test for the shared {@link WriteFunnel}.
@@ -292,6 +297,30 @@ class WriteFunnelTest {
                 "head delete must target this subject's head in the provenance graph, got: " + deleteHead);
     }
 
+    /**
+     * The generation instant comes from the injected clock. It is the only value a revision
+     * carries that is not derived from the write's inputs, so an ambient {@code Instant.now()}
+     * would leave {@code prov:generatedAtTime} permanently unassertable - both here and for the
+     * "revisions between T1 and T2" read path ADR-011 still owes.
+     */
+    @Test
+    void theRevisionCarriesTheGenerationInstantOfTheInjectedClock() {
+        Fixture fixture = new Fixture(List.of(false, false));
+        Instant fixed = Instant.parse("2026-07-26T18:30:00Z");
+
+        fixture.funnelAt(Clock.fixed(fixed, ZoneOffset.UTC)).create(fixture.dataset, GRAPH_IRI,
+                SUBJECT_IRI, CODE, candidate(), null, Signals::unexpected, Signals::unexpected,
+                tx -> { });
+
+        ReadableGraph provenance = fixture.tx.provenanceAdded();
+        String revision = subjectsTyped(provenance, ArkprovVocabulary.REVISION_TYPE).get(0);
+        List<Literal> instants = literalsOf(provenance, revision, ArkprovVocabulary.GENERATED_AT_TIME);
+        assertEquals(1, instants.size(), "exactly one generation instant per revision");
+        assertEquals(fixed.toString(), instants.get(0).getLexicalForm());
+        assertEquals(VocabXsd.DATETIME.getIRIString(), instants.get(0).getDatatype().getIRIString(),
+                "the instant must be typed xsd:dateTime, not a plain string");
+    }
+
     /** A rejected write (here: subject already exists) must leave no revision behind. */
     @Test
     void rejectedCreateRecordsNoRevision() {
@@ -339,6 +368,15 @@ class WriteFunnelTest {
                 .filter(triple -> triple.getPredicate().getIRIString().equals(predicate))
                 .filter(triple -> triple.getObject() instanceof IRI)
                 .map(triple -> ((IRI) triple.getObject()).getIRIString())
+                .toList();
+    }
+
+    private static List<Literal> literalsOf(ReadableGraph graph, String subject, String predicate) {
+        return graph.stream()
+                .filter(triple -> triple.getSubject() instanceof IRI iri && iri.getIRIString().equals(subject))
+                .filter(triple -> triple.getPredicate().getIRIString().equals(predicate))
+                .filter(triple -> triple.getObject() instanceof Literal)
+                .map(triple -> (Literal) triple.getObject())
                 .toList();
     }
 
@@ -412,10 +450,14 @@ class WriteFunnelTest {
         }
 
         private WriteFunnel funnel() {
+            return funnelAt(Clock.systemUTC());
+        }
+
+        private WriteFunnel funnelAt(Clock clock) {
             RDF graphs = new SimpleRdf();
             ShaclWriteGate gate = new ShaclWriteGate(validation, graphs.createGraph(),
                     graphs.createGraph(), ValidationOptions.defaults());
-            return new WriteFunnel(lifecycle, gate, isWriteConflict);
+            return new WriteFunnel(lifecycle, gate, isWriteConflict, clock);
         }
     }
 
