@@ -118,5 +118,15 @@
             <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Die Vokabular-/Ontologie-Regel ist ein gewoehnlicher JUnit-Test, kein ArchUnit-
+             Regelfeld: archunit-junit5 bringt nur die Platform-Engine mit, nicht die
+             Jupiter-Engine, die ein @Test zum Laufen braucht. Die Ontologie-Ressourcen und
+             der Turtle-Parser kommen transitiv ueber die oben deklarierten Out-Adapter. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

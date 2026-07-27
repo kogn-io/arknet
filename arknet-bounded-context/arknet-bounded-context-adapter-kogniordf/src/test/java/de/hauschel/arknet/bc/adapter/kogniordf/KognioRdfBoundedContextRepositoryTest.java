@@ -41,6 +41,7 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
@@ -379,6 +380,79 @@ class KognioRdfBoundedContextRepositoryTest {
                 + "> a <" + BOUNDED_CONTEXT_TYPE + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+
+    /**
+     * ADR-014 revision basis, exercised against a real store: every write through the funnel
+     * records exactly one immutable revision, the head is queryable per resource and moves
+     * with every update, and the new head chains to the superseded one.
+     */
+    @Test
+    void everyWriteRecordsExactlyOneRevisionAndMovesTheQueryableHead() {
+        BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
+        repository.create(WORKSPACE_A, bc);
+        String subject = bc.id().value().value();
+
+        List<String> afterCreate = revisionsOf(subject);
+        assertEquals(1, afterCreate.size(), "create must record exactly one revision");
+        assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
+
+        repository.update(WORKSPACE_A, new BoundedContext(bc.id(), bc.code(), "Renamed",
+                bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()));
+
+        assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
+        List<String> heads = headsOf(subject);
+        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
+        String previousHead = afterCreate.get(0);
+        String newHead = heads.get(0);
+        assertFalse(newHead.equals(previousHead), "the head must have moved");
+        assertEquals(List.of(previousHead), objectsOf(newHead, ArkprovVocabulary.WAS_REVISION_OF),
+                "the new head must supersede the previous one via prov:wasRevisionOf");
+    }
+
+    /**
+     * Atomicity against a real store: a write rejected inside the transaction (here the
+     * duplicate-code check) rolls back as a whole and leaves no revision behind.
+     */
+    @Test
+    void aRejectedWriteLeavesNoRevisionBehind() {
+        repository.create(WORKSPACE_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+
+        assertThrows(DuplicateBoundedContextCodeException.class, () -> repository.create(WORKSPACE_A,
+                boundedContext(new BoundedContextCode("BC-1"), null, null, List.of())));
+
+        String all = "SELECT ?r WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?r a <" + ArkprovVocabulary.REVISION_TYPE + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(all).count(),
+                    "the rejected write must not have recorded a revision");
+        }
+    }
+
+    private List<String> revisionsOf(String subjectIri) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
+                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }");
+    }
+
+    private List<String> headsOf(String subjectIri) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + subjectIri + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
+    }
+
+    private List<String> objectsOf(String subjectIri, String predicateIri) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + subjectIri + "> <" + predicateIri + "> ?v } }");
+    }
+
+    private List<String> selectIris(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
         }
     }
 }

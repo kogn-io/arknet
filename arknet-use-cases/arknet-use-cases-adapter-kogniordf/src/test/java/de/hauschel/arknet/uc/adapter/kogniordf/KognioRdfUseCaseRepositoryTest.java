@@ -35,6 +35,7 @@ import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
@@ -591,5 +592,54 @@ class KognioRdfUseCaseRepositoryTest {
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoTexts)));
         assertTrue(ex.getMessage().contains("stepText"), ex.getMessage());
+    }
+
+    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+
+    /**
+     * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
+     * {@code update} each record exactly one immutable revision of the use case, and the head
+     * is queryable per resource. The step resources the body writes alongside get no revisions
+     * of their own - the revision hangs off the funnel's subject, the use case.
+     *
+     * <p><strong>How far this evidence reaches.</strong> {@code update} is called here directly
+     * on the out-port. This bounded context has no in-port reaching it at all - {@code
+     * UseCaseService} only ever calls {@code create}, and there is no {@code uc_update} tool -
+     * so today every use case's head stays on its create revision. This test proves the funnel
+     * behaves on {@code update}, ahead of a write path that would use it.</p>
+     */
+    @Test
+    void createAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
+        String subject = ID_1.value().value();
+
+        assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
+
+        UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
+                null, null, CUSTOMER, List.of(), null, null,
+                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+        repository.update(WORKSPACE_A, revised);
+
+        List<String> revisions = revisionsOf(subject);
+        assertEquals(2, revisions.size(), "update must record exactly one more revision");
+        List<String> heads = selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH
+                + "> { <" + subject + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
+        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
+        assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
+    }
+
+    private List<String> revisionsOf(String subjectIri) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
+                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + subjectIri + "> } }");
+    }
+
+    private List<String> selectIris(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((io.kogn.rdf.terms.IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
+        }
     }
 }

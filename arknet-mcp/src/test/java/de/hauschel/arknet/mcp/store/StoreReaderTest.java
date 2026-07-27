@@ -16,11 +16,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.terms.IRI;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -53,18 +56,23 @@ class StoreReaderTest {
     Path storageDir;
 
     private DatasetLifecycle lifecycle;
+    private RequirementRepository requirements;
     private StoreReader storeReader;
 
     @BeforeEach
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
-        requirements.create(WORKSPACE, new Requirement(
-                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
+        requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        requirements.create(WORKSPACE, requirementTitled("Login"));
+        storeReader = new StoreReader(lifecycle);
+    }
+
+    private static Requirement requirementTitled(String title) {
+        return new Requirement(
+                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials")));
-        storeReader = new StoreReader(lifecycle);
+                List.of("Login succeeds with valid credentials"));
     }
 
     @AfterEach
@@ -106,6 +114,94 @@ class StoreReaderTest {
 
         Set<Triple> distinct = new HashSet<>(outgoing);
         assertThat(outgoing).hasSameSizeAs(distinct);
+    }
+
+    /**
+     * Every guarded write records a PROV-O revision plus a head pointer into the provenance
+     * graph (ADR-014), and that trail grows with every write, forever. None of the three read
+     * paths surfaces it: the snapshot feeds the store report, a view of the model rather than
+     * of its change history, and the head pointer is hidden for the same reason it must not be
+     * trusted yet - it only moves on writes through the write funnel, while {@code req_update},
+     * {@code req_set_status}, {@code req_link_term} and {@code term_update} bypass it (ADR-014
+     * decision 4).
+     */
+    @Test
+    void noReadPathSurfacesTheProvenanceGraph() {
+        assertThat(provenanceStatementCount())
+                .as("the write in setUp must have recorded a revision - else this test is vacuous")
+                .isPositive();
+
+        assertThat(storeReader.outgoing(WORKSPACE, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
+        assertThat(storeReader.incoming(WORKSPACE, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
+        assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProvenance);
+    }
+
+    /**
+     * The generic read path must not grow with the revision trail: every revision names its
+     * resource via {@code prov:specializationOf} and rewrites its head, so an unfiltered view
+     * would add rows per write, without bound. The revisions themselves are not model resources
+     * either - reaching one by its IRI yields nothing.
+     */
+    @Test
+    void furtherWritesGrowTheTrailInTheStoreButNotTheReadPath() {
+        List<Triple> incomingAfterOneWrite = storeReader.incoming(WORKSPACE, FR_1_IRI);
+        List<Triple> outgoingAfterOneWrite = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+        long trailAfterOneWrite = provenanceStatementCount();
+        String firstHead = headIri();
+
+        requirements.update(WORKSPACE, requirementTitled("Login v2"));
+        requirements.update(WORKSPACE, requirementTitled("Login v3"));
+
+        assertThat(provenanceStatementCount())
+                .as("the two updates must have extended the trail in the store")
+                .isGreaterThan(trailAfterOneWrite);
+        assertThat(headIri())
+                .as("and moved the head - so the read path is hiding something that really changed")
+                .isNotEqualTo(firstHead);
+
+        assertThat(storeReader.incoming(WORKSPACE, FR_1_IRI))
+                .as("two further writes must not add neighbour rows")
+                .hasSameSizeAs(incomingAfterOneWrite);
+        assertThat(storeReader.outgoing(WORKSPACE, FR_1_IRI))
+                .as("nor statement rows")
+                .hasSameSizeAs(outgoingAfterOneWrite);
+        assertThat(storeReader.outgoing(WORKSPACE, headIri()))
+                .as("a revision is not a model resource - the generic read path does not reach it")
+                .isEmpty();
+    }
+
+    private static boolean isProvenance(Triple triple) {
+        return triple.predicate().equals(ArkprovVocabulary.HEAD)
+                || triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF);
+    }
+
+    private List<Triple> snapshotTriples() {
+        return storeReader.readSnapshot(WORKSPACE).resources().stream()
+                .flatMap(resource -> resource.outgoing().stream())
+                .toList();
+    }
+
+    /** Reads the trail straight from the store - the read path under test cannot show it. */
+    private long provenanceStatementCount() {
+        return selectCount("SELECT ?s ?p ?o WHERE { GRAPH <"
+                + ArkprovVocabulary.PROVENANCE_GRAPH + "> { ?s ?p ?o } }");
+    }
+
+    private String headIri() {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + FR_1_IRI + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .findFirst()
+                    .orElseThrow();
+        }
+    }
+
+    private long selectCount(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+            return handle.sparqlQuery().select(query).count();
+        }
     }
 
     @Test
