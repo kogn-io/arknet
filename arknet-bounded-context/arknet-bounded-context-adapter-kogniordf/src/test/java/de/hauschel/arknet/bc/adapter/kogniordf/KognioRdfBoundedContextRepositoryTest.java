@@ -67,7 +67,7 @@ class KognioRdfBoundedContextRepositoryTest {
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         WriteFunnel funnel = new WriteFunnel(datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate(),
-                KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
+                WriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfBoundedContextRepository(datasetLifecycle, funnel);
     }
 

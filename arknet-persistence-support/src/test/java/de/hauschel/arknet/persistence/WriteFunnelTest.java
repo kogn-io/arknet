@@ -29,6 +29,7 @@ import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
@@ -134,6 +135,22 @@ class WriteFunnelTest {
 
         assertSame(signal, thrown);
         assertTrue(fixture.handle.closed, "handle must be released even on a conflict");
+    }
+
+    /**
+     * The predicate the four out-adapters actually inject carries the #144 invariant: point it at
+     * the wrong type (a superclass, a {@code RuntimeException} wrapper) and a lost race would stop
+     * being translated - visible only in a real race, which is exactly what the
+     * {@code *RealStoreConcurrencyTest}s cover flakily (issue #171). Pinned here directly instead.
+     */
+    @Test
+    void defaultWriteConflictRecognisesOnlyTheStoresConcurrencyConflict() {
+        assertTrue(WriteFunnel.DEFAULT_WRITE_CONFLICT.test(
+                new ConcurrencyConflictException("lost SERIALIZABLE conflict", null)));
+        assertFalse(WriteFunnel.DEFAULT_WRITE_CONFLICT.test(new IllegalStateException("unrelated")));
+        assertFalse(WriteFunnel.DEFAULT_WRITE_CONFLICT.test(
+                new RuntimeException("wrapper", new ConcurrencyConflictException("cause", null))),
+                "a merely wrapped conflict is not the store's own signal");
     }
 
     @Test

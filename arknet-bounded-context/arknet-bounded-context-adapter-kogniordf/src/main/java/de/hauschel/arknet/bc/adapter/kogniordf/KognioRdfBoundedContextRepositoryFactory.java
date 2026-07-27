@@ -12,7 +12,6 @@ import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
 
-import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
@@ -72,24 +71,10 @@ public final class KognioRdfBoundedContextRepositoryFactory {
     public static BoundedContextRepository over(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(),
-                KognioRdfBoundedContextRepositoryFactory::isWriteConflict);
+                WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfBoundedContextRepository(lifecycle, funnel);
     }
 
-    /**
-     * Recognises the store's commit-time signal for a lost {@code SERIALIZABLE} transaction
-     * conflict (issue #144, #173): kognio-rdf 0.2.x raises its own
-     * {@link ConcurrencyConflictException} for this case instead of a raw RDF4J
-     * {@code RepositoryException}/{@code SailConflictException}. The method reference passed to
-     * the shared {@link WriteFunnel} above hands this predicate over as a technology-neutral
-     * {@code Predicate} that names no RDF4J type.
-     *
-     * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
-     * same reason {@link #buildGate()} is.</p>
-     */
-    static boolean isWriteConflict(RuntimeException candidate) {
-        return candidate instanceof ConcurrencyConflictException;
-    }
 
     /**
      * Builds the bounded-context write-gate.

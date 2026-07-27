@@ -83,7 +83,7 @@ public final class ShaclWriteGate {
      *                      needed)
      * @param options       validation options (e.g. whether to reason over {@code axioms})
      * @param displayLocale the language a rejected write is reported in, when the violated
-     *                      shape carries its {@code sh:message} in more than one
+     *                      shape carries its {@code sh:message} in more than one language
      */
     public ShaclWriteGate(ShaclValidation validation, ReadableGraph shapes, ReadableGraph axioms,
             ValidationOptions options, DisplayLocale displayLocale) {
