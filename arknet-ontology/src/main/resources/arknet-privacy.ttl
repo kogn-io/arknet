@@ -80,6 +80,8 @@ arkpriv:NonPersonalData a arkpriv:DataCategory ;
 
 arkpriv:LegalBasis a owl:Class ;
     rdfs:label   "Legal Basis"@en , "Rechtsgrundlage"@de ;
+    rdfs:comment "The legal basis under GDPR Art. 6 that justifies the processing of personal data."@en ,
+                 "Die Rechtsgrundlage nach Art. 6 DSGVO, die die Verarbeitung personenbezogener Daten rechtfertigt."@de ;
     rdfs:seeAlso dpv:LegalBasis .
 
 arkpriv:Consent a arkpriv:LegalBasis ;
@@ -121,7 +123,9 @@ arkpriv:ProcessingPurpose a owl:Class ;
 ##############################################################################
 
 arkpriv:DataSubjectRight a owl:Class ;
-    rdfs:label "Data Subject Right"@en , "Betroffenenrecht"@de .
+    rdfs:label "Data Subject Right"@en , "Betroffenenrecht"@de ;
+    rdfs:comment "A right granted to the data subject under GDPR Chapter III (Art. 15-21)."@en ,
+                 "Ein Recht, das der betroffenen Person nach DSGVO Kapitel III (Art. 15-21) zusteht."@de .
 
 arkpriv:RightOfAccess a arkpriv:DataSubjectRight ;
     rdfs:label "Right of Access"@en ;
@@ -154,7 +158,9 @@ arkpriv:RightToObject a arkpriv:DataSubjectRight ;
 ##############################################################################
 
 arkpriv:TechnicalMeasure a owl:Class ;
-    rdfs:label "Technical Measure"@en , "Technische Massnahme"@de .
+    rdfs:label "Technical Measure"@en , "Technische Massnahme"@de ;
+    rdfs:comment "A technical safeguard implemented to protect personal data (GDPR Art. 32)."@en ,
+                 "Eine technische Massnahme zum Schutz personenbezogener Daten (Art. 32 DSGVO)."@de .
 
 arkpriv:Encryption a arkpriv:TechnicalMeasure ;
     rdfs:label "Encryption"@en .
@@ -179,14 +185,20 @@ arkpriv:DataMinimization a arkpriv:TechnicalMeasure ;
 
 arkpriv:hasDataCategory a owl:ObjectProperty ;
     rdfs:label "has data category"@en ;
+    rdfs:comment "Assigns a data category to the entity being classified."@en ,
+                 "Ordnet der klassifizierten Entity eine Datenkategorie zu."@de ;
     rdfs:range arkpriv:DataCategory .
 
 arkpriv:hasLegalBasis a owl:ObjectProperty ;
     rdfs:label "has legal basis"@en ;
+    rdfs:comment "Assigns the legal basis under which the processing is justified."@en ,
+                 "Ordnet die Rechtsgrundlage zu, unter der die Verarbeitung gerechtfertigt ist."@de ;
     rdfs:range arkpriv:LegalBasis .
 
 arkpriv:hasProcessingPurpose a owl:ObjectProperty ;
     rdfs:label "has processing purpose"@en ;
+    rdfs:comment "Assigns the purpose for which the data is processed."@en ,
+                 "Ordnet den Zweck zu, fuer den die Daten verarbeitet werden."@de ;
     rdfs:range arkpriv:ProcessingPurpose .
 
 arkpriv:hasRetentionPeriod a owl:DatatypeProperty ;
@@ -196,10 +208,14 @@ arkpriv:hasRetentionPeriod a owl:DatatypeProperty ;
 
 arkpriv:requiresTechnicalMeasure a owl:ObjectProperty ;
     rdfs:label "requires technical measure"@en ;
+    rdfs:comment "States that a technical measure is required to mitigate the associated risk."@en ,
+                 "Gibt an, dass eine technische Massnahme zur Minderung des zugehoerigen Risikos erforderlich ist."@de ;
     rdfs:range arkpriv:TechnicalMeasure .
 
 arkpriv:supportsDataSubjectRight a owl:ObjectProperty ;
     rdfs:label "supports data subject right"@en ;
+    rdfs:comment "States that the given data subject right is supported for this data category."@en ,
+                 "Gibt an, dass das angegebene Betroffenenrecht fuer diese Datenkategorie unterstuetzt wird."@de ;
     rdfs:range arkpriv:DataSubjectRight .
 
 arkpriv:dataController a owl:DatatypeProperty ;
@@ -223,11 +239,15 @@ arkpriv:PrivacyImpactAssessment a owl:Class ;
 
 arkpriv:assessesBoundedContext a owl:ObjectProperty ;
     rdfs:label  "assesses bounded context"@en ;
+    rdfs:comment "The bounded context this Data Protection Impact Assessment evaluates."@en ,
+                 "Der Bounded Context, den diese Datenschutz-Folgenabschaetzung bewertet."@de ;
     rdfs:domain arkpriv:PrivacyImpactAssessment ;
     rdfs:range  arknet:BoundedContext .
 
 arkpriv:riskLevel a owl:DatatypeProperty ;
     rdfs:label  "risk level"@en ;
+    rdfs:comment "The assessed risk level, e.g. low, medium, high."@en ,
+                 "Die eingeschaetzte Risikostufe, z.B. niedrig, mittel, hoch."@de ;
     rdfs:domain arkpriv:PrivacyImpactAssessment ;
     rdfs:range  xsd:string .
 

@@ -152,7 +152,9 @@ arkreq:motivates a owl:ObjectProperty ;
     rdfs:domain arkreq:Goal ;
     rdfs:range  arkreq:Requirement ;
     owl:inverseOf arkreq:motivatedBy ;
-    rdfs:label  "motivates"@en .
+    rdfs:label  "motivates"@en ;
+    rdfs:comment "Inverse of motivatedBy: this goal motivates the given requirement."@en ,
+                 "Inverse von motivatedBy: dieses Ziel motiviert die angegebene Anforderung."@de .
 
 arkreq:dependsOn a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
@@ -185,11 +187,15 @@ arkreq:Constraint a owl:Class ;
 arkreq:TechnicalConstraint a owl:Class ;
     rdfs:subClassOf arkreq:Constraint ;
     rdfs:label   "Technical Constraint"@en , "Technische Randbedingung"@de ;
+    rdfs:comment "A constraint arising from technology, platform, or infrastructure choices."@en ,
+                 "Eine Randbedingung, die sich aus Technologie-, Plattform- oder Infrastrukturvorgaben ergibt."@de ;
     skos:example "Muss auf der JVM laufen; nur PostgreSQL erlaubt."@de .
 
 arkreq:BusinessConstraint a owl:Class ;
     rdfs:subClassOf arkreq:Constraint ;
     rdfs:label   "Business Constraint"@en , "Geschaeftliche Randbedingung"@de ;
+    rdfs:comment "A constraint arising from business, budget, or organizational decisions."@en ,
+                 "Eine Randbedingung, die sich aus geschaeftlichen, budgetaeren oder organisatorischen Entscheidungen ergibt."@de ;
     skos:example "Budget-Deckel; Go-Live vor Quartalsende."@de .
 
 arkreq:RegulatoryConstraint a owl:Class ;
@@ -368,7 +374,9 @@ arkreq:priority a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
     rdfs:range  arkreq:Priority ;
     a owl:FunctionalProperty ;
-    rdfs:label  "priority"@en .
+    rdfs:label  "priority"@en ;
+    rdfs:comment "The MoSCoW priority assigned to this requirement."@en ,
+                 "Die MoSCoW-Prioritaet dieser Anforderung."@de .
 
 
 ##############################################################################
@@ -407,7 +415,9 @@ arkreq:status a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
     rdfs:range  arkreq:RequirementStatus ;
     a owl:FunctionalProperty ;
-    rdfs:label  "status"@en .
+    rdfs:label  "status"@en ;
+    rdfs:comment "The current lifecycle status of this requirement."@en ,
+                 "Der aktuelle Lebenszyklus-Status dieser Anforderung."@de .
 
 
 ##############################################################################
@@ -424,7 +434,9 @@ arkreq:Milestone a owl:Class ;
 arkreq:milestoneTitle a owl:DatatypeProperty ;
     rdfs:domain arkreq:Milestone ;
     rdfs:range  xsd:string ;
-    rdfs:label  "milestone title"@en .
+    rdfs:label  "milestone title"@en ;
+    rdfs:comment "The name of the milestone."@en ,
+                 "Der Name des Meilensteins."@de .
 
 arkreq:dueDate a owl:DatatypeProperty ;
     rdfs:domain arkreq:Milestone ;
@@ -437,16 +449,22 @@ arkreq:MilestoneState a owl:Class ;
     rdfs:comment "Zustand eines Meilensteins."@de .
 
 arkreq:Open a owl:NamedIndividual , arkreq:MilestoneState ;
-    rdfs:label "Open"@en .
+    rdfs:label "Open"@en ;
+    rdfs:comment "The milestone is still in progress; not all planned requirements have been delivered."@en ,
+                 "Der Meilenstein ist noch in Arbeit; nicht alle geplanten Anforderungen sind ausgeliefert."@de .
 
 arkreq:Closed a owl:NamedIndividual , arkreq:MilestoneState ;
-    rdfs:label "Closed"@en .
+    rdfs:label "Closed"@en ;
+    rdfs:comment "The milestone is complete; all planned requirements have been delivered or removed from scope."@en ,
+                 "Der Meilenstein ist abgeschlossen; alle geplanten Anforderungen wurden ausgeliefert oder aus dem Umfang entfernt."@de .
 
 arkreq:milestoneState a owl:ObjectProperty ;
     rdfs:domain arkreq:Milestone ;
     rdfs:range  arkreq:MilestoneState ;
     a owl:FunctionalProperty ;
-    rdfs:label  "milestone state"@en .
+    rdfs:label  "milestone state"@en ;
+    rdfs:comment "The current lifecycle state of this milestone."@en ,
+                 "Der aktuelle Lebenszyklus-Zustand dieses Meilensteins."@de .
 
 arkreq:Release a owl:Class ;
     rdfs:subClassOf doap:Version ;
