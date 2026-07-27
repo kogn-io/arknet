@@ -18,7 +18,6 @@ import org.eclipse.rdf4j.model.vocabulary.RDFS;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
 
-import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
@@ -105,24 +104,10 @@ public final class KognioRdfRequirementRepositoryFactory {
     public static RequirementRepository over(DatasetLifecycle lifecycle) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         ShaclWriteGate gate = buildGate();
-        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, KognioRdfRequirementRepositoryFactory::isWriteConflict);
+        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         return new KognioRdfRequirementRepository(lifecycle, funnel);
     }
 
-    /**
-     * Recognises the store's commit-time signal for a lost {@code SERIALIZABLE} transaction
-     * conflict (issue #144, #173): kognio-rdf 0.2.x raises its own
-     * {@link ConcurrencyConflictException} for this case instead of a raw RDF4J
-     * {@code RepositoryException}/{@code SailConflictException}. The method reference passed to
-     * {@link KognioRdfRequirementRepository} above hands this predicate over as a
-     * technology-neutral {@code Predicate} that names no RDF4J type.
-     *
-     * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
-     * same reason {@link #buildGate()} is.</p>
-     */
-    static boolean isWriteConflict(RuntimeException candidate) {
-        return candidate instanceof ConcurrencyConflictException;
-    }
 
     /**
      * Builds the requirements write-gate with RDFS reasoning enabled.

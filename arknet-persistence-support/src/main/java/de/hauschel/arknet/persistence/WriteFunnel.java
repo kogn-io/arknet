@@ -15,6 +15,7 @@ import java.util.function.Supplier;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
@@ -47,12 +48,12 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * catch a concurrent create that already fully committed; two <em>genuinely overlapping</em>
  * transactions instead run under the store's {@code SERIALIZABLE} isolation
  * (kogn-io/rdf-core#18), both existence checks pass, and the loser's {@code commit()} itself is
- * rejected as a conflict - surfacing as the RDF4J-backed store's own commit-time exception.
- * That technology-specific exception must not reach this class or any adapter (ArchUnit rule 2
- * in {@code arknet-architecture-tests}), so {@code isWriteConflict} is a technology-neutral
- * {@link Predicate} each repository factory builds and injects. {@link #create} translates a
- * positive answer into the same {@code duplicateCode} signal the synchronous check throws (the
- * signal {@code CodeAssignment}'s retry consumes, see {@code arknet-shared-kernel}).
+ * rejected as a conflict. Which exception that surfaces as is a property of the store behind the
+ * ports, not of this class, so {@code isWriteConflict} stays an injected, technology-neutral
+ * {@link Predicate} (ADR-001: the store is swappable); {@link #DEFAULT_WRITE_CONFLICT} is the
+ * ready-made one for the kognio-rdf-backed store every adapter here uses. {@link #create}
+ * translates a positive answer into the same {@code duplicateCode} signal the synchronous check
+ * throws (the signal {@code CodeAssignment}'s retry consumes, see {@code arknet-shared-kernel}).
  * {@link #update} deliberately does <em>not</em> translate: a conflict there is not a code
  * collision, and the pre-funnel adapters rethrew it raw - preserved as-is, not repaired in
  * passing (the ul adapter's unmigrated patch-update, which translates into its own
@@ -103,6 +104,20 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  */
 public final class WriteFunnel {
 
+    /**
+     * Recognises a lost {@code SERIALIZABLE} write conflict (issue #144) as the kognio-rdf ports
+     * report it: since {@code io.kogn.rdf} 0.2.x (kogn-io/rdf-core#30) the RDF4J-backed
+     * transactor translates the store's own commit-time exception into the neutral
+     * {@link ConcurrencyConflictException} itself, so recognising it needs no RDF4J type and
+     * therefore no longer has to live in the repository factories - the one place ArchUnit lets
+     * an adapter name RDF4J. This is the predicate every adapter in this codebase wants; it is
+     * offered as a default rather than hard-wired, because a different store behind
+     * {@link DatasetLifecycle} (ADR-001) may fail its writers differently, and the funnel would
+     * then be the wrong place to encode that.
+     */
+    public static final Predicate<RuntimeException> DEFAULT_WRITE_CONFLICT =
+            ConcurrencyConflictException.class::isInstance;
+
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
 
     /**
@@ -127,9 +142,10 @@ public final class WriteFunnel {
      *                        be {@code null})
      * @param gate            the SHACL write-gate validating every candidate graph before the
      *                        write transaction opens (must not be {@code null})
-     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
-     *                        class ever naming the RDF4J type (must not be {@code null})
+     * @param isWriteConflict recognises the store's commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144) - pass
+     *                        {@link #DEFAULT_WRITE_CONFLICT} for the kognio-rdf-backed store
+     *                        (must not be {@code null})
      */
     public WriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate,
             Predicate<RuntimeException> isWriteConflict) {
@@ -147,9 +163,10 @@ public final class WriteFunnel {
      *                        be {@code null})
      * @param gate            the SHACL write-gate validating every candidate graph before the
      *                        write transaction opens (must not be {@code null})
-     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
-     *                        class ever naming the RDF4J type (must not be {@code null})
+     * @param isWriteConflict recognises the store's commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144) - pass
+     *                        {@link #DEFAULT_WRITE_CONFLICT} for the kognio-rdf-backed store
+     *                        (must not be {@code null})
      * @param clock           the clock each revision's generation instant is read from (must not
      *                        be {@code null})
      */
