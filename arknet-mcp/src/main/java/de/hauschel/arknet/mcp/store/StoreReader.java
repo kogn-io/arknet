@@ -35,9 +35,14 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * also records a PROV-O revision into {@link ArkprovVocabulary#PROVENANCE_GRAPH} (ADR-014),
  * a trail that grows with every write, forever. The snapshot feeds the store report - a view
  * of the model, not of its change history - so those statements are filtered out; this is an
- * infrastructure-graph exclusion, not domain knowledge. The targeted reads
- * ({@link #outgoing}/{@link #incoming}) stay unfiltered: on a concrete resource, its head
- * revision is signal, not noise.</p>
+ * infrastructure-graph exclusion, not domain knowledge.</p>
+ *
+ * <p>{@link #outgoing} stays unfiltered: a resource carries exactly one {@code arkprov:head},
+ * bounded and signal. {@link #incoming} applies the same exclusion as the snapshot, for the
+ * same reason one level down: every revision points back at its resource via {@code
+ * prov:specializationOf}, so an unfiltered neighbour list would grow by one row per write,
+ * forever. Only {@code arkprov:head} is let back in - it is the one provenance statement that
+ * says something about the resource at hand rather than about its history.</p>
  */
 public final class StoreReader {
 
@@ -111,8 +116,14 @@ public final class StoreReader {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
-        String query = "SELECT DISTINCT ?s ?p WHERE { { ?s ?p " + iriRef + " } UNION { GRAPH ?g { ?s ?p "
-                + iriRef + " } } }";
+        // The revision trail names its resource once per write (prov:specializationOf), so the
+        // neighbour list is filtered exactly like the snapshot: nothing that lives only in the
+        // provenance graph, except the head pointer, which is signal about this very resource.
+        String provenanceGraph = "<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">";
+        String query = "SELECT DISTINCT ?s ?p WHERE { "
+                + "{ { ?s ?p " + iriRef + " } UNION { GRAPH ?g { ?s ?p " + iriRef + " } } } "
+                + "FILTER(?p = <" + ArkprovVocabulary.HEAD + "> "
+                + "|| NOT EXISTS { GRAPH " + provenanceGraph + " { ?s ?p " + iriRef + " } }) }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> incomingTriple(iri, row))

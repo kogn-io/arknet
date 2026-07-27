@@ -54,18 +54,23 @@ class StoreReaderTest {
     Path storageDir;
 
     private DatasetLifecycle lifecycle;
+    private RequirementRepository requirements;
     private StoreReader storeReader;
 
     @BeforeEach
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
-        requirements.create(WORKSPACE, new Requirement(
-                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
+        requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        requirements.create(WORKSPACE, requirementTitled("Login"));
+        storeReader = new StoreReader(lifecycle);
+    }
+
+    private static Requirement requirementTitled(String title) {
+        return new Requirement(
+                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials")));
-        storeReader = new StoreReader(lifecycle);
+                List.of("Login succeeds with valid credentials"));
     }
 
     @AfterEach
@@ -113,8 +118,7 @@ class StoreReaderTest {
      * Every guarded write also records a PROV-O revision into the provenance graph (ADR-014),
      * and that trail grows with every write, forever. The snapshot feeds the store report - a
      * view of the model, not of its change history - so the provenance graph is excluded from
-     * it, while the targeted reads ({@code outgoing}/{@code incoming}) still reach the head
-     * pointer of a concrete resource.
+     * it, while {@code outgoing} still reaches the head pointer of a concrete resource.
      */
     @Test
     void readSnapshotExcludesTheProvenanceGraphButOutgoingStillSeesTheHead() {
@@ -131,6 +135,37 @@ class StoreReaderTest {
                 .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD));
         assertThat(triples)
                 .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF));
+    }
+
+    /**
+     * The neighbour list must not grow with the revision trail: every revision names its
+     * resource via {@code prov:specializationOf}, so an unfiltered {@code incoming} would add
+     * one row per write, without bound. The head pointer stays visible - on the revision it
+     * points at, which is where that statement actually says something.
+     */
+    @Test
+    void incomingIgnoresTheRevisionTrailButStillShowsTheHeadPointer() {
+        List<Triple> afterOneWrite = storeReader.incoming(WORKSPACE, FR_1_IRI);
+
+        requirements.update(WORKSPACE, requirementTitled("Login v2"));
+        requirements.update(WORKSPACE, requirementTitled("Login v3"));
+
+        List<Triple> afterThreeWrites = storeReader.incoming(WORKSPACE, FR_1_IRI);
+        assertThat(afterThreeWrites)
+                .noneMatch(triple -> triple.predicate().equals(ArkprovVocabulary.SPECIALIZATION_OF));
+        assertThat(afterThreeWrites)
+                .as("two further writes must not add neighbour rows")
+                .hasSameSizeAs(afterOneWrite);
+
+        String headIri = storeReader.outgoing(WORKSPACE, FR_1_IRI).stream()
+                .filter(triple -> triple.predicate().equals(ArkprovVocabulary.HEAD))
+                .map(triple -> ((RdfNode.Resource) triple.object()).iri())
+                .findFirst()
+                .orElseThrow();
+        assertThat(storeReader.incoming(WORKSPACE, headIri))
+                .as("the head statement is signal on the revision it points at")
+                .anyMatch(triple -> triple.subject().equals(FR_1_IRI)
+                        && triple.predicate().equals(ArkprovVocabulary.HEAD));
     }
 
     @Test

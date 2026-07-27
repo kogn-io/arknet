@@ -60,9 +60,11 @@ public final class Prefixes {
     }
 
     /**
-     * The default arknet bindings: instance namespaces (requirement, term, actor) plus the
-     * standard vocabularies the bounded contexts write (arkreq, arkproc, arknet core, skos,
-     * dcterms, rdf, rdfs, xsd).
+     * The default arknet bindings: instance namespaces (requirement, term, actor, plus the
+     * revision/activity bases the write funnel mints under) and the standard vocabularies the
+     * bounded contexts write (arkreq, arkproc, arknet core, arkprov, prov, skos, dcterms, rdf,
+     * rdfs, xsd). The provenance bindings are here so a resource's {@code arkprov:head} line
+     * renders as a CURIE like every other statement instead of as two raw IRIs (ADR-014).
      *
      * @return the default resolver
      */
@@ -71,10 +73,14 @@ public final class Prefixes {
                 new Prefix("req", MODEL_INSTANCE_BASE + "requirement/"),
                 new Prefix("term", MODEL_INSTANCE_BASE + "term/"),
                 new Prefix("act", MODEL_INSTANCE_BASE + "actor/"),
+                new Prefix("rev", "https://w3id.org/arknet/revision/"),
+                new Prefix("activity", "https://w3id.org/arknet/activity/"),
                 new Prefix("arknet", "https://w3id.org/arknet/core#"),
                 new Prefix("arkreq", "https://w3id.org/arknet/requirements#"),
                 new Prefix("arkproc", "https://w3id.org/arknet/process#"),
                 new Prefix("arkarch", "https://w3id.org/arknet/architecture#"),
+                new Prefix("arkprov", "https://w3id.org/arknet/provenance#"),
+                new Prefix("prov", "http://www.w3.org/ns/prov#"),
                 new Prefix("skos", "http://www.w3.org/2004/02/skos/core#"),
                 new Prefix("dcterms", "http://purl.org/dc/terms/"),
                 new Prefix("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"),
