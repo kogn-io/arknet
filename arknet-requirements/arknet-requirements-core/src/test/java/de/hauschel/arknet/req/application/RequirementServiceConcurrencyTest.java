@@ -321,7 +321,7 @@ class RequirementServiceConcurrencyTest {
             delegate.findByCode(workspaceId, updated.code())
                     .orElseThrow(() -> new de.hauschel.arknet.req.domain.RequirementNotFoundException(
                             workspaceId, updated.code()));
-            throw new de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException(
+            throw new RequirementConcurrentlyModifiedException(
                     workspaceId, updated.code());
         }
 
