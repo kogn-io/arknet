@@ -21,6 +21,7 @@ import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -62,7 +63,7 @@ class StoreReaderTest {
     @BeforeEach
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-        requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle);
+        requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         requirements.create(WORKSPACE, requirementTitled("Login"));
         storeReader = new StoreReader(lifecycle);
     }

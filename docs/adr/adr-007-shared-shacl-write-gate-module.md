@@ -203,6 +203,7 @@ bisher unerwaehnte Kante im Abhaengigkeitsgraphen dieser ADR -- deshalb der Nach
 
 Kontextunterschiede bleiben Konstruktor-Zustand (Entscheidung 3): der ul-Adapter reicht seine
 echte, Nutzer-konfigurierte `DisplayLocale` durch (die Read-Pfade brauchen sie ohnehin fuer die
-Label-Auswahl), req/uc/bc fuehren heute keine Sprachpraeferenz und uebergeben sichtbar
-`DisplayLocale.DEFAULT` an ihrer jeweiligen `buildGate()`-Stelle -- keine Policy-Entscheidung
-*im* Gate, sondern eine explizite Wahl an der Stelle, die sie trifft.
+Label-Auswahl). req/uc/bc haben keinen eigenen Sprachbedarf, reichen aber dieselbe, vom
+Composition Root konfigurierte `DisplayLocale` an ihre jeweilige `buildGate(DisplayLocale)`-Stelle
+durch statt sie fest auf `DisplayLocale.DEFAULT` zu verdrahten -- sonst wuerde dieselbe SHACL-
+Verletzung je nach Bounded Context in unterschiedlicher Sprache gemeldet.

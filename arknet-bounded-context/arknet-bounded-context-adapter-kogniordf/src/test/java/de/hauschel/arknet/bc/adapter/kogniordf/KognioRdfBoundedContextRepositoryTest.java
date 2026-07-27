@@ -39,6 +39,7 @@ import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -66,8 +67,8 @@ class KognioRdfBoundedContextRepositoryTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, KognioRdfBoundedContextRepositoryFactory.buildGate(),
-                WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
         repository = new KognioRdfBoundedContextRepository(datasetLifecycle, funnel);
     }
 
@@ -191,7 +192,7 @@ class KognioRdfBoundedContextRepositoryTest {
         candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#domainVision"),
                 rdf.createLiteral("A vision long enough to satisfy the ten-character minimum."));
 
-        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate();
+        ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 

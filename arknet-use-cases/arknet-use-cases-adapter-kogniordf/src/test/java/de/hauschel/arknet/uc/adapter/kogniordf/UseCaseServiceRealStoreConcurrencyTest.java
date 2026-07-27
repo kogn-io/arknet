@@ -42,6 +42,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -152,8 +153,8 @@ class UseCaseServiceRealStoreConcurrencyTest {
         assertNotNull(loserResult.get());
         assertNotEquals(winnerResult.get().code(), loserResult.get().code());
 
-        List<UseCase> stored =
-                KognioRdfUseCaseRepositoryFactory.over(realLifecycle, new UuidResourceIdFactory()).findAll(WS);
+        List<UseCase> stored = KognioRdfUseCaseRepositoryFactory.over(
+                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS);
         assertEquals(2, stored.size());
         assertTrue(stored.stream().map(UseCase::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())));
@@ -197,7 +198,8 @@ class UseCaseServiceRealStoreConcurrencyTest {
             }
             return tx;
         });
-        UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(guarded, new UuidResourceIdFactory());
+        UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
+                guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
                 CUSTOMER_ACTOR_LOOKUP);
     }

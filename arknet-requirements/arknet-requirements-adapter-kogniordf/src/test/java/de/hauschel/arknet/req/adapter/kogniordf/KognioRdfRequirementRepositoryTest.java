@@ -31,6 +31,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -67,7 +68,7 @@ class KognioRdfRequirementRepositoryTest {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
                 new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
-        repository = KognioRdfRequirementRepositoryFactory.over(datasetLifecycle);
+        repository = KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -391,7 +392,7 @@ class KognioRdfRequirementRepositoryTest {
                 rdf.createIRI("https://w3id.org/arknet/requirements#Proposed"));
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+                () -> KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
 
         assertTrue(ex.getMessage().contains("acceptanceCriterion"), ex.getMessage());
     }
@@ -890,7 +891,7 @@ class KognioRdfRequirementRepositoryTest {
                 rdf.createIRI("https://example.org/not-a-concept"));
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+                () -> KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
 
         assertTrue(ex.getMessage().contains("usesTerm"), ex.getMessage());
     }
@@ -919,7 +920,7 @@ class KognioRdfRequirementRepositoryTest {
                 rdf.createLiteral("Login succeeds with valid credentials"));
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+                () -> KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
 
         assertTrue(ex.getMessage().contains("title"), ex.getMessage());
     }
@@ -949,7 +950,7 @@ class KognioRdfRequirementRepositoryTest {
                 rdf.createLiteral("Login succeeds with valid credentials"));
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+                () -> KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
 
         assertTrue(ex.getMessage().contains("description"), ex.getMessage());
     }
@@ -986,7 +987,7 @@ class KognioRdfRequirementRepositoryTest {
                 rdf.createLiteral("Login succeeds with valid credentials"));
 
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
-                () -> KognioRdfRequirementRepositoryFactory.buildGate().enforce(candidate));
+                () -> KognioRdfRequirementRepositoryFactory.buildGate(DisplayLocale.DEFAULT).enforce(candidate));
 
         assertTrue(ex.getMessage().contains("motivatedBy"), ex.getMessage());
     }
