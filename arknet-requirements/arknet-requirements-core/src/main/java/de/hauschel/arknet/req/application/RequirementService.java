@@ -198,11 +198,13 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
 
     /**
      * Read-modify-write helper shared by {@link #setStatus}, {@link #linkTerm} and {@link #update}: reads the
-     * current requirement, derives the next state via {@code mutation}, and writes it back via
-     * {@link RequirementRepository#compareAndUpdate} - retrying with a fresh read whenever a
-     * concurrent writer commits a change in between (issue #108, Befund 1: two parallel
-     * read-modify-write round trips on the same requirement used to silently lose whichever one
-     * committed last via plain {@link RequirementRepository#update}).
+     * current requirement and its concurrency token together via
+     * {@link RequirementRepository#findCurrentByCode}, derives the next state via {@code mutation},
+     * and writes it back via {@link RequirementRepository#compareAndUpdate} - retrying with a
+     * fresh read whenever a concurrent writer commits a change in between (issue #108, Befund 1:
+     * two parallel read-modify-write round trips on the same requirement used to silently lose
+     * whichever one committed last; the compare-and-set guard itself degenerated from a
+     * full-snapshot comparison to a head comparison in issue #167/ADR-014 decision 4).
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
      * a no-op: the existing idempotency rules ({@code setStatus} to the same status, linking an
@@ -214,20 +216,24 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      */
     private Requirement updateWithOptimisticRetry(
             WorkspaceId workspaceId, RequirementCode code, UnaryOperator<Requirement> mutation) {
+        RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            Requirement current = repository.findByCode(workspaceId, code)
+            RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(workspaceId, code)
                     .orElseThrow(() -> new RequirementNotFoundException(workspaceId, code));
-            Requirement updated = mutation.apply(current);
-            if (updated.equals(current)) {
-                return current;
+            Requirement updated = mutation.apply(current.value());
+            if (updated.equals(current.value())) {
+                return current.value();
             }
-            if (repository.compareAndUpdate(workspaceId, current, updated)) {
+            try {
+                repository.compareAndUpdate(workspaceId, current.head(), updated);
                 return updated;
+            } catch (RequirementConcurrentlyModifiedException e) {
+                // A concurrent writer replaced the requirement between our read and our write -
+                // retry against the now-current state instead of silently discarding that change.
+                lastConflict = e;
             }
-            // A concurrent writer replaced the requirement between our read and our write -
-            // retry against the now-current state instead of silently discarding that change.
         }
-        throw new RequirementConcurrentlyModifiedException(workspaceId, code);
+        throw lastConflict;
     }
 
     @Override

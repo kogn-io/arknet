@@ -233,6 +233,103 @@ class WriteFunnelTest {
         assertTrue(containsSubject(fixture.validation.data, SUBJECT_IRI));
     }
 
+    // ---- compareAndUpdate (ADR-014 decisions 3+4, issue #167) ---------------------------
+
+    @Test
+    void compareAndUpdateWritesWhenSubjectExistsAndHeadMatches() {
+        Fixture fixture = new Fixture(List.of(true));
+        String head = "https://w3id.org/arknet/revision/current";
+        fixture.tx.headAnswers.add(head);
+
+        List<DatasetTx> bodyCalls = new ArrayList<>();
+        fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, head,
+                candidate(), null, Signals::unexpected, Signals::unexpected, bodyCalls::add);
+
+        assertEquals(List.of(ASK_SUBJECT), fixture.tx.askQueries, "compareAndUpdate runs no code check");
+        assertEquals(1, bodyCalls.size());
+        assertTrue(fixture.handle.closed);
+    }
+
+    /** No revision recorded yet is a valid, comparable state: {@code null} must match no head. */
+    @Test
+    void compareAndUpdateTreatsNoExpectedHeadAsMatchingNoRecordedHead() {
+        Fixture fixture = new Fixture(List.of(true));
+
+        List<DatasetTx> bodyCalls = new ArrayList<>();
+        fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null,
+                candidate(), null, Signals::unexpected, Signals::unexpected, bodyCalls::add);
+
+        assertEquals(1, bodyCalls.size());
+    }
+
+    @Test
+    void compareAndUpdateRejectsMissingSubjectWithNotFoundSignal() {
+        Fixture fixture = new Fixture(List.of(false));
+        RuntimeException signal = new RuntimeException("not found");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null,
+                        candidate(), null, () -> signal, Signals::unexpected, Signals.noBody()));
+
+        assertSame(signal, thrown);
+        assertFalse(fixture.bodyRan);
+    }
+
+    /** The core of the CAS guard: a caller whose observed head is no longer current is rejected. */
+    @Test
+    void compareAndUpdateRejectsStaleExpectedHeadWithHeadMismatchSignal() {
+        Fixture fixture = new Fixture(List.of(true));
+        fixture.tx.headAnswers.add("https://w3id.org/arknet/revision/actual");
+        RuntimeException signal = new RuntimeException("head mismatch");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                        "https://w3id.org/arknet/revision/stale", candidate(), null,
+                        Signals::unexpected, () -> signal, Signals.noBody()));
+
+        assertSame(signal, thrown);
+        assertFalse(fixture.bodyRan, "body must not run after a rejected head comparison");
+    }
+
+    /**
+     * Issue #144's "second interleaving", now also relevant to an update path: two callers can
+     * both observe the same expected head and both pass the synchronous comparison before either
+     * commits, under {@code SERIALIZABLE} isolation - the loser's commit itself is then rejected,
+     * and must translate into the identical {@code headMismatch} signal.
+     */
+    @Test
+    void compareAndUpdateTranslatesRecognisedCommitConflictIntoHeadMismatch() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(true), storeConflict, e -> e == storeConflict);
+        RuntimeException signal = new RuntimeException("head mismatch");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null,
+                        candidate(), null, Signals::unexpected, () -> signal, tx -> { }));
+
+        assertSame(signal, thrown);
+        assertTrue(fixture.handle.closed, "handle must be released even on a conflict");
+    }
+
+    /** Same revision-recording contract as {@link #update}, now proven for the CAS path too. */
+    @Test
+    void compareAndUpdateChainsTheRevisionToThePreviousHeadAndRewritesIt() {
+        Fixture fixture = new Fixture(List.of(true));
+        String previous = "https://w3id.org/arknet/revision/previous";
+        fixture.tx.headAnswers.add(previous);
+
+        fixture.funnel().compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, previous,
+                candidate(), null, Signals::unexpected, Signals::unexpected, tx -> { });
+
+        ReadableGraph provenance = fixture.tx.provenanceAdded();
+        List<String> revisions = subjectsTyped(provenance, ArkprovVocabulary.REVISION_TYPE);
+        assertEquals(1, revisions.size(), "exactly one revision per write");
+        String revision = revisions.get(0);
+        assertEquals(List.of(previous), objectIris(provenance, revision, ArkprovVocabulary.WAS_REVISION_OF),
+                "the new revision must supersede the previous head");
+        assertEquals(List.of(revision), objectIris(provenance, SUBJECT_IRI, ArkprovVocabulary.HEAD));
+    }
+
     // ---- revision recording (ADR-014, revision basis) -----------------------------------
 
     /**

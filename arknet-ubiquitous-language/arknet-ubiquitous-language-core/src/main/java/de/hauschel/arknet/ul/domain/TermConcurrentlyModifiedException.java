@@ -8,22 +8,20 @@ import java.util.Objects;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
- * Thrown when {@link de.hauschel.arknet.ul.application.port.out.TermRepository#update} loses a
- * genuine, store-level write conflict against another writer that concurrently patched the very
- * same predicate of the very same term (e.g. two overlapping {@code term_update} calls both
- * setting {@code skos:prefLabel} to a different value at the same time).
+ * Thrown when {@link de.hauschel.arknet.ul.application.port.out.TermRepository#update} keeps
+ * losing the compare-and-set race against other writers of the same term across every bounded
+ * retry attempt the adapter allows (e.g. two overlapping {@code term_update} calls racing to
+ * advance the same term's revision head, whether or not they touch the same field).
  *
  * <p>Distinct from {@link DuplicateTermCodeException} on purpose: that one means a business-code
- * collision, an entirely different failure mode that {@code update()} can no longer even
- * reach, since it never rewrites {@code dcterms:identifier}. It is also distinct from a classic
- * lost-update between an application-level read and its later write - {@code update()} resolves
- * the term and reads whatever it needs to preserve inside the very transaction that writes, so
- * there is no read-then-write gap left to lose a change in. What remains is narrower: two
- * genuinely overlapping {@code SERIALIZABLE} transactions (kogn-io/rdf-core#18) racing to replace
- * the identical triple pattern, where the store itself rejects the loser's commit rather than
- * silently letting one overwrite the other. An expected-but-rare domain outcome, not a programming
- * error - the caller should re-check the term's current state and retry, not treat this as a
- * permanent failure.</p>
+ * collision, an entirely different failure mode that {@code update()} can no longer even reach,
+ * since it never rewrites {@code dcterms:identifier}. Unlike the classic lost-update it might be
+ * mistaken for, the application-level read-then-write gap is not closed here - each retry attempt
+ * reads the term's current state and revision head, then writes conditionally on that head still
+ * matching. This exception surfaces only once every one of those bounded attempts found the head
+ * had already moved on again; an expected-but-rare domain outcome under sustained,
+ * high-frequency concurrent writes to the very same term, not a programming error - the caller
+ * should re-check the term's current state and retry.</p>
  */
 public class TermConcurrentlyModifiedException extends RuntimeException {
 
@@ -36,13 +34,12 @@ public class TermConcurrentlyModifiedException extends RuntimeException {
      * Creates the exception.
      *
      * @param workspaceId the workspace the term lives in
-     * @param code        the term code whose update lost the write conflict
+     * @param code        the term code whose update kept losing the race
      */
     public TermConcurrentlyModifiedException(WorkspaceId workspaceId, TermCode code) {
         super("term " + Objects.requireNonNull(code, "code").value()
                 + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value()
-                + " could not be updated - a concurrent update to the same field committed at the same time; "
-                + "re-check the term's current state and retry");
+                + " could not be updated - it kept changing concurrently across every retry attempt");
         this.workspaceId = workspaceId;
         this.code = code;
     }
@@ -52,7 +49,7 @@ public class TermConcurrentlyModifiedException extends RuntimeException {
         return workspaceId;
     }
 
-    /** @return the term code whose update lost the write conflict */
+    /** @return the term code whose update kept losing the race */
     public TermCode termCode() {
         return code;
     }

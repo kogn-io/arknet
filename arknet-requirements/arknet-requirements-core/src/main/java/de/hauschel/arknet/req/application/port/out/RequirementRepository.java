@@ -12,6 +12,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 
@@ -30,8 +31,10 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
  * longer a coherent single operation: an identity either already exists (an update) or it does
  * not (a create), and conflating the two would hide a caller bug (writing to an id nobody
- * minted, or an id that was already used). {@link #create} and {@link #update} therefore make
- * that distinction explicit at the port.</p>
+ * minted, or an id that was already used). {@link #create} and {@link #compareAndUpdate}
+ * therefore make that distinction explicit at the port - there is no unconditional update: every
+ * correction to an already-created requirement goes through the compare-and-set guard (issue
+ * #167), so a guarded write path can never be bypassed by accident.</p>
  */
 public interface RequirementRepository {
 
@@ -49,35 +52,37 @@ public interface RequirementRepository {
     void create(WorkspaceId workspaceId, Requirement requirement);
 
     /**
-     * Replaces an existing requirement by identity.
+     * Replaces an existing requirement by identity, but only if its current concurrency token
+     * (the {@code arkprov:head} revision recorded by the last funnel write, ADR-014) still equals
+     * {@code expectedHead} - the compare-and-set guard against the lost-update race (issue #108,
+     * degenerated from a full-snapshot comparison to a head comparison by issue #167/ADR-014
+     * decision 4). A read-modify-write round trip (e.g. {@code req_link_term}, {@code
+     * req_set_status}) reads the current state and head together via {@link #findCurrentByCode},
+     * derives {@code updated}, and calls this method with the head it observed - a mismatch means
+     * the read was already stale, and the caller must re-read and retry rather than silently
+     * discard the concurrent change.
      *
-     * @param workspaceId the workspace (architecture model) the requirement lives in
-     * @param requirement the requirement to store in place of the current one
-     * @throws RequirementNotFoundException if no requirement with this identity exists
-     */
-    void update(WorkspaceId workspaceId, Requirement requirement);
-
-    /**
-     * Replaces an existing requirement by identity, but only if the stored requirement still
-     * equals {@code expected} - an optimistic-concurrency guard against the lost-update race
-     * (issue #108): a read-modify-write round trip (e.g. {@code req_link_term}, {@code
-     * req_set_status}) that reads {@code expected}, derives {@code updated} from it, and calls
-     * this method instead of {@link #update} detects, inside the same store transaction, whether
-     * another writer committed a change to the same identity in between. Unlike {@link #update},
-     * which always overwrites, a mismatch here means the read was already stale - the caller must
-     * re-read and retry rather than silently discard the concurrent change.
+     * <p><strong>The token guards funnel writers, not store-first edits.</strong>
+     * {@code expectedHead} only ever changes when a write goes through the shared
+     * {@code WriteFunnel} (ADR-014); a direct store-first (ADR-005) edit to this requirement's
+     * triples leaves the head untouched. Such an edit therefore passes this method's
+     * compare-and-set check undetected, and the subsequent replace-by-identity write silently
+     * overwrites it. The guard closes the lost-update window between two funnel writers, not
+     * between a funnel writer and a write that bypassed the funnel entirely.</p>
      *
-     * @param workspaceId the workspace (architecture model) the requirement lives in
-     * @param expected    the requirement state the caller last read and built {@code updated}
-     *                    from; must carry the same {@link Requirement#id()} as {@code updated}
-     * @param updated     the requirement to store in place of the current one, if it still
-     *                    matches {@code expected}
-     * @return {@code true} if the stored requirement matched {@code expected} and was replaced by
-     *         {@code updated}; {@code false} if it no longer matched (a concurrent write raced
-     *         ahead) and nothing was changed
-     * @throws RequirementNotFoundException if no requirement with this identity exists at all
+     * @param workspaceId  the workspace (architecture model) the requirement lives in
+     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
+     *                     requirement (from {@link #findCurrentByCode}), or {@code null} if the
+     *                     caller expects no revision to exist yet
+     * @param updated      the requirement to store in place of the current one, if its head still
+     *                     matches {@code expectedHead}
+     * @throws RequirementNotFoundException              if no requirement with this identity
+     *                                                    exists at all
+     * @throws RequirementConcurrentlyModifiedException if {@code expectedHead} no longer matches
+     *                                                    the stored requirement's current head - a
+     *                                                    concurrent write raced ahead
      */
-    boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated);
+    void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated);
 
     /**
      * Finds a requirement by its human-readable business code within a workspace.
@@ -87,6 +92,36 @@ public interface RequirementRepository {
      * @return the requirement if present, otherwise {@link Optional#empty()}
      */
     Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code);
+
+    /**
+     * Reads a requirement's current state together with its concurrency token (the
+     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). Only the core
+     * fields (type, title, description, status, priority, motivatedBy, qualityCategory) and the
+     * head itself are guaranteed to come from one read; {@code usesTerms} and
+     * {@code acceptanceCriteria} are filled in by separate, independent follow-up reads. This is
+     * still safe because of the order: the head is read first, so it is never fresher than any
+     * part of the state it is paired with - a concurrent funnel write landing between the reads
+     * moves the head, so the subsequent {@link #compareAndUpdate} then fails its comparison and
+     * the caller re-reads instead of overwriting a state it never actually saw. The pairing is
+     * deliberately conservative, never optimistic; reading the head later, or any field before it,
+     * would risk the opposite - a fresh head paired with stale state, reopening the lost-update
+     * race this method exists to close. Backs the read side of the read-modify-write round trip
+     * {@link #compareAndUpdate} guards the write side of.
+     *
+     * @param workspaceId the workspace (architecture model) to look up the requirement in
+     * @param code        the requirement code (e.g. {@code FR-1})
+     * @return the requirement and its current head, or {@link Optional#empty()} if no requirement
+     *         with this code exists
+     */
+    Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code);
+
+    /**
+     * A requirement's state paired with its current concurrency token (the {@code arkprov:head}
+     * revision IRI, or {@code null} if the requirement predates the funnel's revision recording),
+     * as read together by {@link #findCurrentByCode}.
+     */
+    record CurrentRequirement(Requirement value, String head) {
+    }
 
     /**
      * Returns all requirements stored in a workspace.

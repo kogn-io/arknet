@@ -75,6 +75,14 @@ class StoreReaderTest {
                 List.of("Login succeeds with valid credentials"));
     }
 
+    /** Reads {@code updated}'s current head and immediately applies it through the CAS guard. */
+    private void replaceViaCompareAndUpdate(Requirement updated) {
+        String head = requirements.findCurrentByCode(WORKSPACE, updated.code())
+                .map(RequirementRepository.CurrentRequirement::head)
+                .orElse(null);
+        requirements.compareAndUpdate(WORKSPACE, head, updated);
+    }
+
     @AfterEach
     void tearDown() {
         lifecycle.close(new DatasetId(WORKSPACE.value()));
@@ -119,11 +127,12 @@ class StoreReaderTest {
     /**
      * Every guarded write records a PROV-O revision plus a head pointer into the provenance
      * graph (ADR-014), and that trail grows with every write, forever. None of the three read
-     * paths surfaces it: the snapshot feeds the store report, a view of the model rather than
-     * of its change history, and the head pointer is hidden for the same reason it must not be
-     * trusted yet - it only moves on writes through the write funnel, while {@code req_update},
-     * {@code req_set_status}, {@code req_link_term} and {@code term_update} bypass it (ADR-014
-     * decision 4).
+     * paths surfaces it: the snapshot feeds the store report, a view of the model rather than of
+     * its change history, and the head pointer stays hidden even though every user-reachable
+     * write now moves it through the funnel (issue #167 resolved {@code req_update}, {@code
+     * req_set_status}, {@code req_link_term} and {@code term_update} into it, ADR-014 decision 4)
+     * - whether and how to expose it through this generic read path is a separate, still open
+     * decision, not gated on the head being a usable token any more.
      */
     @Test
     void noReadPathSurfacesTheProvenanceGraph() {
@@ -149,8 +158,8 @@ class StoreReaderTest {
         long trailAfterOneWrite = provenanceStatementCount();
         String firstHead = headIri();
 
-        requirements.update(WORKSPACE, requirementTitled("Login v2"));
-        requirements.update(WORKSPACE, requirementTitled("Login v3"));
+        replaceViaCompareAndUpdate(requirementTitled("Login v2"));
+        replaceViaCompareAndUpdate(requirementTitled("Login v3"));
 
         assertThat(provenanceStatementCount())
                 .as("the two updates must have extended the trail in the store")
