@@ -25,13 +25,21 @@ package de.hauschel.arknet.persistence;
  *
  * <p>The head triple is the resource's queryable pointer to its latest revision (ADR-014):
  * exactly one {@code arkprov:head} per resource, rewritten with every write <em>through the
- * funnel</em>. It is not yet a complete history: {@code req_update}, {@code req_set_status},
- * {@code req_link_term} and {@code term_update} write past the funnel and move neither
- * revision nor head (ADR-014 decision 4 resolves them), so the head is the intended
- * concurrency token, not yet a usable one - see {@link WriteFunnel} for why compare-and-set
- * must wait for that resolution. The activity carries no resolved agent yet - agent
- * attribution ({@code prov:wasAssociatedWith}) is deliberately additive and out of scope here
- * (ADR-014 decision 5).</p>
+ * funnel</em> - which today is every guarded write path. Where a caller reaches
+ * {@link WriteFunnel#compareAndUpdate} the head is also a usable concurrency token; where it
+ * reaches the unconditional {@link WriteFunnel#update} the head moves but guards nothing, and a
+ * write issued directly against the store moves it not at all - see {@link WriteFunnel} for
+ * both limits. The activity carries no resolved agent yet - agent attribution
+ * ({@code prov:wasAssociatedWith}) is deliberately additive and out of scope here (ADR-014
+ * decision 5).</p>
+ *
+ * <p><strong>A revision is not a snapshot.</strong> It records <em>that</em> a resource was
+ * written, with its instant and its predecessor - the model graph itself is still replaced in
+ * place, so no earlier state survives and two revisions cannot be compared against each other.
+ * Making historical states queryable is open, and so is the compaction strategy the resulting
+ * growth would need (both deferred by ADR-014). Nothing here is SHACL-validated either: the
+ * gate runs on the candidate model graph before the transaction opens, while the revision is
+ * written inside it into {@link #PROVENANCE_GRAPH}, for which arknet ships no shapes.</p>
  *
  * <p><strong>Why here.</strong> Like {@link ArkreqVocabulary} these are RDF serialization
  * constants, not domain vocabulary - the bounded-context cores never see them (opaque
