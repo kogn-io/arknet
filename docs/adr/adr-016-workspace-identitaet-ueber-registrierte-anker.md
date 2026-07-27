@@ -4,10 +4,8 @@
 - Verwandt: ADR-001 (loest die dort festgehaltene Herkunft der WorkspaceId ab -- Aufloesung
   beim Serverstart ueber eine Slug-Kette), ADR-009 (loest dessen Punkt 3 ab -- Ableitung der
   WorkspaceId aus dem Herkunftsverzeichnis per git-common-dir; Transport, Betriebsmodell und
-  Vertrauensgrenze bleiben unveraendert gueltig), ADR-005 (Store-first: die Registry lebt im
-  Store, nicht in einer Betreiber-Konfiguration), ADR-006 (generischer Lesepfad, der das
-  Registry-Dataset ausblenden muss), ADR-007/ADR-013/ADR-014 (SHACL-Write-Gate, WriteFunnel
-  und Head-als-Concurrency-Token, ueber die die Registry geschrieben wird)
+  Vertrauensgrenze bleiben unveraendert gueltig), ADR-006 (generischer Lesepfad, der das
+  Registry-Dataset ausblenden muss)
 
 ## Kontext
 
