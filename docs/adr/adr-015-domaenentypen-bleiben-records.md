@@ -1,16 +1,19 @@
 # ADR-015: Domaenentypen bleiben Records -- kein graph-backed Domaenenobjekt
 
-- Status: Proposed (2026-07-26)
+- Status: Accepted (2026-07-27)
 - Verwandt: ADR-007 (kein Port ohne fachlichen Sinn im Core -- dessen Ablehnungsgrund traegt hier
   wieder), ADR-013 (Schreibtrichter), ADR-014 (praezisiert dessen Entscheidung 4), ADR-005
   (store-first als Quelle der nicht modellierten Praedikate)
 
 ## Kontext
 
-Die geplante generische `resource_update`-Fassade braucht eine Vorentscheidung ueber die
-Repraesentation: wird sie ein generischer Triple-Patch, oder ein Dispatch auf die
-BC-eigenen In-Ports? Die Antwort haengt daran, ob ein Domaenenobjekt und seine
-RDF-Repraesentation dasselbe sein koennen.
+Anlass ist die geplante generische `resource_update`-Fassade: sie braucht eine
+Vorentscheidung ueber die Repraesentation, weil ein generischer Triple-Patch nur dann
+fachlich validierbar waere, wenn ein Domaenenobjekt und seine RDF-Repraesentation dasselbe
+sein koennen. Genau diese Frage entscheidet dieses ADR -- **nicht** die Bauweise der
+Fassade selbst. Die bleibt offen: die hier gemessene Ein-BC-Sicht kann die Fassaden-Ebene
+strukturell nicht erfassen, und dort laege der eigentliche Gewinn des Musters. Entschieden
+wird sie bei der Design-Arbeit an der Fassade, gebunden an die Entscheidungen 1 bis 4 unten.
 
 Das erwogene Muster stammt aus einem frueheren Projekt des Autors: Domaenenobjekte als
 Java-Interfaces mit typisierten Gettern/Settern, deren Implementierung keine Felder haelt,
@@ -76,12 +79,7 @@ zurueckschreiben, ohne dass der Kern seinen Typ aendert.
    Aufgabe des Out-Adapters -- als Graph-Patch innerhalb der Schreibtransaktion --, nicht
    Aufgabe eines Domaenenobjekts, das den Graphen durch die Anwendung traegt.
 
-4. **Die `resource_update`-Fassade wird Port-Dispatch, kein generischer Triple-Patch.** Ohne
-   ein gemeinsames graph-backed Objekt gibt es keine BC-uebergreifende Repraesentation, auf
-   der ein generischer Patch fachlich validierbar waere; die Fassade bleibt eine duenne
-   Verteilung auf die BC-eigenen In-Ports und erbt deren Ablehnungen.
-
-5. **Praezisierung zu ADR-014 Entscheidung 4:** Der Service-seitige Merge der ul-BC uebergibt
+4. **Praezisierung zu ADR-014 Entscheidung 4:** Der Service-seitige Merge der ul-BC uebergibt
    Feld-Deltas ("nicht gesetzt heisst unveraendert"), niemals einen vollstaendigen
    Objekt-Snapshot. Ein Merge, der einen vollstaendigen Term im Service materialisiert und
    zurueckschreibt, ist ausgeschlossen: er stellt genau den Verlust wieder her, den der
@@ -107,7 +105,6 @@ zurueckschreiben, ohne dass der Kern seinen Typ aendert.
   `CONSTRUCT`-Lesepfad entfernt die Zeilen-Gruppierungsschicht, in der die
   Mehrsprachigkeits-, Zeilenvervielfachungs- und Blank-Node-Fehler gewohnt haben, ohne dass
   ein Kern-Typ dafuer aufgegeben wird.
-- Die Fassaden-Frage ist entschieden und muss beim Bau nicht neu aufgerollt werden.
 
 **Negativ / bewusst deferred (YAGNI):**
 
@@ -118,7 +115,13 @@ zurueckschreiben, ohne dass der Kern seinen Typ aendert.
 - Eine generische Schreib-Fassade kann Praedikate, die kein Feld modelliert, nicht generisch
   bewahren. Bewahrung bleibt je Out-Adapter zu implementieren und je Kante zu begruenden --
   dieselbe Verantwortung, die der ADR-007-Nachtrag zu #65 bereits festgeschrieben hat.
-- Entscheidung 5 verbietet dauerhaft eine Bauart, die naheliegt, sobald ein
+- Die Bauweise der `resource_update`-Fassade bleibt offen, obwohl sie der Anlass dieses ADR
+  war. Die Messung hat nur die Repraesentationsfrage beantwortet; ob die Fassade auf die
+  BC-eigenen In-Ports dispatcht, generisch patcht oder den Mittelweg nimmt -- Dispatch auf
+  einen schlanken per-BC-Patch-Port mit Graph-Mechanik adapterintern --, entscheidet die
+  Design-Arbeit an der Fassade. Alle drei Formen sind mit den Entscheidungen 1 bis 3
+  vertraeglich; ein Domaenen-Interface braucht keine davon.
+- Entscheidung 4 verbietet dauerhaft eine Bauart, die naheliegt, sobald ein
   Concurrency-Token vorhanden ist ("lies das Objekt, aendere es, schreib es bedingt
   zurueck"). Wer sie einfuehrt, ohne die Delta-Semantik durchzureichen, erzeugt einen
   stillen Datenverlust, den kein Konflikt-Signal auffaengt.
@@ -143,7 +146,3 @@ zurueckschreiben, ohne dass der Kern seinen Typ aendert.
   flachste BC ist der guenstigste Fall fuer das Muster. Ein Aggregat mit opaken
   Step-Knoten macht die Annahme "ein Subjekt ist ein Graph" teurer, nicht billiger; ein
   Nachmessen dort kann das Ergebnis nur verschlechtern.
-- **Die Frage offen lassen und die Fassade beide Formen unterstuetzen lassen.** Verworfen:
-  eine Fassade, die generischen Patch und Port-Dispatch beide traegt, muss beide
-  Ablehnungswege pflegen und verliert genau die didaktische Fehlermeldung, um derentwillen
-  die BC-eigenen Ports existieren.
