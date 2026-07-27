@@ -190,13 +190,13 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     }
 
     // ---- DatasetLifecycle decoration: pauses each caller's transaction right after its second
-    //      ASK (the code-uniqueness guard), exactly once, then gets out of the way -------------
+    //      contains() guard (the code-uniqueness guard), exactly once, then gets out of the way --
 
-    private BoundedContextService guardedService(Runnable afterSecondAsk) {
+    private BoundedContextService guardedService(Runnable afterSecondGuard) {
         AtomicBoolean armed = new AtomicBoolean(true);
         DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
             if (armed.compareAndSet(true, false)) {
-                return new AskGuardSyncTx(tx, afterSecondAsk);
+                return new GuardSyncTx(tx, afterSecondGuard);
             }
             return tx;
         });
@@ -282,29 +282,24 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Runs {@code afterSecondAsk} exactly once its delegate's second {@code ask()} call returns -
-     * {@link KognioRdfBoundedContextRepository#write} issues exactly two: the identity guard, then
-     * (only reached when the identity guard passed) the code-uniqueness guard.
+     * Runs {@code afterSecondGuard} exactly once its delegate's second {@code contains()} call
+     * returns - {@link KognioRdfBoundedContextRepository#write} issues exactly two: the identity
+     * guard, then (only reached when the identity guard passed) the code-uniqueness guard.
      */
-    private static final class AskGuardSyncTx implements DatasetTx {
+    private static final class GuardSyncTx implements DatasetTx {
 
         private final DatasetTx delegate;
-        private final Runnable afterSecondAsk;
-        private int askCount;
+        private final Runnable afterSecondGuard;
+        private int guardCount;
 
-        AskGuardSyncTx(DatasetTx delegate, Runnable afterSecondAsk) {
+        GuardSyncTx(DatasetTx delegate, Runnable afterSecondGuard) {
             this.delegate = delegate;
-            this.afterSecondAsk = afterSecondAsk;
+            this.afterSecondGuard = afterSecondGuard;
         }
 
         @Override
         public boolean ask(String query) {
-            boolean result = delegate.ask(query);
-            askCount++;
-            if (askCount == 2) {
-                afterSecondAsk.run();
-            }
-            return result;
+            return delegate.ask(query);
         }
 
         @Override
@@ -345,7 +340,12 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         @Override
         public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
                 io.kogn.rdf.terms.RDFTerm object) {
-            return delegate.contains(graph, subject, predicate, object);
+            boolean result = delegate.contains(graph, subject, predicate, object);
+            guardCount++;
+            if (guardCount == 2) {
+                afterSecondGuard.run();
+            }
+            return result;
         }
 
         @Override
