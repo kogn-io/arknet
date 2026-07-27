@@ -9,15 +9,14 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
-import org.eclipse.rdf4j.sail.SailConflictException;
 
-import io.kogn.rdf.dataset.DatasetLifecycle;
-import io.kogn.rdf.dataset.DatasetStoreConfig;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.RDF4JGraph;
-import io.kogn.rdf.rdf4j.dataset.DatasetLifecycleRdf4j;
+import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.rdf4j.shacl.ShaclValidationRdf4j;
 import io.kogn.rdf.shacl.ValidationOptions;
 import io.kogn.rdf.terms.ReadableGraph;
@@ -78,26 +77,18 @@ public final class KognioRdfBoundedContextRepositoryFactory {
     }
 
     /**
-     * Recognises the RDF4J-backed store's commit-time signal for a lost {@code SERIALIZABLE}
-     * transaction conflict (issue #144, kogn-io/rdf-core#18): a {@link RepositoryException} whose
-     * cause chain carries a {@link SailConflictException}. Like {@link #buildGate()}, this method
-     * stays the only place in this package naming those RDF4J types (ArchUnit rule 2) - the
-     * method reference passed to the shared {@link WriteFunnel} above hands it over as a
-     * technology-neutral {@code Predicate} that references no RDF4J type itself.
+     * Recognises the store's commit-time signal for a lost {@code SERIALIZABLE} transaction
+     * conflict (issue #144, #173): kognio-rdf 0.2.x raises its own
+     * {@link ConcurrencyConflictException} for this case instead of a raw RDF4J
+     * {@code RepositoryException}/{@code SailConflictException}. The method reference passed to
+     * the shared {@link WriteFunnel} above hands this predicate over as a technology-neutral
+     * {@code Predicate} that names no RDF4J type.
      *
      * <p>Package-private (not {@code private}) so a concurrency test can wire it directly, the
      * same reason {@link #buildGate()} is.</p>
      */
     static boolean isWriteConflict(RuntimeException candidate) {
-        if (!(candidate instanceof RepositoryException)) {
-            return false;
-        }
-        for (Throwable cause = candidate.getCause(); cause != null; cause = cause.getCause()) {
-            if (cause instanceof SailConflictException) {
-                return true;
-            }
-        }
-        return false;
+        return candidate instanceof ConcurrencyConflictException;
     }
 
     /**

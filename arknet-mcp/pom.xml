@@ -123,6 +123,13 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset</artifactId>
         </dependency>
+        <!-- DatasetLifecycle/DatasetHandle/DatasetId live in this dedicated hosting port module
+             since kognio-rdf 0.2.x (#173); this composition root only needs the technology-neutral
+             port, the RDF4J-backed lifecycle is built inside KognioRdfRequirementRepositoryFactory. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting</artifactId>
+        </dependency>
 
         <!-- Spring AI 2.0 MCP-Server ueber Streamable HTTP (webmvc), gebunden auf Loopback
              (issue #137: ein langlebiger, vom Admin gestarteter Prozess pro Workspace statt

@@ -20,8 +20,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import io.kogn.rdf.dataset.DatasetId;
-import io.kogn.rdf.dataset.DatasetLifecycle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
+import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ResourceId;
