@@ -76,7 +76,7 @@
     a owl:Ontology ;
     owl:imports      <http://www.w3.org/ns/prov-o#> ;
     dcterms:title    "arknet Provenance Ontology"@en ;
-    dcterms:description "arknet's PROV-O-based revision vocabulary: every model write through the shared write funnel produces one immutable revision and moves the resource's head pointer. The head is intended to double as the optimistic-concurrency token once the write paths still bypassing the funnel are resolved."@en ;
+    dcterms:description "arknet's PROV-O-based revision vocabulary: every model write through the shared write funnel produces one immutable revision and moves the resource's head pointer. The head doubles as the optimistic-concurrency token of a conditional write. A revision records that a resource was written, not the state that write produced."@en ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-26"^^xsd:date ;
     dcterms:rights   "Apache-2.0" ;
