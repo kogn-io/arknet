@@ -62,6 +62,14 @@ public interface RequirementRepository {
      * the read was already stale, and the caller must re-read and retry rather than silently
      * discard the concurrent change.
      *
+     * <p><strong>The token guards funnel writers, not store-first edits.</strong>
+     * {@code expectedHead} only ever changes when a write goes through the shared
+     * {@code WriteFunnel} (ADR-014); a direct store-first (ADR-005) edit to this requirement's
+     * triples leaves the head untouched. Such an edit therefore passes this method's
+     * compare-and-set check undetected, and the subsequent replace-by-identity write silently
+     * overwrites it. The guard closes the lost-update window between two funnel writers, not
+     * between a funnel writer and a write that bypassed the funnel entirely.</p>
+     *
      * @param workspaceId  the workspace (architecture model) the requirement lives in
      * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
      *                     requirement (from {@link #findCurrentByCode}), or {@code null} if the

@@ -1042,6 +1042,152 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
+    /**
+     * Regression test for issue #167 review finding P1: {@code attemptUpdate} used to read the
+     * term's assembly and its {@code arkprov:head} via two <em>separate</em>
+     * {@code SparqlQuery#select} calls. That port's contract only guarantees that each individual
+     * call is a self-contained read against the store's current committed state - nothing ties
+     * two separate calls to the same snapshot. A concurrent writer's commit landing exactly
+     * between those two calls left the first call's assembly stale (pre-commit) paired with the
+     * second call's head, which was already fresh (post-commit): the funnel's head comparison
+     * then wrongly matched against a state that was no longer current, and the caller returned a
+     * {@code prefLabel} the store no longer held - without ever entering the retry loop.
+     *
+     * <p>{@link #updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead()} does not
+     * catch this: its decorator interleaves right before the write transaction opens, which is
+     * <em>after</em> both (pre-fix) reads have already completed. This test instead interleaves
+     * right after a {@code select} call returns - the exact window the review named - by injecting
+     * the concurrent commit between the state read and the head read (pre-fix) respectively right
+     * after the single combined read (post-fix).</p>
+     *
+     * <p>Expected outcome, fixed: the concurrent writer's {@code prefLabel} change is never lost
+     * and this caller's own {@code definition} patch is retried against the now-current state, so
+     * the returned {@link Term} carries the concurrent writer's fresh {@code prefLabel} together
+     * with this caller's own patched {@code definition} - never the stale {@code prefLabel} this
+     * caller's own read saw before the race.</p>
+     */
+    @Test
+    void updateReflectsAConcurrentWriteThatCommitsBetweenTheStateAndHeadReads() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(WORKSPACE_A, new Term(id, code, "Alt", "Erste Definition.", null));
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        TermRepository racing = KognioRdfTermRepositoryFactory.over(
+                new SelectRacingLifecycle(lifecycle, () -> {
+                    if (pending.compareAndSet(true, false)) {
+                        repository.update(WORKSPACE_A, code, "Neu", null, null);
+                    }
+                }));
+
+        Term result = racing.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        Term expected = new Term(id, code, "Neu", "Ueberarbeitete Definition.", null);
+        assertEquals(expected, result,
+                "the returned term must carry the concurrent writer's fresh prefLabel, not a stale read");
+        assertEquals(Optional.of(expected), repository.findByCode(WORKSPACE_A, code),
+                "both writers' changes must survive - neither patch is silently lost");
+    }
+
+    /**
+     * Wraps a real {@link DatasetLifecycle} and runs {@code afterSelect} right after every
+     * {@code SparqlQuery#select} call's rows have been materialised - the exact point at which a
+     * pre-#167 read-then-read implementation is between its two separate reads. Unlike
+     * {@link HeadAdvancingLifecycle} (which interleaves once the write transaction opens, i.e.
+     * after both reads), this fires while a caller's read is potentially still in progress. The
+     * one-shot guard lives in the {@link Runnable} the test supplies, exactly like
+     * {@link HeadAdvancingLifecycle} - a retried attempt's own select calls run unimpeded.
+     */
+    private static final class SelectRacingLifecycle implements DatasetLifecycle {
+
+        private final DatasetLifecycle delegate;
+        private final Runnable afterSelect;
+
+        SelectRacingLifecycle(DatasetLifecycle delegate, Runnable afterSelect) {
+            this.delegate = delegate;
+            this.afterSelect = afterSelect;
+        }
+
+        @Override
+        public DatasetHandle acquire(DatasetId id) {
+            return new SelectRacingHandle(delegate.acquire(id), afterSelect);
+        }
+
+        @Override
+        public void close(DatasetId id) {
+            delegate.close(id);
+        }
+
+        @Override
+        public void delete(DatasetId id) {
+            delegate.delete(id);
+        }
+
+        @Override
+        public Set<DatasetId> list() {
+            return delegate.list();
+        }
+    }
+
+    private static final class SelectRacingHandle implements DatasetHandle {
+
+        private final DatasetHandle delegate;
+        private final Runnable afterSelect;
+
+        SelectRacingHandle(DatasetHandle delegate, Runnable afterSelect) {
+            this.delegate = delegate;
+            this.afterSelect = afterSelect;
+        }
+
+        @Override
+        public GraphStore graphStore() {
+            return delegate.graphStore();
+        }
+
+        @Override
+        public SparqlQuery sparqlQuery() {
+            SparqlQuery real = delegate.sparqlQuery();
+            return new SparqlQuery() {
+                @Override
+                public Stream<BindingSet> select(String sparql) {
+                    // Force materialisation before signalling - the port contract already
+                    // promises the returned stream is fully materialised (no store resources
+                    // held open), so this changes no observable behaviour; it only fixes the
+                    // point at which afterSelect must run relative to this call's own result.
+                    List<BindingSet> rows = real.select(sparql).toList();
+                    afterSelect.run();
+                    return rows.stream();
+                }
+
+                @Override
+                public ReadableGraph construct(String sparql) {
+                    return real.construct(sparql);
+                }
+
+                @Override
+                public boolean ask(String sparql) {
+                    return real.ask(sparql);
+                }
+            };
+        }
+
+        @Override
+        public SparqlUpdate sparqlUpdate() {
+            return delegate.sparqlUpdate();
+        }
+
+        @Override
+        public DatasetTransactor transactor() {
+            return delegate.transactor();
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+    }
+
     private List<String> revisionsOf(TermId id) {
         return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "

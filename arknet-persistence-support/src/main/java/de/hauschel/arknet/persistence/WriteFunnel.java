@@ -78,16 +78,23 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * decision 5).</p>
  *
  * <p><strong>What the head promises now (ADR-014 decisions 3+4, issue #167).</strong> Revision
- * and head follow the write <em>through this funnel</em> - and, since this method, that is every
- * guarded write: the requirements context's {@code compareAndUpdate} (behind {@code req_update},
- * {@code req_set_status} and {@code req_link_term}) and the glossary's patch-{@code update}
- * (behind {@code term_update}), both kept outside on purpose for their own transaction semantics
- * by ADR-013 decision 5, are resolved into {@link #compareAndUpdate} rather than integrated
+ * and head follow every write this funnel runs - {@link #create}, {@link #update} and
+ * {@link #compareAndUpdate} each call {@link #recordRevision} after their body, so the head
+ * always points at the latest write regardless of which of the three a caller reached. The
+ * requirements context's {@code compareAndUpdate} (behind {@code req_update}, {@code
+ * req_set_status} and {@code req_link_term}) and the glossary's patch-{@code update} (behind
+ * {@code term_update}), both kept outside on purpose for their own transaction semantics by
+ * ADR-013 decision 5, are resolved into {@link #compareAndUpdate} rather than integrated
  * unchanged - a full-snapshot comparison (requirements) or an in-adapter-transaction field merge
- * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. A
- * resource's head is therefore a usable concurrency token: it moves with every write a caller can
- * reach, and {@link #compareAndUpdate} closes the lost-update window a plain {@link #update}
- * cannot.</p>
+ * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. But
+ * the head is a usable <em>concurrency token</em> only where a caller actually goes through
+ * {@link #compareAndUpdate}: that method closes the lost-update window a plain {@link #update}
+ * cannot, precisely because {@link #update} runs no head check at all. {@link #update} itself
+ * remains reachable, not just an internal implementation detail - the bounded-context adapter's
+ * {@code bc_link_term} performs a read-modify-write through it with no compare-and-set guard, so
+ * two concurrent calls linking a term to the same bounded context can silently lose one of the two
+ * edges. The head moving with a write and the write being guarded by that head are two different
+ * properties; only {@link #compareAndUpdate} callers get both.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same
