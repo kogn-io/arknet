@@ -107,8 +107,9 @@ class StoreReportToolsTest {
         assertThat(result).contains("# HTML report: ");
         assertThat(result).contains("no dangling references");
 
-        // HTML side effect: a self-contained file with no external dependencies.
-        Path html = reportDir.resolve("store-report.html");
+        // HTML side effect: a self-contained file with no external dependencies, under a
+        // workspace-scoped subdirectory of the fallback dir (issue #172).
+        Path html = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
         assertThat(html).exists();
         String content = Files.readString(html);
         assertThat(content).contains("<!doctype html>").contains("arknet Store Report");
@@ -138,7 +139,7 @@ class StoreReportToolsTest {
         final String result = tools.storeOverview(context, null);
 
         assertThat(result).contains("# Workspace noistill").doesNotContain("FAILED");
-        final Path fallbackHtml = reportDir.resolve("store-report.html");
+        final Path fallbackHtml = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
         assertThat(fallbackHtml).exists();
         assertThat(result).contains("# HTML report: " + fallbackHtml.toAbsolutePath());
     }
@@ -163,8 +164,9 @@ class StoreReportToolsTest {
         final String result = toolsWithBrokenFallback.storeOverview(null, null);
 
         assertThat(result).contains("# Workspace noistill").contains("FR-1");
-        assertThat(result).contains("# HTML report: FAILED to write to " + blockedFallbackDir);
-        assertThat(result).contains("FileAlreadyExistsException");
+        assertThat(result)
+                .contains("# HTML report: FAILED to write to " + blockedFallbackDir.resolve(WORKSPACE.value()));
+        assertThat(result).contains("FileSystemException");
     }
 
     /**
@@ -184,11 +186,35 @@ class StoreReportToolsTest {
 
         final String result = toolsWithHostDir.storeOverview(null, null);
 
-        final Path writtenHtml = reportDir.resolve("store-report.html");
+        final Path writtenHtml = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
         assertThat(writtenHtml).exists();
         assertThat(result)
-                .contains("# HTML report: " + hostDir.resolve("store-report.html"))
+                .contains("# HTML report: " + hostDir.resolve(WORKSPACE.value()).resolve("store-report.html"))
                 .doesNotContain(reportDir.toString());
+    }
+
+    /**
+     * #172: every workspace served by a shared daemon falls back to the very same
+     * {@code fallbackReportDir} (e.g. a containerized daemon has no writable origin dir for
+     * ANY project). Without a workspace-scoped subdirectory, the second workspace's report
+     * would silently overwrite the first's under the identical file name.
+     */
+    @Test
+    void storeOverviewWritesEachWorkspaceToItsOwnSubdirectoryOfTheFallbackDir() throws Exception {
+        final WorkspaceId otherWorkspace = new WorkspaceId("other-workspace-172");
+        try {
+            tools.storeOverview(null, null);
+            tools.storeOverview(null, otherWorkspace.value());
+
+            final Path ownReport = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
+            final Path otherReport = reportDir.resolve(otherWorkspace.value()).resolve("store-report.html");
+            assertThat(ownReport).exists();
+            assertThat(otherReport).exists();
+            assertThat(Files.readString(ownReport)).contains("FR-1");
+            assertThat(Files.readString(otherReport)).doesNotContain("FR-1");
+        } finally {
+            lifecycle.close(new DatasetId(otherWorkspace.value()));
+        }
     }
 
     /**
