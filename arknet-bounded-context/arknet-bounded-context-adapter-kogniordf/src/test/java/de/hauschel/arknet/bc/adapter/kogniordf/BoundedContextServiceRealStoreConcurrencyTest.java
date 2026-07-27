@@ -59,7 +59,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * decorator and no real transactions at all.
  *
  * <p><strong>What this proves.</strong> Two callers can also race so that their transactions
- * genuinely <em>overlap</em>: both pass the in-transaction {@code ASK} code-uniqueness guard
+ * genuinely <em>overlap</em>: both pass the in-transaction {@code contains} code-uniqueness guard
  * before either commits (neither sees the other's uncommitted write under {@code SERIALIZABLE}
  * isolation, kogn-io/rdf-core#18), and only the second commit is rejected as a conflict - by the
  * store itself, not by the guard. The shared {@link de.hauschel.arknet.persistence.WriteFunnel}
@@ -70,12 +70,14 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * a failure.</p>
  *
  * <p><strong>How the overlap is forced deterministically.</strong> Mirrors the pattern kogn-io/
- * rdf-core's own {@code DatasetRdf4jTest#inTransaction_overlappingAskGuardedWrites_loserCommitFails}
- * test uses to prove the store-level mechanism, one layer up: a {@link DatasetLifecycle} decorator
- * wraps each caller's {@link DatasetTx} so that, right after its second {@code ASK} (the
- * code-uniqueness guard {@link KognioRdfBoundedContextRepository#write} issues), it blocks on a
- * {@link CyclicBarrier} with two parties. Both callers' guards must therefore have already passed
- * before either proceeds to write - the exact "ASK-guard-defeat" scenario - while a {@link
+ * rdf-core's own {@code DatasetRdf4jTest#inTransaction_overlappingContainsGuardedWrites_
+ * whenGuardIrisUnknownToStore_loserCommitFails} test uses to prove the store-level mechanism, one
+ * layer up: a {@link DatasetLifecycle} decorator wraps each caller's {@link DatasetTx} so that,
+ * right after its second {@code contains} (the code-uniqueness guard
+ * {@link KognioRdfBoundedContextRepository#write} issues), it blocks on a {@link CyclicBarrier}
+ * with two parties. Both callers' guards must therefore have already passed before either proceeds
+ * to write - the exact guard-defeat scenario, which under a SPARQL {@code ASK} guard on
+ * store-unknown IRIs would not even be caught at commit time (ADR-013 Nachtrag) - while a {@link
  * CountDownLatch} then forces the loser to wait until the winner's transaction has fully committed
  * before the loser's own commit is attempted, so which of the two conflicts is deterministic
  * instead of a flaky race. The decorator disarms itself after firing once per caller, so {@code

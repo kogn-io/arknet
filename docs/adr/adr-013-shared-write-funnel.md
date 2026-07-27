@@ -108,3 +108,42 @@ Vergleichslesen in der Transaktion).
   Transaktions-Semantik (Patch-Delete-Insert mit Rueckgabewert, Vergleichslesen mit
   boolean-Ergebnis); sie unter denselben Trichter zu zwingen haette dessen API auf den
   kompliziertesten Fall aufgeblaeht, bevor der Nutzen belegt ist.
+
+## Nachtrag 2026-07-27 (#173, kognio-rdf 0.2.x): der Guard-Read ist kein `ASK` mehr
+
+Der Kontext-Abschnitt oben beschreibt das Skeleton als "Schreibtransaktion mit zwei
+`ASK`-Checks". Beide Checks -- Subject-Existenz und `dcterms:identifier`-Freiheit in `create`,
+Subject-Existenz in `update`/`compareAndUpdate` -- laufen seit kognio-rdf 0.2.x ueber
+`DatasetTx#contains(graph, subject, predicate, object)`. Das ist keine Umbenennung, sondern
+eine Haertung der #144-Invariante, und ihr Grund gehoert hierher:
+
+Ein SPARQL-`ASK` als Guard auf IRIs, die der Store noch gar nicht kennt -- also genau der
+"ist dieser brandneue Code schon vergeben?"-Fall -- ist unter `SERIALIZABLE` **nicht**
+konfliktgeschuetzt. Gemessen auf RDF4J 6.0.0 + MemoryStore: in einem Zwei-Thread-Race, in dem
+beide Guards vor beiden Writes laufen, committeten **beide** Transaktionen in 6 % bzw. 12 %
+von je 1000 Laeufen (zwei Maschinen; die Rate ist timing-abhaengig, keine Konstante) und
+hinterliessen genau das Duplikat, das der Guard verhindern soll. Ursache liegt in RDF4J, nicht
+in arknet und nicht im Port: die Auswertung eines SPARQL-Statement-Patterns interniert seine
+Konstanten in die Value-Registry des Stores; internieren zwei Threads dieselbe unbekannte IRI
+gleichzeitig, behaelt jeder seine eigene Instanz, und die Konflikterkennung laeuft ueber die
+(leere) Statement-Liste der falschen. Derselbe Race erkennt den Konflikt in 1000 von 1000
+Laeufen, sobald der Guard ueber `RepositoryConnection#hasStatement` liest -- der Weg, den
+`contains` nimmt. Belege und Entscheidung auf Port-Seite: kogn-io/rdf-core ADR-0008 samt
+Issue #23.
+
+**Festschreibung:** First-Insert-Uniqueness-Guards im Trichter benutzen `contains`, nicht
+`ask`. Ein SPARQL-`ASK` bleibt fuer gewoehnliche Reads richtig; unzureichend ist allein diese
+eine Verwendung. Wer den Trichter um einen weiteren Guard erweitert, der ueber noch nicht
+existierende Ressourcen entscheidet, faellt unter dieselbe Regel.
+
+Bei derselben Gelegenheit wandert das Konflikt-Predicate in den Trichter. Entscheidung 4
+setzte voraus, dass ein verlorener Commit als store-eigene, RDF4J-gefaerbte Exception
+ankommt -- weshalb `isWriteConflict` je Adapter in der Repository-Factory gebaut wurde, der
+einzigen Stelle, an der ArchUnit einem Adapter RDF4J erlaubt. Seit 0.2.x uebersetzt der
+RDF4J-Transactor selbst in `io.kogn.rdf.dataset.ConcurrencyConflictException`
+(kogn-io/rdf-core#30), einen neutralen Port-Typ; die vier bitgleichen Kopien hatten damit
+keinen Existenzgrund mehr und sind zu `WriteFunnel.DEFAULT_WRITE_CONFLICT` zusammengefuehrt.
+Der Konstruktor-Parameter bleibt: welche Exception ein verlorener Schreiber wirft, ist eine
+Eigenschaft des Stores hinter dem Port (ADR-001, austauschbar), also ein Default und keine
+Verdrahtung. Die Konflikt-Asymmetrie aus Entscheidung 4 bleibt unveraendert -- `update`
+uebersetzt weiterhin nicht.
