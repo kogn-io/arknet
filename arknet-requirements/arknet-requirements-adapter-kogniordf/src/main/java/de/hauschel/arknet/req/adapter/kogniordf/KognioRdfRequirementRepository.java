@@ -366,20 +366,28 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
     }
 
-    @Override
-    public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        Objects.requireNonNull(code, "code");
-
-        // The type join is filtered to the two known requirement types (same FILTER findAll
-        // already uses below), rather than an unfiltered "a ?type": a store-first (ADR-005)
-        // subject carrying a third rdf:type triple alongside its real one would otherwise bind an
-        // extra, unpredictable row, and typeFromIri throws IllegalStateException for any type
-        // that is neither FunctionalRequirement nor NonFunctionalRequirement - findFirst() below
-        // has no way to prefer the "real" row over the spurious one.
-        String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory "
-                + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?s a ?type . "
+    /**
+     * Builds the WHERE-clause body (inside {@code GRAPH <REQUIREMENTS_GRAPH>}) shared by
+     * {@link #findByCode} and {@link #findCurrentByCode}: the mandatory joins (type, identifier,
+     * title, description, status) plus the three optional joins (priority, motivatedBy,
+     * qualityCategory) that scope a single-requirement read to one {@code code}. Extracted because
+     * both callers build a {@link Requirement} from the same row shape via {@link #requirementOf}
+     * - drift between two near-identical read paths in this class was a real bug twice before
+     * (issues #80/#81, the {@link #findAll} row-grouping fix), so this text now lives in one
+     * place. The caller supplies the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE}
+     * wrapping and, in {@link #findCurrentByCode}'s case, the additional provenance-graph join -
+     * only the WHERE body itself is common.
+     *
+     * <p>The type join is filtered to the two known requirement types (same FILTER
+     * {@link #findAll} already uses), rather than an unfiltered "a ?type": a store-first
+     * (ADR-005) subject carrying a third rdf:type triple alongside its real one would otherwise
+     * bind an extra, unpredictable row, and {@link #typeFromIri} throws
+     * {@link IllegalStateException} for any type that is neither FunctionalRequirement nor
+     * NonFunctionalRequirement - the caller's {@code findFirst()} has no way to prefer the "real"
+     * row over the spurious one.</p>
+     */
+    private static String requirementByCodeWhereClause(RequirementCode code) {
+        return "?s a ?type . "
                 + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
                 + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) "
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
@@ -388,29 +396,53 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "?s <" + STATUS_PROPERTY + "> ?status . "
                 + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
                 + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
-                + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
+                + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } ";
+    }
+
+    /**
+     * Builds one {@link Requirement} from a row of {@link #requirementByCodeWhereClause}'s
+     * projection ({@code ?s ?type ?title ?description ?status ?priority ?motivatedBy
+     * ?qualityCategory}), including the two follow-up reads {@link #readUsesTerms} and
+     * {@link #readAcceptanceCriteria} (via {@code handle}) and the legacy-placeholder
+     * substitution ({@link #acceptanceCriteriaOrLegacyPlaceholder}). Shared by
+     * {@link #findByCode} and {@link #findCurrentByCode} so both single-requirement read paths
+     * build a {@link Requirement} the same way - drift between near-identical read paths in this
+     * class was a real bug twice before (issues #80/#81, the {@link #findAll} row-grouping fix).
+     */
+    private Requirement requirementOf(BindingSet row, RequirementCode code, DatasetHandle handle) {
+        String subjectIriString = iriOf(row, "s").getIRIString();
+        return new Requirement(
+                new RequirementId(ResourceId.of(subjectIriString)),
+                code,
+                literalOf(row, "title").getLexicalForm(),
+                literalOf(row, "description").getLexicalForm(),
+                typeFromIri(iriOf(row, "type").getIRIString()),
+                statusFromIri(iriOf(row, "status").getIRIString()),
+                priorityOf(row),
+                motivatedByOf(row),
+                qualityCategoryOf(row),
+                readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
+                acceptanceCriteriaOrLegacyPlaceholder(
+                        readAcceptanceCriteria(handle.sparqlQuery()::select,
+                                SparqlTerms.iriRef(subjectIriString))));
+    }
+
+    @Override
+    public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
+
+        String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory "
+                + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + requirementByCodeWhereClause(code)
+                + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
             if (head.isEmpty()) {
                 return Optional.empty();
             }
-            BindingSet row = head.get();
-            String subjectIriString = iriOf(row, "s").getIRIString();
-            return Optional.of(new Requirement(
-                    new RequirementId(ResourceId.of(subjectIriString)),
-                    code,
-                    literalOf(row, "title").getLexicalForm(),
-                    literalOf(row, "description").getLexicalForm(),
-                    typeFromIri(iriOf(row, "type").getIRIString()),
-                    statusFromIri(iriOf(row, "status").getIRIString()),
-                    priorityOf(row),
-                    motivatedByOf(row),
-                    qualityCategoryOf(row),
-                    readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
-                    acceptanceCriteriaOrLegacyPlaceholder(
-                            readAcceptanceCriteria(handle.sparqlQuery()::select,
-                                    SparqlTerms.iriRef(subjectIriString)))));
+            return Optional.of(requirementOf(head.get(), code, handle));
         }
     }
 
@@ -418,9 +450,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Reads a requirement's current state together with its concurrency token in one query
      * (issue #167) - the head must come from the exact same read as the state it accompanies, so
      * {@link RequirementRepository#compareAndUpdate}'s caller can trust the two are still
-     * consistent with each other. Otherwise identical to {@link #findByCode}'s field-by-field
-     * construction (including the acceptance-criteria placeholder substitution), plus one
-     * {@code OPTIONAL} join into {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head.
+     * consistent with each other. Builds the {@link Requirement} the same way {@link #findByCode}
+     * does - both call {@link #requirementOf} on their row, so the two read paths cannot drift
+     * apart field-by-field the way two near-identical read paths in this class already did twice
+     * before (issues #80/#81) - plus one {@code OPTIONAL} join into
+     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head.
      */
     @Override
     public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
@@ -430,16 +464,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
         String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory ?head "
                 + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?s a ?type . "
-                + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
-                + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) "
-                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
-                + "?s <" + TITLE_PROPERTY + "> ?title . "
-                + "?s <" + DESCRIPTION_PROPERTY + "> ?description . "
-                + "?s <" + STATUS_PROPERTY + "> ?status . "
-                + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
-                + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
-                + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } "
+                + requirementByCodeWhereClause(code)
+                + "} "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
@@ -449,21 +475,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 return Optional.empty();
             }
             BindingSet row = found.get();
-            String subjectIriString = iriOf(row, "s").getIRIString();
-            Requirement requirement = new Requirement(
-                    new RequirementId(ResourceId.of(subjectIriString)),
-                    code,
-                    literalOf(row, "title").getLexicalForm(),
-                    literalOf(row, "description").getLexicalForm(),
-                    typeFromIri(iriOf(row, "type").getIRIString()),
-                    statusFromIri(iriOf(row, "status").getIRIString()),
-                    priorityOf(row),
-                    motivatedByOf(row),
-                    qualityCategoryOf(row),
-                    readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
-                    acceptanceCriteriaOrLegacyPlaceholder(
-                            readAcceptanceCriteria(handle.sparqlQuery()::select,
-                                    SparqlTerms.iriRef(subjectIriString))));
+            Requirement requirement = requirementOf(row, code, handle);
             String head = row.getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> ((IRI) value).getIRIString())

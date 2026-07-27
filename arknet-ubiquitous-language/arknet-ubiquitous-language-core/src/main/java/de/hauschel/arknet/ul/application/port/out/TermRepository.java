@@ -71,13 +71,14 @@ public interface TermRepository {
      * variant or duplicate {@code skos:definition} a store-first (issues #80/#81) term may legally
      * carry - completely untouched at the triple level.
      *
-     * <p>Resolves the subject and reads whatever it needs to preserve inside the very transaction
-     * that then writes, so there is no application-level read-then-write gap in which a
-     * concurrent writer's change could be silently lost (contrast the pre-#163-follow-up
-     * contract, which took a full {@link Term} the caller had to read and merge beforehand). The
-     * narrower race that remains - two overlapping writers patching the identical predicate at the
-     * same time - is caught by the store's own {@code SERIALIZABLE} isolation and surfaces as
-     * {@link TermConcurrentlyModifiedException}, never as a silent overwrite.</p>
+     * <p>Reads the term's current state together with its revision head before the write
+     * transaction, then applies the patch as a compare-and-set: the write only takes effect if
+     * that head still matches what was read. A concurrent write to this term - even one touching a
+     * different field - moves the shared head and is therefore a conflict too, not only a write to
+     * the same predicate; {@code update} retries transparently on a head conflict, re-reading the
+     * term's current state on every attempt, so a losing caller's own change is never silently
+     * discarded. Only once every retry attempt keeps losing the race does
+     * {@link TermConcurrentlyModifiedException} reach the caller.</p>
      *
      * @param workspaceId the workspace (architecture model) the term lives in
      * @param code        the term's own, unchanged business code - {@code update} never rewrites
@@ -93,8 +94,8 @@ public interface TermRepository {
      *                    role triple untouched - only the type is always replaced
      * @return the term's up-to-date state after the correction
      * @throws TermNotFoundException             if no term with this code exists
-     * @throws TermConcurrentlyModifiedException if a concurrent writer's overlapping change to the
-     *                                            same predicate(s) won the store's write conflict
+     * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's
+     *                                            revision head across every retry attempt
      */
     Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
 
