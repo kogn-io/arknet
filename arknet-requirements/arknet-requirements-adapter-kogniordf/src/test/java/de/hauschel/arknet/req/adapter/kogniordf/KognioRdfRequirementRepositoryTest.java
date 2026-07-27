@@ -34,6 +34,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -1192,6 +1193,62 @@ class KognioRdfRequirementRepositoryTest {
                 + "?term a <http://www.w3.org/2004/02/skos/core#Concept> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().ask(ask);
+        }
+    }
+
+    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+
+    /**
+     * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
+     * {@code update} each record exactly one immutable revision, and the head is queryable per
+     * resource. (The unmigrated {@code compareAndUpdate} special path is deliberately not
+     * covered - its revision recording arrives with its dissolution into the funnel's
+     * compare-and-set, ADR-014 decision 4.)
+     *
+     * <p><strong>How far this evidence reaches.</strong> {@code update} is called here directly
+     * on the out-port. Today no in-port reaches it: {@code RequirementService} routes every
+     * state change ({@code req_update}, {@code req_set_status}, {@code req_link_term}) through
+     * {@code compareAndUpdate} instead, so no user-reachable requirement write moves the head
+     * after the initial {@code create}. This test proves the funnel records a revision on
+     * {@code update} - not that requirements accumulate a revision trail in practice.</p>
+     */
+    @Test
+    void createAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(WORKSPACE_A, new Requirement(id, code, "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials")));
+
+        assertEquals(1, revisionsOf(id).size(), "create must record exactly one revision");
+
+        repository.update(WORKSPACE_A, new Requirement(id, code, "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials")));
+
+        List<String> revisions = revisionsOf(id);
+        assertEquals(2, revisions.size(), "update must record exactly one more revision");
+        List<String> heads = headsOf(id);
+        assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
+        assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
+    }
+
+    private List<String> revisionsOf(RequirementId id) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
+                + "<" + ArkprovVocabulary.SPECIALIZATION_OF + "> <" + id.value().value() + "> } }");
+    }
+
+    private List<String> headsOf(RequirementId id) {
+        return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
+    }
+
+    private List<String> selectIris(String query) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
         }
     }
 }

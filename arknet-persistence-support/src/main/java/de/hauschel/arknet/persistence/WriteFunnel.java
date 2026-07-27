@@ -3,7 +3,11 @@
 
 package de.hauschel.arknet.persistence;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -12,8 +16,14 @@ import io.kogn.rdf.dataset.DatasetHandle;
 import io.kogn.rdf.dataset.DatasetId;
 import io.kogn.rdf.dataset.DatasetLifecycle;
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
+import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
+import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.terms.vocab.VocabXsd;
 
 /**
  * The shared write funnel of the kognio-rdf out-adapters (ADR-013): the transactional
@@ -57,9 +67,28 @@ import io.kogn.rdf.terms.vocab.VocabDct;
  *
  * <p><strong>Owning the transaction is the point.</strong> The funnel, not the adapter, opens
  * and commits the write transaction and hands the {@code body} only the live {@link DatasetTx}.
- * That makes it the single place where a later per-write revision record (ADR-011) can be
- * appended <em>atomically with the model write</em> - kept open by this design, deliberately
- * not implemented by it (ADR-013).</p>
+ * That makes it the single place where the per-write revision record (ADR-011) is appended
+ * <em>atomically with the model write</em> - the attachment point ADR-013 kept open,
+ * implemented per ADR-014: after the {@code body} ran, and still inside the same transaction,
+ * the funnel records exactly one immutable PROV-O revision (see {@link ArkprovVocabulary} for
+ * the exact triple shape) and rewrites the resource's {@code arkprov:head} pointer to it,
+ * chaining the superseded head via {@code prov:wasRevisionOf}. A rejected or failing write
+ * therefore never leaves a revision behind - the transaction aborts as a whole. The write
+ * activity carries no resolved agent yet - agent attribution is additive (ADR-014
+ * decision 5).</p>
+ *
+ * <p><strong>What the head does and does not promise today.</strong> Revision and head follow
+ * the write <em>through this funnel</em> - and only writes that come through here. Four write
+ * paths still bypass it and therefore move neither: the requirements context's
+ * {@code compareAndUpdate} (behind {@code req_update}, {@code req_set_status} and
+ * {@code req_link_term}) and the glossary's patch-{@code update} (behind {@code term_update}),
+ * both kept outside on purpose for their own transaction semantics (ADR-013 decision 5). Their
+ * resolution into the funnel is ADR-014 decision 4. Until then a resource's head marks its last
+ * funnel write, not necessarily its last state change - so it is the <em>intended</em>
+ * concurrency token, not yet a usable one. Comparing it inside the transaction
+ * (compare-and-set, ADR-014 decision 3) is the next step, deliberately not implemented here,
+ * and must not be built before those paths are resolved: against a head that silently stands
+ * still, a compare-and-set would wave through exactly the lost update it is meant to stop.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same
@@ -69,13 +98,23 @@ public final class WriteFunnel {
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
 
+    /**
+     * Base IRIs the funnel mints revision/activity identities under - flat and opaque like the
+     * kernel's resource identities, but deliberately under their own bases: a revision is
+     * infrastructure the funnel owns, not a model resource a bounded context minted.
+     */
+    private static final String REVISION_IRI_BASE = "https://w3id.org/arknet/revision/";
+    private static final String ACTIVITY_IRI_BASE = "https://w3id.org/arknet/activity/";
+
     private final DatasetLifecycle lifecycle;
     private final ShaclWriteGate gate;
     private final Predicate<RuntimeException> isWriteConflict;
+    private final Clock clock;
+    private final RDF rdf = new SimpleRdf();
 
     /**
-     * Creates the funnel. Per bounded context one instance, built by that context's repository
-     * factory - exactly like the {@link ShaclWriteGate} it wraps.
+     * Creates the funnel on the system UTC clock. Per bounded context one instance, built by
+     * that context's repository factory - exactly like the {@link ShaclWriteGate} it wraps.
      *
      * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
      *                        be {@code null})
@@ -87,9 +126,32 @@ public final class WriteFunnel {
      */
     public WriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate,
             Predicate<RuntimeException> isWriteConflict) {
+        this(lifecycle, gate, isWriteConflict, Clock.systemUTC());
+    }
+
+    /**
+     * Creates the funnel on an explicit clock - the one the revision's
+     * {@code prov:generatedAtTime} is read from. Every other collaborator arrives by
+     * constructor, and the timestamp is the only externally observable value a revision carries
+     * that is not derived from its inputs; a fixed clock is what makes it assertable and what
+     * gives a later "revisions between T1 and T2" read path deterministic fixtures.
+     *
+     * @param lifecycle       the kognio-rdf dataset lifecycle to acquire datasets from (must not
+     *                        be {@code null})
+     * @param gate            the SHACL write-gate validating every candidate graph before the
+     *                        write transaction opens (must not be {@code null})
+     * @param isWriteConflict recognises the technology-specific commit-time exception of a lost
+     *                        {@code SERIALIZABLE} transaction conflict (issue #144), without this
+     *                        class ever naming the RDF4J type (must not be {@code null})
+     * @param clock           the clock each revision's generation instant is read from (must not
+     *                        be {@code null})
+     */
+    public WriteFunnel(DatasetLifecycle lifecycle, ShaclWriteGate gate,
+            Predicate<RuntimeException> isWriteConflict, Clock clock) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.isWriteConflict = Objects.requireNonNull(isWriteConflict, "isWriteConflict");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     /**
@@ -144,6 +206,7 @@ public final class WriteFunnel {
                         throw duplicateCode.get();
                     }
                     body.accept(tx);
+                    recordRevision(tx, subjectIri);
                     return null;
                 });
             } catch (RuntimeException e) {
@@ -189,9 +252,50 @@ public final class WriteFunnel {
                     throw notFound.get();
                 }
                 body.accept(tx);
+                recordRevision(tx, subjectIri);
                 return null;
             });
         }
+    }
+
+    /**
+     * Records the write's revision (ADR-014): one {@code prov:Activity}, one immutable
+     * {@code arkprov:Revision} entity chained to the superseded head via
+     * {@code prov:wasRevisionOf}, and the rewritten {@code arkprov:head} pointer - all inside
+     * the caller's still-open write transaction, so the revision commits or aborts with the
+     * model write. Runs after the {@code body} so a failing body never reaches it.
+     */
+    private void recordRevision(DatasetTx tx, String subjectIri) {
+        String subject = SparqlTerms.iriRef(subjectIri);
+        String headPattern = "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head }";
+
+        List<IRI> previousHeads = tx.select("SELECT ?head WHERE { " + headPattern + " }")
+                .map(row -> row.getValue("head").orElse(null))
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .toList();
+        if (!previousHeads.isEmpty()) {
+            tx.update("DELETE WHERE { " + headPattern + " }");
+        }
+
+        IRI revision = rdf.createIRI(REVISION_IRI_BASE + UUID.randomUUID());
+        IRI activity = rdf.createIRI(ACTIVITY_IRI_BASE + UUID.randomUUID());
+        IRI resource = rdf.createIRI(subjectIri);
+
+        Graph provenance = rdf.createGraph();
+        provenance.add(activity, VocabRdf.TYPE, rdf.createIRI(ArkprovVocabulary.ACTIVITY_TYPE));
+        provenance.add(revision, VocabRdf.TYPE, rdf.createIRI(ArkprovVocabulary.ENTITY_TYPE));
+        provenance.add(revision, VocabRdf.TYPE, rdf.createIRI(ArkprovVocabulary.REVISION_TYPE));
+        provenance.add(revision, rdf.createIRI(ArkprovVocabulary.SPECIALIZATION_OF), resource);
+        provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_GENERATED_BY), activity);
+        provenance.add(revision, rdf.createIRI(ArkprovVocabulary.GENERATED_AT_TIME),
+                rdf.createLiteral(Instant.now(clock).toString(), VocabXsd.DATETIME));
+        for (IRI previousHead : previousHeads) {
+            provenance.add(revision, rdf.createIRI(ArkprovVocabulary.WAS_REVISION_OF), previousHead);
+        }
+        provenance.add(resource, rdf.createIRI(ArkprovVocabulary.HEAD), revision);
+        tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), provenance);
     }
 
     private void enforceGate(ReadableGraph candidate, ReadableGraph assertedContext) {
