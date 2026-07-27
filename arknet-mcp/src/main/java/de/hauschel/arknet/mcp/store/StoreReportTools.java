@@ -49,8 +49,10 @@ public final class StoreReportTools {
      * @param htmlRenderer      the self-contained HTML report renderer
      * @param workspaces        resolves each call's default workspace from its origin directory (an
      *                          explicit {@code workspace} tool argument still overrides it)
-     * @param fallbackReportDir the directory the HTML report is written into when a call carries no
-     *                          origin directory (the report otherwise lands in the calling project)
+     * @param fallbackReportDir the directory a workspace-scoped subdirectory is created under when a
+     *                          call carries no origin directory (the report otherwise lands in the
+     *                          calling project); the subdirectory keeps workspaces that share this
+     *                          fallback from overwriting each other's report (issue #172)
      * @param reportHostDir     the host-reachable path that {@code fallbackReportDir} is bind-mounted
      *                          from, or {@code null} when the process runs directly on the machine it
      *                          reports to (bare jar) and no translation is needed. Set on a
@@ -93,7 +95,7 @@ public final class StoreReportTools {
         final StoreSnapshot snapshot = storeReader.readSnapshot(workspaceId);
         final String digest = digestRenderer.render(workspaceId, snapshot);
         final String html = htmlRenderer.render(workspaceId, snapshot, digest);
-        return digest + "\n" + writeReportLine(html, reportDirFor(originDir)) + "\n";
+        return digest + "\n" + writeReportLine(html, reportDirFor(originDir, workspaceId), workspaceId) + "\n";
     }
 
     @McpTool(name = "resource_get",
@@ -118,11 +120,20 @@ public final class StoreReportTools {
 
     /**
      * The directory the HTML report is written into: the calling client's origin directory when
-     * it supplied one (so the report lands in the project the call came from, issue #137), else
-     * the server's {@link #fallbackReportDir}.
+     * it supplied one (so the report lands in the project the call came from, issue #137), else a
+     * workspace-scoped subdirectory of {@link #fallbackReportDir}. The subdirectory matters
+     * because every workspace served by a shared daemon falls back to the very same
+     * {@link #fallbackReportDir} (issue #172: a containerized daemon has no writable origin dir
+     * for ANY project, so this is not a rare corner case but the common path there) - without it,
+     * the last workspace to call {@code store_overview} would silently overwrite every other
+     * workspace's report under the identical file name.
      */
-    private Path reportDirFor(final String originDir) {
-        return (originDir == null || originDir.isBlank()) ? fallbackReportDir : Path.of(originDir);
+    private Path reportDirFor(final String originDir, final WorkspaceId workspaceId) {
+        return (originDir == null || originDir.isBlank()) ? fallbackDirFor(workspaceId) : Path.of(originDir);
+    }
+
+    private Path fallbackDirFor(final WorkspaceId workspaceId) {
+        return fallbackReportDir.resolve(workspaceId.value());
     }
 
     /**
@@ -130,32 +141,33 @@ public final class StoreReportTools {
      * never by throwing. A daemon shared across workspaces (issue #137/ADR-009) cannot assume
      * it shares a filesystem with every calling client (issue #158: a containerized daemon has
      * no access to a client's {@code originDir} at all), so a preferred target that turns out
-     * unwritable falls back to {@link #fallbackReportDir}; if that fails too, the digest is
-     * still returned with a failure line instead of losing the whole tool response to an
-     * opaque {@link java.nio.file.AccessDeniedException} whose {@code getMessage()} is only a
-     * bare path fragment. When the report lands in {@link #fallbackReportDir} and
-     * {@link #reportHostDir} is set, the reported path is translated to the host-reachable
-     * equivalent (issue #160) - the write itself still targets {@code fallbackReportDir}, only
-     * the path shown to the caller changes.
+     * unwritable falls back to the workspace's subdirectory of {@link #fallbackReportDir}; if
+     * that fails too, the digest is still returned with a failure line instead of losing the
+     * whole tool response to an opaque {@link java.nio.file.AccessDeniedException} whose
+     * {@code getMessage()} is only a bare path fragment. When the report lands in the fallback
+     * dir and {@link #reportHostDir} is set, the reported path is translated to the
+     * host-reachable equivalent (issue #160) - the write itself still targets the fallback dir,
+     * only the path shown to the caller changes.
      */
-    private String writeReportLine(final String html, final Path preferredDir) {
+    private String writeReportLine(final String html, final Path preferredDir, final WorkspaceId workspaceId) {
+        final Path fallbackDir = fallbackDirFor(workspaceId);
         try {
-            return "# HTML report: " + displayPath(writeReport(html, preferredDir), preferredDir);
+            return "# HTML report: " + displayPath(writeReport(html, preferredDir), preferredDir, workspaceId);
         } catch (final IOException preferredFailure) {
-            if (preferredDir.equals(fallbackReportDir)) {
+            if (preferredDir.equals(fallbackDir)) {
                 return reportFailureLine(preferredDir, preferredFailure);
             }
             try {
-                return "# HTML report: " + displayPath(writeReport(html, fallbackReportDir), fallbackReportDir);
+                return "# HTML report: " + displayPath(writeReport(html, fallbackDir), fallbackDir, workspaceId);
             } catch (final IOException fallbackFailure) {
-                return reportFailureLine(fallbackReportDir, fallbackFailure);
+                return reportFailureLine(fallbackDir, fallbackFailure);
             }
         }
     }
 
-    private String displayPath(final Path written, final Path writtenDir) {
-        return writtenDir.equals(fallbackReportDir) && reportHostDir != null
-                ? reportHostDir.resolve(REPORT_FILE_NAME).toString()
+    private String displayPath(final Path written, final Path writtenDir, final WorkspaceId workspaceId) {
+        return writtenDir.equals(fallbackDirFor(workspaceId)) && reportHostDir != null
+                ? reportHostDir.resolve(workspaceId.value()).resolve(REPORT_FILE_NAME).toString()
                 : written.toString();
     }
 
