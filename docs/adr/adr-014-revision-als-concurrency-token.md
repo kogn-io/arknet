@@ -3,7 +3,9 @@
 - Status: Accepted (2026-07-26)
 - Verwandt: ADR-011 (Revisions-/PROV-O-Rahmen -- dessen Entscheidung 2 wird hier mechanisch
   eingeloest), ADR-013 (WriteFunnel -- dessen offengehaltener Revisions-Ansatzpunkt und dessen
-  in Entscheidung 5 vertagte Sonderpfad-Frage werden hier entschieden), ADR-001
+  in Entscheidung 5 vertagte Sonderpfad-Frage werden hier entschieden), ADR-001,
+  ADR-015 (praezisiert Entscheidung 4: der Service-seitige Merge uebergibt Feld-Deltas,
+  keinen Objekt-Snapshot)
 
 ## Kontext
 
