@@ -136,6 +136,13 @@ Issue #23.
 eine Verwendung. Wer den Trichter um einen weiteren Guard erweitert, der ueber noch nicht
 existierende Ressourcen entscheidet, faellt unter dieselbe Regel.
 
+Eine bekannte Ausnahme bleibt bestehen: `compareAndUpdate` liest den `arkprov:head` weiterhin
+per SPARQL-`SELECT` (`WriteFunnel#readHead`), und im Fall `expectedHead == null` -- Subject
+aelter als der Trichter, noch kein `arkprov:head`-Tripel -- entscheidet auch dieser Read ueber
+eine noch nicht existierende Ressource. Der Race wird dort trotzdem erkannt, weil beide
+Schreiber-Bodies replace-by-identity auf denselben Modell-Tripeln arbeiten und sich am Commit
+ueberschneiden; der Head-Read ist also nicht die einzige Absicherung.
+
 Bei derselben Gelegenheit wandert das Konflikt-Predicate in den Trichter. Entscheidung 4
 setzte voraus, dass ein verlorener Commit als store-eigene, RDF4J-gefaerbte Exception
 ankommt -- weshalb `isWriteConflict` je Adapter in der Repository-Factory gebaut wurde, der
