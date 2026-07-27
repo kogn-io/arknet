@@ -288,6 +288,18 @@ public class KognioRdfTermRepository implements TermRepository {
      * losing caller's own change is never silently discarded. Only sustained, pathological
      * contention on the very same term exhausts {@link #MAX_RETRY_ATTEMPTS} and surfaces {@link
      * TermConcurrentlyModifiedException} to the caller.</p>
+     *
+     * <p><strong>No-op update (issue #167 review finding).</strong> Every field the
+     * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
+     * method with {@code prefLabel}, {@code definition} and {@code actorFacet} all {@code null}.
+     * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
+     * comparison. A revision documents a model change (ADR-011/ADR-014); recording one for an
+     * empty patch would grow the immutable provenance trail without cause and would move the head,
+     * handing a concurrent CAS writer a spurious conflict it did not actually have. The
+     * requirements BC guards the same case symmetrically in
+     * {@code RequirementService#updateWithOptimisticRetry}, comparing the mutated value against the
+     * one just read instead of comparing arguments, since its mutation is a whole-value transform
+     * rather than per-field patches.</p>
      */
     @Override
     public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
@@ -327,6 +339,11 @@ public class KognioRdfTermRepository implements TermRepository {
      * held. Reading both from one query makes that impossible: the assembly and the head are
      * always the same snapshot, so a concurrent commit either lands entirely before or entirely
      * after this read, never in between it.</p>
+     *
+     * <p><strong>No-op short-circuit.</strong> Once {@code current}/{@code currentHead} are read,
+     * this method returns immediately (still throwing {@link TermNotFoundException} for an unknown
+     * code first) if all three field arguments are {@code null} - see the class-level "No-op
+     * update" note on {@link #update}.</p>
      */
     private Term attemptUpdate(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
@@ -338,6 +355,13 @@ public class KognioRdfTermRepository implements TermRepository {
         }
         TermAssembly current = currentTerm.assembly();
         String currentHead = currentTerm.head();
+
+        if (prefLabel == null && definition == null && actorFacet == null) {
+            // No field to patch - a true no-op (issue #167 review finding): the funnel is never
+            // consulted, so no revision is recorded and the head does not move (see class-level
+            // "No-op update" note).
+            return resultingTerm(current, null, null, null);
+        }
 
         String subjectIriString = current.id.value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
