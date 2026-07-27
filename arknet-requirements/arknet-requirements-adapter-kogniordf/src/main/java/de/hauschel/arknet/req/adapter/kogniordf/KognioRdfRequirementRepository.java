@@ -32,6 +32,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -43,6 +44,7 @@ import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -75,19 +77,22 @@ import de.hauschel.arknet.req.domain.TermRef;
  * would use the same routing key differently (e.g. as a server-side project
  * selector), but the local embedded adapter already keeps workspaces separate.</p>
  *
- * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
- * minted once, "insert or replace by identity" is no longer one coherent operation for
- * {@link #write}. The transactional mechanics of that check - the in-transaction {@code ASK}s
- * for identity and business-code collision, the SHACL gate, the commit-conflict translation -
- * live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel} (ADR-013), not here:
- * {@link #write} only builds the candidate graph and, via {@code alreadyExists}/
- * {@code duplicateCode}/{@code notFound}, supplies the exceptions the funnel throws -
- * {@link ResourceAlreadyExistsException} for an identity collision on create,
- * {@link DuplicateRequirementCodeException} for a business-code collision on create (also
- * thrown when a genuinely overlapping {@code SERIALIZABLE} transaction loses the commit itself,
- * issue #144, see the funnel's own javadoc), {@link RequirementNotFoundException} for a missing
- * subject on update. {@link #update} otherwise replaces the subject's triples wholesale (the
- * same replace-by-identity mechanic the previous save-only contract used).</p>
+ * <p><strong>Create vs. compare-and-set update (opaque identity, issue #167).</strong> Because
+ * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent
+ * operation. The transactional mechanics - the in-transaction {@code ASK}s for identity and
+ * business-code collision, the SHACL gate, the commit-conflict translation, and (since #167) the
+ * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel}
+ * (ADR-013/ADR-014), not here: {@link #create} and {@link #compareAndUpdate} only build the
+ * candidate graph and, via {@code alreadyExists}/{@code duplicateCode}/{@code notFound}/
+ * {@code headMismatch}, supply the exceptions the funnel throws - {@link
+ * ResourceAlreadyExistsException} for an identity collision on create, {@link
+ * DuplicateRequirementCodeException} for a business-code collision on create (also thrown when a
+ * genuinely overlapping {@code SERIALIZABLE} transaction loses the commit itself, issue #144, see
+ * the funnel's own javadoc), {@link RequirementNotFoundException} for a missing subject on either
+ * path, and {@link RequirementConcurrentlyModifiedException} for a stale {@code expectedHead} on
+ * {@link #compareAndUpdate}. There is no unconditional update: every correction to an
+ * already-created requirement goes through the compare-and-set guard, replacing the subject's
+ * triples wholesale only once its head still matches.</p>
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance
  * graph against the requirements SHACL shapes before the write transaction opens,
@@ -177,7 +182,6 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String WONT_HAVE_PRIORITY = ARKREQ_NAMESPACE + "WontHave";
 
     private final DatasetLifecycle lifecycle;
-    private final ShaclWriteGate gate;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
@@ -185,30 +189,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Creates the adapter.
      *
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - used by the
-     *                   read paths and {@link #compareAndUpdate} (must not be {@code null})
-     * @param gate       the SHACL write-gate validating candidate graphs before persistence -
-     *                   used by {@link #compareAndUpdate}, which runs outside {@code funnel}
-     *                   (must not be {@code null})
-     * @param funnel     the shared write funnel (ADR-013) {@link #write} runs through; not used
-     *                   by {@link #compareAndUpdate} or the read paths (must not be {@code null})
+     *                   read paths (must not be {@code null})
+     * @param funnel     the shared write funnel (ADR-013) every write runs through - both
+     *                   {@link #create} and {@link #compareAndUpdate} (must not be {@code null})
      */
-    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, ShaclWriteGate gate, WriteFunnel funnel) {
+    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
-        this.gate = Objects.requireNonNull(gate, "gate");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
     public void create(WorkspaceId workspaceId, Requirement requirement) {
-        write(workspaceId, requirement, true);
-    }
-
-    @Override
-    public void update(WorkspaceId workspaceId, Requirement requirement) {
-        write(workspaceId, requirement, false);
-    }
-
-    private void write(WorkspaceId workspaceId, Requirement requirement, boolean expectAbsent) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(requirement, "requirement");
 
@@ -241,71 +232,45 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
         IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
-        if (expectAbsent) {
-            funnel.create(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
-                    requirement.code().value(), graph, assertedContext,
-                    () -> new ResourceAlreadyExistsException(workspaceId, requirement.id().value()),
-                    () -> new DuplicateRequirementCodeException(workspaceId, requirement.code()),
-                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
-        } else {
-            funnel.update(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
-                    graph, assertedContext,
-                    () -> new RequirementNotFoundException(workspaceId, requirement.code()),
-                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
-        }
+        funnel.create(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
+                requirement.code().value(), graph, assertedContext,
+                () -> new ResourceAlreadyExistsException(workspaceId, requirement.id().value()),
+                () -> new DuplicateRequirementCodeException(workspaceId, requirement.code()),
+                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
     }
 
     /**
-     * Optimistic-concurrency variant of {@link #update} (issue #108, Befund 1): replaces the
-     * requirement's triples only if the stored requirement, read fresh inside this same write
-     * transaction, still equals {@code expected} - closing the lost-update window a plain read
-     * (e.g. {@code findByCode}) followed by {@link #update} otherwise leaves open between the
-     * read and the write.
+     * Compare-and-set update (issue #108, degenerated from a full-snapshot comparison to a head
+     * comparison by issue #167/ADR-014 decision 4): replaces the requirement's triples only if
+     * its {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
+     * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window
+     * a plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
+     * otherwise leave open between the read and the write.
      */
     @Override
-    public boolean compareAndUpdate(WorkspaceId workspaceId, Requirement expected, Requirement updated) {
+    public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(updated, "updated");
-        if (!expected.id().equals(updated.id())) {
-            throw new IllegalArgumentException("expected and updated must carry the same identity");
-        }
 
         String subjectIriString = updated.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            List<IRI> termIris = updated.usesTerms().stream()
-                    .map(this::termIriFor)
-                    .toList();
-            Graph graph = buildCandidateGraph(subjectIri, updated, termIris);
-            Graph assertedContext = rdf.createGraph();
-            for (IRI termIri : termIris) {
-                assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
-            }
-            gate.enforce(graph, assertedContext);
-
-            String askExists = "ASK { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
-            IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
-
-            return handle.transactor().inTransaction(tx -> {
-                if (!tx.ask(askExists)) {
-                    throw new RequirementNotFoundException(workspaceId, updated.code());
-                }
-                // Re-reads the requirement's full current state through the same tx that is
-                // about to overwrite it - not via a separate call beforehand, which would leave
-                // exactly the TOCTOU window this method exists to close. A mismatch means some
-                // other writer committed a change since expected was read; nothing is written and
-                // the caller (RequirementService's retry loop) re-reads and tries again.
-                Optional<Requirement> current = readCurrentBySubject(tx::select, subjectIriString, subject);
-                if (current.isEmpty() || !current.get().equals(expected)) {
-                    return false;
-                }
-                replaceTriples(tx, graphIri, subjectIri, subject, graph, true);
-                return true;
-            });
+        List<IRI> termIris = updated.usesTerms().stream()
+                .map(this::termIriFor)
+                .toList();
+        Graph graph = buildCandidateGraph(subjectIri, updated, termIris);
+        Graph assertedContext = rdf.createGraph();
+        for (IRI termIri : termIris) {
+            assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         }
+        IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
+
+        funnel.compareAndUpdate(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
+                expectedHead, graph, assertedContext,
+                () -> new RequirementNotFoundException(workspaceId, updated.code()),
+                () -> new RequirementConcurrentlyModifiedException(workspaceId, updated.code()),
+                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
     }
 
     /**
@@ -450,44 +415,61 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Reads one requirement's full current state by subject IRI - the tx-scoped counterpart to
-     * {@link #findByCode} (which is keyed by business code and reads outside any transaction),
-     * used by {@link #compareAndUpdate} to compare the stored state against {@code expected}
-     * inside the very transaction that is about to overwrite it. Reconstructs the {@link
-     * Requirement} with the same field-by-field logic as {@link #findByCode} (including the
-     * acceptance-criteria placeholder substitution), so a {@code Requirement} obtained from
-     * {@code findByCode} compares equal here whenever nothing has changed in between.
+     * Reads a requirement's current state together with its concurrency token in one query
+     * (issue #167) - the head must come from the exact same read as the state it accompanies, so
+     * {@link RequirementRepository#compareAndUpdate}'s caller can trust the two are still
+     * consistent with each other. Otherwise identical to {@link #findByCode}'s field-by-field
+     * construction (including the acceptance-criteria placeholder substitution), plus one
+     * {@code OPTIONAL} join into {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head.
      */
-    private Optional<Requirement> readCurrentBySubject(
-            Function<String, Stream<BindingSet>> selectFn, String subjectIriString, String subject) {
-        String query = "SELECT ?identifier ?type ?title ?description ?status ?priority ?motivatedBy "
-                + "?qualityCategory WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + subject + " <" + IDENTIFIER_PROPERTY + "> ?identifier ; "
-                + "a ?type ; "
-                + "<" + TITLE_PROPERTY + "> ?title ; "
-                + "<" + DESCRIPTION_PROPERTY + "> ?description ; "
-                + "<" + STATUS_PROPERTY + "> ?status . "
-                + "OPTIONAL { " + subject + " <" + PRIORITY_PROPERTY + "> ?priority } "
-                + "OPTIONAL { " + subject + " <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
-                + "OPTIONAL { " + subject + " <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
+    @Override
+    public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
+            WorkspaceId workspaceId, RequirementCode code) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
 
-        Optional<BindingSet> head = selectFn.apply(query).findFirst();
-        if (head.isEmpty()) {
-            return Optional.empty();
+        String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory ?head "
+                + "WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + "?s a ?type . "
+                + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
+                + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) "
+                + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
+                + "?s <" + TITLE_PROPERTY + "> ?title . "
+                + "?s <" + DESCRIPTION_PROPERTY + "> ?description . "
+                + "?s <" + STATUS_PROPERTY + "> ?status . "
+                + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
+                + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
+                + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } "
+                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
+            if (found.isEmpty()) {
+                return Optional.empty();
+            }
+            BindingSet row = found.get();
+            String subjectIriString = iriOf(row, "s").getIRIString();
+            Requirement requirement = new Requirement(
+                    new RequirementId(ResourceId.of(subjectIriString)),
+                    code,
+                    literalOf(row, "title").getLexicalForm(),
+                    literalOf(row, "description").getLexicalForm(),
+                    typeFromIri(iriOf(row, "type").getIRIString()),
+                    statusFromIri(iriOf(row, "status").getIRIString()),
+                    priorityOf(row),
+                    motivatedByOf(row),
+                    qualityCategoryOf(row),
+                    readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
+                    acceptanceCriteriaOrLegacyPlaceholder(
+                            readAcceptanceCriteria(handle.sparqlQuery()::select,
+                                    SparqlTerms.iriRef(subjectIriString))));
+            String head = row.getValue("head")
+                    .filter(IRI.class::isInstance)
+                    .map(value -> ((IRI) value).getIRIString())
+                    .orElse(null);
+            return Optional.of(new RequirementRepository.CurrentRequirement(requirement, head));
         }
-        BindingSet row = head.get();
-        return Optional.of(new Requirement(
-                new RequirementId(ResourceId.of(subjectIriString)),
-                new RequirementCode(literalOf(row, "identifier").getLexicalForm()),
-                literalOf(row, "title").getLexicalForm(),
-                literalOf(row, "description").getLexicalForm(),
-                typeFromIri(iriOf(row, "type").getIRIString()),
-                statusFromIri(iriOf(row, "status").getIRIString()),
-                priorityOf(row),
-                motivatedByOf(row),
-                qualityCategoryOf(row),
-                readUsesTerms(selectFn, subject),
-                acceptanceCriteriaOrLegacyPlaceholder(readAcceptanceCriteria(selectFn, subject))));
     }
 
     @Override

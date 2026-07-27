@@ -4,7 +4,6 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,6 +41,7 @@ import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
@@ -78,6 +78,19 @@ class KognioRdfRequirementRepositoryTest {
     /** Fresh, valid opaque identity - every test picks its own so ids never collide. */
     private static RequirementId freshId() {
         return new RequirementId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
+    }
+
+    /**
+     * Test convenience for call sites that only need "replace this by identity" and do not
+     * exercise the compare-and-set guard itself (issue #167): reads {@code updated}'s current
+     * head via {@link RequirementRepository#findCurrentByCode} and immediately applies
+     * {@code updated} through it - there is no unconditional {@code update} left on the port.
+     */
+    private void replaceViaCompareAndUpdate(WorkspaceId workspaceId, Requirement updated) {
+        String head = repository.findCurrentByCode(workspaceId, updated.code())
+                .map(RequirementRepository.CurrentRequirement::head)
+                .orElse(null);
+        repository.compareAndUpdate(workspaceId, head, updated);
     }
 
     @Test
@@ -154,17 +167,6 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     @Test
-    void updateRejectsAMissingIdentity() {
-        Requirement neverCreated = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
-                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-
-        assertThrows(RequirementNotFoundException.class,
-                () -> repository.update(WORKSPACE_A, neverCreated));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
-    }
-
-    @Test
     void updateReplacesByIdentityInsteadOfDuplicating() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
@@ -174,7 +176,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
         repository.create(WORKSPACE_A, proposed);
-        repository.update(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
 
         assertEquals(Optional.of(accepted), repository.findByCode(WORKSPACE_A, code));
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
@@ -190,59 +192,60 @@ class KognioRdfRequirementRepositoryTest {
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
-        repository.update(WORKSPACE_A, new Requirement(id, code, "Login",
+        replaceViaCompareAndUpdate(WORKSPACE_A, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
         assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
     }
 
-    // ---- compareAndUpdate: optimistic-concurrency guard against lost updates (issue #108) ----
+    // ---- compareAndUpdate: CAS guard against lost updates (issue #108, head-based since #167) ----
 
     @Test
-    void compareAndUpdateAppliesWhenExpectedMatchesTheStoredRequirement() {
+    void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
         Requirement proposed = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
         repository.create(WORKSPACE_A, proposed);
+        String head = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
 
-        boolean applied = repository.compareAndUpdate(WORKSPACE_A, proposed, accepted);
+        repository.compareAndUpdate(WORKSPACE_A, head, accepted);
 
-        assertTrue(applied);
         assertEquals(Optional.of(accepted), repository.findByCode(WORKSPACE_A, code));
     }
 
     /**
-     * The core of issue #108's fix: a stale {@code expected} (no longer matching what is actually
-     * stored, because some other writer already committed a change) must be rejected without
-     * mutating the store - the caller re-reads and retries instead of silently overwriting the
-     * concurrent change.
+     * The core of issue #108's fix, degenerated from a full-snapshot comparison to a head
+     * comparison by issue #167: a stale {@code expectedHead} (no longer matching the head another
+     * writer already advanced) must be rejected without mutating the store - the caller re-reads
+     * and retries instead of silently overwriting the concurrent change.
      */
     @Test
-    void compareAndUpdateRejectsAndPersistsNothingWhenExpectedIsStale() {
+    void compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
         Requirement original = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
         repository.create(WORKSPACE_A, original);
-        // Simulates a concurrent writer that already committed a change since `original` was read.
+        String staleHead = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        // Simulates a concurrent writer that already committed a change since staleHead was read.
         Requirement concurrentlyAccepted = new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
                 null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.update(WORKSPACE_A, concurrentlyAccepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, concurrentlyAccepted);
 
         Requirement staleAttempt = new Requirement(id, code, "Login renamed",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                 null, null, null, null, List.of("Login succeeds with valid credentials"));
-        boolean applied = repository.compareAndUpdate(WORKSPACE_A, original, staleAttempt);
 
-        assertFalse(applied);
+        assertThrows(RequirementConcurrentlyModifiedException.class,
+                () -> repository.compareAndUpdate(WORKSPACE_A, staleHead, staleAttempt));
         assertEquals(Optional.of(concurrentlyAccepted), repository.findByCode(WORKSPACE_A, code));
     }
 
@@ -255,27 +258,28 @@ class KognioRdfRequirementRepositoryTest {
                 List.of("Login succeeds with valid credentials"));
 
         assertThrows(RequirementNotFoundException.class,
-                () -> repository.compareAndUpdate(WORKSPACE_A, neverCreated, neverCreated));
+                () -> repository.compareAndUpdate(WORKSPACE_A, null, neverCreated));
         assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+        assertEquals(Optional.empty(), repository.findCurrentByCode(WORKSPACE_A, code));
     }
 
     /**
      * Regression guard for the replace-by-identity write path, exercised via {@code
-     * compareAndUpdate} rather than {@code update}: linked terms and acceptance criteria must
-     * still survive the optimistic-concurrency write path, not just the plain one.
+     * compareAndUpdate}: linked terms and acceptance criteria must still survive the CAS write
+     * path.
      */
     @Test
     void compareAndUpdatePreservesLinkedTermsAndAcceptanceCriteria() {
         givenTerm(WORKSPACE_A, "TERM-1");
         Requirement created = requirementUsing(termRef("TERM-1"));
         repository.create(WORKSPACE_A, created);
+        String head = repository.findCurrentByCode(WORKSPACE_A, created.code()).orElseThrow().head();
 
         Requirement accepted = new Requirement(created.id(), created.code(), created.title(), created.description(),
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
                 created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria());
-        boolean applied = repository.compareAndUpdate(WORKSPACE_A, created, accepted);
+        repository.compareAndUpdate(WORKSPACE_A, head, accepted);
 
-        assertTrue(applied);
         Requirement found = repository.findByCode(WORKSPACE_A, created.code()).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
         assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
@@ -426,7 +430,7 @@ class KognioRdfRequirementRepositoryTest {
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(),
                 reloaded.acceptanceCriteria());
-        repository.update(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
 
         Requirement found = repository.findByCode(WORKSPACE_A, code).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
@@ -837,7 +841,7 @@ class KognioRdfRequirementRepositoryTest {
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        repository.update(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
 
         Requirement found = repository.findByCode(WORKSPACE_A, code).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
@@ -851,7 +855,7 @@ class KognioRdfRequirementRepositoryTest {
         Requirement created = requirementUsing(termRef("TERM-1"));
         repository.create(WORKSPACE_A, created);
 
-        repository.update(WORKSPACE_A, new Requirement(created.id(), created.code(), created.title(),
+        replaceViaCompareAndUpdate(WORKSPACE_A, new Requirement(created.id(), created.code(), created.title(),
                 created.description(), created.type(), created.status(), created.priority(),
                 created.motivatedBy(), created.qualityCategory(), List.of(), List.of("Login succeeds with valid credentials")));
 
@@ -1012,7 +1016,7 @@ class KognioRdfRequirementRepositoryTest {
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        repository.update(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
 
         assertEquals(List.of(expected), repository.findByCode(WORKSPACE_A, code).orElseThrow().usesTerms(),
                 "the edge is now part of the ordinary record, carried forward by the replacing "
@@ -1046,7 +1050,7 @@ class KognioRdfRequirementRepositoryTest {
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        repository.update(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
 
         assertTrue(usesTermEdgeTargetsAConceptBlankNode(WORKSPACE_A, reloaded.id()),
                 "blank-node edge must survive the replacing update and still point at its typed node - "
@@ -1069,7 +1073,7 @@ class KognioRdfRequirementRepositoryTest {
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        repository.update(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
 
         String termIri = "https://w3id.org/arknet/model/term/TERM-1";
         assertEquals(1, countUsesTermEdges(WORKSPACE_A, reloaded.id(), termIri));
@@ -1200,20 +1204,15 @@ class KognioRdfRequirementRepositoryTest {
 
     /**
      * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
-     * {@code update} each record exactly one immutable revision, and the head is queryable per
-     * resource. (The unmigrated {@code compareAndUpdate} special path is deliberately not
-     * covered - its revision recording arrives with its dissolution into the funnel's
-     * compare-and-set, ADR-014 decision 4.)
-     *
-     * <p><strong>How far this evidence reaches.</strong> {@code update} is called here directly
-     * on the out-port. Today no in-port reaches it: {@code RequirementService} routes every
-     * state change ({@code req_update}, {@code req_set_status}, {@code req_link_term}) through
-     * {@code compareAndUpdate} instead, so no user-reachable requirement write moves the head
-     * after the initial {@code create}. This test proves the funnel records a revision on
-     * {@code update} - not that requirements accumulate a revision trail in practice.</p>
+     * {@code compareAndUpdate} each record exactly one immutable revision, and the head is
+     * queryable per resource. Since issue #167 resolved {@code compareAndUpdate} into the funnel
+     * (ADR-014 decision 4), this is no longer a special path any more than {@code create} is -
+     * {@code RequirementService} routes every state change ({@code req_update}, {@code
+     * req_set_status}, {@code req_link_term}) through it, so the head now moves on every
+     * user-reachable requirement write, not just the initial {@code create}.
      */
     @Test
-    void createAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
+    void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
         repository.create(WORKSPACE_A, new Requirement(id, code, "Login",
@@ -1221,16 +1220,19 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
         assertEquals(1, revisionsOf(id).size(), "create must record exactly one revision");
+        String headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
 
-        repository.update(WORKSPACE_A, new Requirement(id, code, "Login",
+        repository.compareAndUpdate(WORKSPACE_A, headAfterCreate, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
         List<String> revisions = revisionsOf(id);
-        assertEquals(2, revisions.size(), "update must record exactly one more revision");
+        assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");
         List<String> heads = headsOf(id);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
+        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head(),
+                "findCurrentByCode must observe the advanced head");
     }
 
     private List<String> revisionsOf(RequirementId id) {
