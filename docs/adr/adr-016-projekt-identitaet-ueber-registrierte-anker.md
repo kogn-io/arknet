@@ -122,9 +122,10 @@ Faehigkeiten bleiben bedienbar: ein statischer Header genuegt.
 **Negativ / bewusst deferred (YAGNI):** Isolation ist nicht mehr zero-config. Jedes Projekt
 braucht einen einmaligen Anlage- oder Anhaenge-Schritt, und ein Client, der heute ohne Anker
 schreibt, scheitert danach sichtbar -- gewollt, aber es ist eine echte Bruchstelle im Betrieb.
-Ein Modell, das mehrere Repositories unter einem gemeinsamen Glossar umspannt, ist damit nicht
-abgebildet: entweder sind es ein Projekt mit mehreren Ankern, oder es sind getrennte Projekte
-mit getrennten Glossaren. Eine Klammer darueber ist bewusst nicht gebaut (siehe Alternativen).
+Die Projektgrenze ist zugleich die Datengrenze: zwei Projekte teilen nichts, auch keinen
+einzigen Glossarbegriff. Wer denselben Begriff in beiden fuehrt, legt ihn zweimal an; wer
+stattdessen einen gemeinsamen Bestand will, hat genau eine Wahl -- ein Projekt mit mehreren
+Ankern. Eine Klammer ueber Projekten ist bewusst nicht gebaut (siehe Alternativen).
 Der Anker bleibt Routing und ist keine Authentifizierung: eine kopierte Client-Konfiguration
 traegt denselben Anker an einen zweiten Ort, was sich anhand des zuletzt gesehenen Ankers
 erkennen, aber an dieser Vertrauensgrenze nicht verhindern laesst (ADR-009 Punkt 4 gilt
@@ -151,7 +152,8 @@ ProjectId, statt mit ihr verschmolzen zu werden.
   verliert den Store beim Verschieben des Verzeichnisses. Verworfen (tauscht stille Vermischung gegen
   stille Zersplitterung).
 - **Workspace als Klammer ueber mehreren Projekten, ein Dataset je Workspace.** Haette erlaubt,
-  mehrere Repositories unter einem gemeinsamen Glossar zu fuehren. Verworfen: der Client sendet
+  mehrere Projekte auf einem gemeinsamen Datenbestand zu fuehren -- ein Glossarbegriff, von den
+  Requirements mehrerer Projekte referenziert. Verworfen: der Client sendet
   pro Aufruf genau einen Anker, und zeigt dieser auf die Klammer, ist die Projektzugehoerigkeit
   der geschriebenen Daten verloren -- die Requirements aller Projekte laegen ununterscheidbar in
   einem Dataset. Rettbar waere das nur, indem jede Ressource ihre Projektzugehoerigkeit traegt
@@ -181,5 +183,5 @@ ProjectId, statt mit ihr verschmolzen zu werden.
 - **Statische, vom Betreiber gepflegte Zuordnungskonfiguration.** Kein Selbstbedienungspfad fuer
   den treibenden Agenten, jede Aenderung erfordert einen Eingriff am Serverbetrieb. Verworfen.
 - **Modulname `arknet-identity` mit Blick auf spaetere Autorisierung.** Vermischt zwei
-  Gegenstaende mit verschiedenen Lebenszyklen -- welches Modell ist gemeint (Routing) und wer
+  Gegenstaende mit verschiedenen Lebenszyklen -- welches Projekt ist gemeint (Routing) und wer
   darf darauf zugreifen (Principal). Verworfen; das Modul heisst nach dem, was es verwaltet.
