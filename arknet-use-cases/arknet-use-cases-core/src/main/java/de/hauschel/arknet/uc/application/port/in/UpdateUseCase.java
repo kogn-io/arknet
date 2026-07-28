@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.application.port.in;
 
 import java.util.List;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 
@@ -39,7 +39,7 @@ public interface UpdateUseCase {
      * Updates the use case identified by {@code code} within a workspace, leaving any
      * {@code null}/omitted argument unchanged.
      *
-     * @param workspaceId     the workspace (architecture model) the use case lives in
+     * @param projectId       the project (architecture model) the use case lives in
      * @param code            the use-case code, e.g. {@code UC1}
      * @param title           the new short human-readable name, or {@code null} to leave it
      *                        unchanged
@@ -56,7 +56,7 @@ public interface UpdateUseCase {
      *                        unchanged
      * @return the updated use case
      */
-    UseCase update(WorkspaceId workspaceId, UseCaseCode code, String title, String goal, String scope,
+    UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,
             List<StepTextPatch> stepTextPatches);
 

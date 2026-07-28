@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when a read-modify-write round trip (e.g. {@code uc_update}) keeps losing the
@@ -22,26 +22,26 @@ public class UseCaseConcurrentlyModifiedException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient UseCaseCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the use case lives in
-     * @param code        the use-case code whose update kept losing the race
+     * @param projectId the project the use case lives in
+     * @param code      the use-case code whose update kept losing the race
      */
-    public UseCaseConcurrentlyModifiedException(WorkspaceId workspaceId, UseCaseCode code) {
+    public UseCaseConcurrentlyModifiedException(ProjectId projectId, UseCaseCode code) {
         super("use case " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value()
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
-        this.workspaceId = workspaceId;
+        this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the use case lives in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    /** @return the project the use case lives in */
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the use-case code whose update kept losing the race */

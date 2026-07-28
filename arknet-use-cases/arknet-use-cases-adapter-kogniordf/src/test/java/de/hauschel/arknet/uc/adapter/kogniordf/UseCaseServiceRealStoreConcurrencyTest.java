@@ -4,6 +4,7 @@
 package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -58,13 +59,14 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.UseCase;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
 
 /**
- * Regression test for the second interleaving of issue #144, reproduced against a real
- * RDF4J-backed store (on-disk {@code NativeStore}) with real threads - unlike {@code
- * UseCaseServiceConcurrencyTest}, which reproduces the first interleaving ("a concurrent caller
- * commits its whole write before this one's transaction even begins") with a repository decorator
- * and no real transactions at all.
+ * Regression tests against a real RDF4J-backed store (on-disk {@code NativeStore}): the second
+ * interleaving of issue #144 with real threads, and the lost-update race of issue #165 through
+ * the funnel's own compare-and-set path - unlike {@code UseCaseServiceConcurrencyTest}, which
+ * reproduces the first interleaving ("a concurrent caller commits its whole write before this
+ * one's transaction even begins") with a repository decorator and no real transactions at all.
  *
  * <p>Mirrors {@code BoundedContextServiceRealStoreConcurrencyTest} exactly: the shared
  * {@link de.hauschel.arknet.persistence.WriteFunnel} translates a genuine store-level commit conflict
@@ -84,9 +86,12 @@ import de.hauschel.arknet.uc.domain.UseCase;
  * barrier/latch would otherwise hang {@code join()} forever, so neither {@code @AfterEach} nor
  * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project has
  * no {@code junit-platform.properties}/Surefire-level timeout, so this class-level {@link Timeout}
- * is the only backstop; the interleaving itself normally resolves in well under a second.</p>
+ * is the only backstop; the interleavings themselves normally resolve in well under a second. The
+ * budget mirrors {@code BoundedContextServiceRealStoreConcurrencyTest}'s 60 s (issue #182): the
+ * on-disk {@code NativeStore}'s commit path serialises writers, and a full parallel reactor build
+ * can slow that well beyond the 10 s this class started with.</p>
  */
-@Timeout(value = 10, unit = TimeUnit.SECONDS)
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class UseCaseServiceRealStoreConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
@@ -350,6 +355,8 @@ class UseCaseServiceRealStoreConcurrencyTest {
                 return new GuardSyncTx(tx, afterSecondGuard);
             }
             return tx;
+        }, () -> {
+            // This service pins the #144 interleaving inside the transaction; nothing to do before.
         });
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
                 guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
@@ -357,20 +364,80 @@ class UseCaseServiceRealStoreConcurrencyTest {
                 CUSTOMER_ACTOR_LOOKUP);
     }
 
-    /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */
+    /**
+     * A service wired over {@code lifecycle} with the fixed {@code Customer} actor lookup - used
+     * by {@link #updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead}, which
+     * needs no requirement lookup either since neither racer's step realises one.
+     */
+    private static UseCaseService serviceOver(DatasetLifecycle lifecycle) {
+        UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
+                CUSTOMER_ACTOR_LOOKUP);
+    }
+
+    /**
+     * Issue #165 against the real store: a concurrent {@code uc_update} that commits between this
+     * caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
+     * nothing and lose neither change. Before this fix, {@code uc_update} did not exist - a
+     * read-modify-write over an unconditional {@code update} would have silently dropped the
+     * first writer's change.
+     *
+     * <p>The interleaving is pinned by the {@code beforeTransaction} hook - which fires exactly
+     * where the funnel's compare-and-set transaction opens - rather than by real threads, which
+     * would make this flaky. The one-shot guard lives in the injected {@link Runnable}, so the
+     * retried attempt runs unimpeded. Mirrors {@code
+     * BoundedContextServiceRealStoreConcurrencyTest#linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}.</p>
+     */
+    @Test
+    void updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead() {
+        UseCaseService straightThrough = serviceOver(realLifecycle);
+        UseCaseCode code = straightThrough.add(WS, newUseCase()).code();
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        UseCaseService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
+            if (pending.compareAndSet(true, false)) {
+                straightThrough.update(WS, code, null, null, null, "Concurrent trigger",
+                        null, null, null, null);
+            }
+        }));
+
+        UseCase result = racing.update(WS, code, null, null, null, null,
+                "Racing precondition", null, null, null);
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        assertEquals("Concurrent trigger", result.trigger(),
+                "the retry must return the state it re-read, not its stale first read");
+        assertEquals("Racing precondition", result.precondition());
+        UseCase stored = straightThrough.get(WS, code).orElseThrow();
+        assertEquals("Concurrent trigger", stored.trigger(), "both writers' changes must survive");
+        assertEquals("Racing precondition", stored.precondition());
+    }
+
+    /**
+     * Wraps a real {@link DatasetLifecycle}, running {@code beforeTransaction} right before every
+     * write transaction opens and decorating every acquired transaction's {@link DatasetTx}. The
+     * two hooks pin two different interleavings: {@code beforeTransaction} is where a concurrent
+     * writer's commit turns an already-taken read stale (issue #165), {@code txDecorator} is where
+     * two transactions are held open against each other (issue #144). Mirrors {@code
+     * BoundedContextServiceRealStoreConcurrencyTest}'s {@code GuardedLifecycle}.
+     */
     private static final class GuardedLifecycle implements DatasetLifecycle {
 
         private final DatasetLifecycle delegate;
         private final Function<DatasetTx, DatasetTx> txDecorator;
+        private final Runnable beforeTransaction;
 
-        GuardedLifecycle(DatasetLifecycle delegate, Function<DatasetTx, DatasetTx> txDecorator) {
+        GuardedLifecycle(DatasetLifecycle delegate, Function<DatasetTx, DatasetTx> txDecorator,
+                Runnable beforeTransaction) {
             this.delegate = delegate;
             this.txDecorator = txDecorator;
+            this.beforeTransaction = beforeTransaction;
         }
 
         @Override
         public DatasetHandle acquire(DatasetId id) {
-            return new GuardedHandle(delegate.acquire(id), txDecorator);
+            return new GuardedHandle(delegate.acquire(id), txDecorator, beforeTransaction);
         }
 
         @Override
@@ -393,10 +460,13 @@ class UseCaseServiceRealStoreConcurrencyTest {
 
         private final DatasetHandle delegate;
         private final Function<DatasetTx, DatasetTx> txDecorator;
+        private final Runnable beforeTransaction;
 
-        GuardedHandle(DatasetHandle delegate, Function<DatasetTx, DatasetTx> txDecorator) {
+        GuardedHandle(DatasetHandle delegate, Function<DatasetTx, DatasetTx> txDecorator,
+                Runnable beforeTransaction) {
             this.delegate = delegate;
             this.txDecorator = txDecorator;
+            this.beforeTransaction = beforeTransaction;
         }
 
         @Override
@@ -420,6 +490,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
             return new DatasetTransactor() {
                 @Override
                 public <T> T inTransaction(Function<DatasetTx, T> fn) {
+                    beforeTransaction.run();
                     return real.inTransaction(tx -> fn.apply(txDecorator.apply(tx)));
                 }
             };

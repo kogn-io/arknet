@@ -47,6 +47,7 @@ import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
@@ -106,6 +107,20 @@ class KognioRdfUseCaseRepositoryTest {
     @AfterEach
     void tearDown() {
         lifecycle.shutDownAll();
+    }
+
+    /**
+     * Test convenience for call sites that only need "replace this by identity" and do not
+     * exercise the compare-and-set guard itself (issue #165): reads {@code updated}'s current
+     * head via {@link UseCaseRepository#findCurrentByCode} and immediately applies {@code updated}
+     * through it - there is no unconditional {@code update} left on the port. Mirrors
+     * {@code KognioRdfRequirementRepositoryTest#replaceViaCompareAndUpdate}.
+     */
+    private void replaceViaCompareAndUpdate(ProjectId projectId, UseCase updated) {
+        String head = repository.findCurrentByCode(projectId, updated.code())
+                .map(UseCaseRepository.CurrentUseCase::head)
+                .orElse(null);
+        repository.compareAndUpdate(projectId, head, updated);
     }
 
     private void seed(ProjectId workspace, String graph, String triples) {
@@ -223,7 +238,7 @@ class KognioRdfUseCaseRepositoryTest {
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.update(WORKSPACE_A, revised);
+        replaceViaCompareAndUpdate(WORKSPACE_A, revised);
 
         assertEquals(1, repository.findAll(WORKSPACE_A).size());
         UseCase found = repository.findByCode(WORKSPACE_A, CODE_1).orElseThrow();
@@ -264,9 +279,61 @@ class KognioRdfUseCaseRepositoryTest {
         seedReferences(WORKSPACE_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.update(WORKSPACE_A, placeOrder()));
+                () -> repository.compareAndUpdate(WORKSPACE_A, null, placeOrder()));
 
         assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+    }
+
+    // ---- compareAndUpdate: CAS guard against lost updates (issue #165) ----
+
+    @Test
+    void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
+        String head = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+
+        UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
+                null, null, CUSTOMER, List.of(), null, null,
+                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+        repository.compareAndUpdate(WORKSPACE_A, head, revised);
+
+        assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, CODE_1));
+    }
+
+    /**
+     * A stale {@code expectedHead} (no longer matching the head another writer already advanced)
+     * must be rejected without mutating the store - the caller re-reads and retries instead of
+     * silently overwriting the concurrent change. Mirrors
+     * {@code KognioRdfRequirementRepositoryTest#compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale}.
+     */
+    @Test
+    void compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale() {
+        seedReferences(WORKSPACE_A);
+        repository.create(WORKSPACE_A, placeOrder());
+        String staleHead = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        // Simulates a concurrent writer that already committed a change since staleHead was read.
+        UseCase concurrentlyRevised = new UseCase(ID_1, CODE_1, "Place order (concurrently revised)",
+                "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
+                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+        replaceViaCompareAndUpdate(WORKSPACE_A, concurrentlyRevised);
+
+        UseCase staleAttempt = new UseCase(ID_1, CODE_1, "Place order (stale attempt)",
+                "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
+                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+
+        assertThrows(UseCaseConcurrentlyModifiedException.class,
+                () -> repository.compareAndUpdate(WORKSPACE_A, staleHead, staleAttempt));
+        assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(WORKSPACE_A, CODE_1));
+    }
+
+    @Test
+    void compareAndUpdateThrowsWhenTheIdentityDoesNotExistAtAll() {
+        seedReferences(WORKSPACE_A);
+
+        assertThrows(UseCaseNotFoundException.class,
+                () -> repository.compareAndUpdate(WORKSPACE_A, null, placeOrder()));
+        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+        assertEquals(Optional.empty(), repository.findCurrentByCode(WORKSPACE_A, CODE_1));
     }
 
     @Test
@@ -600,35 +667,36 @@ class KognioRdfUseCaseRepositoryTest {
 
     /**
      * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
-     * {@code update} each record exactly one immutable revision of the use case, and the head
-     * is queryable per resource. The step resources the body writes alongside get no revisions
-     * of their own - the revision hangs off the funnel's subject, the use case.
-     *
-     * <p><strong>How far this evidence reaches.</strong> {@code update} is called here directly
-     * on the out-port. This bounded context has no in-port reaching it at all - {@code
-     * UseCaseService} only ever calls {@code create}, and there is no {@code uc_update} tool -
-     * so today every use case's head stays on its create revision. This test proves the funnel
-     * behaves on {@code update}, ahead of a write path that would use it.</p>
+     * {@code compareAndUpdate} each record exactly one immutable revision of the use case, and
+     * the head is queryable per resource. The step resources the body writes alongside get no
+     * revisions of their own - the revision hangs off the funnel's subject, the use case. Since
+     * issue #165 wired {@code uc_update} through {@code compareAndUpdate}, this is no longer a
+     * path exercised only directly on the out-port - every {@code UseCaseService#update} call
+     * moves the head too, mirroring {@code
+     * KognioRdfRequirementRepositoryTest#createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead}.
      */
     @Test
-    void createAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
+    void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
         seedReferences(WORKSPACE_A);
         repository.create(WORKSPACE_A, placeOrder());
         String subject = ID_1.value().value();
 
         assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
+        String headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.update(WORKSPACE_A, revised);
+        repository.compareAndUpdate(WORKSPACE_A, headAfterCreate, revised);
 
         List<String> revisions = revisionsOf(subject);
-        assertEquals(2, revisions.size(), "update must record exactly one more revision");
+        assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");
         List<String> heads = selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH
                 + "> { <" + subject + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
+        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head(),
+                "findCurrentByCode must observe the advanced head");
     }
 
     private List<String> revisionsOf(String subjectIri) {
