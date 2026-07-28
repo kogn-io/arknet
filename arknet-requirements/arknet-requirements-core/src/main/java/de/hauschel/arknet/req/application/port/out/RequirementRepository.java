@@ -95,18 +95,18 @@ public interface RequirementRepository {
 
     /**
      * Reads a requirement's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). Only the core
+     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). The core
      * fields (type, title, description, status, priority, motivatedBy, qualityCategory) and the
-     * head itself are guaranteed to come from one read; {@code usesTerms} and
-     * {@code acceptanceCriteria} are filled in by separate, independent follow-up reads. This is
-     * still safe because of the order: the head is read first, so it is never fresher than any
-     * part of the state it is paired with - a concurrent funnel write landing between the reads
-     * moves the head, so the subsequent {@link #compareAndUpdate} then fails its comparison and
-     * the caller re-reads instead of overwriting a state it never actually saw. The pairing is
-     * deliberately conservative, never optimistic; reading the head later, or any field before it,
-     * would risk the opposite - a fresh head paired with stale state, reopening the lost-update
-     * race this method exists to close. Backs the read side of the read-modify-write round trip
-     * {@link #compareAndUpdate} guards the write side of.
+     * head itself come from one query call - one snapshot - which is the load-bearing guarantee
+     * here, not an ordering of clauses within that query. {@code usesTerms} and
+     * {@code acceptanceCriteria}, in contrast, are deliberately filled in by later, independent
+     * follow-up reads; that is safe precisely because a later read can only be fresher, never
+     * staler, than the head: a funnel write that commits in between moves the head, so the
+     * subsequent {@link #compareAndUpdate} then fails its comparison and the caller re-reads
+     * instead of overwriting a state it never actually saw. The pairing is therefore conservative
+     * - state is never older than the head it is paired with - never optimistic; it does not mean
+     * the whole requirement comes from a single read. Backs the read side of the read-modify-write
+     * round trip {@link #compareAndUpdate} guards the write side of.
      *
      * @param workspaceId the workspace (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
