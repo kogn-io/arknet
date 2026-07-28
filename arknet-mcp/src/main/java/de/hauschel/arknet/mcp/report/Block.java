@@ -26,14 +26,28 @@ public sealed interface Block {
     /**
      * A single run of text: a goal, a description, a precondition.
      *
+     * <p>Carries {@link RichText} rather than a string because a text may mention the
+     * ubiquitous language, and the builder - not the renderer - is who can tell a mention the
+     * model backs with an edge from one it does not. A field nobody analyses simply arrives as
+     * {@link RichText#plain}.</p>
+     *
      * @param label the block heading
      * @param text  the text; non-blank (an absent optional field is left out entirely rather
      *              than rendered as an empty block)
      */
-    record Prose(String label, String text) implements Block {
+    record Prose(String label, RichText text) implements Block {
         public Prose {
             Objects.requireNonNull(label, "label");
             Objects.requireNonNull(text, "text");
+        }
+
+        /**
+         * @param label the block heading
+         * @param text  a text with nothing marked up
+         * @return the block
+         */
+        public static Prose plain(final String label, final String text) {
+            return new Prose(label, RichText.plain(text));
         }
     }
 
@@ -43,10 +57,20 @@ public sealed interface Block {
      * @param label the block heading
      * @param items the items; never {@code null}
      */
-    record Bullets(String label, List<String> items) implements Block {
+    record Bullets(String label, List<RichText> items) implements Block {
         public Bullets {
             Objects.requireNonNull(label, "label");
             items = items == null ? List.of() : List.copyOf(items);
+        }
+
+        /**
+         * @param label the block heading
+         * @param items texts with nothing marked up
+         * @return the block
+         */
+        public static Bullets plain(final String label, final List<String> items) {
+            return new Bullets(label, items == null ? List.of()
+                    : items.stream().map(RichText::plain).toList());
         }
     }
 
