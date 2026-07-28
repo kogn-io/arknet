@@ -28,9 +28,12 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
@@ -65,18 +68,18 @@ class UseCaseMcpToolsTest {
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final UseCaseMcpTools adapter =
-            new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, PROJECTS);
+            new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms, resolveRequirements, PROJECTS);
 
     @Test
-    void declaresTheThreeUseCaseTools() {
+    void declaresTheFourUseCaseTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(3, names.size());
-        assertTrue(names.containsAll(List.of("uc_add", "uc_list", "uc_get")));
+        assertEquals(4, names.size());
+        assertTrue(names.containsAll(List.of("uc_add", "uc_list", "uc_get", "uc_update")));
     }
 
     @Test
@@ -84,22 +87,29 @@ class UseCaseMcpToolsTest {
         assertTrue(readOnly("list"));
         assertTrue(readOnly("get"));
         assertFalse(readOnly("add"));
+        assertFalse(readOnly("update"));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, resolveTerms, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(null, stub, stub, stub, resolveTerms, resolveRequirements, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(stub, null, stub, stub, resolveTerms, resolveRequirements, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, null, PROJECTS));
+                () -> new UseCaseMcpTools(stub, stub, null, stub, resolveTerms, resolveRequirements, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveTerms, resolveRequirements, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, resolveRequirements, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, null));
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms, resolveRequirements, null));
     }
 
     @Test
@@ -233,6 +243,68 @@ class UseCaseMcpToolsTest {
         assertTrue(thrown.getMessage().contains("req_add"));
     }
 
+    /** Issue #165: {@code uc_update} passes every given field through to the in-port. */
+    @Test
+    void updatePassesAllGivenFieldsThroughToTheInPort() {
+        String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger",
+                "New precondition", "New postcondition", List.of("2a. abort"),
+                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null);
+
+        assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
+        assertEquals("New title", stub.lastUpdateTitle);
+        assertEquals("New goal", stub.lastUpdateGoal);
+        assertEquals("New scope", stub.lastUpdateScope);
+        assertEquals("New trigger", stub.lastUpdateTrigger);
+        assertEquals("New precondition", stub.lastUpdatePrecondition);
+        assertEquals("New postcondition", stub.lastUpdatePostcondition);
+        assertEquals(List.of("2a. abort"), stub.lastUpdateExtensions);
+        assertEquals(List.of(new UpdateUseCase.StepTextPatch(1, "corrected text")), stub.lastUpdateStepTextPatches);
+        assertTrue(rendered.contains("New title"), rendered);
+    }
+
+    /**
+     * An omitted field must reach {@link UpdateUseCase} as {@code null} - so the port (not this
+     * adapter) decides that "unchanged" means "leave the existing value".
+     */
+    @Test
+    void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null);
+
+        assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
+        assertEquals(null, stub.lastUpdateTitle);
+        assertEquals(null, stub.lastUpdateGoal);
+        assertEquals(null, stub.lastUpdateScope);
+        assertEquals(null, stub.lastUpdateTrigger);
+        assertEquals(null, stub.lastUpdatePrecondition);
+        assertEquals(null, stub.lastUpdatePostcondition);
+        assertEquals(null, stub.lastUpdateExtensions);
+        assertEquals(null, stub.lastUpdateStepTextPatches);
+    }
+
+    /** A blank string is treated as omitted, the same tolerance {@code uc_add} already applies. */
+    @Test
+    void updateTreatsABlankFieldAsOmitted() {
+        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null);
+
+        assertEquals(null, stub.lastUpdateTitle);
+    }
+
+    /**
+     * An unknown step position surfaces as a tool error, not a silent no-op - the didactic
+     * {@link StepPositionNotFoundException} message reaches the caller verbatim, the same way
+     * {@code uc_add}'s reference-resolution errors do.
+     */
+    @Test
+    void updatePropagatesAnUnknownStepPositionVerbatim() {
+        stub.updateFailure = new StepPositionNotFoundException(PROJECT, new UseCaseCode("UC1"), 99);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null,
+                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null));
+
+        assertTrue(thrown.getMessage().contains("99"), thrown.getMessage());
+    }
+
     private boolean readOnly(String methodName) {
         return Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .filter(m -> m.getName().equals(methodName))
@@ -243,13 +315,23 @@ class UseCaseMcpToolsTest {
                 .annotations().readOnlyHint();
     }
 
-    /** Structural stub implementing the three driving in-ports. */
-    private static final class Stub implements AddUseCase, ListUseCases, GetUseCase {
+    /** Structural stub implementing the four driving in-ports. */
+    private static final class Stub implements AddUseCase, ListUseCases, GetUseCase, UpdateUseCase {
 
         private AddUseCase.NewUseCase lastCommand;
         private RuntimeException addFailure;
         private List<UseCase> listResult = List.of();
         private Optional<UseCase> getResult = Optional.empty();
+        private UseCaseCode lastUpdatedUseCase;
+        private String lastUpdateTitle;
+        private String lastUpdateGoal;
+        private String lastUpdateScope;
+        private String lastUpdateTrigger;
+        private String lastUpdatePrecondition;
+        private String lastUpdatePostcondition;
+        private List<String> lastUpdateExtensions;
+        private List<StepTextPatch> lastUpdateStepTextPatches;
+        private RuntimeException updateFailure;
 
         @Override
         public UseCase add(ProjectId projectId, AddUseCase.NewUseCase command) {
@@ -282,6 +364,29 @@ class UseCaseMcpToolsTest {
         @Override
         public Optional<UseCase> get(ProjectId projectId, UseCaseCode code) {
             return getResult;
+        }
+
+        @Override
+        public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
+                String trigger, String precondition, String postcondition, List<String> extensions,
+                List<StepTextPatch> stepTextPatches) {
+            if (updateFailure != null) {
+                throw updateFailure;
+            }
+            lastUpdatedUseCase = code;
+            lastUpdateTitle = title;
+            lastUpdateGoal = goal;
+            lastUpdateScope = scope;
+            lastUpdateTrigger = trigger;
+            lastUpdatePrecondition = precondition;
+            lastUpdatePostcondition = postcondition;
+            lastUpdateExtensions = extensions;
+            lastUpdateStepTextPatches = stepTextPatches;
+            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+            return new UseCase(opaqueId("uc-1"), code, title != null ? title : "t",
+                    goal != null ? goal : "goal", scope, trigger, primaryActor, List.of(), precondition,
+                    postcondition, List.of(new Step(1, "do something", List.of())),
+                    extensions != null ? extensions : List.of());
         }
     }
 

@@ -88,7 +88,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
  *       RDF4J-free wiring as requirements).</li>
  *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
- *       an RDF-persisted use-case repository) - the three use-case tools, assembled through
+ *       an RDF-persisted use-case repository) - the four use-case tools, assembled through
  *       {@link KognioRdfUseCaseRepositoryFactory}. {@code uc_add}'s cross-BC label-to-identity
  *       resolution (issue #89, the use-cases analogue of requirements' #77) is two separate
  *       {@link KognioRdfRequirementLookup}/{@link KognioRdfActorLookup} beans over the same
@@ -336,7 +336,7 @@ public class ArknetMcpConfiguration {
             final UseCaseService service, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ProjectResolver projectResolver) {
         return new UseCaseMcpTools(
-                service, service, service, resolveTerms, resolveRequirements, projectResolver);
+                service, service, service, service, resolveTerms, resolveRequirements, projectResolver);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------

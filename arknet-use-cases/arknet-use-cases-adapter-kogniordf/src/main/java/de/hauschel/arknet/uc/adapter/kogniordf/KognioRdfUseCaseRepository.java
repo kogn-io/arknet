@@ -26,6 +26,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -39,6 +40,7 @@ import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
@@ -120,15 +122,18 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
- * transactional mechanics of that distinction - the in-transaction {@code contains} checks, the
- * SHACL gate, the commit-conflict translation (issue #144) - live in the shared {@link WriteFunnel}
- * (ADR-013), not here: {@link #create} only builds the candidate graph and rejects an existing
- * subject with {@link ResourceAlreadyExistsException} or a colliding business code with
- * {@link DuplicateUseCaseCodeException}; {@link #update} rejects a missing subject with
- * {@link UseCaseNotFoundException}. Either write otherwise replaces the subject and all its
- * derived step resources wholesale - the {@code deleteExisting} query below stays this adapter's
- * own business, since {@link WriteFunnel#update} only knows a generic {@code body}, not the
- * step-following delete a use case's opaque steps need.</p>
+ * transactional mechanics of that distinction - the in-transaction {@code contains}/head checks,
+ * the SHACL gate, the commit-conflict translation (issue #144) - live in the shared
+ * {@link WriteFunnel} (ADR-013), not here: {@link #create} only builds the candidate graph and
+ * rejects an existing subject with {@link ResourceAlreadyExistsException} or a colliding business
+ * code with {@link DuplicateUseCaseCodeException}; {@link #compareAndUpdate} rejects a missing
+ * subject with {@link UseCaseNotFoundException} and a stale {@code expectedHead} with
+ * {@link UseCaseConcurrentlyModifiedException} (issue #165, mirroring
+ * {@code KognioRdfRequirementRepository}). There is no unconditional update: every correction to
+ * an already-created use case goes through the compare-and-set guard. Either write otherwise
+ * replaces the subject and all its derived step resources wholesale - the {@code deleteExisting}
+ * query below stays this adapter's own business, since the funnel's write methods only know a
+ * generic {@code body}, not the step-following delete a use case's opaque steps need.</p>
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write
  * transaction opens, {@link WriteConstraintViolationException} on a violation, nothing
@@ -178,9 +183,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *                          {@code null}); the use-case root's own identity is minted above
      *                          the store and arrives on the {@link UseCase}
      * @param funnel            the shared write funnel (ADR-013) both {@link #create} and
-     *                          {@link #update} run through - SHACL gate, dataset acquisition,
-     *                          the in-transaction existence checks and the commit-conflict
-     *                          translation (must not be {@code null})
+     *                          {@link #compareAndUpdate} run through - SHACL gate, dataset
+     *                          acquisition, the in-transaction existence/head checks and the
+     *                          commit-conflict translation (must not be {@code null})
      */
     KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
@@ -190,15 +195,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     @Override
     public void create(ProjectId projectId, UseCase useCase) {
-        write(projectId, useCase, true);
+        write(projectId, useCase, true, null);
     }
 
     @Override
-    public void update(ProjectId projectId, UseCase useCase) {
-        write(projectId, useCase, false);
+    public void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated) {
+        write(projectId, updated, false, expectedHead);
     }
 
-    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent) {
+    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, String expectedHead) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
@@ -299,9 +304,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     () -> new DuplicateUseCaseCodeException(projectId, useCase.code()),
                     tx -> tx.add(graphIri, graph));
         } else {
-            funnel.update(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
-                    graph, assertedContext,
+            funnel.compareAndUpdate(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
+                    expectedHead, graph, assertedContext,
                     () -> new UseCaseNotFoundException(projectId, useCase.code()),
+                    () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
                     tx -> {
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
@@ -343,10 +349,62 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         }
     }
 
+    /**
+     * Reads a use case's current state together with its concurrency token (the
+     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014) - the read
+     * side of the read-modify-write round trip {@link #compareAndUpdate} guards the write side
+     * of. Mirrors {@code KognioRdfRequirementRepository#findCurrentByCode}: reuses the same
+     * subject lookup {@link #findByCode} does, then pairs the scalar/head read in one query call
+     * via {@link #readCurrentBySubject} - one snapshot for the core fields and the head, exactly
+     * as {@link #readBySubject} reads the core fields alone.
+     */
+    @Override
+    public Optional<UseCaseRepository.CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
+                + SparqlTerms.escape(code.value()) + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
+            if (head.isEmpty()) {
+                return Optional.empty();
+            }
+            return readCurrentBySubject(handle, iriOf(head.get(), "s").getIRIString(), code);
+        }
+    }
+
     private record UseCaseRow(String subjectIri, UseCaseCode code) {
     }
 
     // ---- reading -----------------------------------------------------------------------
+
+    /**
+     * Builds the mandatory/optional scalar triple patterns (inside {@code GRAPH <USE_CASES_GRAPH>})
+     * shared by {@link #readBySubject} and {@link #readCurrentBySubject}, so both single-use-case
+     * read paths query the core fields identically - drift between two near-identical read paths
+     * was a real bug more than once in the sibling requirements adapter (issues #80/#81).
+     *
+     * <p>{@code FILTER(isIRI(?primaryActor))} mirrors {@link #readSupportingActors}/
+     * {@link #readMainStepRealises}: {@code arkreq:primaryActor} carries no {@code sh:nodeKind}
+     * constraint, so a store-first (ADR-005) edge may legally target a blank node, which
+     * {@link ResourceId} cannot represent. Unlike the other two properties, {@code primaryActor}
+     * is part of this required (non-{@code OPTIONAL}) triple pattern, so filtering it out here
+     * makes the whole scalar query yield no row for such a use case - the caller then treats it
+     * as "not found", silently skipping only this one use case rather than crashing the whole
+     * result list.</p>
+     */
+    private static String scalarWhereClause(String subject) {
+        return subject + " a <" + USE_CASE_TYPE + "> ; "
+                + "<" + TITLE_PROPERTY + "> ?title ; "
+                + "<" + USE_CASE_GOAL_PROPERTY + "> ?goal ; "
+                + "<" + PRIMARY_ACTOR_PROPERTY + "> ?primaryActor . "
+                + "FILTER(isIRI(?primaryActor)) "
+                + "OPTIONAL { " + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?scope } "
+                + "OPTIONAL { " + subject + " <" + TRIGGER_PROPERTY + "> ?trigger } "
+                + "OPTIONAL { " + subject + " <" + PRECONDITION_PROPERTY + "> ?precondition } "
+                + "OPTIONAL { " + subject + " <" + POSTCONDITION_PROPERTY + "> ?postcondition } ";
+    }
 
     private Optional<UseCase> readBySubject(DatasetHandle handle, String subjectIriString, UseCaseCode code) {
         if (!SparqlTerms.isValidIriReference(subjectIriString)) {
@@ -355,32 +413,60 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        // FILTER(isIRI(?primaryActor)) mirrors readSupportingActors/readMainStepRealises:
-        // arkreq:primaryActor carries no sh:nodeKind constraint, so a store-first (ADR-005) edge
-        // may legally target a blank node, which ResourceId cannot represent. Unlike the other
-        // two properties, primaryActor is part of this required (non-OPTIONAL) triple pattern, so
-        // filtering it out here makes the whole scalar query yield no row for such a use case -
-        // readBySubject then returns Optional.empty() and the caller (findByCode/findAll) treats
-        // it as "not found", silently skipping only this one use case rather than crashing the
-        // caller's entire result list.
         String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryActor "
-                + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
-                + subject + " a <" + USE_CASE_TYPE + "> ; "
-                + "<" + TITLE_PROPERTY + "> ?title ; "
-                + "<" + USE_CASE_GOAL_PROPERTY + "> ?goal ; "
-                + "<" + PRIMARY_ACTOR_PROPERTY + "> ?primaryActor . "
-                + "FILTER(isIRI(?primaryActor)) "
-                + "OPTIONAL { " + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?scope } "
-                + "OPTIONAL { " + subject + " <" + TRIGGER_PROPERTY + "> ?trigger } "
-                + "OPTIONAL { " + subject + " <" + PRECONDITION_PROPERTY + "> ?precondition } "
-                + "OPTIONAL { " + subject + " <" + POSTCONDITION_PROPERTY + "> ?postcondition } } }";
+                + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} }";
 
-        Optional<BindingSet> head = handle.sparqlQuery().select(scalarQuery).findFirst();
-        if (head.isEmpty()) {
+        Optional<BindingSet> row = handle.sparqlQuery().select(scalarQuery).findFirst();
+        if (row.isEmpty()) {
             return Optional.empty();
         }
-        BindingSet row = head.get();
+        return buildUseCase(handle, subjectIriString, code, subject, row.get());
+    }
 
+    /**
+     * Reads a use case's current state together with its concurrency token: the core scalar
+     * fields and the head itself come from one query call - one snapshot, the load-bearing
+     * guarantee, mirroring {@code KognioRdfRequirementRepository#findCurrentByCode}.
+     * {@code supportingActors}/{@code steps}/{@code extensions} still come from later, independent
+     * reads inside {@link #buildUseCase} - safe precisely because a later read can only be
+     * fresher, never staler, than the head: a funnel write landing in between moves the head, so
+     * the subsequent {@link #compareAndUpdate} then fails its comparison and the caller re-reads
+     * instead of overwriting a state it never actually saw.
+     */
+    private Optional<UseCaseRepository.CurrentUseCase> readCurrentBySubject(
+            DatasetHandle handle, String subjectIriString, UseCaseCode code) {
+        if (!SparqlTerms.isValidIriReference(subjectIriString)) {
+            return Optional.empty();
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+        String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryActor ?head "
+                + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} "
+                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+
+        Optional<BindingSet> row = handle.sparqlQuery().select(scalarQuery).findFirst();
+        if (row.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<UseCase> useCase = buildUseCase(handle, subjectIriString, code, subject, row.get());
+        if (useCase.isEmpty()) {
+            return Optional.empty();
+        }
+        String headIri = row.get().getValue("head")
+                .filter(IRI.class::isInstance)
+                .map(value -> ((IRI) value).getIRIString())
+                .orElse(null);
+        return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), headIri));
+    }
+
+    /**
+     * Builds a {@link UseCase} from {@code row} (the projection of {@link #scalarWhereClause})
+     * plus the follow-up reads {@link #readSupportingActors}/{@link #readMainSteps}/
+     * {@link #readExtensions} - shared by {@link #readBySubject} and
+     * {@link #readCurrentBySubject} so both build a {@link UseCase} identically.
+     */
+    private Optional<UseCase> buildUseCase(
+            DatasetHandle handle, String subjectIriString, UseCaseCode code, String subject, BindingSet row) {
         List<ActorRef> supportingActors = readSupportingActors(handle, subject);
         List<Step> steps = readMainSteps(handle, subject);
         if (steps.isEmpty()) {
