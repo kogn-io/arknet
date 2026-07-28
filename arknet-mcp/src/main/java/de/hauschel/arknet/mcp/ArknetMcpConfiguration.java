@@ -17,7 +17,12 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.kernel.WorkspaceResolver;
-import de.hauschel.arknet.mcp.store.HtmlReportRenderer;
+import de.hauschel.arknet.mcp.report.BoundedContextCards;
+import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
+import de.hauschel.arknet.mcp.report.ModelViews;
+import de.hauschel.arknet.mcp.report.RequirementCards;
+import de.hauschel.arknet.mcp.report.TermCards;
+import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
@@ -363,28 +368,48 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The two generic, read-only store tools ({@code store_overview}, {@code resource_get}).
-     * They read the workspace dataset through {@link StoreReader} - a single generic
-     * {@code SELECT ?s ?p ?o} - and render domain-agnostic views, so they work for every
-     * bounded context (requirements, ubiquitous-language, ...) without type-to-tool mapping:
-     * every resource renders regardless of BC. One presentation nuance is bounded, not
-     * structural: {@link HtmlReportRenderer} and {@code StoreResource} hardcode the
-     * requirements-BC's {@code arkreq:status}/{@code arkreq:priority} predicates for "pill"
-     * styling (issue #111) - it affects only how those two predicates are styled, not which
-     * resources appear. The HTML report is written into {@code arknet.report.dir} (default:
-     * the launched project root / working directory). {@code arknet.report.host-dir} is the
+     * Assembles the HTML report's per-bounded-context sections by borrowing all four hexagons'
+     * read In-Ports - the same In-Adapter-as-gateway role ADR-008 grants {@code uc_get} when it
+     * borrows {@link ResolveTerms}, here for the report rather than for a tool response. A use
+     * case reconstructed from raw triples is not readable as a use case (its flow is a set of
+     * opaque {@code arkreq:Step} subjects ordered by an {@code arkreq:position} literal), so the
+     * report asks the context that wrote it instead of re-deriving the answer here. The generic
+     * snapshot still backs every card's raw triples and catches whatever no context claims -
+     * see the ADR-006 addendum.
+     */
+    @Bean
+    ModelViews modelViews(
+            final UseCaseService useCases, final RequirementService requirements, final TermService terms,
+            final BoundedContextService boundedContexts, final ResolveTerms resolveTerms,
+            final ResolveRequirements resolveRequirements) {
+        return new ModelViews(
+                new UseCaseCards(useCases, resolveTerms, resolveRequirements),
+                new RequirementCards(requirements, resolveTerms),
+                new TermCards(terms),
+                new BoundedContextCards(boundedContexts, resolveTerms));
+    }
+
+    /**
+     * The two read-only store tools ({@code store_overview}, {@code resource_get}). Both read
+     * the workspace dataset through {@link StoreReader} - a single generic
+     * {@code SELECT ?s ?p ?o} - so no bounded context needs a read tool of its own. The agent's
+     * return value stays that domain-agnostic digest; the human-facing HTML additionally groups
+     * the model per bounded context through {@link ModelViews}, with the generic snapshot as its
+     * safety net. The HTML report is written into {@code arknet.report.dir} (default: the
+     * launched project root / working directory). {@code arknet.report.host-dir} is the
      * host-reachable equivalent of that directory when it is a container-internal mount point
      * the calling agent cannot reach directly (issue #160); unset on the non-containerized path,
      * where {@code fallbackReportDir} is already host-reachable.
      */
     @Bean
     StoreReportTools storeReportTools(
-            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaceResolver,
+            final StoreReader storeReader, final Prefixes prefixes, final ModelViews modelViews,
+            final WorkspaceResolver workspaceResolver,
             @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
-                storeReader, prefixes, new HtmlReportRenderer(prefixes), workspaceResolver, fallbackReportDir,
-                reportHostDir);
+                storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, workspaceResolver,
+                fallbackReportDir, reportHostDir);
     }
 
     /**

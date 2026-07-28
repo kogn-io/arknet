@@ -16,19 +16,29 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
+import de.hauschel.arknet.mcp.report.ModelViews;
 
 /**
- * Generic, read-only store tools exposed over MCP: {@code store_overview} and
- * {@code resource_get}. Both are fed by one generic {@code SELECT ?s ?p ?o}
- * ({@link StoreReader}) and render domain-agnostic views, so they work for every bounded
- * context (requirements, ubiquitous-language, ...) without any type-to-tool mapping.
+ * Read-only store tools exposed over MCP: {@code store_overview} and {@code resource_get}.
+ * Both are fed by one generic {@code SELECT ?s ?p ?o} ({@link StoreReader}), so no bounded
+ * context needs a read tool of its own and a new one appears without a type-to-tool mapping.
  *
- * <p>This is an in-adapter of the composition root, not of a bounded context: the store
- * report has no domain of its own, it is a generic technical read path over whatever the
- * BCs wrote. The rendering, CURIE resolution and query execution live in isolated,
- * unit-testable collaborators ({@link StoreReader}, {@link DigestRenderer},
- * {@link ResourceRenderer}, {@link HtmlReportRenderer}, {@link Prefixes}); this class only
- * orchestrates them and declares the {@code @McpTool} surface.</p>
+ * <p><strong>Two audiences, two shapes.</strong> The tool's return value - what the agent
+ * reads - stays the domain-agnostic text digest built from that one query. The HTML report -
+ * what a human reads - is assembled per bounded context through their read in-ports
+ * ({@link ModelViews}), because a use case rendered as its raw triples is not a use case any
+ * more: its flow is a set of opaque step subjects ordered by a position literal. The generic
+ * snapshot remains the report's safety net for everything no context claims. See the ADR-006
+ * addendum.</p>
+ *
+ * <p>This is an in-adapter of the composition root, not of a bounded context: the store report
+ * has no domain of its own. Borrowing four contexts' read in-ports for display is the same
+ * gateway role ADR-008 grants a driving adapter. The rendering, CURIE resolution and query
+ * execution live in isolated, unit-testable collaborators ({@link StoreReader},
+ * {@link DigestRenderer}, {@link ResourceRenderer}, {@link HtmlReportRenderer},
+ * {@link ModelViews}, {@link Prefixes}); this class only orchestrates them and declares the
+ * {@code @McpTool} surface.</p>
  */
 public final class StoreReportTools {
 
@@ -36,6 +46,7 @@ public final class StoreReportTools {
 
     private final StoreReader storeReader;
     private final HtmlReportRenderer htmlRenderer;
+    private final ModelViews modelViews;
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
     private final HandleResolver handleResolver;
@@ -47,6 +58,9 @@ public final class StoreReportTools {
      * @param storeReader       the generic store read path
      * @param prefixes          the CURIE / IRI resolver
      * @param htmlRenderer      the self-contained HTML report renderer
+     * @param modelViews        assembles the report's per-bounded-context sections; never fails the
+     *                          tool - a context whose read path throws is reported as a warning in
+     *                          the HTML and its resources fall back to the generic raw view
      * @param workspaces        resolves each call's default workspace from its origin directory (an
      *                          explicit {@code workspace} tool argument still overrides it)
      * @param fallbackReportDir the directory a workspace-scoped subdirectory is created under when a
@@ -63,12 +77,14 @@ public final class StoreReportTools {
             final StoreReader storeReader,
             final Prefixes prefixes,
             final HtmlReportRenderer htmlRenderer,
+            final ModelViews modelViews,
             final WorkspaceResolver workspaces,
             final Path fallbackReportDir,
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         Objects.requireNonNull(prefixes, "prefixes");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
+        this.modelViews = Objects.requireNonNull(modelViews, "modelViews");
         this.digestRenderer = new DigestRenderer(prefixes);
         this.resourceRenderer = new ResourceRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
@@ -78,10 +94,12 @@ public final class StoreReportTools {
     }
 
     @McpTool(name = "store_overview",
-            description = "Domain-agnostic overview of everything in the workspace store: a compact text"
+            description = "Overview of everything in the workspace store: a compact, domain-agnostic text"
                     + " digest (resource/triple/type counts, prefix legend, one line per resource with a"
                     + " '-> resource_get(...)' drill-down, integrity hint) plus a self-contained HTML report"
-                    + " written to disk (its path is returned). Works for every bounded context.",
+                    + " for humans, written to disk (its path is returned). The HTML groups the model by"
+                    + " bounded context - use cases with their flow, requirements with their acceptance"
+                    + " criteria, glossary, bounded contexts - and keeps a raw section for the rest.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeOverview(
             final McpSyncRequestContext context,
@@ -94,7 +112,7 @@ public final class StoreReportTools {
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(workspaceId);
         final String digest = digestRenderer.render(workspaceId, snapshot);
-        final String html = htmlRenderer.render(workspaceId, snapshot, digest);
+        final String html = htmlRenderer.render(workspaceId, snapshot, digest, modelViews.of(workspaceId));
         return digest + "\n" + writeReportLine(html, reportDirFor(originDir, workspaceId), workspaceId) + "\n";
     }
 
