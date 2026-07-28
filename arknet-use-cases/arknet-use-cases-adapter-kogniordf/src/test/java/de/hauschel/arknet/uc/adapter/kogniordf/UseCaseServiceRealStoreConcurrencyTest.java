@@ -9,8 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -56,7 +55,7 @@ import de.hauschel.arknet.uc.domain.UseCase;
 
 /**
  * Regression test for the second interleaving of issue #144, reproduced against a real
- * RDF4J-backed store (in-memory {@code SailRepository}) with real threads - unlike {@code
+ * RDF4J-backed store (on-disk {@code NativeStore}) with real threads - unlike {@code
  * UseCaseServiceConcurrencyTest}, which reproduces the first interleaving ("a concurrent caller
  * commits its whole write before this one's transaction even begins") with a repository decorator
  * and no real transactions at all.
@@ -68,6 +67,11 @@ import de.hauschel.arknet.uc.domain.UseCase;
  * de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException} the synchronous guard throws, so
  * {@code CodeAssignment}'s retry (in {@link UseCaseService#add}) catches this interleaving exactly
  * like the first one: both callers end up with distinct codes, neither sees a failure.</p>
+ *
+ * <p>That includes the sail: the store is built {@code PERSISTENT}, the one the daemon runs on.
+ * Commit-time conflict detection belongs to each sail, so an {@code IN_MEMORY} run would prove the
+ * invariant for a store that holds no user data in production (issue #180);
+ * {@code BoundedContextServiceRealStoreConcurrencyTest} spells the reasoning out.</p>
  *
  * <p><strong>Timeout.</strong> {@link CyclicBarrier#await()}/{@link CountDownLatch#await()} block
  * indefinitely by default; a future regression that stops one caller from ever reaching its
@@ -92,13 +96,20 @@ class UseCaseServiceRealStoreConcurrencyTest {
         throw new UnsupportedOperationException("not exercised by this test");
     };
 
+    /**
+     * The {@code NativeStore}'s on-disk home, managed by JUnit rather than by
+     * {@code Files.createTempDirectory}, which left its directories behind - empty and harmless
+     * while the store was in-memory, but a persistent store fills them. Deleted after
+     * {@link #tearDown()} has shut the store down.
+     */
+    @TempDir
+    Path storageRoot;
+
     private DatasetLifecycleRdf4j realLifecycle;
 
     @BeforeEach
-    void setUp() throws IOException {
-        Path tmp = Files.createTempDirectory("arknet-uc-real-race");
-        realLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+    void setUp() {
+        realLifecycle = new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageRoot);
     }
 
     @AfterEach
