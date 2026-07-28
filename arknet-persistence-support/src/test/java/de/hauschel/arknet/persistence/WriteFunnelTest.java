@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -135,6 +136,129 @@ class WriteFunnelTest {
 
         assertSame(signal, thrown);
         assertTrue(fixture.handle.closed, "handle must be released even on a conflict");
+    }
+
+    /**
+     * Issue #181: a caller guarding a second uniqueness rule of its own inside the body (the
+     * project registry's anchor uniqueness) may name the signal a lost commit surfaces as, instead
+     * of having {@code duplicateCode} imposed on it - and it sees the store's own exception, so it
+     * can decide by more than the mere fact of having lost.
+     */
+    @Test
+    void createLetsTheCallerTranslateALostCommitItself() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+        RuntimeException ownSignal = new RuntimeException("the anchor was taken");
+        List<RuntimeException> translated = new ArrayList<>();
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        conflict -> {
+                            translated.add(conflict);
+                            return ownSignal;
+                        },
+                        tx -> { }));
+
+        assertSame(ownSignal, thrown, "the caller's own signal must reach the caller");
+        assertEquals(List.of(storeConflict), translated, "the translator must see the store's exception");
+        assertTrue(fixture.handle.closed, "handle must be released even on a conflict");
+    }
+
+    /**
+     * A translator can fail itself - {@code KognioRdfProjectRegistry#attributeLostRegistration}
+     * re-reads the store after the rollback, and that read can throw. The translator's own
+     * exception must be what reaches the caller (it is the more actionable diagnosis: it says what
+     * went wrong attributing the loss, where the store's own conflict says only "somebody else
+     * committed first"), and the original store conflict must not simply vanish - it is attached
+     * as {@link Throwable#getSuppressed()}, so a caller who wants to know a race happened still
+     * can.
+     */
+    @Test
+    void createLetsTheAttributionFailureThroughWithTheLostCommitSuppressed() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+        RuntimeException attributionFailure = new IllegalStateException("unrecognised anchor type IRI");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        conflict -> {
+                            throw attributionFailure;
+                        },
+                        tx -> { }));
+
+        assertSame(attributionFailure, thrown, "the translator's own failure must reach the caller");
+        assertEquals(1, thrown.getSuppressed().length);
+        assertSame(storeConflict, thrown.getSuppressed()[0],
+                "the original store conflict must survive as suppressed, not vanish");
+    }
+
+    /**
+     * A translator that simply rethrows the conflict it was handed - instead of returning it, the
+     * documented "leave it untranslated" contract - must not fail on
+     * {@code Throwable#addSuppressed(this)} (which throws {@link IllegalArgumentException} for a
+     * self-reference); the conflict must still reach the caller cleanly.
+     */
+    @Test
+    void createDoesNotFailWhenTheTranslatorRethrowsTheSameConflictInstance() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        conflict -> {
+                            throw conflict;
+                        },
+                        tx -> { }));
+
+        assertSame(storeConflict, thrown);
+        assertEquals(0, thrown.getSuppressed().length,
+                "a translator rethrowing its own input must not self-suppress");
+    }
+
+    /**
+     * The translator's escape hatch: returning the store's exception unchanged leaves the loss
+     * untranslated - what {@code KognioRdfProjectRegistry} does when none of its uniqueness rules
+     * explains the loss, rather than claiming a collision that did not happen. A {@code null}
+     * result is treated the same way instead of replacing the conflict with a {@code
+     * NullPointerException} that would hide it.
+     */
+    @Test
+    void createLeavesALostCommitUntranslatedWhenTheCallerReturnsItOrNothing() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+
+        Fixture passingThrough = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+        assertSame(storeConflict, assertThrows(RuntimeException.class,
+                () -> passingThrough.funnel().create(passingThrough.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        UnaryOperator.identity(), tx -> { })));
+
+        Fixture returningNull = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+        assertSame(storeConflict, assertThrows(RuntimeException.class,
+                () -> returningNull.funnel().create(returningNull.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        conflict -> null, tx -> { })));
+    }
+
+    /**
+     * The synchronous code check and a lost commit are two different observations, and only the
+     * latter is the translator's business: a caller that translates lost commits into its own
+     * signal must still see {@code duplicateCode} when the code was found taken before any write.
+     */
+    @Test
+    void createStillRejectsATakenCodeWithDuplicateCodeWhenATranslatorIsGiven() {
+        Fixture fixture = new Fixture(List.of(false, true));
+        RuntimeException duplicateCode = new RuntimeException("duplicate code");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, () -> duplicateCode,
+                        conflict -> new RuntimeException("must not be reached"), Signals.noBody()));
+
+        assertSame(duplicateCode, thrown);
+        assertFalse(fixture.bodyRan);
     }
 
     /**
