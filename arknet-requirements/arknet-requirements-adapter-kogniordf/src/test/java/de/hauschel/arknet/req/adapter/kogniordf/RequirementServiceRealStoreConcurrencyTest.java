@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -211,24 +213,55 @@ class RequirementServiceRealStoreConcurrencyTest {
      * racers' results (business code plus resource IRI), each result's current
      * {@code arkprov:head} read fresh from the store after the race (ADR-014's concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
-     * the loser's exception if any, and the full timestamped timeline of guard/barrier/latch/commit
-     * events. Built lazily by an assertion's message {@link Supplier}, so it costs nothing when the
-     * race resolves as expected.
+     * the loser's exception if any, the system load at failure time, and the full timestamped
+     * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message
+     * {@link Supplier}, so it costs nothing when the race resolves as expected.
+     *
+     * <p><strong>Must never throw.</strong> This runs inside an already-failing assertion; a
+     * second exception from the diagnostics themselves (the store in a bad state after the race,
+     * the lifecycle already shut down, a lock held, a timeout interrupt) would replace the
+     * assertion's actual message and leave the next sighting with nothing evaluable again - worse
+     * than before this class was instrumented, because the failure would then look like a broken
+     * diagnostic instead of carrying #171's signature. Everything already appended to {@code report}
+     * survives a failure below it; {@link #headOf} additionally never throws on its own.</p>
      */
     private String diagnosticReport(List<String> timeline, Requirement winner, Requirement loser,
             Throwable failure) {
         StringBuilder report = new StringBuilder();
-        report.append("issue #171 diagnostics").append(System.lineSeparator());
-        report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
-        report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
-        report.append("  racer-B (loser) result: ").append(describe(loser)).append(System.lineSeparator());
-        report.append("  racer-B (loser) arkprov:head: ").append(headOf(loser)).append(System.lineSeparator());
-        report.append("  racer-B (loser) failure: ").append(failure == null
-                ? "none" : failure.getClass().getName() + ": " + failure.getMessage())
-                .append(System.lineSeparator());
-        report.append("  timeline:").append(System.lineSeparator());
-        timeline.forEach(event -> report.append("    ").append(event).append(System.lineSeparator()));
+        try {
+            report.append("issue #171 diagnostics").append(System.lineSeparator());
+            report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
+            report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
+            report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
+            report.append("  racer-B (loser) result: ").append(describe(loser)).append(System.lineSeparator());
+            report.append("  racer-B (loser) arkprov:head: ").append(headOf(loser)).append(System.lineSeparator());
+            report.append("  racer-B (loser) failure: ").append(failure == null
+                    ? "none" : failure.getClass().getName() + ": " + failure.getMessage())
+                    .append(System.lineSeparator());
+            report.append("  timeline:").append(System.lineSeparator());
+            timeline.forEach(event -> report.append("    ").append(event).append(System.lineSeparator()));
+        } catch (Throwable t) {
+            report.append("  [diagnostic report itself failed: ").append(t.getClass().getName())
+                    .append(": ").append(t.getMessage()).append(']').append(System.lineSeparator());
+            report.append("  timeline so far:").append(System.lineSeparator());
+            timeline.forEach(event -> report.append("    ").append(event).append(System.lineSeparator()));
+        }
         return report.toString();
+    }
+
+    /**
+     * Available processors, {@code systemLoadAverage} and this thread's interrupt status at the
+     * moment the report is built - both real #171 sightings were load-dependent, and without this
+     * line the load has to be reconstructed after the fact from unrelated sources (issue #171
+     * follow-up).
+     */
+    private static String systemDiagnostics() {
+        OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
+        double loadAverage = osBean.getSystemLoadAverage();
+        String loadAverageText = loadAverage < 0 ? "n/a" : String.format("%.2f", loadAverage);
+        return "availableProcessors=" + Runtime.getRuntime().availableProcessors()
+                + ", systemLoadAverage=" + loadAverageText
+                + ", threadInterrupted=" + Thread.currentThread().isInterrupted();
     }
 
     private static String describe(Requirement requirement) {
@@ -244,10 +277,20 @@ class RequirementServiceRealStoreConcurrencyTest {
      * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
+     *
+     * <p>Never throws (issue #171 follow-up): a {@code @Timeout} interrupt landing mid-race can
+     * leave the sail in a bad state for a follow-up read, so both the dataset acquisition and the
+     * query run inside one {@code try}/{@code catch(Throwable)} - a failure here becomes part of
+     * the diagnostic text instead of replacing it. The interrupt status is recorded rather than
+     * silently dropped, since it is itself a diagnostic signal (a timed-out racer thread reading
+     * its own head after having been interrupted).</p>
      */
     private String headOf(Requirement requirement) {
         if (requirement == null) {
             return "n/a (no result)";
+        }
+        if (Thread.currentThread().isInterrupted()) {
+            return "skipped (thread interrupted before this read)";
         }
         String subjectIriString = requirement.id().value().value();
         String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
@@ -259,6 +302,9 @@ class RequirementServiceRealStoreConcurrencyTest {
                     .filter(IRI.class::isInstance)
                     .map(value -> ((IRI) value).getIRIString());
             return head.orElse("none (no revision recorded through the funnel)");
+        } catch (Throwable t) {
+            String interruptNote = Thread.currentThread().isInterrupted() ? ", thread interrupted" : "";
+            return "unavailable: " + t.getClass().getName() + ": " + t.getMessage() + interruptNote;
         }
     }
 
