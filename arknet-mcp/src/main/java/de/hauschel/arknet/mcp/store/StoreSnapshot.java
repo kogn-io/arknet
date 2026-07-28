@@ -119,8 +119,13 @@ public final class StoreSnapshot {
         return index;
     }
 
-    /** The alphabetically smallest {@code rdf:type} IRI, or {@link #UNTYPED} if untyped. */
-    static String primaryType(StoreResource resource) {
+    /**
+     * The alphabetically smallest {@code rdf:type} IRI, or {@link #UNTYPED} if untyped.
+     *
+     * @param resource the resource to classify
+     * @return the primary type IRI used to group and label the resource
+     */
+    public static String primaryType(StoreResource resource) {
         return resource.types().stream().min(Comparator.naturalOrder()).orElse(UNTYPED);
     }
 
