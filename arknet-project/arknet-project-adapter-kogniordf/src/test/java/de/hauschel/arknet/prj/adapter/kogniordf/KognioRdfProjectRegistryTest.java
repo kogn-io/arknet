@@ -8,8 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +16,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
@@ -52,14 +51,21 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  */
 class KognioRdfProjectRegistryTest {
 
+    /**
+     * Where the store would persist to. It does not - this test runs {@code IN_MEMORY} - but the
+     * lifecycle takes a storage root regardless, and letting JUnit own it keeps the directory from
+     * outliving the test the way {@code Files.createTempDirectory} let it (issue #180).
+     */
+    @TempDir
+    Path storageRoot;
+
     private DatasetLifecycleRdf4j lifecycle;
     private KognioRdfProjectRegistry registry;
 
     @BeforeEach
-    void setUp() throws IOException {
-        Path tmp = Files.createTempDirectory("arknet-prj-it");
+    void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfProjectRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);

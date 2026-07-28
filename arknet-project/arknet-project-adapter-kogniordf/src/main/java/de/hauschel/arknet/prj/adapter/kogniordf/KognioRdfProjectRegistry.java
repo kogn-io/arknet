@@ -83,6 +83,15 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  * ask {@code contains} about <em>before</em> the write commits, which a randomly minted anchor
  * identity could never offer.</p>
  *
+ * <p><strong>Two uniqueness rules, so a lost race needs attributing (issue #181).</strong> Both
+ * guards above pass when two registrations genuinely overlap - neither transaction sees the other's
+ * uncommitted write under {@code SERIALIZABLE} - and the loser is rejected by the store at commit
+ * time, which reveals only that it lost, not what it collided with. Unlike the four model contexts,
+ * this one has two rules a write can break (label, anchor) and no {@code CodeAssignment}-style
+ * retry that would absorb the signal, so {@link #attributeLostRegistration} re-reads the committed
+ * state and names the actual collision. The shared {@link WriteFunnel} takes that decision as a
+ * parameter for exactly this reason.</p>
+ *
  * <p><strong>Replace-by-identity leaves no orphaned anchor nodes.</strong> {@link #writeBody}, on
  * an update, first deletes the project subject's own triples <em>and</em> the triples of every
  * anchor node the project held <em>before</em> the update (read via {@link #deleteProjectAndItsAnchors}
@@ -155,7 +164,60 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                     candidate, null,
                     () -> new ResourceAlreadyExistsException(project.id()),
                     () -> new DuplicateProjectLabelException(project.label()),
+                    conflict -> attributeLostRegistration(project, conflict),
                     tx -> writeBody(tx, graphIri, projectSubject, project, candidate, false));
+        }
+    }
+
+    /**
+     * Names what a registration that lost a commit race actually collided with (issue #181).
+     *
+     * <p>{@link WriteFunnel#create}'s own conflict translation cannot do this: a lost commit tells
+     * it only that somebody wrote first, and this context guards <em>two</em> uniqueness rules, not
+     * one - the label via the funnel's {@code code} parameter, the anchor via
+     * {@link #checkAnchorUniqueness} inside the body (ADR-016 decision 4). Reporting every lost
+     * race as a label collision would tell a caller who lost on an <em>anchor</em> that its label
+     * is taken, when that label may never have been used. The four model contexts are not exposed
+     * to this: a business code is the only thing that can collide there, and {@code CodeAssignment}
+     * heals the signal before any caller sees it - {@link #register} has no such retry (there is no
+     * {@code PRJ-N} code to recompute), so what this method returns is what the caller reads.</p>
+     *
+     * <p>Runs after the write transaction was rolled back, so these reads see committed state
+     * only - the winner's write included. The anchor is checked before the label: it is the rule
+     * whose violation crosses the project boundary, so when both collide it is the one worth
+     * naming. Attributing nothing, the store's own conflict is returned unchanged rather than
+     * dressed up as a collision that did not happen. That residual case is not what today's store
+     * does to two unrelated registrations - {@code ProjectRegistryRealStoreConcurrencyTest} shows
+     * those overlap without either losing - but the fallback stays: which writes a store finds in
+     * conflict is a property of the store behind the port, and it is swappable (ADR-001).</p>
+     */
+    private RuntimeException attributeLostRegistration(Project project, RuntimeException conflict) {
+        for (Anchor anchor : project.anchors()) {
+            Optional<ProjectId> owner = findByAnchor(anchor).map(Project::id);
+            if (owner.isPresent() && !owner.get().equals(project.id())) {
+                return new AnchorAlreadyRegisteredException(anchor, owner.get());
+            }
+        }
+        if (labelHeldByAnotherProject(project)) {
+            return new DuplicateProjectLabelException(project.label());
+        }
+        return conflict;
+    }
+
+    /**
+     * Whether {@code project}'s label is {@code dcterms:identifier} of some <em>other</em>
+     * registered project - the label half of {@link #attributeLostRegistration}'s attribution.
+     * Excludes the project's own subject so a rewrite of an already-registered project is not
+     * mistaken for a collision with itself.
+     */
+    private boolean labelHeldByAnotherProject(Project project) {
+        String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + "?other <" + VocabDct.IDENTIFIER.getIRIString() + "> \""
+                + SparqlTerms.escape(project.label()) + "\" "
+                + "FILTER (?other != " + SparqlTerms.iriRef(ProjectGraphs.projectIri(project.id())) + ") } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(SYSTEM_DATASET)) {
+            return handle.sparqlQuery().ask(query);
         }
     }
 
