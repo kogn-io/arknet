@@ -15,7 +15,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
@@ -27,7 +27,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class BoundedContextCardsTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("bc-cards-test");
+    private static final ProjectId WORKSPACE = new ProjectId("bc-cards-test");
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final ResourceId BESTELLUNG = ResourceId.of(ID + "term-1");
     private static final ResourceId LIEFERADRESSE = ResourceId.of(ID + "term-2");
@@ -88,7 +88,7 @@ class BoundedContextCardsTest {
     }
 
     private static BoundedContextCards cardsFor(final BoundedContext context) {
-        return new BoundedContextCards(workspaceId -> List.of(context));
+        return new BoundedContextCards(projectId -> List.of(context));
     }
 
     private static BoundedContext context(final String vision, final List<ResourceId> linked) {
