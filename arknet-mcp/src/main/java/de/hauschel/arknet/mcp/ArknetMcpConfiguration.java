@@ -355,7 +355,7 @@ public class ArknetMcpConfiguration {
         return new BoundedContextMcpTools(service, service, service, service, resolveTerms, workspaceResolver);
     }
 
-    // --- Generic store report (domain-agnostic read path) ----------------------
+    // --- Store read path: generic query, model-shaped report -------------------
 
     @Bean
     Prefixes storeReportPrefixes() {
