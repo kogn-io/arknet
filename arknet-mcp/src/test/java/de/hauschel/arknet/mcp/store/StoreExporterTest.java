@@ -5,10 +5,18 @@ package de.hauschel.arknet.mcp.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.util.Models;
+import org.eclipse.rdf4j.model.util.Values;
+import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.Rio;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,12 +46,22 @@ import de.hauschel.arknet.req.domain.RequirementType;
 /**
  * Unit tests for {@link StoreExporter}: unlike {@link StoreReader}, the backup export must
  * surface every named graph, including the infrastructure ones {@link StoreReader} hides.
+ *
+ * <p>Serialisation itself is {@link DatasetHandle#datasetExport()} (kognio-rdf 0.2.2), an
+ * RDF4J-Rio-backed writer - these tests exercise {@link StoreExporter}'s own wiring around it
+ * (dataset acquisition, which graphs come back), plus one end-to-end regression for the defect
+ * that motivated the switch: the previous hand-rolled serialisation fell back to
+ * {@code RDFTerm#ntriplesString()} for literal objects, which resolves to
+ * {@code Value#toString()} on the RDF4J-backed term implementation this store runs on - a method
+ * that does not escape an embedded {@code "}, {@code \} or newline in the lexical form.</p>
  */
 class StoreExporterTest {
 
     private static final ProjectId PROJECT = new ProjectId("store-exporter-test");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-1";
+    private static final String FR_2_IRI = "https://w3id.org/arknet/id/store-exporter-test-fr-2";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
+    private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
 
     @TempDir
     Path storageDir;
@@ -65,18 +83,28 @@ class StoreExporterTest {
     }
 
     private static Requirement requirementTitled(String title) {
+        return requirementIdentifiedAndTitled(FR_1_IRI, "FR-1", title);
+    }
+
+    private static Requirement requirementIdentifiedAndTitled(String iri, String code, String title) {
         return new Requirement(
-                new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
+                new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
                 List.of("Login succeeds with valid credentials"));
     }
 
+    private String exportTrig() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        exporter.exportTrig(PROJECT, out);
+        return out.toString(StandardCharsets.UTF_8);
+    }
+
     @Test
     void exportTrigContainsTheRequirementsGraphBlock() {
-        String trig = exporter.exportTrig(PROJECT);
+        String trig = exportTrig();
 
-        assertThat(trig).contains("<" + REQUIREMENTS_GRAPH + "> {");
+        assertThat(trig).contains("<" + REQUIREMENTS_GRAPH + ">");
         assertThat(trig).contains("<" + FR_1_IRI + ">");
         assertThat(trig).contains("\"Login\"");
     }
@@ -88,21 +116,36 @@ class StoreExporterTest {
      */
     @Test
     void exportTrigContainsBothTheRequirementsGraphAndTheProvenanceGraph() {
-        String trig = exporter.exportTrig(PROJECT);
+        String trig = exportTrig();
 
-        assertThat(trig).contains("<" + REQUIREMENTS_GRAPH + "> {");
-        assertThat(trig).contains("<" + ArkprovVocabulary.PROVENANCE_GRAPH + "> {");
+        assertThat(trig).contains("<" + REQUIREMENTS_GRAPH + ">");
+        assertThat(trig).contains("<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">");
     }
 
+    /**
+     * Regression test for the defect that motivated moving serialisation onto
+     * {@link DatasetHandle#datasetExport()}: a literal value carrying an embedded quote and a
+     * newline must still round-trip through a real TriG parser instead of breaking the grammar.
+     *
+     * <p>Asserts on the <em>parsed</em> literal value rather than a raw substring of the TriG
+     * text: Rio is free to render such a literal as a long (triple-quoted) string, which keeps
+     * the newline literal and only escapes a quote where it would clash with the closing
+     * delimiter - a different, equally valid rendering than the short-string-literal escaping an
+     * earlier version of this test assumed.</p>
+     */
     @Test
-    void exportTrigOrdersGraphBlocksAlphabeticallyForADeterministicDiffStableOutput() {
-        String trig = exporter.exportTrig(PROJECT);
+    void exportTrigEscapesEmbeddedQuotesAndNewlinesInLiteralValues() throws Exception {
+        String awkwardTitle = "Say \"hi\" then\nnew line";
+        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        requirements.create(PROJECT, requirementIdentifiedAndTitled(FR_2_IRI, "FR-2", awkwardTitle));
+        // A distinct IRI/code, not FR_1_IRI: create() rejects a subject that already exists
+        // (the "Login" seed from setUp), so the awkward-title requirement is a second one.
 
-        int provenanceIndex = trig.indexOf("<" + ArkprovVocabulary.PROVENANCE_GRAPH + "> {");
-        int requirementsIndex = trig.indexOf("<" + REQUIREMENTS_GRAPH + "> {");
-        assertThat(provenanceIndex).isNotEqualTo(-1);
-        assertThat(requirementsIndex).isNotEqualTo(-1);
-        assertThat(provenanceIndex).isLessThan(requirementsIndex);
+        String trig = exportTrig();
+
+        Model model = Rio.parse(new ByteArrayInputStream(trig.getBytes(StandardCharsets.UTF_8)), RDFFormat.TRIG);
+        Model titleStatements = model.filter(Values.iri(FR_2_IRI), Values.iri(DCTERMS_TITLE), null);
+        assertThat(Models.objectString(titleStatements)).contains(awkwardTitle);
     }
 
     /**
@@ -110,8 +153,8 @@ class StoreExporterTest {
      * target is RDF-legally allowed to be a blank node (see
      * {@code KognioRdfRequirementRepository#replaceTriples}), and a store-first edge can and does
      * point at one. Seeded directly through the raw dataset API - the requirement domain path
-     * never produces one itself - to prove {@code exportTrig} serialises a blank-node subject's
-     * own triples instead of crashing on the first non-IRI subject it meets.
+     * never produces one itself - to prove the export path serialises a blank-node subject's own
+     * triples instead of silently dropping them.
      */
     @Test
     void exportTrigDoesNotCrashOnABlankNodeSubjectAndSerialisesItsOwnTriples() {
@@ -119,11 +162,11 @@ class StoreExporterTest {
         String predicate = "https://w3id.org/arknet/requirements#usesTerm";
         seedBlankNodeSubjectTriple(testGraph, predicate);
 
-        String trig = exporter.exportTrig(PROJECT);
+        String trig = exportTrig();
 
-        assertThat(trig).contains("<" + testGraph + "> {");
+        assertThat(trig).contains("<" + testGraph + ">");
         assertThat(trig).containsPattern(
-                Pattern.compile("_:\\S+ <" + Pattern.quote(predicate) + "> \"blank node target\" \\."));
+                Pattern.compile("_:\\S+\\s+<" + Pattern.quote(predicate) + ">\\s+\"blank node target\"\\s*\\."));
     }
 
     /** Writes a single blank-node-subject triple straight into its own named graph. */

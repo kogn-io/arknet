@@ -4,9 +4,10 @@
 package de.hauschel.arknet.mcp.store;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -30,6 +31,12 @@ import de.hauschel.arknet.prj.domain.Project;
  * registered project rather than routing one call to one dataset. There is deliberately no
  * restore counterpart (issue #154) - restoring a {@code .trig} file back into a dataset is left to
  * manual or agent-assisted recovery for now.</p>
+ *
+ * <p>Each project's file is written to a sibling {@code .tmp} path first and only moved onto its
+ * final name once {@link StoreExporter#exportTrig} returns - {@code exportTrig} now streams
+ * straight into the target {@link OutputStream} rather than building the whole TriG text in
+ * memory first, so a failure partway through the write must not leave a truncated, invalid
+ * {@code .trig} file sitting under a name that looks like a completed export.</p>
  *
  * <p>Marked {@code readOnlyHint = true} even though it writes files, for the same reason
  * {@code store_overview} is: the hint describes mutation of the RDF store, and this tool never
@@ -83,16 +90,28 @@ public final class StoreExportTools {
 
     private String exportOne(final Project project, final String timestamp) {
         final Path targetDir = fallbackExportDir.resolve(timestamp);
+        final String fileName = sanitize(project.label()) + ".trig";
+        final Path target = targetDir.resolve(fileName);
+        final Path tmp = targetDir.resolve(fileName + ".tmp");
         try {
-            final String trig = exporter.exportTrig(project.id());
-            final String fileName = sanitize(project.label()) + ".trig";
             Files.createDirectories(targetDir);
-            final Path target = targetDir.resolve(fileName);
-            Files.writeString(target, trig, StandardCharsets.UTF_8);
+            try (OutputStream out = Files.newOutputStream(tmp)) {
+                exporter.exportTrig(project.id(), out);
+            }
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
             return "# Exported " + project.label() + ": " + displayPath(timestamp, fileName);
         } catch (final IOException | RuntimeException failure) {
+            deleteQuietly(tmp);
             return "# Exported " + project.label() + ": FAILED to write to " + targetDir + " ("
                     + failure.getClass().getSimpleName() + ": " + failure.getMessage() + ")";
+        }
+    }
+
+    private static void deleteQuietly(final Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (final IOException ignored) {
+            // best-effort cleanup of a partial write; the FAILED result already reports the real error
         }
     }
 

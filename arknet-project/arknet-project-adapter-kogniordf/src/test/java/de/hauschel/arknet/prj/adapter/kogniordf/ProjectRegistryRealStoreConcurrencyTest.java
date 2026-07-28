@@ -33,6 +33,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.ConcurrencyConflictException;
+import io.kogn.rdf.dataset.DatasetExport;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
@@ -415,6 +416,11 @@ class ProjectRegistryRealStoreConcurrencyTest {
         @Override
         public SparqlUpdate sparqlUpdate() {
             return delegate.sparqlUpdate();
+        }
+
+        @Override
+        public DatasetExport datasetExport() {
+            return delegate.datasetExport();
         }
 
         @Override

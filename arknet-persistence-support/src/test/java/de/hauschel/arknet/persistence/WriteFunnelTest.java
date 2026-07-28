@@ -31,6 +31,7 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.ConcurrencyConflictException;
+import io.kogn.rdf.dataset.DatasetExport;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
@@ -788,6 +789,11 @@ class WriteFunnelTest {
 
         @Override
         public SparqlUpdate sparqlUpdate() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public DatasetExport datasetExport() {
             throw new UnsupportedOperationException();
         }
 
