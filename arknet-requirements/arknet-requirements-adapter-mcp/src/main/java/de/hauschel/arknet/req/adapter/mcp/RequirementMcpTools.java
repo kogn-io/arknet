@@ -237,8 +237,9 @@ public final class RequirementMcpTools {
     }
 
     @McpTool(name = "req_update",
-            description = "Correct an already-created requirement's title, description and/or acceptance "
-                    + "criteria. Every argument is optional - an omitted one leaves that field unchanged. "
+            description = "Correct an already-created requirement's title, description, acceptance "
+                    + "criteria and/or MoSCoW priority. Every argument is optional - an omitted one leaves "
+                    + "that field unchanged; an omitted priority never removes an already-set one. "
                     + "Does not touch status (use req_set_status) or linked terms (use req_link_term).")
     public String update(
             final McpSyncRequestContext context,
@@ -251,11 +252,19 @@ public final class RequirementMcpTools {
             final String description,
             @McpToolParam(description = "New testable 'Done when ...' criteria, replacing the existing ones "
                     + "wholesale (optional, unchanged if omitted)", required = false)
-            final List<String> acceptanceCriteria) {
+            final List<String> acceptanceCriteria,
+            @McpToolParam(description = "New MoSCoW priority: MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
+                    + "WONT_HAVE (optional, unchanged if omitted - omitting it cannot clear a priority "
+                    + "that is already set)", required = false)
+            final String priority) {
         final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
         final RequirementCode code = new RequirementCode(id);
+        final Priority requirementPriority = blankToNull(priority) == null
+                ? null
+                : Priority.valueOf(priority.trim());
         final Requirement updated = updateRequirement.update(workspaceId, code, blankToNull(title),
-                blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria));
+                blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria),
+                requirementPriority);
         return format(workspaceId, updated);
     }
 

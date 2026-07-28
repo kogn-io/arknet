@@ -137,7 +137,7 @@ Requirements BC (`arknet-requirements`) -- requirement lifecycle:
 | `req_get` | Fetch a single requirement by identity (e.g. FR-1, NFR-7) |
 | `req_set_status` | Change lifecycle status (PROPOSED / ACCEPTED) |
 | `req_link_term` | Link a requirement to a glossary term (`arkreq:usesTerm`; the term must exist) |
-| `req_update` | Correct a requirement's title, description and/or acceptance criteria (each optional, unchanged if omitted) |
+| `req_update` | Correct a requirement's title, description, acceptance criteria and/or MoSCoW priority (each optional, unchanged if omitted) |
 | `req_schema` | The `arkreq:` vocabulary (RequirementType, RequirementStatus, Priority) as data -- definition + allowed values, so a client need not guess |
 
 Ubiquitous Language BC -- glossary terms (SKOS Concepts):
