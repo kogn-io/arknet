@@ -91,7 +91,7 @@ class StoreExportToolsTest {
         assertThat(written).hasSize(1);
         Path file = written.get(0);
         assertThat(file.getParent().getFileName().toString()).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}");
-        assertThat(file.getFileName().toString()).isEqualTo("arknet.trig");
+        assertThat(file.getFileName().toString()).isEqualTo("arknet__store-export-tools-test-1.trig");
         assertThat(contentOf(file)).contains(FR_1_IRI).contains("\"Login\"");
     }
 
@@ -109,7 +109,40 @@ class StoreExportToolsTest {
 
         List<Path> written = findTrigFiles(exportDir);
         assertThat(written).hasSize(1);
-        assertThat(written.get(0).getFileName().toString()).isEqualTo("arknet___dev__main_.trig");
+        assertThat(written.get(0).getFileName().toString())
+                .isEqualTo("arknet___dev__main___store-export-tools-test-1.trig");
+    }
+
+    /**
+     * Two projects whose labels sanitize to the identical filesystem stem ("team/main" and
+     * "team main" both become "team_main") must not collide on disk - the project id is
+     * guaranteed unique and is appended to the filename precisely so one export can never
+     * silently overwrite the other.
+     */
+    @Test
+    void exportOfTwoProjectsWithCollidingSanitizedLabelsWritesDistinctFiles() {
+        try {
+            RequirementRepository requirements =
+                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            requirements.create(PROJECT_2, requirementTitled("Second"));
+
+            StoreExportTools tools = new StoreExportTools(
+                    listProjectsOf(
+                            new Project(PROJECT_1, "team/main", List.of(pathAnchor("/x"))),
+                            new Project(PROJECT_2, "team main", List.of(pathAnchor("/y")))),
+                    new StoreExporter(lifecycle), exportDir, null);
+
+            String result = tools.export();
+
+            assertThat(result).contains("# Exported team/main: ").contains("# Exported team main: ");
+            List<Path> written = findTrigFiles(exportDir);
+            assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
+                    .containsExactlyInAnyOrder(
+                            "team_main__store-export-tools-test-1.trig",
+                            "team_main__store-export-tools-test-2.trig");
+        } finally {
+            lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
     }
 
     /**
@@ -174,7 +207,7 @@ class StoreExportToolsTest {
 
             String timestamp = StoreExportTools.timestampFolderName();
             Path timestampDir = exportDir.resolve(timestamp);
-            blockFileWithADirectory(timestampDir.resolve("broken.trig.tmp"));
+            blockFileWithADirectory(timestampDir.resolve("broken__store-export-tools-test-1.trig.tmp"));
 
             StoreExportTools tools = new StoreExportTools(
                     listProjectsOf(
@@ -186,9 +219,10 @@ class StoreExportToolsTest {
 
             assertThat(result).contains("# Exported second: ");
             assertThat(result).contains("broken").contains("FAILED");
-            assertThat(exportDir.resolve(timestamp).resolve("second.trig")).exists();
-            assertThat(exportDir.resolve(timestamp).resolve("broken.trig")).doesNotExist();
-            assertThat(exportDir.resolve(timestamp).resolve("broken.trig.tmp")).doesNotExist();
+            assertThat(exportDir.resolve(timestamp).resolve("second__store-export-tools-test-2.trig")).exists();
+            assertThat(exportDir.resolve(timestamp).resolve("broken__store-export-tools-test-1.trig")).doesNotExist();
+            assertThat(exportDir.resolve(timestamp).resolve("broken__store-export-tools-test-1.trig.tmp"))
+                    .doesNotExist();
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
         }
