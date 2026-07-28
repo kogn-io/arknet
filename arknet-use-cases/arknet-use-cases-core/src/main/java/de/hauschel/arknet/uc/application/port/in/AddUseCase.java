@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.application.port.in;
 
 import java.util.List;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.domain.UseCase;
 
 /**
@@ -20,14 +20,14 @@ public interface AddUseCase {
     /**
      * Adds a new use case.
      *
-     * @param workspaceId the workspace (architecture model) to add the use case to
+     * @param projectId the project (architecture model) to add the use case to
      * @param command     the data describing the use case to create
      * @return the persisted use case including its assigned identity
      */
-    UseCase add(WorkspaceId workspaceId, NewUseCase command);
+    UseCase add(ProjectId projectId, NewUseCase command);
 
     /**
-     * Input data for {@link #add(WorkspaceId, NewUseCase)}. Mirrors {@link UseCase} minus the
+     * Input data for {@link #add(ProjectId, NewUseCase)}. Mirrors {@link UseCase} minus the
      * identity, which the service assigns.
      *
      * <p><strong>Raw human-typed references (issue #89).</strong> {@code primaryActor},

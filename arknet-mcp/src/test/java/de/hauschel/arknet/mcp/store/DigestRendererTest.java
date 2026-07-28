@@ -9,7 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Unit tests for the domain-agnostic digest rendering. Builds snapshots from hand-made
@@ -38,9 +38,9 @@ class DigestRendererTest {
                 iri(TERM + "login", RDF_TYPE, SKOS + "Concept"),
                 lit(TERM + "login", SKOS + "prefLabel", "Anmeldung")));
 
-        String digest = renderer.render(new WorkspaceId("noistill"), snapshot);
+        String digest = renderer.render(new ProjectId("noistill"), snapshot);
 
-        assertThat(digest).contains("# Workspace noistill -- 2 resources, 6 triples, 2 types");
+        assertThat(digest).contains("# Project noistill -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
         assertThat(digest).contains("req:").contains(REQ);
         assertThat(digest).contains("# Handle for resource_get is the IRI (as a CURIE), NOT the label.");
@@ -66,7 +66,7 @@ class DigestRendererTest {
                 lit(opaqueIri, TITLE, "Login"),
                 lit(opaqueIri, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new WorkspaceId("noistill"), snapshot);
+        String digest = renderer.render(new ProjectId("noistill"), snapshot);
 
         assertThat(digest).doesNotContain(opaqueIri);
         assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
@@ -85,7 +85,7 @@ class DigestRendererTest {
                 lit(subject, TITLE, "Export"),
                 iri(subject, ARKREQ + "refinesTerm", danglingTarget)));
 
-        String digest = renderer.render(new WorkspaceId("ws"), snapshot);
+        String digest = renderer.render(new ProjectId("ws"), snapshot);
 
         assertThat(digest).contains("dangling reference(s)");
         assertThat(digest).contains(subject).contains(danglingTarget).contains("(missing)");

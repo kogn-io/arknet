@@ -9,7 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
@@ -41,7 +41,7 @@ class TraceabilityRendererTest {
     private static final String UC_1 = ID + "uc-1";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
+    private static final ProjectId WORKSPACE = new ProjectId("noistill");
 
     @Test
     void traceMatrixReportsUsedTermsAndRealisingUseCasePerRequirement() {
@@ -49,7 +49,7 @@ class TraceabilityRendererTest {
 
         String matrix = renderer.traceMatrix(WORKSPACE, graph);
 
-        assertThat(matrix).contains("# Traceability matrix -- workspace noistill -- 2 requirement(s)");
+        assertThat(matrix).contains("# Traceability matrix -- project noistill -- 2 requirement(s)");
         assertThat(matrix).contains("FR-1 [FunctionalRequirement] \"Login\"");
         assertThat(matrix).contains("uses terms  : TERM-1");
         assertThat(matrix).contains("realised by : UC1");
@@ -64,7 +64,7 @@ class TraceabilityRendererTest {
 
         String report = renderer.orphanCheck(WORKSPACE, graph);
 
-        assertThat(report).contains("# Orphan check -- workspace noistill");
+        assertThat(report).contains("# Orphan check -- project noistill");
         assertThat(report).contains("## Requirements without a realising use case (1)");
         assertThat(report).contains("FR-2");
         assertThat(report).contains("## Terms never referenced (0)");
@@ -83,7 +83,7 @@ class TraceabilityRendererTest {
 
         String impact = renderer.impactAnalysis(WORKSPACE, graph, TERM_1);
 
-        assertThat(impact).contains("# Impact analysis -- workspace noistill -- target: TERM-1");
+        assertThat(impact).contains("# Impact analysis -- project noistill -- target: TERM-1");
         assertThat(impact).contains("## Transitively affected (2)");
         assertThat(impact).contains("FR-1").contains("UC1");
         assertThat(impact).doesNotContain(STEP_1);

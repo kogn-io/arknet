@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
@@ -28,7 +28,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  *
  * <p>A hand-rolled fake (not a mock): it actually stores requirements, keyed by
  * workspace then opaque identity, so the service's policy can be exercised end-to-end.
- * Insertion order is preserved to make {@link #findAll(WorkspaceId)} assertions
+ * Insertion order is preserved to make {@link #findAll(ProjectId)} assertions
  * deterministic.</p>
  *
  * <p><strong>Concurrency token (issue #167).</strong> Mirrors the real {@link
@@ -39,15 +39,15 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  */
 final class InMemoryRequirementRepository implements RequirementRepository {
 
-    private final Map<WorkspaceId, Map<RequirementId, Requirement>> byWorkspace = new LinkedHashMap<>();
+    private final Map<ProjectId, Map<RequirementId, Requirement>> byProject = new LinkedHashMap<>();
     private final Map<RequirementId, String> headByIdentity = new LinkedHashMap<>();
 
     @Override
-    public void create(WorkspaceId workspaceId, Requirement requirement) {
-        Map<RequirementId, Requirement> requirements = byWorkspace.computeIfAbsent(workspaceId,
+    public void create(ProjectId projectId, Requirement requirement) {
+        Map<RequirementId, Requirement> requirements = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (requirements.containsKey(requirement.id())) {
-            throw new ResourceAlreadyExistsException(workspaceId, requirement.id().value());
+            throw new ResourceAlreadyExistsException(projectId, requirement.id().value());
         }
         // Mirrors the real out-adapter's in-transaction askCodeExists guard (issue #108): a
         // business-code collision is rejected here too, so a fake exercising RequirementService's
@@ -55,48 +55,48 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         // would.
         boolean codeTaken = requirements.values().stream().anyMatch(r -> r.code().equals(requirement.code()));
         if (codeTaken) {
-            throw new DuplicateRequirementCodeException(workspaceId, requirement.code());
+            throw new DuplicateRequirementCodeException(projectId, requirement.code());
         }
         requirements.put(requirement.id(), requirement);
         headByIdentity.put(requirement.id(), UUID.randomUUID().toString());
     }
 
     @Override
-    public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
-        Map<RequirementId, Requirement> requirements = byWorkspace.getOrDefault(workspaceId, Map.of());
+    public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+        Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
         Requirement current = requirements.get(updated.id());
         if (current == null) {
-            throw new RequirementNotFoundException(workspaceId, updated.code());
+            throw new RequirementNotFoundException(projectId, updated.code());
         }
         if (!Objects.equals(headByIdentity.get(updated.id()), expectedHead)) {
-            throw new RequirementConcurrentlyModifiedException(workspaceId, updated.code());
+            throw new RequirementConcurrentlyModifiedException(projectId, updated.code());
         }
         requirements.put(updated.id(), updated);
         headByIdentity.put(updated.id(), UUID.randomUUID().toString());
     }
 
     @Override
-    public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+    public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(r -> r.code().equals(code))
                 .findFirst();
     }
 
     @Override
-    public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
-        return findByCode(workspaceId, code)
+    public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
+        return findByCode(projectId, code)
                 .map(requirement -> new CurrentRequirement(requirement, headByIdentity.get(requirement.id())));
     }
 
     @Override
-    public List<Requirement> findAll(WorkspaceId workspaceId) {
-        return List.copyOf(byWorkspace.getOrDefault(workspaceId, Map.of()).values());
+    public List<Requirement> findAll(ProjectId projectId) {
+        return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 
     @Override
-    public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+    public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
-        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(r -> wanted.contains(r.id().value()))
                 .map(r -> new ResolveRequirements.ResolvedRequirement(r.id().value(), r.code()))
                 .toList();

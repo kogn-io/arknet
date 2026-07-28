@@ -9,7 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
@@ -21,7 +21,7 @@ import de.hauschel.arknet.mcp.store.Triple;
  */
 class HtmlReportRendererTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("report-test");
+    private static final ProjectId WORKSPACE = new ProjectId("report-test");
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
@@ -123,7 +123,7 @@ class HtmlReportRendererTest {
         assertThat(html).contains("Incomplete report").contains("store closed");
     }
 
-    /** A reference whose target is not in this workspace stays visible as a dead chip. */
+    /** A reference whose target is not in this project stays visible as a dead chip. */
     @Test
     void marksAReferenceThatIsNotInTheWorkspace() {
         final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
@@ -134,7 +134,7 @@ class HtmlReportRendererTest {
         final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
 
         assertThat(html).contains(
-                "<span class=\"chip dead\" title=\"TERM-404 - not in this workspace\">Lieferschein</span>");
+                "<span class=\"chip dead\" title=\"TERM-404 - not in this project\">Lieferschein</span>");
     }
 
     /**

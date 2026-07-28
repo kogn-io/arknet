@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when {@link de.hauschel.arknet.uc.application.port.out.UseCaseRepository#create}
@@ -22,25 +22,25 @@ public class DuplicateUseCaseCodeException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient UseCaseCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the code collided in
+     * @param projectId the project the code collided in
      * @param code        the use-case code that already exists
      */
-    public DuplicateUseCaseCodeException(WorkspaceId workspaceId, UseCaseCode code) {
+    public DuplicateUseCaseCodeException(ProjectId projectId, UseCaseCode code) {
         super("use case code " + Objects.requireNonNull(code, "code").value()
-                + " already exists in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
-        this.workspaceId = workspaceId;
+                + " already exists in project " + Objects.requireNonNull(projectId, "projectId").value());
+        this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the code collided in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    /** @return the project the code collided in */
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the use-case code that already exists */

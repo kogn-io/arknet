@@ -5,7 +5,7 @@ package de.hauschel.arknet.req.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when {@link de.hauschel.arknet.req.application.port.out.RequirementRepository#create}
@@ -22,25 +22,25 @@ public class DuplicateRequirementCodeException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient RequirementCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the code collided in
+     * @param projectId the project the code collided in
      * @param code        the requirement code that already exists
      */
-    public DuplicateRequirementCodeException(WorkspaceId workspaceId, RequirementCode code) {
+    public DuplicateRequirementCodeException(ProjectId projectId, RequirementCode code) {
         super("requirement code " + Objects.requireNonNull(code, "code").value()
-                + " already exists in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
-        this.workspaceId = workspaceId;
+                + " already exists in project " + Objects.requireNonNull(projectId, "projectId").value());
+        this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the code collided in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    /** @return the project the code collided in */
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the requirement code that already exists */

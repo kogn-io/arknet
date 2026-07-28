@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreResource;
@@ -61,18 +61,18 @@ public final class HtmlReportRenderer {
     /**
      * Renders the complete HTML document.
      *
-     * @param workspaceId the workspace the snapshot was read from
+     * @param projectId the project the snapshot was read from
      * @param snapshot    the flat statement snapshot, used for raw triples and the leftovers
      * @param digest      the agent digest text shown in the top panel
      * @param views       the per-bounded-context sections that make up the report's body
      * @return the self-contained HTML document
      */
     public String render(
-            final WorkspaceId workspaceId,
+            final ProjectId projectId,
             final StoreSnapshot snapshot,
             final String digest,
             final ModelViews.Views views) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(digest, "digest");
         Objects.requireNonNull(views, "views");
@@ -95,7 +95,7 @@ public final class HtmlReportRenderer {
                 .append(CSS)
                 .append("\n</style>\n</head>\n<body>\n<div class=\"wrap\">\n");
 
-        appendHeader(html, workspaceId, snapshot, carded.size());
+        appendHeader(html, projectId, snapshot, carded.size());
         appendFailures(html, views.failures());
         appendAgentPanel(html, digest);
         appendToolbar(html);
@@ -138,12 +138,12 @@ public final class HtmlReportRenderer {
 
     private void appendHeader(
             final StringBuilder html,
-            final WorkspaceId workspaceId,
+            final ProjectId projectId,
             final StoreSnapshot snapshot,
             final int elements) {
         html.append("  <header class=\"top\">\n")
                 .append("    <h1>arknet Store Report</h1>\n")
-                .append("    <span class=\"ws\">workspace: ").append(escape(workspaceId.value())).append("</span>\n")
+                .append("    <span class=\"ws\">project: ").append(escape(projectId.value())).append("</span>\n")
                 .append("    <span class=\"meta\"><b>").append(elements)
                 .append("</b> model elements &middot; <b>").append(snapshot.resourceCount())
                 .append("</b> resources &middot; <b>").append(snapshot.tripleCount())
@@ -237,7 +237,7 @@ public final class HtmlReportRenderer {
         if (!sections.isEmpty() || !leftovers.isEmpty()) {
             return;
         }
-        html.append("      <p class=\"empty\">This workspace holds no model yet. Start with"
+        html.append("      <p class=\"empty\">This project holds no model yet. Start with"
                 + " <code>bc_add</code>, <code>term_add</code>, <code>req_add</code> or"
                 + " <code>uc_add</code>.</p>\n");
     }
@@ -306,9 +306,9 @@ public final class HtmlReportRenderer {
     }
 
     /**
-     * Renders references as chips. A reference whose target is anywhere in this workspace links
+     * Renders references as chips. A reference whose target is anywhere in this project links
      * to it - to its card if it has one, to its raw card otherwise. A reference to something not
-     * in the workspace renders as a dead chip rather than a broken link, so the store's dangling
+     * in the project renders as a dead chip rather than a broken link, so the store's dangling
      * references stay visible instead of being quietly styled away.
      *
      * <p>The chip shows the target's label; its business code, which is what a human types into
@@ -324,8 +324,8 @@ public final class HtmlReportRenderer {
                         .append(escape(ref.label())).append("</a>");
             } else {
                 final String hint = ref.code() == null
-                        ? "not in this workspace"
-                        : ref.code() + " - not in this workspace";
+                        ? "not in this project"
+                        : ref.code() + " - not in this project";
                 html.append("<span class=\"chip dead\"").append(titleAttribute(hint)).append('>')
                         .append(escape(ref.label())).append("</span>");
             }

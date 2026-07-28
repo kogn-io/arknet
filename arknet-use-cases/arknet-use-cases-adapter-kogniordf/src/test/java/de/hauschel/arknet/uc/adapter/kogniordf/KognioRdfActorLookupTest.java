@@ -22,7 +22,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 
@@ -37,8 +37,8 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  */
 class KognioRdfActorLookupTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     private DatasetLifecycleRdf4j lifecycle;
@@ -111,7 +111,7 @@ class KognioRdfActorLookupTest {
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** An actor of another workspace must not satisfy this workspace's reference. */
+    /** An actor of another workspace must not satisfy this project's reference. */
     @Test
     void anActorOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
         givenHumanActor(WORKSPACE_B, "customer", "Customer");
@@ -120,37 +120,37 @@ class KognioRdfActorLookupTest {
                 () -> actorLookup.resolveByName(WORKSPACE_A, "Customer"));
     }
 
-    private String givenHumanActor(WorkspaceId workspaceId, String slug, String prefLabel) {
+    private String givenHumanActor(ProjectId projectId, String slug, String prefLabel) {
         String actorIri = "https://w3id.org/arknet/model/term/" + slug;
         String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
                 + "<https://w3id.org/arknet/process#HumanActor> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
-        write(workspaceId, insert);
+        write(projectId, insert);
         return actorIri;
     }
 
-    private String givenSystemActor(WorkspaceId workspaceId, String slug, String prefLabel) {
+    private String givenSystemActor(ProjectId projectId, String slug, String prefLabel) {
         String actorIri = "https://w3id.org/arknet/model/term/" + slug;
         String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
                 + "<https://w3id.org/arknet/process#SystemActor> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
-        write(workspaceId, insert);
+        write(projectId, insert);
         return actorIri;
     }
 
-    private String givenNonActorConcept(WorkspaceId workspaceId, String slug, String prefLabel) {
+    private String givenNonActorConcept(ProjectId projectId, String slug, String prefLabel) {
         String conceptIri = "https://w3id.org/arknet/model/term/" + slug;
         String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + conceptIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
-        write(workspaceId, insert);
+        write(projectId, insert);
         return conceptIri;
     }
 
-    private void write(WorkspaceId workspaceId, String insert) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+    private void write(ProjectId projectId, String insert) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;

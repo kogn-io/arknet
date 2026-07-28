@@ -8,7 +8,7 @@ import java.util.List;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driving port: register a new requirement.
@@ -22,14 +22,14 @@ public interface AddRequirement {
     /**
      * Adds a new requirement.
      *
-     * @param workspaceId the workspace (architecture model) to add the requirement to
+     * @param projectId the project (architecture model) to add the requirement to
      * @param command     the data describing the requirement to create
      * @return the persisted requirement including its assigned identity
      */
-    Requirement add(WorkspaceId workspaceId, NewRequirement command);
+    Requirement add(ProjectId projectId, NewRequirement command);
 
     /**
-     * Input data for {@link #add(WorkspaceId, NewRequirement)}.
+     * Input data for {@link #add(ProjectId, NewRequirement)}.
      *
      * @param title           short human-readable summary
      * @param description     the normative statement ("The system shall ...")

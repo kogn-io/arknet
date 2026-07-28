@@ -17,13 +17,13 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 
 /**
- * The single generic read path into a workspace dataset: one {@code SELECT ?s ?p ?o} over
+ * The single generic read path into a project dataset: one {@code SELECT ?s ?p ?o} over
  * the kognio-rdf substrate, spanning the default and all named graphs.
  *
  * <p>Domain-agnostic by construction - it never mentions a requirement, term or any type,
@@ -83,15 +83,15 @@ public final class StoreReader {
     }
 
     /**
-     * Reads every statement of the workspace and assembles a {@link StoreSnapshot}.
+     * Reads every statement of the project and assembles a {@link StoreSnapshot}.
      *
-     * @param workspaceId the workspace to read
+     * @param projectId the project to read
      * @return the snapshot over all statements
      */
-    public StoreSnapshot readSnapshot(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public StoreSnapshot readSnapshot(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
         String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingInfrastructure("?s ?p ?o") + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<Triple> triples = handle.sparqlQuery().select(query)
                     .map(StoreReader::toTriple)
                     .filter(Optional::isPresent)
@@ -104,17 +104,17 @@ public final class StoreReader {
     /**
      * Reads the outgoing statements of a resource ({@code <iri> ?p ?o}).
      *
-     * @param workspaceId the workspace to read
+     * @param projectId the project to read
      * @param iri         the subject IRI
      * @return the outgoing statements
      */
-    public List<Triple> outgoing(WorkspaceId workspaceId, String iri) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<Triple> outgoing(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?p ?o WHERE { "
                 + excludingInfrastructure(iriRef + " ?p ?o") + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> outgoingTriple(iri, row))
                     .filter(Optional::isPresent)
@@ -126,17 +126,17 @@ public final class StoreReader {
     /**
      * Reads the incoming statements of a resource ({@code ?s ?p <iri>}) - its neighbours.
      *
-     * @param workspaceId the workspace to read
+     * @param projectId the project to read
      * @param iri         the object IRI
      * @return the incoming statements (their object is always {@code iri})
      */
-    public List<Triple> incoming(WorkspaceId workspaceId, String iri) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<Triple> incoming(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?s ?p WHERE { "
                 + excludingInfrastructure("?s ?p " + iriRef) + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> incomingTriple(iri, row))
                     .filter(Optional::isPresent)
@@ -150,16 +150,16 @@ public final class StoreReader {
      * business id, e.g. {@code FR-1}). Returns all matches so the caller can reject an
      * ambiguous id spanning bounded contexts instead of guessing.
      *
-     * @param workspaceId the workspace to read
+     * @param projectId the project to read
      * @param identifier  the {@code dcterms:identifier} lexical value
      * @return the matching subject IRIs (distinct)
      */
-    public List<String> findByIdentifier(WorkspaceId workspaceId, String identifier) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<String> findByIdentifier(ProjectId projectId, String identifier) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(identifier, "identifier");
         String literal = "\"" + identifier.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
         String query = "SELECT DISTINCT ?s WHERE { ?s <" + DCTERMS_IDENTIFIER + "> " + literal + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> row.getValue("s").orElse(null))
                     .filter(IRI.class::isInstance)

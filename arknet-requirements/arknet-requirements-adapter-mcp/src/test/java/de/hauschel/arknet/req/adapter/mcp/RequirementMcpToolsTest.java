@@ -19,8 +19,8 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
@@ -53,12 +53,15 @@ class RequirementMcpToolsTest {
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+    private static final ProjectId PROJECT = new ProjectId("test-project");
+
+    /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
+    private static final ProjectResolver PROJECTS = anchor -> PROJECT;
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES);
+            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS);
 
     @Test
     void declaresTheSevenRequirementTools() {
@@ -78,23 +81,23 @@ class RequirementMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        null, stub, stub, stub, stub, stub, stub, resolveTerms, WORKSPACES));
+                        null, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, null, stub, stub, resolveTerms, WORKSPACES));
+                        stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, null, stub, resolveTerms, WORKSPACES));
+                        stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, null, resolveTerms, WORKSPACES));
+                        stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, null, WORKSPACES));
+                        stub, stub, stub, stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
-    void rejectsNullWorkspaceResolver() {
+    void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, null));
     }
@@ -134,7 +137,7 @@ class RequirementMcpToolsTest {
     void addPassesAcceptanceCriteriaThroughAndRendersThem() {
         List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
 
-        String rendered = adapter.add(null, "t", "d", "FUNCTIONAL", criteria, null, null, null);
+        String rendered = adapter.add(null, "t", "d", "FUNCTIONAL", criteria, null, null, null, null);
 
         assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
         assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
@@ -149,7 +152,7 @@ class RequirementMcpToolsTest {
     @Test
     void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null));
+                () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null, null));
     }
 
     @Test
@@ -158,7 +161,7 @@ class RequirementMcpToolsTest {
         // the code the human typed is what they see rendered back (issue #77 nachtrag).
         resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-1"), new TermCode("TERM-1"));
 
-        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1", null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
@@ -171,7 +174,7 @@ class RequirementMcpToolsTest {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
         String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria,
-                "SHOULD_HAVE");
+                "SHOULD_HAVE", null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals("Neuer Titel", stub.lastUpdateTitle);
@@ -188,7 +191,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
@@ -205,7 +208,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateCanCorrectOnlyThePriority() {
-        String rendered = adapter.update(null, "FR-1", null, null, null, "SHOULD_HAVE");
+        String rendered = adapter.update(null, "FR-1", null, null, null, "SHOULD_HAVE", null);
 
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertEquals(null, stub.lastUpdateTitle);
@@ -221,7 +224,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateTreatsABlankPriorityAsOmitted() {
-        adapter.update(null, "FR-1", null, null, null, "  ");
+        adapter.update(null, "FR-1", null, null, null, "  ", null);
 
         assertEquals(null, stub.lastUpdatePriority);
     }
@@ -230,7 +233,7 @@ class RequirementMcpToolsTest {
     @Test
     void updateRejectsAnUnknownPriority() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE"));
+                () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE", null));
     }
 
     /** The resolvable case: a linked term shows its business code, not the raw IRI (issue #77). */
@@ -240,7 +243,7 @@ class RequirementMcpToolsTest {
         resolveTerms.register(termResourceId, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = termResourceId;
 
-        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1", null);
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -255,7 +258,7 @@ class RequirementMcpToolsTest {
         stub.nextLinkedTermResourceId = unresolvable;
         // Deliberately not registered with resolveTerms - simulates a missing/deleted term.
 
-        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1", null);
 
         assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
     }
@@ -277,7 +280,7 @@ class RequirementMcpToolsTest {
         resolveTerms.register(duplicated, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = duplicated;
 
-        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "FR-1", "TERM-1", null);
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -291,7 +294,7 @@ class RequirementMcpToolsTest {
         resolveTerms.register(second, new TermCode("TERM-2"));
         stub.nextLinkedTerms = List.of(first, second);
 
-        adapter.linkTerm(null, "FR-1", "TERM-1");
+        adapter.linkTerm(null, "FR-1", "TERM-1", null);
 
         assertEquals(1, resolveTerms.callCount());
     }
@@ -310,7 +313,7 @@ class RequirementMcpToolsTest {
                 requirementWithTerms("FR-1", termA),
                 requirementWithTerms("FR-2", termB));
 
-        String rendered = adapter.list(null);
+        String rendered = adapter.list(null, null);
 
         assertEquals(1, resolveTerms.callCount());
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
@@ -321,7 +324,7 @@ class RequirementMcpToolsTest {
     void listOfRequirementsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
         stub.allRequirements = List.of(requirementWithTerms("FR-1"));
 
-        adapter.list(null);
+        adapter.list(null, null);
 
         assertEquals(0, resolveTerms.callCount());
     }
@@ -351,7 +354,7 @@ class RequirementMcpToolsTest {
         private Priority lastUpdatePriority;
 
         @Override
-        public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
+        public Requirement add(ProjectId projectId, NewRequirement command) {
             lastAddCommand = command;
             return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
                     command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
@@ -359,22 +362,22 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public List<Requirement> list(WorkspaceId workspaceId) {
+        public List<Requirement> list(ProjectId projectId) {
             return allRequirements;
         }
 
         @Override
-        public Optional<Requirement> get(WorkspaceId workspaceId, RequirementCode code) {
+        public Optional<Requirement> get(ProjectId projectId, RequirementCode code) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Requirement setStatus(WorkspaceId workspaceId, RequirementCode code, RequirementStatus status) {
+        public Requirement setStatus(ProjectId projectId, RequirementCode code, RequirementStatus status) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode) {
+        public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode) {
             lastLinkedRequirement = code;
             lastLinkedTermCode = termCode;
             List<ResourceId> ids = new ArrayList<>(nextLinkedTerms);
@@ -396,7 +399,7 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
+        public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
                 List<String> acceptanceCriteria, Priority priority) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
@@ -429,7 +432,7 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
             calls++;
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();

@@ -58,7 +58,7 @@ import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 
 /**
@@ -126,7 +126,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 @Timeout(value = 60, unit = TimeUnit.SECONDS)
 class BoundedContextServiceRealStoreConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
 
@@ -388,7 +388,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * {@code TERM-2} - the two edges the lost-update race above competes over.
      */
     private static BoundedContextService serviceOver(DatasetLifecycle lifecycle) {
-        TermLookup termLookup = (workspaceId, termCode) -> switch (termCode) {
+        TermLookup termLookup = (projectId, termCode) -> switch (termCode) {
             case "TERM-1" -> TERM_1;
             case "TERM-2" -> TERM_2;
             default -> throw new IllegalArgumentException("fake lookup: unknown term code " + termCode);
@@ -435,7 +435,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         });
         BoundedContextRepository repository =
                 KognioRdfBoundedContextRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
-        TermLookup unusedTermLookup = (workspaceId, termCode) -> {
+        TermLookup unusedTermLookup = (projectId, termCode) -> {
             throw new UnsupportedOperationException("not exercised by this test");
         };
         return new BoundedContextService(repository, new UuidResourceIdFactory(), unusedTermLookup);

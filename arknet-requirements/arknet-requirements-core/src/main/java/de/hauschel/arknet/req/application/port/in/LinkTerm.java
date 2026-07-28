@@ -3,7 +3,7 @@
 
 package de.hauschel.arknet.req.application.port.in;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
@@ -31,5 +31,5 @@ public interface LinkTerm {
      * @param termCode the term's human-readable business code, e.g. {@code TERM-1}
      * @return the requirement including the link
      */
-    Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode);
+    Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode);
 }

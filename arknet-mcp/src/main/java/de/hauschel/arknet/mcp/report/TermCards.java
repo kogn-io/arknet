@@ -30,7 +30,7 @@ public final class TermCards {
     }
 
     /**
-     * @param glossary the workspace's glossary
+     * @param glossary the project's glossary
      * @return the glossary section, ordered by preferred label
      */
     public static ModelSection section(final Glossary glossary) {

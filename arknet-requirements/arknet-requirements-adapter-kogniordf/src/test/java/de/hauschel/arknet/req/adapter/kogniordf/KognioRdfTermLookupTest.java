@@ -22,7 +22,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 
@@ -37,8 +37,8 @@ import de.hauschel.arknet.req.application.port.out.TermLookup;
  */
 class KognioRdfTermLookupTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     private DatasetLifecycleRdf4j lifecycle;
@@ -94,7 +94,7 @@ class KognioRdfTermLookupTest {
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** A term of another workspace must not satisfy this workspace's reference. */
+    /** A term of another workspace must not satisfy this project's reference. */
     @Test
     void aTermOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
         givenTerm(WORKSPACE_B, "TERM-1");
@@ -108,18 +108,18 @@ class KognioRdfTermLookupTest {
      * dataset - deliberately via raw SPARQL rather than the ubiquitous-language adapter, so
      * this test does not couple the two bounded contexts. Returns the term's IRI.
      */
-    private String givenTerm(WorkspaceId workspaceId, String termId) {
+    private String givenTerm(ProjectId projectId, String termId) {
         String termIri = "https://w3id.org/arknet/model/term/" + termId;
-        givenTermAtIri(workspaceId, termIri, termId);
+        givenTermAtIri(projectId, termIri, termId);
         return termIri;
     }
 
-    private void givenTermAtIri(WorkspaceId workspaceId, String termIri, String identifier) {
+    private void givenTermAtIri(ProjectId projectId, String termIri, String identifier) {
         String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + termIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + identifier + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Anmeldung\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;

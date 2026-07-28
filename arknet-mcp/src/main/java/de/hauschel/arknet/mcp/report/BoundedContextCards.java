@@ -15,7 +15,7 @@ import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Builds the report's bounded-context cards from the bounded-context context's read in-port.
@@ -39,13 +39,13 @@ public final class BoundedContextCards {
     }
 
     /**
-     * @param workspaceId the workspace to read
-     * @param glossary    the workspace's glossary, for labelling and marking up references
+     * @param projectId the project to read
+     * @param glossary    the project's glossary, for labelling and marking up references
      * @return the bounded-context section, ordered by business code
      */
-    public ModelSection section(final WorkspaceId workspaceId, final Glossary glossary) {
+    public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<ModelCard> cards = contexts.list(workspaceId).stream()
+        final List<ModelCard> cards = contexts.list(projectId).stream()
                 .sorted(Comparator.comparing(context -> context.code().value()))
                 .map(context -> card(context, glossary))
                 .toList();

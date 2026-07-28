@@ -4,7 +4,7 @@
 package de.hauschel.arknet.uc.application.port.out;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: resolves a requirement's human-typed business code to its opaque subject identity
@@ -26,11 +26,11 @@ public interface RequirementLookup {
 
     /**
      * Resolves {@code requirementCode} to the identity of the requirement it currently names
-     * within {@code workspaceId}.
+     * within {@code projectId}.
      *
-     * @param workspaceId      the workspace (architecture model) to resolve the code in
+     * @param projectId      the project (architecture model) to resolve the code in
      * @param requirementCode  the requirement's human-readable business code, e.g. {@code FR-5}
      * @return the resolved requirement's opaque subject identity
      */
-    ResourceId resolveByCode(WorkspaceId workspaceId, String requirementCode);
+    ResourceId resolveByCode(ProjectId projectId, String requirementCode);
 }

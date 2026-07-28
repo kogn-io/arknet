@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -56,13 +56,16 @@ class UseCaseMcpToolsTest {
     }
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+    private static final ProjectId PROJECT = new ProjectId("test-project");
+
+    /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
+    private static final ProjectResolver PROJECTS = anchor -> PROJECT;
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
     private final UseCaseMcpTools adapter =
-            new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, WORKSPACES);
+            new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, PROJECTS);
 
     @Test
     void declaresTheThreeUseCaseTools() {
@@ -86,15 +89,15 @@ class UseCaseMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, resolveTerms, resolveRequirements, WORKSPACES));
+                () -> new UseCaseMcpTools(null, stub, stub, resolveTerms, resolveRequirements, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveRequirements, WORKSPACES));
+                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveRequirements, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, null, WORKSPACES));
+                () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, null, PROJECTS));
     }
 
     @Test
-    void rejectsNullWorkspaceResolver() {
+    void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, null));
     }
@@ -105,7 +108,7 @@ class UseCaseMcpToolsTest {
                 "Customer", List.of("PaymentProvider"), "Customer is logged in", "Order is recorded",
                 List.of(new StepInput(1, "Customer selects items", List.of("FR-1")),
                         new StepInput(2, "Customer confirms and pays", List.of())),
-                List.of("2a. Payment declined -> use case ends in failure"));
+                List.of("2a. Payment declined -> use case ends in failure"), null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
         assertEquals("Place order", command.title());
@@ -125,7 +128,7 @@ class UseCaseMcpToolsTest {
     @Test
     void addNormalizesOmittedOptionalsToNullAndEmpty() {
         adapter.add(null, "Reset password", "User resets password", null, null, "Customer", null, null, null,
-                List.of(new StepInput(1, "User requests a reset link", null)), null);
+                List.of(new StepInput(1, "User requests a reset link", null)), null, null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
         assertNull(command.scope());
@@ -153,7 +156,7 @@ class UseCaseMcpToolsTest {
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure")));
 
-        String rendered = adapter.get(null, "UC1");
+        String rendered = adapter.get(null, "UC1", null);
 
         assertTrue(rendered.contains("UC1 Place order"));
         assertTrue(rendered.contains("primaryActor: Customer"));
@@ -179,7 +182,7 @@ class UseCaseMcpToolsTest {
                 "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
                 List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of()));
 
-        String rendered = adapter.get(null, "UC1");
+        String rendered = adapter.get(null, "UC1", null);
 
         assertTrue(rendered.contains("primaryActor: https://w3id.org/arknet/id/unknown-actor"), rendered);
         assertTrue(rendered.contains("realises https://w3id.org/arknet/id/unknown-req"), rendered);
@@ -188,7 +191,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucGetReturnsNotFoundMessageForUnknownCode() {
         stub.getResult = Optional.empty();
-        assertEquals("Use case not found: UC99", adapter.get(null, "UC99"));
+        assertEquals("Use case not found: UC99", adapter.get(null, "UC99", null));
     }
 
     @Test
@@ -204,7 +207,7 @@ class UseCaseMcpToolsTest {
                         customer, List.of(), null, null,
                         List.of(new Step(1, "request link", List.of())), List.of()));
 
-        String rendered = adapter.list(null);
+        String rendered = adapter.list(null, null);
 
         assertEquals("UC1 | Place order | Customer places an order\n"
                 + "UC2 | Reset password | User resets password", rendered);
@@ -213,18 +216,18 @@ class UseCaseMcpToolsTest {
     @Test
     void ucListReturnsPlaceholderWhenEmpty() {
         stub.listResult = List.of();
-        assertEquals("(no use cases)", adapter.list(null));
+        assertEquals("(no use cases)", adapter.list(null, null));
     }
 
     @Test
     void addPropagatesDidacticReferenceErrorVerbatim() {
         stub.addFailure = new IllegalStateException(
-                "Requirement 'FR-1' does not exist in workspace 'default'. "
+                "Requirement 'FR-1' does not exist in project 'default'. "
                         + "Create it first with req_add before a use-case step realises it.");
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> adapter.add(null, "Place order", "goal", null, null, "Customer", null, null, null,
-                        List.of(new StepInput(1, "select items", List.of("FR-1"))), null));
+                        List.of(new StepInput(1, "select items", List.of("FR-1"))), null, null));
 
         assertTrue(thrown.getMessage().contains("FR-1"));
         assertTrue(thrown.getMessage().contains("req_add"));
@@ -249,7 +252,7 @@ class UseCaseMcpToolsTest {
         private Optional<UseCase> getResult = Optional.empty();
 
         @Override
-        public UseCase add(WorkspaceId workspaceId, AddUseCase.NewUseCase command) {
+        public UseCase add(ProjectId projectId, AddUseCase.NewUseCase command) {
             this.lastCommand = command;
             if (addFailure != null) {
                 throw addFailure;
@@ -272,12 +275,12 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<UseCase> list(WorkspaceId workspaceId) {
+        public List<UseCase> list(ProjectId projectId) {
             return listResult;
         }
 
         @Override
-        public Optional<UseCase> get(WorkspaceId workspaceId, UseCaseCode code) {
+        public Optional<UseCase> get(ProjectId projectId, UseCaseCode code) {
             return getResult;
         }
     }
@@ -295,7 +298,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();
         }
@@ -314,7 +317,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(r -> wanted.contains(r.id())).toList();
         }

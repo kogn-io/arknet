@@ -5,7 +5,7 @@ package de.hauschel.arknet.req.application.port.in;
 
 import java.util.List;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -45,10 +45,10 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 public interface UpdateRequirement {
 
     /**
-     * Updates the requirement identified by {@code code} within a workspace, leaving any
+     * Updates the requirement identified by {@code code} within a project, leaving any
      * {@code null} argument unchanged.
      *
-     * @param workspaceId         the workspace (architecture model) the requirement lives in
+     * @param projectId         the project (architecture model) the requirement lives in
      * @param code                the requirement code, e.g. {@code FR-1}
      * @param title               the new title, or {@code null} to leave it unchanged
      * @param description         the new normative statement, or {@code null} to leave it unchanged
@@ -58,6 +58,6 @@ public interface UpdateRequirement {
      *                            one unchanged (never a request to remove it)
      * @return the updated requirement
      */
-    Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
+    Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
             List<String> acceptanceCriteria, Priority priority);
 }

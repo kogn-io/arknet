@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Renders the compact, token-cheap text digest an agent gets back from {@code
@@ -39,18 +39,18 @@ public final class DigestRenderer {
     }
 
     /**
-     * Renders the digest for a workspace snapshot.
+     * Renders the digest for a project snapshot.
      *
-     * @param workspaceId the workspace the snapshot was read from
+     * @param projectId the project the snapshot was read from
      * @param snapshot    the snapshot to render
      * @return the digest text
      */
-    public String render(WorkspaceId workspaceId, StoreSnapshot snapshot) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public String render(ProjectId projectId, StoreSnapshot snapshot) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(snapshot, "snapshot");
 
         StringBuilder out = new StringBuilder();
-        out.append("# Workspace ").append(workspaceId.value())
+        out.append("# Project ").append(projectId.value())
                 .append(" -- ").append(snapshot.resourceCount()).append(" resources, ")
                 .append(snapshot.tripleCount()).append(" triples, ")
                 .append(snapshot.typeCount()).append(" types\n");

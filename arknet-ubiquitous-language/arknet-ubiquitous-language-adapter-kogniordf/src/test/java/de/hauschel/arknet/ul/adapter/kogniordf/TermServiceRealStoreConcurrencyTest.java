@@ -47,7 +47,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
@@ -84,7 +84,7 @@ import de.hauschel.arknet.ul.domain.Term;
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 class TermServiceRealStoreConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
 
     /**
      * The {@code NativeStore}'s on-disk home, managed by JUnit rather than by

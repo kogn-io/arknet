@@ -10,7 +10,7 @@ import java.util.Optional;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
@@ -34,7 +34,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * <p><strong>Policy.</strong> Identity ({@link TermId}) is opaque and minted once per term via
  * {@link ResourceIdFactory}; it never changes. The human-readable business code
  * ({@link TermCode}, {@code TERM-N}) is assigned independently, where {@code N} is one above the
- * highest running number currently used in the target workspace (numbering is independent per
+ * highest running number currently used in the target project (numbering is independent per
  * workspace). Keeping identity separate from both the code and the {@code skos:prefLabel} means
  * relabeling never changes identity (a core SKOS principle).</p>
  *
@@ -84,8 +84,8 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     }
 
     @Override
-    public Term add(WorkspaceId workspaceId, NewTerm command) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Term add(ProjectId projectId, NewTerm command) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
         // business code is recomputed when a concurrent term_add claims the same candidate first
@@ -93,50 +93,50 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         TermId id = new TermId(resourceIdFactory.newId());
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
-            TermCode code = nextCode(workspaceId);
+            TermCode code = nextCode(projectId);
             Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
-            repository.create(workspaceId, term);
+            repository.create(projectId, term);
             return term;
         });
     }
 
     @Override
-    public List<Term> list(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        return repository.findAll(workspaceId);
+    public List<Term> list(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAll(projectId);
     }
 
     @Override
-    public Optional<Term> get(WorkspaceId workspaceId, TermCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<Term> get(ProjectId projectId, TermCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(workspaceId, code);
+        return repository.findByCode(projectId, code);
     }
 
     @Override
-    public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+    public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.update(workspaceId, code, prefLabel, definition, actorFacet);
+        return repository.update(projectId, code, prefLabel, definition, actorFacet);
     }
 
     @Override
-    public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.length == 0) {
             return List.of();
         }
-        return repository.findByIds(workspaceId, List.of(ids));
+        return repository.findByIds(projectId, List.of(ids));
     }
 
     /**
-     * Derives the next free business code in {@code workspaceId}: the highest running
+     * Derives the next free business code in {@code projectId}: the highest running
      * number currently in use, plus one (starting at 1).
      */
-    private TermCode nextCode(WorkspaceId workspaceId) {
-        int next = repository.findAll(workspaceId).stream()
+    private TermCode nextCode(ProjectId projectId) {
+        int next = repository.findAll(projectId).stream()
                 .mapToInt(t -> runningNumber(t.code()))
                 .max()
                 .orElse(0) + 1;

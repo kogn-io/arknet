@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
@@ -26,7 +26,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p>A hand-rolled fake (not a mock): it actually stores terms, keyed by workspace
  * then opaque identity, so the service's policy can be exercised end-to-end. Insertion
- * order is preserved to make {@link #findAll(WorkspaceId)} assertions deterministic. {@link
+ * order is preserved to make {@link #findAll(ProjectId)} assertions deterministic. {@link
  * #create} honours the same contract as the real adapter (rejects an existing identity or a
  * duplicate code). {@link #update} resolves by code and replaces only the fields the caller
  * actually supplied - it cannot reproduce the real adapter's triple-level preservation of a
@@ -36,28 +36,28 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  */
 final class InMemoryTermRepository implements TermRepository {
 
-    private final Map<WorkspaceId, Map<TermId, Term>> byWorkspace = new LinkedHashMap<>();
+    private final Map<ProjectId, Map<TermId, Term>> byProject = new LinkedHashMap<>();
 
     @Override
-    public void create(WorkspaceId workspaceId, Term term) {
-        Map<TermId, Term> terms = byWorkspace.computeIfAbsent(workspaceId, k -> new LinkedHashMap<>());
+    public void create(ProjectId projectId, Term term) {
+        Map<TermId, Term> terms = byProject.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
         if (terms.containsKey(term.id())) {
-            throw new ResourceAlreadyExistsException(workspaceId, term.id().value());
+            throw new ResourceAlreadyExistsException(projectId, term.id().value());
         }
         if (terms.values().stream().anyMatch(t -> t.code().equals(term.code()))) {
-            throw new DuplicateTermCodeException(workspaceId, term.code());
+            throw new DuplicateTermCodeException(projectId, term.code());
         }
         terms.put(term.id(), term);
     }
 
     @Override
-    public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+    public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
-        Map<TermId, Term> terms = byWorkspace.getOrDefault(workspaceId, Map.of());
+        Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
         Term current = terms.values().stream()
                 .filter(t -> t.code().equals(code))
                 .findFirst()
-                .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
+                .orElseThrow(() -> new TermNotFoundException(projectId, code));
         Term updated = new Term(current.id(), current.code(),
                 prefLabel != null ? prefLabel : current.prefLabel(),
                 definition != null ? definition : current.definition(),
@@ -67,21 +67,21 @@ final class InMemoryTermRepository implements TermRepository {
     }
 
     @Override
-    public Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code) {
-        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+    public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(t -> t.code().equals(code))
                 .findFirst();
     }
 
     @Override
-    public List<Term> findAll(WorkspaceId workspaceId) {
-        return List.copyOf(byWorkspace.getOrDefault(workspaceId, Map.of()).values());
+    public List<Term> findAll(ProjectId projectId) {
+        return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 
     @Override
-    public List<ResolveTerms.ResolvedTerm> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
+    public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
-        return byWorkspace.getOrDefault(workspaceId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(t -> wanted.contains(t.id().value()))
                 .map(t -> new ResolveTerms.ResolvedTerm(t.id().value(), t.code()))
                 .toList();

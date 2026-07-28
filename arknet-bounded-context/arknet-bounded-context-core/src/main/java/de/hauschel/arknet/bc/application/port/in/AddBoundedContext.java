@@ -5,7 +5,7 @@ package de.hauschel.arknet.bc.application.port.in;
 
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.Subdomain;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driving port: register a new bounded context.
@@ -19,14 +19,14 @@ public interface AddBoundedContext {
     /**
      * Adds a new bounded context.
      *
-     * @param workspaceId the workspace (architecture model) to add the bounded context to
+     * @param projectId the project (architecture model) to add the bounded context to
      * @param command     the data describing the bounded context to create
      * @return the persisted bounded context including its assigned identity and code
      */
-    BoundedContext add(WorkspaceId workspaceId, NewBoundedContext command);
+    BoundedContext add(ProjectId projectId, NewBoundedContext command);
 
     /**
-     * Input data for {@link #add(WorkspaceId, NewBoundedContext)}.
+     * Input data for {@link #add(ProjectId, NewBoundedContext)}.
      *
      * @param name         the context's human-readable name (e.g. {@code OrderManagement})
      * @param domainVision one sentence stating what this context does and why it exists
