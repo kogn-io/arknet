@@ -17,9 +17,9 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 public interface GetRequirement {
 
     /**
-     * Looks up a requirement by its business code within a workspace.
+     * Looks up a requirement by its business code within a project.
      *
-     * @param projectId the workspace (architecture model) to look up the requirement in
+     * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code, e.g. {@code FR-1}
      * @return the requirement if present, otherwise {@link Optional#empty()}
      */

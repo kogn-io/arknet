@@ -17,9 +17,9 @@ import de.hauschel.arknet.ul.domain.Term;
 public interface AddTerm {
 
     /**
-     * Adds a new term to the workspace glossary.
+     * Adds a new term to the project glossary.
      *
-     * @param projectId the workspace (architecture model) to add the term to
+     * @param projectId the project (architecture model) to add the term to
      * @param command     the data describing the term to create
      * @return the persisted term including its assigned identity
      */

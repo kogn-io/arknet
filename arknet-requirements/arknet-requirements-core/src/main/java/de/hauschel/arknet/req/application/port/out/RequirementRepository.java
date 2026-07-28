@@ -25,7 +25,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  *
  * <p>The {@link ProjectId} routing key identifies which architecture model a
  * requirement belongs to. A local single-user adapter may treat it as an implicit
- * default; a remote/team adapter uses it to address one of several workspaces.</p>
+ * default; a remote/team adapter uses it to address one of several projects.</p>
  *
  * <p><strong>Create vs. update.</strong> Identity is opaque and minted once (see
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
@@ -39,9 +39,9 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 public interface RequirementRepository {
 
     /**
-     * Persists a brand-new requirement whose identity does not yet exist in the workspace.
+     * Persists a brand-new requirement whose identity does not yet exist in the project.
      *
-     * @param projectId the workspace (architecture model) to store the requirement in
+     * @param projectId the project (architecture model) to store the requirement in
      * @param requirement the requirement to create
      * @throws ResourceAlreadyExistsException   if a requirement with this identity already exists
      * @throws DuplicateRequirementCodeException if another requirement already carries this
@@ -70,7 +70,7 @@ public interface RequirementRepository {
      * overwrites it. The guard closes the lost-update window between two funnel writers, not
      * between a funnel writer and a write that bypassed the funnel entirely.</p>
      *
-     * @param projectId  the workspace (architecture model) the requirement lives in
+     * @param projectId  the project (architecture model) the requirement lives in
      * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
      *                     requirement (from {@link #findCurrentByCode}), or {@code null} if the
      *                     caller expects no revision to exist yet
@@ -85,9 +85,9 @@ public interface RequirementRepository {
     void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated);
 
     /**
-     * Finds a requirement by its human-readable business code within a workspace.
+     * Finds a requirement by its human-readable business code within a project.
      *
-     * @param projectId the workspace (architecture model) to look up the requirement in
+     * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
      * @return the requirement if present, otherwise {@link Optional#empty()}
      */
@@ -108,7 +108,7 @@ public interface RequirementRepository {
      * the whole requirement comes from a single read. Backs the read side of the read-modify-write
      * round trip {@link #compareAndUpdate} guards the write side of.
      *
-     * @param projectId the workspace (architecture model) to look up the requirement in
+     * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
      * @return the requirement and its current head, or {@link Optional#empty()} if no requirement
      *         with this code exists
@@ -124,17 +124,17 @@ public interface RequirementRepository {
     }
 
     /**
-     * Returns all requirements stored in a workspace.
+     * Returns all requirements stored in a project.
      *
-     * @param projectId the workspace (architecture model) to list requirements from
+     * @param projectId the project (architecture model) to list requirements from
      * @return all requirements, never {@code null}
      */
     List<Requirement> findAll(ProjectId projectId);
 
     /**
-     * Finds every requirement in a workspace whose identity is among {@code ids}, in one store
+     * Finds every requirement in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveRequirements} (issue #88). This is a batch lookup, not a
-     * per-id existence check: an id absent from the workspace is simply absent from the result,
+     * per-id existence check: an id absent from the project is simply absent from the result,
      * never an error.
      *
      * <p>Returns the slim {@link ResolveRequirements.ResolvedRequirement} projection, not the
@@ -144,7 +144,7 @@ public interface RequirementRepository {
      * reads would needlessly exclude a store-first requirement that carries an identity and a
      * code but happens to miss one of them.</p>
      *
-     * @param projectId the workspace (architecture model) to look up requirements in
+     * @param projectId the project (architecture model) to look up requirements in
      * @param ids         the opaque identities to resolve; an empty list yields an empty result
      * @return the resolved requirements found, in no particular order, never {@code null}
      */

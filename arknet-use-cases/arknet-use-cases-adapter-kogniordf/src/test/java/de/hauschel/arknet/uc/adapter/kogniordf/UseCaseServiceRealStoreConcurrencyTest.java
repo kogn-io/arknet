@@ -89,7 +89,7 @@ import de.hauschel.arknet.uc.domain.UseCase;
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 class UseCaseServiceRealStoreConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
     private static final ActorLookup CUSTOMER_ACTOR_LOOKUP = (projectId, actorName) -> {
         if (!"Customer".equals(actorName)) {

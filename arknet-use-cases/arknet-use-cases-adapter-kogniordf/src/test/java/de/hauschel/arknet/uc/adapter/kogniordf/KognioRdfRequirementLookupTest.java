@@ -89,7 +89,7 @@ class KognioRdfRequirementLookupTest {
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** A requirement of another workspace must not satisfy this workspace's reference. */
+    /** A requirement of another workspace must not satisfy this project's reference. */
     @Test
     void aRequirementOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
         givenRequirement(WORKSPACE_B, "FR-1");

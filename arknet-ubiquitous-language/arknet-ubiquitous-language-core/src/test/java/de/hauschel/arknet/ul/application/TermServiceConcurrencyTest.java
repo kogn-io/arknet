@@ -26,7 +26,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 /**
  * Regression test for issue #144: {@link TermService#add} used to compute the next business code
  * ({@code TERM-N}) client-side via {@code nextCode()} and then {@code create()} it with no retry,
- * so two racing {@code term_add} calls in the same workspace both computed the same candidate code
+ * so two racing {@code term_add} calls in the same project both computed the same candidate code
  * and one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard fire as
  * a caller-visible {@code DuplicateTermCodeException} - even though nothing about its own request
  * was wrong.
@@ -39,7 +39,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
  */
 class TermServiceConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
 
     private InMemoryTermRepository store;
     /**

@@ -29,7 +29,7 @@ public interface ActorLookup {
      * Resolves {@code actorName} to the identity of the actor term it currently names within
      * {@code projectId}.
      *
-     * @param projectId the workspace (architecture model) to resolve the name in
+     * @param projectId the project (architecture model) to resolve the name in
      * @param actorName   the actor's human-readable name, e.g. {@code Customer}
      * @return the resolved actor's opaque subject identity
      */

@@ -116,7 +116,7 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * Builds a graph from every statement of a workspace snapshot.
+     * Builds a graph from every statement of a project snapshot.
      *
      * @param snapshot the snapshot to traverse (as read by {@code StoreReader#readSnapshot})
      * @return the assembled graph

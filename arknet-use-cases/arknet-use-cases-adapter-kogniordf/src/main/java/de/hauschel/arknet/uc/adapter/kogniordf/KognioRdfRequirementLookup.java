@@ -25,7 +25,7 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
  * {@link ResourceId} within the shared workspace store.
  *
  * <p><strong>Strict cross-BC requirement resolution (issue #89).</strong> Use-cases and
- * requirements share one per-workspace store. This adapter looks up a code by
+ * requirements share one per-project store. This adapter looks up a code by
  * {@code dcterms:identifier} among the requirements graph's subjects; an unknown or ambiguous
  * code aborts with a didactic {@link UnresolvedReferenceException}. This is called once, from
  * the application service, at the moment a use-case step realises a requirement -
@@ -48,7 +48,7 @@ public final class KognioRdfRequirementLookup implements RequirementLookup {
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     // Mirrors the graph IRI the requirements out-adapter writes into. The bounded contexts share
-    // one workspace dataset; resolving a requirement means reading across into that sibling graph.
+    // one project dataset; resolving a requirement means reading across into that sibling graph.
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
 
     private final DatasetLifecycle lifecycle;
@@ -78,12 +78,12 @@ public final class KognioRdfRequirementLookup implements RequirementLookup {
                     .toList();
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Requirement '" + requirementCode
-                        + "' does not exist in workspace '" + projectId.value()
+                        + "' does not exist in project '" + projectId.value()
                         + "'. Create it first with req_add before a use-case step realises it.");
             }
             if (matches.size() > 1) {
                 throw new UnresolvedReferenceException("Requirement label '" + requirementCode
-                        + "' is ambiguous in workspace '" + projectId.value() + "' (" + matches.size()
+                        + "' is ambiguous in project '" + projectId.value() + "' (" + matches.size()
                         + " matches). Reference a requirement by its unique dcterms:identifier.");
             }
             return ResourceId.of(matches.get(0).getIRIString());

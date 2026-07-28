@@ -18,7 +18,7 @@ public interface ListTerms {
     /**
      * Returns all terms currently under management in the given workspace glossary.
      *
-     * @param projectId the workspace (architecture model) to list terms from
+     * @param projectId the project (architecture model) to list terms from
      * @return all terms, never {@code null}
      */
     List<Term> list(ProjectId projectId);

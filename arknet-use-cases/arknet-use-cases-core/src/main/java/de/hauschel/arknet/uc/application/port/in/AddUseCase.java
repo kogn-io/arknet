@@ -20,7 +20,7 @@ public interface AddUseCase {
     /**
      * Adds a new use case.
      *
-     * @param projectId the workspace (architecture model) to add the use case to
+     * @param projectId the project (architecture model) to add the use case to
      * @param command     the data describing the use case to create
      * @return the persisted use case including its assigned identity
      */

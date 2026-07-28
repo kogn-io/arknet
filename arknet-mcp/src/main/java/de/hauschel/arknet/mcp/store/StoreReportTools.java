@@ -50,7 +50,7 @@ public final class StoreReportTools {
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
     private final HandleResolver handleResolver;
-    private final ProjectResolver workspaces;
+    private final ProjectResolver projects;
     private final Path fallbackReportDir;
     private final Path reportHostDir;
 
@@ -61,24 +61,22 @@ public final class StoreReportTools {
      * @param modelViews        assembles the report's per-bounded-context sections; never fails the
      *                          tool - a context whose read path throws is reported as a warning in
      *                          the HTML and its resources fall back to the generic raw view
-     * @param workspaces        resolves each call's default workspace from its origin directory (an
-     *                          explicit {@code workspace} tool argument still overrides it)
-     * @param fallbackReportDir the directory a workspace-scoped subdirectory is created under when a
-     *                          call carries no origin directory (the report otherwise lands in the
-     *                          calling project); the subdirectory keeps workspaces that share this
-     *                          fallback from overwriting each other's report (issue #172)
+     * @param projects          resolves each call's target project from its anchor
+     * @param fallbackReportDir the directory a project-scoped subdirectory is created under for the
+     *                          HTML report; the subdirectory keeps projects that share this
+     *                          directory from overwriting each other's report (issue #172)
      * @param reportHostDir     the host-reachable path that {@code fallbackReportDir} is bind-mounted
      *                          from, or {@code null} when the process runs directly on the machine it
-     *                          reports to (bare jar) and no translation is needed. Set on a
-     *                          containerized daemon (issue #160) whose {@code fallbackReportDir} is a
-     *                          container-internal mount point the calling agent cannot reach.
+     *                          reports to and no translation is needed. Set on a containerized daemon
+     *                          (issue #160) whose {@code fallbackReportDir} is a container-internal
+     *                          mount point the calling agent cannot reach.
      */
     public StoreReportTools(
             final StoreReader storeReader,
             final Prefixes prefixes,
             final HtmlReportRenderer htmlRenderer,
             final ModelViews modelViews,
-            final ProjectResolver workspaces,
+            final ProjectResolver projects,
             final Path fallbackReportDir,
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
@@ -88,13 +86,13 @@ public final class StoreReportTools {
         this.digestRenderer = new DigestRenderer(prefixes);
         this.resourceRenderer = new ResourceRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
-        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+        this.projects = Objects.requireNonNull(projects, "projects");
         this.fallbackReportDir = Objects.requireNonNull(fallbackReportDir, "fallbackReportDir");
         this.reportHostDir = reportHostDir;
     }
 
     @McpTool(name = "store_overview",
-            description = "Overview of everything in the workspace store: a compact, domain-agnostic text"
+            description = "Overview of everything in the project store: a compact, domain-agnostic text"
                     + " digest (resource/triple/type counts, prefix legend, one line per resource with a"
                     + " '-> resource_get(...)' drill-down, integrity hint) plus a self-contained HTML report"
                     + " for humans, written to disk (its path is returned). The HTML groups the model by"
@@ -103,17 +101,18 @@ public final class StoreReportTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String storeOverview(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
-                    required = false)
-            final String workspace) {
-        final String originDir = HandleResolver.originDir(context);
-        final ProjectId projectId =
-                HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir));
+            @McpToolParam(description = "Optional anchor identifying the project to report on, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
         final String digest = digestRenderer.render(projectId, snapshot);
         final String html = htmlRenderer.render(projectId, snapshot, digest, modelViews.of(projectId));
-        return digest + "\n" + writeReportLine(html, reportDirFor(originDir, projectId), projectId) + "\n";
+        return digest + "\n" + writeReportLine(html, fallbackDirFor(projectId), projectId) + "\n";
     }
 
     @McpTool(name = "resource_get",
@@ -125,11 +124,13 @@ public final class StoreReportTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
             final String id,
-            @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
-                    required = false)
-            final String workspace) {
-        final ProjectId projectId =
-                HandleResolver.resolveWorkspace(workspace, workspaces.resolve(HandleResolver.originDir(context)));
+            @McpToolParam(description = "Optional anchor identifying the project to read from, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
         final String iri = handleResolver.resolve(projectId, id);
         final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
         final List<Triple> incoming = storeReader.incoming(projectId, iri);
@@ -137,54 +138,50 @@ public final class StoreReportTools {
     }
 
     /**
-     * The directory the HTML report is written into: the calling client's origin directory when
-     * it supplied one (so the report lands in the project the call came from, issue #137), else a
-     * workspace-scoped subdirectory of {@link #fallbackReportDir}. The subdirectory matters
-     * because every workspace served by a shared daemon falls back to the very same
-     * {@link #fallbackReportDir} (issue #172: a containerized daemon has no writable origin dir
-     * for ANY project, so this is not a rare corner case but the common path there) - without it,
-     * the last workspace to call {@code store_overview} would silently overwrite every other
-     * workspace's report under the identical file name.
+     * The directory the HTML report is written into: always a project-scoped subdirectory of
+     * {@link #fallbackReportDir}. The subdirectory matters because every project served by a
+     * shared daemon uses the very same {@link #fallbackReportDir} - without it, the last project
+     * to call {@code store_overview} would silently overwrite every other project's report under
+     * the identical file name (issue #172).
+     *
+     * <p><strong>The client's own directory is no longer a candidate</strong>, and that follows
+     * from ADR-016 rather than from a preference. The report used to be written into whatever the
+     * client sent in its header, because that value <em>was</em> a working directory. What arrives
+     * now is an anchor: opaque, possibly a URL or a UUID, and the server does not interpret it -
+     * that is the whole of decision 2. Passing it to {@code Path.of} would be exactly the
+     * interpretation ADR-016 removes, and it would fail outright for any client whose anchor is
+     * not a path. The written path is returned in the digest either way, and on a containerized
+     * daemon this was already the only reachable target (issue #158/#160): there, the client's
+     * directory does not exist inside the container at all.</p>
      */
-    private Path reportDirFor(final String originDir, final ProjectId projectId) {
-        return (originDir == null || originDir.isBlank()) ? fallbackDirFor(projectId) : Path.of(originDir);
-    }
-
     private Path fallbackDirFor(final ProjectId projectId) {
         return fallbackReportDir.resolve(projectId.value());
     }
 
     /**
-     * Writes the HTML report and renders the digest's trailing "# HTML report: ..." line -
-     * never by throwing. A daemon shared across workspaces (issue #137/ADR-009) cannot assume
-     * it shares a filesystem with every calling client (issue #158: a containerized daemon has
-     * no access to a client's {@code originDir} at all), so a preferred target that turns out
-     * unwritable falls back to the workspace's subdirectory of {@link #fallbackReportDir}; if
-     * that fails too, the digest is still returned with a failure line instead of losing the
-     * whole tool response to an opaque {@link java.nio.file.AccessDeniedException} whose
-     * {@code getMessage()} is only a bare path fragment. When the report lands in the fallback
-     * dir and {@link #reportHostDir} is set, the reported path is translated to the
-     * host-reachable equivalent (issue #160) - the write itself still targets the fallback dir,
-     * only the path shown to the caller changes.
+     * Writes the HTML report and renders the digest's trailing "# HTML report: ..." line - never
+     * by throwing. An unwritable target still returns the digest with a failure line rather than
+     * losing the whole tool response to an opaque {@link java.nio.file.AccessDeniedException}
+     * whose {@code getMessage()} is only a bare path fragment (issue #158). When
+     * {@link #reportHostDir} is set, the reported path is translated to the host-reachable
+     * equivalent (issue #160) - the write itself is unaffected, only the path shown to the caller
+     * changes.
+     *
+     * <p>There used to be a second attempt here, falling back from the client's own directory to
+     * {@link #fallbackReportDir}. It went with the client directory itself: since ADR-016 there is
+     * only ever one target (see {@link #fallbackDirFor}), so a retry would just repeat the write
+     * that has already failed.</p>
      */
-    private String writeReportLine(final String html, final Path preferredDir, final ProjectId projectId) {
-        final Path fallbackDir = fallbackDirFor(projectId);
+    private String writeReportLine(final String html, final Path targetDir, final ProjectId projectId) {
         try {
-            return "# HTML report: " + displayPath(writeReport(html, preferredDir), preferredDir, projectId);
-        } catch (final IOException preferredFailure) {
-            if (preferredDir.equals(fallbackDir)) {
-                return reportFailureLine(preferredDir, preferredFailure);
-            }
-            try {
-                return "# HTML report: " + displayPath(writeReport(html, fallbackDir), fallbackDir, projectId);
-            } catch (final IOException fallbackFailure) {
-                return reportFailureLine(fallbackDir, fallbackFailure);
-            }
+            return "# HTML report: " + displayPath(writeReport(html, targetDir), projectId);
+        } catch (final IOException failure) {
+            return reportFailureLine(targetDir, failure);
         }
     }
 
-    private String displayPath(final Path written, final Path writtenDir, final ProjectId projectId) {
-        return writtenDir.equals(fallbackDirFor(projectId)) && reportHostDir != null
+    private String displayPath(final Path written, final ProjectId projectId) {
+        return reportHostDir != null
                 ? reportHostDir.resolve(projectId.value()).resolve(REPORT_FILE_NAME).toString()
                 : written.toString();
     }

@@ -32,11 +32,6 @@ class ProjectIdTest {
         assertThrows(IllegalArgumentException.class, () -> new ProjectId(" "));
     }
 
-    @Test
-    void defaultConstantIsNonBlank() {
-        assertEquals("default", ProjectId.DEFAULT.value());
-    }
-
     /**
      * Moved here from {@code ProjectServiceTest} along with the type itself: the reserved value is
      * an invariant of {@link ProjectId}, so it belongs to the type's own test rather than to the

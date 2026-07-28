@@ -53,7 +53,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 /**
  * Integration test for {@link KognioRdfUseCaseRepository} against an in-memory RDF4J-backed
  * kognio-rdf store. Requirement and actor resources referenced by a use case are seeded
- * directly into the same workspace graphs (as the requirements / ubiquitous-language adapters
+ * directly into the same project graphs (as the requirements / ubiquitous-language adapters
  * would write them), so the write path can be exercised without a cross-bounded-context test
  * dependency.
  *
@@ -275,7 +275,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     @Test
-    void workspacesAreIsolated() {
+    void projectsAreIsolated() {
         seedReferences(WORKSPACE_A);
         repository.create(WORKSPACE_A, placeOrder());
 

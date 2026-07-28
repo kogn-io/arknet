@@ -71,10 +71,10 @@ import de.hauschel.arknet.req.domain.TermRef;
  * supplied by the composition root.</p>
  *
  * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId}
- * is mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are
+ * is mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are
  * fully isolated datasets. A future remote/team adapter (against kognio-memory)
  * would use the same routing key differently (e.g. as a server-side project
- * selector), but the local embedded adapter already keeps workspaces separate.</p>
+ * selector), but the local embedded adapter already keeps projects separate.</p>
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity, issue #167).</strong> Because
  * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent

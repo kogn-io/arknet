@@ -39,12 +39,12 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  */
 final class InMemoryRequirementRepository implements RequirementRepository {
 
-    private final Map<ProjectId, Map<RequirementId, Requirement>> byWorkspace = new LinkedHashMap<>();
+    private final Map<ProjectId, Map<RequirementId, Requirement>> byProject = new LinkedHashMap<>();
     private final Map<RequirementId, String> headByIdentity = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Requirement requirement) {
-        Map<RequirementId, Requirement> requirements = byWorkspace.computeIfAbsent(projectId,
+        Map<RequirementId, Requirement> requirements = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (requirements.containsKey(requirement.id())) {
             throw new ResourceAlreadyExistsException(projectId, requirement.id().value());
@@ -63,7 +63,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
 
     @Override
     public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
-        Map<RequirementId, Requirement> requirements = byWorkspace.getOrDefault(projectId, Map.of());
+        Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
         Requirement current = requirements.get(updated.id());
         if (current == null) {
             throw new RequirementNotFoundException(projectId, updated.code());
@@ -77,7 +77,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
 
     @Override
     public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
-        return byWorkspace.getOrDefault(projectId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(r -> r.code().equals(code))
                 .findFirst();
     }
@@ -90,13 +90,13 @@ final class InMemoryRequirementRepository implements RequirementRepository {
 
     @Override
     public List<Requirement> findAll(ProjectId projectId) {
-        return List.copyOf(byWorkspace.getOrDefault(projectId, Map.of()).values());
+        return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 
     @Override
     public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
-        return byWorkspace.getOrDefault(projectId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(r -> wanted.contains(r.id().value()))
                 .map(r -> new ResolveRequirements.ResolvedRequirement(r.id().value(), r.code()))
                 .toList();

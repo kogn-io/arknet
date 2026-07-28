@@ -56,8 +56,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p>Maps a {@link Term} to a W3C SKOS concept whose subject is its opaque {@link TermId}
  * (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
- * business code or the label), stored in one named graph shared by all terms of a workspace.
- * Each term is typed {@code skos:Concept}, placed into a per-workspace glossary via
+ * business code or the label), stored in one named graph shared by all terms of a project.
+ * Each term is typed {@code skos:Concept}, placed into a per-project glossary via
  * {@code skos:inScheme}, and carries {@code skos:prefLabel} (the term) and
  * {@code skos:definition} (its meaning); the human-readable running code
  * ({@link TermCode}, {@code TERM-1}) is additionally kept as {@code dcterms:identifier} -
@@ -71,7 +71,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * supplied by the composition root.</p>
  *
  * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId} is
- * mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are fully
+ * mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are fully
  * isolated datasets - and thus distinct glossaries. For the MVP there is exactly one
  * {@code skos:ConceptScheme} per workspace ({@link #GLOSSARY_SCHEME}); a per-bounded-context
  * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
@@ -146,7 +146,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * crashing primary subject takes the whole result list down with it - {@link #findByCode} and
  * {@link #findAll} therefore add {@code FILTER(isIRI(?s))} (mirroring the {@code
  * FILTER(isIRI(?target))} guard on cross-BC reference fields in the requirements/use-cases
- * adapters) so such a concept is skipped rather than crashing every other term in the workspace.
+ * adapters) so such a concept is skipped rather than crashing every other term in the project.
  * {@link #findByIds} needs no such filter: its subjects come from a {@code VALUES} clause bound to
  * caller-supplied {@link ResourceId}s, which can never denote a blank node.</p>
  *
@@ -227,7 +227,7 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.code().value()));
         graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), rdf.createLiteral(term.prefLabel()));
         graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), rdf.createLiteral(term.definition()));
-        // The per-workspace glossary itself, typed once (idempotent - RDF set semantics).
+        // The per-project glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
         // Optional actor facet: the same skos:Concept is additionally typed as an

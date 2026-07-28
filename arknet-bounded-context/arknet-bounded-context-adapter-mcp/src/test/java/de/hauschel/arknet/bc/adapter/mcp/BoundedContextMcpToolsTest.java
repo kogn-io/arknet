@@ -27,6 +27,7 @@ import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -42,13 +43,50 @@ class BoundedContextMcpToolsTest {
     private static final BoundedContextId ID =
             new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
-    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final ProjectResolver WORKSPACES = originDir -> ProjectId.DEFAULT;
+    private static final ProjectId PROJECT = new ProjectId("test-project");
+    private static final String ANCHOR = "/home/dev/projects/test-project";
+
+    /**
+     * Stands in for the project registry (ADR-016): exactly one registered anchor, and a hard
+     * failure for anything else. Rejecting the unknown case rather than resolving it is what makes
+     * {@link #routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone} mean anything - a stub
+     * that answered every anchor would pass whether the parameter was honoured or ignored.
+     */
+    private static final ProjectResolver PROJECTS = anchor -> {
+        if (ANCHOR.equals(anchor)) {
+            return PROJECT;
+        }
+        throw new UnresolvedProjectAnchorException(anchor, "no project registered for '" + anchor + "'");
+    };
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final BoundedContextMcpTools adapter =
-            new BoundedContextMcpTools(stub, stub, stub, stub, resolveTerms, WORKSPACES);
+            new BoundedContextMcpTools(stub, stub, stub, stub, resolveTerms, PROJECTS);
+
+    /**
+     * ADR-016 decision 2: the explicit tool parameter is a full second delivery path, open to a
+     * client that cannot set the transport header - not a fallback for when the header is missing.
+     * Passing it here with a {@code null} context is exactly that client's situation.
+     */
+    @Test
+    void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
+        String created = adapter.add(null, "OrderManagement", "Handles orders end to end.", null, null, ANCHOR);
+
+        assertTrue(created.contains("BC-1"), created);
+        assertEquals(PROJECT, stub.lastProjectId);
+    }
+
+    /**
+     * The counterpart: no anchor at all is a caller error, never a route to a default project
+     * (ADR-016 decision 3). Without this the adapter could silently pass {@code null} on and let
+     * some later layer invent an answer.
+     */
+    @Test
+    void rejectsACallThatCarriesNoAnchorAtAll() {
+        assertThrows(UnresolvedProjectAnchorException.class,
+                () -> adapter.add(null, "OrderManagement", "Handles orders end to end.", null, null, null));
+    }
 
     @Test
     void declaresTheFourBoundedContextTools() {
@@ -65,11 +103,11 @@ class BoundedContextMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(null, stub, stub, stub, resolveTerms, WORKSPACES));
+                () -> new BoundedContextMcpTools(null, stub, stub, stub, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, null, resolveTerms, WORKSPACES));
+                () -> new BoundedContextMcpTools(stub, stub, stub, null, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new BoundedContextMcpTools(stub, stub, stub, stub, null, WORKSPACES));
+                () -> new BoundedContextMcpTools(stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
@@ -81,7 +119,7 @@ class BoundedContextMcpToolsTest {
     @Test
     void addPassesTheFieldsThroughAndRendersThem() {
         String rendered = adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.",
-                "CORE_DOMAIN", "orders-team");
+                "CORE_DOMAIN", "orders-team", ANCHOR);
 
         assertEquals("OrderManagement", stub.lastAddCommand.name());
         assertEquals(Subdomain.CORE_DOMAIN, stub.lastAddCommand.subdomain());
@@ -93,7 +131,7 @@ class BoundedContextMcpToolsTest {
 
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
-        adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.", "  ", "");
+        adapter.add(null, "OrderManagement", "Owns the customer order lifecycle end to end.", "  ", "", ANCHOR);
 
         assertEquals(null, stub.lastAddCommand.subdomain());
         assertEquals(null, stub.lastAddCommand.ownedBy());
@@ -103,7 +141,7 @@ class BoundedContextMcpToolsTest {
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
         resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-1"), new TermCode("TERM-1"));
 
-        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1", ANCHOR);
 
         assertEquals(new BoundedContextCode("BC-1"), stub.lastLinkedBoundedContext);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
@@ -116,7 +154,7 @@ class BoundedContextMcpToolsTest {
         resolveTerms.register(termResourceId, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = termResourceId;
 
-        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1", ANCHOR);
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -126,7 +164,7 @@ class BoundedContextMcpToolsTest {
         ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-term");
         stub.nextLinkedTermResourceId = unresolvable;
 
-        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1", ANCHOR);
 
         assertTrue(rendered.contains("[terms: https://w3id.org/arknet/id/unknown-term]"), rendered);
     }
@@ -138,7 +176,7 @@ class BoundedContextMcpToolsTest {
         resolveTerms.register(duplicated, new TermCode("TERM-7"));
         stub.nextLinkedTermResourceId = duplicated;
 
-        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1");
+        String rendered = adapter.linkTerm(null, "BC-1", "TERM-1", ANCHOR);
 
         assertTrue(rendered.contains("[terms: TERM-7]"), rendered);
     }
@@ -153,7 +191,7 @@ class BoundedContextMcpToolsTest {
                 boundedContextWithTerms("BC-1", termA),
                 boundedContextWithTerms("BC-2", termB));
 
-        String rendered = adapter.list(null);
+        String rendered = adapter.list(null, ANCHOR);
 
         assertEquals(1, resolveTerms.callCount());
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
@@ -164,14 +202,14 @@ class BoundedContextMcpToolsTest {
     void listOfBoundedContextsWithoutAnyLinkedTermsDoesNotCallResolveTerms() {
         stub.allBoundedContexts = List.of(boundedContextWithTerms("BC-1"));
 
-        adapter.list(null);
+        adapter.list(null, ANCHOR);
 
         assertEquals(0, resolveTerms.callCount());
     }
 
     @Test
     void getRendersUnknownBoundedContextMessage() {
-        String rendered = adapter.get(null, "BC-99");
+        String rendered = adapter.get(null, "BC-99", ANCHOR);
 
         assertTrue(rendered.contains("Bounded context not found: BC-99"), rendered);
     }
@@ -192,10 +230,13 @@ class BoundedContextMcpToolsTest {
         private List<ResourceId> nextLinkedTerms = List.of();
         private List<BoundedContext> allBoundedContexts = List.of();
         private NewBoundedContext lastAddCommand;
+        /** Records which project the adapter routed to, so a test can assert the routing itself. */
+        private ProjectId lastProjectId;
 
         @Override
         public BoundedContext add(ProjectId projectId, NewBoundedContext command) {
             lastAddCommand = command;
+            lastProjectId = projectId;
             return new BoundedContext(ID, new BoundedContextCode("BC-1"), command.name(),
                     command.domainVision(), command.subdomain(), command.ownedBy(), List.of());
         }

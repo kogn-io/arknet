@@ -25,7 +25,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 /**
  * Regression test for issue #144: {@link UseCaseService#add} used to compute the next business
  * code ({@code UCn}) client-side via {@code nextCode()} and then {@code create()} it with no
- * retry, so two racing {@code uc_add} calls in the same workspace both computed the same candidate
+ * retry, so two racing {@code uc_add} calls in the same project both computed the same candidate
  * code and one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard
  * fire as a caller-visible {@code DuplicateUseCaseCodeException} - even though nothing about its
  * own request was wrong.
@@ -38,7 +38,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  */
 class UseCaseServiceConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
 
     private InMemoryUseCaseRepository store;

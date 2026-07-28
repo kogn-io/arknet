@@ -82,7 +82,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
      *
      * <p>This is the seam the composition root (arknet-mcp) uses: it passes the single shared
      * {@link DatasetLifecycle} bean so the use-case repository reads and writes the <em>same</em>
-     * per-workspace store as the requirements and ubiquitous-language repositories - which is
+     * per-project store as the requirements and ubiquitous-language repositories - which is
      * what makes the strict cross-bounded-context label resolution (a use-case step realising an
      * {@code FR-1}, or naming an actor term) actually find those resources. Tests likewise supply
      * their own (e.g. in-memory) lifecycle.</p>

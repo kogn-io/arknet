@@ -126,7 +126,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 @Timeout(value = 60, unit = TimeUnit.SECONDS)
 class BoundedContextServiceRealStoreConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
 

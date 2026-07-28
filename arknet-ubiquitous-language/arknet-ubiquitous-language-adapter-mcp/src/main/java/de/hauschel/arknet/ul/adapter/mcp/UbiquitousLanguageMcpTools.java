@@ -44,11 +44,11 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * identity itself is a store-internal detail that never needs to cross the MCP boundary;
  * responses render the code back to the caller, not the underlying resource identity.</p>
  *
- * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
+ * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
  * workspace on the machine (issue #137), so there is no single injected workspace any
  * more: each tool call resolves its own workspace from the request's origin directory,
- * carried in the MCP transport context under {@link ProjectResolver#WORKSPACE_DIR_KEY}.
+ * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
  * not a caller-facing argument. The concrete resolution (git top-level, slugging,
@@ -60,45 +60,55 @@ public final class UbiquitousLanguageMcpTools {
     private final ListTerms listTerms;
     private final GetTerm getTerm;
     private final UpdateTerm updateTerm;
-    private final ProjectResolver workspaces;
+    private final ProjectResolver projects;
 
     /**
      * Creates the adapter with its four driving in-ports and the resolver that maps each
-     * call's origin directory to a workspace.
+     * call's origin directory to a project.
      *
      * @param addTerm     in-port backing {@code term_add}
      * @param listTerms   in-port backing {@code term_list}
      * @param getTerm     in-port backing {@code term_get}
      * @param updateTerm  in-port backing {@code term_update}
-     * @param workspaces  resolves each call's target workspace from its origin directory
+     * @param projects  resolves each call's target project from its origin directory
      */
     public UbiquitousLanguageMcpTools(
             final AddTerm addTerm,
             final ListTerms listTerms,
             final GetTerm getTerm,
             final UpdateTerm updateTerm,
-            final ProjectResolver workspaces) {
+            final ProjectResolver projects) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
         this.updateTerm = Objects.requireNonNull(updateTerm, "updateTerm");
-        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+        this.projects = Objects.requireNonNull(projects, "projects");
     }
 
     /**
-     * Extracts the calling client's origin directory from the per-call transport context -
-     * the value the server's context extractor placed there off the request header (issue
-     * #137). Null-tolerant on every hop: a call without a context, without a transport
-     * context, or without the key resolves to {@code null}, which {@link ProjectResolver}
-     * turns into the server's default workspace.
+     * Extracts the calling client's project anchor from the per-call transport context - the value
+     * the server's context extractor placed there off the request header (ADR-016). Null-tolerant
+     * on every hop: a call without a context, without a transport context, or without the key
+     * resolves to {@code null}, which is a caller error rather than a route to a default.
      */
-    private static String originDir(final McpSyncRequestContext context) {
+    private static String contextAnchor(final McpSyncRequestContext context) {
         if (context == null) {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
-        return dir == null ? null : dir.toString();
+        final Object anchor = transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY);
+        return anchor == null ? null : anchor.toString();
+    }
+
+    /**
+     * Resolves the project this call targets: the explicit {@code projectAnchor} parameter if the
+     * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
+     * delivery paths are open to every MCP client). Neither present is a caller error; there is no
+     * default project and no fallback to a server-side working directory (decision 3).
+     */
+    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+        final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -115,8 +125,15 @@ public final class UbiquitousLanguageMcpTools {
             final String actorKind,
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
-            final String actorRole) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+            final String actorRole,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final ActorFacet facet = blankToNull(actorKind) == null
                 ? null
                 : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
@@ -126,8 +143,16 @@ public final class UbiquitousLanguageMcpTools {
 
     @McpTool(name = "term_list", description = "List all glossary terms.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String list(final McpSyncRequestContext context) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+    public String list(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final List<Term> all = listTerms.list(projectId);
         return all.stream().map(UbiquitousLanguageMcpTools::format)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no terms)");
@@ -137,8 +162,15 @@ public final class UbiquitousLanguageMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Term identity, e.g. TERM-1") final String id) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+            @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         return getTerm.get(projectId, code)
                 .map(UbiquitousLanguageMcpTools::format)
@@ -163,8 +195,15 @@ public final class UbiquitousLanguageMcpTools {
                     + "(arkproc:actorRole); only meaningful together with actorKind. Omitting it while "
                     + "giving actorKind leaves an already-set role unchanged (it does not clear it)",
                     required = false)
-            final String actorRole) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+            final String actorRole,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final ActorFacet facet = blankToNull(actorKind) == null
                 ? null

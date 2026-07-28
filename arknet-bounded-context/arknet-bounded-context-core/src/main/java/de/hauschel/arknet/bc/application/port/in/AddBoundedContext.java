@@ -19,7 +19,7 @@ public interface AddBoundedContext {
     /**
      * Adds a new bounded context.
      *
-     * @param projectId the workspace (architecture model) to add the bounded context to
+     * @param projectId the project (architecture model) to add the bounded context to
      * @param command     the data describing the bounded context to create
      * @return the persisted bounded context including its assigned identity and code
      */

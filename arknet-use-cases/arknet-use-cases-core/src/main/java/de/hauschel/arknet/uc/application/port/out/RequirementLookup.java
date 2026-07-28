@@ -28,7 +28,7 @@ public interface RequirementLookup {
      * Resolves {@code requirementCode} to the identity of the requirement it currently names
      * within {@code projectId}.
      *
-     * @param projectId      the workspace (architecture model) to resolve the code in
+     * @param projectId      the project (architecture model) to resolve the code in
      * @param requirementCode  the requirement's human-readable business code, e.g. {@code FR-5}
      * @return the resolved requirement's opaque subject identity
      */

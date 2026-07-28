@@ -39,12 +39,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  */
 final class InMemoryBoundedContextRepository implements BoundedContextRepository {
 
-    private final Map<ProjectId, Map<BoundedContextId, BoundedContext>> byWorkspace = new LinkedHashMap<>();
+    private final Map<ProjectId, Map<BoundedContextId, BoundedContext>> byProject = new LinkedHashMap<>();
     private final Map<BoundedContextId, String> headByIdentity = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, BoundedContext boundedContext) {
-        Map<BoundedContextId, BoundedContext> contexts = byWorkspace.computeIfAbsent(projectId,
+        Map<BoundedContextId, BoundedContext> contexts = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (contexts.containsKey(boundedContext.id())) {
             throw new ResourceAlreadyExistsException(projectId, boundedContext.id().value());
@@ -59,7 +59,7 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
 
     @Override
     public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
-        Map<BoundedContextId, BoundedContext> contexts = byWorkspace.getOrDefault(projectId, Map.of());
+        Map<BoundedContextId, BoundedContext> contexts = byProject.getOrDefault(projectId, Map.of());
         if (!contexts.containsKey(updated.id())) {
             throw new BoundedContextNotFoundException(projectId, updated.code());
         }
@@ -72,7 +72,7 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
 
     @Override
     public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
-        return byWorkspace.getOrDefault(projectId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(bc -> bc.code().equals(code))
                 .findFirst();
     }
@@ -86,6 +86,6 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
 
     @Override
     public List<BoundedContext> findAll(ProjectId projectId) {
-        return List.copyOf(byWorkspace.getOrDefault(projectId, Map.of()).values());
+        return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 }

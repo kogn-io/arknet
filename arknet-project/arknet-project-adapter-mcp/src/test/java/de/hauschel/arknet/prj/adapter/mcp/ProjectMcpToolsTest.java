@@ -301,7 +301,7 @@ class ProjectMcpToolsTest {
 
     /**
      * Builds an {@link McpSyncRequestContext} carrying a fixed origin directory under
-     * {@link ProjectResolver#WORKSPACE_DIR_KEY} - the single thing this adapter reads out of
+     * {@link ProjectResolver#ANCHOR_KEY} - the single thing this adapter reads out of
      * the framework context.
      *
      * <p>A dynamic proxy rather than a hand-written implementation of the interface. That
@@ -316,7 +316,7 @@ class ProjectMcpToolsTest {
     private static McpSyncRequestContext contextWithOriginDir(final String originDir) {
         final McpTransportContext transport = originDir == null
                 ? McpTransportContext.create(Map.of())
-                : McpTransportContext.create(Map.of(ProjectResolver.WORKSPACE_DIR_KEY, originDir));
+                : McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, originDir));
         return (McpSyncRequestContext) Proxy.newProxyInstance(
                 McpSyncRequestContext.class.getClassLoader(),
                 new Class<?>[] {McpSyncRequestContext.class},

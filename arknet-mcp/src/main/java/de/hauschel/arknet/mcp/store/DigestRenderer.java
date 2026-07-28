@@ -39,9 +39,9 @@ public final class DigestRenderer {
     }
 
     /**
-     * Renders the digest for a workspace snapshot.
+     * Renders the digest for a project snapshot.
      *
-     * @param projectId the workspace the snapshot was read from
+     * @param projectId the project the snapshot was read from
      * @param snapshot    the snapshot to render
      * @return the digest text
      */
@@ -50,7 +50,7 @@ public final class DigestRenderer {
         Objects.requireNonNull(snapshot, "snapshot");
 
         StringBuilder out = new StringBuilder();
-        out.append("# Workspace ").append(projectId.value())
+        out.append("# Project ").append(projectId.value())
                 .append(" -- ").append(snapshot.resourceCount()).append(" resources, ")
                 .append(snapshot.tripleCount()).append(" triples, ")
                 .append(snapshot.typeCount()).append(" types\n");

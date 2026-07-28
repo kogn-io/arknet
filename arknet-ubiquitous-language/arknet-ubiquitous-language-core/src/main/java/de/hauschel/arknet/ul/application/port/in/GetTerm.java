@@ -18,9 +18,9 @@ import de.hauschel.arknet.ul.domain.TermCode;
 public interface GetTerm {
 
     /**
-     * Looks up a term by its business code within a workspace glossary.
+     * Looks up a term by its business code within a project glossary.
      *
-     * @param projectId the workspace (architecture model) to look up the term in
+     * @param projectId the project (architecture model) to look up the term in
      * @param code        the term code (e.g. {@code TERM-1})
      * @return the term if present, otherwise {@link Optional#empty()}
      */

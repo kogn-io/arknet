@@ -84,7 +84,7 @@ import de.hauschel.arknet.ul.domain.Term;
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 class TermServiceRealStoreConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
 
     /**
      * The {@code NativeStore}'s on-disk home, managed by JUnit rather than by

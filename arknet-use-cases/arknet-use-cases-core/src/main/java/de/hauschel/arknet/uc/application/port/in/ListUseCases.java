@@ -16,7 +16,7 @@ public interface ListUseCases {
     /**
      * Returns all use cases currently under management in the given workspace.
      *
-     * @param projectId the workspace (architecture model) to list use cases from
+     * @param projectId the project (architecture model) to list use cases from
      * @return all use cases, never {@code null}
      */
     List<UseCase> list(ProjectId projectId);

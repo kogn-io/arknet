@@ -73,7 +73,7 @@ public final class ModelViews {
     /**
      * Reads every context and assembles its section.
      *
-     * @param projectId the workspace to read
+     * @param projectId the project to read
      * @return the sections that could be read and carry at least one card, plus the failures
      */
     public Views of(final ProjectId projectId) {

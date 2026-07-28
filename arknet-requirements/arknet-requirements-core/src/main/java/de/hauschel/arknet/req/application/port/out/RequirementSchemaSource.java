@@ -14,7 +14,7 @@ import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
  *
  * <p>Named after the capability ("describe the vocabulary"), not after any technology.
  * Implementations live in adapter modules and read the ontology (a static classpath resource),
- * not the workspace store - unlike {@link RequirementRepository} this takes no
+ * not the project store - unlike {@link RequirementRepository} this takes no
  * {@link de.hauschel.arknet.kernel.ProjectId}, since the vocabulary does not vary per
  * architecture model.</p>
  */

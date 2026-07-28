@@ -32,7 +32,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  */
 class TermServiceTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
 
     private InMemoryTermRepository repository;
     private TermService service;

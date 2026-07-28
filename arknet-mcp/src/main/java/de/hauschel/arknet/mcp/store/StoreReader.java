@@ -23,7 +23,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 
 /**
- * The single generic read path into a workspace dataset: one {@code SELECT ?s ?p ?o} over
+ * The single generic read path into a project dataset: one {@code SELECT ?s ?p ?o} over
  * the kognio-rdf substrate, spanning the default and all named graphs.
  *
  * <p>Domain-agnostic by construction - it never mentions a requirement, term or any type,
@@ -83,9 +83,9 @@ public final class StoreReader {
     }
 
     /**
-     * Reads every statement of the workspace and assembles a {@link StoreSnapshot}.
+     * Reads every statement of the project and assembles a {@link StoreSnapshot}.
      *
-     * @param projectId the workspace to read
+     * @param projectId the project to read
      * @return the snapshot over all statements
      */
     public StoreSnapshot readSnapshot(ProjectId projectId) {
@@ -104,7 +104,7 @@ public final class StoreReader {
     /**
      * Reads the outgoing statements of a resource ({@code <iri> ?p ?o}).
      *
-     * @param projectId the workspace to read
+     * @param projectId the project to read
      * @param iri         the subject IRI
      * @return the outgoing statements
      */
@@ -126,7 +126,7 @@ public final class StoreReader {
     /**
      * Reads the incoming statements of a resource ({@code ?s ?p <iri>}) - its neighbours.
      *
-     * @param projectId the workspace to read
+     * @param projectId the project to read
      * @param iri         the object IRI
      * @return the incoming statements (their object is always {@code iri})
      */
@@ -150,7 +150,7 @@ public final class StoreReader {
      * business id, e.g. {@code FR-1}). Returns all matches so the caller can reject an
      * ambiguous id spanning bounded contexts instead of guessing.
      *
-     * @param projectId the workspace to read
+     * @param projectId the project to read
      * @param identifier  the {@code dcterms:identifier} lexical value
      * @return the matching subject IRIs (distinct)
      */

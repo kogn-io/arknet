@@ -17,9 +17,9 @@ import de.hauschel.arknet.kernel.ProjectId;
 public interface GetBoundedContext {
 
     /**
-     * Looks up a bounded context by its business code within a workspace.
+     * Looks up a bounded context by its business code within a project.
      *
-     * @param projectId the workspace (architecture model) to look up the bounded context in
+     * @param projectId the project (architecture model) to look up the bounded context in
      * @param code        the bounded-context code, e.g. {@code BC-1}
      * @return the bounded context if present, otherwise {@link Optional#empty()}
      */

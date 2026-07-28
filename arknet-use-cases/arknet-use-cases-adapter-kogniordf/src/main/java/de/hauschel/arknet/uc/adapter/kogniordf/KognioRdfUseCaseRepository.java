@@ -108,7 +108,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
  * case the same way it skips a blank-node {@code primaryActor}, rather than letting the
  * constructor's exception propagate out of {@link #findAll}/{@link #findByCode} and crash every
- * read for the whole workspace.</p>
+ * read for the whole project.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
@@ -116,7 +116,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * by the composition root.</p>
  *
  * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId} is mapped
- * 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are fully isolated datasets.</p>
+ * 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are fully isolated datasets.</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
@@ -388,7 +388,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // ShaclWriteGate#enforce lets a store-first (ADR-005) use case through with zero main
             // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
             // mirror the primaryActor blank-node guard above: skip this one use case instead of
-            // letting the constructor throw out of findByCode/findAll for the whole workspace
+            // letting the constructor throw out of findByCode/findAll for the whole project
             // (issue #102).
             return Optional.empty();
         }
@@ -398,7 +398,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // UseCase.requireConsecutiveStepPositions, and store-first data (ADR-005) never runs
             // through that. Mirror the empty-steps guard above rather than letting the
             // constructor's IllegalArgumentException propagate out of findByCode/findAll for the
-            // whole workspace (issue #102).
+            // whole project (issue #102).
             return Optional.empty();
         }
         List<String> extensions = readExtensions(handle, subject);

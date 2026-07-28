@@ -27,17 +27,17 @@ public class ResourceAlreadyExistsException extends RuntimeException {
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace the identity collided in
+     * @param projectId the project the identity collided in
      * @param id          the resource identity that already exists
      */
     public ResourceAlreadyExistsException(ProjectId projectId, ResourceId id) {
         super("resource " + Objects.requireNonNull(id, "id").value()
-                + " already exists in workspace " + Objects.requireNonNull(projectId, "projectId").value());
+                + " already exists in project " + Objects.requireNonNull(projectId, "projectId").value());
         this.projectId = projectId;
         this.id = id;
     }
 
-    /** @return the workspace the identity collided in */
+    /** @return the project the identity collided in */
     public ProjectId projectId() {
         return projectId;
     }

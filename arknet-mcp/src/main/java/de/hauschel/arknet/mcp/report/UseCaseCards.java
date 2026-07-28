@@ -59,8 +59,8 @@ public final class UseCaseCards {
     }
 
     /**
-     * @param projectId the workspace to read
-     * @param glossary    the workspace's glossary, for actor labels
+     * @param projectId the project to read
+     * @param glossary    the project's glossary, for actor labels
      * @return the use-case section, ordered by business code
      */
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {

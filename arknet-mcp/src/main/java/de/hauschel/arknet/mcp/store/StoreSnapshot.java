@@ -14,7 +14,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
- * An in-memory, domain-agnostic view over the statements read from a workspace dataset.
+ * An in-memory, domain-agnostic view over the statements read from a project dataset.
  *
  * <p>Built purely from a flat {@code List<Triple>} (one generic {@code SELECT ?s ?p ?o}),
  * so it works identically for requirements, glossary terms or any future bounded context.
@@ -54,7 +54,7 @@ public final class StoreSnapshot {
     }
 
     /**
-     * Builds a snapshot from all statements of a workspace.
+     * Builds a snapshot from all statements of a project.
      *
      * @param triples the flat statement list (must not be {@code null})
      * @return the assembled snapshot

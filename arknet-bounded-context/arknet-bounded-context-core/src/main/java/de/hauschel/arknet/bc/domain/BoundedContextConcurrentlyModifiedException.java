@@ -28,18 +28,18 @@ public class BoundedContextConcurrentlyModifiedException extends RuntimeExceptio
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace the bounded context lives in
+     * @param projectId the project the bounded context lives in
      * @param code        the bounded-context code whose update kept losing the race
      */
     public BoundedContextConcurrentlyModifiedException(ProjectId projectId, BoundedContextCode code) {
         super("bounded context " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value()
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
         this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the bounded context lives in */
+    /** @return the project the bounded context lives in */
     public ProjectId projectId() {
         return projectId;
     }

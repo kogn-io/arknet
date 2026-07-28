@@ -88,7 +88,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 class RequirementServiceRealStoreConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     /** Unused by this race: neither caller links a term. */
     private static final TermLookup UNUSED_TERM_LOOKUP = (projectId, termCode) -> {
         throw new UnsupportedOperationException("not exercised by this test");
