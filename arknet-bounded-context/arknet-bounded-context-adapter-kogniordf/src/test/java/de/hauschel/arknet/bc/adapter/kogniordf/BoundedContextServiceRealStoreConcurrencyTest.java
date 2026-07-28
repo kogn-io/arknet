@@ -10,8 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -57,7 +56,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
- * Regression tests against a real RDF4J-backed store (in-memory {@code SailRepository}): the
+ * Regression tests against a real RDF4J-backed store (on-disk {@code NativeStore}): the
  * second interleaving of issue #144 with real threads, and the lost-update race of issue #176
  * through the funnel's own compare-and-set path - unlike {@code
  * BoundedContextServiceConcurrencyTest}, which reproduces the first interleaving ("a concurrent
@@ -74,6 +73,15 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * throws, so {@code CodeAssignment}'s retry (in {@link BoundedContextService#add}) catches this
  * interleaving exactly like the first one: both callers end up with distinct codes, neither sees
  * a failure.</p>
+ *
+ * <p><strong>Why the on-disk sail.</strong> Both races above are decided by the store's
+ * commit-time conflict detection, and that lives in each sail rather than in a shared layer above
+ * them: {@code rdf4j-sail-memory} and {@code rdf4j-sail-nativerdf} are two separate code paths.
+ * The daemon runs on the {@code NativeStore}, so this store is built {@code PERSISTENT} - with the
+ * very {@link DatasetStoreConfig#persistentDefault()} configuration the composition root uses -
+ * and the proof holds for the sail that actually holds user data (issue #180). Every other test in
+ * this module stays {@code IN_MEMORY} on purpose: what they assert sits above the store, where the
+ * faster sail is the legitimate choice and no coverage is lost.</p>
  *
  * <p><strong>How the overlap is forced deterministically.</strong> Mirrors the pattern kogn-io/
  * rdf-core's own {@code DatasetRdf4jTest#inTransaction_overlappingContainsGuardedWrites_
@@ -104,13 +112,21 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
 
+    /**
+     * The {@code NativeStore}'s on-disk home. Managed by JUnit rather than by
+     * {@code Files.createTempDirectory}, which left its directories behind: harmless while the
+     * store was in-memory and the directories stayed empty, but a persistent store fills them
+     * (some 21 MB per 400 runs). JUnit deletes this one after {@link #tearDown()} has shut the
+     * store down.
+     */
+    @TempDir
+    Path storageRoot;
+
     private DatasetLifecycleRdf4j realLifecycle;
 
     @BeforeEach
-    void setUp() throws IOException {
-        Path tmp = Files.createTempDirectory("arknet-bc-real-race");
-        realLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+    void setUp() {
+        realLifecycle = new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageRoot);
     }
 
     @AfterEach
