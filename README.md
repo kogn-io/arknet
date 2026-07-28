@@ -221,9 +221,7 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 |------|-------------|
 | `trace_matrix` | Per requirement (FR/NFR): the glossary terms used (`arkreq:usesTerm`) and the realizing use case(s) (via the step flow) |
 | `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms without any usage |
-| `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes |
-
-Sample call and output, against the use case above:
+| `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes (see sample below) |
 
 ```
 > impact_analysis(handle: "TERM-4")
