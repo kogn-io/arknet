@@ -28,9 +28,11 @@ import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository
 import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
 import de.hauschel.arknet.bc.application.BoundedContextService;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfDatasetInventory;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectRepositoryFactory;
 import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
+import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.mcp.store.StoreReader;
@@ -80,7 +82,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link RequirementMcpTools} (#77 nachtrag). {@code req_schema} (issue #31) is backed by
  *       a third {@link KognioRdfRequirementRepositoryFactory} product,
  *       {@link RequirementSchemaSource} - it reads only the classpath ontology, not the
- *       workspace store, so it needs no {@link DatasetLifecycle}.</li>
+ *       project store, so it needs no {@link DatasetLifecycle}.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
  *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
  *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
@@ -105,8 +107,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
  *       {@link BoundedContextMcpTools} (ADR-008).</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
- *       RDF-persisted registry) - the four project tools ({@code project_add}/
- *       {@code project_attach_anchor}/{@code project_rename}/{@code project_list}), assembled
+ *       RDF-persisted registry) - the five project tools ({@code project_add}/
+ *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
+ *       {@code project_list}), assembled
  *       through {@link KognioRdfProjectRepositoryFactory}. This one is shaped differently from the
  *       four above and deliberately so (ADR-016): it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
@@ -411,10 +414,24 @@ public class ArknetMcpConfiguration {
         return KognioRdfProjectRepositoryFactory.selfDescriptionOver(datasetLifecycle, displayLocale);
     }
 
+    /**
+     * Lists which datasets the store physically holds - the one question the registry cannot answer,
+     * because a dataset written before ADR-016 was never in it. Backs {@code project_adopt} and the
+     * "unregistered datasets" section of {@code project_list}.
+     *
+     * <p>Reads over the same shared {@link DatasetLifecycle} as everything else, and only its
+     * {@code list()}: no dataset is acquired or opened here.</p>
+     */
+    @Bean
+    DatasetInventory datasetInventory(final DatasetLifecycle datasetLifecycle) {
+        return new KognioRdfDatasetInventory(datasetLifecycle);
+    }
+
     @Bean
     ProjectService projectService(
-            final ProjectRegistry projectRegistry, final ProjectSelfDescription projectSelfDescription) {
-        return new ProjectService(projectRegistry, projectSelfDescription);
+            final ProjectRegistry projectRegistry, final ProjectSelfDescription projectSelfDescription,
+            final DatasetInventory datasetInventory) {
+        return new ProjectService(projectRegistry, projectSelfDescription, datasetInventory);
     }
 
     /**
@@ -433,7 +450,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     ProjectMcpTools projectMcpTools(final ProjectService service) {
-        return new ProjectMcpTools(service, service, service, service, service);
+        return new ProjectMcpTools(service, service, service, service, service, service, service);
     }
 
     // --- Store read path: generic query, model-shaped report -------------------

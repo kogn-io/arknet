@@ -17,12 +17,14 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.domain.Anchor;
+import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
+import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
 /**
  * Policy tests for {@link ProjectService}: registration, anchor attachment, renaming and
@@ -32,13 +34,15 @@ class ProjectServiceTest {
 
     private InMemoryProjectRegistry registry;
     private InMemoryProjectSelfDescription selfDescription;
+    private InMemoryDatasetInventory datasets;
     private ProjectService service;
 
     @BeforeEach
     void setUp() {
         registry = new InMemoryProjectRegistry();
         selfDescription = new InMemoryProjectSelfDescription();
-        service = new ProjectService(registry, selfDescription);
+        datasets = new InMemoryDatasetInventory();
+        service = new ProjectService(registry, selfDescription, datasets);
     }
 
     @Test
@@ -146,6 +150,78 @@ class ProjectServiceTest {
         assertEquals(3, selfDescription.writeCount());
     }
 
+    // --- adoption of pre-ADR-016 datasets -------------------------------------
+
+    @Test
+    void adoptRegistersTheExistingDatasetUnderItsOwnIdentity() {
+        ProjectId existing = new ProjectId("arknet");
+        datasets.with(existing);
+        Anchor anchor = pathAnchor("/home/fred/DEV/arknet");
+
+        Project adopted = service.adopt(existing, "arknet", anchor);
+
+        assertEquals(existing, adopted.id(), "the dataset keeps its identity - nothing is migrated");
+        assertEquals("arknet", adopted.label());
+        assertEquals(List.of(anchor), adopted.anchors());
+        assertEquals(adopted, service.resolve(anchor));
+        assertEquals(adopted, selfDescription.lastDescribed(existing));
+    }
+
+    @Test
+    void adoptRejectsADatasetThatDoesNotExist() {
+        assertThrows(UnknownDatasetException.class,
+                () -> service.adopt(new ProjectId("never-written"), "ghost", pathAnchor("/home/fred/ghost")));
+        assertEquals(0, registry.writeCount(), "a rejected adoption writes nothing");
+    }
+
+    @Test
+    void adoptRejectsADatasetSomeProjectAlreadyHolds() {
+        ProjectId existing = new ProjectId("arknet");
+        datasets.with(existing);
+        service.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet"));
+
+        assertThrows(DatasetAlreadyAdoptedException.class,
+                () -> service.adopt(existing, "arknet-again", pathAnchor("/home/other/arknet")));
+    }
+
+    @Test
+    void adoptRejectsAnAnchorThatAlreadyBelongsToAnotherProject() {
+        Anchor taken = pathAnchor("/home/fred/DEV/arknet");
+        service.register("arknet", taken);
+        ProjectId existing = new ProjectId("other-dataset");
+        datasets.with(existing);
+
+        assertThrows(AnchorAlreadyRegisteredException.class,
+                () -> service.adopt(existing, "other", taken));
+    }
+
+    /**
+     * The list is what keeps a caller from having to guess a dataset id, so it must shrink as
+     * adoption proceeds - otherwise it would keep offering datasets that are already claimed.
+     */
+    @Test
+    void adoptableListsOnlyDatasetsNoProjectClaims() {
+        datasets.with(new ProjectId("arknet")).with(new ProjectId("zahlenwart"));
+
+        assertEquals(List.of(new ProjectId("arknet"), new ProjectId("zahlenwart")), service.adoptable());
+
+        service.adopt(new ProjectId("arknet"), "arknet", pathAnchor("/home/fred/DEV/arknet"));
+
+        assertEquals(List.of(new ProjectId("zahlenwart")), service.adoptable());
+    }
+
+    /**
+     * A project registered the ordinary way mints a fresh identity, which by construction names no
+     * existing dataset - so it never appears as adoptable, and the two paths cannot collide.
+     */
+    @Test
+    void aFreshlyRegisteredProjectIsNotAdoptable() {
+        datasets.with(new ProjectId("arknet"));
+        service.register("something-new", pathAnchor("/home/fred/new"));
+
+        assertEquals(List.of(new ProjectId("arknet")), service.adoptable());
+    }
+
     @Test
     void projectRejectsAnEmptyAnchorList() {
         ProjectId id = new ProjectId(UUID.randomUUID().toString());
@@ -163,7 +239,7 @@ class ProjectServiceTest {
     void aStaleCompareAndUpdateOnTheFirstAttemptIsRetriedTransparently() {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
         ProjectService retryingService =
-                new ProjectService(new ConflictsOnFirstWriteRegistry(registry), selfDescription);
+                new ProjectService(new ConflictsOnFirstWriteRegistry(registry), selfDescription, datasets);
 
         Project attached = retryingService.attach(project.id(), pathAnchor("/home/fred/arknet-worktree"));
 
