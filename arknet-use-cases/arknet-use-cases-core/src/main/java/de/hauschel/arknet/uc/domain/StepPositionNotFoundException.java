@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when a {@code uc_update} step-text correction names a {@link Step#position() position}
@@ -19,29 +19,29 @@ public class StepPositionNotFoundException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient UseCaseCode code;
     private final int position;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the use case lives in
-     * @param code        the use-case code the correction targeted
-     * @param position    the position named by the patch that matched no existing step
+     * @param projectId the project the use case lives in
+     * @param code      the use-case code the correction targeted
+     * @param position  the position named by the patch that matched no existing step
      */
-    public StepPositionNotFoundException(WorkspaceId workspaceId, UseCaseCode code, int position) {
+    public StepPositionNotFoundException(ProjectId projectId, UseCaseCode code, int position) {
         super("use case " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value()
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value()
                 + " has no step at position " + position);
-        this.workspaceId = workspaceId;
+        this.projectId = projectId;
         this.code = code;
         this.position = position;
     }
 
-    /** @return the workspace the use case lives in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    /** @return the project the use case lives in */
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the use-case code the correction targeted */

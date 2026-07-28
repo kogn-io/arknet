@@ -248,7 +248,7 @@ class UseCaseServiceTest {
                 () -> service.update(WS, new UseCaseCode("UC99"), "New title", null, null, null, null, null,
                         null, null));
 
-        assertSame(WS, ex.workspaceId());
+        assertSame(WS, ex.projectId());
         assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
     }
 
@@ -294,7 +294,7 @@ class UseCaseServiceTest {
                 () -> service.update(WS, code, null, null, null, null, null, null, null,
                         List.of(new StepTextPatch(99, "does not exist"))));
 
-        assertSame(WS, ex.workspaceId());
+        assertSame(WS, ex.projectId());
         assertEquals(code, ex.useCaseCode());
         assertEquals(99, ex.position());
     }
