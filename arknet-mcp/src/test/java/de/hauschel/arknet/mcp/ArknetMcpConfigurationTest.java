@@ -155,6 +155,59 @@ class ArknetMcpConfigurationTest {
                 });
     }
 
+    /**
+     * The migration path for data written before ADR-016, end to end - and the reason adoption is a
+     * tool rather than a startup routine.
+     *
+     * <p>The setup is the real situation: a dataset already sits under the id {@code arknet}, the
+     * slug the old resolver derived from a directory basename, and holds this project's whole model.
+     * Nothing points at it. The server cannot repair that by itself - the slug is not invertible, so
+     * it cannot know which of possibly several {@code .../arknet} directories once produced it, and
+     * guessing is precisely what ADR-016 removes. The person at the keyboard supplies the missing
+     * half by naming the dataset; the anchor arrives from their client as it always does.</p>
+     *
+     * <p>What must hold afterwards is that no data moved: the requirement written before adoption
+     * reads back through the ordinary routing path, under the same business code, addressed only by
+     * the anchor (ADR-016 decision 5 - pre-existing ids stay valid opaque values and simply gain the
+     * anchors they were always reached by).</p>
+     */
+    @Test
+    void adoptsAPreAdr016DatasetSoItsExistingDataStaysReachableByAnchor() {
+        contextRunner
+                .withPropertyValues("arknet.rdf.storage=" + storageDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    ProjectId legacy = new ProjectId("arknet");
+                    RequirementService requirements = context.getBean(RequirementService.class);
+                    Requirement before = requirements.add(legacy,
+                            new NewRequirement("Written before ADR-016",
+                                    "The system shall keep data written under a derived id reachable.",
+                                    RequirementType.FUNCTIONAL, null, null, null,
+                                    List.of("The requirement survives adoption")));
+
+                    ProjectService projects = context.getBean(ProjectService.class);
+                    ProjectResolver resolver = context.getBean(ProjectResolver.class);
+
+                    assertThat(projects.adoptable())
+                            .as("a dataset nothing points at is offered for adoption")
+                            .contains(legacy);
+                    assertThatThrownBy(() -> resolver.resolve("/home/a/DEV/arknet"))
+                            .as("and is unreachable until somebody claims it")
+                            .isInstanceOf(UnresolvedProjectAnchorException.class);
+
+                    Project adopted = projects.adopt(
+                            legacy, "arknet", new Anchor("/home/a/DEV/arknet", AnchorType.PATH));
+
+                    assertThat(adopted.id()).as("the dataset keeps its identity").isEqualTo(legacy);
+                    assertThat(projects.adoptable()).doesNotContain(legacy);
+
+                    ProjectId routed = resolver.resolve("/home/a/DEV/arknet");
+                    assertThat(requirements.get(routed, before.code()))
+                            .as("the data written before adoption reads back through the routing path")
+                            .isEqualTo(Optional.of(before));
+                });
+    }
+
     /** Counts the statements of one named graph in one dataset, straight from the store. */
     private static long graphSize(DatasetLifecycle lifecycle, String datasetId, String graphIri) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(datasetId))) {

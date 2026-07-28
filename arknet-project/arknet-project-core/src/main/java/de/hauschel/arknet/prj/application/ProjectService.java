@@ -4,26 +4,34 @@
 package de.hauschel.arknet.prj.application;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
+import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
 import de.hauschel.arknet.prj.application.port.in.RenameProject;
 import de.hauschel.arknet.prj.application.port.in.ResolveProject;
+import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
+import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
+import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
 /**
  * Application service implementing the project use cases (ADR-016 decision 8).
@@ -60,7 +68,9 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  * issue #108. Neither race is visible to a well-formed caller; only sustained, pathological
  * contention on the very same project surfaces as {@link StaleProjectException}.</p>
  */
-public class ProjectService implements RegisterProject, AttachAnchor, RenameProject, ListProjects, ResolveProject {
+public class ProjectService
+        implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
+        ListAdoptableDatasets, ResolveProject {
 
     /**
      * Bound on {@link #updateWithOptimisticRetry}'s retry loop, mirroring {@code
@@ -74,16 +84,21 @@ public class ProjectService implements RegisterProject, AttachAnchor, RenameProj
 
     private final ProjectRegistry registry;
     private final ProjectSelfDescription selfDescription;
+    private final DatasetInventory datasets;
 
     /**
      * Creates the service.
      *
      * @param registry        the driven registry port (must not be {@code null})
      * @param selfDescription the driven self-description port (must not be {@code null})
+     * @param datasets        the driven inventory of datasets present in the store, consulted only
+     *                        by {@link #adopt} and {@link #adoptable} (must not be {@code null})
      */
-    public ProjectService(ProjectRegistry registry, ProjectSelfDescription selfDescription) {
+    public ProjectService(ProjectRegistry registry, ProjectSelfDescription selfDescription,
+            DatasetInventory datasets) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.selfDescription = Objects.requireNonNull(selfDescription, "selfDescription");
+        this.datasets = Objects.requireNonNull(datasets, "datasets");
     }
 
     @Override
@@ -103,6 +118,51 @@ public class ProjectService implements RegisterProject, AttachAnchor, RenameProj
         registry.register(project);
         selfDescription.describe(project);
         return project;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The three guards run in this order for a reason. The dataset must exist, or the caller
+     * would end up with a registration pointing at nothing and would take the empty dataset it then
+     * writes into for its recovered model. It must be unclaimed, or two projects would share one
+     * body of data. Only then is the anchor checked - the registry re-checks it under its own write
+     * gate anyway, so this earlier check is for the message's sake, not for correctness.</p>
+     *
+     * <p>Note what is <em>not</em> checked: whether the dataset actually holds anything. An empty
+     * one is adoptable, because the alternative is worse - a project whose data was legitimately
+     * deleted, or a dataset created moments ago by a failed call, would otherwise be unreachable
+     * with no way to say so.</p>
+     */
+    @Override
+    public Project adopt(ProjectId datasetId, String label, Anchor anchor) {
+        Objects.requireNonNull(datasetId, "datasetId");
+        Objects.requireNonNull(label, "label");
+        Objects.requireNonNull(anchor, "anchor");
+        if (!datasets.existingDatasets().contains(datasetId)) {
+            throw new UnknownDatasetException(datasetId);
+        }
+        Optional<Project> alreadyAdopted = registry.findById(datasetId);
+        if (alreadyAdopted.isPresent()) {
+            throw new DatasetAlreadyAdoptedException(datasetId, alreadyAdopted.get().label());
+        }
+        Optional<Project> anchorOwner = registry.findByAnchor(anchor);
+        if (anchorOwner.isPresent()) {
+            throw new AnchorAlreadyRegisteredException(anchor, anchorOwner.get().id());
+        }
+        Project project = new Project(datasetId, label, List.of(anchor));
+        registry.register(project);
+        selfDescription.describe(project);
+        return project;
+    }
+
+    @Override
+    public List<ProjectId> adoptable() {
+        Set<ProjectId> registered = registry.findAll().stream().map(Project::id).collect(Collectors.toSet());
+        return datasets.existingDatasets().stream()
+                .filter(id -> !registered.contains(id))
+                .sorted(Comparator.comparing(ProjectId::value))
+                .toList();
     }
 
     @Override

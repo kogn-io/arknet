@@ -15,7 +15,10 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
 import de.hauschel.arknet.prj.application.port.in.RenameProject;
@@ -26,8 +29,9 @@ import de.hauschel.arknet.prj.domain.Project;
 
 /**
  * Driving (in) adapter of the project component: exposes the project-registry use-cases as MCP
- * tools ({@code project_add}, {@code project_attach_anchor}, {@code project_rename},
- * {@code project_list}) and delegates each tool call to the corresponding in-port.
+ * tools ({@code project_add}, {@code project_adopt}, {@code project_attach_anchor},
+ * {@code project_rename}, {@code project_list}) and delegates each tool call to the corresponding
+ * in-port.
  *
  * <p>This adapter belongs to the project hexagon (symmetric to the out-adapter
  * {@code arknet-project-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -51,26 +55,30 @@ import de.hauschel.arknet.prj.domain.Project;
  * value to hold onto.</p>
  *
  * <p><strong>No {@link ProjectResolver} here, on purpose.</strong> Every other bounded context's
- * MCP adapter resolves a {@code ProjectId} per call by handing the client's origin directory to
- * {@link ProjectResolver}, which <em>derives</em> an id from it (git top-level, slugging). That
- * derivation is exactly what ADR-016 replaces: a project's identity is a registered anchor
- * relationship, not something computed from a directory name. This adapter therefore imports
- * {@link ProjectResolver} only for its {@link ProjectResolver#ANCHOR_KEY} constant -
- * the key under which the calling client's origin directory travels in the MCP transport context
- * - and never calls {@link ProjectResolver#resolve(String)}. The raw value read under that key
- * is instead wrapped directly as an {@link Anchor} of {@link AnchorType#PATH} and looked up
- * against the registry. The key name itself is still the old one because this issue (#178) is
- * purely additive - it introduces the registry alongside the existing derived-workspace path
- * without touching it; issue #179 is the follow-up that renames the transport header and this
- * constant once every bounded context has moved onto registered anchors.</p>
+ * MCP adapter turns the caller's anchor into a {@code ProjectId} through {@link ProjectResolver},
+ * whose composition-root implementation answers by consulting <em>this</em> component's registry.
+ * That is the reason this adapter cannot use it: the component answering the routing question
+ * cannot itself sit behind an answer to it. It therefore imports {@link ProjectResolver} only for
+ * its {@link ProjectResolver#ANCHOR_KEY} constant - the key under which the calling client's anchor
+ * travels in the MCP transport context - and never calls {@link ProjectResolver#resolve(String)}.
+ * The raw value read under that key is wrapped directly as an {@link Anchor} and looked up here.</p>
  *
  * <p><strong>No default, no fallback (ADR-016 decision 3).</strong> A call whose transport context
- * carries no origin directory, and which was not given an explicit anchor parameter either, is a
- * caller error - never a silent fallback to some server-side working directory. Such a call would
- * have no way to know which project it belongs to, and inventing an answer is precisely the
- * failure mode this bounded context exists to close off. {@link #add}, {@link #attachAnchor} and
+ * carries no anchor, and which was not given an explicit anchor parameter either, is a caller error
+ * - never a silent fallback to some server-side working directory. Such a call would have no way to
+ * know which project it belongs to, and inventing an answer is precisely the failure mode this
+ * bounded context exists to close off. {@link #add}, {@link #adopt}, {@link #attachAnchor} and
  * {@link #rename} all throw {@link IllegalArgumentException} in that situation, rather than
  * guessing.</p>
+ *
+ * <p><strong>{@link #adopt} exists because the server cannot repair the past on its own.</strong>
+ * Datasets written before ADR-016 sit under ids derived from a directory name
+ * ({@code slug(basename(git-common-dir))}), and that derivation is not invertible: the server
+ * cannot know which directory the dataset {@code arknet} once meant, and guessing is the thing
+ * ADR-016 removes. Only the person at the keyboard knows, so adoption is a tool rather than a
+ * migration that runs at startup - the anchor arrives from the calling client as it always does,
+ * and the dataset is named explicitly. {@link #list} renders the adoptable datasets alongside the
+ * registered projects so that name never has to be guessed either.</p>
  *
  * <p><strong>Both anchor paths open to every tool (ADR-016 decision 2).</strong> This is not a
  * relaxation of the paragraph above - a missing anchor is still a hard error - but ADR-016 decision
@@ -112,33 +120,55 @@ public final class ProjectMcpTools {
                     + "already registered for this project instead, for clients that cannot supply an "
                     + "origin directory via their transport context.";
 
+    /**
+     * Used by {@link #adopt} only: like {@link #add} the caller owns no registered anchor yet, but
+     * the remedy names {@code project_adopt}'s own {@code anchor} parameter rather than
+     * {@code project_add}'s - sending it to the wrong tool would create a second, empty project
+     * beside the data it is trying to reach.
+     */
+    private static final String NO_CONTEXT_ANCHOR_MESSAGE_ADOPT =
+            "No anchor available: the calling client's transport supplied no anchor, so the project "
+                    + "this dataset should be adopted under cannot be determined. There is no default "
+                    + "and no fallback to a server-side working directory. project_adopt also accepts "
+                    + "an explicit 'anchor' parameter for clients that cannot supply one via their "
+                    + "transport context - pass that instead.";
+
     private final RegisterProject registerProject;
+    private final AdoptProject adoptProject;
     private final AttachAnchor attachAnchor;
     private final RenameProject renameProject;
     private final ListProjects listProjects;
+    private final ListAdoptableDatasets listAdoptableDatasets;
     private final ResolveProject resolveProject;
 
     /**
-     * Creates the adapter with its five driving in-ports.
+     * Creates the adapter with its seven driving in-ports.
      *
-     * @param registerProject in-port backing {@code project_add}
-     * @param attachAnchor    in-port backing {@code project_attach_anchor}
-     * @param renameProject   in-port backing {@code project_rename}
-     * @param listProjects    in-port backing {@code project_list}
-     * @param resolveProject  in-port used to resolve the caller's own project from its context
-     *                        anchor, so {@code project_attach_anchor} and {@code project_rename}
-     *                        never need a project identity as a caller-facing parameter
+     * @param registerProject       in-port backing {@code project_add}
+     * @param adoptProject          in-port backing {@code project_adopt}
+     * @param attachAnchor          in-port backing {@code project_attach_anchor}
+     * @param renameProject         in-port backing {@code project_rename}
+     * @param listProjects          in-port backing {@code project_list}
+     * @param listAdoptableDatasets in-port backing {@code project_list}'s second section
+     * @param resolveProject        in-port used to resolve the caller's own project from its context
+     *                              anchor, so {@code project_attach_anchor} and
+     *                              {@code project_rename} never need a project identity as a
+     *                              caller-facing parameter
      */
     public ProjectMcpTools(
             final RegisterProject registerProject,
+            final AdoptProject adoptProject,
             final AttachAnchor attachAnchor,
             final RenameProject renameProject,
             final ListProjects listProjects,
+            final ListAdoptableDatasets listAdoptableDatasets,
             final ResolveProject resolveProject) {
         this.registerProject = Objects.requireNonNull(registerProject, "registerProject");
+        this.adoptProject = Objects.requireNonNull(adoptProject, "adoptProject");
         this.attachAnchor = Objects.requireNonNull(attachAnchor, "attachAnchor");
         this.renameProject = Objects.requireNonNull(renameProject, "renameProject");
         this.listProjects = Objects.requireNonNull(listProjects, "listProjects");
+        this.listAdoptableDatasets = Objects.requireNonNull(listAdoptableDatasets, "listAdoptableDatasets");
         this.resolveProject = Objects.requireNonNull(resolveProject, "resolveProject");
     }
 
@@ -273,14 +303,51 @@ public final class ProjectMcpTools {
         return format(updated);
     }
 
-    @McpTool(name = "project_list", description = "List all registered projects.",
+    @McpTool(name = "project_adopt", description = "Claim an EXISTING dataset as the project this "
+            + "call comes from - for data written before projects were registered, or for a dataset "
+            + "restored from a backup. The calling client's anchor becomes the project's first "
+            + "anchor; the dataset keeps its identity and all its data. Use project_list to see "
+            + "which datasets are available for adoption. For a new, empty project use project_add.")
+    public String adopt(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Identity of the existing dataset to adopt, exactly as "
+                    + "project_list reports it under 'unregistered datasets' (e.g. 'arknet'). It "
+                    + "becomes this project's identity unchanged - nothing is renamed or migrated.")
+            final String datasetId,
+            @McpToolParam(description = "The project's human-readable, cross-project-unique name.")
+            final String label,
+            @McpToolParam(description = "Optional explicit anchor to adopt the dataset under, used "
+                    + "INSTEAD of the calling client's own anchor. Only needed for a client that cannot "
+                    + "supply an anchor via its transport context - most callers should omit this and "
+                    + "let their calling directory become the anchor.", required = false)
+            final String anchor,
+            @McpToolParam(description = "Type of the explicit 'anchor' parameter above: 'path', 'url' "
+                    + "or 'uuid'. Defaults to 'path'. Ignored when 'anchor' is omitted.", required = false)
+            final String anchorType) {
+        final Anchor resolvedAnchor = isBlank(anchor)
+                ? requireContextAnchor(context, NO_CONTEXT_ANCHOR_MESSAGE_ADOPT)
+                : new Anchor(anchor, parseAnchorType(anchorType));
+        final Project adopted = adoptProject.adopt(new ProjectId(datasetId), label, resolvedAnchor);
+        return format(adopted);
+    }
+
+    @McpTool(name = "project_list", description = "List all registered projects, and any datasets "
+            + "in the store that no project claims yet (adoptable with project_adopt).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list() {
         final List<Project> all = listProjects.list();
-        if (all.isEmpty()) {
-            return "(no projects)";
+        final List<ProjectId> adoptable = listAdoptableDatasets.adoptable();
+        final String projects = all.isEmpty()
+                ? "(no projects)"
+                : all.stream().map(ProjectMcpTools::format).collect(Collectors.joining("\n"));
+        if (adoptable.isEmpty()) {
+            return projects;
         }
-        return all.stream().map(ProjectMcpTools::format).collect(Collectors.joining("\n"));
+        // Rendered here rather than as a tool of its own: a caller asking what exists should not
+        // have to know that "registered" and "present in the store" can differ before it can find
+        // out that they do. The section disappears once everything is adopted.
+        return projects + "\n\n# Unregistered datasets (adoptable with project_adopt)\n"
+                + adoptable.stream().map(ProjectId::value).collect(Collectors.joining("\n"));
     }
 
     /**
