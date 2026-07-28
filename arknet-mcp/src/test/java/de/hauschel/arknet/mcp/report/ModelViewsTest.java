@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Fred Hauschel
+
+package de.hauschel.arknet.mcp.report;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import de.hauschel.arknet.bc.domain.BoundedContext;
+import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextId;
+import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.Requirement;
+import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.req.domain.RequirementId;
+import de.hauschel.arknet.req.domain.RequirementStatus;
+import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.UseCase;
+import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseId;
+import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
+
+/**
+ * {@code store_overview} is the tool a user reaches for when they suspect the store is broken.
+ * Assembling the model sections must therefore never be able to fail the whole call.
+ */
+class ModelViewsTest {
+
+    private static final WorkspaceId WORKSPACE = new WorkspaceId("views-test");
+
+    @Test
+    void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
+        final ModelViews views = new ModelViews(
+                new UseCaseCards(workspaceId -> {
+                    throw new IllegalStateException("store closed");
+                }, (workspaceId, ids) -> List.of(), (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
+                new TermCards(workspaceId -> List.of(term())),
+                new BoundedContextCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()));
+
+        final ModelViews.Views result = views.of(WORKSPACE);
+
+        assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
+        assertThat(result.failures()).singleElement().asString()
+                .contains("Use Cases")
+                .contains("IllegalStateException")
+                .contains("store closed")
+                .contains("Other resources");
+    }
+
+    /** An empty context contributes no heading - a section with zero cards is noise, not information. */
+    @Test
+    void leavesOutEmptySections() {
+        final ModelViews views = new ModelViews(
+                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of(),
+                        (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
+                new TermCards(workspaceId -> List.of(term())),
+                new BoundedContextCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()));
+
+        final ModelViews.Views result = views.of(WORKSPACE);
+
+        assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
+        assertThat(result.failures()).isEmpty();
+    }
+
+    /**
+     * Reading order is strategic to detailed: what the model is about (bounded contexts), what it
+     * must do (requirements), how that plays out (use cases), and the language all of it uses.
+     */
+    @Test
+    void ordersSectionsFromStrategicToDetailed() {
+        final ModelViews views = new ModelViews(
+                new UseCaseCards(workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of(),
+                        (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of(requirement()), (workspaceId, ids) -> List.of()),
+                new TermCards(workspaceId -> List.of(term())),
+                new BoundedContextCards(workspaceId -> List.of(boundedContext()), (workspaceId, ids) -> List.of()));
+
+        assertThat(views.of(WORKSPACE).sections()).extracting(ModelSection::title)
+                .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Glossary");
+    }
+
+    private static UseCase useCase() {
+        return new UseCase(
+                new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1")),
+                new UseCaseCode("UC1"), "Bestellung aufgeben", "Der Kunde bestellt Artikel.",
+                null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-1")),
+                List.of(), null, null,
+                List.of(new Step(1, "Artikel in den Warenkorb legen", List.of())), List.of());
+    }
+
+    private static Requirement requirement() {
+        return new Requirement(
+                new RequirementId(ResourceId.of("https://w3id.org/arknet/id/fr-1")),
+                new RequirementCode("FR-1"), "Anmeldung", "Das System muss Nutzer authentifizieren.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
+                List.of(), List.of("Anmeldung gelingt mit gueltigen Zugangsdaten"));
+    }
+
+    private static BoundedContext boundedContext() {
+        return new BoundedContext(
+                new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/bc-1")),
+                new BoundedContextCode("BC-1"), "Ordering", "Bestellungen aufnehmen und verfolgen.",
+                Subdomain.CORE_DOMAIN, null, List.of());
+    }
+
+    private static Term term() {
+        return new Term(
+                new TermId(ResourceId.of("https://w3id.org/arknet/id/term-1")),
+                new TermCode("TERM-1"), "Anmeldung", "Der Nachweis der eigenen Identitaet.", null);
+    }
+}

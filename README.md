@@ -170,7 +170,7 @@ Store report -- generic, cross-BC read path (readOnly; works for any BC without 
 
 | Tool | Description |
 |------|-------------|
-| `store_overview` | Compact text digest of the workspace store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML resource browser and returns its path |
+| `store_overview` | Compact text digest of the workspace store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML report and returns its path. The report reads as the model rather than as triples -- use cases with their numbered flow, requirements with their acceptance criteria, glossary, bounded contexts -- and keeps a raw section for everything no bounded context claims, so nothing in the store can hide from it |
 | `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, or bare business id (`FR-1`). The revision trail is left out -- it is change history, not model ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 
 Traceability -- readOnly graph traversal over the same store snapshot (no second SPARQL path):
@@ -205,7 +205,7 @@ addendum.
 | Module | Description |
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
-| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context) via a shared DatasetLifecycle + the generic store report (`store_overview`/`resource_get`) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
+| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`WorkspaceId`, opaque `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
