@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp.store;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -17,6 +18,7 @@ import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDFTerm;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 
@@ -31,10 +33,21 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * backend types. This class depends solely on the technology-neutral kognio-rdf ports, never
  * on RDF4J.</p>
  *
- * <p><strong>The provenance graph is invisible here.</strong> Every guarded write also records
- * a PROV-O revision into {@link ArkprovVocabulary#PROVENANCE_GRAPH} (ADR-014). All three read
- * methods exclude that graph with the same filter, so this read path shows the model and never
- * its change history - an infrastructure-graph exclusion, not domain knowledge.</p>
+ * <p><strong>The infrastructure graphs are invisible here.</strong> Two named graphs inside a
+ * project's dataset carry no model at all, and all three read methods exclude both through the
+ * same filter, so this read path shows the model and never the machinery underneath it - an
+ * infrastructure-graph exclusion, not domain knowledge:</p>
+ *
+ * <ul>
+ *   <li>{@link ArkprovVocabulary#PROVENANCE_GRAPH} - every guarded write records a PROV-O
+ *       revision there (ADR-014), so an unfiltered view would grow with the change history
+ *       rather than with the model.</li>
+ *   <li>{@link ArkprjVocabulary#IDENTITY_GRAPH} - the project's self-description (ADR-016
+ *       decision 7): the anchors and label by which a client's call is routed to this dataset.
+ *       Without the exclusion, every store report would open with its own routing record. The
+ *       registry itself needs no exclusion, because it lives in a reserved dataset no ordinary
+ *       call ever addresses; only the self-description sits inside the dataset being read.</li>
+ * </ul>
  *
  * <p><strong>Why the head pointer is excluded too</strong>, even though exactly one
  * {@code arkprov:head} per resource would be bounded and cheap to show: the head only moves on
@@ -50,7 +63,15 @@ public final class StoreReader {
 
     private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
-    private static final String PROVENANCE_GRAPH = "<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">";
+    /**
+     * The named graphs this read path hides, as SPARQL {@code IRIREF}s - see the class javadoc for
+     * why each one is infrastructure rather than model. Adding a graph here is all it takes to hide
+     * it from {@link #readSnapshot}, {@link #outgoing} and {@link #incoming} at once, which is the
+     * point of the list: the three cannot drift apart.
+     */
+    private static final List<String> HIDDEN_GRAPHS = List.of(
+            "<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">",
+            "<" + ArkprjVocabulary.IDENTITY_GRAPH + ">");
 
     private final DatasetLifecycle lifecycle;
 
@@ -69,7 +90,7 @@ public final class StoreReader {
      */
     public StoreSnapshot readSnapshot(WorkspaceId workspaceId) {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingProvenance("?s ?p ?o") + " }";
+        String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingInfrastructure("?s ?p ?o") + " }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             List<Triple> triples = handle.sparqlQuery().select(query)
                     .map(StoreReader::toTriple)
@@ -92,7 +113,7 @@ public final class StoreReader {
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?p ?o WHERE { "
-                + excludingProvenance(iriRef + " ?p ?o") + " }";
+                + excludingInfrastructure(iriRef + " ?p ?o") + " }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> outgoingTriple(iri, row))
@@ -114,7 +135,7 @@ public final class StoreReader {
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?s ?p WHERE { "
-                + excludingProvenance("?s ?p " + iriRef) + " }";
+                + excludingInfrastructure("?s ?p " + iriRef) + " }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> incomingTriple(iri, row))
@@ -149,22 +170,28 @@ public final class StoreReader {
     }
 
     /**
-     * Wraps a triple pattern into the provenance-graph exclusion every read path here shares -
+     * Wraps a triple pattern into the infrastructure-graph exclusion every read path here shares -
      * one helper rather than three hand-written filters, so the exclusion cannot drift apart
      * between snapshot and neighbour lists.
      *
      * <p>Two branches, because the plain pattern may already span every context on some backends
      * (see the {@code DISTINCT} note in {@code StoreReaderTest}): the {@code GRAPH} branch is
-     * guarded by graph IRI, the plain branch by "this triple lives <em>only</em> in the
-     * provenance graph". A triple that also exists in a model graph therefore survives via the
+     * guarded by graph IRI, the plain branch by "this triple lives <em>only</em> in hidden
+     * graphs". A triple that also exists in a model graph therefore survives via the
      * {@code GRAPH} branch, and {@code DISTINCT} collapses the overlap.</p>
      *
      * @param pattern a triple pattern; must bind neither {@code ?g} nor anything named like it
-     * @return the pattern as a {@code UNION} group excluding the provenance graph
+     * @return the pattern as a {@code UNION} group excluding every {@link #HIDDEN_GRAPHS} entry
      */
-    private static String excludingProvenance(String pattern) {
-        return "{ " + pattern + " FILTER NOT EXISTS { GRAPH " + PROVENANCE_GRAPH + " { " + pattern + " } } } "
-                + "UNION { GRAPH ?g { " + pattern + " } FILTER(?g != " + PROVENANCE_GRAPH + ") }";
+    private static String excludingInfrastructure(String pattern) {
+        String notInAnyHiddenGraph = HIDDEN_GRAPHS.stream()
+                .map(graph -> "FILTER NOT EXISTS { GRAPH " + graph + " { " + pattern + " } } ")
+                .collect(Collectors.joining());
+        String outsideEveryHiddenGraph = HIDDEN_GRAPHS.stream()
+                .map(graph -> "?g != " + graph)
+                .collect(Collectors.joining(" && "));
+        return "{ " + pattern + " " + notInAnyHiddenGraph + "} "
+                + "UNION { GRAPH ?g { " + pattern + " } FILTER(" + outsideEveryHiddenGraph + ") }";
     }
 
     private static Optional<Triple> toTriple(BindingSet row) {

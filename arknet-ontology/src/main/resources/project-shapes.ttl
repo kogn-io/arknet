@@ -1,0 +1,79 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Project SHACL Shapes  :  Version 0.1.0
+#
+#  Validates ADR-016's registered-project vocabulary (arknet-project.ttl): a
+#  project is identified by a unique dcterms:identifier and reachable only
+#  through the anchors it carries. A dataset holds the data of exactly one
+#  project, so nothing here filters by project - the store boundary already
+#  is the project boundary.
+#
+#  arkprj:Project-anchor has no upper bound and no default: a project
+#  without at least one anchor is unfindable, and ADR-016 point 3 rules out
+#  both a default anchor and a fallback to a server-local guess.
+#
+#  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
+##############################################################################
+
+@prefix sh:       <http://www.w3.org/ns/shacl#> .
+@prefix arkprj:   <https://w3id.org/arknet/project#> .
+@prefix dcterms:  <http://purl.org/dc/terms/> .
+@prefix prjshapes: <https://w3id.org/arknet/shapes/project#> .
+
+
+##############################################################################
+#  PROJECT SHAPE
+##############################################################################
+
+prjshapes:ProjectShape
+    a sh:NodeShape ;
+    sh:targetClass arkprj:Project ;
+    sh:property prjshapes:Project-identifier ;
+    sh:property prjshapes:Project-anchor .
+
+prjshapes:Project-identifier
+    a sh:PropertyShape ;
+    sh:path     dcterms:identifier ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:minLength 1 ;
+    sh:message  "A Project needs exactly one non-empty dcterms:identifier - this IS the project's human-readable name and must be unique across all projects."@en ;
+    sh:severity sh:Violation .
+
+prjshapes:Project-anchor
+    a sh:PropertyShape ;
+    sh:path     arkprj:anchor ;
+    sh:minCount 1 ;
+    sh:message  "A Project needs at least one arkprj:anchor. There is no default anchor and no fallback (ADR-016 point 3) - a project without an anchor cannot be reached by any client."@en ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  ANCHOR SHAPE
+##############################################################################
+
+prjshapes:AnchorShape
+    a sh:NodeShape ;
+    sh:targetClass arkprj:Anchor ;
+    sh:property prjshapes:Anchor-value ;
+    sh:property prjshapes:Anchor-type .
+
+prjshapes:Anchor-value
+    a sh:PropertyShape ;
+    sh:path     arkprj:anchorValue ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:minLength 1 ;
+    sh:message  "An Anchor needs exactly one non-empty arkprj:anchorValue - the opaque string the server looks up, never interprets."@en ;
+    sh:severity sh:Violation .
+
+prjshapes:Anchor-type
+    a sh:PropertyShape ;
+    sh:path     arkprj:anchorType ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in       ( arkprj:PathAnchor arkprj:UrlAnchor arkprj:UuidAnchor ) ;
+    sh:message  "An Anchor needs exactly one arkprj:anchorType, one of PathAnchor, UrlAnchor, or UuidAnchor."@en ;
+    sh:severity sh:Violation .
+
+# END OF PROJECT SHAPES

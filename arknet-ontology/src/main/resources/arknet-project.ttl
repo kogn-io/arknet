@@ -1,0 +1,134 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Project (Registry) Ontology  :  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/project#
+#  License    : Apache-2.0
+#
+#  Scope: ADR-016's registered-anchor vocabulary. Project identity is
+#         REGISTERED, not derived. A client sends an opaque, typed anchor;
+#         the server looks it up and never interprets it. There is no
+#         derivation from a working-directory path, no slug, no default and
+#         no fallback - an unknown anchor is an error, not a guess.
+#
+#           arkprj:Project a arkprj:Project ;
+#                           dcterms:identifier "..." ;
+#                           arkprj:anchor <anchor-1> , <anchor-2> .
+#           <anchor-1> a arkprj:Anchor ;
+#                      arkprj:anchorValue "/home/user/project" ;
+#                      arkprj:anchorType arkprj:PathAnchor .
+#
+#  ONE DATASET, ONE PROJECT: a dataset holds the data of exactly one project.
+#         There is no layer between project and store - the "workspace" term
+#         from earlier ADRs is retired as a store-level concept (ADR-016
+#         point 1). The bounded contexts filter by nothing above the store
+#         boundary; project separation IS the store boundary.
+#
+#  THE ANCHOR IS THE HALTEPUNKT, NOT THE IDENTITY: an anchor is the opaque
+#         string a client anchors itself to (a path, a URL, a UUID, ...) and
+#         knows because it works there. arkprj:anchorValue is never parsed
+#         or interpreted by the server - it is looked up, byte for byte,
+#         against the registry. The project's own identity is the resource
+#         IRI plus its dcterms:identifier; anchor and identity are
+#         deliberately two different things, which is why one project can
+#         carry several anchors (git worktrees next to the main checkout,
+#         several IDE directories of the same project, a copy elsewhere)
+#         without the project existing twice (ADR-016 point 4).
+#
+#  UNIQUENESS OF THE ANCHOR ACROSS ALL PROJECTS is the central invariant of
+#         this model: two projects can never share one anchor. There is no
+#         analogous cross-project uniqueness constraint on the anchor VALUE
+#         alone outside this invariant - the pairing of value and type is
+#         what the registry indexes on.
+#
+#  WRITTEN TWICE, ON PURPOSE: a project is written in two places - once as
+#         an entry in the registry, which lives in a reserved system dataset
+#         of the same store and goes through the same write path as every
+#         other model write (SHACL write gate, WriteFunnel, head-as-
+#         concurrency-token; ADR-016 point 6), and once as a self-
+#         description inside the project's own dataset (its anchors, its
+#         label; ADR-016 point 7). The self-description is what keeps the
+#         registry a REBUILDABLE INDEX rather than a single point of
+#         failure - a dataset restored from a backup carries its identity
+#         with it and can re-populate the registry, instead of depending on
+#         the registry to remain the sole record of what that dataset is.
+#
+#  IDENTITY VS. LABEL: dcterms:identifier IS the human-readable label of a
+#         project - deliberately no separate label property. It is unique
+#         across all projects, and that uniqueness is exactly what the
+#         shared write funnel's uniqueness check enforces on write.
+##############################################################################
+
+@prefix arkprj:  <https://w3id.org/arknet/project#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/project>
+    a owl:Ontology ;
+    dcterms:title    "arknet Project Ontology"@en ;
+    dcterms:description "arknet's registered-project vocabulary (ADR-016): a project holds one or more opaque, typed anchors that a client can anchor itself to; a dataset holds the data of exactly one project; an unknown anchor is an error, not a derived default."@en ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-07-28"^^xsd:date ;
+    dcterms:rights   "Apache-2.0" ;
+    vann:preferredNamespacePrefix "arkprj" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/project#" ;
+    owl:versionInfo  "0.1.0" .
+
+##############################################################################
+#  1. PROJECT
+##############################################################################
+
+arkprj:Project a owl:Class ;
+    rdfs:label   "Project"@en , "Projekt"@de ;
+    rdfs:comment "A registered project - the store-level identity every bounded context's data belongs to. Its human-readable name IS its dcterms:identifier (no separate label property): dcterms:identifier is unique across all projects, and that uniqueness is what the shared write funnel enforces on write. A project carries one or more anchors and is written twice - once into the registry's reserved system dataset, once as a self-description inside its own dataset - so the registry stays a rebuildable index (ADR-016 points 6 and 7)."@en , "Ein registriertes Projekt - die Store-Identitaet, zu der die Daten aller Bounded Contexts gehoeren. Seine menschenlesbare Bezeichnung IST sein dcterms:identifier (keine eigene label-Property): dcterms:identifier ist projektuebergreifend eindeutig, und genau diese Eindeutigkeit erzwingt der geteilte Schreibtrichter beim Schreiben. Ein Projekt traegt einen oder mehrere Anker und wird zweimal geschrieben - einmal in das reservierte System-Dataset der Registry, einmal als Selbstbeschreibung im eigenen Dataset - damit die Registry ein rebuildbarer Index bleibt (ADR-016 Punkte 6 und 7)."@de .
+
+arkprj:anchor a owl:ObjectProperty ;
+    rdfs:domain  arkprj:Project ;
+    rdfs:range   arkprj:Anchor ;
+    rdfs:label   "anchor"@en , "Anker"@de ;
+    rdfs:comment "An anchor a client can anchor itself to in order to reach this project. A project carries one or more anchors (git worktrees, several IDE directories of the same project, a copy elsewhere); an anchor belongs to exactly one project, and uniqueness of the anchor across all projects is the central invariant of this model (ADR-016 point 4)."@en , "Ein Anker, an dem sich ein Client festmachen kann, um dieses Projekt zu erreichen. Ein Projekt traegt einen oder mehrere Anker (git-Worktrees, mehrere IDE-Verzeichnisse desselben Projekts, eine Kopie an anderem Ort); ein Anker gehoert zu genau einem Projekt, und die Eindeutigkeit des Ankers ueber alle Projekte hinweg ist die zentrale Invariante dieses Modells (ADR-016 Punkt 4)."@de .
+
+##############################################################################
+#  2. ANCHOR
+##############################################################################
+
+arkprj:Anchor a owl:Class ;
+    rdfs:label   "Anchor"@en , "Anker"@de ;
+    rdfs:comment "An opaque, typed Haltepunkt a client anchors itself to. The server looks an anchor up against the registry and never interprets it - whether its value looks like a file path is a matter for the client, not a server-side parsing rule (ADR-016 point 2)."@en , "Ein opaker, typisierter Haltepunkt, an dem sich ein Client festmacht. Der Server schlaegt einen Anker gegen die Registry nach und interpretiert ihn nie - ob sein Wert wie ein Dateipfad aussieht, ist Sache des Clients, keine serverseitige Parsing-Regel (ADR-016 Punkt 2)."@de .
+
+arkprj:anchorValue a owl:DatatypeProperty ;
+    rdfs:domain  arkprj:Anchor ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "anchor value"@en , "Ankerwert"@de ;
+    rdfs:comment "The opaque string of an anchor. The server never interprets this value - it is looked up, not parsed - so it stays whatever the client sends (a path, a URL, a UUID, ...)."@en , "Die opake Zeichenkette eines Ankers. Der Server interpretiert diesen Wert nie - er wird nachgeschlagen, nicht geparst - und bleibt deshalb genau das, was der Client sendet (ein Pfad, eine URL, eine UUID, ...)."@de .
+
+arkprj:anchorType a owl:ObjectProperty ;
+    rdfs:domain  arkprj:Anchor ;
+    rdfs:range   arkprj:AnchorType ;
+    rdfs:label   "anchor type"@en , "Ankertyp"@de ;
+    rdfs:comment "The kind of anchor value carried by an anchor - path, URL, or UUID. The type is metadata about the anchor's shape, not a hint the server acts on beyond storing and comparing it."@en , "Die Art des Ankerwerts, den ein Anker traegt - Pfad, URL oder UUID. Der Typ ist Metadaten ueber die Form des Ankers, kein Hinweis, auf den der Server ueber Speichern und Vergleichen hinaus reagiert."@de .
+
+arkprj:AnchorType a owl:Class ;
+    rdfs:label   "Anchor Type"@en , "Ankertyp"@de ;
+    rdfs:comment "The category of an anchor's value: a filesystem path, a URL, or a UUID. Closed set of arkprj:AnchorType individuals below; later anchor kinds are added as additional individuals, not by widening the range."@en , "Die Kategorie des Ankerwerts: ein Dateipfad, eine URL oder eine UUID. Geschlossene Menge der unten definierten arkprj:AnchorType-Individuen; spaetere Ankerarten kommen als weitere Individuen hinzu, nicht durch Aufweichen der Range."@de .
+
+arkprj:PathAnchor a owl:NamedIndividual , arkprj:AnchorType ;
+    rdfs:label   "Path Anchor"@en , "Pfad-Anker"@de ;
+    rdfs:comment "An anchor whose value is a filesystem path, such as a working directory or a git worktree root."@en , "Ein Anker, dessen Wert ein Dateisystempfad ist, etwa ein Arbeitsverzeichnis oder die Wurzel eines git-Worktrees."@de .
+
+arkprj:UrlAnchor a owl:NamedIndividual , arkprj:AnchorType ;
+    rdfs:label   "URL Anchor"@en , "URL-Anker"@de ;
+    rdfs:comment "An anchor whose value is a URL, such as a remote repository address."@en , "Ein Anker, dessen Wert eine URL ist, etwa die Adresse eines Remote-Repositories."@de .
+
+arkprj:UuidAnchor a owl:NamedIndividual , arkprj:AnchorType ;
+    rdfs:label   "UUID Anchor"@en , "UUID-Anker"@de ;
+    rdfs:comment "An anchor whose value is a UUID, for clients without a stable path or URL to anchor to."@en , "Ein Anker, dessen Wert eine UUID ist, fuer Clients ohne stabilen Pfad oder stabile URL als Haltepunkt."@de .
+
+# END OF PROJECT ONTOLOGY

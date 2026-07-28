@@ -59,6 +59,12 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-project-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Regel 3: die technologieneutralen Hexagon-Inneren. -->
         <dependency>
@@ -82,6 +88,12 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-bounded-context-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-project-core</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -109,6 +121,12 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-bounded-context-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-project-adapter-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

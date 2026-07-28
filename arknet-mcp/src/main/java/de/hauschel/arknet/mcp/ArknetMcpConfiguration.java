@@ -28,6 +28,11 @@ import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository
 import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
 import de.hauschel.arknet.bc.application.BoundedContextService;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectRepositoryFactory;
+import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
+import de.hauschel.arknet.prj.application.ProjectService;
+import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
+import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
@@ -58,7 +63,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Four hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Five hexagons are wired:</p>
  *
  * <ul>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
@@ -99,10 +104,21 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code bc_list}'s reverse direction (identity back to a displayable term code) is the
  *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
  *       {@link BoundedContextMcpTools} (ADR-008).</li>
+ *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
+ *       RDF-persisted registry) - the four project tools ({@code project_add}/
+ *       {@code project_attach_anchor}/{@code project_rename}/{@code project_list}), assembled
+ *       through {@link KognioRdfProjectRepositoryFactory}. This one is shaped differently from the
+ *       four above and deliberately so (ADR-016): it manages identity rather than model, its
+ *       registry lives in one reserved dataset instead of a per-project one, and it is the only
+ *       hexagon here wired <em>without</em> a {@link WorkspaceResolver} - it reads the caller's
+ *       origin value as an opaque anchor and looks it up, which is the substance of ADR-016 rather
+ *       than an omission. It is additive: registering these tools changes the routing of no other
+ *       tool call.</li>
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
- * {@code arknet.rdf.storage}, no competing locks) and the single {@link WorkspaceResolver} bean.
+ * {@code arknet.rdf.storage}, no competing locks); the four model hexagons additionally share the
+ * single {@link WorkspaceResolver} bean.
  * Every tool call resolves its {@link WorkspaceId} per request from the caller's origin directory
  * (issue #137: one shared HTTP server for every workspace on the machine, see
  * {@link WorkspaceHttpTransportConfiguration}), so requirements, glossary terms, use cases and
@@ -353,6 +369,64 @@ public class ArknetMcpConfiguration {
             final BoundedContextService service, final ResolveTerms resolveTerms,
             final WorkspaceResolver workspaceResolver) {
         return new BoundedContextMcpTools(service, service, service, service, resolveTerms, workspaceResolver);
+    }
+
+    // --- Project hexagon (the registry, ADR-016) -------------------------------
+
+    /**
+     * The project registry: which opaque, client-sent anchor belongs to which project (ADR-016).
+     *
+     * <p><strong>The one hexagon that is not project-scoped.</strong> Every other repository bean
+     * here takes a per-call {@link WorkspaceId} and acquires that project's dataset; this one
+     * always addresses a single reserved dataset ({@code ProjectId.RESERVED_SYSTEM_DATASET}) and
+     * therefore takes no routing key at all. It has to be that way round: the registry is what
+     * answers the routing question, so it cannot itself be behind an answer to it. It shares the
+     * same {@link DatasetLifecycle} bean as everything else - one store, one lock, one reserved
+     * dataset inside it alongside the project datasets.</p>
+     */
+    @Bean
+    ProjectRegistry projectRegistry(
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfProjectRepositoryFactory.registryOver(datasetLifecycle, displayLocale);
+    }
+
+    /**
+     * Writes each project's self-description into that project's <em>own</em> dataset (ADR-016
+     * decision 7), so the registry stays a rebuildable index rather than a single point of failure
+     * and a dataset restored from a backup carries its own identity with it. A second bean rather
+     * than a method on {@link #projectRegistry}, because it writes to a different dataset - there
+     * is no shared transaction between the two, and the ordering (registry first, self-description
+     * second) is a policy of the application service, not of either adapter.
+     */
+    @Bean
+    ProjectSelfDescription projectSelfDescription(
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfProjectRepositoryFactory.selfDescriptionOver(datasetLifecycle, displayLocale);
+    }
+
+    @Bean
+    ProjectService projectService(
+            final ProjectRegistry projectRegistry, final ProjectSelfDescription projectSelfDescription) {
+        return new ProjectService(projectRegistry, projectSelfDescription);
+    }
+
+    /**
+     * The four project tools ({@code project_add}, {@code project_attach_anchor},
+     * {@code project_rename}, {@code project_list}).
+     *
+     * <p>Note what is <em>not</em> injected: no {@link WorkspaceResolver}. Every other
+     * {@code *McpTools} bean gets one to turn a call's origin directory into a {@link WorkspaceId}
+     * by deriving it (git top-level, slugging); this adapter reads the very same origin value but
+     * treats it as an opaque anchor and looks it up, which is the whole substance of ADR-016.
+     * Wiring it without a resolver is therefore not an omission but the point.</p>
+     *
+     * <p>This bean is additive (issue #178): registering the tools does not change how any other
+     * tool call is routed - the derived-workspace path in {@link #workspaceResolver} keeps running
+     * untouched until issue #179 switches over and tears it down.</p>
+     */
+    @Bean
+    ProjectMcpTools projectMcpTools(final ProjectService service) {
+        return new ProjectMcpTools(service, service, service, service, service);
     }
 
     // --- Store read path: generic query, model-shaped report -------------------
