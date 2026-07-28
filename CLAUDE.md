@@ -39,8 +39,8 @@ gearbeitet wird.
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
 - **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Projekte auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess; Projekt pro Aufruf ueber den Anker aus dem Header, ADR-009/ADR-016) + Composition Root, verdrahtet alle fuenf BC-Hexagons + geteilter DatasetLifecycle + der Anker-Aufloesung ueber die Projekt-Registry + generischer Store-Lesepfad (ADR-006; der Agent-Digest bleibt generisch, der HTML-Report wird pro BC aus deren Lese-In-Ports zusammengesetzt und faellt fuer alles Uebrige auf die generische Rohsicht zurueck). Details: `arknet-mcp/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- ProjectId (inkl. der reservierten System-Dataset-Invariante), ProjectResolver-Port (Per-Aufruf-Aufloesung ueber den Anker, ADR-009/ADR-016), ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
-- **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), geteilter Schreibtrichter WriteFunnel (ADR-013; schreibt je Write atomar eine PROV-O-Revision + Head-Pointer, ADR-014), SparqlTerms, UnresolvedReferenceException. Details: `arknet-persistence-support/CLAUDE.md`
-- **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln plus der Abgleich von `ArkprovVocabulary` gegen die ausgelieferte Provenance-Ontologie. Details: `arknet-architecture-tests/CLAUDE.md`
+- **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), geteilter Schreibtrichter WriteFunnel (ADR-013; schreibt je Write atomar eine PROV-O-Revision + Head-Pointer, ADR-014), SparqlTerms, UnresolvedReferenceException, die Vokabular-Konstanten ArkprovVocabulary/ArkreqVocabulary/ArkprjVocabulary. Details: `arknet-persistence-support/CLAUDE.md`
+- **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln plus der beidseitige Abgleich von `ArkprovVocabulary`/`ArkprjVocabulary` gegen die ausgelieferte Provenance- bzw. Projekt-Ontologie. Details: `arknet-architecture-tests/CLAUDE.md`
 - **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar, opake Identitaet, acceptanceCriterion. Details: `arknet-requirements/CLAUDE.md`
 - **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools) mit optionaler Actor-Facette, opake Identitaet. Details: `arknet-ubiquitous-language/CLAUDE.md`
 - **arknet-use-cases**: dritte hexagonale BC -- Cockburn-Use-Cases (`uc_*`-Tools) mit opaken Step-VOs, Actor-/Requirement-Referenzen. Details: `arknet-use-cases/CLAUDE.md`
@@ -66,6 +66,13 @@ gearbeitet wird.
 - **Projektion** = generiertes Artefakt (AsciiDoc/HTML/PDF, PlantUML, Turtle)
 - **Viewpoint** = SPARQL-Query + Template + Rolle
 - **Shape** = SHACL-Validierungsregel
+- **Projekt** = der Gegenstand, an dem Requirements, Glossarbegriffe und Use Cases haengen; ein
+  Dataset haelt die Daten genau eines Projekts, die Projektgrenze ist damit die Datengrenze
+  (ADR-016). **Nicht** das Verzeichnis, aus dem ein Client arbeitet -- das heisst Arbeits- oder
+  Projektverzeichnis. Ein Workspace-Begriff darueber existiert nicht.
+- **Anker** = die opake, typisierte Zeichenkette (`path`/`url`/`uuid`), mit der ein Client sagt,
+  welches Projekt sein Aufruf meint. Der Server schlaegt sie nach und interpretiert sie nie. Ein
+  Projekt haelt mehrere Anker, ein Anker gehoert zu genau einem Projekt.
 
 ## Konventionen
 
