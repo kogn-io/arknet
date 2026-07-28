@@ -164,7 +164,7 @@ Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assig
 | `bc_add` | Create a new bounded context |
 | `bc_list` | List all bounded contexts |
 | `bc_get` | Fetch a single bounded context with its linked glossary terms |
-| `bc_link_term` | Link a bounded context to a glossary term (`arknet:hasAggregate`; the term must exist) |
+| `bc_link_term` | Link a bounded context to a glossary term (`arknet:ubiquitousLanguageTerm`; the term must exist) |
 
 Store report -- generic, cross-BC read path (readOnly; works for any BC without type mapping):
 
