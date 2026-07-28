@@ -32,6 +32,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
@@ -40,6 +41,7 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -60,20 +62,27 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * it never imports RDF4J. The backend ({@link DatasetLifecycle} implementation) is supplied by
  * the composition root.</p>
  *
- * <p><strong>Create vs. update (opaque identity).</strong> The transactional mechanics of the
- * existence check - the in-transaction {@code contains} check, the SHACL gate, the commit-conflict
- * translation - live in the shared {@link WriteFunnel} (ADR-013), not here. {@link #create}
- * rejects an existing subject with {@link ResourceAlreadyExistsException} and a business-code
- * collision (by {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
- * {@link #update} rejects a missing subject with {@link BoundedContextNotFoundException} and
- * otherwise replaces the subject's triples wholesale (see {@link #replaceTriples}).</p>
+ * <p><strong>Create vs. compare-and-set update (opaque identity, issue #176).</strong> The
+ * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
+ * the commit-conflict translation, and the head comparison - live in the shared
+ * {@link WriteFunnel} (ADR-013/ADR-014), not here. {@link #create} rejects an existing subject
+ * with {@link ResourceAlreadyExistsException} and a business-code collision (by
+ * {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
+ * {@link #compareAndUpdate} rejects a missing subject with
+ * {@link BoundedContextNotFoundException} and a stale {@code expectedHead} with
+ * {@link BoundedContextConcurrentlyModifiedException}, and otherwise replaces the subject's
+ * triples wholesale (see {@link #replaceTriples}). There is no unconditional update: every
+ * correction to an already-created bounded context goes through the compare-and-set guard, so two
+ * concurrent {@code bc_link_term} calls can no longer silently lose one another's edge.</p>
  *
  * <p><strong>The second interleaving (issue #144).</strong> {@link WriteFunnel#create} translates
  * a lost {@code SERIALIZABLE} write conflict on {@link #create} into the same
  * {@link DuplicateBoundedContextCodeException} its synchronous code check throws - so
  * {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) catches both interleavings the
- * same way. {@link WriteFunnel#update} runs no such translation (see its own javadoc): a conflict
- * on {@link #update} is not a code collision.</p>
+ * same way. {@link WriteFunnel#compareAndUpdate} translates the same commit-time rejection into
+ * its {@code headMismatch} signal instead - on that path a lost conflict is not a code collision
+ * but a stale read, which the application service's retry loop absorbs exactly like a synchronous
+ * head mismatch.</p>
  *
  * <p><strong>Term references arrive pre-resolved (issue #62/#66).</strong> {@link TermRef}
  * carries the term's opaque subject {@link ResourceId} directly - resolving a human-typed term
@@ -129,7 +138,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - read paths
      *                  only, the write path goes through {@code funnel} (must not be {@code null})
      * @param funnel    the shared write funnel (ADR-013) running the SHACL gate, dataset
-     *                  acquisition and existence checks for every {@link #create}/{@link #update}
+     *                  acquisition and existence/head checks for every
+     *                  {@link #create}/{@link #compareAndUpdate}
      *                  (must not be {@code null})
      */
     KognioRdfBoundedContextRepository(DatasetLifecycle lifecycle, WriteFunnel funnel) {
@@ -139,15 +149,6 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
     @Override
     public void create(WorkspaceId workspaceId, BoundedContext boundedContext) {
-        write(workspaceId, boundedContext, true);
-    }
-
-    @Override
-    public void update(WorkspaceId workspaceId, BoundedContext boundedContext) {
-        write(workspaceId, boundedContext, false);
-    }
-
-    private void write(WorkspaceId workspaceId, BoundedContext boundedContext, boolean expectAbsent) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(boundedContext, "boundedContext");
 
@@ -157,32 +158,52 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
         IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
+        Graph graph = buildCandidateGraph(subjectIri, boundedContext);
 
-        List<IRI> termIris = boundedContext.usesTerms().stream()
-                .map(this::termIriFor)
-                .toList();
-        Graph graph = buildCandidateGraph(subjectIri, boundedContext, termIris);
+        funnel.create(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
+                boundedContext.code().value(), graph, null,
+                () -> new ResourceAlreadyExistsException(workspaceId, boundedContext.id().value()),
+                () -> new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code()),
+                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
+    }
 
-        if (expectAbsent) {
-            funnel.create(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
-                    boundedContext.code().value(), graph, null,
-                    () -> new ResourceAlreadyExistsException(workspaceId, boundedContext.id().value()),
-                    () -> new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code()),
-                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
-        } else {
-            funnel.update(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
-                    graph, null,
-                    () -> new BoundedContextNotFoundException(workspaceId, boundedContext.code()),
-                    tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
-        }
+    /**
+     * Compare-and-set update (issue #176, the guard requirements got in issues #108/#167):
+     * replaces the bounded context's triples only if its {@code arkprov:head} still equals
+     * {@code expectedHead} at the moment the shared {@link WriteFunnel} checks it inside the write
+     * transaction - closing the lost-update window a plain read (via {@link #findCurrentByCode})
+     * followed by an unconditional replace would otherwise leave open between the read and the
+     * write.
+     */
+    @Override
+    public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(updated, "updated");
+
+        String subjectIriString = updated.id().value().value();
+        IRI subjectIri = rdf.createIRI(subjectIriString);
+        String subject = SparqlTerms.iriRef(subjectIriString);
+        IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
+        Graph graph = buildCandidateGraph(subjectIri, updated);
+
+        funnel.compareAndUpdate(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
+                expectedHead, graph, null,
+                () -> new BoundedContextNotFoundException(workspaceId, updated.code()),
+                () -> new BoundedContextConcurrentlyModifiedException(workspaceId, updated.code()),
+                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
     }
 
     /**
      * Builds the candidate graph for one bounded context's triples: type, identifier, name,
      * domainVision, optional subdomain and ownedBy, and zero or more
-     * {@code arknet:ubiquitousLanguageTerm} edges to {@code termIris}.
+     * {@code arknet:ubiquitousLanguageTerm} edges to the bounded context's already-resolved term
+     * references. Shared by {@link #create} and {@link #compareAndUpdate} so both write paths
+     * serialise a {@link BoundedContext} identically.
      */
-    private Graph buildCandidateGraph(IRI subjectIri, BoundedContext boundedContext, List<IRI> termIris) {
+    private Graph buildCandidateGraph(IRI subjectIri, BoundedContext boundedContext) {
+        List<IRI> termIris = boundedContext.usesTerms().stream()
+                .map(this::termIriFor)
+                .toList();
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(BOUNDED_CONTEXT_TYPE));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(boundedContext.code().value()));
@@ -262,29 +283,96 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
         String query = "SELECT ?s ?name ?domainVision ?subdomain ?ownedBy WHERE { GRAPH <"
                 + BOUNDED_CONTEXT_GRAPH + "> { "
-                + "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
+                + boundedContextByCodeWhereClause(code)
+                + "} }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
+            if (found.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(boundedContextOf(found.get(), code, handle));
+        }
+    }
+
+    /**
+     * Reads a bounded context's current state together with its concurrency token. The row built
+     * from {@link #boundedContextByCodeWhereClause} (the core fields) plus the head itself come
+     * from this method's one query call (issue #176) - one snapshot, which is the load-bearing
+     * guarantee, not an ordering of clauses within that query. {@link #boundedContextOf} then
+     * issues one further, independent query, via {@link #readUsesTerms}, to fill in
+     * {@code usesTerms}; that later read is safe precisely because it can only be fresher, never
+     * staler, than the head: a concurrent funnel write landing in between moves the head, so
+     * {@link BoundedContextRepository#compareAndUpdate} then fails its comparison and the caller
+     * re-reads instead of silently overwriting a state it never actually saw. Builds the
+     * {@link BoundedContext} the same way {@link #findByCode} does - both call
+     * {@link #boundedContextOf} on their row, so the two read paths cannot drift apart
+     * field-by-field.
+     */
+    @Override
+    public Optional<BoundedContextRepository.CurrentBoundedContext> findCurrentByCode(
+            WorkspaceId workspaceId, BoundedContextCode code) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(code, "code");
+
+        String query = "SELECT ?s ?name ?domainVision ?subdomain ?ownedBy ?head WHERE { GRAPH <"
+                + BOUNDED_CONTEXT_GRAPH + "> { "
+                + boundedContextByCodeWhereClause(code)
+                + "} "
+                + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
+            if (found.isEmpty()) {
+                return Optional.empty();
+            }
+            BindingSet row = found.get();
+            BoundedContext boundedContext = boundedContextOf(row, code, handle);
+            String head = row.getValue("head")
+                    .filter(IRI.class::isInstance)
+                    .map(value -> ((IRI) value).getIRIString())
+                    .orElse(null);
+            return Optional.of(new BoundedContextRepository.CurrentBoundedContext(boundedContext, head));
+        }
+    }
+
+    /**
+     * The WHERE body shared by {@link #findByCode} and {@link #findCurrentByCode}: the mandatory
+     * joins (type, identifier, name, domainVision) plus the two optional joins (subdomain,
+     * ownedBy) that scope a single-bounded-context read to one {@code code}. Extracted because
+     * both callers build a {@link BoundedContext} from the same row shape via
+     * {@link #boundedContextOf} - drift between two near-identical read paths is what issues
+     * #80/#81 cost the requirements adapter, so this text lives in one place. The caller supplies
+     * the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in
+     * {@link #findCurrentByCode}'s case, the additional provenance-graph join.
+     */
+    private static String boundedContextByCodeWhereClause(BoundedContextCode code) {
+        return "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
                 + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
                 + "OPTIONAL { ?s <" + SUBDOMAIN_PROPERTY + "> ?subdomain } "
-                + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } } }";
+                + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } ";
+    }
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
-            Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
-            if (head.isEmpty()) {
-                return Optional.empty();
-            }
-            BindingSet row = head.get();
-            String subjectIriString = iriOf(row, "s").getIRIString();
-            return Optional.of(new BoundedContext(
-                    new BoundedContextId(ResourceId.of(subjectIriString)),
-                    code,
-                    literalOf(row, "name").getLexicalForm(),
-                    literalOf(row, "domainVision").getLexicalForm(),
-                    subdomainOf(row),
-                    ownedByOf(row),
-                    readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString))));
-        }
+    /**
+     * Builds one {@link BoundedContext} from a row of {@link #boundedContextByCodeWhereClause}'s
+     * projection ({@code ?s ?name ?domainVision ?subdomain ?ownedBy}), including the follow-up
+     * read {@link #readUsesTerms} (via {@code handle}). Shared by {@link #findByCode} and
+     * {@link #findCurrentByCode} so both single-bounded-context read paths build the aggregate the
+     * same way.
+     */
+    private BoundedContext boundedContextOf(BindingSet row, BoundedContextCode code, DatasetHandle handle) {
+        String subjectIriString = iriOf(row, "s").getIRIString();
+        return new BoundedContext(
+                new BoundedContextId(ResourceId.of(subjectIriString)),
+                code,
+                literalOf(row, "name").getLexicalForm(),
+                literalOf(row, "domainVision").getLexicalForm(),
+                subdomainOf(row),
+                ownedByOf(row),
+                readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)));
     }
 
     @Override
