@@ -1,6 +1,6 @@
 # ADR-016: Projekt-Identitaet ueber registrierte Anker statt abgeleiteter Namen
 
-- Status: Proposed (2026-07-27)
+- Status: Accepted (2026-07-28)
 - Verwandt: ADR-001 (loest die dort festgehaltene Herkunft der Store-Identitaet ab -- Aufloesung
   beim Serverstart ueber eine Slug-Kette), ADR-009 (loest dessen Punkt 3 ab -- Ableitung aus dem
   Herkunftsverzeichnis per git-common-dir; Transport, Betriebsmodell und Vertrauensgrenze bleiben
