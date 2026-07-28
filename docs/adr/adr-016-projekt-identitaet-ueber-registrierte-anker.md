@@ -12,7 +12,7 @@ Die Identitaet des Stores, den ein Aufruf trifft, wurde bisher aus dem Herkunfts
 Clients *abgeleitet*: geslugter Basename des git-Ankers, sonst des Arbeitsverzeichnisses. Eine
 Ableitung ist nur so gut wie die Information, die der Server hat -- und er hat keine. Er erhaelt
 eine Zeichenkette und kann sie weder pruefen noch anreichern. Der Basename wirft den Pfad weg,
-also fallen zwei gleichnamige Projekte an verschiedenen Orten auf dieselbe Id, dasselbe Dataset
+also fallen zwei gleichnamige Verzeichnisse an verschiedenen Orten auf dieselbe Id, dasselbe Dataset
 und dasselbe Store-Verzeichnis: stille Vermischung zweier Architekturmodelle, ohne Fehlermeldung
 und ohne erkennbares Symptom, bis Business-Codes und Cross-Referenzen projektuebergreifend
 kollidieren.
@@ -24,7 +24,8 @@ faellt dort ausnahmslos auf den Basename zurueck. Fuer nicht-git-Projekte existi
 git-Zweig ohnehin nie. Er war eine Sonderfallregel fuer eine Teilmenge, kein Fundament. arknet
 ist ausserdem ausschliesslich eine Server-Anwendung -- lokal betrieben oder spaeter im Netz --
 und nie ein im Projektverzeichnis mitlaufender Prozess. Ein Betriebsmodus, in dem der Server das
-Projekt selbst inspizieren koennte, ist damit nicht bloss unpraktisch, sondern nicht vorgesehen.
+Verzeichnis selbst inspizieren koennte, ist damit nicht bloss unpraktisch, sondern nicht
+vorgesehen.
 
 Damit steht die Frage nicht mehr, *wie* aus einem Verzeichnis eine Id abgeleitet wird, sondern
 ob abgeleitet werden darf.
@@ -33,7 +34,9 @@ Die zweite, laenger unklare Frage ist, *worauf* die Id ueberhaupt zeigt. Sie hie
 "Workspace" -- ein Begriff aus der Arbeitsweise in der IDE, wo jedes Verzeichnis ein Workspace
 ist. Er hat nie einen modellierten Gegenstand bezeichnet, sondern zufaellig beschrieben, was der
 Client sendet. Der Gegenstand, an dem Requirements, Glossarbegriffe und Use Cases tatsaechlich
-haengen, ist das **Projekt**. Ein zusaetzlicher Workspace-Begriff *ueber* dem Projekt haette
+haengen, ist das **Projekt**. "Projekt" bezeichnet von hier an durchgehend diesen
+Modellgegenstand -- nicht das Verzeichnis, aus dem ein Client arbeitet; das heisst weiterhin
+Arbeits- oder Projektverzeichnis. Ein zusaetzlicher Workspace-Begriff *ueber* dem Projekt haette
 bedeutet, dass ein Dataset die Daten mehrerer Projekte haelt und die Trennung innerhalb des
 Datasets nachgezogen werden muss -- jeder Lese- und Schreibpfad in allen vier Bounded Contexts
 braeuchte einen Projektfilter, und die Eindeutigkeit der Business-Codes haenge an dessen
@@ -107,8 +110,9 @@ Projekt-Identitaet wird **registriert, nicht abgeleitet**. Der Store-Gegenstand 
 **Positiv:** Kollision ist strukturell ausgeschlossen, weil der Anker der Schluessel ist und
 nichts mehr verkuerzt wird. Fragmentierung ebenso: ein weiteres Verzeichnis desselben Projekts
 wird angehaengt statt geraten. git-Projekte und nicht-git-Projekte sind gleichgestellt, weil
-keine Ableitung mehr existiert, die das eine bevorzugt. Der Server braucht keinerlei Sicht auf
-das Projekt und funktioniert lokal wie im Netz unveraendert. Die Zuordnung ist wieder umkehrbar:
+keine Ableitung mehr existiert, die das eine bevorzugt. Der Server braucht keinerlei Zugriff auf
+das Arbeitsverzeichnis des Clients und funktioniert lokal wie im Netz unveraendert. Die Zuordnung
+ist wieder umkehrbar:
 zu jedem Projekt sind seine Anker abfragbar, womit ein Export seine Identitaet eindeutig
 mitfuehrt und ein Restore sie wiederfindet. Die fachlichen Kerne bleiben unberuehrt -- weil
 Dataset und Projekt zusammenfallen, braucht kein Lese- oder Schreibpfad einen Projektfilter, und
@@ -144,7 +148,7 @@ ProjectId, statt mit ihr verschmolzen zu werden.
   Entscheidung.
 - **Vollen Pfad ableiten (Slug oder Hash des absoluten Pfades).** Beseitigt die Kollision ohne
   neuen Zustand, macht dafuer jedes Unterverzeichnis zu einem eigenen, leeren Projekt und
-  verliert den Store beim Verschieben des Projekts. Verworfen (tauscht stille Vermischung gegen
+  verliert den Store beim Verschieben des Verzeichnisses. Verworfen (tauscht stille Vermischung gegen
   stille Zersplitterung).
 - **Workspace als Klammer ueber mehreren Projekten, ein Dataset je Workspace.** Haette erlaubt,
   mehrere Repositories unter einem gemeinsamen Glossar zu fuehren. Verworfen: der Client sendet
@@ -158,8 +162,8 @@ ProjectId, statt mit ihr verschmolzen zu werden.
   ausser einer Gruppierung in Oberflaechen nichts leistet. Verworfen, bis ein konkreter Bedarf
   auftritt -- sie liesse sich spaeter additiv ergaenzen, ohne die Store-Grenze anzufassen.
 - **git-common-dir als Anker, notfalls clientseitig vorverdaut.** Setzt git voraus, schliesst
-  nicht-git-Projekte aus und verlangt vom Server Sicht auf das Projekt oder vom Client ein
-  ausgefuehrtes Hilfsskript. Als optionale Vorverarbeitung des Ankers weiterhin moeglich, als
+  nicht-git-Projekte aus und verlangt vom Server Zugriff auf das Projektverzeichnis oder vom
+  Client ein ausgefuehrtes Hilfsskript. Als optionale Vorverarbeitung des Ankers weiterhin moeglich, als
   Fundament der Identitaet verworfen.
 - **MCP `roots/list` als Identitaetsquelle.** Der protokolleigene Weg, Verzeichnisse vom Client
   zu erfahren, und als zusaetzlicher Lieferweg des Ankers zulaessig. Liefert aber nur das
