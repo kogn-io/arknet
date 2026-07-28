@@ -215,6 +215,12 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 | `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms without any usage |
 | `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes |
 
+Backup -- not project-scoped, one call covers every registered project:
+
+| Tool | Description |
+|------|-------------|
+| `project_export` | Export every registered project's complete RDF store (every named graph, including provenance and project self-description -- unlike `store_overview`, this hides nothing) as a `.trig` file into a timestamped subdirectory of a configurable export directory. There is no matching import/restore tool yet -- a dataset restored by hand is claimed back into the registry with `project_adopt` |
+
 ### Storage model (store-first)
 
 The model lives primarily in the local RDF store (kognio-rdf), **persistent

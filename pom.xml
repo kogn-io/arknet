@@ -69,8 +69,11 @@
              echt ueberlappende Schreibtransaktionen beim commit() mit einer
              RepositoryException (Ursache SailConflictException) statt still kollidieren (#144).
              0.2.1 ist ein Release (Maven Central, kein Snapshot); Breaking Changes gegenueber
-             0.1.1 und ihre arknet-seitige Migration: #173. -->
-        <kognio-rdf.version>0.2.1</kognio-rdf.version>
+             0.1.1 und ihre arknet-seitige Migration: #173.
+             0.2.2-SNAPSHOT bringt DatasetHandle#datasetExport() (RdfFormat-basierter, Rio-gestuetzter
+             Serialisierungs-Port) fuer #154 - Uebergangspin bis das gleichnamige 0.3.0-Release auf
+             Central synct, dann Wechsel auf das Release. -->
+        <kognio-rdf.version>0.2.2-SNAPSHOT</kognio-rdf.version>
         <spotless-maven-plugin.version>3.8.0</spotless-maven-plugin.version>
     </properties>
 
