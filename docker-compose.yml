@@ -31,8 +31,8 @@
 # adopts the store directory's EXISTING owner automatically at every start (a
 # fresh, container-only volume falls back to the image's own non-root user),
 # then applies that same identity to the report dir -- no manual chown/chmod
-# on the host is needed, and a prior bare-jar run's ownership of ~/.arknet/rdf
-# is left untouched. Set PUID/PGID below only if you want to force a specific
+# on the host is needed, and the ownership an earlier run left on ~/.arknet/rdf
+# is untouched. Set PUID/PGID below only if you want to force a specific
 # uid:gid regardless of what currently owns the store (e.g. provisioning a
 # fresh volume ahead of first use).
 x-report-host-dir: &report-host-dir "${HOME}/.arknet/report"

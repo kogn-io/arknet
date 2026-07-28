@@ -54,8 +54,9 @@ ARG ARKNET_VERSION=dev
 ENV ARKNET_VERSION=${ARKNET_VERSION}
 
 # --- Container networking, read this before changing the run command ---------
-# application.properties hardcodes server.address=127.0.0.1 on purpose: on the
-# bare-jar path that loopback bind IS the trust boundary (no auth, ADR-009).
+# application.properties hardcodes server.address=127.0.0.1 on purpose: for a
+# process running directly on its host, that loopback bind IS the trust boundary
+# (no auth, ADR-009).
 # Inside a container that default is BROKEN: Docker's published-port NAT delivers
 # inbound traffic to the container's eth0, not its loopback interface, so a
 # service bound only to 127.0.0.1 is unreachable even with -p published.
