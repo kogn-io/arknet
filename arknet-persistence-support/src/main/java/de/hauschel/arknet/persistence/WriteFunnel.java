@@ -88,15 +88,16 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * {@code term_update}), both kept outside on purpose for their own transaction semantics by
  * ADR-013 decision 5, are resolved into {@link #compareAndUpdate} rather than integrated
  * unchanged - a full-snapshot comparison (requirements) or an in-adapter-transaction field merge
- * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. But
- * the head is a usable <em>concurrency token</em> only where a caller actually goes through
- * {@link #compareAndUpdate}: that method closes the lost-update window a plain {@link #update}
- * cannot, precisely because {@link #update} runs no head check at all. {@link #update} itself
- * remains reachable, not just an internal implementation detail - the bounded-context adapter's
- * {@code bc_link_term} performs a read-modify-write through it with no compare-and-set guard, so
- * two concurrent calls linking a term to the same bounded context can silently lose one of the two
- * edges. The head moving with a write and the write being guarded by that head are two different
- * properties; only {@link #compareAndUpdate} callers get both.</p>
+ * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. The
+ * bounded context's {@code bc_link_term} joined them in issue #176 - its read-modify-write used to
+ * run through the unguarded {@link #update} and could silently lose one of two concurrently linked
+ * edges. But the head is a usable <em>concurrency token</em> only where a caller actually goes
+ * through {@link #compareAndUpdate}: that method closes the lost-update window a plain
+ * {@link #update} cannot, precisely because {@link #update} runs no head check at all. The head
+ * moving with a write and the write being guarded by that head are two different properties; only
+ * {@link #compareAndUpdate} callers get both. {@link #update} survives as the funnel's
+ * unconditional write path - the use-case adapter's replace-by-identity write uses it - but no
+ * in-port reaches a read-modify-write through it any more: there is no {@code uc_update} tool.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same

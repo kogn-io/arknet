@@ -4,6 +4,7 @@
 package de.hauschel.arknet.bc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -47,14 +48,18 @@ import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedCon
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
+import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.Subdomain;
+import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.WorkspaceId;
 
 /**
- * Regression test for the second interleaving of issue #144, reproduced against a real
- * RDF4J-backed store (in-memory {@code SailRepository}) with real threads - unlike {@code
+ * Regression tests against a real RDF4J-backed store (in-memory {@code SailRepository}): the
+ * second interleaving of issue #144 with real threads, and the lost-update race of issue #176
+ * through the funnel's own compare-and-set path - unlike {@code
  * BoundedContextServiceConcurrencyTest}, which reproduces the first interleaving ("a concurrent
  * caller commits its whole write before this one's transaction even begins") with a repository
  * decorator and no real transactions at all.
@@ -75,7 +80,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * whenGuardIrisUnknownToStore_loserCommitFails} test uses to prove the store-level mechanism, one
  * layer up: a {@link DatasetLifecycle} decorator wraps each caller's {@link DatasetTx} so that,
  * right after its second {@code contains} (the code-uniqueness guard
- * {@link KognioRdfBoundedContextRepository#write} issues), it blocks on a {@link CyclicBarrier}
+ * {@link KognioRdfBoundedContextRepository#create} issues), it blocks on a {@link CyclicBarrier}
  * with two parties. Both callers' guards must therefore have already passed before either proceeds
  * to write - the exact guard-defeat scenario, which under a SPARQL {@code ASK} guard on
  * store-unknown IRIs would not even be caught at commit time (ADR-013 Nachtrag) - while a {@link
@@ -96,6 +101,8 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 class BoundedContextServiceRealStoreConcurrencyTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
+    private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
 
     private DatasetLifecycleRdf4j realLifecycle;
 
@@ -165,10 +172,59 @@ class BoundedContextServiceRealStoreConcurrencyTest {
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())));
     }
 
+    /**
+     * Issue #176 against the real store: a concurrent {@code bc_link_term} that commits between
+     * this caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
+     * nothing and lose neither edge. Before the fix, {@code linkTerm} read outside any transaction
+     * and wrote back unconditionally, so the second writer silently dropped the first writer's
+     * {@code arknet:ubiquitousLanguageTerm} edge.
+     *
+     * <p>The interleaving is pinned by the {@code beforeTransaction} hook - which fires exactly
+     * where the funnel's compare-and-set transaction opens - rather than by real threads, which
+     * would make this flaky. The one-shot guard lives in the injected {@link Runnable}, so the
+     * retried attempt runs unimpeded.</p>
+     */
+    @Test
+    void linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead() {
+        BoundedContextService straightThrough = serviceOver(realLifecycle);
+        BoundedContextCode code = straightThrough.add(WS, newBoundedContext("orders-team")).code();
+
+        AtomicBoolean pending = new AtomicBoolean(true);
+        BoundedContextService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
+            if (pending.compareAndSet(true, false)) {
+                straightThrough.linkTerm(WS, code, "TERM-2");
+            }
+        }));
+
+        BoundedContext result = racing.linkTerm(WS, code, "TERM-1");
+
+        assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
+        assertEquals(2, result.usesTerms().size(),
+                "the retry must return the state it re-read, not its stale first read");
+        assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
+        BoundedContext stored = straightThrough.get(WS, code).orElseThrow();
+        assertEquals(2, stored.usesTerms().size(), "both writers' edges must survive - neither is silently lost");
+    }
+
     private static NewBoundedContext newBoundedContext(String owner) {
         return new NewBoundedContext("OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, owner);
+    }
+
+    /**
+     * A service wired over {@code lifecycle} with a term lookup that knows {@code TERM-1} and
+     * {@code TERM-2} - the two edges the lost-update race above competes over.
+     */
+    private static BoundedContextService serviceOver(DatasetLifecycle lifecycle) {
+        TermLookup termLookup = (workspaceId, termCode) -> switch (termCode) {
+            case "TERM-1" -> TERM_1;
+            case "TERM-2" -> TERM_2;
+            default -> throw new IllegalArgumentException("fake lookup: unknown term code " + termCode);
+        };
+        return new BoundedContextService(
+                KognioRdfBoundedContextRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT),
+                new UuidResourceIdFactory(), termLookup);
     }
 
     // ---- synchronisation helpers ---------------------------------------------------------
@@ -203,6 +259,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
                 return new GuardSyncTx(tx, afterSecondGuard);
             }
             return tx;
+        }, () -> {
+            // This service pins the #144 interleaving inside the transaction; nothing to do before.
         });
         BoundedContextRepository repository =
                 KognioRdfBoundedContextRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
@@ -212,20 +270,29 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         return new BoundedContextService(repository, new UuidResourceIdFactory(), unusedTermLookup);
     }
 
-    /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */
+    /**
+     * Wraps a real {@link DatasetLifecycle}, running {@code beforeTransaction} right before every
+     * write transaction opens and decorating every acquired transaction's {@link DatasetTx}. The
+     * two hooks pin two different interleavings: {@code beforeTransaction} is where a concurrent
+     * writer's commit turns an already-taken read stale (issue #176), {@code txDecorator} is where
+     * two transactions are held open against each other (issue #144).
+     */
     private static final class GuardedLifecycle implements DatasetLifecycle {
 
         private final DatasetLifecycle delegate;
         private final Function<DatasetTx, DatasetTx> txDecorator;
+        private final Runnable beforeTransaction;
 
-        GuardedLifecycle(DatasetLifecycle delegate, Function<DatasetTx, DatasetTx> txDecorator) {
+        GuardedLifecycle(DatasetLifecycle delegate, Function<DatasetTx, DatasetTx> txDecorator,
+                Runnable beforeTransaction) {
             this.delegate = delegate;
             this.txDecorator = txDecorator;
+            this.beforeTransaction = beforeTransaction;
         }
 
         @Override
         public DatasetHandle acquire(DatasetId id) {
-            return new GuardedHandle(delegate.acquire(id), txDecorator);
+            return new GuardedHandle(delegate.acquire(id), txDecorator, beforeTransaction);
         }
 
         @Override
@@ -248,10 +315,13 @@ class BoundedContextServiceRealStoreConcurrencyTest {
 
         private final DatasetHandle delegate;
         private final Function<DatasetTx, DatasetTx> txDecorator;
+        private final Runnable beforeTransaction;
 
-        GuardedHandle(DatasetHandle delegate, Function<DatasetTx, DatasetTx> txDecorator) {
+        GuardedHandle(DatasetHandle delegate, Function<DatasetTx, DatasetTx> txDecorator,
+                Runnable beforeTransaction) {
             this.delegate = delegate;
             this.txDecorator = txDecorator;
+            this.beforeTransaction = beforeTransaction;
         }
 
         @Override
@@ -275,6 +345,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             return new DatasetTransactor() {
                 @Override
                 public <T> T inTransaction(Function<DatasetTx, T> fn) {
+                    beforeTransaction.run();
                     return real.inTransaction(tx -> fn.apply(txDecorator.apply(tx)));
                 }
             };

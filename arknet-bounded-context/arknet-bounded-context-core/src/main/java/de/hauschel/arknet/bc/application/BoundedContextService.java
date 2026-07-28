@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
@@ -16,6 +17,7 @@ import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
@@ -39,16 +41,29 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * be linked to a bounded context at any time; the edge lives inside the aggregate and is
  * therefore carried along by every subsequent replace-by-identity write.</p>
  *
- * <p><strong>Concurrency (issue #144).</strong> {@link #add} recomputes its next code against a
- * fresh read whenever a concurrent {@code bc_add} claims the same {@code BC-N} first, via
- * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
- * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
- * multi-writer concern (ADR-001).</p>
+ * <p><strong>Concurrency (issues #144 and #176).</strong> {@link #add} recomputes its next code
+ * against a fresh read whenever a concurrent {@code bc_add} claims the same {@code BC-N} first,
+ * via {@link CodeAssignment#createRetryingOnCodeCollision}, and {@link #linkTerm} retries its
+ * whole read-modify-write round trip via
+ * {@link BoundedContextRepository#compareAndUpdate} whenever a concurrent writer commits in
+ * between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed
+ * caller; only sustained, pathological contention on the very same bounded context surfaces as
+ * {@link BoundedContextConcurrentlyModifiedException}. Parallel sessions of one user against one
+ * local store are the normal case, not a remote/multi-writer concern (ADR-001).</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
         GetBoundedContext, LinkTerm {
 
     private static final String CODE_PREFIX = "BC";
+
+    /**
+     * Bound on {@link #updateWithOptimisticRetry}'s compare-and-set retry loop (issue #176). Two
+     * callers read-modify-writing the same bounded context are resolved by a single retry in the
+     * overwhelming majority of cases, since each retry re-reads the now-current state before
+     * trying again; this bound only exists so a pathological, sustained storm of concurrent
+     * writers against the very same bounded context fails loudly instead of looping forever.
+     */
+    private static final int MAX_RETRY_ATTEMPTS = 20;
 
     private final BoundedContextRepository repository;
     private final ResourceIdFactory resourceIdFactory;
@@ -107,20 +122,60 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
-        // Resolution happens before the read-modify-write: an unknown/ambiguous term code must
-        // propagate as a didactic rejection and leave the bounded context untouched.
+        // Resolution does not depend on the bounded context's current state, so it happens once,
+        // outside the retry loop below - an unknown/ambiguous term code must propagate as a
+        // didactic rejection immediately and leave the bounded context untouched.
         TermRef term = new TermRef(termLookup.resolveByCode(workspaceId, termCode));
-        BoundedContext current = repository.findByCode(workspaceId, code)
-                .orElseThrow(() -> new BoundedContextNotFoundException(workspaceId, code));
-        if (current.usesTerms().contains(term)) {
-            return current;
+        return updateWithOptimisticRetry(workspaceId, code, current -> {
+            if (current.usesTerms().contains(term)) {
+                return current;
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.add(term);
+            return new BoundedContext(current.id(), current.code(), current.name(),
+                    current.domainVision(), current.subdomain(), current.ownedBy(), linked);
+        });
+    }
+
+    /**
+     * Read-modify-write helper behind {@link #linkTerm}: reads the current bounded context and its
+     * concurrency token together via {@link BoundedContextRepository#findCurrentByCode}, derives
+     * the next state via {@code mutation}, and writes it back via
+     * {@link BoundedContextRepository#compareAndUpdate} - retrying with a fresh read whenever a
+     * concurrent writer commits a change in between (issue #176: two parallel {@code bc_link_term}
+     * round trips on the same bounded context used to silently lose whichever one committed last,
+     * because the read happened outside any transaction and the write carried no guard at all).
+     *
+     * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as a
+     * no-op: linking an already-linked term skips the write entirely, exactly as before this
+     * fix.</p>
+     *
+     * @throws BoundedContextNotFoundException             if no bounded context with {@code code}
+     *                                                     exists
+     * @throws BoundedContextConcurrentlyModifiedException if the write keeps losing the race
+     *                                                     across every retry attempt
+     */
+    private BoundedContext updateWithOptimisticRetry(
+            WorkspaceId workspaceId, BoundedContextCode code, UnaryOperator<BoundedContext> mutation) {
+        BoundedContextConcurrentlyModifiedException lastConflict = null;
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            BoundedContextRepository.CurrentBoundedContext current =
+                    repository.findCurrentByCode(workspaceId, code)
+                            .orElseThrow(() -> new BoundedContextNotFoundException(workspaceId, code));
+            BoundedContext updated = mutation.apply(current.value());
+            if (updated.equals(current.value())) {
+                return current.value();
+            }
+            try {
+                repository.compareAndUpdate(workspaceId, current.head(), updated);
+                return updated;
+            } catch (BoundedContextConcurrentlyModifiedException e) {
+                // A concurrent writer replaced the bounded context between our read and our write -
+                // retry against the now-current state instead of silently discarding that change.
+                lastConflict = e;
+            }
         }
-        List<TermRef> linked = new ArrayList<>(current.usesTerms());
-        linked.add(term);
-        BoundedContext updated = new BoundedContext(current.id(), current.code(), current.name(),
-                current.domainVision(), current.subdomain(), current.ownedBy(), linked);
-        repository.update(workspaceId, updated);
-        return updated;
+        throw lastConflict;
     }
 
     /**
