@@ -179,6 +179,7 @@ Use Cases BC (`arknet-use-cases`) -- flow-oriented Cockburn use cases (bind FRs 
 | `uc_add` | Create a complete use case in one call (goal, actor, trigger, numbered step flow with FR references) |
 | `uc_list` | List all use cases |
 | `uc_get` | Fetch a single use case with resolved steps and FR/actor edges (e.g. UC1) |
+| `uc_update` | Correct a use case's title, goal, scope, trigger, precondition, postcondition and/or extensions (each optional, unchanged if omitted), and/or the text of individual existing steps by position -- does not touch primaryActor, supportingActors, the step list's structure or realises links |
 
 Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assigns glossary terms to a domain cut):
 
