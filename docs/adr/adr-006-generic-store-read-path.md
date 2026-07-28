@@ -2,7 +2,8 @@
 
 - Status: Accepted (2026-07-14)
 - Verwandt: ADR-001 (austauschbarer Store), ADR-005 (Store-first), ADR-010 (Review-UI --
-  konsumiert diesen Lesepfad in-process)
+  konsumiert diesen Lesepfad in-process), ADR-016 (Projekt-Identitaet -- dessen
+  Registry-Dataset muss dieser Lesepfad ausblenden, wie er es mit dem Provenance-Graphen tut)
 
 ## Kontext
 
