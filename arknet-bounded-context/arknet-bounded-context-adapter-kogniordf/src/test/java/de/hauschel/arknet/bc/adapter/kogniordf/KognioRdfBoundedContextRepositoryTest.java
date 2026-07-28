@@ -31,8 +31,10 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
@@ -165,7 +167,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.SUPPORTING_DOMAIN, "platform-team", List.of());
-        repository.update(WORKSPACE_A, changed);
+        repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         BoundedContext found = repository.findByCode(WORKSPACE_A, new BoundedContextCode("BC-1")).orElseThrow();
         assertEquals(Subdomain.SUPPORTING_DOMAIN, found.subdomain());
@@ -176,7 +178,8 @@ class KognioRdfBoundedContextRepositoryTest {
     void updateRejectsAMissingIdentity() {
         BoundedContext missing = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
 
-        assertThrows(BoundedContextNotFoundException.class, () -> repository.update(WORKSPACE_A, missing));
+        assertThrows(BoundedContextNotFoundException.class,
+                () -> repository.compareAndUpdate(WORKSPACE_A, null, missing));
     }
 
     @Test
@@ -240,7 +243,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext extended = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null,
                 List.of(term1, term2));
-        repository.update(WORKSPACE_A, extended);
+        repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(extended.code()), extended);
 
         BoundedContext found = repository.findByCode(WORKSPACE_A, new BoundedContextCode("BC-1")).orElseThrow();
         assertEquals(List.of(term1, term2), found.usesTerms());
@@ -273,7 +276,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
-        repository.update(WORKSPACE_A, changed);
+        repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/core#hasAggregate> <" + aggregateIri + "> } }";
@@ -313,7 +316,7 @@ class KognioRdfBoundedContextRepositoryTest {
         TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID()));
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of(term));
-        repository.update(WORKSPACE_A, changed);
+        repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/core#ubiquitousLanguageTerm> ?term . "
@@ -352,7 +355,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.",
                 Subdomain.CORE_DOMAIN, "orders-team", List.of());
-        repository.update(WORKSPACE_A, changed);
+        repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
                 + "> <https://w3id.org/arknet/core#hasAggregate> ?aggregate . "
@@ -401,8 +404,8 @@ class KognioRdfBoundedContextRepositoryTest {
         assertEquals(1, afterCreate.size(), "create must record exactly one revision");
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
-        repository.update(WORKSPACE_A, new BoundedContext(bc.id(), bc.code(), "Renamed",
-                bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()));
+        repository.compareAndUpdate(WORKSPACE_A, afterCreate.get(0), new BoundedContext(bc.id(), bc.code(),
+                "Renamed", bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()));
 
         assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
         List<String> heads = headsOf(subject);
@@ -431,6 +434,95 @@ class KognioRdfBoundedContextRepositoryTest {
             assertEquals(1, handle.sparqlQuery().select(all).count(),
                     "the rejected write must not have recorded a revision");
         }
+    }
+
+    // ---- compare-and-set (issue #176) ------------------------------------------------------
+
+    /**
+     * The read side of the guard: {@code findCurrentByCode} hands out the very {@code arkprov:head}
+     * the last funnel write recorded, so a caller's {@code compareAndUpdate} can be checked against
+     * it - and the state it pairs the head with is the same one {@code findByCode} reads.
+     */
+    @Test
+    void findCurrentByCodeReturnsTheStateTogetherWithTheCurrentHead() {
+        BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"),
+                Subdomain.CORE_DOMAIN, "orders-team", List.of());
+        repository.create(WORKSPACE_A, bc);
+
+        BoundedContextRepository.CurrentBoundedContext current =
+                repository.findCurrentByCode(WORKSPACE_A, new BoundedContextCode("BC-1")).orElseThrow();
+
+        assertEquals(bc, current.value());
+        assertEquals(headsOf(bc.id().value().value()), List.of(current.head()));
+    }
+
+    @Test
+    void findCurrentByCodeReturnsEmptyForAnUnknownCode() {
+        assertEquals(Optional.empty(), repository.findCurrentByCode(WORKSPACE_A, new BoundedContextCode("BC-9")));
+    }
+
+    /**
+     * The write side of the guard (issue #176): a caller whose observed head is no longer current -
+     * because another writer committed in between - is rejected instead of overwriting the change
+     * it never saw, and its rejected write leaves neither a triple nor a revision behind.
+     */
+    @Test
+    void compareAndUpdateRejectsAStaleHeadAndWritesNothing() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(WORKSPACE_A, original);
+        String staleHead = currentHeadOf(original.code());
+
+        // A concurrent writer commits first, moving the head away from what the loser observed.
+        BoundedContext byTheWinner = new BoundedContext(id, original.code(), "Renamed by the winner",
+                original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
+        repository.compareAndUpdate(WORKSPACE_A, staleHead, byTheWinner);
+
+        BoundedContext byTheLoser = new BoundedContext(id, original.code(), "Renamed by the loser",
+                original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
+        assertThrows(BoundedContextConcurrentlyModifiedException.class,
+                () -> repository.compareAndUpdate(WORKSPACE_A, staleHead, byTheLoser));
+
+        assertEquals("Renamed by the winner",
+                repository.findByCode(WORKSPACE_A, original.code()).orElseThrow().name());
+        assertEquals(2, revisionsOf(id.value().value()).size(),
+                "the rejected write must not have recorded a revision");
+    }
+
+    /**
+     * A bounded context written before the funnel recorded revisions carries no head at all. Its
+     * {@code null} head is a legitimate expectation, not a missing one - so a caller that observed
+     * "no head yet" may still write, and the write records the first revision.
+     */
+    @Test
+    void compareAndUpdateAcceptsANullHeadWhenTheResourceHasNoneYet() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(WORKSPACE_A, original);
+        // Strips the head the create recorded, leaving the pre-ADR-014 state behind.
+        String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(dropHead);
+                return null;
+            });
+        }
+        assertNull(currentHeadOf(original.code()), "precondition: the bounded context carries no head");
+
+        BoundedContext changed = new BoundedContext(id, original.code(), "Renamed",
+                original.domainVision(), original.subdomain(), original.ownedBy(), List.of());
+        repository.compareAndUpdate(WORKSPACE_A, null, changed);
+
+        assertEquals("Renamed", repository.findByCode(WORKSPACE_A, original.code()).orElseThrow().name());
+        assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
+    }
+
+    /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
+    private String currentHeadOf(BoundedContextCode code) {
+        return repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
     }
 
     private List<String> revisionsOf(String subjectIri) {
