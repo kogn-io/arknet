@@ -25,6 +25,8 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
@@ -35,8 +37,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the use-cases component: exposes the use-case use-cases as MCP
- * tools ({@code uc_add}, {@code uc_list}, {@code uc_get}) and delegates each tool call to
- * the corresponding in-port.
+ * tools ({@code uc_add}, {@code uc_list}, {@code uc_get}, {@code uc_update}) and delegates each
+ * tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the use-cases hexagon (symmetric to the out-adapter
  * {@code arknet-use-cases-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -92,17 +94,19 @@ public final class UseCaseMcpTools {
     private final AddUseCase addUseCase;
     private final ListUseCases listUseCases;
     private final GetUseCase getUseCase;
+    private final UpdateUseCase updateUseCase;
     private final ResolveTerms resolveTerms;
     private final ResolveRequirements resolveRequirements;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its three driving in-ports, the two borrowed sibling-hexagon
-     * display ports and the resolver that maps each call's origin directory to a project.
+     * Creates the adapter with its four driving in-ports, the two borrowed sibling-hexagon
+     * display ports and the resolver that maps each call's origin anchor to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
      * @param listUseCases        in-port backing {@code uc_list}
      * @param getUseCase          in-port backing {@code uc_get}
+     * @param updateUseCase       in-port backing {@code uc_update}
      * @param resolveTerms        ubiquitous-language driving port used only to render a
      *                            referenced actor's business name instead of its bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
@@ -113,12 +117,14 @@ public final class UseCaseMcpTools {
             final AddUseCase addUseCase,
             final ListUseCases listUseCases,
             final GetUseCase getUseCase,
+            final UpdateUseCase updateUseCase,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
             final ProjectResolver projects) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
+        this.updateUseCase = Objects.requireNonNull(updateUseCase, "updateUseCase");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.projects = Objects.requireNonNull(projects, "projects");
@@ -160,6 +166,17 @@ public final class UseCaseMcpTools {
      *                 {@code FR-1}); may be empty or omitted
      */
     public record StepInput(int position, String text, List<String> realises) {
+    }
+
+    /**
+     * A text-only correction for one existing main-flow step, as passed by the agent to
+     * {@code uc_update}.
+     *
+     * @param position 1-based position of the existing step to correct - must match a step
+     *                 already present in the use case
+     * @param text     the corrected step text
+     */
+    public record StepPatchInput(int position, String text) {
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -259,6 +276,57 @@ public final class UseCaseMcpTools {
                 .orElse("Use case not found: " + code.value());
     }
 
+    @McpTool(name = "uc_update",
+            description = "Correct an already-created use case's title, goal, scope, trigger, precondition "
+                    + "and/or postcondition, and/or the text of individual existing main-flow steps by their "
+                    + "position. Every argument is optional - an omitted one leaves that field unchanged; "
+                    + "omitted extensions leave the existing ones unchanged, given extensions replace them "
+                    + "wholesale. stepTextPatches corrects only a step's text, never its realises references, "
+                    + "and cannot add, remove or reorder steps - a position with no matching step is rejected. "
+                    + "Does not touch primaryActor, supportingActors, the step list's structure or realises "
+                    + "links; use uc_add to recreate the use case if those need to change.")
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "New short human-readable name (optional, unchanged if omitted)",
+                    required = false)
+            final String title,
+            @McpToolParam(description = "New goal the primary actor wants to achieve (optional, unchanged if "
+                    + "omitted)", required = false)
+            final String goal,
+            @McpToolParam(description = "New system/design scope (optional, unchanged if omitted)",
+                    required = false)
+            final String scope,
+            @McpToolParam(description = "New triggering event (optional, unchanged if omitted)", required = false)
+            final String trigger,
+            @McpToolParam(description = "New precondition (optional, unchanged if omitted)", required = false)
+            final String precondition,
+            @McpToolParam(description = "New postcondition (optional, unchanged if omitted)", required = false)
+            final String postcondition,
+            @McpToolParam(description = "New alternative/exception flows as free-text lines, replacing the "
+                    + "existing ones wholesale (optional, unchanged if omitted)", required = false)
+            final List<String> extensions,
+            @McpToolParam(description = "Text corrections for individual existing main-flow steps: a JSON "
+                    + "array of {position: 1-based int of the step to correct, text: the corrected text}. Only "
+                    + "the named steps' text changes - their realises references and every other step are "
+                    + "untouched. A position with no matching step is rejected (optional, unchanged if omitted)",
+                    required = false)
+            final List<StepPatchInput> stepTextPatches,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final UseCaseCode code = new UseCaseCode(id);
+        final UseCase updated = updateUseCase.update(projectId, code, blankToNull(title), blankToNull(goal),
+                blankToNull(scope), blankToNull(trigger), blankToNull(precondition), blankToNull(postcondition),
+                extensions == null ? null : List.copyOf(extensions), toStepTextPatches(stepTextPatches));
+        return formatFull(projectId, updated);
+    }
+
     // --- mapping helpers -------------------------------------------------------
 
     private static List<NewStep> toNewSteps(final List<StepInput> steps) {
@@ -269,6 +337,13 @@ public final class UseCaseMcpTools {
                 .map(s -> new NewStep(s.position(), s.text(),
                         s.realises() == null ? List.of() : List.copyOf(s.realises())))
                 .toList();
+    }
+
+    private static List<StepTextPatch> toStepTextPatches(final List<StepPatchInput> patches) {
+        if (patches == null) {
+            return null;
+        }
+        return patches.stream().map(p -> new StepTextPatch(p.position(), p.text())).toList();
     }
 
     private static String formatShort(final UseCase uc) {
