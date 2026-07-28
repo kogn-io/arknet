@@ -6,6 +6,7 @@ package de.hauschel.arknet.req.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -219,7 +220,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
         Requirement updated = service.update(WS, code, "New title", "New description",
-                List.of("New done-when criterion"));
+                List.of("New done-when criterion"), null);
 
         assertEquals("New title", updated.title());
         assertEquals("New description", updated.description());
@@ -231,7 +232,7 @@ class RequirementServiceTest {
     void updateWithNullFieldsLeavesThemUnchanged() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        Requirement updated = service.update(WS, code, null, "New description", null);
+        Requirement updated = service.update(WS, code, null, "New description", null, null);
 
         assertEquals("User can log in", updated.title());
         assertEquals("New description", updated.description());
@@ -243,7 +244,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
         Requirement before = service.get(WS, code).orElseThrow();
 
-        Requirement result = service.update(WS, code, null, null, null);
+        Requirement result = service.update(WS, code, null, null, null, null);
 
         assertEquals(before, result);
     }
@@ -256,7 +257,7 @@ class RequirementServiceTest {
         service.setStatus(WS, code, RequirementStatus.ACCEPTED);
         service.linkTerm(WS, code, "TERM-1");
 
-        Requirement updated = service.update(WS, code, "New title", null, null);
+        Requirement updated = service.update(WS, code, "New title", null, null, null);
 
         assertEquals(RequirementStatus.ACCEPTED, updated.status());
         assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
@@ -265,17 +266,61 @@ class RequirementServiceTest {
         assertEquals("security", updated.qualityCategory());
     }
 
+    /**
+     * Issue #170: the concrete case - a register audited as uniformly {@code MUST_HAVE} is
+     * corrected down to {@code SHOULD_HAVE}, keeping the requirement's code and thus every
+     * {@code usesTerm}/{@code realises} reference into it intact.
+     */
+    @Test
+    void updateChangesThePriorityWithoutTouchingAnyOtherField() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL,
+                Priority.MUST_HAVE, null, null, List.of("Done when it works"))).code();
+
+        Requirement updated = service.update(WS, code, null, null, null, Priority.SHOULD_HAVE);
+
+        assertEquals(Priority.SHOULD_HAVE, updated.priority());
+        assertEquals("a", updated.title());
+        assertEquals("desc a", updated.description());
+        assertEquals(List.of("Done when it works"), updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code).orElseThrow());
+    }
+
+    /** A requirement added without a priority can have one set after the fact. */
+    @Test
+    void updateCanSetAPriorityThatWasNeverSet() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        assertNull(service.get(WS, code).orElseThrow().priority());
+
+        Requirement updated = service.update(WS, code, null, null, null, Priority.COULD_HAVE);
+
+        assertEquals(Priority.COULD_HAVE, updated.priority());
+    }
+
+    /**
+     * {@code null} means "unchanged", not "remove": correcting only the title must not silently
+     * strip an already-set priority (removing one is deliberately out of this port's scope).
+     */
+    @Test
+    void updateWithANullPriorityDoesNotClearAnAlreadySetOne() {
+        RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL,
+                Priority.MUST_HAVE, null, null, List.of("Done when it works"))).code();
+
+        Requirement updated = service.update(WS, code, "New title", null, null, null);
+
+        assertEquals(Priority.MUST_HAVE, updated.priority());
+    }
+
     @Test
     void updateRejectsABlankTitleViaTheDomainInvariant() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        assertThrows(IllegalArgumentException.class, () -> service.update(WS, code, " ", null, null));
+        assertThrows(IllegalArgumentException.class, () -> service.update(WS, code, " ", null, null, null));
     }
 
     @Test
     void updateThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null));
+                () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null, null));
 
         assertSame(WS, ex.workspaceId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
