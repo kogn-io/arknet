@@ -160,7 +160,10 @@ class StoreExportToolsTest {
     /**
      * A project whose export cannot be written must not prevent the others from being written -
      * the whole point of exporting every project in one call is that one broken project cannot
-     * take the others down with it.
+     * take the others down with it. {@link StoreExportTools} now writes to a sibling
+     * {@code .trig.tmp} path first and only moves it onto the final {@code .trig} name once the
+     * export succeeds, so the write is blocked by pre-creating a directory at the {@code .tmp}
+     * path rather than at the final one.
      */
     @Test
     void exportContinuesWithOtherProjectsWhenOneProjectsFileCannotBeWritten() {
@@ -171,7 +174,7 @@ class StoreExportToolsTest {
 
             String timestamp = StoreExportTools.timestampFolderName();
             Path timestampDir = exportDir.resolve(timestamp);
-            blockFileWithADirectory(timestampDir.resolve("broken.trig"));
+            blockFileWithADirectory(timestampDir.resolve("broken.trig.tmp"));
 
             StoreExportTools tools = new StoreExportTools(
                     listProjectsOf(
@@ -184,6 +187,8 @@ class StoreExportToolsTest {
             assertThat(result).contains("# Exported second: ");
             assertThat(result).contains("broken").contains("FAILED");
             assertThat(exportDir.resolve(timestamp).resolve("second.trig")).exists();
+            assertThat(exportDir.resolve(timestamp).resolve("broken.trig")).doesNotExist();
+            assertThat(exportDir.resolve(timestamp).resolve("broken.trig.tmp")).doesNotExist();
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
         }
