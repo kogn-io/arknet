@@ -4,6 +4,7 @@
 package de.hauschel.arknet.prj.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -106,12 +107,53 @@ class ProjectMcpToolsTest {
         attachAnchor.result = new Project(target.id(), target.label(),
                 List.of(callerAnchor, new Anchor("/home/f/DEV/arknet-wt", AnchorType.PATH)));
 
-        final String rendered =
-                adapter.attachAnchor(contextWithOrigin("/home/f/DEV/arknet"), "/home/f/DEV/arknet-wt", "path");
+        final String rendered = adapter.attachAnchor(
+                contextWithOrigin("/home/f/DEV/arknet"), "/home/f/DEV/arknet-wt", "path", null);
 
         assertEquals(target.id(), attachAnchor.lastProjectId);
         assertEquals(new Anchor("/home/f/DEV/arknet-wt", AnchorType.PATH), attachAnchor.lastAnchor);
         assertTrue(rendered.contains("arknet-wt"), rendered);
+    }
+
+    @Test
+    void attachAnchorWithAnExplicitCallerAnchorResolvesTheCallerWithoutATransportContext() {
+        final Anchor callerAnchor = new Anchor("https://example.org/arknet", AnchorType.URL);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+        attachAnchor.result = new Project(target.id(), target.label(),
+                List.of(callerAnchor, new Anchor("/home/f/DEV/arknet-wt", AnchorType.PATH)));
+
+        final String rendered = adapter.attachAnchor(
+                null, "/home/f/DEV/arknet-wt", "path", "https://example.org/arknet");
+
+        assertEquals(target.id(), attachAnchor.lastProjectId);
+        assertEquals(new Anchor("/home/f/DEV/arknet-wt", AnchorType.PATH), attachAnchor.lastAnchor);
+        assertTrue(rendered.contains("arknet-wt"), rendered);
+    }
+
+    @Test
+    void attachAnchorWithBothAContextAnchorAndAnExplicitCallerAnchorPrefersTheExplicitOne() {
+        final Anchor contextAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Anchor explicitCallerAnchor = new Anchor("https://example.org/arknet", AnchorType.URL);
+        final Project fromContext = new Project(new ProjectId("wrong"), "wrong", List.of(contextAnchor));
+        final Project fromExplicit = new Project(new ProjectId("p-1"), "arknet", List.of(explicitCallerAnchor));
+        resolveProject.register(contextAnchor, fromContext);
+        resolveProject.register(explicitCallerAnchor, fromExplicit);
+        attachAnchor.result = fromExplicit;
+
+        adapter.attachAnchor(contextWithOrigin("/home/f/DEV/arknet"), "/home/f/DEV/arknet-wt", "path",
+                "https://example.org/arknet");
+
+        assertEquals(fromExplicit.id(), attachAnchor.lastProjectId);
+    }
+
+    @Test
+    void attachAnchorWithoutAContextAnchorAndWithoutAnExplicitCallerAnchorFailsInsteadOfDefaulting() {
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> adapter.attachAnchor(null, "/home/f/DEV/arknet-wt", "path", null));
+
+        assertTrue(ex.getMessage().contains("callerAnchor"), ex.getMessage());
+        assertFalse(ex.getMessage().contains("project_add"), ex.getMessage());
     }
 
     @Test
@@ -121,7 +163,22 @@ class ProjectMcpToolsTest {
         resolveProject.register(callerAnchor, target);
         renameProject.result = new Project(target.id(), "arknet-renamed", target.anchors());
 
-        final String rendered = adapter.rename(contextWithOrigin("/home/f/DEV/arknet"), "arknet-renamed");
+        final String rendered = adapter.rename(contextWithOrigin("/home/f/DEV/arknet"), "arknet-renamed", null);
+
+        assertEquals(target.id(), renameProject.lastProjectId);
+        assertEquals("arknet-renamed", renameProject.lastLabel);
+        assertTrue(rendered.contains("arknet-renamed"), rendered);
+    }
+
+    @Test
+    void renameWithAnExplicitCallerAnchorResolvesTheCallerWithoutATransportContext() {
+        final Anchor callerAnchor = new Anchor("https://example.org/arknet", AnchorType.URL);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+        renameProject.result = new Project(target.id(), "arknet-renamed", target.anchors());
+
+        final String rendered =
+                adapter.rename(null, "arknet-renamed", "https://example.org/arknet");
 
         assertEquals(target.id(), renameProject.lastProjectId);
         assertEquals("arknet-renamed", renameProject.lastLabel);
@@ -162,7 +219,7 @@ class ProjectMcpToolsTest {
     @Test
     void unknownAnchorExceptionFromResolveProjectIsPropagatedNotSwallowedIntoAReturnString() {
         assertThrows(UnknownAnchorException.class,
-                () -> adapter.rename(contextWithOrigin("/home/f/DEV/unregistered"), "new-label"));
+                () -> adapter.rename(contextWithOrigin("/home/f/DEV/unregistered"), "new-label", null));
     }
 
     private static McpSyncRequestContext contextWithOrigin(final String originDir) {

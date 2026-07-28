@@ -276,6 +276,21 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         }
     }
 
+    /**
+     * Lists every registered project.
+     *
+     * <p>Deliberately looks up each project's anchors in {@code anchorsByProject} with
+     * {@link Map#get} rather than {@link Map#getOrDefault} with an empty list: the {@link Project}
+     * constructor rejects an empty anchor list with {@link IllegalArgumentException}, so a default
+     * would not make a project without anchors survive here - it would only move the failure one
+     * line down and dress it up as if it were handled. On the normal write path this case cannot
+     * arise at all: the project SHACL shape's {@code sh:minCount 1} on {@code arkprj:anchor}
+     * rejects an anchor-less project before it is ever written (see the SHACL write-gate tests in
+     * this class). A missing entry here would mean the registry graph itself is inconsistent, and
+     * {@link Project}'s constructor rejects the resulting {@code null} with the very message that
+     * names the invariant ("a project must hold at least one anchor") - a louder and more useful
+     * failure than silently returning a project that violates the domain's own invariant.</p>
+     */
     @Override
     public List<Project> findAll() {
         String query = "SELECT ?project ?label WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
@@ -289,7 +304,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                         String projectIriString = iriOf(row, "project").getIRIString();
                         return new Project(ProjectGraphs.projectIdOf(projectIriString),
                                 literalOf(row, "label").getLexicalForm(),
-                                anchorsByProject.getOrDefault(projectIriString, List.of()));
+                                anchorsByProject.get(projectIriString));
                     })
                     .toList();
         }
