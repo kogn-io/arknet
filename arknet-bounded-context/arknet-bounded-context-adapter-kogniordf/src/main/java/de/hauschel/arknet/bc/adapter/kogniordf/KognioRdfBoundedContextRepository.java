@@ -296,17 +296,15 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     /**
-     * Reads a bounded context's current state together with its concurrency token. Only the row
-     * built from {@link #boundedContextByCodeWhereClause} (the core fields) plus the head itself
-     * come from this method's one query (issue #176) - {@link #boundedContextOf} then issues one
-     * further, independent query, via {@link #readUsesTerms}, to fill in {@code usesTerms}. This
-     * is still safe because of the order, not because everything is one query: the head is read
-     * first, so it is never fresher than any part of the state it is paired with - a concurrent
-     * funnel write landing between the queries moves the head, so
+     * Reads a bounded context's current state together with its concurrency token. The row built
+     * from {@link #boundedContextByCodeWhereClause} (the core fields) plus the head itself come
+     * from this method's one query call (issue #176) - one snapshot, which is the load-bearing
+     * guarantee, not an ordering of clauses within that query. {@link #boundedContextOf} then
+     * issues one further, independent query, via {@link #readUsesTerms}, to fill in
+     * {@code usesTerms}; that later read is safe precisely because it can only be fresher, never
+     * staler, than the head: a concurrent funnel write landing in between moves the head, so
      * {@link BoundedContextRepository#compareAndUpdate} then fails its comparison and the caller
-     * re-reads instead of silently overwriting a state it never actually saw. Reading the head
-     * later, or joining any field before it, would risk the opposite - a fresh head paired with a
-     * stale state, reopening the lost-update race this method exists to close. Builds the
+     * re-reads instead of silently overwriting a state it never actually saw. Builds the
      * {@link BoundedContext} the same way {@link #findByCode} does - both call
      * {@link #boundedContextOf} on their row, so the two read paths cannot drift apart
      * field-by-field.

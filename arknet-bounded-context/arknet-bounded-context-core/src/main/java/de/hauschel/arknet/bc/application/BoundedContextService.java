@@ -57,13 +57,11 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     private static final String CODE_PREFIX = "BC";
 
     /**
-     * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops (issues #144
-     * and #176). Both races this guards against - two callers computing the same next-free
-     * {@link BoundedContextCode}, or two callers read-modify-writing the same bounded context -
-     * are resolved by a single retry in the overwhelming majority of cases, since each retry
-     * re-reads the now-current state before trying again; this bound only exists so a
-     * pathological, sustained storm of concurrent writers against the very same bounded context
-     * fails loudly instead of looping forever.
+     * Bound on {@link #updateWithOptimisticRetry}'s compare-and-set retry loop (issue #176). Two
+     * callers read-modify-writing the same bounded context are resolved by a single retry in the
+     * overwhelming majority of cases, since each retry re-reads the now-current state before
+     * trying again; this bound only exists so a pathological, sustained storm of concurrent
+     * writers against the very same bounded context fails loudly instead of looping forever.
      */
     private static final int MAX_RETRY_ATTEMPTS = 20;
 
@@ -96,7 +94,7 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         // (issue #144). See CodeAssignment for why that race exists and why it must retry rather
         // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         BoundedContextId id = new BoundedContextId(resourceIdFactory.newId());
-        return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
+        return CodeAssignment.createRetryingOnCodeCollision(
                 DuplicateBoundedContextCodeException.class, () -> {
                     BoundedContextCode code = nextCode(workspaceId);
                     BoundedContext boundedContext = new BoundedContext(id, code, command.name(),
