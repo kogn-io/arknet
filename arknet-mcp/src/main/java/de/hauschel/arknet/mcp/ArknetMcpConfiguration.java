@@ -450,17 +450,22 @@ public class ArknetMcpConfiguration {
      * report asks the context that wrote it instead of re-deriving the answer here. The generic
      * snapshot still backs every card's raw triples and catches whatever no context claims -
      * see the ADR-006 addendum.
+     *
+     * <p>The glossary arrives as {@code ListTerms} rather than {@link ResolveTerms}: besides
+     * labelling references, the report marks the ubiquitous language up inside the other
+     * contexts' prose, and telling a linked mention from an unlinked one needs every term, not
+     * just the ones an edge already points at.</p>
      */
     @Bean
     ModelViews modelViews(
             final UseCaseService useCases, final RequirementService requirements, final TermService terms,
-            final BoundedContextService boundedContexts, final ResolveTerms resolveTerms,
+            final BoundedContextService boundedContexts,
             final ResolveRequirements resolveRequirements) {
         return new ModelViews(
-                new UseCaseCards(useCases, resolveTerms, resolveRequirements),
-                new RequirementCards(requirements, resolveTerms),
-                new TermCards(terms),
-                new BoundedContextCards(boundedContexts, resolveTerms));
+                terms,
+                new UseCaseCards(useCases, resolveRequirements),
+                new RequirementCards(requirements),
+                new BoundedContextCards(boundedContexts));
     }
 
     /**

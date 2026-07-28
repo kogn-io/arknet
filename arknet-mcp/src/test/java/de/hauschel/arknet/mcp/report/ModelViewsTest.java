@@ -41,12 +41,12 @@ class ModelViewsTest {
     @Test
     void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
         final ModelViews views = new ModelViews(
+                workspaceId -> List.of(term()),
                 new UseCaseCards(workspaceId -> {
                     throw new IllegalStateException("store closed");
-                }, (workspaceId, ids) -> List.of(), (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
-                new TermCards(workspaceId -> List.of(term())),
-                new BoundedContextCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()));
+                }, (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of()),
+                new BoundedContextCards(workspaceId -> List.of()));
 
         final ModelViews.Views result = views.of(WORKSPACE);
 
@@ -58,15 +58,40 @@ class ModelViewsTest {
                 .contains("Other resources");
     }
 
+    /**
+     * The glossary is read once for the whole report - it is the glossary section, every term
+     * chip's label and what the other sections' prose is matched against. That makes it the one
+     * read whose failure could take the report down, so it has to fail like a section: loudly,
+     * and only for itself.
+     */
+    @Test
+    void survivesAnUnreadableGlossaryAndSaysSo() {
+        final ModelViews views = new ModelViews(
+                workspaceId -> {
+                    throw new IllegalStateException("glossary unreadable");
+                },
+                new UseCaseCards(workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of(requirement())),
+                new BoundedContextCards(workspaceId -> List.of(boundedContext())));
+
+        final ModelViews.Views result = views.of(WORKSPACE);
+
+        assertThat(result.sections()).extracting(ModelSection::title)
+                .containsExactly("Bounded Contexts", "Requirements", "Use Cases");
+        assertThat(result.failures()).singleElement().asString()
+                .contains("Glossary")
+                .contains("glossary unreadable")
+                .contains("identities rather than labels");
+    }
+
     /** An empty context contributes no heading - a section with zero cards is noise, not information. */
     @Test
     void leavesOutEmptySections() {
         final ModelViews views = new ModelViews(
-                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of(),
-                        (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
-                new TermCards(workspaceId -> List.of(term())),
-                new BoundedContextCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()));
+                workspaceId -> List.of(term()),
+                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of()),
+                new BoundedContextCards(workspaceId -> List.of()));
 
         final ModelViews.Views result = views.of(WORKSPACE);
 
@@ -81,11 +106,10 @@ class ModelViewsTest {
     @Test
     void ordersSectionsFromStrategicToDetailed() {
         final ModelViews views = new ModelViews(
-                new UseCaseCards(workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of(),
-                        (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of(requirement()), (workspaceId, ids) -> List.of()),
-                new TermCards(workspaceId -> List.of(term())),
-                new BoundedContextCards(workspaceId -> List.of(boundedContext()), (workspaceId, ids) -> List.of()));
+                workspaceId -> List.of(term()),
+                new UseCaseCards(workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of()),
+                new RequirementCards(workspaceId -> List.of(requirement())),
+                new BoundedContextCards(workspaceId -> List.of(boundedContext())));
 
         assertThat(views.of(WORKSPACE).sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Glossary");
