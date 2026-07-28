@@ -195,8 +195,8 @@ Project BC (`arknet-project`) -- the project registry: which anchor a call arriv
 |------|-------------|
 | `project_add` | Register a project; the calling client's origin directory becomes its first anchor (or pass `anchor`/`anchorType` explicitly for clients that cannot supply one) |
 | `project_adopt` | Claim an existing dataset as the project the call comes from -- for data written before projects were registered, or a dataset restored from a backup; the dataset keeps its identity and all its data |
-| `project_attach_anchor` | Attach a further anchor to the project the call comes from -- for the same project worked on from a second directory |
-| `project_rename` | Rename the project the call comes from; identity and anchors are unaffected |
+| `project_attach_anchor` | Attach a further anchor to the project the call comes from -- for the same project worked on from a second directory (`callerAnchor` names the calling project explicitly when the transport carries no origin directory) |
+| `project_rename` | Rename the project the call comes from; identity and anchors are unaffected (same optional `callerAnchor`) |
 | `project_list` | List all registered projects with their anchors and identities, plus any datasets no project claims yet (adoptable with `project_adopt`) |
 
 Store report -- generic, cross-BC read path (readOnly; works for any BC without type mapping):
