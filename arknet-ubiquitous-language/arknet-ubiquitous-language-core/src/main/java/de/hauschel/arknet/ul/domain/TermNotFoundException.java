@@ -5,7 +5,7 @@ package de.hauschel.arknet.ul.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when an operation refers to a term that does not exist in the targeted
@@ -21,25 +21,25 @@ public class TermNotFoundException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient TermCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace that was searched
+     * @param projectId the workspace that was searched
      * @param code        the term code that was not found
      */
-    public TermNotFoundException(WorkspaceId workspaceId, TermCode code) {
+    public TermNotFoundException(ProjectId projectId, TermCode code) {
         super("no term " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
-        this.workspaceId = workspaceId;
+                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value());
+        this.projectId = projectId;
         this.code = code;
     }
 
     /** @return the workspace that was searched */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the term code that was not found */

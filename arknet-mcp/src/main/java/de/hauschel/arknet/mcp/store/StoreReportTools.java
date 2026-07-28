@@ -14,8 +14,8 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 
@@ -50,7 +50,7 @@ public final class StoreReportTools {
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
     private final HandleResolver handleResolver;
-    private final WorkspaceResolver workspaces;
+    private final ProjectResolver workspaces;
     private final Path fallbackReportDir;
     private final Path reportHostDir;
 
@@ -78,7 +78,7 @@ public final class StoreReportTools {
             final Prefixes prefixes,
             final HtmlReportRenderer htmlRenderer,
             final ModelViews modelViews,
-            final WorkspaceResolver workspaces,
+            final ProjectResolver workspaces,
             final Path fallbackReportDir,
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
@@ -107,13 +107,13 @@ public final class StoreReportTools {
                     required = false)
             final String workspace) {
         final String originDir = HandleResolver.originDir(context);
-        final WorkspaceId workspaceId =
+        final ProjectId projectId =
                 HandleResolver.resolveWorkspace(workspace, workspaces.resolve(originDir));
 
-        final StoreSnapshot snapshot = storeReader.readSnapshot(workspaceId);
-        final String digest = digestRenderer.render(workspaceId, snapshot);
-        final String html = htmlRenderer.render(workspaceId, snapshot, digest, modelViews.of(workspaceId));
-        return digest + "\n" + writeReportLine(html, reportDirFor(originDir, workspaceId), workspaceId) + "\n";
+        final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
+        final String digest = digestRenderer.render(projectId, snapshot);
+        final String html = htmlRenderer.render(projectId, snapshot, digest, modelViews.of(projectId));
+        return digest + "\n" + writeReportLine(html, reportDirFor(originDir, projectId), projectId) + "\n";
     }
 
     @McpTool(name = "resource_get",
@@ -128,11 +128,11 @@ public final class StoreReportTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId =
+        final ProjectId projectId =
                 HandleResolver.resolveWorkspace(workspace, workspaces.resolve(HandleResolver.originDir(context)));
-        final String iri = handleResolver.resolve(workspaceId, id);
-        final List<Triple> outgoing = storeReader.outgoing(workspaceId, iri);
-        final List<Triple> incoming = storeReader.incoming(workspaceId, iri);
+        final String iri = handleResolver.resolve(projectId, id);
+        final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
+        final List<Triple> incoming = storeReader.incoming(projectId, iri);
         return resourceRenderer.render(iri, outgoing, incoming);
     }
 
@@ -146,12 +146,12 @@ public final class StoreReportTools {
      * the last workspace to call {@code store_overview} would silently overwrite every other
      * workspace's report under the identical file name.
      */
-    private Path reportDirFor(final String originDir, final WorkspaceId workspaceId) {
-        return (originDir == null || originDir.isBlank()) ? fallbackDirFor(workspaceId) : Path.of(originDir);
+    private Path reportDirFor(final String originDir, final ProjectId projectId) {
+        return (originDir == null || originDir.isBlank()) ? fallbackDirFor(projectId) : Path.of(originDir);
     }
 
-    private Path fallbackDirFor(final WorkspaceId workspaceId) {
-        return fallbackReportDir.resolve(workspaceId.value());
+    private Path fallbackDirFor(final ProjectId projectId) {
+        return fallbackReportDir.resolve(projectId.value());
     }
 
     /**
@@ -167,25 +167,25 @@ public final class StoreReportTools {
      * host-reachable equivalent (issue #160) - the write itself still targets the fallback dir,
      * only the path shown to the caller changes.
      */
-    private String writeReportLine(final String html, final Path preferredDir, final WorkspaceId workspaceId) {
-        final Path fallbackDir = fallbackDirFor(workspaceId);
+    private String writeReportLine(final String html, final Path preferredDir, final ProjectId projectId) {
+        final Path fallbackDir = fallbackDirFor(projectId);
         try {
-            return "# HTML report: " + displayPath(writeReport(html, preferredDir), preferredDir, workspaceId);
+            return "# HTML report: " + displayPath(writeReport(html, preferredDir), preferredDir, projectId);
         } catch (final IOException preferredFailure) {
             if (preferredDir.equals(fallbackDir)) {
                 return reportFailureLine(preferredDir, preferredFailure);
             }
             try {
-                return "# HTML report: " + displayPath(writeReport(html, fallbackDir), fallbackDir, workspaceId);
+                return "# HTML report: " + displayPath(writeReport(html, fallbackDir), fallbackDir, projectId);
             } catch (final IOException fallbackFailure) {
                 return reportFailureLine(fallbackDir, fallbackFailure);
             }
         }
     }
 
-    private String displayPath(final Path written, final Path writtenDir, final WorkspaceId workspaceId) {
-        return writtenDir.equals(fallbackDirFor(workspaceId)) && reportHostDir != null
-                ? reportHostDir.resolve(workspaceId.value()).resolve(REPORT_FILE_NAME).toString()
+    private String displayPath(final Path written, final Path writtenDir, final ProjectId projectId) {
+        return writtenDir.equals(fallbackDirFor(projectId)) && reportHostDir != null
+                ? reportHostDir.resolve(projectId.value()).resolve(REPORT_FILE_NAME).toString()
                 : written.toString();
     }
 

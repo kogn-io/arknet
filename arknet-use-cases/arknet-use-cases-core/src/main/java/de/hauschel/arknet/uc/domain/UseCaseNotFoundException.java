@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when an operation refers to a use case that does not exist in the
@@ -22,25 +22,25 @@ public class UseCaseNotFoundException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient UseCaseCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace that was searched
+     * @param projectId the workspace that was searched
      * @param code        the use-case code that was not found
      */
-    public UseCaseNotFoundException(WorkspaceId workspaceId, UseCaseCode code) {
+    public UseCaseNotFoundException(ProjectId projectId, UseCaseCode code) {
         super("no use case " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
-        this.workspaceId = workspaceId;
+                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value());
+        this.projectId = projectId;
         this.code = code;
     }
 
     /** @return the workspace that was searched */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the use-case code that was not found */

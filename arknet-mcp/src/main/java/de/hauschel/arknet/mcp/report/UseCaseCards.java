@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
@@ -59,14 +59,14 @@ public final class UseCaseCards {
     }
 
     /**
-     * @param workspaceId the workspace to read
+     * @param projectId the workspace to read
      * @param glossary    the workspace's glossary, for actor labels
      * @return the use-case section, ordered by business code
      */
-    public ModelSection section(final WorkspaceId workspaceId, final Glossary glossary) {
+    public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<UseCase> all = useCases.list(workspaceId);
-        final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(workspaceId, all);
+        final List<UseCase> all = useCases.list(projectId);
+        final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(projectId, all);
         final List<ModelCard> cards = all.stream()
                 .sorted(java.util.Comparator.comparing(uc -> uc.code().value()))
                 .map(uc -> card(uc, glossary, reqs))
@@ -122,7 +122,7 @@ public final class UseCaseCards {
      * for the same reason: this path exists to render, never to throw.
      */
     private Map<ResourceId, ResolvedRequirement> resolveRequirements(
-            final WorkspaceId workspaceId, final List<UseCase> all) {
+            final ProjectId projectId, final List<UseCase> all) {
         final ResourceId[] ids = all.stream()
                 .flatMap(uc -> uc.steps().stream())
                 .flatMap(step -> step.realises().stream())
@@ -132,7 +132,7 @@ public final class UseCaseCards {
         if (ids.length == 0) {
             return Map.of();
         }
-        return requirements.getById(workspaceId, ids).stream()
+        return requirements.getById(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
     }
 }

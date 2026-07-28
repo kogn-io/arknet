@@ -34,7 +34,7 @@ import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
@@ -45,7 +45,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  *
  * <p><strong>Every method addresses the one reserved system dataset - always.</strong> Unlike
  * every other bounded context's out-adapter in this codebase, no method here takes a
- * {@code WorkspaceId}/{@code ProjectId} routing parameter: {@link ProjectRegistry}'s own javadoc
+ * {@code ProjectId}/{@code ProjectId} routing parameter: {@link ProjectRegistry}'s own javadoc
  * explains why - there is exactly one registry, and it lives permanently in
  * {@link ProjectId#RESERVED_SYSTEM_DATASET} (ADR-016 decision 6). This class hard-codes that one
  * dataset id ({@link #SYSTEM_DATASET}) rather than accepting it as a parameter, so a caller

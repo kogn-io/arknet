@@ -17,15 +17,15 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -65,14 +65,14 @@ class ArknetMcpConfigurationTest {
                     assertThat(context).hasSingleBean(RequirementMcpTools.class);
 
                     RequirementService service = context.getBean(RequirementService.class);
-                    Requirement created = service.add(WorkspaceId.DEFAULT,
+                    Requirement created = service.add(ProjectId.DEFAULT,
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.",
                                     RequirementType.FUNCTIONAL, null, null, null,
                                     List.of("The requirement round-trips through the store")));
 
                     assertThat(created.code().value()).isEqualTo("FR-1");
-                    assertThat(service.get(WorkspaceId.DEFAULT, created.code()))
+                    assertThat(service.get(ProjectId.DEFAULT, created.code()))
                             .isEqualTo(Optional.of(created));
                 });
     }
@@ -88,11 +88,11 @@ class ArknetMcpConfigurationTest {
                     assertThat(context).hasSingleBean(UbiquitousLanguageMcpTools.class);
 
                     TermService service = context.getBean(TermService.class);
-                    Term created = service.add(WorkspaceId.DEFAULT,
+                    Term created = service.add(ProjectId.DEFAULT,
                             new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null));
 
                     assertThat(created.code().value()).isEqualTo("TERM-1");
-                    assertThat(service.get(WorkspaceId.DEFAULT, created.code()))
+                    assertThat(service.get(ProjectId.DEFAULT, created.code()))
                             .isEqualTo(Optional.of(created));
                 });
     }
@@ -105,7 +105,7 @@ class ArknetMcpConfigurationTest {
      * also pins that the reserved dataset coexists with the project datasets in one store rather
      * than needing a second one.
      *
-     * <p>Wired without a {@link WorkspaceResolver} on purpose - the anchor is looked up, never
+     * <p>Wired without a {@link ProjectResolver} on purpose - the anchor is looked up, never
      * derived - so this test deliberately pins {@code arknet.workspace.id} to a value that has
      * nothing to do with the anchor below: were the project hexagon secretly routed through the
      * derived-workspace path, the anchor lookup would not survive it.</p>
@@ -156,21 +156,21 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * With an explicit {@code arknet.workspace.id} pinned, the per-call {@link WorkspaceResolver}
+     * With an explicit {@code arknet.workspace.id} pinned, the per-call {@link ProjectResolver}
      * (issue #137) resolves every call to that fixed workspace regardless of the call's origin
      * directory - the override wins over any directory-derived name.
      */
     @Test
-    void resolvesWorkspaceIdFromExplicitProperty() {
+    void resolvesProjectIdFromExplicitProperty() {
         contextRunner
                 .withPropertyValues(
                         "arknet.rdf.storage=" + storageDir,
                         "arknet.workspace.id=noistill")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    WorkspaceResolver resolver = context.getBean(WorkspaceResolver.class);
-                    assertThat(resolver.resolve(null)).isEqualTo(new WorkspaceId("noistill"));
-                    assertThat(resolver.resolve("/some/other/dir")).isEqualTo(new WorkspaceId("noistill"));
+                    ProjectResolver resolver = context.getBean(ProjectResolver.class);
+                    assertThat(resolver.resolve(null)).isEqualTo(new ProjectId("noistill"));
+                    assertThat(resolver.resolve("/some/other/dir")).isEqualTo(new ProjectId("noistill"));
                 });
     }
 }

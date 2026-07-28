@@ -9,7 +9,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
@@ -80,8 +80,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases {
     }
 
     @Override
-    public UseCase add(WorkspaceId workspaceId, NewUseCase command) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public UseCase add(ProjectId projectId, NewUseCase command) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry. Reference
         // resolution likewise happens once, before the retry: an unknown/ambiguous actor or
@@ -89,56 +89,56 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases {
         // business code is recomputed when a concurrent uc_add claims the same candidate first
         // (issue #144) - see CodeAssignment for why that race exists.
         UseCaseId id = new UseCaseId(resourceIdFactory.newId());
-        ActorRef primaryActor = new ActorRef(actorLookup.resolveByName(workspaceId, command.primaryActor()));
+        ActorRef primaryActor = new ActorRef(actorLookup.resolveByName(projectId, command.primaryActor()));
         List<ActorRef> supportingActors = command.supportingActors() == null
                 ? List.of()
                 : command.supportingActors().stream()
-                        .map(name -> new ActorRef(actorLookup.resolveByName(workspaceId, name)))
+                        .map(name -> new ActorRef(actorLookup.resolveByName(projectId, name)))
                         .toList();
         List<Step> steps = command.steps() == null
                 ? List.of()
                 : command.steps().stream()
-                        .map(step -> toStep(workspaceId, step))
+                        .map(step -> toStep(projectId, step))
                         .toList();
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateUseCaseCodeException.class, () -> {
-            UseCaseCode code = nextCode(workspaceId);
+            UseCaseCode code = nextCode(projectId);
             UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
                     command.trigger(), primaryActor, supportingActors,
                     command.precondition(), command.postcondition(), steps,
                     command.extensions());
-            repository.create(workspaceId, useCase);
+            repository.create(projectId, useCase);
             return useCase;
         });
     }
 
-    private Step toStep(WorkspaceId workspaceId, NewStep step) {
+    private Step toStep(ProjectId projectId, NewStep step) {
         List<RequirementRef> realises = step.realises() == null
                 ? List.of()
                 : step.realises().stream()
-                        .map(code -> new RequirementRef(requirementLookup.resolveByCode(workspaceId, code)))
+                        .map(code -> new RequirementRef(requirementLookup.resolveByCode(projectId, code)))
                         .toList();
         return new Step(step.position(), step.text(), realises);
     }
 
     @Override
-    public List<UseCase> list(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        return repository.findAll(workspaceId);
+    public List<UseCase> list(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAll(projectId);
     }
 
     @Override
-    public Optional<UseCase> get(WorkspaceId workspaceId, UseCaseCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<UseCase> get(ProjectId projectId, UseCaseCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(workspaceId, code);
+        return repository.findByCode(projectId, code);
     }
 
     /**
-     * Derives the next free business code in {@code workspaceId}: the highest running number
+     * Derives the next free business code in {@code projectId}: the highest running number
      * currently in use, plus one (starting at 1).
      */
-    private UseCaseCode nextCode(WorkspaceId workspaceId) {
-        int next = repository.findAll(workspaceId).stream()
+    private UseCaseCode nextCode(ProjectId projectId) {
+        int next = repository.findAll(projectId).stream()
                 .mapToInt(uc -> runningNumber(uc.code()))
                 .max()
                 .orElse(0) + 1;

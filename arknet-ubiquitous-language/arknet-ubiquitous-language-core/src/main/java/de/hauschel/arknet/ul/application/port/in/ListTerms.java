@@ -5,7 +5,7 @@ package de.hauschel.arknet.ul.application.port.in;
 
 import java.util.List;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
@@ -18,8 +18,8 @@ public interface ListTerms {
     /**
      * Returns all terms currently under management in the given workspace glossary.
      *
-     * @param workspaceId the workspace (architecture model) to list terms from
+     * @param projectId the workspace (architecture model) to list terms from
      * @return all terms, never {@code null}
      */
-    List<Term> list(WorkspaceId workspaceId);
+    List<Term> list(ProjectId projectId);
 }

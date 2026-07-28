@@ -18,7 +18,7 @@ import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServer
 
 import tools.jackson.databind.json.JsonMapper;
 
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
  * Wires the calling client's workspace directory into every MCP tool call (issue #137).
@@ -30,7 +30,7 @@ import de.hauschel.arknet.kernel.WorkspaceResolver;
  * This configuration overrides Spring AI's auto-configured Streamable-HTTP transport provider
  * (which wires no {@code contextExtractor}, leaving {@link McpTransportContext#EMPTY}) with one
  * that reads that header off each request and places it in the per-call transport context under
- * {@link WorkspaceResolver#WORKSPACE_DIR_KEY}, where the in-adapters pick it up.</p>
+ * {@link ProjectResolver#WORKSPACE_DIR_KEY}, where the in-adapters pick it up.</p>
  *
  * <p>The bean otherwise reproduces the auto-configuration's provider verbatim (same JSON mapper,
  * endpoint, keep-alive and delete policy); it only adds the extractor. The header is not
@@ -67,7 +67,7 @@ class WorkspaceHttpTransportConfiguration {
 
     /**
      * Reads the {@value #WORKSPACE_DIR_HEADER} header off the request and exposes it under
-     * {@link WorkspaceResolver#WORKSPACE_DIR_KEY}. A missing or blank header yields
+     * {@link ProjectResolver#WORKSPACE_DIR_KEY}. A missing or blank header yields
      * {@link McpTransportContext#EMPTY}, which the in-adapters resolve to the server's default
      * workspace.
      */
@@ -76,6 +76,6 @@ class WorkspaceHttpTransportConfiguration {
         if (dir == null || dir.isBlank()) {
             return McpTransportContext.EMPTY;
         }
-        return McpTransportContext.create(Map.of(WorkspaceResolver.WORKSPACE_DIR_KEY, dir));
+        return McpTransportContext.create(Map.of(ProjectResolver.WORKSPACE_DIR_KEY, dir));
     }
 }

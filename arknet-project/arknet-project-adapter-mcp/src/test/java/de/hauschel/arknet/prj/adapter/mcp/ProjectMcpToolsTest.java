@@ -20,7 +20,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
@@ -29,13 +29,13 @@ import de.hauschel.arknet.prj.application.port.in.ResolveProject;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
 /**
  * Scaffold-level check that the adapter declares exactly the four project tools, resolves the
  * caller's own project from its transport-context anchor rather than from any derived {@link
- * WorkspaceResolver} workspace, and never turns an unknown-anchor situation into a silent default
+ * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default
  * (ADR-016 decision 3).
  */
 class ProjectMcpToolsTest {
@@ -301,7 +301,7 @@ class ProjectMcpToolsTest {
 
     /**
      * Builds an {@link McpSyncRequestContext} carrying a fixed origin directory under
-     * {@link WorkspaceResolver#WORKSPACE_DIR_KEY} - the single thing this adapter reads out of
+     * {@link ProjectResolver#WORKSPACE_DIR_KEY} - the single thing this adapter reads out of
      * the framework context.
      *
      * <p>A dynamic proxy rather than a hand-written implementation of the interface. That
@@ -316,7 +316,7 @@ class ProjectMcpToolsTest {
     private static McpSyncRequestContext contextWithOriginDir(final String originDir) {
         final McpTransportContext transport = originDir == null
                 ? McpTransportContext.create(Map.of())
-                : McpTransportContext.create(Map.of(WorkspaceResolver.WORKSPACE_DIR_KEY, originDir));
+                : McpTransportContext.create(Map.of(ProjectResolver.WORKSPACE_DIR_KEY, originDir));
         return (McpSyncRequestContext) Proxy.newProxyInstance(
                 McpSyncRequestContext.class.getClassLoader(),
                 new Class<?>[] {McpSyncRequestContext.class},

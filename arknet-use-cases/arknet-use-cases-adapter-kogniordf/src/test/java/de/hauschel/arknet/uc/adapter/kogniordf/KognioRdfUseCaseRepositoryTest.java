@@ -35,7 +35,7 @@ import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -73,8 +73,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  */
 class KognioRdfUseCaseRepositoryTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
 
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
@@ -108,7 +108,7 @@ class KognioRdfUseCaseRepositoryTest {
         lifecycle.shutDownAll();
     }
 
-    private void seed(WorkspaceId workspace, String graph, String triples) {
+    private void seed(ProjectId workspace, String graph, String triples) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update("INSERT DATA { GRAPH <" + graph + "> { " + triples + " } }");
@@ -118,21 +118,21 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /** Counts {@code arkreq:Step} resources in the use-cases graph - guards delete-by-edge. */
-    private long countSteps(WorkspaceId workspace) {
+    private long countSteps(ProjectId workspace) {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
             return handle.sparqlQuery().select("SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                     + "?s a <https://w3id.org/arknet/requirements#Step> } }").count();
         }
     }
 
-    private void seedRequirement(WorkspaceId workspace, String label) {
+    private void seedRequirement(ProjectId workspace, String label) {
         seed(workspace, REQUIREMENTS_GRAPH,
                 "<https://w3id.org/arknet/model/requirement/" + label + "> "
                         + "a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + label + "\" .");
     }
 
-    private void seedHumanActor(WorkspaceId workspace, String slug, String prefLabel) {
+    private void seedHumanActor(ProjectId workspace, String slug, String prefLabel) {
         seed(workspace, TERMS_GRAPH,
                 "<https://w3id.org/arknet/model/term/" + slug + "> "
                         + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
@@ -140,7 +140,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
     }
 
-    private void seedSystemActor(WorkspaceId workspace, String slug, String prefLabel) {
+    private void seedSystemActor(ProjectId workspace, String slug, String prefLabel) {
         seed(workspace, TERMS_GRAPH,
                 "<https://w3id.org/arknet/model/term/" + slug + "> "
                         + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
@@ -148,7 +148,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
     }
 
-    private void seedReferences(WorkspaceId workspace) {
+    private void seedReferences(ProjectId workspace) {
         seedRequirement(workspace, "FR-1");
         seedHumanActor(workspace, "customer", "Customer");
         seedSystemActor(workspace, "payment-provider", "PaymentProvider");
@@ -322,7 +322,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(CUSTOMER, found.primaryActor());
     }
 
-    private void deletePrefLabel(WorkspaceId workspace, ResourceId subject) {
+    private void deletePrefLabel(ProjectId workspace, ResourceId subject) {
         String delete = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + subject.value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
@@ -333,7 +333,7 @@ class KognioRdfUseCaseRepositoryTest {
         }
     }
 
-    private void renamePrefLabel(WorkspaceId workspace, ResourceId subject, String oldLabel, String newLabel) {
+    private void renamePrefLabel(ProjectId workspace, ResourceId subject, String oldLabel, String newLabel) {
         String update = "DELETE { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
                 + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + oldLabel + "\" } } "
                 + "INSERT { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()

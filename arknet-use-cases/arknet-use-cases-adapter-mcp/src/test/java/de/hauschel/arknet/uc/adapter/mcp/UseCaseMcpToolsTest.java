@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -56,7 +56,7 @@ class UseCaseMcpToolsTest {
     }
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+    private static final ProjectResolver WORKSPACES = originDir -> ProjectId.DEFAULT;
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
@@ -94,7 +94,7 @@ class UseCaseMcpToolsTest {
     }
 
     @Test
-    void rejectsNullWorkspaceResolver() {
+    void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new UseCaseMcpTools(stub, stub, stub, resolveTerms, resolveRequirements, null));
     }
@@ -249,7 +249,7 @@ class UseCaseMcpToolsTest {
         private Optional<UseCase> getResult = Optional.empty();
 
         @Override
-        public UseCase add(WorkspaceId workspaceId, AddUseCase.NewUseCase command) {
+        public UseCase add(ProjectId projectId, AddUseCase.NewUseCase command) {
             this.lastCommand = command;
             if (addFailure != null) {
                 throw addFailure;
@@ -272,12 +272,12 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<UseCase> list(WorkspaceId workspaceId) {
+        public List<UseCase> list(ProjectId projectId) {
             return listResult;
         }
 
         @Override
-        public Optional<UseCase> get(WorkspaceId workspaceId, UseCaseCode code) {
+        public Optional<UseCase> get(ProjectId projectId, UseCaseCode code) {
             return getResult;
         }
     }
@@ -295,7 +295,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();
         }
@@ -314,7 +314,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(r -> wanted.contains(r.id())).toList();
         }

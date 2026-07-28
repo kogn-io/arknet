@@ -14,7 +14,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -36,17 +36,17 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class ModelViewsTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("views-test");
+    private static final ProjectId WORKSPACE = new ProjectId("views-test");
 
     @Test
     void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
         final ModelViews views = new ModelViews(
-                workspaceId -> List.of(term()),
-                new UseCaseCards(workspaceId -> {
+                projectId -> List.of(term()),
+                new UseCaseCards(projectId -> {
                     throw new IllegalStateException("store closed");
-                }, (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of()),
-                new BoundedContextCards(workspaceId -> List.of()));
+                }, (projectId, ids) -> List.of()),
+                new RequirementCards(projectId -> List.of()),
+                new BoundedContextCards(projectId -> List.of()));
 
         final ModelViews.Views result = views.of(WORKSPACE);
 
@@ -67,12 +67,12 @@ class ModelViewsTest {
     @Test
     void survivesAnUnreadableGlossaryAndSaysSo() {
         final ModelViews views = new ModelViews(
-                workspaceId -> {
+                projectId -> {
                     throw new IllegalStateException("glossary unreadable");
                 },
-                new UseCaseCards(workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of(requirement())),
-                new BoundedContextCards(workspaceId -> List.of(boundedContext())));
+                new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
+                new RequirementCards(projectId -> List.of(requirement())),
+                new BoundedContextCards(projectId -> List.of(boundedContext())));
 
         final ModelViews.Views result = views.of(WORKSPACE);
 
@@ -88,10 +88,10 @@ class ModelViewsTest {
     @Test
     void leavesOutEmptySections() {
         final ModelViews views = new ModelViews(
-                workspaceId -> List.of(term()),
-                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of()),
-                new BoundedContextCards(workspaceId -> List.of()));
+                projectId -> List.of(term()),
+                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
+                new RequirementCards(projectId -> List.of()),
+                new BoundedContextCards(projectId -> List.of()));
 
         final ModelViews.Views result = views.of(WORKSPACE);
 
@@ -106,10 +106,10 @@ class ModelViewsTest {
     @Test
     void ordersSectionsFromStrategicToDetailed() {
         final ModelViews views = new ModelViews(
-                workspaceId -> List.of(term()),
-                new UseCaseCards(workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of()),
-                new RequirementCards(workspaceId -> List.of(requirement())),
-                new BoundedContextCards(workspaceId -> List.of(boundedContext())));
+                projectId -> List.of(term()),
+                new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
+                new RequirementCards(projectId -> List.of(requirement())),
+                new BoundedContextCards(projectId -> List.of(boundedContext())));
 
         assertThat(views.of(WORKSPACE).sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Glossary");

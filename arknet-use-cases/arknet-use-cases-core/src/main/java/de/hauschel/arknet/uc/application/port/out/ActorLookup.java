@@ -4,7 +4,7 @@
 package de.hauschel.arknet.uc.application.port.out;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: resolves an actor's human-typed name to its opaque subject identity in the shared
@@ -27,11 +27,11 @@ public interface ActorLookup {
 
     /**
      * Resolves {@code actorName} to the identity of the actor term it currently names within
-     * {@code workspaceId}.
+     * {@code projectId}.
      *
-     * @param workspaceId the workspace (architecture model) to resolve the name in
+     * @param projectId the workspace (architecture model) to resolve the name in
      * @param actorName   the actor's human-readable name, e.g. {@code Customer}
      * @return the resolved actor's opaque subject identity
      */
-    ResourceId resolveByName(WorkspaceId workspaceId, String actorName);
+    ResourceId resolveByName(ProjectId projectId, String actorName);
 }

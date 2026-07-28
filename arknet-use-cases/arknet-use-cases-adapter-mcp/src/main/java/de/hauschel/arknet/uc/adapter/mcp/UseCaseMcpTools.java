@@ -16,8 +16,8 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
@@ -62,14 +62,14 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * message verbatim.</p>
  *
  * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
- * {@link WorkspaceId} routing key. arknet-mcp runs as one shared server for every
+ * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
  * workspace on the machine (issue #137), so there is no single injected workspace any
  * more: each tool call resolves its own workspace from the request's origin directory,
- * carried in the MCP transport context under {@link WorkspaceResolver#WORKSPACE_DIR_KEY}.
+ * carried in the MCP transport context under {@link ProjectResolver#WORKSPACE_DIR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
  * not a caller-facing argument. The concrete resolution (git top-level, slugging,
- * explicit-id override) stays behind {@link WorkspaceResolver} in the composition root.</p>
+ * explicit-id override) stays behind {@link ProjectResolver} in the composition root.</p>
  *
  * <p><strong>Actor/requirement display resolution (issue #89).</strong> {@link ActorRef} and
  * {@link RequirementRef} carry an opaque subject identity, not a business label - but a human
@@ -93,7 +93,7 @@ public final class UseCaseMcpTools {
     private final GetUseCase getUseCase;
     private final ResolveTerms resolveTerms;
     private final ResolveRequirements resolveRequirements;
-    private final WorkspaceResolver workspaces;
+    private final ProjectResolver workspaces;
 
     /**
      * Creates the adapter with its three driving in-ports, the two borrowed sibling-hexagon
@@ -114,7 +114,7 @@ public final class UseCaseMcpTools {
             final GetUseCase getUseCase,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
-            final WorkspaceResolver workspaces) {
+            final ProjectResolver workspaces) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
@@ -127,7 +127,7 @@ public final class UseCaseMcpTools {
      * Extracts the calling client's origin directory from the per-call transport context -
      * the value the server's context extractor placed there off the request header (issue
      * #137). Null-tolerant on every hop: a call without a context, without a transport
-     * context, or without the key resolves to {@code null}, which {@link WorkspaceResolver}
+     * context, or without the key resolves to {@code null}, which {@link ProjectResolver}
      * turns into the server's default workspace.
      */
     private static String originDir(final McpSyncRequestContext context) {
@@ -135,7 +135,7 @@ public final class UseCaseMcpTools {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
         return dir == null ? null : dir.toString();
     }
 
@@ -187,7 +187,7 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Optional: alternative/exception flows as free-text lines, e.g. "
                     + "'2a. Payment declined -> use case ends in failure'", required = false)
             final List<String> extensions) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final NewUseCase command = new NewUseCase(
                 title,
                 goal,
@@ -199,15 +199,15 @@ public final class UseCaseMcpTools {
                 blankToNull(postcondition),
                 toNewSteps(steps),
                 extensions == null ? List.of() : List.copyOf(extensions));
-        final UseCase created = addUseCase.add(workspaceId, command);
-        return formatFull(workspaceId, created);
+        final UseCase created = addUseCase.add(projectId, command);
+        return formatFull(projectId, created);
     }
 
     @McpTool(name = "uc_list", description = "List all use cases in this workspace (id, title, goal).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(final McpSyncRequestContext context) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
-        final List<UseCase> all = listUseCases.list(workspaceId);
+        final ProjectId projectId = workspaces.resolve(originDir(context));
+        final List<UseCase> all = listUseCases.list(projectId);
         return all.stream().map(UseCaseMcpTools::formatShort)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no use cases)");
     }
@@ -219,10 +219,10 @@ public final class UseCaseMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final UseCaseCode code = new UseCaseCode(id);
-        return getUseCase.get(workspaceId, code)
-                .map(uc -> formatFull(workspaceId, uc))
+        return getUseCase.get(projectId, code)
+                .map(uc -> formatFull(projectId, uc))
                 .orElse("Use case not found: " + code.value());
     }
 
@@ -242,9 +242,9 @@ public final class UseCaseMcpTools {
         return "%s | %s | %s".formatted(uc.code().value(), uc.title(), uc.goal());
     }
 
-    private String formatFull(final WorkspaceId workspaceId, final UseCase uc) {
-        final Map<ResourceId, ResolvedTerm> actorsById = resolveActorsFor(workspaceId, uc);
-        final Map<ResourceId, ResolvedRequirement> requirementsById = resolveRequirementsFor(workspaceId, uc);
+    private String formatFull(final ProjectId projectId, final UseCase uc) {
+        final Map<ResourceId, ResolvedTerm> actorsById = resolveActorsFor(projectId, uc);
+        final Map<ResourceId, ResolvedRequirement> requirementsById = resolveRequirementsFor(projectId, uc);
 
         final StringBuilder sb = new StringBuilder();
         sb.append(uc.code().value()).append(' ').append(uc.title()).append('\n');
@@ -309,7 +309,7 @@ public final class UseCaseMcpTools {
      * instead; which one is kept is immaterial here, since rendering only ever reads
      * {@link ResolvedTerm#code()}.</p>
      */
-    private Map<ResourceId, ResolvedTerm> resolveActorsFor(final WorkspaceId workspaceId, final UseCase uc) {
+    private Map<ResourceId, ResolvedTerm> resolveActorsFor(final ProjectId projectId, final UseCase uc) {
         final ResourceId[] ids = Stream.concat(
                         Stream.of(uc.primaryActor()), uc.supportingActors().stream())
                 .map(ActorRef::value)
@@ -318,7 +318,7 @@ public final class UseCaseMcpTools {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveTerms.getById(workspaceId, ids).stream()
+        return resolveTerms.getById(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 
@@ -328,7 +328,7 @@ public final class UseCaseMcpTools {
      * same merge-function reasoning as {@link #resolveActorsFor}.
      */
     private Map<ResourceId, ResolvedRequirement> resolveRequirementsFor(
-            final WorkspaceId workspaceId, final UseCase uc) {
+            final ProjectId projectId, final UseCase uc) {
         final ResourceId[] ids = uc.steps().stream()
                 .flatMap(step -> step.realises().stream())
                 .map(RequirementRef::value)
@@ -337,7 +337,7 @@ public final class UseCaseMcpTools {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveRequirements.getById(workspaceId, ids).stream()
+        return resolveRequirements.getById(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
     }
 

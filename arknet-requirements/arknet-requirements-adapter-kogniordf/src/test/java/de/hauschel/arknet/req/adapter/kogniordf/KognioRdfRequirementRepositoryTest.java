@@ -33,7 +33,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
@@ -56,8 +56,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  */
 class KognioRdfRequirementRepositoryTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
 
     private DatasetLifecycleRdf4j lifecycle;
     private RequirementRepository repository;
@@ -87,11 +87,11 @@ class KognioRdfRequirementRepositoryTest {
      * head via {@link RequirementRepository#findCurrentByCode} and immediately applies
      * {@code updated} through it - there is no unconditional {@code update} left on the port.
      */
-    private void replaceViaCompareAndUpdate(WorkspaceId workspaceId, Requirement updated) {
-        String head = repository.findCurrentByCode(workspaceId, updated.code())
+    private void replaceViaCompareAndUpdate(ProjectId projectId, Requirement updated) {
+        String head = repository.findCurrentByCode(projectId, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        repository.compareAndUpdate(workspaceId, head, updated);
+        repository.compareAndUpdate(projectId, head, updated);
     }
 
     @Test
@@ -477,7 +477,7 @@ class KognioRdfRequirementRepositoryTest {
      * call made before issue #91 would have produced, since the shape only gates writes made
      * after the SHACL property was added.
      */
-    private void givenLegacyRequirementWithoutAcceptanceCriterion(WorkspaceId workspaceId, RequirementId id,
+    private void givenLegacyRequirementWithoutAcceptanceCriterion(ProjectId projectId, RequirementId id,
             String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
@@ -486,7 +486,7 @@ class KognioRdfRequirementRepositoryTest {
                 + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
                 + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> "
                 + "} }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -536,7 +536,7 @@ class KognioRdfRequirementRepositoryTest {
      * this out, and {@code req_add} cannot produce it (it writes plain literals, no language
      * tag), so this is reachable only store-first (ADR-005).
      */
-    private void givenRequirementWithDuplicateAcceptanceCriterionByLanguageTag(WorkspaceId workspaceId,
+    private void givenRequirementWithDuplicateAcceptanceCriterionByLanguageTag(ProjectId projectId,
             RequirementId id, String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
@@ -547,7 +547,7 @@ class KognioRdfRequirementRepositoryTest {
                 + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
                 + "\"Login succeeds with valid credentials\"@en , \"Login succeeds with valid credentials\"@de "
                 + "} }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -562,7 +562,7 @@ class KognioRdfRequirementRepositoryTest {
      * property, and {@link Requirement}'s constructor is the only place that rejects blanks, so
      * this is reachable only store-first (ADR-005).
      */
-    private void givenRequirementWithBlankAndValidAcceptanceCriterion(WorkspaceId workspaceId, RequirementId id,
+    private void givenRequirementWithBlankAndValidAcceptanceCriterion(ProjectId projectId, RequirementId id,
             String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
@@ -573,7 +573,7 @@ class KognioRdfRequirementRepositoryTest {
                 + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
                 + "\"Login succeeds with valid credentials\" , \"   \" "
                 + "} }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -642,7 +642,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code sh:Warning}-severity, so the write-gate never rejects it), but unreachable via
      * {@code req_add}/{@code req_set_status}, which only ever write one.
      */
-    private void givenRequirementWithTwoPriorities(WorkspaceId workspaceId, RequirementId id, String code) {
+    private void givenRequirementWithTwoPriorities(ProjectId projectId, RequirementId id, String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
@@ -654,7 +654,7 @@ class KognioRdfRequirementRepositoryTest {
                 + "<https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#MustHave> ; "
                 + "<https://w3id.org/arknet/requirements#priority> <https://w3id.org/arknet/requirements#ShouldHave> "
                 + "} }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -669,7 +669,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code req_add}, which types a requirement exactly once.
      */
     private void givenRequirementWithAnAdditionalType(
-            WorkspaceId workspaceId, RequirementId id, String code, String additionalTypeIri) {
+            ProjectId projectId, RequirementId id, String code, String additionalTypeIri) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "a <" + additionalTypeIri + "> ; "
@@ -679,7 +679,7 @@ class KognioRdfRequirementRepositoryTest {
                 + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
                 + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
                 + "\"Login succeeds with valid credentials\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -766,13 +766,13 @@ class KognioRdfRequirementRepositoryTest {
      * {@code sh:maxCount} on the property), but unreachable via {@code req_add}. No other fields
      * are set: {@code findByIds}' query only selects {@code ?s}/{@code ?identifier}.
      */
-    private void givenRequirementWithTwoIdentifiers(WorkspaceId workspaceId, RequirementId id, String first,
+    private void givenRequirementWithTwoIdentifiers(ProjectId projectId, RequirementId id, String first,
             String second) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + first + "\" ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + second + "\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -1097,13 +1097,13 @@ class KognioRdfRequirementRepositoryTest {
      * this test does not couple the two bounded contexts. The cross-BC wiring itself is
      * covered by {@code CrossBoundedContextStoreWiringTest} in arknet-mcp.
      */
-    private void givenTerm(WorkspaceId workspaceId, String termId) {
+    private void givenTerm(ProjectId projectId, String termId) {
         String termIri = "https://w3id.org/arknet/model/term/" + termId;
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + termIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + termId + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Anmeldung\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -1118,12 +1118,12 @@ class KognioRdfRequirementRepositoryTest {
      * by code (no identifier to look up by), so a test wiring an edge to it must do so directly
      * per raw SPARQL as well. Returns the term's IRI for that purpose.
      */
-    private String givenTermWithoutIdentifier(WorkspaceId workspaceId) {
+    private String givenTermWithoutIdentifier(ProjectId projectId) {
         String termIri = "https://w3id.org/arknet/model/term/" + UUID.randomUUID();
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + termIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Anmeldung\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -1137,11 +1137,11 @@ class KognioRdfRequirementRepositoryTest {
      * store-first path (ADR-005), unmediated by {@code req_link_term}/{@code KognioRdfTermLookup},
      * so it can point at a term the strict lookup would reject by code.
      */
-    private void givenUsesTermEdge(WorkspaceId workspaceId, RequirementId subjectId, String termIri) {
+    private void givenUsesTermEdge(ProjectId projectId, RequirementId subjectId, String termIri) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> <"
                 + termIri + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -1155,11 +1155,11 @@ class KognioRdfRequirementRepositoryTest {
      * assertion this supports must not rely on the very read path whose blind spot it is
      * proving safe.
      */
-    private long countUsesTermEdges(WorkspaceId workspaceId, RequirementId subjectId, String termIri) {
+    private long countUsesTermEdges(ProjectId projectId, RequirementId subjectId, String termIri) {
         String select = "SELECT ?term WHERE { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> <"
                 + termIri + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().select(select).count();
         }
     }
@@ -1171,11 +1171,11 @@ class KognioRdfRequirementRepositoryTest {
      * only store-first, never via {@code req_link_term}/{@code KognioRdfTermLookup}, which
      * resolve a code to an IRI and therefore cannot even address a blank node.
      */
-    private void givenUsesTermEdgeToFreshBlankNodeConcept(WorkspaceId workspaceId, RequirementId subjectId) {
+    private void givenUsesTermEdgeToFreshBlankNodeConcept(ProjectId projectId, RequirementId subjectId) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> "
                 + "[ a <http://www.w3.org/2004/02/skos/core#Concept> ] } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -1192,11 +1192,11 @@ class KognioRdfRequirementRepositoryTest {
      * proof the edge was re-attached to the very same blank node rather than to a dangling or
      * freshly-generated one.
      */
-    private boolean usesTermEdgeTargetsAConceptBlankNode(WorkspaceId workspaceId, RequirementId subjectId) {
+    private boolean usesTermEdgeTargetsAConceptBlankNode(ProjectId projectId, RequirementId subjectId) {
         String ask = "ASK { GRAPH <https://w3id.org/arknet/model/requirements> { "
                 + "<" + subjectId.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> ?term . "
                 + "?term a <http://www.w3.org/2004/02/skos/core#Concept> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().ask(ask);
         }
     }

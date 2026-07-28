@@ -15,7 +15,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 
@@ -62,27 +62,27 @@ public final class KognioRdfTermLookup implements TermLookup {
     }
 
     @Override
-    public ResourceId resolveByCode(WorkspaceId workspaceId, String termCode) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public ResourceId resolveByCode(ProjectId projectId, String termCode) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(termCode, "termCode");
 
         String query = "SELECT ?term WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?term a <" + CONCEPT_TYPE + "> ; "
                 + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(termCode) + "\" } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
                     .map(row -> iriOf(row, "term"))
                     .distinct()
                     .toList();
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Term '" + termCode
-                        + "' does not exist in workspace '" + workspaceId.value()
+                        + "' does not exist in workspace '" + projectId.value()
                         + "'. Create it first with term_add before a bounded context names it.");
             }
             if (matches.size() > 1) {
                 throw new UnresolvedReferenceException("Term identity '" + termCode
-                        + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
+                        + "' is ambiguous in workspace '" + projectId.value() + "' (" + matches.size()
                         + " matches). Reference a term by its unique dcterms:identifier.");
             }
             return ResourceId.of(matches.get(0).getIRIString());

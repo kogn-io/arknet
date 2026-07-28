@@ -9,8 +9,8 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.store.HandleResolver;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreReader;
@@ -34,7 +34,7 @@ public final class TraceabilityMcpTools {
     private final StoreReader storeReader;
     private final TraceabilityRenderer renderer;
     private final HandleResolver handleResolver;
-    private final WorkspaceResolver workspaces;
+    private final ProjectResolver workspaces;
 
     /**
      * @param storeReader the generic store read path
@@ -43,7 +43,7 @@ public final class TraceabilityMcpTools {
      *                    explicit {@code workspace} tool argument still overrides it)
      */
     public TraceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaces) {
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver workspaces) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         this.renderer = new TraceabilityRenderer(Objects.requireNonNull(prefixes, "prefixes"));
         this.handleResolver = new HandleResolver(storeReader, prefixes);
@@ -60,8 +60,8 @@ public final class TraceabilityMcpTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = resolveWorkspace(context, workspace);
-        return renderer.traceMatrix(workspaceId, readGraph(workspaceId));
+        final ProjectId projectId = resolveWorkspace(context, workspace);
+        return renderer.traceMatrix(projectId, readGraph(projectId));
     }
 
     @McpTool(name = "orphan_check",
@@ -74,8 +74,8 @@ public final class TraceabilityMcpTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = resolveWorkspace(context, workspace);
-        return renderer.orphanCheck(workspaceId, readGraph(workspaceId));
+        final ProjectId projectId = resolveWorkspace(context, workspace);
+        return renderer.orphanCheck(projectId, readGraph(projectId));
     }
 
     @McpTool(name = "impact_analysis",
@@ -92,20 +92,20 @@ public final class TraceabilityMcpTools {
             @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
                     required = false)
             final String workspace) {
-        final WorkspaceId workspaceId = resolveWorkspace(context, workspace);
-        final String targetIri = handleResolver.resolve(workspaceId, id);
-        return renderer.impactAnalysis(workspaceId, readGraph(workspaceId), targetIri);
+        final ProjectId projectId = resolveWorkspace(context, workspace);
+        final String targetIri = handleResolver.resolve(projectId, id);
+        return renderer.impactAnalysis(projectId, readGraph(projectId), targetIri);
     }
 
-    private TraceabilityGraph readGraph(final WorkspaceId workspaceId) {
-        return TraceabilityGraph.of(storeReader.readSnapshot(workspaceId));
+    private TraceabilityGraph readGraph(final ProjectId projectId) {
+        return TraceabilityGraph.of(storeReader.readSnapshot(projectId));
     }
 
     /**
      * The workspace a call targets: an explicit {@code workspace} tool argument if given, else
      * the one resolved from the request's origin directory (issue #137).
      */
-    private WorkspaceId resolveWorkspace(final McpSyncRequestContext context, final String workspace) {
+    private ProjectId resolveWorkspace(final McpSyncRequestContext context, final String workspace) {
         return HandleResolver.resolveWorkspace(workspace, workspaces.resolve(HandleResolver.originDir(context)));
     }
 }

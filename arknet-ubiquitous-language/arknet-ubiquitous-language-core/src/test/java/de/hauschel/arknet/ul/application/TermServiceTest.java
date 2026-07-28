@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.domain.ActorFacet;
@@ -32,7 +32,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  */
 class TermServiceTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
 
     private InMemoryTermRepository repository;
     private TermService service;
@@ -75,7 +75,7 @@ class TermServiceTest {
 
     @Test
     void addIsScopedPerWorkspace() {
-        WorkspaceId other = new WorkspaceId("other");
+        ProjectId other = new ProjectId("other");
         service.add(WS, new NewTerm("Gutschrift", "def a", null));
 
         Term inOther = service.add(other, new NewTerm("Bestellung", "def b", null));
@@ -166,7 +166,7 @@ class TermServiceTest {
     @Test
     void getByIdIsScopedPerWorkspace() {
         Term inWs = service.add(WS, new NewTerm("Gutschrift", "def a", null));
-        WorkspaceId other = new WorkspaceId("other");
+        ProjectId other = new ProjectId("other");
 
         assertEquals(List.of(), service.getById(other, inWs.id().value()));
     }

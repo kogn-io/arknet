@@ -9,7 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
@@ -41,7 +41,7 @@ class TraceabilityRendererTest {
     private static final String UC_1 = ID + "uc-1";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
+    private static final ProjectId WORKSPACE = new ProjectId("noistill");
 
     @Test
     void traceMatrixReportsUsedTermsAndRealisingUseCasePerRequirement() {

@@ -24,7 +24,7 @@ import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Application service implementing the bounded-context use cases.
@@ -86,8 +86,8 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     @Override
-    public BoundedContext add(WorkspaceId workspaceId, NewBoundedContext command) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public BoundedContext add(ProjectId projectId, NewBoundedContext command) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
         // business code is recomputed when a concurrent bc_add claims the same candidate first
@@ -96,37 +96,37 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         BoundedContextId id = new BoundedContextId(resourceIdFactory.newId());
         return CodeAssignment.createRetryingOnCodeCollision(
                 DuplicateBoundedContextCodeException.class, () -> {
-                    BoundedContextCode code = nextCode(workspaceId);
+                    BoundedContextCode code = nextCode(projectId);
                     BoundedContext boundedContext = new BoundedContext(id, code, command.name(),
                             command.domainVision(), command.subdomain(), command.ownedBy(), List.of());
-                    repository.create(workspaceId, boundedContext);
+                    repository.create(projectId, boundedContext);
                     return boundedContext;
                 });
     }
 
     @Override
-    public List<BoundedContext> list(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        return repository.findAll(workspaceId);
+    public List<BoundedContext> list(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAll(projectId);
     }
 
     @Override
-    public Optional<BoundedContext> get(WorkspaceId workspaceId, BoundedContextCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(workspaceId, code);
+        return repository.findByCode(projectId, code);
     }
 
     @Override
-    public BoundedContext linkTerm(WorkspaceId workspaceId, BoundedContextCode code, String termCode) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
         // Resolution does not depend on the bounded context's current state, so it happens once,
         // outside the retry loop below - an unknown/ambiguous term code must propagate as a
         // didactic rejection immediately and leave the bounded context untouched.
-        TermRef term = new TermRef(termLookup.resolveByCode(workspaceId, termCode));
-        return updateWithOptimisticRetry(workspaceId, code, current -> {
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        return updateWithOptimisticRetry(projectId, code, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -156,18 +156,18 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
      *                                                     across every retry attempt
      */
     private BoundedContext updateWithOptimisticRetry(
-            WorkspaceId workspaceId, BoundedContextCode code, UnaryOperator<BoundedContext> mutation) {
+            ProjectId projectId, BoundedContextCode code, UnaryOperator<BoundedContext> mutation) {
         BoundedContextConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             BoundedContextRepository.CurrentBoundedContext current =
-                    repository.findCurrentByCode(workspaceId, code)
-                            .orElseThrow(() -> new BoundedContextNotFoundException(workspaceId, code));
+                    repository.findCurrentByCode(projectId, code)
+                            .orElseThrow(() -> new BoundedContextNotFoundException(projectId, code));
             BoundedContext updated = mutation.apply(current.value());
             if (updated.equals(current.value())) {
                 return current.value();
             }
             try {
-                repository.compareAndUpdate(workspaceId, current.head(), updated);
+                repository.compareAndUpdate(projectId, current.head(), updated);
                 return updated;
             } catch (BoundedContextConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the bounded context between our read and our write -
@@ -179,11 +179,11 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     /**
-     * Derives the next free business code in {@code workspaceId}: the highest running number
+     * Derives the next free business code in {@code projectId}: the highest running number
      * currently in use, plus one (starting at 1).
      */
-    private BoundedContextCode nextCode(WorkspaceId workspaceId) {
-        int next = repository.findAll(workspaceId).stream()
+    private BoundedContextCode nextCode(ProjectId projectId) {
+        int next = repository.findAll(projectId).stream()
                 .mapToInt(bc -> runningNumber(bc.code()))
                 .max()
                 .orElse(0) + 1;

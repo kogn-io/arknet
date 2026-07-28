@@ -6,7 +6,7 @@ package de.hauschel.arknet.ul.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 
@@ -32,14 +32,14 @@ public interface ResolveTerms {
 
     /**
      * Resolves {@code ids} to the {@link ResolvedTerm}s they currently identify within
-     * {@code workspaceId}, in a single batch (one store round-trip, not one per id).
+     * {@code projectId}, in a single batch (one store round-trip, not one per id).
      *
-     * @param workspaceId the workspace (architecture model) to resolve terms in
+     * @param projectId the workspace (architecture model) to resolve terms in
      * @param ids         the opaque identities to resolve; may be empty
      * @return the resolved terms found; an id absent from the workspace is simply absent here
      *         too, never {@code null}
      */
-    List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids);
+    List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids);
 
     /**
      * The slim projection this port resolves an identity to: just enough for a caller to render

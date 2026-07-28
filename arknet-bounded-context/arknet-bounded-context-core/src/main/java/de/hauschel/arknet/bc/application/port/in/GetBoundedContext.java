@@ -7,7 +7,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driving port: fetch a single bounded context by its business code.
@@ -19,9 +19,9 @@ public interface GetBoundedContext {
     /**
      * Looks up a bounded context by its business code within a workspace.
      *
-     * @param workspaceId the workspace (architecture model) to look up the bounded context in
+     * @param projectId the workspace (architecture model) to look up the bounded context in
      * @param code        the bounded-context code, e.g. {@code BC-1}
      * @return the bounded context if present, otherwise {@link Optional#empty()}
      */
-    Optional<BoundedContext> get(WorkspaceId workspaceId, BoundedContextCode code);
+    Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code);
 }

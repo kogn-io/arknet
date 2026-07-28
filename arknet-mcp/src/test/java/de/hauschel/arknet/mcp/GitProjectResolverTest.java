@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Unit test for the per-call workspace cache: within the TTL a repeated origin directory must
@@ -23,7 +23,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * the daemon kept running, issue #137 follow-up - it must re-resolve instead of serving a
  * possibly stale entry forever.
  */
-class GitWorkspaceResolverTest {
+class GitProjectResolverTest {
 
     private static final Path ORIGIN = Path.of("/home/dev/projects/my-app");
     private static final Path FALLBACK = Path.of("/home/dev/projects/fallback");
@@ -32,13 +32,13 @@ class GitWorkspaceResolverTest {
     void cachesWithinTtl() {
         AtomicInteger gitConsultations = new AtomicInteger();
         AtomicLong clock = new AtomicLong(0);
-        GitWorkspaceResolver resolver = new GitWorkspaceResolver(
+        GitProjectResolver resolver = new GitProjectResolver(
                 countingResolver(gitConsultations, Path.of("/home/dev/projects/my-app")), null, FALLBACK,
                 clock::get);
 
-        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new WorkspaceId("my-app"));
+        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new ProjectId("my-app"));
         clock.addAndGet(TimeUnit.SECONDS.toNanos(30));
-        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new WorkspaceId("my-app"));
+        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new ProjectId("my-app"));
 
         assertThat(gitConsultations.get()).isEqualTo(1);
     }
@@ -47,7 +47,7 @@ class GitWorkspaceResolverTest {
     void reResolvesAfterTtlExpires() {
         AtomicInteger gitConsultations = new AtomicInteger();
         AtomicLong clock = new AtomicLong(0);
-        GitWorkspaceResolver resolver = new GitWorkspaceResolver(
+        GitProjectResolver resolver = new GitProjectResolver(
                 countingResolver(gitConsultations, Path.of("/home/dev/projects/my-app")), null, FALLBACK,
                 clock::get);
 
@@ -63,33 +63,33 @@ class GitWorkspaceResolverTest {
         AtomicInteger gitConsultations = new AtomicInteger();
         AtomicLong clock = new AtomicLong(0);
         AtomicReference<Path> toplevel = new AtomicReference<>(Path.of("/home/dev/projects/x"));
-        WorkspaceIdResolver delegate = new WorkspaceIdResolver(dir -> {
+        ProjectIdResolver delegate = new ProjectIdResolver(dir -> {
             gitConsultations.incrementAndGet();
             return Optional.of(toplevel.get());
         });
-        GitWorkspaceResolver resolver = new GitWorkspaceResolver(delegate, null, FALLBACK, clock::get);
+        GitProjectResolver resolver = new GitProjectResolver(delegate, null, FALLBACK, clock::get);
 
-        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new WorkspaceId("x"));
+        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new ProjectId("x"));
 
         // ORIGIN was turned into a worktree of a different project (issue #136 scenario) while
         // the daemon kept running.
         toplevel.set(Path.of("/home/dev/projects/y"));
         clock.addAndGet(TimeUnit.SECONDS.toNanos(61));
 
-        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new WorkspaceId("y"));
+        assertThat(resolver.resolve(ORIGIN.toString())).isEqualTo(new ProjectId("y"));
     }
 
     @Test
     void fallsBackToServerWorkingDirectoryWhenOriginMissing() {
-        GitWorkspaceResolver resolver =
-                new GitWorkspaceResolver(new WorkspaceIdResolver(dir -> Optional.empty()), null, FALLBACK);
+        GitProjectResolver resolver =
+                new GitProjectResolver(new ProjectIdResolver(dir -> Optional.empty()), null, FALLBACK);
 
-        assertThat(resolver.resolve(null)).isEqualTo(new WorkspaceId("fallback"));
-        assertThat(resolver.resolve("  ")).isEqualTo(new WorkspaceId("fallback"));
+        assertThat(resolver.resolve(null)).isEqualTo(new ProjectId("fallback"));
+        assertThat(resolver.resolve("  ")).isEqualTo(new ProjectId("fallback"));
     }
 
-    private static WorkspaceIdResolver countingResolver(AtomicInteger gitConsultations, Path toplevel) {
-        return new WorkspaceIdResolver(dir -> {
+    private static ProjectIdResolver countingResolver(AtomicInteger gitConsultations, Path toplevel) {
+        return new ProjectIdResolver(dir -> {
             gitConsultations.incrementAndGet();
             return Optional.of(toplevel);
         });

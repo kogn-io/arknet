@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
@@ -35,7 +35,7 @@ import de.hauschel.arknet.ul.domain.TermId;
 class UbiquitousLanguageMcpToolsTest {
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+    private static final ProjectResolver WORKSPACES = originDir -> ProjectId.DEFAULT;
 
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
@@ -62,7 +62,7 @@ class UbiquitousLanguageMcpToolsTest {
     }
 
     @Test
-    void rejectsNullWorkspaceResolver() {
+    void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null));
     }
@@ -130,7 +130,7 @@ class UbiquitousLanguageMcpToolsTest {
         private ActorFacet lastUpdateActorFacet;
 
         @Override
-        public Term add(WorkspaceId workspaceId, NewTerm command) {
+        public Term add(ProjectId projectId, NewTerm command) {
             lastCommand = command;
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")),
                     new TermCode("TERM-1"), command.prefLabel(), command.definition(),
@@ -138,17 +138,17 @@ class UbiquitousLanguageMcpToolsTest {
         }
 
         @Override
-        public List<Term> list(WorkspaceId workspaceId) {
+        public List<Term> list(ProjectId projectId) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Optional<Term> get(WorkspaceId workspaceId, TermCode code) {
+        public Optional<Term> get(ProjectId projectId, TermCode code) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+        public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
                 ActorFacet actorFacet) {
             lastUpdatedTerm = code;
             lastUpdatePrefLabel = prefLabel;

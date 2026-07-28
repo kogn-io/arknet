@@ -24,8 +24,8 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
@@ -61,14 +61,14 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * {@link #format} never throws and never drops a term.</p>
  *
  * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
- * {@link WorkspaceId} routing key. arknet-mcp runs as one shared server for every
+ * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
  * workspace on the machine (issue #137), so there is no single injected workspace any
  * more: each tool call resolves its own workspace from the request's origin directory,
- * carried in the MCP transport context under {@link WorkspaceResolver#WORKSPACE_DIR_KEY}.
+ * carried in the MCP transport context under {@link ProjectResolver#WORKSPACE_DIR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
  * not a caller-facing argument. The concrete resolution (git top-level, slugging,
- * explicit-id override) stays behind {@link WorkspaceResolver} in the composition root.</p>
+ * explicit-id override) stays behind {@link ProjectResolver} in the composition root.</p>
  */
 public final class BoundedContextMcpTools {
 
@@ -77,7 +77,7 @@ public final class BoundedContextMcpTools {
     private final GetBoundedContext getBoundedContext;
     private final LinkTerm linkTerm;
     private final ResolveTerms resolveTerms;
-    private final WorkspaceResolver workspaces;
+    private final ProjectResolver workspaces;
 
     /**
      * Creates the adapter with its four driving in-ports, the borrowed ubiquitous-language display
@@ -97,7 +97,7 @@ public final class BoundedContextMcpTools {
             final GetBoundedContext getBoundedContext,
             final LinkTerm linkTerm,
             final ResolveTerms resolveTerms,
-            final WorkspaceResolver workspaces) {
+            final ProjectResolver workspaces) {
         this.addBoundedContext = Objects.requireNonNull(addBoundedContext, "addBoundedContext");
         this.listBoundedContexts = Objects.requireNonNull(listBoundedContexts, "listBoundedContexts");
         this.getBoundedContext = Objects.requireNonNull(getBoundedContext, "getBoundedContext");
@@ -110,7 +110,7 @@ public final class BoundedContextMcpTools {
      * Extracts the calling client's origin directory from the per-call transport context -
      * the value the server's context extractor placed there off the request header (issue
      * #137). Null-tolerant on every hop: a call without a context, without a transport
-     * context, or without the key resolves to {@code null}, which {@link WorkspaceResolver}
+     * context, or without the key resolves to {@code null}, which {@link ProjectResolver}
      * turns into the server's default workspace.
      */
     private static String originDir(final McpSyncRequestContext context) {
@@ -118,7 +118,7 @@ public final class BoundedContextMcpTools {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
         return dir == null ? null : dir.toString();
     }
 
@@ -138,25 +138,25 @@ public final class BoundedContextMcpTools {
             final String subdomain,
             @McpToolParam(description = "Owning team name (optional)", required = false)
             final String ownedBy) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final Subdomain subdomainValue = blankToNull(subdomain) == null
                 ? null
                 : Subdomain.valueOf(subdomain.trim());
-        final BoundedContext created = addBoundedContext.add(workspaceId,
+        final BoundedContext created = addBoundedContext.add(projectId,
                 new NewBoundedContext(name, domainVision, subdomainValue, blankToNull(ownedBy)));
-        return format(workspaceId, created);
+        return format(projectId, created);
     }
 
     @McpTool(name = "bc_list", description = "List all managed bounded contexts.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(final McpSyncRequestContext context) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
-        final List<BoundedContext> all = listBoundedContexts.list(workspaceId);
+        final ProjectId projectId = workspaces.resolve(originDir(context));
+        final List<BoundedContext> all = listBoundedContexts.list(projectId);
         if (all.isEmpty()) {
             return "(no bounded contexts)";
         }
         // One batch resolution across every context's linked terms, not one per context.
-        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(workspaceId, all);
+        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, all);
         return all.stream().map(bc -> format(bc, termsById))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no bounded contexts)");
     }
@@ -166,10 +166,10 @@ public final class BoundedContextMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Bounded-context identity, e.g. BC-1") final String id) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final BoundedContextCode code = new BoundedContextCode(id);
-        return getBoundedContext.get(workspaceId, code)
-                .map(bc -> format(workspaceId, bc))
+        return getBoundedContext.get(projectId, code)
+                .map(bc -> format(projectId, bc))
                 .orElse("Bounded context not found: " + code.value());
     }
 
@@ -183,15 +183,15 @@ public final class BoundedContextMcpTools {
             @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
                     + "against the glossary - not its skos:prefLabel or its store IRI)")
             final String termId) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final BoundedContext updated =
-                linkTerm.linkTerm(workspaceId, new BoundedContextCode(bcId), termId);
-        return format(workspaceId, updated);
+                linkTerm.linkTerm(projectId, new BoundedContextCode(bcId), termId);
+        return format(projectId, updated);
     }
 
     /** Renders a single bounded context, resolving its own linked terms in one batch call. */
-    private String format(final WorkspaceId workspaceId, final BoundedContext bc) {
-        return format(bc, resolveTermsFor(workspaceId, List.of(bc)));
+    private String format(final ProjectId projectId, final BoundedContext bc) {
+        return format(bc, resolveTermsFor(projectId, List.of(bc)));
     }
 
     /**
@@ -227,7 +227,7 @@ public final class BoundedContextMcpTools {
      * cannot turn a display concern into a thrown exception.
      */
     private Map<ResourceId, ResolvedTerm> resolveTermsFor(
-            final WorkspaceId workspaceId, final List<BoundedContext> boundedContexts) {
+            final ProjectId projectId, final List<BoundedContext> boundedContexts) {
         final ResourceId[] ids = boundedContexts.stream()
                 .flatMap(bc -> bc.usesTerms().stream())
                 .map(TermRef::value)
@@ -236,7 +236,7 @@ public final class BoundedContextMcpTools {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveTerms.getById(workspaceId, ids).stream()
+        return resolveTerms.getById(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 

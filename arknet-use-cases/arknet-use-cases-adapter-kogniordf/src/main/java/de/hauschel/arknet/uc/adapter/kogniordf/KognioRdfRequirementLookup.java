@@ -14,7 +14,7 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.vocab.VocabDct;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
@@ -64,26 +64,26 @@ public final class KognioRdfRequirementLookup implements RequirementLookup {
     }
 
     @Override
-    public ResourceId resolveByCode(WorkspaceId workspaceId, String requirementCode) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public ResourceId resolveByCode(ProjectId projectId, String requirementCode) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(requirementCode, "requirementCode");
 
         String query = "SELECT ?req WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "?req <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(requirementCode) + "\" } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
                     .map(row -> iriOf(row, "req"))
                     .distinct()
                     .toList();
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Requirement '" + requirementCode
-                        + "' does not exist in workspace '" + workspaceId.value()
+                        + "' does not exist in workspace '" + projectId.value()
                         + "'. Create it first with req_add before a use-case step realises it.");
             }
             if (matches.size() > 1) {
                 throw new UnresolvedReferenceException("Requirement label '" + requirementCode
-                        + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
+                        + "' is ambiguous in workspace '" + projectId.value() + "' (" + matches.size()
                         + " matches). Reference a requirement by its unique dcterms:identifier.");
             }
             return ResourceId.of(matches.get(0).getIRIString());

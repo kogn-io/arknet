@@ -11,7 +11,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Unit test for the workspace resolution chain. A fake {@link GitToplevelLocator}
@@ -19,66 +19,66 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * working directory, default) are exercised deterministically without spawning a
  * process.
  */
-class WorkspaceIdResolverTest {
+class ProjectIdResolverTest {
 
     private static final Path WORKING_DIR = Path.of("/home/dev/projects/my-app");
 
     @Test
     void explicitIdWinsAndGitIsNotConsulted() {
-        WorkspaceIdResolver resolver = new WorkspaceIdResolver(dir -> {
+        ProjectIdResolver resolver = new ProjectIdResolver(dir -> {
             throw new AssertionError("git must not be consulted when an explicit id is set");
         });
 
-        assertThat(resolver.resolve("noistill", WORKING_DIR)).isEqualTo(new WorkspaceId("noistill"));
+        assertThat(resolver.resolve("noistill", WORKING_DIR)).isEqualTo(new ProjectId("noistill"));
     }
 
     @Test
     void explicitIdIsTrimmed() {
-        WorkspaceIdResolver resolver = new WorkspaceIdResolver(dir -> Optional.empty());
+        ProjectIdResolver resolver = new ProjectIdResolver(dir -> Optional.empty());
 
-        assertThat(resolver.resolve("  team-x  ", WORKING_DIR)).isEqualTo(new WorkspaceId("team-x"));
+        assertThat(resolver.resolve("  team-x  ", WORKING_DIR)).isEqualTo(new ProjectId("team-x"));
     }
 
     @Test
     void derivesSluggedGitToplevelNameWhenExplicitBlank() {
-        WorkspaceIdResolver resolver =
-                new WorkspaceIdResolver(dir -> Optional.of(Path.of("/home/dev/projects/ArkNet")));
+        ProjectIdResolver resolver =
+                new ProjectIdResolver(dir -> Optional.of(Path.of("/home/dev/projects/ArkNet")));
 
-        assertThat(resolver.resolve("   ", WORKING_DIR)).isEqualTo(new WorkspaceId("arknet"));
+        assertThat(resolver.resolve("   ", WORKING_DIR)).isEqualTo(new ProjectId("arknet"));
     }
 
     @Test
     void derivesGitToplevelNameWhenExplicitNull() {
-        WorkspaceIdResolver resolver =
-                new WorkspaceIdResolver(dir -> Optional.of(Path.of("/home/dev/projects/arknet-issue-26")));
+        ProjectIdResolver resolver =
+                new ProjectIdResolver(dir -> Optional.of(Path.of("/home/dev/projects/arknet-issue-26")));
 
-        assertThat(resolver.resolve(null, WORKING_DIR)).isEqualTo(new WorkspaceId("arknet-issue-26"));
+        assertThat(resolver.resolve(null, WORKING_DIR)).isEqualTo(new ProjectId("arknet-issue-26"));
     }
 
     @Test
     void fallsBackToSluggedWorkingDirNameWhenNoGit() {
-        WorkspaceIdResolver resolver = new WorkspaceIdResolver(dir -> Optional.empty());
+        ProjectIdResolver resolver = new ProjectIdResolver(dir -> Optional.empty());
 
         assertThat(resolver.resolve(null, Path.of("/home/dev/projects/My Project!")))
-                .isEqualTo(new WorkspaceId("my-project"));
+                .isEqualTo(new ProjectId("my-project"));
     }
 
     @Test
     void fallsBackToDefaultWhenNameHasNoUsableCharacters() {
-        WorkspaceIdResolver resolver = new WorkspaceIdResolver(dir -> Optional.empty());
+        ProjectIdResolver resolver = new ProjectIdResolver(dir -> Optional.empty());
 
-        assertThat(resolver.resolve(null, Path.of("/"))).isEqualTo(WorkspaceId.DEFAULT);
+        assertThat(resolver.resolve(null, Path.of("/"))).isEqualTo(ProjectId.DEFAULT);
     }
 
     @Test
     void rejectsNullWorkingDir() {
-        WorkspaceIdResolver resolver = new WorkspaceIdResolver(dir -> Optional.empty());
+        ProjectIdResolver resolver = new ProjectIdResolver(dir -> Optional.empty());
 
         assertThatThrownBy(() -> resolver.resolve(null, null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void rejectsNullLocator() {
-        assertThatThrownBy(() -> new WorkspaceIdResolver(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ProjectIdResolver(null)).isInstanceOf(NullPointerException.class);
     }
 }

@@ -15,8 +15,8 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
@@ -110,7 +110,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       through {@link KognioRdfProjectRepositoryFactory}. This one is shaped differently from the
  *       four above and deliberately so (ADR-016): it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
- *       hexagon here wired <em>without</em> a {@link WorkspaceResolver} - it reads the caller's
+ *       hexagon here wired <em>without</em> a {@link ProjectResolver} - it reads the caller's
  *       origin value as an opaque anchor and looks it up, which is the substance of ADR-016 rather
  *       than an omission. It is additive: registering these tools changes the routing of no other
  *       tool call.</li>
@@ -118,8 +118,8 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
  * {@code arknet.rdf.storage}, no competing locks); the four model hexagons additionally share the
- * single {@link WorkspaceResolver} bean.
- * Every tool call resolves its {@link WorkspaceId} per request from the caller's origin directory
+ * single {@link ProjectResolver} bean.
+ * Every tool call resolves its {@link ProjectId} per request from the caller's origin directory
  * (issue #137: one shared HTTP server for every workspace on the machine, see
  * {@link WorkspaceHttpTransportConfiguration}), so requirements, glossary terms, use cases and
  * bounded contexts of the <em>same</em> project land in the same workspace/dataset and can
@@ -198,18 +198,18 @@ public class ArknetMcpConfiguration {
     /**
      * Resolves each tool call's target workspace from the calling client's origin directory
      * (issue #137). arknet-mcp is one shared server for every workspace on the machine, so there
-     * is no longer a single workspace fixed at boot; the {@link WorkspaceResolver} maps a
+     * is no longer a single workspace fixed at boot; the {@link ProjectResolver} maps a
      * per-call origin directory - carried in the request header (see
-     * {@link WorkspaceHttpTransportConfiguration}) - to a {@link WorkspaceId} via
-     * {@link WorkspaceIdResolver} (explicit {@code arknet.workspace.id} override, else the git
+     * {@link WorkspaceHttpTransportConfiguration}) - to a {@link ProjectId} via
+     * {@link ProjectIdResolver} (explicit {@code arknet.workspace.id} override, else the git
      * top-level / working-directory name). A call without an origin falls back to
      * {@code arknet.workspace.dir} (the daemon's own working directory).
      */
     @Bean
-    WorkspaceResolver workspaceResolver(
+    ProjectResolver projectResolver(
             @Value("${arknet.workspace.id:}") final String explicitId,
             @Value("${arknet.workspace.dir:${user.dir}}") final Path fallbackDir) {
-        return new GitWorkspaceResolver(new WorkspaceIdResolver(), explicitId, fallbackDir);
+        return new GitProjectResolver(new ProjectIdResolver(), explicitId, fallbackDir);
     }
 
     /**
@@ -223,16 +223,16 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementMcpTools requirementMcpTools(
             final RequirementService service, final ResolveTerms resolveTerms,
-            final WorkspaceResolver workspaceResolver) {
+            final ProjectResolver projectResolver) {
         return new RequirementMcpTools(
-                service, service, service, service, service, service, service, resolveTerms, workspaceResolver);
+                service, service, service, service, service, service, service, resolveTerms, projectResolver);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------
 
     /**
      * The display language this server instance reads labels in - a consumer-supplied context,
-     * exactly like {@link WorkspaceId}: one value per process, injected into the bounded context
+     * exactly like {@link ProjectId}: one value per process, injected into the bounded context
      * (issue #80). A glossary concept may carry {@code skos:prefLabel} in several languages;
      * {@link DisplayLocale#select} then chooses which one the read paths surface, degrading
      * through a fixed fallback chain (requested language, {@code arknet.locale.requested} -> system
@@ -260,8 +260,8 @@ public class ArknetMcpConfiguration {
 
     @Bean
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
-            final TermService service, final WorkspaceResolver workspaceResolver) {
-        return new UbiquitousLanguageMcpTools(service, service, service, service, workspaceResolver);
+            final TermService service, final ProjectResolver projectResolver) {
+        return new UbiquitousLanguageMcpTools(service, service, service, service, projectResolver);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------
@@ -324,9 +324,9 @@ public class ArknetMcpConfiguration {
     @Bean
     UseCaseMcpTools useCaseMcpTools(
             final UseCaseService service, final ResolveTerms resolveTerms,
-            final ResolveRequirements resolveRequirements, final WorkspaceResolver workspaceResolver) {
+            final ResolveRequirements resolveRequirements, final ProjectResolver projectResolver) {
         return new UseCaseMcpTools(
-                service, service, service, resolveTerms, resolveRequirements, workspaceResolver);
+                service, service, service, resolveTerms, resolveRequirements, projectResolver);
     }
 
     // --- Bounded-context hexagon -----------------------------------------------
@@ -367,8 +367,8 @@ public class ArknetMcpConfiguration {
     @Bean
     BoundedContextMcpTools boundedContextMcpTools(
             final BoundedContextService service, final ResolveTerms resolveTerms,
-            final WorkspaceResolver workspaceResolver) {
-        return new BoundedContextMcpTools(service, service, service, service, resolveTerms, workspaceResolver);
+            final ProjectResolver projectResolver) {
+        return new BoundedContextMcpTools(service, service, service, service, resolveTerms, projectResolver);
     }
 
     // --- Project hexagon (the registry, ADR-016) -------------------------------
@@ -377,7 +377,7 @@ public class ArknetMcpConfiguration {
      * The project registry: which opaque, client-sent anchor belongs to which project (ADR-016).
      *
      * <p><strong>The one hexagon that is not project-scoped.</strong> Every other repository bean
-     * here takes a per-call {@link WorkspaceId} and acquires that project's dataset; this one
+     * here takes a per-call {@link ProjectId} and acquires that project's dataset; this one
      * always addresses a single reserved dataset ({@code ProjectId.RESERVED_SYSTEM_DATASET}) and
      * therefore takes no routing key at all. It has to be that way round: the registry is what
      * answers the routing question, so it cannot itself be behind an answer to it. It shares the
@@ -414,14 +414,14 @@ public class ArknetMcpConfiguration {
      * The four project tools ({@code project_add}, {@code project_attach_anchor},
      * {@code project_rename}, {@code project_list}).
      *
-     * <p>Note what is <em>not</em> injected: no {@link WorkspaceResolver}. Every other
-     * {@code *McpTools} bean gets one to turn a call's origin directory into a {@link WorkspaceId}
+     * <p>Note what is <em>not</em> injected: no {@link ProjectResolver}. Every other
+     * {@code *McpTools} bean gets one to turn a call's origin directory into a {@link ProjectId}
      * by deriving it (git top-level, slugging); this adapter reads the very same origin value but
      * treats it as an opaque anchor and looks it up, which is the whole substance of ADR-016.
      * Wiring it without a resolver is therefore not an omission but the point.</p>
      *
      * <p>This bean is additive (issue #178): registering the tools does not change how any other
-     * tool call is routed - the derived-workspace path in {@link #workspaceResolver} keeps running
+     * tool call is routed - the derived-workspace path in {@link #projectResolver} keeps running
      * untouched until issue #179 switches over and tears it down.</p>
      */
     @Bean
@@ -483,11 +483,11 @@ public class ArknetMcpConfiguration {
     @Bean
     StoreReportTools storeReportTools(
             final StoreReader storeReader, final Prefixes prefixes, final ModelViews modelViews,
-            final WorkspaceResolver workspaceResolver,
+            final ProjectResolver projectResolver,
             @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
-                storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, workspaceResolver,
+                storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, projectResolver,
                 fallbackReportDir, reportHostDir);
     }
 
@@ -500,7 +500,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     TraceabilityMcpTools traceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final WorkspaceResolver workspaceResolver) {
-        return new TraceabilityMcpTools(storeReader, prefixes, workspaceResolver);
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
+        return new TraceabilityMcpTools(storeReader, prefixes, projectResolver);
     }
 }
