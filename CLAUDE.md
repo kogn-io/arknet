@@ -37,7 +37,7 @@ einer eigenen `CLAUDE.md` im Modulverzeichnis -- laedt nur, wenn dort auch
 gearbeitet wird.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Workspaces auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess mehr; Workspace pro Aufruf aus dem `${PWD}`-Header, ADR-009) + Composition Root, verdrahtet alle vier BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006; der Agent-Digest bleibt generisch, der HTML-Report wird pro BC aus deren Lese-In-Ports zusammengesetzt und faellt fuer alles Uebrige auf die generische Rohsicht zurueck). Details: `arknet-mcp/CLAUDE.md`
+- **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Workspaces auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess mehr; Workspace pro Aufruf aus dem `${PWD}`-Header, ADR-009) + Composition Root, verdrahtet alle fuenf BC-Hexagons + geteilter DatasetLifecycle + generischer Store-Lesepfad (ADR-006; der Agent-Digest bleibt generisch, der HTML-Report wird pro BC aus deren Lese-In-Ports zusammengesetzt und faellt fuer alles Uebrige auf die generische Rohsicht zurueck). Details: `arknet-mcp/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- WorkspaceId, WorkspaceResolver-Port (Per-Aufruf-Aufloesung, ADR-009), ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), geteilter Schreibtrichter WriteFunnel (ADR-013; schreibt je Write atomar eine PROV-O-Revision + Head-Pointer, ADR-014), SparqlTerms, UnresolvedReferenceException. Details: `arknet-persistence-support/CLAUDE.md`
 - **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln plus der Abgleich von `ArkprovVocabulary` gegen die ausgelieferte Provenance-Ontologie. Details: `arknet-architecture-tests/CLAUDE.md`
@@ -45,6 +45,7 @@ gearbeitet wird.
 - **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools) mit optionaler Actor-Facette, opake Identitaet. Details: `arknet-ubiquitous-language/CLAUDE.md`
 - **arknet-use-cases**: dritte hexagonale BC -- Cockburn-Use-Cases (`uc_*`-Tools) mit opaken Step-VOs, Actor-/Requirement-Referenzen. Details: `arknet-use-cases/CLAUDE.md`
 - **arknet-bounded-context**: vierte hexagonale BC -- BoundedContext-Lifecycle (`bc_*`-Tools), ubiquitousLanguageTerm-Kante ins Glossar (BC->Term, #62), opake Identitaet. Details: `arknet-bounded-context/CLAUDE.md`
+- **arknet-project**: fuenfte hexagonale BC -- die Projekt-Registry (`project_*`-Tools), die einen vom Client gesendeten, opaken und typisierten Anker auf das Projekt abbildet, dessen Dataset die Modelldaten haelt (ADR-016). Verwaltet Identitaet statt Modell und ist als einziger BC nicht projekt-scoped: seine Registry wohnt im reservierten System-Dataset. Details: `arknet-project/CLAUDE.md`
 
 ## Ontologie-Namespaces
 
@@ -56,6 +57,7 @@ gearbeitet wird.
 - `https://w3id.org/arknet/tech#` (Prefix: `arktech:`) — Service, Container, API, Database, MessageBroker
 - `https://w3id.org/arknet/privacy#` (Prefix: `arkpriv:`) — DataCategory, LegalBasis, ProcessingPurpose
 - `https://w3id.org/arknet/provenance#` (Prefix: `arkprov:`) — Revision (PROV-O-basiert), head (Head-Pointer = Concurrency-Token je Ressource; ADR-014)
+- `https://w3id.org/arknet/project#` (Prefix: `arkprj:`) — Project (registrierte Store-Identitaet), Anchor + AnchorType (`PathAnchor`/`UrlAnchor`/`UuidAnchor`); Praefix bewusst `arkprj` statt `arkproj`, um die Verwechslung mit `arkproc:` in SPARQL-Queries auszuschliessen (ADR-016)
 
 ## Ubiquitous Language
 
