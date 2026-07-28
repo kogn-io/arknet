@@ -111,9 +111,11 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * through {@link #compareAndUpdate}: that method closes the lost-update window a plain
  * {@link #update} cannot, precisely because {@link #update} runs no head check at all. The head
  * moving with a write and the write being guarded by that head are two different properties; only
- * {@link #compareAndUpdate} callers get both. {@link #update} survives as the funnel's
- * unconditional write path - the use-case adapter's replace-by-identity write uses it - but no
- * in-port reaches a read-modify-write through it any more: there is no {@code uc_update} tool.</p>
+ * {@link #compareAndUpdate} callers get both. {@link #update} remains part of the funnel's
+ * contract for a bounded context with no CAS need, but has no caller left in this codebase: the
+ * use-case adapter's replace-by-identity write used to run through it, until issue #165's
+ * {@code uc_update} moved it onto {@link #compareAndUpdate} as well, joining {@code req_update},
+ * {@code term_update} and {@code bc_link_term}.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same

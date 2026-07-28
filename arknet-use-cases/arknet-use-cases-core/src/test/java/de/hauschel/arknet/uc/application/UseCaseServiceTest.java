@@ -6,6 +6,7 @@ package de.hauschel.arknet.uc.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,10 +22,13 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
+import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
  * Policy tests for {@link UseCaseService}: opaque identity minting, code assignment, listing,
@@ -174,6 +178,147 @@ class UseCaseServiceTest {
 
         assertEquals(added, fetched);
         assertTrue(service.list(WS).contains(added));
+    }
+
+    @Test
+    void updateChangesGoalLevelFields() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+
+        UseCase updated = service.update(WS, code, "New title", "New goal", "New scope", "New trigger",
+                "New precondition", "New postcondition", null, null);
+
+        assertEquals("New title", updated.title());
+        assertEquals("New goal", updated.goal());
+        assertEquals("New scope", updated.scope());
+        assertEquals("New trigger", updated.trigger());
+        assertEquals("New precondition", updated.precondition());
+        assertEquals("New postcondition", updated.postcondition());
+        assertEquals(updated, service.get(WS, code).orElseThrow());
+    }
+
+    @Test
+    void updateWithNullFieldsLeavesThemUnchanged() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+
+        UseCase updated = service.update(WS, code, null, "New goal", null, null, null, null, null, null);
+
+        assertEquals("Place order", updated.title());
+        assertEquals("New goal", updated.goal());
+    }
+
+    @Test
+    void updateWithEverythingOmittedIsANoOp() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCase before = service.get(WS, code).orElseThrow();
+
+        UseCase result = service.update(WS, code, null, null, null, null, null, null, null, null);
+
+        assertEquals(before, result);
+    }
+
+    @Test
+    void updateReplacesExtensionsWholesale() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+
+        UseCase updated = service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. Payment declined -> abort"), null);
+
+        assertEquals(List.of("2a. Payment declined -> abort"), updated.extensions());
+    }
+
+    @Test
+    void updatePreservesPrimaryActorSupportingActorsAndSteps() {
+        NewUseCase command = new NewUseCase("Place order", "Customer places an order", "Webshop",
+                "Customer opens the cart", "Customer", List.of("PaymentProvider"),
+                "Customer is logged in", "Order is recorded",
+                List.of(new NewStep(1, "select items", List.of("FR5"))), List.of());
+        UseCaseCode code = service.add(WS, command).code();
+        UseCase before = service.get(WS, code).orElseThrow();
+
+        UseCase updated = service.update(WS, code, "New title", null, null, null, null, null, null, null);
+
+        assertEquals(before.primaryActor(), updated.primaryActor());
+        assertEquals(before.supportingActors(), updated.supportingActors());
+        assertEquals(before.steps(), updated.steps());
+    }
+
+    @Test
+    void updateThrowsWhenUseCaseUnknown() {
+        UseCaseNotFoundException ex = assertThrows(UseCaseNotFoundException.class,
+                () -> service.update(WS, new UseCaseCode("UC99"), "New title", null, null, null, null, null,
+                        null, null));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
+    }
+
+    @Test
+    void updateCorrectsAnExistingStepsTextWithoutTouchingItsRealisesOrOtherSteps() {
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+                null, null,
+                List.of(new NewStep(1, "select items", List.of("FR5")),
+                        new NewStep(2, "confirm", List.of())),
+                List.of());
+        UseCaseCode code = service.add(WS, command).code();
+
+        UseCase updated = service.update(WS, code, null, null, null, null, null, null, null,
+                List.of(new StepTextPatch(1, "select the desired items")));
+
+        assertEquals("select the desired items", updated.steps().get(0).text());
+        assertEquals(List.of(new RequirementRef(FR5_ID)), updated.steps().get(0).realises());
+        assertEquals("confirm", updated.steps().get(1).text());
+    }
+
+    @Test
+    void updateCanPatchSeveralStepsAtOnce() {
+        NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
+                null, null,
+                List.of(new NewStep(1, "select items", List.of()),
+                        new NewStep(2, "confirm", List.of())),
+                List.of());
+        UseCaseCode code = service.add(WS, command).code();
+
+        UseCase updated = service.update(WS, code, null, null, null, null, null, null, null,
+                List.of(new StepTextPatch(1, "select the desired items"),
+                        new StepTextPatch(2, "confirm and pay")));
+
+        assertEquals("select the desired items", updated.steps().get(0).text());
+        assertEquals("confirm and pay", updated.steps().get(1).text());
+    }
+
+    @Test
+    void updateRejectsAStepTextPatchForAnUnknownPosition() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+
+        StepPositionNotFoundException ex = assertThrows(StepPositionNotFoundException.class,
+                () -> service.update(WS, code, null, null, null, null, null, null, null,
+                        List.of(new StepTextPatch(99, "does not exist"))));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.useCaseCode());
+        assertEquals(99, ex.position());
+    }
+
+    @Test
+    void stepTextPatchRejectsNullTextInsteadOfSilentlyIgnoringThePosition() {
+        assertThrows(NullPointerException.class, () -> new StepTextPatch(1, null));
+    }
+
+    @Test
+    void stepTextPatchRejectsBlankText() {
+        assertThrows(IllegalArgumentException.class, () -> new StepTextPatch(1, "  "));
+    }
+
+    @Test
+    void updateWithAnUnknownStepPositionPatchLeavesTheUseCaseUntouched() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCase before = service.get(WS, code).orElseThrow();
+
+        assertThrows(StepPositionNotFoundException.class,
+                () -> service.update(WS, code, "attempted title change", null, null, null, null, null, null,
+                        List.of(new StepTextPatch(99, "does not exist"))));
+
+        assertEquals(before, service.get(WS, code).orElseThrow());
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
