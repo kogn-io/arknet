@@ -33,7 +33,15 @@ import de.hauschel.arknet.prj.domain.ProjectId;
  * <p><strong>Deterministic anchor identity is the load-bearing decision of this adapter.</strong>
  * An anchor's subject IRI is not minted (no {@code ResourceIdFactory}, no
  * {@code UUID.randomUUID()}) but derived, deterministically, as {@link #ANCHOR_IRI_BASE} followed
- * by the SHA-256 hex digest of the anchor's opaque value:</p>
+ * by the SHA-256 hex digest of the anchor's opaque value - the value <em>alone</em>; the anchor's
+ * {@code AnchorType} plays no part in {@link #anchorIri}. This is not an oversight: it is exactly
+ * why {@link Anchor#equals} and {@link Anchor#hashCode} are likewise overridden to compare the
+ * value alone (see that record's javadoc). Storage identity here and domain equality there must
+ * stay cut the same way - if the domain ever considered the same value under two different types
+ * to be two distinct anchors while this method still mapped them onto one storage node, a caller
+ * attaching an already-registered value under a different type would look new to the domain, sail
+ * past the in-transaction uniqueness check in {@link KognioRdfProjectRegistry}, and collide only
+ * once the resulting duplicate anchor node reaches the SHACL gate.</p>
  *
  * <ul>
  *   <li><strong>The same anchor value always names the same node.</strong> A replace-by-identity

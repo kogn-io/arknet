@@ -94,6 +94,22 @@ class ProjectServiceTest {
         assertEquals(writesAfterRegister, registry.writeCount());
     }
 
+    /**
+     * Anchor identity is the value alone, not the (value, type) pair (see {@link Anchor}'s
+     * javadoc): attaching the same value under a different type must therefore be recognised as
+     * the same anchor already on file, not as a new one.
+     */
+    @Test
+    void attachingTheSameAnchorValueUnderADifferentTypeIsIdempotentAndPerformsNoSecondWrite() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        int writesAfterRegister = registry.writeCount();
+
+        Project attached = service.attach(project.id(), new Anchor("/home/fred/arknet", AnchorType.URL));
+
+        assertEquals(project, attached);
+        assertEquals(writesAfterRegister, registry.writeCount());
+    }
+
     @Test
     void attachingAnAnchorAlreadyOwnedByAnotherProjectThrows() {
         Project a = service.register("project-a", pathAnchor("/home/fred/a"));

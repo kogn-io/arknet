@@ -5,7 +5,6 @@ package de.hauschel.arknet.prj.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import org.junit.jupiter.api.Test;
 
@@ -43,9 +42,24 @@ class AnchorTest {
     }
 
     @Test
-    void typeIsPartOfIdentityBecauseTheSameStringCanBeTwoKindsOfAnchor() {
-        assertNotEquals(new Anchor("https://example.org/repo", AnchorType.URL),
-                new Anchor("https://example.org/repo", AnchorType.PATH));
+    void sameValueIsTheSameAnchorRegardlessOfTypeBecauseTheValueAloneIsTheKey() {
+        Anchor asUrl = new Anchor("https://example.org/repo", AnchorType.URL);
+        Anchor asPath = new Anchor("https://example.org/repo", AnchorType.PATH);
+
+        assertEquals(asUrl, asPath,
+                "the value alone is the anchor's identity, matching the storage identity derived from "
+                        + "the value alone - the type is descriptive metadata, not a second identity axis");
+    }
+
+    @Test
+    void sameValueHashesTheSameRegardlessOfTypeSoHashSetsAndHashMapsStayConsistentWithEquals() {
+        Anchor asUrl = new Anchor("https://example.org/repo", AnchorType.URL);
+        Anchor asPath = new Anchor("https://example.org/repo", AnchorType.PATH);
+
+        assertEquals(asUrl.hashCode(), asPath.hashCode(),
+                "equal anchors must hash equally, or a HashSet/HashMap keyed on Anchor would silently "
+                        + "treat the same value as two different keys depending on which type happened to "
+                        + "be looked up first");
     }
 
     @Test

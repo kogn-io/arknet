@@ -36,10 +36,11 @@
 #         without the project existing twice (ADR-016 point 4).
 #
 #  UNIQUENESS OF THE ANCHOR ACROSS ALL PROJECTS is the central invariant of
-#         this model: two projects can never share one anchor. There is no
-#         analogous cross-project uniqueness constraint on the anchor VALUE
-#         alone outside this invariant - the pairing of value and type is
-#         what the registry indexes on.
+#         this model: two projects can never share one anchor. The anchor
+#         VALUE ALONE is what the registry indexes on and what this
+#         invariant is checked against - arkprj:anchorType is descriptive
+#         metadata about the value's shape, not a second key alongside it.
+#         The same value under two different types is one anchor, not two.
 #
 #  WRITTEN TWICE, ON PURPOSE: a project is written in two places - once as
 #         an entry in the registry, which lives in a reserved system dataset
@@ -113,7 +114,7 @@ arkprj:anchorType a owl:ObjectProperty ;
     rdfs:domain  arkprj:Anchor ;
     rdfs:range   arkprj:AnchorType ;
     rdfs:label   "anchor type"@en , "Ankertyp"@de ;
-    rdfs:comment "The kind of anchor value carried by an anchor - path, URL, or UUID. The type is metadata about the anchor's shape, not a hint the server acts on beyond storing and comparing it."@en , "Die Art des Ankerwerts, den ein Anker traegt - Pfad, URL oder UUID. Der Typ ist Metadaten ueber die Form des Ankers, kein Hinweis, auf den der Server ueber Speichern und Vergleichen hinaus reagiert."@de .
+    rdfs:comment "The kind of anchor value carried by an anchor - path, URL, or UUID. The type is metadata about the anchor's shape, not a hint the server acts on beyond storing it - anchor identity and uniqueness are decided on the value alone, never on the type."@en , "Die Art des Ankerwerts, den ein Anker traegt - Pfad, URL oder UUID. Der Typ ist Metadaten ueber die Form des Ankers, kein Hinweis, auf den der Server ueber das Speichern hinaus reagiert - Ankeridentitaet und -eindeutigkeit werden allein am Wert entschieden, nie am Typ."@de .
 
 arkprj:AnchorType a owl:Class ;
     rdfs:label   "Anchor Type"@en , "Ankertyp"@de ;

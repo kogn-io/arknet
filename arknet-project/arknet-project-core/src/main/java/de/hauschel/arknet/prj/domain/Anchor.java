@@ -31,6 +31,20 @@ import java.util.Objects;
  * to trim on its own, which is how one call site ends up normalising and another one, written
  * later, does not.</p>
  *
+ * <p><strong>Identity is the value alone, not the (value, type) pair.</strong> {@link #equals}
+ * and {@link #hashCode} are overridden to compare {@link #value} only, deliberately diverging
+ * from the record default. {@link AnchorType} "carries no behaviour" (see its own javadoc): it is
+ * descriptive metadata about the shape of the value, not a second identity axis. The value, on the
+ * other hand, is the lookup key - the out-adapter derives the anchor's storage identity as a
+ * SHA-256 digest over the value alone (see {@code ProjectGraphs}), with the type playing no part in
+ * that derivation. If domain equality disagreed with that storage identity, the same value under
+ * two different types would look like two distinct anchors here while colliding on write into one
+ * node there: an idempotency check ({@code ProjectService#attach}) would treat the second call as a
+ * new anchor, let it past the uniqueness guard because no equal anchor is on file yet, and only the
+ * SHACL gate would catch the resulting duplicate anchor node - with a message that names a
+ * cardinality violation, not the mistake the caller actually made. Same value, different type, is
+ * therefore one anchor, not two.</p>
+ *
  * @param value the opaque anchor value as sent by the client, stripped of surrounding whitespace;
  *              never {@code null} and never blank
  * @param type  the kind of value this is, never {@code null}
@@ -44,5 +58,15 @@ public record Anchor(String value, AnchorType type) {
             throw new IllegalArgumentException("Anchor value must not be blank");
         }
         value = value.strip();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof Anchor a && value.equals(a.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return value.hashCode();
     }
 }

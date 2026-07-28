@@ -169,6 +169,25 @@ class KognioRdfProjectRegistryTest {
         assertEquals(Optional.of(owner), registry.findByAnchor(foreignAnchor));
     }
 
+    /**
+     * Anchor identity is the value alone, not the (value, type) pair (see {@link Anchor}'s
+     * javadoc and {@link ProjectGraphs}'s class javadoc): a second project registering the same
+     * value under a different type must be rejected exactly as if it had used the same type.
+     */
+    @Test
+    void registerRejectsTheSameAnchorValueUnderADifferentTypeAsAlreadyOwnedByAnotherProject() {
+        Anchor sharedValueAsPath = pathAnchor("/home/dev/arknet");
+        Project first = new Project(freshId(), "arknet", List.of(sharedValueAsPath));
+        registry.register(first);
+
+        Anchor sameValueAsUrl = new Anchor("/home/dev/arknet", AnchorType.URL);
+        Project second = new Project(freshId(), "arknet-copy", List.of(sameValueAsUrl));
+
+        AnchorAlreadyRegisteredException thrown = assertThrows(AnchorAlreadyRegisteredException.class,
+                () -> registry.register(second));
+        assertEquals(first.id(), thrown.owner());
+    }
+
     @Test
     void registerRejectsADuplicateLabelOnADifferentIdentity() {
         registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/a"))));
