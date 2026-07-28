@@ -5,8 +5,9 @@
   Betriebsmodell, nicht die lokale Client-Natur), ADR-004 (Spring-AI-2.0-Tech-Linie -- dieselbe
   Linie, nur der HTTP- statt der stdio-Transport-Baustein), ADR-003 (Adapter B/kognio-memory --
   explizit NICHT die Loesung hier, siehe Alternativen), ADR-016 (loest Punkt 3 ab -- der Client
-  sendet einen registrierten Anker statt eines abzuleitenden Herkunftsverzeichnisses; Transport,
-  Betriebsmodell und Vertrauensgrenze dieser ADR bleiben gueltig)
+  sendet einen registrierten Anker statt eines abzuleitenden Herkunftsverzeichnisses, und der
+  Gegenstand hinter der Id heisst dort Projekt statt Workspace; Transport, Betriebsmodell und
+  Vertrauensgrenze dieser ADR bleiben gueltig)
 
 ## Kontext
 
