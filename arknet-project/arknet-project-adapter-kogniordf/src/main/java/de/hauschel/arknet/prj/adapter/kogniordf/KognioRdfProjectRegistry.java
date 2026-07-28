@@ -207,8 +207,16 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     /**
      * Whether {@code project}'s label is {@code dcterms:identifier} of some <em>other</em>
      * registered project - the label half of {@link #attributeLostRegistration}'s attribution.
-     * Excludes the project's own subject so a rewrite of an already-registered project is not
-     * mistaken for a collision with itself.
+     *
+     * <p>The {@code FILTER (?other != <projectIri>)} is defensive, not load-bearing on the one
+     * path that reaches this method today: {@link #attributeLostRegistration} runs only from
+     * {@link #register}'s {@code commitConflict} translator, and {@link WriteFunnel#create}'s own
+     * {@code alreadyExists} guard has already ruled out that this subject exists before the
+     * translator ever runs - a freshly minted {@link ProjectId} (a UUID, never reused) that no
+     * other writer could have committed. So on this path the filter can never actually exclude
+     * anything; it exists to keep this method correct if a translator is ever wired onto the
+     * {@link #compareAndUpdate} path too, where the subject <em>does</em> already exist and
+     * excluding it would matter.</p>
      */
     private boolean labelHeldByAnotherProject(Project project) {
         String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "

@@ -166,6 +166,59 @@ class WriteFunnelTest {
     }
 
     /**
+     * A translator can fail itself - {@code KognioRdfProjectRegistry#attributeLostRegistration}
+     * re-reads the store after the rollback, and that read can throw. The translator's own
+     * exception must be what reaches the caller (it is the more actionable diagnosis: it says what
+     * went wrong attributing the loss, where the store's own conflict says only "somebody else
+     * committed first"), and the original store conflict must not simply vanish - it is attached
+     * as {@link Throwable#getSuppressed()}, so a caller who wants to know a race happened still
+     * can.
+     */
+    @Test
+    void createLetsTheAttributionFailureThroughWithTheLostCommitSuppressed() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+        RuntimeException attributionFailure = new IllegalStateException("unrecognised anchor type IRI");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        conflict -> {
+                            throw attributionFailure;
+                        },
+                        tx -> { }));
+
+        assertSame(attributionFailure, thrown, "the translator's own failure must reach the caller");
+        assertEquals(1, thrown.getSuppressed().length);
+        assertSame(storeConflict, thrown.getSuppressed()[0],
+                "the original store conflict must survive as suppressed, not vanish");
+    }
+
+    /**
+     * A translator that simply rethrows the conflict it was handed - instead of returning it, the
+     * documented "leave it untranslated" contract - must not fail on
+     * {@code Throwable#addSuppressed(this)} (which throws {@link IllegalArgumentException} for a
+     * self-reference); the conflict must still reach the caller cleanly.
+     */
+    @Test
+    void createDoesNotFailWhenTheTranslatorRethrowsTheSameConflictInstance() {
+        RuntimeException storeConflict = new RuntimeException("store commit conflict");
+        Fixture fixture = new Fixture(List.of(false, false), storeConflict, e -> e == storeConflict);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                        candidate(), null, Signals::unexpected, Signals::unexpected,
+                        conflict -> {
+                            throw conflict;
+                        },
+                        tx -> { }));
+
+        assertSame(storeConflict, thrown);
+        assertEquals(0, thrown.getSuppressed().length,
+                "a translator rethrowing its own input must not self-suppress");
+    }
+
+    /**
      * The translator's escape hatch: returning the store's exception unchanged leaves the loss
      * untranslated - what {@code KognioRdfProjectRegistry} does when none of its uniqueness rules
      * explains the loss, rather than claiming a collision that did not happen. A {@code null}

@@ -250,7 +250,12 @@ public final class WriteFunnel {
      *                        transaction has been rolled back, so it may read the store to
      *                        attribute the loss - the dataset handle is still open at that point,
      *                        but no transaction is. A {@code null} result is treated as
-     *                        "untranslated" rather than allowed to mask the conflict
+     *                        "untranslated" rather than allowed to mask the conflict. Should the
+     *                        translator itself throw (for instance while re-reading the store to
+     *                        attribute the loss, see {@link #translateCommitConflict}), that
+     *                        exception is what reaches the caller instead - with the original
+     *                        store conflict kept on it as {@linkplain Throwable#addSuppressed
+     *                        suppressed}, never dropped
      * @param body            the write itself, given the live transaction after all checks passed
      */
     public void create(DatasetId dataset, String graphIri, String subjectIri, String code,
@@ -293,11 +298,51 @@ public final class WriteFunnel {
                 });
             } catch (RuntimeException e) {
                 if (isWriteConflict.test(e)) {
-                    throw Objects.requireNonNullElse(commitConflict.apply(e), e);
+                    throw translateCommitConflict(commitConflict, e);
                 }
                 throw e;
             }
         }
+    }
+
+    /**
+     * Runs {@code commitConflict} on a recognised commit conflict, without ever letting the
+     * conflict itself vanish - neither into a swallowed return value (that half is
+     * {@link Objects#requireNonNullElse}) nor into a translator that throws instead of returning.
+     *
+     * <p>A translator such as {@code KognioRdfProjectRegistry#attributeLostRegistration} re-reads
+     * the store after the rollback to name what the loser actually collided with (issue #181) -
+     * itself a query that can fail (e.g. an unrecognised anchor-type IRI surfacing as an
+     * {@link IllegalStateException} from {@code ProjectGraphs#anchorTypeFromIri}). Letting that
+     * failure simply propagate would erase the original {@code ConcurrencyConflictException}
+     * without a trace: not the cause, not a suppressed exception, nothing a caller could use to
+     * even tell a race happened. The translator's own exception is the more actionable diagnosis
+     * - it says what went wrong attributing the loss, where the original conflict says only
+     * "somebody else committed first" - so it is what reaches the caller, with the original
+     * conflict attached via {@link Throwable#addSuppressed} so the loser is never left with no
+     * information at all.</p>
+     *
+     * @param commitConflict the caller's translator, as documented on the caller-facing overload
+     * @param conflict       the store's own conflict exception, already recognised by
+     *                       {@code isWriteConflict}
+     * @return the exception to throw in place of {@code conflict}
+     */
+    private static RuntimeException translateCommitConflict(
+            UnaryOperator<RuntimeException> commitConflict, RuntimeException conflict) {
+        RuntimeException translated;
+        try {
+            translated = commitConflict.apply(conflict);
+        } catch (RuntimeException attributionFailed) {
+            // Throwable#addSuppressed(this) throws IllegalArgumentException; a translator that
+            // simply rethrows the conflict it was handed (rather than returning it, the documented
+            // "leave it untranslated" contract) would otherwise fail here instead of passing the
+            // conflict through cleanly.
+            if (attributionFailed != conflict) {
+                attributionFailed.addSuppressed(conflict);
+            }
+            return attributionFailed;
+        }
+        return Objects.requireNonNullElse(translated, conflict);
     }
 
     /**
