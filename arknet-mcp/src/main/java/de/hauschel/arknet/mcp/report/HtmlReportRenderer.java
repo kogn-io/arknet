@@ -174,6 +174,8 @@ public final class HtmlReportRenderer {
         html.append("  <div class=\"toolbar\">\n")
                 .append("    <input id=\"filter\" type=\"text\" placeholder=\"Filter: type a code, title,"
                         + " actor or any word ...\" aria-label=\"Filter\" />\n")
+                .append("    <button type=\"button\" id=\"expand-all\">Expand all</button>\n")
+                .append("    <button type=\"button\" id=\"collapse-all\">Collapse all</button>\n")
                 .append("  </div>\n");
     }
 
@@ -250,20 +252,21 @@ public final class HtmlReportRenderer {
             final StoreResource raw) {
         final String anchor = resourceAnchor(card.iri());
         html.append("          <article class=\"card\" id=\"").append(anchor).append("\">\n")
-                .append("            <div class=\"head\">\n")
-                .append("              <span class=\"code\">").append(escape(card.code())).append("</span>\n")
-                .append("              <h3>").append(escape(card.title())).append("</h3>\n");
+                .append("            <details class=\"fold\">\n")
+                .append("              <summary class=\"head\">\n")
+                .append("                <span class=\"code\">").append(escape(card.code())).append("</span>\n")
+                .append("                <h3>").append(escape(card.title())).append("</h3>\n");
         for (final Badge badge : card.badges()) {
-            html.append("              ").append(badgePill(badge)).append('\n');
+            html.append("                ").append(badgePill(badge)).append('\n');
         }
-        html.append("              <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
-                .append("            </div>\n            <div class=\"body\">\n");
+        html.append("                <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
+                .append("              </summary>\n              <div class=\"body\">\n");
         for (final Block block : card.blocks()) {
             appendBlock(html, block, carded, subjects);
         }
-        html.append("            </div>\n");
+        html.append("              </div>\n");
         appendRawTriples(html, raw, subjects);
-        html.append("          </article>\n");
+        html.append("            </details>\n          </article>\n");
     }
 
     private void appendBlock(
@@ -272,11 +275,12 @@ public final class HtmlReportRenderer {
                 .append(escape(block.label())).append("</span>\n");
         switch (block) {
             case Block.Prose prose -> html.append("                <p class=\"prose\">")
-                    .append(escape(prose.text())).append("</p>\n");
+                    .append(renderText(prose.text(), carded, subjects)).append("</p>\n");
             case Block.Bullets bullets -> {
                 html.append("                <ul class=\"bullets\">\n");
-                for (final String item : bullets.items()) {
-                    html.append("                  <li>").append(escape(item)).append("</li>\n");
+                for (final RichText item : bullets.items()) {
+                    html.append("                  <li>").append(renderText(item, carded, subjects))
+                            .append("</li>\n");
                 }
                 html.append("                </ul>\n");
             }
@@ -306,20 +310,64 @@ public final class HtmlReportRenderer {
      * to it - to its card if it has one, to its raw card otherwise. A reference to something not
      * in the workspace renders as a dead chip rather than a broken link, so the store's dangling
      * references stay visible instead of being quietly styled away.
+     *
+     * <p>The chip shows the target's label; its business code, which is what a human types into
+     * {@code term_get}, moves into the tooltip instead of taking the reader's attention.</p>
      */
     private void appendChips(
             final StringBuilder html, final List<Ref> refs, final Set<String> carded, final Set<String> subjects) {
         html.append("                <div class=\"chips\">");
         for (final Ref ref : refs) {
             if (carded.contains(ref.iri()) || subjects.contains(ref.iri())) {
-                html.append("<a class=\"chip\" href=\"#").append(resourceAnchor(ref.iri())).append("\">")
-                        .append(escape(ref.code())).append("</a>");
+                html.append("<a class=\"chip\" href=\"#").append(resourceAnchor(ref.iri())).append('"')
+                        .append(titleAttribute(ref.code())).append('>')
+                        .append(escape(ref.label())).append("</a>");
             } else {
-                html.append("<span class=\"chip dead\" title=\"not in this workspace\">")
-                        .append(escape(ref.code())).append("</span>");
+                final String hint = ref.code() == null
+                        ? "not in this workspace"
+                        : ref.code() + " - not in this workspace";
+                html.append("<span class=\"chip dead\"").append(titleAttribute(hint)).append('>')
+                        .append(escape(ref.label())).append("</span>");
             }
         }
         html.append("</div>\n");
+    }
+
+    /**
+     * Renders a text's spans: plain runs escaped as they are, glossary mentions marked up.
+     *
+     * <p>A mention the model backs with an edge becomes a link into the glossary. A mention of a
+     * term with no such edge becomes a marked but unlinked run - it is not a reference, it is
+     * the <em>absence</em> of one, and rendering it as a working link would tell the reader the
+     * model holds a relationship that nobody ever recorded.</p>
+     */
+    private String renderText(final RichText text, final Set<String> carded, final Set<String> subjects) {
+        final StringBuilder out = new StringBuilder();
+        for (final Span span : text.spans()) {
+            switch (span) {
+                case Span.Plain plain -> out.append(escape(plain.text()));
+                case Span.TermLink link -> {
+                    if (carded.contains(link.iri()) || subjects.contains(link.iri())) {
+                        out.append("<a class=\"term\" href=\"#").append(resourceAnchor(link.iri())).append('"')
+                                .append(titleAttribute(link.code())).append('>')
+                                .append(escape(link.text())).append("</a>");
+                    } else {
+                        out.append("<span class=\"term\"").append(titleAttribute(link.code())).append('>')
+                                .append(escape(link.text())).append("</span>");
+                    }
+                }
+                case Span.TermGap gap -> out.append("<span class=\"term gap\"")
+                        .append(titleAttribute(gap.code() + " - in the glossary, but this element does not"
+                                + " link to it"))
+                        .append('>').append(escape(gap.text())).append("</span>");
+            }
+        }
+        return out.toString();
+    }
+
+    /** @return a {@code title="..."} attribute, or nothing at all when there is no tooltip to show. */
+    private static String titleAttribute(final String tooltip) {
+        return tooltip == null ? "" : " title=\"" + escape(tooltip) + "\"";
     }
 
     private void appendRawTriples(final StringBuilder html, final StoreResource raw, final Set<String> subjects) {
@@ -336,17 +384,18 @@ public final class HtmlReportRenderer {
     private void appendRawCard(final StringBuilder html, final StoreResource resource, final Set<String> subjects) {
         final String anchor = resourceAnchor(resource.iri());
         html.append("            <article class=\"card raw-card\" id=\"").append(anchor).append("\">\n")
-                .append("              <div class=\"head\">\n")
-                .append("                <span class=\"code mono\">")
+                .append("              <details class=\"fold\">\n")
+                .append("                <summary class=\"head\">\n")
+                .append("                  <span class=\"code mono\">")
                 .append(escape(displayHandle(resource))).append("</span>\n");
         resource.label().ifPresent(label ->
-                html.append("                <h3>").append(escape(label)).append("</h3>\n"));
-        html.append("                <span class=\"pill neutral\">")
+                html.append("                  <h3>").append(escape(label)).append("</h3>\n"));
+        html.append("                  <span class=\"pill neutral\">")
                 .append(escape(displayType(StoreSnapshot.primaryType(resource)))).append("</span>\n")
-                .append("                <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
-                .append("              </div>\n");
+                .append("                  <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
+                .append("                </summary>\n");
         appendPropertyTable(html, resource, subjects);
-        html.append("            </article>\n");
+        html.append("              </details>\n            </article>\n");
     }
 
     private void appendPropertyTable(
@@ -476,6 +525,10 @@ public final class HtmlReportRenderer {
             .toolbar input{flex:1;padding:9px 13px;border:1px solid var(--border-strong);border-radius:7px;
               background:var(--surface);color:var(--ink);font-family:var(--mono);font-size:13px;}
             .toolbar input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+            .toolbar button{padding:8px 13px;border:1px solid var(--border-strong);border-radius:7px;
+              background:var(--surface);color:var(--ink-soft);font-family:var(--sans);font-size:12.5px;
+              cursor:pointer;white-space:nowrap;}
+            .toolbar button:hover{border-color:var(--accent);color:var(--accent);}
             .layout{display:grid;grid-template-columns:210px 1fr;gap:28px;align-items:start;}
             nav.index{position:sticky;top:20px;font-size:13px;}
             nav.index .lbl{text-transform:uppercase;letter-spacing:0.07em;font-size:10.5px;color:var(--ink-faint);
@@ -504,12 +557,22 @@ public final class HtmlReportRenderer {
             article.card .head .anchor{margin-left:auto;font-family:var(--mono);font-size:12px;
               color:var(--ink-faint);text-decoration:none;}
             article.card .head .anchor:hover{color:var(--accent);}
+            article.card>details.fold>summary.head{cursor:pointer;list-style:none;}
+            article.card>details.fold>summary.head::-webkit-details-marker{display:none;}
+            article.card>details.fold>summary.head::before{content:"";flex:0 0 auto;width:0;height:0;
+              border-left:5px solid var(--ink-faint);border-top:4px solid transparent;
+              border-bottom:4px solid transparent;transition:transform 120ms ease;}
+            article.card>details.fold[open]>summary.head::before{transform:rotate(90deg);}
+            article.card>details.fold>summary.head:hover::before{border-left-color:var(--accent);}
             article.card .body{margin-top:12px;display:grid;gap:11px;}
             .block .blabel{display:block;text-transform:uppercase;letter-spacing:0.07em;font-size:10px;
               font-weight:700;color:var(--ink-faint);margin-bottom:3px;}
             .block .prose{margin:0;font-size:14px;color:var(--ink-soft);}
             .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);}
             .block .bullets li{margin:2px 0;}
+            .term{color:var(--iri);text-decoration:none;border-bottom:1px solid var(--border-strong);}
+            a.term:hover{color:var(--accent);border-bottom-color:var(--accent);}
+            .term.gap{color:var(--warn);border-bottom:1px dashed var(--warn);cursor:help;}
             .chips{display:flex;flex-wrap:wrap;gap:5px;}
             .chip{font-family:var(--mono);font-size:11.5px;text-decoration:none;padding:2px 8px;border-radius:5px;
               background:var(--surface-2);color:var(--iri);border:1px solid var(--border);}
@@ -561,6 +624,39 @@ public final class HtmlReportRenderer {
 
     private static final String FILTER_JS = """
             (function(){
+              var folds = function(){return document.querySelectorAll('article.card>details.fold');};
+              var setAll = function(open){folds().forEach(function(f){f.open = open;});};
+
+              var expand = document.getElementById('expand-all');
+              var collapse = document.getElementById('collapse-all');
+              if(expand){expand.addEventListener('click', function(){setAll(true);});}
+              if(collapse){collapse.addEventListener('click', function(){setAll(false);});}
+
+              // The anchor link sits inside the summary; without this every attempt to copy a
+              // card's link would also toggle the card.
+              document.querySelectorAll('summary a').forEach(function(a){
+                a.addEventListener('click', function(e){e.stopPropagation();});
+              });
+
+              // Cards start collapsed, so following a reference has to open its target - and
+              // every details around it, or the target stays hidden inside the raw section.
+              var reveal = function(){
+                var id = decodeURIComponent(location.hash.replace('#',''));
+                if(!id){return;}
+                var target = document.getElementById(id);
+                if(!target){return;}
+                var node = target;
+                while(node){
+                  if(node.tagName === 'DETAILS'){node.open = true;}
+                  node = node.parentElement;
+                }
+                var fold = target.querySelector('details.fold');
+                if(fold){fold.open = true;}
+                target.scrollIntoView();
+              };
+              window.addEventListener('hashchange', reveal);
+              reveal();
+
               var input = document.getElementById('filter');
               if(!input){return;}
               input.addEventListener('input', function(){
@@ -571,6 +667,10 @@ public final class HtmlReportRenderer {
                     var match = q === '' || card.textContent.toLowerCase().indexOf(q) !== -1;
                     card.style.display = match ? '' : 'none';
                     if(match){visible++;}
+                    // A hit in a collapsed card would otherwise be a card that matches while
+                    // showing nothing of why; clearing the filter folds them away again.
+                    var fold = card.querySelector('details.fold');
+                    if(fold){fold.open = q !== '' && match;}
                   });
                   sec.style.display = visible === 0 ? 'none' : '';
                   // A hit inside the collapsed raw section would otherwise stay invisible.

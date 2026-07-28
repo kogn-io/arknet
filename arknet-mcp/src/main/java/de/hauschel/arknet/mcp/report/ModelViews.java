@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.ul.application.port.in.ListTerms;
 
 /**
  * Assembles the report's per-bounded-context sections by asking each context's read in-ports
@@ -33,23 +34,24 @@ public final class ModelViews {
 
     private final UseCaseCards useCases;
     private final RequirementCards requirements;
-    private final TermCards terms;
+    private final ListTerms terms;
     private final BoundedContextCards boundedContexts;
 
     /**
+     * @param terms           the ubiquitous-language context's list in-port, read once into the
+     *                        {@link Glossary} every other section is rendered against
      * @param useCases        builds the use-case section
      * @param requirements    builds the requirements section
-     * @param terms           builds the glossary section
      * @param boundedContexts builds the bounded-context section
      */
     public ModelViews(
+            final ListTerms terms,
             final UseCaseCards useCases,
             final RequirementCards requirements,
-            final TermCards terms,
             final BoundedContextCards boundedContexts) {
+        this.terms = Objects.requireNonNull(terms, "terms");
         this.useCases = Objects.requireNonNull(useCases, "useCases");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
-        this.terms = Objects.requireNonNull(terms, "terms");
         this.boundedContexts = Objects.requireNonNull(boundedContexts, "boundedContexts");
     }
 
@@ -77,11 +79,33 @@ public final class ModelViews {
     public Views of(final WorkspaceId workspaceId) {
         final List<ModelSection> sections = new ArrayList<>();
         final List<String> failures = new ArrayList<>();
-        collect(sections, failures, "Bounded Contexts", () -> boundedContexts.section(workspaceId));
-        collect(sections, failures, "Requirements", () -> requirements.section(workspaceId));
-        collect(sections, failures, "Use Cases", () -> useCases.section(workspaceId));
-        collect(sections, failures, "Glossary", () -> terms.section(workspaceId));
+        final Glossary glossary = glossary(workspaceId, failures);
+        collect(sections, failures, "Bounded Contexts", () -> boundedContexts.section(workspaceId, glossary));
+        collect(sections, failures, "Requirements", () -> requirements.section(workspaceId, glossary));
+        collect(sections, failures, "Use Cases", () -> useCases.section(workspaceId, glossary));
+        collect(sections, failures, "Glossary", () -> TermCards.section(glossary));
         return new Views(sections, failures);
+    }
+
+    /**
+     * Reads the glossary once for the whole report: it is the glossary section, the label behind
+     * every term chip, and what the other sections' prose is matched against.
+     *
+     * <p>Being one read makes it a single point of failure, so it fails the same way a section
+     * does - loudly, and only for itself. An unreadable glossary leaves every other section
+     * standing, with chips falling back to bare identities and no prose marked up; the warning
+     * says so, because chips that suddenly read as IRIs would otherwise look like a modelling
+     * mistake rather than a read error.</p>
+     */
+    private Glossary glossary(final WorkspaceId workspaceId, final List<String> failures) {
+        try {
+            return Glossary.of(terms.list(workspaceId));
+        } catch (final RuntimeException e) {
+            failures.add("Glossary: could not be read (" + e.getClass().getSimpleName() + ": " + e.getMessage()
+                    + ") - its terms appear under \"Other resources\" below, and references to them show as"
+                    + " identities rather than labels.");
+            return Glossary.empty();
+        }
     }
 
     private static void collect(

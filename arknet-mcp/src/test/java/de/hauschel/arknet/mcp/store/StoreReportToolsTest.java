@@ -108,13 +108,11 @@ class StoreReportToolsTest {
      */
     private ModelViews modelViews() {
         return new ModelViews(
-                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of(),
-                        (workspaceId, ids) -> List.of()),
+                workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(term1) : List.of(),
+                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
                 new RequirementCards(
-                        workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(fr1) : List.of(),
-                        (workspaceId, ids) -> List.of()),
-                new TermCards(workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(term1) : List.of()),
-                new BoundedContextCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()));
+                        workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(fr1) : List.of()),
+                new BoundedContextCards(workspaceId -> List.of()));
     }
 
     @AfterEach
