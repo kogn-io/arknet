@@ -1,8 +1,9 @@
 # ADR-006: Generischer Store-Lesepfad als Composition-Root-Werkzeug, nicht als Bounded Context
 
 - Status: Accepted (2026-07-14)
-- Verwandt: ADR-001 (austauschbarer Store), ADR-005 (Store-first), ADR-010 (Review-UI --
-  konsumiert diesen Lesepfad in-process), ADR-016 (Projekt-Identitaet -- dessen
+- Verwandt: ADR-001 (austauschbarer Store), ADR-005 (Store-first), ADR-008 (In-Adapter als
+  Tor zum BC -- die Lizenz, mit der der Report fremde Lese-In-Ports borgt), ADR-010 (Review-UI
+  -- konsumiert diesen Lesepfad in-process), ADR-016 (Projekt-Identitaet -- dessen
   Registry-Dataset muss dieser Lesepfad ausblenden, wie er es mit dem Provenance-Graphen tut)
 
 ## Kontext
@@ -108,3 +109,74 @@ Klassifizierung aber still nicht mehr finden.
 Resolutionslogik aus `StoreReportTools#resolveHandle` wurde nach `HandleResolver` extrahiert;
 `impact_analysis`s Zielparameter und `resource_get`s `id`-Parameter teilen sich jetzt dieselbe
 Implementierung statt zweier driftender Kopien.
+
+## Nachtrag 2026-07-28: Der HTML-Report wird pro Bounded Context gelesen, der Digest bleibt generisch
+
+Entscheidung 2 ("eine generische `SELECT ?s ?p ?o`") galt bis hierher fuer beide Ausgaben
+gleichermassen: der Agent-Digest UND der HTML-Report entstanden aus derselben flachen
+Statement-Liste. Fuer den Digest traegt das; fuer den Menschen nicht. Ein Use Case als Tripel
+gelesen zerfaellt: sein Ablauf sind `n` eigene `arkreq:Step`-Subjekte unter opaken IRIs, deren
+Reihenfolge in einem `arkreq:position`-Literal steckt, und seine Akteure und realisierten
+Requirements sind weitere opake IRIs. Generisch gerendert ist das eine Tripel-Halde, kein
+Anwendungsfall -- und der Report ist genau das Artefakt, das ein Fachbereich lesen soll.
+
+**Der HTML-Report wird pro Bounded Context aus deren Lese-In-Ports zusammengesetzt**
+(`ListBoundedContexts`/`ListRequirements`/`ListUseCases`/`ListTerms`, plus
+`ResolveTerms`/`ResolveRequirements` fuer die Anzeige-Codes referenzierter Identitaeten).
+Der Kontext, der ein Modellelement geschrieben hat, weiss es zurueckzulesen; der Report fragt
+ihn, statt die Antwort im Composition Root neu herzuleiten. Dass ein treibender Adapter dafuer
+fremde In-Ports borgt, ist keine neue Freiheit, sondern die aus ADR-008 -- hier fuer eine
+Anzeige statt fuer eine Tool-Antwort. Die BC-Cores bleiben unberuehrt.
+
+Unberuehrt bleiben ebenso die Entscheidungen 1, 3 und 4: kein eigener BC, derselbe geteilte
+`DatasetLifecycle`/`StoreReader`, derselbe Handle-Vertrag, keine RDF4J-Abhaengigkeit im
+Composition Root.
+
+**Der Datenpfad des Agenten bleibt generisch.** Der Rueckgabewert von `store_overview` ist
+weiterhin der domaenenagnostische Text-Digest aus der einen `SELECT ?s ?p ?o`. Zwei Zielgruppen,
+zwei Formen -- das war schon die tragende Unterscheidung dieses ADR, hier nur konsequent
+zuende gefuehrt.
+
+**Der Snapshot bleibt das Auffangnetz des Reports.** Jede Karte haelt ihre Roh-Tripel eine
+Ebene tiefer bereit, und alles, was kein Kontext als Modellelement beansprucht, erscheint
+unveraendert generisch in einem eigenen Abschnitt. Der Report kann damit nichts verbergen,
+was im Store steht -- die Eigenschaft, die ihn ueberhaupt als Kontrollausgabe brauchbar macht.
+Genau eine strukturelle Ausnahme: `arkreq:Step`-Ressourcen, die von einem Use Case aus
+erreichbar sind, werden dort unterdrueckt, weil sie im Ablauf jener Karte bereits stehen; ein
+Step, den kein Use Case referenziert, wird nicht unterdrueckt -- ein Waise ist gerade das,
+was dieser Abschnitt zeigen soll.
+
+### Konsequenzen dieses Nachtrags
+
+**Positiv:**
+
+- Der Report liest sich als Modell: Use Case mit nummeriertem Ablauf, Requirement mit
+  Akzeptanzkriterien, Begriff mit Definition, Bounded Context mit Domain Vision.
+- Keine zweite Interpretation derselben Tripel. Reihenfolge, Aufloesung opaker Referenzen und
+  Feldsemantik gibt es genau einmal, im besitzenden Kontext -- ein Praedikat-Rename kann den
+  Report nicht mehr still falsch rendern lassen, waehrend die Tools korrekt bleiben.
+- Der Report ist damit derselbe Konsument, den ADR-010 fuer die Review-UI vorsieht (Lesen ueber
+  die `*_list`/`*_get`-In-Ports plus den generischen Lesepfad). Was hier entsteht, ist die
+  Vorlage fuer jene UI, nicht ein zweiter, konkurrierender Weg.
+
+**Negativ / bewusst:**
+
+- Die urspruengliche Konsequenz "neue BCs erscheinen ohne Report-Aenderung" gilt so nicht mehr:
+  ein neuer Bounded Context erscheint weiterhin vollstaendig, aber roh, bis er einen eigenen
+  Abschnitt bekommt. Der Preis ist bewusst -- eine Darstellung, die ein Modellelement als das
+  zeigt, was es ist, kann nicht typunabhaengig sein.
+- Der Report haengt jetzt an vier Lese-In-Ports. Weil `store_overview` das Werkzeug ist, zu dem
+  ein Nutzer greift, wenn er den Store fuer kaputt haelt, darf keiner davon den Aufruf fallen
+  lassen: ein Abschnitt, dessen In-Port wirft, wird als sichtbare Warnung im Report gemeldet und
+  seine Ressourcen fallen in den generischen Abschnitt zurueck. Ein still fehlender Abschnitt
+  laese sich sonst als "Store ist leer".
+
+### Alternativen
+
+- **Die Sicht aus dem Snapshot rekonstruieren** (typ-spezifische Renderer, die
+  `arkreq:mainStep`/`position`/`primaryActor` selbst auswerten). Verworfen: das dupliziert die
+  Lese- und Aufloesungslogik der Out-Adapter im Composition Root, mit dem klassischen
+  Drift-Risiko zweier Kopien -- und die Menge hartkodierter Praedikate waere um eine
+  Groessenordnung gewachsen statt begrenzt zu bleiben.
+- **Alles generisch lassen und nur besser stylen.** Verworfen: kein Styling macht aus `n`
+  opaken Step-Subjekten einen lesbaren Ablauf. Das Problem ist die Struktur, nicht die Optik.

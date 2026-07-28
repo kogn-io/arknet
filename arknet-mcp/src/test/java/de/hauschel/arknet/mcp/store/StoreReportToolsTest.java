@@ -28,6 +28,12 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
 import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.mcp.report.BoundedContextCards;
+import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
+import de.hauschel.arknet.mcp.report.ModelViews;
+import de.hauschel.arknet.mcp.report.RequirementCards;
+import de.hauschel.arknet.mcp.report.TermCards;
+import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -61,6 +67,8 @@ class StoreReportToolsTest {
     Path reportDir;
 
     private DatasetLifecycle lifecycle;
+    private Requirement fr1;
+    private Term term1;
     private StoreReportTools tools;
 
     @BeforeEach
@@ -70,14 +78,16 @@ class StoreReportToolsTest {
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
 
-        requirements.create(WORKSPACE, new Requirement(
+        fr1 = new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials")));
-        terms.create(WORKSPACE, new Term(
+                List.of("Login succeeds with valid credentials"));
+        term1 = new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
-                "The act of proving one's identity.", null));
+                "The act of proving one's identity.", null);
+        requirements.create(WORKSPACE, fr1);
+        terms.create(WORKSPACE, term1);
 
         Prefixes prefixes = Prefixes.defaults();
         StoreReader reader = new StoreReader(lifecycle);
@@ -85,7 +95,26 @@ class StoreReportToolsTest {
         // null context (no origin), so the resolver returns the fixed test workspace and the report
         // lands in the fallback reportDir - exactly the pre-#137 single-workspace behaviour.
         WorkspaceResolver workspaces = originDir -> WORKSPACE;
-        tools = new StoreReportTools(reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, reportDir, null);
+        tools = new StoreReportTools(
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces, reportDir, null);
+    }
+
+    /**
+     * The HTML report's model sections come from the bounded contexts' read in-ports, not from
+     * the snapshot. This test is about the generic read path and the write resilience around it,
+     * so the in-ports are stubbed to the very objects the repositories above were seeded with -
+     * and, like the real services, they answer per workspace, so a report for a different
+     * workspace stays empty.
+     */
+    private ModelViews modelViews() {
+        return new ModelViews(
+                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of(),
+                        (workspaceId, ids) -> List.of()),
+                new RequirementCards(
+                        workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(fr1) : List.of(),
+                        (workspaceId, ids) -> List.of()),
+                new TermCards(workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(term1) : List.of()),
+                new BoundedContextCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()));
     }
 
     @AfterEach
@@ -116,8 +145,10 @@ class StoreReportToolsTest {
         String content = Files.readString(html);
         assertThat(content).contains("<!doctype html>").contains("arknet Store Report");
         assertThat(content).doesNotContain("http://cdn").doesNotContain("<script src");
-        // Status renders as a pill (stored as vocabulary IRI arkreq:Proposed -> local name).
-        assertThat(content).contains("class=\"pill status-proposed\">Proposed<");
+        // The HTML is grouped by bounded context, not by rdf:type, and the requirement's status
+        // renders as a pill.
+        assertThat(content).contains("id=\"sec-requirements\"").contains("id=\"sec-glossary\"");
+        assertThat(content).contains("class=\"pill status v-proposed\">Proposed<");
     }
 
     /**
@@ -161,7 +192,8 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final WorkspaceResolver workspaces = originDir -> WORKSPACE;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, blockedFallbackDir, null);
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces,
+                blockedFallbackDir, null);
 
         final String result = toolsWithBrokenFallback.storeOverview(null, null);
 
@@ -184,7 +216,7 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final WorkspaceResolver workspaces = originDir -> WORKSPACE;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), workspaces, reportDir, hostDir);
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces, reportDir, hostDir);
 
         final String result = toolsWithHostDir.storeOverview(null, null);
 
