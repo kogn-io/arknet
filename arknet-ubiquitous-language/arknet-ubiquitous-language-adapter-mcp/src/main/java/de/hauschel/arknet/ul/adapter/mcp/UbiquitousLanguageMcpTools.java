@@ -46,13 +46,14 @@ import de.hauschel.arknet.ul.domain.TermCode;
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
- * workspace on the machine (issue #137), so there is no single injected workspace any
- * more: each tool call resolves its own workspace from the request's origin directory,
+ * project on the machine (issue #137), so there is no single injected project any
+ * more: each tool call resolves its own project from the request's anchor,
  * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
- * not a caller-facing argument. The concrete resolution (git top-level, slugging,
- * explicit-id override) stays behind {@link ProjectResolver} in the composition root.</p>
+ * not a caller-facing argument. The anchor is looked up in the project registry (ADR-016):
+ * it arrives opaque, is matched whole against what was registered, and either hits exactly
+ * one project or fails with an error message naming the possible remedies.</p>
  */
 public final class UbiquitousLanguageMcpTools {
 

@@ -23,7 +23,7 @@ import de.hauschel.arknet.mcp.store.Triple;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
- * An in-memory directed multigraph over one workspace's statements, purpose-built for the
+ * An in-memory directed multigraph over one project's statements, purpose-built for the
  * cross-bounded-context edges the traceability tools traverse (issue #131):
  * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
  * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), and the two-hop
