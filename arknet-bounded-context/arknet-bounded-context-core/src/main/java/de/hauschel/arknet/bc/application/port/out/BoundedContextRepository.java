@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
@@ -24,11 +25,14 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * belongs to. A local single-user adapter may treat it as an implicit default; a remote/team
  * adapter uses it to address one of several workspaces.</p>
  *
- * <p><strong>Create vs. update.</strong> Identity is opaque and minted once (see
+ * <p><strong>Create vs. compare-and-set update.</strong> Identity is opaque and minted once (see
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
  * longer a coherent single operation: an identity either already exists (an update) or it does
  * not (a create), and conflating the two would hide a caller bug. {@link #create} and
- * {@link #update} therefore make that distinction explicit at the port.</p>
+ * {@link #compareAndUpdate} therefore make that distinction explicit at the port - and there is
+ * no unconditional update: every correction to an already-created bounded context goes through
+ * the compare-and-set guard (issue #176), so a guarded write path can never be bypassed by
+ * accident.</p>
  */
 public interface BoundedContextRepository {
 
@@ -48,13 +52,39 @@ public interface BoundedContextRepository {
     void create(WorkspaceId workspaceId, BoundedContext boundedContext);
 
     /**
-     * Replaces an existing bounded context by identity.
+     * Replaces an existing bounded context by identity, but only if its current concurrency token
+     * (the {@code arkprov:head} revision recorded by the last funnel write, ADR-014) still equals
+     * {@code expectedHead} - the compare-and-set guard against the lost-update race (issue #176,
+     * the same guard the requirements context got in issue #108/#167). A read-modify-write round
+     * trip ({@code bc_link_term}) reads the current state and head together via
+     * {@link #findCurrentByCode}, derives {@code updated}, and calls this method with the head it
+     * observed - a mismatch means the read was already stale, and the caller must re-read and
+     * retry rather than silently discard the concurrent change (an
+     * {@code arknet:ubiquitousLanguageTerm} edge a concurrent {@code bc_link_term} had just
+     * added).
      *
-     * @param workspaceId    the workspace (architecture model) the bounded context lives in
-     * @param boundedContext the bounded context to store in place of the current one
-     * @throws BoundedContextNotFoundException if no bounded context with this identity exists
+     * <p><strong>The token guards funnel writers, not store-first edits.</strong>
+     * {@code expectedHead} only ever changes when a write goes through the shared
+     * {@code WriteFunnel} (ADR-014); a direct store-first (ADR-005) edit to this bounded
+     * context's triples leaves the head untouched. Such an edit therefore passes this method's
+     * compare-and-set check undetected, and the subsequent replace-by-identity write silently
+     * overwrites it. The guard closes the lost-update window between two funnel writers, not
+     * between a funnel writer and a write that bypassed the funnel entirely.</p>
+     *
+     * @param workspaceId  the workspace (architecture model) the bounded context lives in
+     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
+     *                     bounded context (from {@link #findCurrentByCode}), or {@code null} if
+     *                     the caller expects no revision to exist yet
+     * @param updated      the bounded context to store in place of the current one, if its head
+     *                     still matches {@code expectedHead}
+     * @throws BoundedContextNotFoundException             if no bounded context with this identity
+     *                                                     exists at all
+     * @throws BoundedContextConcurrentlyModifiedException if {@code expectedHead} no longer
+     *                                                     matches the stored bounded context's
+     *                                                     current head - a concurrent write raced
+     *                                                     ahead
      */
-    void update(WorkspaceId workspaceId, BoundedContext boundedContext);
+    void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated);
 
     /**
      * Finds a bounded context by its human-readable business code within a workspace.
@@ -64,6 +94,35 @@ public interface BoundedContextRepository {
      * @return the bounded context if present, otherwise {@link Optional#empty()}
      */
     Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code);
+
+    /**
+     * Reads a bounded context's current state together with its concurrency token (the
+     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). Only the core
+     * fields (name, domainVision, subdomain, ownedBy) and the head itself are guaranteed to come
+     * from one read; {@code usesTerms} is filled in by a separate, independent follow-up read.
+     * This is still safe because of the order: the head is read first, so it is never fresher than
+     * any part of the state it is paired with - a concurrent funnel write landing between the
+     * reads moves the head, so the subsequent {@link #compareAndUpdate} then fails its comparison
+     * and the caller re-reads instead of overwriting a state it never actually saw. The pairing is
+     * deliberately conservative, never optimistic; reading the head later, or any field before it,
+     * would risk the opposite - a fresh head paired with stale state, reopening the lost-update
+     * race this method exists to close. Backs the read side of the read-modify-write round trip
+     * {@link #compareAndUpdate} guards the write side of.
+     *
+     * @param workspaceId the workspace (architecture model) to look up the bounded context in
+     * @param code        the bounded-context code (e.g. {@code BC-1})
+     * @return the bounded context and its current head, or {@link Optional#empty()} if no bounded
+     *         context with this code exists
+     */
+    Optional<CurrentBoundedContext> findCurrentByCode(WorkspaceId workspaceId, BoundedContextCode code);
+
+    /**
+     * A bounded context's state paired with its current concurrency token (the
+     * {@code arkprov:head} revision IRI, or {@code null} if the bounded context predates the
+     * funnel's revision recording), as read together by {@link #findCurrentByCode}.
+     */
+    record CurrentBoundedContext(BoundedContext value, String head) {
+    }
 
     /**
      * Returns all bounded contexts stored in a workspace.
