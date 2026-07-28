@@ -170,12 +170,14 @@ class RequirementMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
-        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria);
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria,
+                "SHOULD_HAVE");
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals("Neuer Titel", stub.lastUpdateTitle);
         assertEquals("Neue Beschreibung", stub.lastUpdateDescription);
         assertEquals(criteria, stub.lastUpdateAcceptanceCriteria);
+        assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertTrue(rendered.contains("Neuer Titel"), rendered);
     }
 
@@ -186,12 +188,49 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
         assertEquals(null, stub.lastUpdateDescription);
         assertEquals(null, stub.lastUpdateAcceptanceCriteria);
+        assertEquals(null, stub.lastUpdatePriority);
+    }
+
+    /**
+     * Issue #170: the concrete case behind the priority parameter - correcting a requirement
+     * mis-prioritised as {@code MUST_HAVE} down to {@code SHOULD_HAVE} without restating any
+     * other field, and without the round trip through {@code req_add} that would mint a new code
+     * and orphan every reference into the old one.
+     */
+    @Test
+    void updateCanCorrectOnlyThePriority() {
+        String rendered = adapter.update(null, "FR-1", null, null, null, "SHOULD_HAVE");
+
+        assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
+        assertEquals(null, stub.lastUpdateTitle);
+        assertEquals(null, stub.lastUpdateDescription);
+        assertEquals(null, stub.lastUpdateAcceptanceCriteria);
+        assertTrue(rendered.contains("SHOULD_HAVE"), rendered);
+    }
+
+    /**
+     * A blank priority is an omitted one, not a parse attempt: MCP clients that send "" for an
+     * unfilled optional string must not trip {@link Priority#valueOf} - the same tolerance
+     * {@code req_add} already applies.
+     */
+    @Test
+    void updateTreatsABlankPriorityAsOmitted() {
+        adapter.update(null, "FR-1", null, null, null, "  ");
+
+        assertEquals(null, stub.lastUpdatePriority);
+    }
+
+    /** An unknown priority is rejected loudly rather than silently dropped. */
+    @Test
+    void updateRejectsAnUnknownPriority() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE"));
     }
 
     /** The resolvable case: a linked term shows its business code, not the raw IRI (issue #77). */
@@ -309,6 +348,7 @@ class RequirementMcpToolsTest {
         private String lastUpdateTitle;
         private String lastUpdateDescription;
         private List<String> lastUpdateAcceptanceCriteria;
+        private Priority lastUpdatePriority;
 
         @Override
         public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
@@ -357,13 +397,15 @@ class RequirementMcpToolsTest {
 
         @Override
         public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
-                List<String> acceptanceCriteria) {
+                List<String> acceptanceCriteria, Priority priority) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
             lastUpdateDescription = description;
             lastUpdateAcceptanceCriteria = acceptanceCriteria;
+            lastUpdatePriority = priority;
             return new Requirement(ID, code, title != null ? title : "t", description != null ? description : "d",
-                    RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
+                    RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    priority != null ? priority : Priority.MUST_HAVE, null, null,
                     List.of(), acceptanceCriteria != null ? acceptanceCriteria : List.of("Done when it works"));
         }
     }

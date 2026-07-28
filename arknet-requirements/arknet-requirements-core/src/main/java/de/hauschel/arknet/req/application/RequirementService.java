@@ -25,6 +25,7 @@ import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
+import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -60,15 +61,18 @@ import de.hauschel.arknet.req.domain.TermRef;
  * caller; only sustained, pathological contention on the very same requirement surfaces as
  * {@link RequirementConcurrentlyModifiedException}.</p>
  *
- * <p><strong>Correction (issue #162).</strong> {@link #update} lets a caller correct a
- * requirement's title, description and/or acceptance criteria after the fact - e.g. once an
- * interview sharpens a domain fact the original wording missed. Every argument is optional
- * ({@code null} leaves that field unchanged); a non-{@code null} value still has to satisfy
- * {@link Requirement}'s own invariants (non-blank title/description, a non-empty,
- * duplicate-free acceptance-criteria list), so a caller cannot use {@code update} to put the
- * requirement into a state {@code req_add} itself could never have created. Status and linked
- * terms are untouched - {@link #setStatus} and {@link #linkTerm} remain the only way to change
- * those.</p>
+ * <p><strong>Correction (issues #162, #170).</strong> {@link #update} lets a caller correct a
+ * requirement's title, description, acceptance criteria and/or MoSCoW priority after the fact -
+ * e.g. once an interview sharpens a domain fact the original wording missed, or once a
+ * prioritisation review finds a whole register sitting on {@code MUST_HAVE}. Every argument is
+ * optional ({@code null} leaves that field unchanged, priority included - it is never a request
+ * to remove one); a non-{@code null} value still has to satisfy {@link Requirement}'s own
+ * invariants (non-blank title/description, a non-empty, duplicate-free acceptance-criteria
+ * list), so a caller cannot use {@code update} to put the requirement into a state {@code
+ * req_add} itself could never have created. Status and linked terms are untouched - {@link
+ * #setStatus} and {@link #linkTerm} remain the only way to change those. The priority parameter
+ * is an interim step that issue #169's generic {@code resource_update} facade is meant to
+ * replace; see {@link UpdateRequirement}.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         SetRequirementStatus, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
@@ -185,13 +189,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
 
     @Override
     public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
-            List<String> acceptanceCriteria) {
+            List<String> acceptanceCriteria, Priority priority) {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(code, "code");
         return updateWithOptimisticRetry(workspaceId, code, current -> new Requirement(current.id(), current.code(),
                 title != null ? title : current.title(),
                 description != null ? description : current.description(),
-                current.type(), current.status(), current.priority(), current.motivatedBy(),
+                current.type(), current.status(),
+                priority != null ? priority : current.priority(), current.motivatedBy(),
                 current.qualityCategory(), current.usesTerms(),
                 acceptanceCriteria != null ? List.copyOf(acceptanceCriteria) : current.acceptanceCriteria()));
     }
