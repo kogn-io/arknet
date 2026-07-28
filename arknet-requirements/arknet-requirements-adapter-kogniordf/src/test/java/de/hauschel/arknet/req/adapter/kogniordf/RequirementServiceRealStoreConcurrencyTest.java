@@ -37,6 +37,7 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
+import io.kogn.rdf.dataset.DatasetExport;
 import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
@@ -406,6 +407,11 @@ class RequirementServiceRealStoreConcurrencyTest {
         @Override
         public SparqlUpdate sparqlUpdate() {
             return delegate.sparqlUpdate();
+        }
+
+        @Override
+        public DatasetExport datasetExport() {
+            return delegate.datasetExport();
         }
 
         @Override

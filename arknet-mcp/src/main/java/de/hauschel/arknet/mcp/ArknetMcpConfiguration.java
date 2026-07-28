@@ -35,6 +35,8 @@ import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
+import de.hauschel.arknet.mcp.store.StoreExportTools;
+import de.hauschel.arknet.mcp.store.StoreExporter;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
@@ -515,6 +517,32 @@ public class ArknetMcpConfiguration {
         return new StoreReportTools(
                 storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, projectResolver,
                 fallbackReportDir, reportHostDir);
+    }
+
+    /**
+     * The backup read path: a complete {@code SELECT ?g ?s ?p ?o} spanning every named graph of a
+     * project's dataset, unlike {@link #storeReader} it hides neither the provenance nor the
+     * project-identity graph, because a backup exists to restore both (issue #154).
+     */
+    @Bean
+    StoreExporter storeExporter(final DatasetLifecycle datasetLifecycle) {
+        return new StoreExporter(datasetLifecycle);
+    }
+
+    /**
+     * The one backup tool ({@code project_export}, issue #154). Not project-scoped like every
+     * other {@code *McpTools} bean here - it exports every project {@link ProjectService} (as its
+     * {@code ListProjects} in-port) reports as registered, in one call. {@code arknet.export.dir}/
+     * {@code arknet.export.host-dir} mirror {@code arknet.report.dir}/{@code arknet.report.host-dir}
+     * for the same reason (issue #160): on a containerized daemon the export directory is a
+     * container-internal mount point the calling agent cannot reach directly.
+     */
+    @Bean
+    StoreExportTools storeExportTools(
+            final ProjectService projectService, final StoreExporter storeExporter,
+            @Value("${arknet.export.dir:${user.home}/.arknet/export}") final Path fallbackExportDir,
+            @Value("${arknet.export.host-dir:#{null}}") final Path exportHostDir) {
+        return new StoreExportTools(projectService, storeExporter, fallbackExportDir, exportHostDir);
     }
 
     /**
