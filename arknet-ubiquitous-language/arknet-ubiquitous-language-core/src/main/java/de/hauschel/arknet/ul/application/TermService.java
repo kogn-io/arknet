@@ -34,7 +34,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * <p><strong>Policy.</strong> Identity ({@link TermId}) is opaque and minted once per term via
  * {@link ResourceIdFactory}; it never changes. The human-readable business code
  * ({@link TermCode}, {@code TERM-N}) is assigned independently, where {@code N} is one above the
- * highest running number currently used in the target workspace (numbering is independent per
+ * highest running number currently used in the target project (numbering is independent per
  * workspace). Keeping identity separate from both the code and the {@code skos:prefLabel} means
  * relabeling never changes identity (a core SKOS principle).</p>
  *

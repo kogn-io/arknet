@@ -33,7 +33,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  */
 class UseCaseServiceTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
 
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
     private static final ResourceId PAYMENT_PROVIDER_ID =

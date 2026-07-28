@@ -27,11 +27,11 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  */
 final class InMemoryUseCaseRepository implements UseCaseRepository {
 
-    private final Map<ProjectId, Map<UseCaseId, UseCase>> byWorkspace = new LinkedHashMap<>();
+    private final Map<ProjectId, Map<UseCaseId, UseCase>> byProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, UseCase useCase) {
-        Map<UseCaseId, UseCase> useCases = byWorkspace.computeIfAbsent(projectId,
+        Map<UseCaseId, UseCase> useCases = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (useCases.containsKey(useCase.id())) {
             throw new ResourceAlreadyExistsException(projectId, useCase.id().value());
@@ -45,7 +45,7 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     @Override
     public void update(ProjectId projectId, UseCase useCase) {
-        Map<UseCaseId, UseCase> useCases = byWorkspace.getOrDefault(projectId, Map.of());
+        Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
         if (!useCases.containsKey(useCase.id())) {
             throw new UseCaseNotFoundException(projectId, useCase.code());
         }
@@ -54,13 +54,13 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     @Override
     public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
-        return byWorkspace.getOrDefault(projectId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(uc -> uc.code().equals(code))
                 .findFirst();
     }
 
     @Override
     public List<UseCase> findAll(ProjectId projectId) {
-        return List.copyOf(byWorkspace.getOrDefault(projectId, Map.of()).values());
+        return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 }

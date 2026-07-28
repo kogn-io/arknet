@@ -4,6 +4,7 @@
 package de.hauschel.arknet.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -19,13 +20,13 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
 import de.hauschel.arknet.prj.application.ProjectService;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -48,6 +49,18 @@ import de.hauschel.arknet.ul.domain.Term;
  */
 class ArknetMcpConfigurationTest {
 
+    /**
+     * The project the hexagon-wiring tests below write into.
+     *
+     * <p>They used to pin it through the {@code arknet.workspace.id} property, which is gone with
+     * the rest of the derived resolution path (ADR-016 decision 9). Nothing needs to replace it
+     * here: these tests drive the application services directly, and a service takes the project
+     * as a parameter. The property was only ever pinning the <em>resolver</em>, which these tests
+     * never went through - see {@link #resolvesProjectIdByLookingUpARegisteredAnchor} for the one
+     * that does.</p>
+     */
+    private static final ProjectId PROJECT = new ProjectId("test-project");
+
     @TempDir
     Path storageDir;
 
@@ -58,21 +71,20 @@ class ArknetMcpConfigurationTest {
     void wiresRequirementsHexagonFromStoragePropertyAndRoundTrips() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=test-workspace")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(RequirementMcpTools.class);
 
                     RequirementService service = context.getBean(RequirementService.class);
-                    Requirement created = service.add(ProjectId.DEFAULT,
+                    Requirement created = service.add(PROJECT,
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.",
                                     RequirementType.FUNCTIONAL, null, null, null,
                                     List.of("The requirement round-trips through the store")));
 
                     assertThat(created.code().value()).isEqualTo("FR-1");
-                    assertThat(service.get(ProjectId.DEFAULT, created.code()))
+                    assertThat(service.get(PROJECT, created.code()))
                             .isEqualTo(Optional.of(created));
                 });
     }
@@ -81,18 +93,17 @@ class ArknetMcpConfigurationTest {
     void wiresUbiquitousLanguageHexagonFromStoragePropertyAndRoundTrips() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=test-workspace")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(UbiquitousLanguageMcpTools.class);
 
                     TermService service = context.getBean(TermService.class);
-                    Term created = service.add(ProjectId.DEFAULT,
+                    Term created = service.add(PROJECT,
                             new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null));
 
                     assertThat(created.code().value()).isEqualTo("TERM-1");
-                    assertThat(service.get(ProjectId.DEFAULT, created.code()))
+                    assertThat(service.get(PROJECT, created.code()))
                             .isEqualTo(Optional.of(created));
                 });
     }
@@ -106,16 +117,14 @@ class ArknetMcpConfigurationTest {
      * than needing a second one.
      *
      * <p>Wired without a {@link ProjectResolver} on purpose - the anchor is looked up, never
-     * derived - so this test deliberately pins {@code arknet.workspace.id} to a value that has
-     * nothing to do with the anchor below: were the project hexagon secretly routed through the
-     * derived-workspace path, the anchor lookup would not survive it.</p>
+     * derived. That the registered anchor resolves back to its own project is what this asserts
+     * first: it is the property every other tool call now depends on for routing.</p>
      */
     @Test
     void wiresProjectHexagonAndWritesRegistryAndSelfDescriptionToDistinctDatasets() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=irrelevant-for-the-registry")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(ProjectMcpTools.class);
@@ -156,21 +165,43 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * With an explicit {@code arknet.workspace.id} pinned, the per-call {@link ProjectResolver}
-     * (issue #137) resolves every call to that fixed workspace regardless of the call's origin
-     * directory - the override wins over any directory-derived name.
+     * The switch-over itself, wired end to end: the {@link ProjectResolver} bean every model
+     * hexagon routes on answers by looking the anchor up in the registry.
+     *
+     * <p>Three assertions, one per property ADR-016 turns on. A registered anchor resolves to
+     * <em>its own</em> project, so a call lands where its data is. An unregistered anchor fails
+     * instead of resolving, so a typo or a copied client config cannot silently open a second
+     * store. And no anchor at all fails too, rather than falling back to the daemon's working
+     * directory - which is what the deleted property used to configure.</p>
+     *
+     * <p>The second assertion is the one that closes issue #175 at this level: the two anchors
+     * differ only in their parent directory and share a basename. Under the old resolver both
+     * slugged to {@code arknet} and hit the same dataset; here the unregistered one has no answer
+     * at all.</p>
      */
     @Test
-    void resolvesProjectIdFromExplicitProperty() {
+    void resolvesProjectIdByLookingUpARegisteredAnchor() {
         contextRunner
-                .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=noistill")
+                .withPropertyValues("arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
+                    ProjectService projects = context.getBean(ProjectService.class);
+                    Project registered = projects.register(
+                            "arknet", new Anchor("/home/a/DEV/arknet", AnchorType.PATH));
+
                     ProjectResolver resolver = context.getBean(ProjectResolver.class);
-                    assertThat(resolver.resolve(null)).isEqualTo(new ProjectId("noistill"));
-                    assertThat(resolver.resolve("/some/other/dir")).isEqualTo(new ProjectId("noistill"));
+
+                    assertThat(resolver.resolve("/home/a/DEV/arknet"))
+                            .as("a registered anchor resolves to its own project")
+                            .isEqualTo(registered.id());
+                    assertThatThrownBy(() -> resolver.resolve("/home/b/other/arknet"))
+                            .as("an identically named directory elsewhere is unknown, not the same "
+                                    + "project - the collision of issue #175")
+                            .isInstanceOf(UnresolvedProjectAnchorException.class)
+                            .hasMessageContaining("/home/b/other/arknet");
+                    assertThatThrownBy(() -> resolver.resolve(null))
+                            .as("no anchor is an error, never the server's own working directory")
+                            .isInstanceOf(UnresolvedProjectAnchorException.class);
                 });
     }
 }

@@ -111,7 +111,7 @@ class KognioRdfActorLookupTest {
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** An actor of another workspace must not satisfy this workspace's reference. */
+    /** An actor of another workspace must not satisfy this project's reference. */
     @Test
     void anActorOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
         givenHumanActor(WORKSPACE_B, "customer", "Customer");

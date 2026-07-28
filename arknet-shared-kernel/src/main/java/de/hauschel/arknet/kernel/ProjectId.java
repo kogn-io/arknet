@@ -52,16 +52,6 @@ public record ProjectId(String value) {
      */
     public static final String RESERVED_SYSTEM_DATASET = "urn:arknet:system";
 
-    /**
-     * The implicit project a call without an origin used to fall back to.
-     *
-     * @deprecated ADR-016 decision 3 removes the notion of a default entirely - a call whose
-     *             project cannot be determined is an error, not a call routed somewhere. Still
-     *             here only so this rename stays behaviour-neutral; the switch-over deletes it.
-     */
-    @Deprecated
-    public static final ProjectId DEFAULT = new ProjectId("default");
-
     public ProjectId {
         Objects.requireNonNull(value, "value");
         if (value.isBlank()) {

@@ -49,7 +49,7 @@ class TraceabilityRendererTest {
 
         String matrix = renderer.traceMatrix(WORKSPACE, graph);
 
-        assertThat(matrix).contains("# Traceability matrix -- workspace noistill -- 2 requirement(s)");
+        assertThat(matrix).contains("# Traceability matrix -- project noistill -- 2 requirement(s)");
         assertThat(matrix).contains("FR-1 [FunctionalRequirement] \"Login\"");
         assertThat(matrix).contains("uses terms  : TERM-1");
         assertThat(matrix).contains("realised by : UC1");
@@ -64,7 +64,7 @@ class TraceabilityRendererTest {
 
         String report = renderer.orphanCheck(WORKSPACE, graph);
 
-        assertThat(report).contains("# Orphan check -- workspace noistill");
+        assertThat(report).contains("# Orphan check -- project noistill");
         assertThat(report).contains("## Requirements without a realising use case (1)");
         assertThat(report).contains("FR-2");
         assertThat(report).contains("## Terms never referenced (0)");
@@ -83,7 +83,7 @@ class TraceabilityRendererTest {
 
         String impact = renderer.impactAnalysis(WORKSPACE, graph, TERM_1);
 
-        assertThat(impact).contains("# Impact analysis -- workspace noistill -- target: TERM-1");
+        assertThat(impact).contains("# Impact analysis -- project noistill -- target: TERM-1");
         assertThat(impact).contains("## Transitively affected (2)");
         assertThat(impact).contains("FR-1").contains("UC1");
         assertThat(impact).doesNotContain(STEP_1);

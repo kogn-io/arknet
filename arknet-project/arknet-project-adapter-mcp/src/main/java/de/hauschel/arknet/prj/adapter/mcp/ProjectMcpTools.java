@@ -55,7 +55,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * {@link ProjectResolver}, which <em>derives</em> an id from it (git top-level, slugging). That
  * derivation is exactly what ADR-016 replaces: a project's identity is a registered anchor
  * relationship, not something computed from a directory name. This adapter therefore imports
- * {@link ProjectResolver} only for its {@link ProjectResolver#WORKSPACE_DIR_KEY} constant -
+ * {@link ProjectResolver} only for its {@link ProjectResolver#ANCHOR_KEY} constant -
  * the key under which the calling client's origin directory travels in the MCP transport context
  * - and never calls {@link ProjectResolver#resolve(String)}. The raw value read under that key
  * is instead wrapped directly as an {@link Anchor} of {@link AnchorType#PATH} and looked up
@@ -148,12 +148,12 @@ public final class ProjectMcpTools {
      * without the key resolves to {@code null}. Unlike every other bounded context's adapter,
      * this value is never handed to a {@link ProjectResolver} - see the class Javadoc.
      */
-    private static String originDir(final McpSyncRequestContext context) {
+    private static String contextAnchor(final McpSyncRequestContext context) {
         if (context == null) {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
+        final Object dir = transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY);
         return dir == null ? null : dir.toString();
     }
 
@@ -168,7 +168,7 @@ public final class ProjectMcpTools {
      * @throws IllegalArgumentException if the context carried no origin directory
      */
     private static Anchor requireContextAnchor(final McpSyncRequestContext context, final String noAnchorMessage) {
-        final String origin = originDir(context);
+        final String origin = contextAnchor(context);
         if (origin == null || origin.isBlank()) {
             throw new IllegalArgumentException(noAnchorMessage);
         }

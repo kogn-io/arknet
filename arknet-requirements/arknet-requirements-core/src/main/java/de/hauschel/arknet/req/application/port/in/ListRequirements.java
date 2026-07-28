@@ -18,7 +18,7 @@ public interface ListRequirements {
     /**
      * Returns all requirements currently under management in the given workspace.
      *
-     * @param projectId the workspace (architecture model) to list requirements from
+     * @param projectId the project (architecture model) to list requirements from
      * @return all requirements, never {@code null}
      */
     List<Requirement> list(ProjectId projectId);

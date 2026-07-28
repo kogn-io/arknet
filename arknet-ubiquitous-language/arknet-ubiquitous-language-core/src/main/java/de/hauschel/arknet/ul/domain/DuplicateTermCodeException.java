@@ -29,17 +29,17 @@ public class DuplicateTermCodeException extends RuntimeException {
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace the code collided in
+     * @param projectId the project the code collided in
      * @param code        the term code that already exists
      */
     public DuplicateTermCodeException(ProjectId projectId, TermCode code) {
         super("term code " + Objects.requireNonNull(code, "code").value()
-                + " already exists in workspace " + Objects.requireNonNull(projectId, "projectId").value());
+                + " already exists in project " + Objects.requireNonNull(projectId, "projectId").value());
         this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the code collided in */
+    /** @return the project the code collided in */
     public ProjectId projectId() {
         return projectId;
     }

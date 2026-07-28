@@ -61,11 +61,11 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * a tool error rather than a raw stack trace. Keeping the tool method thin preserves that
  * message verbatim.</p>
  *
- * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
+ * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
  * workspace on the machine (issue #137), so there is no single injected workspace any
  * more: each tool call resolves its own workspace from the request's origin directory,
- * carried in the MCP transport context under {@link ProjectResolver#WORKSPACE_DIR_KEY}.
+ * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
  * not a caller-facing argument. The concrete resolution (git top-level, slugging,
@@ -93,11 +93,11 @@ public final class UseCaseMcpTools {
     private final GetUseCase getUseCase;
     private final ResolveTerms resolveTerms;
     private final ResolveRequirements resolveRequirements;
-    private final ProjectResolver workspaces;
+    private final ProjectResolver projects;
 
     /**
      * Creates the adapter with its three driving in-ports, the two borrowed sibling-hexagon
-     * display ports and the resolver that maps each call's origin directory to a workspace.
+     * display ports and the resolver that maps each call's origin directory to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
      * @param listUseCases        in-port backing {@code uc_list}
@@ -106,7 +106,7 @@ public final class UseCaseMcpTools {
      *                            referenced actor's business name instead of its bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
      *                            requirement's business code instead of its bare IRI
-     * @param workspaces          resolves each call's target workspace from its origin directory
+     * @param projects          resolves each call's target project from its origin directory
      */
     public UseCaseMcpTools(
             final AddUseCase addUseCase,
@@ -114,29 +114,39 @@ public final class UseCaseMcpTools {
             final GetUseCase getUseCase,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
-            final ProjectResolver workspaces) {
+            final ProjectResolver projects) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
-        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+        this.projects = Objects.requireNonNull(projects, "projects");
     }
 
     /**
-     * Extracts the calling client's origin directory from the per-call transport context -
-     * the value the server's context extractor placed there off the request header (issue
-     * #137). Null-tolerant on every hop: a call without a context, without a transport
-     * context, or without the key resolves to {@code null}, which {@link ProjectResolver}
-     * turns into the server's default workspace.
+     * Extracts the calling client's project anchor from the per-call transport context - the value
+     * the server's context extractor placed there off the request header (ADR-016). Null-tolerant
+     * on every hop: a call without a context, without a transport context, or without the key
+     * resolves to {@code null}, which is a caller error rather than a route to a default.
      */
-    private static String originDir(final McpSyncRequestContext context) {
+    private static String contextAnchor(final McpSyncRequestContext context) {
         if (context == null) {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
-        return dir == null ? null : dir.toString();
+        final Object anchor = transport == null ? null : transport.get(ProjectResolver.ANCHOR_KEY);
+        return anchor == null ? null : anchor.toString();
+    }
+
+    /**
+     * Resolves the project this call targets: the explicit {@code projectAnchor} parameter if the
+     * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
+     * delivery paths are open to every MCP client). Neither present is a caller error; there is no
+     * default project and no fallback to a server-side working directory (decision 3).
+     */
+    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+        final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
     }
 
     /**
@@ -156,7 +166,7 @@ public final class UseCaseMcpTools {
     @McpTool(name = "uc_add",
             description = "Register a complete use case (Cockburn-style, goal + ordered main flow) in a "
                     + "single call. Requirement and actor references are given as bare labels that must "
-                    + "already exist in this workspace (create requirements with req_add, actors with "
+                    + "already exist in this project (create requirements with req_add, actors with "
                     + "term_add using actorKind first).")
     public String add(
             final McpSyncRequestContext context,
@@ -186,8 +196,15 @@ public final class UseCaseMcpTools {
             final List<StepInput> steps,
             @McpToolParam(description = "Optional: alternative/exception flows as free-text lines, e.g. "
                     + "'2a. Payment declined -> use case ends in failure'", required = false)
-            final List<String> extensions) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+            final List<String> extensions,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final NewUseCase command = new NewUseCase(
                 title,
                 goal,
@@ -203,10 +220,18 @@ public final class UseCaseMcpTools {
         return formatFull(projectId, created);
     }
 
-    @McpTool(name = "uc_list", description = "List all use cases in this workspace (id, title, goal).",
+    @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal).",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String list(final McpSyncRequestContext context) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+    public String list(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final List<UseCase> all = listUseCases.list(projectId);
         return all.stream().map(UseCaseMcpTools::formatShort)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no use cases)");
@@ -218,8 +243,15 @@ public final class UseCaseMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Use-case code, e.g. UC1") final String id) {
-        final ProjectId projectId = workspaces.resolve(originDir(context));
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);
         return getUseCase.get(projectId, code)
                 .map(uc -> formatFull(projectId, uc))

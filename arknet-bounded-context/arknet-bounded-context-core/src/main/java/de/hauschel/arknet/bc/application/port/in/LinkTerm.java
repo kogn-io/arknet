@@ -29,7 +29,7 @@ public interface LinkTerm {
      * Links the glossary term identified by {@code termCode} to the bounded context {@code code}.
      * Linking an already-linked term is an idempotent no-op.
      *
-     * @param projectId the workspace (architecture model) the bounded context lives in
+     * @param projectId the project (architecture model) the bounded context lives in
      * @param code        the bounded-context code, e.g. {@code BC-1}
      * @param termCode    the term's human-readable business code, e.g. {@code TERM-1}
      * @return the bounded context including the link

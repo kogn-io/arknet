@@ -29,7 +29,7 @@ public interface TermLookup {
      * Resolves {@code termCode} to the identity of the glossary term it currently names within
      * {@code projectId}.
      *
-     * @param projectId the workspace (architecture model) to resolve the code in
+     * @param projectId the project (architecture model) to resolve the code in
      * @param termCode    the term's human-readable business code, e.g. {@code TERM-1}
      * @return the resolved term's opaque subject identity
      */

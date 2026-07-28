@@ -28,17 +28,17 @@ public class BoundedContextNotFoundException extends RuntimeException {
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace that was searched
+     * @param projectId the project that was searched
      * @param code        the bounded-context code that was not found
      */
     public BoundedContextNotFoundException(ProjectId projectId, BoundedContextCode code) {
         super("no bounded context " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value());
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value());
         this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace that was searched */
+    /** @return the project that was searched */
     public ProjectId projectId() {
         return projectId;
     }

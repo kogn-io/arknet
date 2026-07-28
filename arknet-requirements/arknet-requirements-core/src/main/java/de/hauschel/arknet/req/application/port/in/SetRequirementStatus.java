@@ -17,9 +17,9 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 public interface SetRequirementStatus {
 
     /**
-     * Sets a new status on the requirement identified by {@code code} within a workspace.
+     * Sets a new status on the requirement identified by {@code code} within a project.
      *
-     * @param projectId the workspace (architecture model) the requirement lives in
+     * @param projectId the project (architecture model) the requirement lives in
      * @param code        the requirement code, e.g. {@code FR-1}
      * @param status      the target status
      * @return the updated requirement

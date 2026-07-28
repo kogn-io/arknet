@@ -474,7 +474,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     @Test
-    void workspacesAreIsolated() {
+    void projectsAreIsolated() {
         Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
         repository.create(WORKSPACE_A, term);
@@ -765,7 +765,7 @@ class KognioRdfTermRepositoryTest {
         assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(second.id().value(), second.code())));
     }
 
-    /** An id absent from the workspace is simply absent from the result, never an error. */
+    /** An id absent from the project is simply absent from the result, never an error. */
     @Test
     void findByIdsSilentlyOmitsUnknownIdentities() {
         Term known = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
@@ -870,7 +870,7 @@ class KognioRdfTermRepositoryTest {
      * {@code sh:nodeKind sh:IRI} constraint on the subject, so a blank-node concept is
      * SHACL-legal even though {@code term_add} always mints an IRI subject. Before the fix,
      * the unguarded {@code (IRI) row.getValue("s")} cast in {@code iriOf} threw a
-     * {@code ClassCastException} that crashed {@code findAll} for the whole workspace, not just
+     * {@code ClassCastException} that crashed {@code findAll} for the whole project, not just
      * the offending term.
      */
     @Test

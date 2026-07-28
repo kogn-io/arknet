@@ -33,18 +33,18 @@ public class TermConcurrentlyModifiedException extends RuntimeException {
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace the term lives in
+     * @param projectId the project the term lives in
      * @param code        the term code whose update kept losing the race
      */
     public TermConcurrentlyModifiedException(ProjectId projectId, TermCode code) {
         super("term " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value()
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
         this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the term lives in */
+    /** @return the project the term lives in */
     public ProjectId projectId() {
         return projectId;
     }

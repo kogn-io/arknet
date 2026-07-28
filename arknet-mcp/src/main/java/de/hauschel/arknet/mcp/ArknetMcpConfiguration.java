@@ -111,19 +111,25 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       four above and deliberately so (ADR-016): it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
  *       hexagon here wired <em>without</em> a {@link ProjectResolver} - it reads the caller's
- *       origin value as an opaque anchor and looks it up, which is the substance of ADR-016 rather
- *       than an omission. It is additive: registering these tools changes the routing of no other
- *       tool call.</li>
+ *       anchor raw and looks it up, which is the substance of ADR-016 rather than an omission.
+ *       Since it answers the routing question for everyone else, it cannot itself be routed.</li>
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
  * {@code arknet.rdf.storage}, no competing locks); the four model hexagons additionally share the
- * single {@link ProjectResolver} bean.
- * Every tool call resolves its {@link ProjectId} per request from the caller's origin directory
- * (issue #137: one shared HTTP server for every workspace on the machine, see
- * {@link WorkspaceHttpTransportConfiguration}), so requirements, glossary terms, use cases and
- * bounded contexts of the <em>same</em> project land in the same workspace/dataset and can
- * reference each other, while different projects stay isolated.</p>
+ * single {@link ProjectResolver} bean. Every tool call resolves its {@link ProjectId} per request
+ * by looking up the anchor the caller sent - in the request header (see
+ * {@link AnchorHttpTransportConfiguration}) or as an explicit tool parameter - so requirements,
+ * glossary terms, use cases and bounded contexts of the <em>same</em> project land in the same
+ * dataset and can reference each other, while different projects stay isolated.</p>
+ *
+ * <p><strong>What is no longer wired here, and why that is the point (ADR-016 decision 9).</strong>
+ * There used to be a resolver bean deriving that identity from the caller's directory
+ * ({@code arknet.workspace.id}, a git top-level lookup, slugging, a fallback to the daemon's own
+ * working directory). It is gone in full rather than kept as a fallback: a second resolution path
+ * that quietly takes over when the first finds nothing is precisely how two different projects came
+ * to share one dataset (issue #175), and a fallback would have reinstated that failure while
+ * looking like a safety net.</p>
  */
 @Configuration(proxyBeanMethods = false)
 public class ArknetMcpConfiguration {
@@ -159,7 +165,7 @@ public class ArknetMcpConfiguration {
      * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
      * subject identity - the strict cross-BC lookup {@code req_link_term} needs (issue #77).
      * Acquires datasets from the same shared {@link DatasetLifecycle} as
-     * {@link #requirementRepository}, so it reads the same workspace the ubiquitous-language
+     * {@link #requirementRepository}, so it reads the same project the ubiquitous-language
      * hexagon writes into.
      */
     @Bean
@@ -196,20 +202,21 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Resolves each tool call's target workspace from the calling client's origin directory
-     * (issue #137). arknet-mcp is one shared server for every workspace on the machine, so there
-     * is no longer a single workspace fixed at boot; the {@link ProjectResolver} maps a
-     * per-call origin directory - carried in the request header (see
-     * {@link WorkspaceHttpTransportConfiguration}) - to a {@link ProjectId} via
-     * {@link ProjectIdResolver} (explicit {@code arknet.workspace.id} override, else the git
-     * top-level / working-directory name). A call without an origin falls back to
-     * {@code arknet.workspace.dir} (the daemon's own working directory).
+     * Resolves each tool call's target project by looking the caller's anchor up in the registry
+     * (ADR-016). arknet-mcp is one shared server for every project on the machine, so there is no
+     * single project fixed at boot; the anchor arrives per call in the request header (see
+     * {@link AnchorHttpTransportConfiguration}) or as a tool parameter.
+     *
+     * <p>This bean is where the four model hexagons meet the project hexagon: it adapts the
+     * kernel's {@link ProjectResolver} port onto {@link ProjectService}'s {@code ResolveProject}
+     * in-port, so those four depend on the neutral port and never on {@code arknet-project} - see
+     * {@link RegisteredAnchorProjectResolver}. It takes no configuration at all, which is the
+     * point: {@code arknet.workspace.id}, the working-directory fallback and the git derivation
+     * they fed are gone, not made optional (ADR-016 decision 9).</p>
      */
     @Bean
-    ProjectResolver projectResolver(
-            @Value("${arknet.workspace.id:}") final String explicitId,
-            @Value("${arknet.workspace.dir:${user.dir}}") final Path fallbackDir) {
-        return new GitProjectResolver(new ProjectIdResolver(), explicitId, fallbackDir);
+    ProjectResolver projectResolver(final ProjectService projectService) {
+        return new RegisteredAnchorProjectResolver(projectService);
     }
 
     /**
@@ -341,7 +348,7 @@ public class ArknetMcpConfiguration {
      * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
      * subject identity - the strict cross-BC lookup {@code bc_link_term} needs (issue #62/#66).
      * Acquires datasets from the same shared {@link DatasetLifecycle} as
-     * {@link #termRepository}, so it reads the same workspace the ubiquitous-language hexagon
+     * {@link #termRepository}, so it reads the same project the ubiquitous-language hexagon
      * writes into.
      */
     @Bean
@@ -470,7 +477,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * The two read-only store tools ({@code store_overview}, {@code resource_get}). Both read
-     * the workspace dataset through {@link StoreReader} - a single generic
+     * the project dataset through {@link StoreReader} - a single generic
      * {@code SELECT ?s ?p ?o} - so no bounded context needs a read tool of its own. The agent's
      * return value stays that domain-agnostic digest; the human-facing HTML additionally groups
      * the model per bounded context through {@link ModelViews}, with the generic snapshot as its
@@ -484,7 +491,7 @@ public class ArknetMcpConfiguration {
     StoreReportTools storeReportTools(
             final StoreReader storeReader, final Prefixes prefixes, final ModelViews modelViews,
             final ProjectResolver projectResolver,
-            @Value("${arknet.report.dir:${arknet.workspace.dir:${user.dir}}}") final Path fallbackReportDir,
+            @Value("${arknet.report.dir:${user.dir}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
                 storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, projectResolver,

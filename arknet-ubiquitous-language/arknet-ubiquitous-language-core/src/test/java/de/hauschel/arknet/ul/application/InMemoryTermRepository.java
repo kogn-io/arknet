@@ -36,11 +36,11 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  */
 final class InMemoryTermRepository implements TermRepository {
 
-    private final Map<ProjectId, Map<TermId, Term>> byWorkspace = new LinkedHashMap<>();
+    private final Map<ProjectId, Map<TermId, Term>> byProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Term term) {
-        Map<TermId, Term> terms = byWorkspace.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
+        Map<TermId, Term> terms = byProject.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
         if (terms.containsKey(term.id())) {
             throw new ResourceAlreadyExistsException(projectId, term.id().value());
         }
@@ -53,7 +53,7 @@ final class InMemoryTermRepository implements TermRepository {
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
-        Map<TermId, Term> terms = byWorkspace.getOrDefault(projectId, Map.of());
+        Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
         Term current = terms.values().stream()
                 .filter(t -> t.code().equals(code))
                 .findFirst()
@@ -68,20 +68,20 @@ final class InMemoryTermRepository implements TermRepository {
 
     @Override
     public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
-        return byWorkspace.getOrDefault(projectId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(t -> t.code().equals(code))
                 .findFirst();
     }
 
     @Override
     public List<Term> findAll(ProjectId projectId) {
-        return List.copyOf(byWorkspace.getOrDefault(projectId, Map.of()).values());
+        return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 
     @Override
     public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
         Set<ResourceId> wanted = Set.copyOf(ids);
-        return byWorkspace.getOrDefault(projectId, Map.of()).values().stream()
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(t -> wanted.contains(t.id().value()))
                 .map(t -> new ResolveTerms.ResolvedTerm(t.id().value(), t.code()))
                 .toList();

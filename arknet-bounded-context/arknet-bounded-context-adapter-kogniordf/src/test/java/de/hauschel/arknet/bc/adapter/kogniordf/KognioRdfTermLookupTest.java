@@ -92,7 +92,7 @@ class KognioRdfTermLookupTest {
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** A term of another workspace must not satisfy this workspace's reference. */
+    /** A term of another workspace must not satisfy this project's reference. */
     @Test
     void aTermOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
         givenTerm(WORKSPACE_B, "TERM-1");

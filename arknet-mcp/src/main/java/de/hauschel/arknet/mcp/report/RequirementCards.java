@@ -44,8 +44,8 @@ public final class RequirementCards {
     }
 
     /**
-     * @param projectId the workspace to read
-     * @param glossary    the workspace's glossary, for labelling and marking up references
+     * @param projectId the project to read
+     * @param glossary    the project's glossary, for labelling and marking up references
      * @return the requirements section, ordered by business code
      */
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {

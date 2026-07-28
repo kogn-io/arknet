@@ -28,17 +28,17 @@ public class RequirementNotFoundException extends RuntimeException {
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace that was searched
+     * @param projectId the project that was searched
      * @param code        the requirement code that was not found
      */
     public RequirementNotFoundException(ProjectId projectId, RequirementCode code) {
         super("no requirement " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value());
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value());
         this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace that was searched */
+    /** @return the project that was searched */
     public ProjectId projectId() {
         return projectId;
     }

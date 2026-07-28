@@ -40,7 +40,7 @@ class DigestRendererTest {
 
         String digest = renderer.render(new ProjectId("noistill"), snapshot);
 
-        assertThat(digest).contains("# Workspace noistill -- 2 resources, 6 triples, 2 types");
+        assertThat(digest).contains("# Project noistill -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
         assertThat(digest).contains("req:").contains(REQ);
         assertThat(digest).contains("# Handle for resource_get is the IRI (as a CURIE), NOT the label.");

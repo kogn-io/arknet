@@ -22,7 +22,7 @@ public interface AddRequirement {
     /**
      * Adds a new requirement.
      *
-     * @param projectId the workspace (architecture model) to add the requirement to
+     * @param projectId the project (architecture model) to add the requirement to
      * @param command     the data describing the requirement to create
      * @return the persisted requirement including its assigned identity
      */

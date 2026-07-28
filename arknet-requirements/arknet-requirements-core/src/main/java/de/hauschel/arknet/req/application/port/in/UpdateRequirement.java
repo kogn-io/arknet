@@ -45,10 +45,10 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 public interface UpdateRequirement {
 
     /**
-     * Updates the requirement identified by {@code code} within a workspace, leaving any
+     * Updates the requirement identified by {@code code} within a project, leaving any
      * {@code null} argument unchanged.
      *
-     * @param projectId         the workspace (architecture model) the requirement lives in
+     * @param projectId         the project (architecture model) the requirement lives in
      * @param code                the requirement code, e.g. {@code FR-1}
      * @param title               the new title, or {@code null} to leave it unchanged
      * @param description         the new normative statement, or {@code null} to leave it unchanged

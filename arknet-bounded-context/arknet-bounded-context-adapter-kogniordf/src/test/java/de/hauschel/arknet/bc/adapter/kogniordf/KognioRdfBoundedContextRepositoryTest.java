@@ -367,14 +367,14 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     @Test
-    void workspacesAreIsolated() {
+    void projectsAreIsolated() {
         repository.create(WORKSPACE_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
 
         assertFalse(repository.findByCode(WORKSPACE_B, new BoundedContextCode("BC-1")).isPresent());
         assertTrue(repository.findAll(WORKSPACE_B).isEmpty());
     }
 
-    /** A store-first bounded context is what actually lands in the shared workspace dataset. */
+    /** A store-first bounded context is what actually lands in the shared project dataset. */
     @Test
     void writesIntoTheBoundedContextNamedGraph() {
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());

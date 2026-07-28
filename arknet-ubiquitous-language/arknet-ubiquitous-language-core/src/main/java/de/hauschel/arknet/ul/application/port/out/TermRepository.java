@@ -27,7 +27,7 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
  * <p>The {@link ProjectId} routing key identifies which architecture model (and
  * thus which glossary) a term belongs to. A local single-user adapter may treat it
  * as an implicit default; a remote/team adapter uses it to address one of several
- * workspaces.</p>
+ * projects.</p>
  *
  * <p><strong>Create vs. update.</strong> Identity is opaque and minted once (see
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
@@ -54,9 +54,9 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 public interface TermRepository {
 
     /**
-     * Persists a brand-new term whose identity does not yet exist in the workspace.
+     * Persists a brand-new term whose identity does not yet exist in the project.
      *
-     * @param projectId the workspace (architecture model) to store the term in
+     * @param projectId the project (architecture model) to store the term in
      * @param term        the term to create
      * @throws ResourceAlreadyExistsException if a term with this identity already exists
      * @throws DuplicateTermCodeException     if another term already carries this term's
@@ -84,7 +84,7 @@ public interface TermRepository {
      * is a no-op: nothing is written, no revision is recorded, and the revision head does not
      * move.</p>
      *
-     * @param projectId the workspace (architecture model) the term lives in
+     * @param projectId the project (architecture model) the term lives in
      * @param code        the term's own, unchanged business code - {@code update} never rewrites
      *                    {@code dcterms:identifier}, so this can never itself introduce a code
      *                    collision
@@ -104,26 +104,26 @@ public interface TermRepository {
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
 
     /**
-     * Finds a term by its human-readable business code within a workspace.
+     * Finds a term by its human-readable business code within a project.
      *
-     * @param projectId the workspace (architecture model) to look up the term in
+     * @param projectId the project (architecture model) to look up the term in
      * @param code        the term code (e.g. {@code TERM-1})
      * @return the term if present, otherwise {@link Optional#empty()}
      */
     Optional<Term> findByCode(ProjectId projectId, TermCode code);
 
     /**
-     * Returns all terms stored in a workspace glossary.
+     * Returns all terms stored in a project glossary.
      *
-     * @param projectId the workspace (architecture model) to list terms from
+     * @param projectId the project (architecture model) to list terms from
      * @return all terms, never {@code null}
      */
     List<Term> findAll(ProjectId projectId);
 
     /**
-     * Finds every term in a workspace whose identity is among {@code ids}, in one store
+     * Finds every term in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveTerms} (issue #77). This is a batch lookup, not a per-id
-     * existence check: an id absent from the workspace is simply absent from the result, never an
+     * existence check: an id absent from the project is simply absent from the result, never an
      * error.
      *
      * <p>Returns the slim {@link ResolveTerms.ResolvedTerm} projection, not the full {@link Term}
@@ -132,7 +132,7 @@ public interface TermRepository {
      * as {@code prefLabel}/{@code definition} the caller never reads would needlessly exclude a
      * store-first term that carries an identity and a code but happens to miss one of them.</p>
      *
-     * @param projectId the workspace (architecture model) to look up terms in
+     * @param projectId the project (architecture model) to look up terms in
      * @param ids         the opaque identities to resolve; an empty list yields an empty result
      * @return the resolved terms found, in no particular order, never {@code null}
      */

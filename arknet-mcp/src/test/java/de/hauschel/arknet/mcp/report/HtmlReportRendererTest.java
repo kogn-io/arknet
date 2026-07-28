@@ -123,7 +123,7 @@ class HtmlReportRendererTest {
         assertThat(html).contains("Incomplete report").contains("store closed");
     }
 
-    /** A reference whose target is not in this workspace stays visible as a dead chip. */
+    /** A reference whose target is not in this project stays visible as a dead chip. */
     @Test
     void marksAReferenceThatIsNotInTheWorkspace() {
         final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
@@ -134,7 +134,7 @@ class HtmlReportRendererTest {
         final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
 
         assertThat(html).contains(
-                "<span class=\"chip dead\" title=\"TERM-404 - not in this workspace\">Lieferschein</span>");
+                "<span class=\"chip dead\" title=\"TERM-404 - not in this project\">Lieferschein</span>");
     }
 
     /**

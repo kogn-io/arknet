@@ -35,11 +35,14 @@ import de.hauschel.arknet.ul.domain.TermId;
 class UbiquitousLanguageMcpToolsTest {
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final ProjectResolver WORKSPACES = originDir -> ProjectId.DEFAULT;
+    private static final ProjectId PROJECT = new ProjectId("test-project");
+
+    /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
+    private static final ProjectResolver PROJECTS = anchor -> PROJECT;
 
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
-            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, WORKSPACES);
+            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, PROJECTS);
 
     @Test
     void declaresTheFourTermTools() {
@@ -56,9 +59,9 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, WORKSPACES));
+                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null, WORKSPACES));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null, PROJECTS));
     }
 
     @Test
@@ -69,14 +72,14 @@ class UbiquitousLanguageMcpToolsTest {
 
     @Test
     void addPassesThroughActorFacet() {
-        adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller");
+        adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller", null);
 
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), stub.lastCommand.actorFacet());
     }
 
     @Test
     void addWithoutActorKindLeavesFacetNull() {
-        adapter.add(null, "Gutschrift", "def a", null, null);
+        adapter.add(null, "Gutschrift", "def a", null, null, null);
 
         assertNull(stub.lastCommand.actorFacet());
     }
@@ -84,13 +87,13 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void addRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null));
+                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null));
     }
 
     /** Issue #163: {@code term_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
-        String rendered = adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde");
+        String rendered = adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde", null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertEquals("Erstattung", stub.lastUpdatePrefLabel);
@@ -106,7 +109,7 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "TERM-1", null, null, null, null);
+        adapter.update(null, "TERM-1", null, null, null, null, null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertNull(stub.lastUpdatePrefLabel);
@@ -117,7 +120,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void updateRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null));
+                () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null, null));
     }
 
     /** Structural stub implementing the four driving in-ports. */

@@ -34,33 +34,35 @@ public final class TraceabilityMcpTools {
     private final StoreReader storeReader;
     private final TraceabilityRenderer renderer;
     private final HandleResolver handleResolver;
-    private final ProjectResolver workspaces;
+    private final ProjectResolver projects;
 
     /**
      * @param storeReader the generic store read path
      * @param prefixes    the CURIE / IRI resolver
-     * @param workspaces  resolves each call's default workspace from its origin directory (an
-     *                    explicit {@code workspace} tool argument still overrides it)
+     * @param projects    resolves each call's target project from its anchor
      */
     public TraceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver workspaces) {
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projects) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         this.renderer = new TraceabilityRenderer(Objects.requireNonNull(prefixes, "prefixes"));
         this.handleResolver = new HandleResolver(storeReader, prefixes);
-        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+        this.projects = Objects.requireNonNull(projects, "projects");
     }
 
     @McpTool(name = "trace_matrix",
-            description = "Traceability matrix: for every requirement (FR and NFR) in the workspace, which"
+            description = "Traceability matrix: for every requirement (FR and NFR) in the project, which"
                     + " glossary terms it uses (arkreq:usesTerm) and which use case(s) realise it (via their"
                     + " step flow's arkreq:stepRealises). One line per requirement, business codes not IRIs.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String traceMatrix(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
-                    required = false)
-            final String workspace) {
-        final ProjectId projectId = resolveWorkspace(context, workspace);
+            @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
         return renderer.traceMatrix(projectId, readGraph(projectId));
     }
 
@@ -71,10 +73,13 @@ public final class TraceabilityMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
-                    required = false)
-            final String workspace) {
-        final ProjectId projectId = resolveWorkspace(context, workspace);
+            @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
         return renderer.orphanCheck(projectId, readGraph(projectId));
     }
 
@@ -89,10 +94,13 @@ public final class TraceabilityMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
             final String id,
-            @McpToolParam(description = "Optional workspace id; defaults to this server's workspace",
-                    required = false)
-            final String workspace) {
-        final ProjectId projectId = resolveWorkspace(context, workspace);
+            @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
         final String targetIri = handleResolver.resolve(projectId, id);
         return renderer.impactAnalysis(projectId, readGraph(projectId), targetIri);
     }
@@ -101,11 +109,4 @@ public final class TraceabilityMcpTools {
         return TraceabilityGraph.of(storeReader.readSnapshot(projectId));
     }
 
-    /**
-     * The workspace a call targets: an explicit {@code workspace} tool argument if given, else
-     * the one resolved from the request's origin directory (issue #137).
-     */
-    private ProjectId resolveWorkspace(final McpSyncRequestContext context, final String workspace) {
-        return HandleResolver.resolveWorkspace(workspace, workspaces.resolve(HandleResolver.originDir(context)));
-    }
 }

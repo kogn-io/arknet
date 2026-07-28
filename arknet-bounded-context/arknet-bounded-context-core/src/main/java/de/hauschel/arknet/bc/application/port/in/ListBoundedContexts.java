@@ -18,7 +18,7 @@ public interface ListBoundedContexts {
     /**
      * Returns all bounded contexts currently under management in the given workspace.
      *
-     * @param projectId the workspace (architecture model) to list bounded contexts from
+     * @param projectId the project (architecture model) to list bounded contexts from
      * @return all bounded contexts, never {@code null}
      */
     List<BoundedContext> list(ProjectId projectId);

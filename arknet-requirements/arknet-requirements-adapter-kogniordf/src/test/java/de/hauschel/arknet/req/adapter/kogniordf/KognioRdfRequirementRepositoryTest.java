@@ -293,7 +293,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     @Test
-    void workspacesAreIsolated() {
+    void projectsAreIsolated() {
         Requirement requirement = new Requirement(
                 freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
@@ -709,7 +709,7 @@ class KognioRdfRequirementRepositoryTest {
                 resolved.contains(new ResolveRequirements.ResolvedRequirement(second.id().value(), second.code())));
     }
 
-    /** An id absent from the workspace is simply absent from the result, never an error. */
+    /** An id absent from the project is simply absent from the result, never an error. */
     @Test
     void findByIdsSilentlyOmitsUnknownIdentities() {
         Requirement known = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",

@@ -29,18 +29,18 @@ public class RequirementConcurrentlyModifiedException extends RuntimeException {
     /**
      * Creates the exception.
      *
-     * @param projectId the workspace the requirement lives in
+     * @param projectId the project the requirement lives in
      * @param code        the requirement code whose update kept losing the race
      */
     public RequirementConcurrentlyModifiedException(ProjectId projectId, RequirementCode code) {
         super("requirement " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value()
+                + " in project " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
         this.projectId = projectId;
         this.code = code;
     }
 
-    /** @return the workspace the requirement lives in */
+    /** @return the project the requirement lives in */
     public ProjectId projectId() {
         return projectId;
     }

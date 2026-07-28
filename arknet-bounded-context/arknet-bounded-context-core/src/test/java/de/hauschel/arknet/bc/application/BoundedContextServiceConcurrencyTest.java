@@ -31,7 +31,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>Issue #144: {@link BoundedContextService#add} used to compute the next business code
  * ({@code BC-N}) client-side via {@code nextCode()} and then {@code create()} it with no retry, so
- * two racing {@code bc_add} calls in the same workspace both computed the same candidate code and
+ * two racing {@code bc_add} calls in the same project both computed the same candidate code and
  * one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard fire as a
  * caller-visible {@code DuplicateBoundedContextCodeException} - even though nothing about its own
  * request was wrong.</p>
@@ -53,7 +53,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  */
 class BoundedContextServiceConcurrencyTest {
 
-    private static final ProjectId WS = ProjectId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
 
