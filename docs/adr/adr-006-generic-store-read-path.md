@@ -122,7 +122,7 @@ Anwendungsfall -- und der Report ist genau das Artefakt, das ein Fachbereich les
 
 **Der HTML-Report wird pro Bounded Context aus deren Lese-In-Ports zusammengesetzt**
 (`ListBoundedContexts`/`ListRequirements`/`ListUseCases`/`ListTerms`, plus
-`ResolveTerms`/`ResolveRequirements` fuer die Anzeige-Codes referenzierter Identitaeten).
+`ResolveRequirements` fuer die Anzeige-Codes referenzierter Requirement-Identitaeten).
 Der Kontext, der ein Modellelement geschrieben hat, weiss es zurueckzulesen; der Report fragt
 ihn, statt die Antwort im Composition Root neu herzuleiten. Dass ein treibender Adapter dafuer
 fremde In-Ports borgt, ist keine neue Freiheit, sondern die aus ADR-008 -- hier fuer eine
@@ -131,6 +131,16 @@ Anzeige statt fuer eine Tool-Antwort. Die BC-Cores bleiben unberuehrt.
 Unberuehrt bleiben ebenso die Entscheidungen 1, 3 und 4: kein eigener BC, derselbe geteilte
 `DatasetLifecycle`/`StoreReader`, derselbe Handle-Vertrag, keine RDF4J-Abhaengigkeit im
 Composition Root.
+
+Glossar-Referenzen laufen dabei ueber `ListTerms` statt ueber `ResolveTerms`: der Report
+beantwortet nicht nur "wie heisst dieser Begriff", sondern auch "nennt ein Text einen Begriff,
+auf den keine Kante zeigt" -- und dafuer genuegt die schmale Aufloesung bereits verlinkter
+Identitaeten nicht.
+
+**Der Report glaettet die Luecke zwischen Prosa und Modell nicht, sondern zeigt sie.** Eine
+Term-Erwaehnung mit Kante wird zum Link, eine ohne Kante bleibt als solche sichtbar. Das folgt
+aus der Rolle als Kontrollausgabe: beides gleich zu rendern hiesse, eine Beziehung zu behaupten,
+die der Store nicht haelt. Mechanik und Abgrenzungen: `arknet-mcp/CLAUDE.md`.
 
 **Der Datenpfad des Agenten bleibt generisch.** Der Rueckgabewert von `store_overview` ist
 weiterhin der domaenenagnostische Text-Digest aus der einen `SELECT ?s ?p ?o`. Zwei Zielgruppen,
