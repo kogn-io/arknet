@@ -223,6 +223,8 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 | `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms without any usage |
 | `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes |
 
+Sample call and output, against the use case above:
+
 ```
 > impact_analysis(handle: "TERM-4")
 
