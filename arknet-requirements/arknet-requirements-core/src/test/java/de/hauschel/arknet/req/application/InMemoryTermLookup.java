@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 
 /**
@@ -31,7 +31,7 @@ final class InMemoryTermLookup implements TermLookup {
     }
 
     @Override
-    public ResourceId resolveByCode(WorkspaceId workspaceId, String termCode) {
+    public ResourceId resolveByCode(ProjectId projectId, String termCode) {
         ResourceId resolved = knownTerms.get(termCode);
         if (resolved == null) {
             throw new NoSuchElementException("fake lookup: unknown term code '" + termCode + "'");

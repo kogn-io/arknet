@@ -19,7 +19,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -54,7 +54,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class TraceabilityGraphTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("trace-graph-test");
+    private static final ProjectId WORKSPACE = new ProjectId("trace-graph-test");
 
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/trace-test-term-1";
     private static final String TERM_2_IRI = "https://w3id.org/arknet/id/trace-test-term-2";

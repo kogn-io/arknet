@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 
 /**
@@ -31,7 +31,7 @@ final class InMemoryActorLookup implements ActorLookup {
     }
 
     @Override
-    public ResourceId resolveByName(WorkspaceId workspaceId, String actorName) {
+    public ResourceId resolveByName(ProjectId projectId, String actorName) {
         ResourceId resolved = knownActors.get(actorName);
         if (resolved == null) {
             throw new NoSuchElementException("fake lookup: unknown actor name '" + actorName + "'");

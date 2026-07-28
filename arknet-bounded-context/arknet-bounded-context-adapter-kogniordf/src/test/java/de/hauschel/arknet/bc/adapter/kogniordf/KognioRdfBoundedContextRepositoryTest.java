@@ -43,7 +43,7 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -55,8 +55,8 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  */
 class KognioRdfBoundedContextRepositoryTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
     private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/core#BoundedContext";
     private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
 

@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * In-memory test double for {@link ProjectSelfDescription}.

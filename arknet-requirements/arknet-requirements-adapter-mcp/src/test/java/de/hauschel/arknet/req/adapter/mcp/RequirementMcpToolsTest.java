@@ -19,8 +19,8 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
@@ -53,7 +53,7 @@ class RequirementMcpToolsTest {
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+    private static final ProjectResolver WORKSPACES = originDir -> ProjectId.DEFAULT;
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
@@ -94,7 +94,7 @@ class RequirementMcpToolsTest {
     }
 
     @Test
-    void rejectsNullWorkspaceResolver() {
+    void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, null));
     }
@@ -351,7 +351,7 @@ class RequirementMcpToolsTest {
         private Priority lastUpdatePriority;
 
         @Override
-        public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
+        public Requirement add(ProjectId projectId, NewRequirement command) {
             lastAddCommand = command;
             return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
                     command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
@@ -359,22 +359,22 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public List<Requirement> list(WorkspaceId workspaceId) {
+        public List<Requirement> list(ProjectId projectId) {
             return allRequirements;
         }
 
         @Override
-        public Optional<Requirement> get(WorkspaceId workspaceId, RequirementCode code) {
+        public Optional<Requirement> get(ProjectId projectId, RequirementCode code) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Requirement setStatus(WorkspaceId workspaceId, RequirementCode code, RequirementStatus status) {
+        public Requirement setStatus(ProjectId projectId, RequirementCode code, RequirementStatus status) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode) {
+        public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode) {
             lastLinkedRequirement = code;
             lastLinkedTermCode = termCode;
             List<ResourceId> ids = new ArrayList<>(nextLinkedTerms);
@@ -396,7 +396,7 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
+        public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
                 List<String> acceptanceCriteria, Priority priority) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
@@ -429,7 +429,7 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
             calls++;
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();

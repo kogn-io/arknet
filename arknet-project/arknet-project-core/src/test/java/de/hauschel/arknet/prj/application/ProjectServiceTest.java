@@ -20,7 +20,7 @@ import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
@@ -144,11 +144,6 @@ class ProjectServiceTest {
         assertEquals(renamed, selfDescription.lastDescribed(registered.id()));
 
         assertEquals(3, selfDescription.writeCount());
-    }
-
-    @Test
-    void projectIdRejectsTheReservedSystemDatasetValue() {
-        assertThrows(IllegalArgumentException.class, () -> new ProjectId(ProjectId.RESERVED_SYSTEM_DATASET));
     }
 
     @Test

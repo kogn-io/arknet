@@ -11,8 +11,8 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
  * Resolves a resource handle - CURIE, full IRI, or bare business id - to an absolute IRI.
@@ -48,15 +48,15 @@ public final class HandleResolver {
      * Resolves a handle to an absolute IRI, following the contract described in the class-level
      * Javadoc.
      *
-     * @param workspaceId the workspace to resolve a bare business id against
+     * @param projectId the workspace to resolve a bare business id against
      * @param id          the handle: a CURIE (e.g. {@code req:FR-1}), a full IRI, or a bare
      *                    business id (e.g. {@code FR-1})
      * @return the resolved absolute IRI
      * @throws IllegalArgumentException if the handle is empty, uses an unknown prefix, or a
      *                                  bare id resolves to zero or more than one resource
      */
-    public String resolve(WorkspaceId workspaceId, String id) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public String resolve(ProjectId projectId, String id) {
+        Objects.requireNonNull(projectId, "projectId");
         final String handle = Objects.requireNonNull(id, "id").strip();
         if (handle.isEmpty()) {
             throw new IllegalArgumentException("Empty resource handle. Pass a CURIE (req:FR-1),"
@@ -78,7 +78,7 @@ public final class HandleResolver {
         }
 
         // Bare business id: resolve via dcterms:identifier; reject ambiguity across contexts.
-        final List<String> matches = storeReader.findByIdentifier(workspaceId, handle);
+        final List<String> matches = storeReader.findByIdentifier(projectId, handle);
         if (matches.isEmpty()) {
             throw new IllegalArgumentException("No resource found for id '" + handle + "'."
                     + " Use a CURIE (req:FR-1) or full IRI, or check the id via store_overview.");
@@ -95,27 +95,27 @@ public final class HandleResolver {
 
     /**
      * Resolves the optional {@code workspace} argument every read tool accepts to a concrete
-     * {@link WorkspaceId}: the trimmed value when present, otherwise the server's default. Shared
+     * {@link ProjectId}: the trimmed value when present, otherwise the server's default. Shared
      * by {@link StoreReportTools} ({@code store_overview}/{@code resource_get}) and the
      * traceability tools ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}),
      * which each expose the same optional-workspace parameter, instead of each carrying its own
      * copy of the blank-check-and-default fallback.
      *
      * @param workspace          the raw tool argument, may be {@code null} or blank
-     * @param defaultWorkspaceId the workspace used when {@code workspace} is null or blank
+     * @param defaultProjectId the workspace used when {@code workspace} is null or blank
      * @return the resolved workspace id
      */
-    public static WorkspaceId resolveWorkspace(String workspace, WorkspaceId defaultWorkspaceId) {
-        Objects.requireNonNull(defaultWorkspaceId, "defaultWorkspaceId");
+    public static ProjectId resolveWorkspace(String workspace, ProjectId defaultProjectId) {
+        Objects.requireNonNull(defaultProjectId, "defaultProjectId");
         return (workspace == null || workspace.isBlank())
-                ? defaultWorkspaceId
-                : new WorkspaceId(workspace.trim());
+                ? defaultProjectId
+                : new ProjectId(workspace.trim());
     }
 
     /**
      * Extracts the calling client's origin directory from the per-call transport context (issue
      * #137). Null-tolerant on every hop; a {@code null} result is turned into the server's
-     * default workspace by {@link WorkspaceResolver}. Shared by {@link StoreReportTools} and
+     * default workspace by {@link ProjectResolver}. Shared by {@link StoreReportTools} and
      * {@code de.hauschel.arknet.mcp.trace.TraceabilityMcpTools} instead of each carrying its own
      * copy, the same reasoning as {@link #resolveWorkspace}.
      *
@@ -127,7 +127,7 @@ public final class HandleResolver {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
         return dir == null ? null : dir.toString();
     }
 }

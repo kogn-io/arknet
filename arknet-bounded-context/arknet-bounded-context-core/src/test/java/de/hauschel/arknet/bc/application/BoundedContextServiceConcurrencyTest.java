@@ -24,7 +24,7 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Regression tests for the two concurrency races {@link BoundedContextService} has to absorb.
@@ -53,7 +53,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  */
 class BoundedContextServiceConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
 
@@ -183,29 +183,29 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, BoundedContext boundedContext) {
-            delegate.create(workspaceId, boundedContext);
+        public void create(ProjectId projectId, BoundedContext boundedContext) {
+            delegate.create(projectId, boundedContext);
         }
 
         @Override
-        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated) {
-            delegate.compareAndUpdate(workspaceId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
         @Override
-        public Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public Optional<CurrentBoundedContext> findCurrentByCode(WorkspaceId workspaceId,
+        public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId,
                 BoundedContextCode code) {
-            return delegate.findCurrentByCode(workspaceId, code);
+            return delegate.findCurrentByCode(projectId, code);
         }
 
         @Override
-        public List<BoundedContext> findAll(WorkspaceId workspaceId) {
-            List<BoundedContext> result = delegate.findAll(workspaceId);
+        public List<BoundedContext> findAll(ProjectId projectId) {
+            List<BoundedContext> result = delegate.findAll(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -233,24 +233,24 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, BoundedContext boundedContext) {
-            delegate.create(workspaceId, boundedContext);
+        public void create(ProjectId projectId, BoundedContext boundedContext) {
+            delegate.create(projectId, boundedContext);
         }
 
         @Override
-        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated) {
-            delegate.compareAndUpdate(workspaceId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
         @Override
-        public Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public Optional<CurrentBoundedContext> findCurrentByCode(WorkspaceId workspaceId,
+        public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId,
                 BoundedContextCode code) {
-            Optional<CurrentBoundedContext> result = delegate.findCurrentByCode(workspaceId, code);
+            Optional<CurrentBoundedContext> result = delegate.findCurrentByCode(projectId, code);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -259,8 +259,8 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public List<BoundedContext> findAll(WorkspaceId workspaceId) {
-            return delegate.findAll(workspaceId);
+        public List<BoundedContext> findAll(ProjectId projectId) {
+            return delegate.findAll(projectId);
         }
     }
 
@@ -274,32 +274,32 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, BoundedContext boundedContext) {
-            delegate.create(workspaceId, boundedContext);
+        public void create(ProjectId projectId, BoundedContext boundedContext) {
+            delegate.create(projectId, boundedContext);
         }
 
         @Override
-        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated) {
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(workspaceId, updated.code())
-                    .orElseThrow(() -> new BoundedContextNotFoundException(workspaceId, updated.code()));
-            throw new BoundedContextConcurrentlyModifiedException(workspaceId, updated.code());
+            delegate.findByCode(projectId, updated.code())
+                    .orElseThrow(() -> new BoundedContextNotFoundException(projectId, updated.code()));
+            throw new BoundedContextConcurrentlyModifiedException(projectId, updated.code());
         }
 
         @Override
-        public Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public Optional<CurrentBoundedContext> findCurrentByCode(WorkspaceId workspaceId,
+        public Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId,
                 BoundedContextCode code) {
-            return delegate.findCurrentByCode(workspaceId, code);
+            return delegate.findCurrentByCode(projectId, code);
         }
 
         @Override
-        public List<BoundedContext> findAll(WorkspaceId workspaceId) {
-            return delegate.findAll(workspaceId);
+        public List<BoundedContext> findAll(ProjectId projectId) {
+            return delegate.findAll(projectId);
         }
     }
 }

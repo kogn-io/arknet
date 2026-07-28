@@ -5,7 +5,7 @@ package de.hauschel.arknet.ul.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when {@link de.hauschel.arknet.ul.application.port.out.TermRepository#update} keeps
@@ -27,26 +27,26 @@ public class TermConcurrentlyModifiedException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient TermCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the term lives in
+     * @param projectId the workspace the term lives in
      * @param code        the term code whose update kept losing the race
      */
-    public TermConcurrentlyModifiedException(WorkspaceId workspaceId, TermCode code) {
+    public TermConcurrentlyModifiedException(ProjectId projectId, TermCode code) {
         super("term " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value()
+                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
-        this.workspaceId = workspaceId;
+        this.projectId = projectId;
         this.code = code;
     }
 
     /** @return the workspace the term lives in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the term code whose update kept losing the race */

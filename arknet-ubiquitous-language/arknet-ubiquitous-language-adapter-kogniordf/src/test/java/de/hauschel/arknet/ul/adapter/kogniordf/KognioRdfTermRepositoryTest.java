@@ -47,7 +47,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -69,8 +69,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  */
 class KognioRdfTermRepositoryTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
 
     private DatasetLifecycleRdf4j lifecycle;
@@ -297,11 +297,11 @@ class KognioRdfTermRepositoryTest {
     }
 
     /** Whether {@code subjectIri} carries a {@code skos:prefLabel} literal with exactly this value and tag. */
-    private boolean subjectHasLanguageTaggedPrefLabel(WorkspaceId workspaceId, TermId id, String value, String tag) {
+    private boolean subjectHasLanguageTaggedPrefLabel(ProjectId projectId, TermId id, String value, String tag) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \""
                 + value + "\"@" + tag + " } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().ask(query);
         }
     }
@@ -661,13 +661,13 @@ class KognioRdfTermRepositoryTest {
      * itself never produces.
      */
     private void givenMultilingualConcept(
-            WorkspaceId workspaceId, TermId id, String code, String definition, String prefLabelList) {
+            ProjectId projectId, TermId id, String code, String definition, String prefLabelList) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"" + definition + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> " + prefLabelList + " } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -733,14 +733,14 @@ class KognioRdfTermRepositoryTest {
      * write one.
      */
     private void givenTermWithTwoDefinitions(
-            WorkspaceId workspaceId, TermId id, String code, String firstDefinition, String secondDefinition) {
+            ProjectId projectId, TermId id, String code, String firstDefinition, String secondDefinition) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"" + firstDefinition + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"" + secondDefinition + "\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -835,13 +835,13 @@ class KognioRdfTermRepositoryTest {
      * {@code dcterms:identifier} triples - shape-legal ({@code ulshapes:TermShape} places no
      * constraint on the property at all), but unreachable via {@code term_add}.
      */
-    private void givenTermWithTwoIdentifiers(WorkspaceId workspaceId, TermId id, String first, String second) {
+    private void givenTermWithTwoIdentifiers(ProjectId projectId, TermId id, String first, String second) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + first + "\" ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + second + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -850,12 +850,12 @@ class KognioRdfTermRepositoryTest {
     }
 
     /** Writes a {@code skos:Concept} without any {@code skos:prefLabel} - store-first only. */
-    private void givenTermWithoutPrefLabel(WorkspaceId workspaceId, TermId id, String code) {
+    private void givenTermWithoutPrefLabel(ProjectId projectId, TermId id, String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"Eine Person, die bestellt.\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -900,13 +900,13 @@ class KognioRdfTermRepositoryTest {
      * SHACL-legal store-first (ADR-005), even though {@code term_add} always mints an IRI
      * subject via {@link de.hauschel.arknet.kernel.ResourceIdFactory}.
      */
-    private void givenBlankNodeTerm(WorkspaceId workspaceId, String code, String prefLabel, String definition) {
+    private void givenBlankNodeTerm(ProjectId projectId, String code, String prefLabel, String definition) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "[] a <http://www.w3.org/2004/02/skos/core#Concept> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" ; "
                 + "<http://www.w3.org/2004/02/skos/core#definition> \"" + definition + "\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;
@@ -914,10 +914,10 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    private boolean subjectHasType(WorkspaceId workspaceId, TermId id, String typeIri) {
+    private boolean subjectHasType(ProjectId projectId, TermId id, String typeIri) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> a <" + typeIri + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().ask(query);
         }
     }

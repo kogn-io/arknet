@@ -5,7 +5,7 @@ package de.hauschel.arknet.bc.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when a read-modify-write round trip (today {@code bc_link_term}) keeps losing the
@@ -22,26 +22,26 @@ public class BoundedContextConcurrentlyModifiedException extends RuntimeExceptio
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient BoundedContextCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the bounded context lives in
+     * @param projectId the workspace the bounded context lives in
      * @param code        the bounded-context code whose update kept losing the race
      */
-    public BoundedContextConcurrentlyModifiedException(WorkspaceId workspaceId, BoundedContextCode code) {
+    public BoundedContextConcurrentlyModifiedException(ProjectId projectId, BoundedContextCode code) {
         super("bounded context " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value()
+                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
-        this.workspaceId = workspaceId;
+        this.projectId = projectId;
         this.code = code;
     }
 
     /** @return the workspace the bounded context lives in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the bounded-context code whose update kept losing the race */

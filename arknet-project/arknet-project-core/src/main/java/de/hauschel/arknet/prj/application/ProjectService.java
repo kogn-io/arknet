@@ -20,7 +20,7 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;

@@ -19,7 +19,7 @@ import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Shared serialisation of a {@link Project} to RDF triples, and the two IRI mappings that

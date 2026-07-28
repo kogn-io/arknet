@@ -6,7 +6,7 @@ package de.hauschel.arknet.req.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
@@ -33,14 +33,14 @@ public interface ResolveRequirements {
 
     /**
      * Resolves {@code ids} to the {@link ResolvedRequirement}s they currently identify within
-     * {@code workspaceId}, in a single batch (one store round-trip, not one per id).
+     * {@code projectId}, in a single batch (one store round-trip, not one per id).
      *
-     * @param workspaceId the workspace (architecture model) to resolve requirements in
+     * @param projectId the workspace (architecture model) to resolve requirements in
      * @param ids         the opaque identities to resolve; may be empty
      * @return the resolved requirements found; an id absent from the workspace is simply absent
      *         here too, never {@code null}
      */
-    List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids);
+    List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids);
 
     /**
      * The slim projection this port resolves an identity to: just enough for a caller to render a

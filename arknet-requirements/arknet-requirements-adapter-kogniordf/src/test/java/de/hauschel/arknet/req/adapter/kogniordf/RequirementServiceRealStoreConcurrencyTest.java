@@ -48,7 +48,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -88,9 +88,9 @@ import de.hauschel.arknet.req.domain.RequirementType;
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 class RequirementServiceRealStoreConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
     /** Unused by this race: neither caller links a term. */
-    private static final TermLookup UNUSED_TERM_LOOKUP = (workspaceId, termCode) -> {
+    private static final TermLookup UNUSED_TERM_LOOKUP = (projectId, termCode) -> {
         throw new UnsupportedOperationException("not exercised by this test");
     };
     /** Unused by this race: {@code req_schema} is orthogonal to code assignment. */

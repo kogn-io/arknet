@@ -18,7 +18,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
@@ -49,7 +49,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("req-ul-schema");
+    private static final ProjectId WORKSPACE = new ProjectId("req-ul-schema");
 
     private DatasetLifecycleRdf4j lifecycle;
     private TermRepository ulTermRepository;

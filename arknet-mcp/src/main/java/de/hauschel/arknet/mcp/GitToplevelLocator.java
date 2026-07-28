@@ -12,7 +12,7 @@ import java.util.Optional;
  * every {@code git worktree} linked to it, since all of them share one
  * {@code .git} directory (the "git common dir").
  *
- * <p>Used by {@link WorkspaceIdResolver} to derive a per-project workspace
+ * <p>Used by {@link ProjectIdResolver} to derive a per-project workspace
  * identity when none is configured explicitly. Deriving from the common dir
  * rather than each working tree's own top-level is deliberate: a linked worktree
  * must resolve to the same workspace (and therefore the same store) as its main

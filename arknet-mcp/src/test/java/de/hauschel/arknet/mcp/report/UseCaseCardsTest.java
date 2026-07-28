@@ -10,7 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -29,7 +29,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class UseCaseCardsTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("cards-test");
+    private static final ProjectId WORKSPACE = new ProjectId("cards-test");
     private static final ResourceId ACTOR = ResourceId.of("https://w3id.org/arknet/id/actor-1");
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
 
@@ -39,8 +39,8 @@ class UseCaseCardsTest {
     @Test
     void buildsACockburnStyleCardWithTheFlowInOrder() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()),
-                (workspaceId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
+                projectId -> List.of(useCase()),
+                (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
         final ModelSection section = cards.section(WORKSPACE, GLOSSARY);
 
@@ -68,7 +68,7 @@ class UseCaseCardsTest {
     @Test
     void showsAnActorByItsLabelWithTheCodeAsTooltip() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
+                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
         assertThat(cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks()).contains(
                 new Block.Refs("Primary actor", List.of(new Ref("Kunde", "TERM-1", ACTOR.value()))));
@@ -82,7 +82,7 @@ class UseCaseCardsTest {
     @Test
     void leavesGlossaryWordsInTheGoalUnmarked() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
+                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
         final Block.Prose goal = (Block.Prose) cards.section(WORKSPACE, GLOSSARY)
                 .cards().getFirst().blocks().getFirst();
@@ -93,8 +93,8 @@ class UseCaseCardsTest {
     @Test
     void resolvesStepRequirementsToTheirBusinessCodes() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()),
-                (workspaceId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
+                projectId -> List.of(useCase()),
+                (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
         final Block.Flow flow = flowOf(cards.section(WORKSPACE, GLOSSARY));
 
@@ -108,7 +108,7 @@ class UseCaseCardsTest {
     @Test
     void fallsBackToTheBareIriWhenAReferenceCannotBeResolved() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
+                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
         final ModelSection section = cards.section(WORKSPACE, Glossary.empty());
 
@@ -122,7 +122,7 @@ class UseCaseCardsTest {
     @Test
     void omitsAbsentOptionalFields() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
+                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
         final List<String> labels = cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
@@ -133,7 +133,7 @@ class UseCaseCardsTest {
     @Test
     void sectionIsEmptyWhenThereAreNoUseCases() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(), (workspaceId, ids) -> List.of());
+                projectId -> List.of(), (projectId, ids) -> List.of());
 
         assertThat(cards.section(WORKSPACE, GLOSSARY).isEmpty()).isTrue();
     }

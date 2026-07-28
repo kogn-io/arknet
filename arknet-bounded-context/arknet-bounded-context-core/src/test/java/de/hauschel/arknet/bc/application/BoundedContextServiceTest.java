@@ -25,7 +25,7 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Policy tests for {@link BoundedContextService}: identity minting, code assignment, listing,
@@ -34,7 +34,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  */
 class BoundedContextServiceTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
     private static final ResourceId TERM_1 =
             ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 =
@@ -103,7 +103,7 @@ class BoundedContextServiceTest {
 
     @Test
     void addIsScopedPerWorkspace() {
-        WorkspaceId other = new WorkspaceId("other");
+        ProjectId other = new ProjectId("other");
         service.add(WS, newBoundedContext());
 
         BoundedContext inOther = service.add(other, newBoundedContext());
@@ -175,7 +175,7 @@ class BoundedContextServiceTest {
         BoundedContextNotFoundException ex = assertThrows(BoundedContextNotFoundException.class,
                 () -> service.linkTerm(WS, new BoundedContextCode("BC-42"), "TERM-1"));
 
-        assertSame(WS, ex.workspaceId());
+        assertSame(WS, ex.projectId());
         assertEquals(new BoundedContextCode("BC-42"), ex.boundedContextCode());
     }
 

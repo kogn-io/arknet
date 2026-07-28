@@ -4,23 +4,23 @@
 package de.hauschel.arknet.kernel;
 
 /**
- * Resolves which {@link WorkspaceId} a single tool call targets from the origin
+ * Resolves which {@link ProjectId} a single tool call targets from the origin
  * directory the calling client supplied - its project root.
  *
  * <p>arknet-mcp runs as one shared server for every workspace on the machine (issue #137):
  * a single process, a single port, no per-workspace daemon. There is therefore no longer
- * one {@link WorkspaceId} per process to inject as a singleton; instead every in-adapter
+ * one {@link ProjectId} per process to inject as a singleton; instead every in-adapter
  * resolves the workspace <em>per call</em> from the request's origin directory. The
  * concrete resolution (git top-level derivation, slugging, explicit-id override) stays in
  * the composition root's implementation - a bounded context only depends on this neutral
  * port, never on the transport or on git.</p>
  *
- * <p>This is a shared-kernel concept for the same reason {@link WorkspaceId} is: several
+ * <p>This is a shared-kernel concept for the same reason {@link ProjectId} is: several
  * bounded contexts (requirements, ubiquitous-language, ...) all address the same
  * per-project workspace and therefore share one way of resolving it rather than each
  * inventing its own.</p>
  */
-public interface WorkspaceResolver {
+public interface ProjectResolver {
 
     /**
      * Key under which the client's origin directory travels in the MCP transport context.
@@ -41,5 +41,5 @@ public interface WorkspaceResolver {
      *                  supplied
      * @return the resolved workspace, never {@code null}
      */
-    WorkspaceId resolve(String originDir);
+    ProjectId resolve(String originDir);
 }

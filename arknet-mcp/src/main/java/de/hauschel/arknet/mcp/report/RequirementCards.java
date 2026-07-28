@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.TermRef;
@@ -44,13 +44,13 @@ public final class RequirementCards {
     }
 
     /**
-     * @param workspaceId the workspace to read
+     * @param projectId the workspace to read
      * @param glossary    the workspace's glossary, for labelling and marking up references
      * @return the requirements section, ordered by business code
      */
-    public ModelSection section(final WorkspaceId workspaceId, final Glossary glossary) {
+    public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<ModelCard> cards = requirements.list(workspaceId).stream()
+        final List<ModelCard> cards = requirements.list(projectId).stream()
                 .sorted(Comparator.comparing(requirement -> requirement.code().value()))
                 .map(requirement -> card(requirement, glossary))
                 .toList();

@@ -49,7 +49,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
@@ -89,16 +89,16 @@ import de.hauschel.arknet.uc.domain.UseCase;
 @Timeout(value = 10, unit = TimeUnit.SECONDS)
 class UseCaseServiceRealStoreConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
-    private static final ActorLookup CUSTOMER_ACTOR_LOOKUP = (workspaceId, actorName) -> {
+    private static final ActorLookup CUSTOMER_ACTOR_LOOKUP = (projectId, actorName) -> {
         if (!"Customer".equals(actorName)) {
             throw new IllegalArgumentException("unexpected actor name in this test: " + actorName);
         }
         return CUSTOMER_ID;
     };
     /** Unused by this race: no step realises a requirement. */
-    private static final RequirementLookup UNUSED_REQUIREMENT_LOOKUP = (workspaceId, requirementCode) -> {
+    private static final RequirementLookup UNUSED_REQUIREMENT_LOOKUP = (projectId, requirementCode) -> {
         throw new UnsupportedOperationException("not exercised by this test");
     };
 

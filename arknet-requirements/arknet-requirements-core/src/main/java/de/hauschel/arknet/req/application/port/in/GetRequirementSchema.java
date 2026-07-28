@@ -13,7 +13,7 @@ import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
  * {@code req_add}/{@code req_set_status}, instead of having to guess them (issue #31).
  *
  * <p>Unlike every other requirements in-port, this deliberately takes no
- * {@link de.hauschel.arknet.kernel.WorkspaceId}: the vocabulary is static tool self-description,
+ * {@link de.hauschel.arknet.kernel.ProjectId}: the vocabulary is static tool self-description,
  * not workspace instance data - it does not vary per architecture model.</p>
  *
  * <p>Backs the read-only MVP tool {@code req_schema}.</p>

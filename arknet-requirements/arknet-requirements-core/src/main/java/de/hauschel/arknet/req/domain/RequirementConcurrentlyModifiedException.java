@@ -5,7 +5,7 @@ package de.hauschel.arknet.req.domain;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when a read-modify-write round trip (e.g. {@code req_link_term}, {@code
@@ -23,26 +23,26 @@ public class RequirementConcurrentlyModifiedException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient RequirementCode code;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the requirement lives in
+     * @param projectId the workspace the requirement lives in
      * @param code        the requirement code whose update kept losing the race
      */
-    public RequirementConcurrentlyModifiedException(WorkspaceId workspaceId, RequirementCode code) {
+    public RequirementConcurrentlyModifiedException(ProjectId projectId, RequirementCode code) {
         super("requirement " + Objects.requireNonNull(code, "code").value()
-                + " in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value()
+                + " in workspace " + Objects.requireNonNull(projectId, "projectId").value()
                 + " could not be updated - it kept changing concurrently across every retry attempt");
-        this.workspaceId = workspaceId;
+        this.projectId = projectId;
         this.code = code;
     }
 
     /** @return the workspace the requirement lives in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the requirement code whose update kept losing the race */

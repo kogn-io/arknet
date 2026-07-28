@@ -13,7 +13,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.terms.IRI;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
@@ -60,28 +60,28 @@ public final class KognioRdfActorLookup implements ActorLookup {
     }
 
     @Override
-    public ResourceId resolveByName(WorkspaceId workspaceId, String actorName) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public ResourceId resolveByName(ProjectId projectId, String actorName) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(actorName, "actorName");
 
         String query = "SELECT ?actor WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?actor <" + PREF_LABEL_PROPERTY + "> \"" + SparqlTerms.escape(actorName) + "\" . "
                 + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
                     .map(row -> iriOf(row, "actor"))
                     .distinct()
                     .toList();
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Actor '" + actorName
-                        + "' does not exist in workspace '" + workspaceId.value()
+                        + "' does not exist in workspace '" + projectId.value()
                         + "'. Create it first with term_add (actorKind human|system) before a use case "
                         + "references it.");
             }
             if (matches.size() > 1) {
                 throw new UnresolvedReferenceException("Actor label '" + actorName
-                        + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
+                        + "' is ambiguous in workspace '" + projectId.value() + "' (" + matches.size()
                         + " matches). Give the actor term a unique skos:prefLabel.");
             }
             return ResourceId.of(matches.get(0).getIRIString());

@@ -40,7 +40,7 @@ import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -148,8 +148,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     @Override
-    public void create(WorkspaceId workspaceId, BoundedContext boundedContext) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public void create(ProjectId projectId, BoundedContext boundedContext) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(boundedContext, "boundedContext");
 
         // ResourceId#of validates IRIREF-safety at construction, so the wrapped IRI is already
@@ -160,10 +160,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, boundedContext);
 
-        funnel.create(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
+        funnel.create(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
                 boundedContext.code().value(), graph, null,
-                () -> new ResourceAlreadyExistsException(workspaceId, boundedContext.id().value()),
-                () -> new DuplicateBoundedContextCodeException(workspaceId, boundedContext.code()),
+                () -> new ResourceAlreadyExistsException(projectId, boundedContext.id().value()),
+                () -> new DuplicateBoundedContextCodeException(projectId, boundedContext.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
     }
 
@@ -176,8 +176,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * write.
      */
     @Override
-    public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
 
         String subjectIriString = updated.id().value().value();
@@ -186,10 +186,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         IRI graphIri = rdf.createIRI(BOUNDED_CONTEXT_GRAPH);
         Graph graph = buildCandidateGraph(subjectIri, updated);
 
-        funnel.compareAndUpdate(new DatasetId(workspaceId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
                 expectedHead, graph, null,
-                () -> new BoundedContextNotFoundException(workspaceId, updated.code()),
-                () -> new BoundedContextConcurrentlyModifiedException(workspaceId, updated.code()),
+                () -> new BoundedContextNotFoundException(projectId, updated.code()),
+                () -> new BoundedContextConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
     }
 
@@ -277,8 +277,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     @Override
-    public Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
         String query = "SELECT ?s ?name ?domainVision ?subdomain ?ownedBy WHERE { GRAPH <"
@@ -286,7 +286,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + boundedContextByCodeWhereClause(code)
                 + "} }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
             if (found.isEmpty()) {
                 return Optional.empty();
@@ -311,8 +311,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      */
     @Override
     public Optional<BoundedContextRepository.CurrentBoundedContext> findCurrentByCode(
-            WorkspaceId workspaceId, BoundedContextCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+            ProjectId projectId, BoundedContextCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
         String query = "SELECT ?s ?name ?domainVision ?subdomain ?ownedBy ?head WHERE { GRAPH <"
@@ -322,7 +322,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
             if (found.isEmpty()) {
                 return Optional.empty();
@@ -376,8 +376,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     @Override
-    public List<BoundedContext> findAll(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<BoundedContext> findAll(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
 
         String query = "SELECT ?s ?identifier ?name ?domainVision ?subdomain ?ownedBy WHERE { GRAPH <"
                 + BOUNDED_CONTEXT_GRAPH + "> { "
@@ -388,7 +388,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "OPTIONAL { ?s <" + SUBDOMAIN_PROPERTY + "> ?subdomain } "
                 + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
             // Grouped by subject (issue #81): subdomain/ownedBy are OPTIONAL joins without an
             // enforced sh:maxCount, so a store-first bounded context with two triples on either

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
@@ -41,7 +41,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  */
 class RequirementServiceTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
     private static final ResourceId TERM_1 =
             ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 =
@@ -125,7 +125,7 @@ class RequirementServiceTest {
 
     @Test
     void addIsScopedPerWorkspace() {
-        WorkspaceId other = new WorkspaceId("other");
+        ProjectId other = new ProjectId("other");
         service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works")));
 
         Requirement inOther = service.add(other,
@@ -211,7 +211,7 @@ class RequirementServiceTest {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
                 () -> service.setStatus(WS, new RequirementCode("FR-42"), RequirementStatus.ACCEPTED));
 
-        assertSame(WS, ex.workspaceId());
+        assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
     }
 
@@ -322,7 +322,7 @@ class RequirementServiceTest {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
                 () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null, null));
 
-        assertSame(WS, ex.workspaceId());
+        assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
     }
 
@@ -368,7 +368,7 @@ class RequirementServiceTest {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
                 () -> service.linkTerm(WS, new RequirementCode("FR-42"), "TERM-1"));
 
-        assertSame(WS, ex.workspaceId());
+        assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
     }
 
@@ -472,7 +472,7 @@ class RequirementServiceTest {
     @Test
     void getByIdIsScopedPerWorkspace() {
         Requirement inWs = service.add(WS, newFunctionalRequirement());
-        WorkspaceId other = new WorkspaceId("other");
+        ProjectId other = new ProjectId("other");
 
         assertEquals(List.of(), service.getById(other, inWs.id().value()));
     }

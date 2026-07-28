@@ -5,7 +5,7 @@ package de.hauschel.arknet.bc.application.port.in;
 
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driving port: link a bounded context to a glossary term of the ubiquitous language it names.
@@ -29,10 +29,10 @@ public interface LinkTerm {
      * Links the glossary term identified by {@code termCode} to the bounded context {@code code}.
      * Linking an already-linked term is an idempotent no-op.
      *
-     * @param workspaceId the workspace (architecture model) the bounded context lives in
+     * @param projectId the workspace (architecture model) the bounded context lives in
      * @param code        the bounded-context code, e.g. {@code BC-1}
      * @param termCode    the term's human-readable business code, e.g. {@code TERM-1}
      * @return the bounded context including the link
      */
-    BoundedContext linkTerm(WorkspaceId workspaceId, BoundedContextCode code, String termCode);
+    BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode);
 }

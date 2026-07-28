@@ -16,7 +16,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -48,7 +48,7 @@ import de.hauschel.arknet.ul.domain.Term;
  */
 class CrossBoundedContextStoreWiringTest {
 
-    private static final WorkspaceId WS = new WorkspaceId("cross-bc");
+    private static final ProjectId WS = new ProjectId("cross-bc");
 
     @TempDir
     Path storageDir;

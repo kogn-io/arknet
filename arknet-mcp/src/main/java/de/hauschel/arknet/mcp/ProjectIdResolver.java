@@ -7,13 +7,13 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Resolves the {@link WorkspaceId} a single arknet MCP server instance operates
+ * Resolves the {@link ProjectId} a single arknet MCP server instance operates
  * against - one server process serves exactly one workspace, so requirements from
  * different projects land in isolated datasets (see
- * {@code KognioRdfRequirementRepository}, which maps {@code WorkspaceId} 1:1 to a
+ * {@code KognioRdfRequirementRepository}, which maps {@code ProjectId} 1:1 to a
  * kognio-rdf dataset).
  *
  * <p>Resolution order:</p>
@@ -27,7 +27,7 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  *       its main checkout instead of an empty one of its own (#136) - (zero-config
  *       per git project);</li>
  *   <li>otherwise the slugged working-directory name (non-git projects);</li>
- *   <li>otherwise {@link WorkspaceId#DEFAULT} (e.g. the filesystem root, which has no
+ *   <li>otherwise {@link ProjectId#DEFAULT} (e.g. the filesystem root, which has no
  *       usable name).</li>
  * </ol>
  *
@@ -35,12 +35,12 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * collapsed to a single hyphen, leading/trailing hyphens trimmed); an explicitly
  * configured id is respected as given.</p>
  */
-public final class WorkspaceIdResolver {
+public final class ProjectIdResolver {
 
     private final GitToplevelLocator gitToplevelLocator;
 
     /** Creates a resolver deriving git top-levels via {@link ProcessGitToplevelLocator}. */
-    public WorkspaceIdResolver() {
+    public ProjectIdResolver() {
         this(new ProcessGitToplevelLocator());
     }
 
@@ -50,7 +50,7 @@ public final class WorkspaceIdResolver {
      *
      * @param gitToplevelLocator the git top-level locator (must not be {@code null})
      */
-    public WorkspaceIdResolver(GitToplevelLocator gitToplevelLocator) {
+    public ProjectIdResolver(GitToplevelLocator gitToplevelLocator) {
         this.gitToplevelLocator = Objects.requireNonNull(gitToplevelLocator, "gitToplevelLocator");
     }
 
@@ -60,16 +60,16 @@ public final class WorkspaceIdResolver {
      * @param explicitId the explicitly configured id, or {@code null}/blank if none
      * @param workingDir the server's working directory (typically the launched
      *                   project root); must not be {@code null}
-     * @return the resolved {@link WorkspaceId}, never {@code null}
+     * @return the resolved {@link ProjectId}, never {@code null}
      */
-    public WorkspaceId resolve(String explicitId, Path workingDir) {
+    public ProjectId resolve(String explicitId, Path workingDir) {
         Objects.requireNonNull(workingDir, "workingDir");
         if (explicitId != null && !explicitId.isBlank()) {
-            return new WorkspaceId(explicitId.trim());
+            return new ProjectId(explicitId.trim());
         }
         Path projectDir = gitToplevelLocator.toplevelOf(workingDir).orElse(workingDir);
         String slug = slug(fileName(projectDir));
-        return slug.isBlank() ? WorkspaceId.DEFAULT : new WorkspaceId(slug);
+        return slug.isBlank() ? ProjectId.DEFAULT : new ProjectId(slug);
     }
 
     private static String fileName(Path dir) {

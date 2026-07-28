@@ -26,7 +26,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
@@ -39,14 +39,14 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
- * Unit tests for {@link StoreReader#outgoing(WorkspaceId, String)} and
- * {@link StoreReader#incoming(WorkspaceId, String)}: they must reject a resource handle that
+ * Unit tests for {@link StoreReader#outgoing(ProjectId, String)} and
+ * {@link StoreReader#incoming(ProjectId, String)}: they must reject a resource handle that
  * cannot appear unescaped inside a SPARQL {@code IRIREF} instead of splicing it into the query
  * text (issue #105 - SPARQL injection via {@code resource_get}'s {@code id} parameter).
  */
 class StoreReaderTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
+    private static final ProjectId WORKSPACE = new ProjectId("noistill");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-reader-test-fr-1";
     private static final String PROJECT_IRI = "https://w3id.org/arknet/id/store-reader-test-project";
 

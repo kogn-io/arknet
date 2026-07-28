@@ -26,13 +26,12 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
-import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -56,7 +55,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class StoreReportToolsTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
+    private static final ProjectId WORKSPACE = new ProjectId("noistill");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-report-test-fr-1";
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/store-report-test-term-1";
 
@@ -94,7 +93,7 @@ class StoreReportToolsTest {
         // Shared server: the default workspace is resolved per call. This test drives calls with a
         // null context (no origin), so the resolver returns the fixed test workspace and the report
         // lands in the fallback reportDir - exactly the pre-#137 single-workspace behaviour.
-        WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        ProjectResolver workspaces = originDir -> WORKSPACE;
         tools = new StoreReportTools(
                 reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces, reportDir, null);
     }
@@ -108,11 +107,11 @@ class StoreReportToolsTest {
      */
     private ModelViews modelViews() {
         return new ModelViews(
-                workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(term1) : List.of(),
-                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
+                projectId -> WORKSPACE.equals(projectId) ? List.of(term1) : List.of(),
+                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(
-                        workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(fr1) : List.of()),
-                new BoundedContextCards(workspaceId -> List.of()));
+                        projectId -> WORKSPACE.equals(projectId) ? List.of(fr1) : List.of()),
+                new BoundedContextCards(projectId -> List.of()));
     }
 
     @AfterEach
@@ -163,7 +162,7 @@ class StoreReportToolsTest {
         Files.writeString(blockedOriginDir, "a plain file blocking directory creation");
 
         final McpTransportContext transportContext = McpTransportContext.create(
-                Map.of(WorkspaceResolver.WORKSPACE_DIR_KEY, blockedOriginDir.toString()));
+                Map.of(ProjectResolver.WORKSPACE_DIR_KEY, blockedOriginDir.toString()));
         final McpSyncRequestContext context = mock(McpSyncRequestContext.class);
         when(context.transportContext()).thenReturn(transportContext);
 
@@ -188,7 +187,7 @@ class StoreReportToolsTest {
 
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);
-        final WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        final ProjectResolver workspaces = originDir -> WORKSPACE;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
                 reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces,
                 blockedFallbackDir, null);
@@ -212,7 +211,7 @@ class StoreReportToolsTest {
             throws Exception {
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);
-        final WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        final ProjectResolver workspaces = originDir -> WORKSPACE;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
                 reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces, reportDir, hostDir);
 
@@ -233,7 +232,7 @@ class StoreReportToolsTest {
      */
     @Test
     void storeOverviewWritesEachWorkspaceToItsOwnSubdirectoryOfTheFallbackDir() throws Exception {
-        final WorkspaceId otherWorkspace = new WorkspaceId("other-workspace-172");
+        final ProjectId otherWorkspace = new ProjectId("other-workspace-172");
         try {
             tools.storeOverview(null, null);
             tools.storeOverview(null, otherWorkspace.value());
@@ -282,7 +281,7 @@ class StoreReportToolsTest {
 
     /**
      * Reproduces #106: {@code resource_get} used to ignore its workspace parameter entirely
-     * and always read {@code defaultWorkspaceId}, unlike {@code store_overview} which already
+     * and always read {@code defaultProjectId}, unlike {@code store_overview} which already
      * honored an optional {@code workspace} argument. Two workspaces each carry a requirement
      * with the SAME business code ("FR-1") but different identities/titles - a caller passing
      * the other workspace's id must get that workspace's resource back, not a silent hit in
@@ -290,7 +289,7 @@ class StoreReportToolsTest {
      */
     @Test
     void resourceGetHonorsExplicitWorkspaceParameter() {
-        WorkspaceId otherWorkspace = new WorkspaceId("other-workspace");
+        ProjectId otherWorkspace = new ProjectId("other-workspace");
         String otherFr1Iri = "https://w3id.org/arknet/id/store-report-test-fr-1-other";
 
         RequirementRepository requirements =

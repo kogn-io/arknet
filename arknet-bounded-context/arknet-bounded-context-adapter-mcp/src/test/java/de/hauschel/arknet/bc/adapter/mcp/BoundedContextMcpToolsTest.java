@@ -25,8 +25,8 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -43,7 +43,7 @@ class BoundedContextMcpToolsTest {
             new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
     /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
-    private static final WorkspaceResolver WORKSPACES = originDir -> WorkspaceId.DEFAULT;
+    private static final ProjectResolver WORKSPACES = originDir -> ProjectId.DEFAULT;
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
@@ -73,7 +73,7 @@ class BoundedContextMcpToolsTest {
     }
 
     @Test
-    void rejectsNullWorkspaceResolver() {
+    void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new BoundedContextMcpTools(stub, stub, stub, stub, resolveTerms, null));
     }
@@ -194,24 +194,24 @@ class BoundedContextMcpToolsTest {
         private NewBoundedContext lastAddCommand;
 
         @Override
-        public BoundedContext add(WorkspaceId workspaceId, NewBoundedContext command) {
+        public BoundedContext add(ProjectId projectId, NewBoundedContext command) {
             lastAddCommand = command;
             return new BoundedContext(ID, new BoundedContextCode("BC-1"), command.name(),
                     command.domainVision(), command.subdomain(), command.ownedBy(), List.of());
         }
 
         @Override
-        public List<BoundedContext> list(WorkspaceId workspaceId) {
+        public List<BoundedContext> list(ProjectId projectId) {
             return allBoundedContexts;
         }
 
         @Override
-        public Optional<BoundedContext> get(WorkspaceId workspaceId, BoundedContextCode code) {
+        public Optional<BoundedContext> get(ProjectId projectId, BoundedContextCode code) {
             return Optional.empty();
         }
 
         @Override
-        public BoundedContext linkTerm(WorkspaceId workspaceId, BoundedContextCode code, String termCode) {
+        public BoundedContext linkTerm(ProjectId projectId, BoundedContextCode code, String termCode) {
             lastLinkedBoundedContext = code;
             lastLinkedTermCode = termCode;
             List<ResourceId> ids = new ArrayList<>(nextLinkedTerms);
@@ -246,7 +246,7 @@ class BoundedContextMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedTerm> getById(WorkspaceId workspaceId, ResourceId... ids) {
+        public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
             calls++;
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();

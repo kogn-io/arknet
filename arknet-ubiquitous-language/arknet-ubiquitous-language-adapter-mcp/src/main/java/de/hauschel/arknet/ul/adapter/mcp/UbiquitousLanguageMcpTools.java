@@ -12,8 +12,8 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
@@ -45,14 +45,14 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * responses render the code back to the caller, not the underlying resource identity.</p>
  *
  * <p><strong>Workspace (resolved per call).</strong> Every in-port takes a
- * {@link WorkspaceId} routing key. arknet-mcp runs as one shared server for every
+ * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
  * workspace on the machine (issue #137), so there is no single injected workspace any
  * more: each tool call resolves its own workspace from the request's origin directory,
- * carried in the MCP transport context under {@link WorkspaceResolver#WORKSPACE_DIR_KEY}.
+ * carried in the MCP transport context under {@link ProjectResolver#WORKSPACE_DIR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
  * not a caller-facing argument. The concrete resolution (git top-level, slugging,
- * explicit-id override) stays behind {@link WorkspaceResolver} in the composition root.</p>
+ * explicit-id override) stays behind {@link ProjectResolver} in the composition root.</p>
  */
 public final class UbiquitousLanguageMcpTools {
 
@@ -60,7 +60,7 @@ public final class UbiquitousLanguageMcpTools {
     private final ListTerms listTerms;
     private final GetTerm getTerm;
     private final UpdateTerm updateTerm;
-    private final WorkspaceResolver workspaces;
+    private final ProjectResolver workspaces;
 
     /**
      * Creates the adapter with its four driving in-ports and the resolver that maps each
@@ -77,7 +77,7 @@ public final class UbiquitousLanguageMcpTools {
             final ListTerms listTerms,
             final GetTerm getTerm,
             final UpdateTerm updateTerm,
-            final WorkspaceResolver workspaces) {
+            final ProjectResolver workspaces) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
@@ -89,7 +89,7 @@ public final class UbiquitousLanguageMcpTools {
      * Extracts the calling client's origin directory from the per-call transport context -
      * the value the server's context extractor placed there off the request header (issue
      * #137). Null-tolerant on every hop: a call without a context, without a transport
-     * context, or without the key resolves to {@code null}, which {@link WorkspaceResolver}
+     * context, or without the key resolves to {@code null}, which {@link ProjectResolver}
      * turns into the server's default workspace.
      */
     private static String originDir(final McpSyncRequestContext context) {
@@ -97,7 +97,7 @@ public final class UbiquitousLanguageMcpTools {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
         return dir == null ? null : dir.toString();
     }
 
@@ -116,19 +116,19 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
             final String actorRole) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final ActorFacet facet = blankToNull(actorKind) == null
                 ? null
                 : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
-        final Term created = addTerm.add(workspaceId, new NewTerm(label, definition, facet));
+        final Term created = addTerm.add(projectId, new NewTerm(label, definition, facet));
         return format(created);
     }
 
     @McpTool(name = "term_list", description = "List all glossary terms.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(final McpSyncRequestContext context) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
-        final List<Term> all = listTerms.list(workspaceId);
+        final ProjectId projectId = workspaces.resolve(originDir(context));
+        final List<Term> all = listTerms.list(projectId);
         return all.stream().map(UbiquitousLanguageMcpTools::format)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no terms)");
     }
@@ -138,9 +138,9 @@ public final class UbiquitousLanguageMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final TermCode code = new TermCode(id);
-        return getTerm.get(workspaceId, code)
+        return getTerm.get(projectId, code)
                 .map(UbiquitousLanguageMcpTools::format)
                 .orElse("Term not found: " + code.value());
     }
@@ -164,13 +164,13 @@ public final class UbiquitousLanguageMcpTools {
                     + "giving actorKind leaves an already-set role unchanged (it does not clear it)",
                     required = false)
             final String actorRole) {
-        final WorkspaceId workspaceId = workspaces.resolve(originDir(context));
+        final ProjectId projectId = workspaces.resolve(originDir(context));
         final TermCode code = new TermCode(id);
         final ActorFacet facet = blankToNull(actorKind) == null
                 ? null
                 : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
         final Term updated = updateTerm.update(
-                workspaceId, code, blankToNull(label), blankToNull(definition), facet);
+                projectId, code, blankToNull(label), blankToNull(definition), facet);
         return format(updated);
     }
 

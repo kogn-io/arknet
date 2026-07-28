@@ -17,7 +17,7 @@ import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServer
 
 import tools.jackson.databind.json.JsonMapper;
 
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
  * Pins the workspace-directory transport wiring (issue #137): the context extractor lifts the
@@ -32,7 +32,7 @@ class WorkspaceHttpTransportConfigurationTest {
 
         McpTransportContext context = WorkspaceHttpTransportConfiguration.extractWorkspaceDir(request);
 
-        assertThat(context.get(WorkspaceResolver.WORKSPACE_DIR_KEY)).isEqualTo("/home/dev/projects/noistill");
+        assertThat(context.get(ProjectResolver.WORKSPACE_DIR_KEY)).isEqualTo("/home/dev/projects/noistill");
     }
 
     @Test

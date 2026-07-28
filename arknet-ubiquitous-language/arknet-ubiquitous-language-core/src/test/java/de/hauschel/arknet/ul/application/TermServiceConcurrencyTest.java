@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
@@ -39,7 +39,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
  */
 class TermServiceConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = ProjectId.DEFAULT;
 
     private InMemoryTermRepository store;
     /**
@@ -108,24 +108,24 @@ class TermServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, Term term) {
-            delegate.create(workspaceId, term);
+        public void create(ProjectId projectId, Term term) {
+            delegate.create(projectId, term);
         }
 
         @Override
-        public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+        public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
                 ActorFacet actorFacet) {
-            return delegate.update(workspaceId, code, prefLabel, definition, actorFacet);
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet);
         }
 
         @Override
-        public Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public List<Term> findAll(WorkspaceId workspaceId) {
-            List<Term> result = delegate.findAll(workspaceId);
+        public List<Term> findAll(ProjectId projectId) {
+            List<Term> result = delegate.findAll(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -134,8 +134,8 @@ class TermServiceConcurrencyTest {
         }
 
         @Override
-        public List<ResolveTerms.ResolvedTerm> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
-            return delegate.findByIds(workspaceId, ids);
+        public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, ids);
         }
     }
 }

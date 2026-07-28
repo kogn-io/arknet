@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.ArknetMcpConfiguration;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -38,7 +38,7 @@ import de.hauschel.arknet.ul.domain.Term;
  */
 class TraceabilityMcpToolsTest {
 
-    private static final WorkspaceId WS = new WorkspaceId("trace-tools-test");
+    private static final ProjectId WS = new ProjectId("trace-tools-test");
 
     @TempDir
     Path storageDir;

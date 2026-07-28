@@ -12,7 +12,7 @@ import java.util.function.UnaryOperator;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
@@ -114,8 +114,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement add(WorkspaceId workspaceId, NewRequirement command) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Requirement add(ProjectId projectId, NewRequirement command) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
         // business code is recomputed when a concurrent add() claims the same candidate first
@@ -127,35 +127,35 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         RequirementId id = new RequirementId(resourceIdFactory.newId());
         return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
                 DuplicateRequirementCodeException.class, () -> {
-                    RequirementCode code = nextCode(workspaceId, command.type());
+                    RequirementCode code = nextCode(projectId, command.type());
                     Requirement requirement = new Requirement(id, code, command.title(),
                             command.description(), command.type(), RequirementStatus.PROPOSED,
                             command.priority(), command.motivatedBy(), command.qualityCategory(),
                             List.of(), command.acceptanceCriteria());
-                    repository.create(workspaceId, requirement);
+                    repository.create(projectId, requirement);
                     return requirement;
                 });
     }
 
     @Override
-    public List<Requirement> list(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
-        return repository.findAll(workspaceId);
+    public List<Requirement> list(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+        return repository.findAll(projectId);
     }
 
     @Override
-    public Optional<Requirement> get(WorkspaceId workspaceId, RequirementCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<Requirement> get(ProjectId projectId, RequirementCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(workspaceId, code);
+        return repository.findByCode(projectId, code);
     }
 
     @Override
-    public Requirement setStatus(WorkspaceId workspaceId, RequirementCode code, RequirementStatus status) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Requirement setStatus(ProjectId projectId, RequirementCode code, RequirementStatus status) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(status, "status");
-        return updateWithOptimisticRetry(workspaceId, code, current -> {
+        return updateWithOptimisticRetry(projectId, code, current -> {
             if (current.status() == status) {
                 return current;
             }
@@ -167,15 +167,15 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement linkTerm(WorkspaceId workspaceId, RequirementCode code, String termCode) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(termCode, "termCode");
         // Resolution does not depend on the requirement's current state, so it happens once,
         // outside the retry loop below - a lookup failure must propagate immediately and leave
         // the requirement untouched, exactly as before.
-        TermRef term = new TermRef(termLookup.resolveByCode(workspaceId, termCode));
-        return updateWithOptimisticRetry(workspaceId, code, current -> {
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        return updateWithOptimisticRetry(projectId, code, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -188,11 +188,11 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement update(WorkspaceId workspaceId, RequirementCode code, String title, String description,
+    public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
             List<String> acceptanceCriteria, Priority priority) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(workspaceId, code, current -> new Requirement(current.id(), current.code(),
+        return updateWithOptimisticRetry(projectId, code, current -> new Requirement(current.id(), current.code(),
                 title != null ? title : current.title(),
                 description != null ? description : current.description(),
                 current.type(), current.status(),
@@ -220,17 +220,17 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                                                   every retry attempt
      */
     private Requirement updateWithOptimisticRetry(
-            WorkspaceId workspaceId, RequirementCode code, UnaryOperator<Requirement> mutation) {
+            ProjectId projectId, RequirementCode code, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(workspaceId, code)
-                    .orElseThrow(() -> new RequirementNotFoundException(workspaceId, code));
+            RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(projectId, code)
+                    .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
             Requirement updated = mutation.apply(current.value());
             if (updated.equals(current.value())) {
                 return current.value();
             }
             try {
-                repository.compareAndUpdate(workspaceId, current.head(), updated);
+                repository.compareAndUpdate(projectId, current.head(), updated);
                 return updated;
             } catch (RequirementConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the requirement between our read and our write -
@@ -242,13 +242,13 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.length == 0) {
             return List.of();
         }
-        return repository.findByIds(workspaceId, List.of(ids));
+        return repository.findByIds(projectId, List.of(ids));
     }
 
     @Override
@@ -257,11 +257,11 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     /**
-     * Derives the next free business code for {@code type} in {@code workspaceId}: the highest
+     * Derives the next free business code for {@code type} in {@code projectId}: the highest
      * running number currently used by that type, plus one (starting at 1).
      */
-    private RequirementCode nextCode(WorkspaceId workspaceId, RequirementType type) {
-        int next = repository.findAll(workspaceId).stream()
+    private RequirementCode nextCode(ProjectId projectId, RequirementType type) {
+        int next = repository.findAll(projectId).stream()
                 .filter(r -> r.type() == type)
                 .mapToInt(r -> runningNumber(r.code()))
                 .max()

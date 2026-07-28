@@ -10,12 +10,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
- * The composition root's {@link WorkspaceResolver}: maps a tool call's origin directory to a
- * {@link WorkspaceId} through the existing {@link WorkspaceIdResolver} (explicit-id override,
+ * The composition root's {@link ProjectResolver}: maps a tool call's origin directory to a
+ * {@link ProjectId} through the existing {@link ProjectIdResolver} (explicit-id override,
  * else the git top-level / working-directory name; #136).
  *
  * <p>arknet-mcp runs as one shared server for every workspace on the machine (issue #137), so
@@ -33,17 +33,17 @@ import de.hauschel.arknet.kernel.WorkspaceResolver;
  * server's own working directory - the same value the pre-#137 single-workspace boot used - so
  * behaviour degrades to "the daemon's own project" rather than failing.</p>
  */
-final class GitWorkspaceResolver implements WorkspaceResolver {
+final class GitProjectResolver implements ProjectResolver {
 
     private static final long CACHE_TTL_NANOS = TimeUnit.SECONDS.toNanos(60);
 
-    private final WorkspaceIdResolver delegate;
+    private final ProjectIdResolver delegate;
     private final String explicitId;
     private final Path fallbackDir;
     private final LongSupplier nanoClock;
     private final Map<Path, CacheEntry> cache = new ConcurrentHashMap<>();
 
-    private record CacheEntry(WorkspaceId workspaceId, long cachedAtNanos) {
+    private record CacheEntry(ProjectId projectId, long cachedAtNanos) {
     }
 
     /**
@@ -53,16 +53,16 @@ final class GitWorkspaceResolver implements WorkspaceResolver {
      * @param fallbackDir the directory used when a call supplies no origin (the server's own
      *                    working directory)
      */
-    GitWorkspaceResolver(final WorkspaceIdResolver delegate, final String explicitId, final Path fallbackDir) {
+    GitProjectResolver(final ProjectIdResolver delegate, final String explicitId, final Path fallbackDir) {
         this(delegate, explicitId, fallbackDir, System::nanoTime);
     }
 
     /**
      * Test-only constructor: injects a fake clock so cache-expiry can be exercised without
      * waiting real wall-clock time (mirrors the fake-{@link GitToplevelLocator} pattern
-     * {@link WorkspaceIdResolver} uses to avoid spawning a process in tests).
+     * {@link ProjectIdResolver} uses to avoid spawning a process in tests).
      */
-    GitWorkspaceResolver(final WorkspaceIdResolver delegate, final String explicitId, final Path fallbackDir,
+    GitProjectResolver(final ProjectIdResolver delegate, final String explicitId, final Path fallbackDir,
             final LongSupplier nanoClock) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.explicitId = explicitId;
@@ -71,14 +71,14 @@ final class GitWorkspaceResolver implements WorkspaceResolver {
     }
 
     @Override
-    public WorkspaceId resolve(final String originDir) {
+    public ProjectId resolve(final String originDir) {
         final Path dir = (originDir == null || originDir.isBlank()) ? fallbackDir : Path.of(originDir);
         final long now = nanoClock.getAsLong();
         final CacheEntry cached = cache.get(dir);
         if (cached != null && now - cached.cachedAtNanos() < CACHE_TTL_NANOS) {
-            return cached.workspaceId();
+            return cached.projectId();
         }
-        final WorkspaceId resolved = delegate.resolve(explicitId, dir);
+        final ProjectId resolved = delegate.resolve(explicitId, dir);
         cache.put(dir, new CacheEntry(resolved, now));
         return resolved;
     }

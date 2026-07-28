@@ -14,7 +14,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
@@ -46,18 +46,18 @@ import de.hauschel.arknet.prj.domain.Project;
  * project's data - exactly the cross-project bleed ADR-016 exists to close. Projects are
  * therefore addressed only by the {@link Anchor}s a client actually presented and registered
  * (never by a short code a human could mistype into someone else's project), and rendered with
- * their full opaque {@link de.hauschel.arknet.prj.domain.ProjectId} so a later surface without an
+ * their full opaque {@link de.hauschel.arknet.kernel.ProjectId} so a later surface without an
  * anchor of its own (a web UI, e.g. issue #149's review UI) still has a stable, tool-addressable
  * value to hold onto.</p>
  *
- * <p><strong>No {@link WorkspaceResolver} here, on purpose.</strong> Every other bounded context's
- * MCP adapter resolves a {@code WorkspaceId} per call by handing the client's origin directory to
- * {@link WorkspaceResolver}, which <em>derives</em> an id from it (git top-level, slugging). That
+ * <p><strong>No {@link ProjectResolver} here, on purpose.</strong> Every other bounded context's
+ * MCP adapter resolves a {@code ProjectId} per call by handing the client's origin directory to
+ * {@link ProjectResolver}, which <em>derives</em> an id from it (git top-level, slugging). That
  * derivation is exactly what ADR-016 replaces: a project's identity is a registered anchor
  * relationship, not something computed from a directory name. This adapter therefore imports
- * {@link WorkspaceResolver} only for its {@link WorkspaceResolver#WORKSPACE_DIR_KEY} constant -
+ * {@link ProjectResolver} only for its {@link ProjectResolver#WORKSPACE_DIR_KEY} constant -
  * the key under which the calling client's origin directory travels in the MCP transport context
- * - and never calls {@link WorkspaceResolver#resolve(String)}. The raw value read under that key
+ * - and never calls {@link ProjectResolver#resolve(String)}. The raw value read under that key
  * is instead wrapped directly as an {@link Anchor} of {@link AnchorType#PATH} and looked up
  * against the registry. The key name itself is still the old one because this issue (#178) is
  * purely additive - it introduces the registry alongside the existing derived-workspace path
@@ -146,14 +146,14 @@ public final class ProjectMcpTools {
      * Extracts the calling client's origin directory from the per-call transport context.
      * Null-tolerant on every hop: a call without a context, without a transport context, or
      * without the key resolves to {@code null}. Unlike every other bounded context's adapter,
-     * this value is never handed to a {@link WorkspaceResolver} - see the class Javadoc.
+     * this value is never handed to a {@link ProjectResolver} - see the class Javadoc.
      */
     private static String originDir(final McpSyncRequestContext context) {
         if (context == null) {
             return null;
         }
         final McpTransportContext transport = context.transportContext();
-        final Object dir = transport == null ? null : transport.get(WorkspaceResolver.WORKSPACE_DIR_KEY);
+        final Object dir = transport == null ? null : transport.get(ProjectResolver.WORKSPACE_DIR_KEY);
         return dir == null ? null : dir.toString();
     }
 
