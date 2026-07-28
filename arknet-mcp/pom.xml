@@ -100,6 +100,20 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Project-Hexagon: fifth hexagonal BC, gleiche Verdrahtung wie die uebrigen
+             (In-Adapter mit @McpTool-Beans + Out-Adapter Repository) ueber den geteilten
+             DatasetLifecycle. Registered project identity (ADR-016). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-project-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-project-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Persistence-Support: RDF4J-freie Technik-Bausteine. Der generische Store-Lesepfad
              nutzt SparqlTerms (IRIREF-Serialisierung), der Traceability-Lesepfad zusaetzlich
              ArkreqVocabulary (die geteilten arkreq:-Praedikat-IRIs, gemeinsame Quelle mit den
