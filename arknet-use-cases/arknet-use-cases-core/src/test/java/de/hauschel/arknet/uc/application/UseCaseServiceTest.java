@@ -300,6 +300,16 @@ class UseCaseServiceTest {
     }
 
     @Test
+    void stepTextPatchRejectsNullTextInsteadOfSilentlyIgnoringThePosition() {
+        assertThrows(NullPointerException.class, () -> new StepTextPatch(1, null));
+    }
+
+    @Test
+    void stepTextPatchRejectsBlankText() {
+        assertThrows(IllegalArgumentException.class, () -> new StepTextPatch(1, "  "));
+    }
+
+    @Test
     void updateWithAnUnknownStepPositionPatchLeavesTheUseCaseUntouched() {
         UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
         UseCase before = service.get(WS, code).orElseThrow();
