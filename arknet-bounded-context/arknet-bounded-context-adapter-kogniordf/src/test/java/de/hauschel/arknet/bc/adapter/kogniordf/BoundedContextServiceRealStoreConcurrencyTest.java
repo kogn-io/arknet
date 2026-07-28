@@ -109,9 +109,21 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
  * barrier/latch would otherwise hang {@code join()} forever, so neither {@code @AfterEach} nor
  * {@code shutDownAll()} would ever run - the build would hang instead of failing. The project has
  * no {@code junit-platform.properties}/Surefire-level timeout, so this class-level {@link Timeout}
- * is the only backstop; the interleaving itself normally resolves in well under a second.</p>
+ * is the only backstop; the interleaving itself normally resolves in well under a second.
+ * Uncontended, both methods together finish in about 4 s. The budget was originally 10 s, sized
+ * while this class ran against {@code sail-memory} - #180 moved it onto the on-disk
+ * {@code NativeStore}, whose commit path serialises writers through
+ * {@link org.eclipse.rdf4j.common.concurrent.locks.ExclusiveReentrantLockManager}, and under a full
+ * parallel reactor build (issue #182) {@code linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}
+ * measured up to 13.44 s, occasionally tripping the 10 s budget. Reproduced locally by saturating
+ * every core with busy-loops during a run: the method finished in 10.6-23 s across repeated runs
+ * (bounded, not growing further under repeated saturation) - consistent with CPU-starved I/O, not
+ * with a stuck lock, since {@code ExclusiveReentrantLockManager} would otherwise hold this class's
+ * only writer waiting on nothing (the two test methods each open their own store, so neither
+ * contends with the other). 60 s leaves several times that headroom while still catching a genuine
+ * hang (see above) long before a human would notice the build stall.</p>
  */
-@Timeout(value = 10, unit = TimeUnit.SECONDS)
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
 class BoundedContextServiceRealStoreConcurrencyTest {
 
     private static final WorkspaceId WS = WorkspaceId.DEFAULT;
