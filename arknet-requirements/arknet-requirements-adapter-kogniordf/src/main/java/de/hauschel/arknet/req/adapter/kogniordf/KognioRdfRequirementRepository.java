@@ -446,22 +446,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Reads a requirement's current state together with its concurrency token. Only the row built
-     * from {@link #requirementByCodeWhereClause} (the core fields) plus the head itself come from
-     * this method's one query (issue #167) - {@link #requirementOf} then issues two further,
-     * independent queries, via {@link #readUsesTerms} and {@link #readAcceptanceCriteria}, to fill
-     * in {@code usesTerms} and {@code acceptanceCriteria}. This is still safe because of the
-     * order, not because everything is one query: the head is read first, so it is never fresher
-     * than any part of the state it is paired with - a concurrent funnel write landing between the
-     * queries moves the head, so {@link RequirementRepository#compareAndUpdate} then fails its
-     * comparison and the caller re-reads instead of silently overwriting a state it never actually
-     * saw. Reading the head later, or joining any field before it, would risk the opposite - a
-     * fresh head paired with a stale state, reopening the lost-update race this method exists to
-     * close. Builds the {@link Requirement} the same way {@link #findByCode} does - both call
-     * {@link #requirementOf} on their row, so the two read paths cannot drift apart field-by-field
-     * the way two near-identical read paths in this class already did twice before (issues
-     * #80/#81) - plus one {@code OPTIONAL} join into {@link ArkprovVocabulary#PROVENANCE_GRAPH}
-     * for the head.
+     * Reads a requirement's current state together with its concurrency token. The row built from
+     * {@link #requirementByCodeWhereClause} (the core fields) plus the head itself come from this
+     * method's one query call (issue #167) - one snapshot, which is the load-bearing guarantee,
+     * not an ordering of clauses within that query. {@link #requirementOf} then issues two
+     * further, independent queries, via {@link #readUsesTerms} and {@link #readAcceptanceCriteria},
+     * to fill in {@code usesTerms} and {@code acceptanceCriteria}; those later reads are safe
+     * precisely because they can only be fresher, never staler, than the head: a concurrent funnel
+     * write landing in between moves the head, so {@link RequirementRepository#compareAndUpdate}
+     * then fails its comparison and the caller re-reads instead of silently overwriting a state it
+     * never actually saw. Builds the {@link Requirement} the same way {@link #findByCode} does -
+     * both call {@link #requirementOf} on their row, so the two read paths cannot drift apart
+     * field-by-field the way two near-identical read paths in this class already did twice before
+     * (issues #80/#81) - plus one {@code OPTIONAL} join into
+     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head.
      */
     @Override
     public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
