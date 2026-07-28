@@ -5,6 +5,14 @@ DDD architecture models that machines can understand.
 W3C standards (RDF/OWL) instead of a proprietary DSL -- validatable (SHACL),
 queryable (SPARQL), AI-ready (MCP).
 
+This is what a use case looks like once it is in the store -- rendered by
+`store_overview`'s self-contained HTML report, not hand-written:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/use-case-card-dark.png">
+  <img src="docs/img/use-case-card.png" alt="Rendered use case card: numbered flow, realizes-links to FRs, raw triples on demand">
+</picture>
+
 ## Repository
 
 Code and pull requests live on GitHub
@@ -214,6 +222,18 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 | `trace_matrix` | Per requirement (FR/NFR): the glossary terms used (`arkreq:usesTerm`) and the realizing use case(s) (via the step flow) |
 | `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms without any usage |
 | `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes |
+
+```
+> impact_analysis(handle: "TERM-4")
+
+# Impact analysis -- target: TERM-4 [Concept] "Order"
+
+## Transitively affected (4)
+- FR-1 [FunctionalRequirement] "Place an order from a confirmed cart"
+- FR-2 [FunctionalRequirement] "Authorise the payment before the order is placed"
+- FR-3 [FunctionalRequirement] "Confirm the placed order to the customer"
+- UC1  [UseCase] "Place an order"
+```
 
 ### Storage model (store-first)
 
