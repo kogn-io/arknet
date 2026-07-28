@@ -52,10 +52,11 @@ class HtmlReportRendererTest {
                 .contains("System bestaetigt die Bestellung");
         // The realised requirement is a chip linking to the requirement's own anchor.
         assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(FR_1) + "\">FR-1</a>");
-        // The primary actor shows its business code and links to the actor's own resource; the
-        // opaque identity stays where it belongs, in the raw triples.
+        // The primary actor shows the term itself and links to the actor's own resource; its
+        // running number is the tooltip, and the opaque identity stays in the raw triples.
         assertThat(html).contains("<span class=\"blabel\">Primary actor</span>");
-        assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(ID + "actor-1") + "\">Kunde</a>");
+        assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(ID + "actor-1")
+                + "\" title=\"TERM-1\">Kunde</a>");
     }
 
     /**
@@ -127,11 +128,52 @@ class HtmlReportRendererTest {
     void marksAReferenceThatIsNotInTheWorkspace() {
         final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
                 new ModelCard("FR-9", "Gone", FR_1, List.of(),
-                        List.of(new Block.Refs("Uses terms", List.of(new Ref("TERM-404", ID + "nowhere")))))));
+                        List.of(new Block.Refs("Uses terms",
+                                List.of(new Ref("Lieferschein", "TERM-404", ID + "nowhere")))))));
 
         final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
 
-        assertThat(html).contains("<span class=\"chip dead\" title=\"not in this workspace\">TERM-404</span>");
+        assertThat(html).contains(
+                "<span class=\"chip dead\" title=\"TERM-404 - not in this workspace\">Lieferschein</span>");
+    }
+
+    /**
+     * A mention the model backs with an edge links into the glossary; a mention of a term
+     * nothing links to is marked but deliberately not clickable, because it is the absence of a
+     * reference, not one.
+     */
+    @Test
+    void rendersALinkedMentionAsALinkAndAnUnlinkedOneAsAGap() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of(
+                        new Block.Prose("Description", new RichText(List.of(
+                                new Span.Plain("Der "),
+                                new Span.TermLink("Kunde", ID + "actor-1", "TERM-1"),
+                                new Span.Plain(" legt eine "),
+                                new Span.TermGap("Bestellung", ID + "term-2", "TERM-2"),
+                                new Span.Plain(" an."))))))));
+
+        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
+
+        assertThat(html).contains("<a class=\"term\" href=\"#r-" + anchorOf(ID + "actor-1")
+                + "\" title=\"TERM-1\">Kunde</a>");
+        assertThat(html).contains("<span class=\"term gap\" title=\"TERM-2 - in the glossary, but this"
+                + " element does not link to it\">Bestellung</span>");
+        assertThat(html).doesNotContain("href=\"#r-" + anchorOf(ID + "term-2"));
+    }
+
+    /**
+     * Cards start folded so a large model is readable at all; the toolbar can open them in bulk,
+     * and following a reference has to open its target - see the report's own script.
+     */
+    @Test
+    void foldsEveryCardAndOffersBulkControls() {
+        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+
+        assertThat(html).contains("<details class=\"fold\">").doesNotContain("<details class=\"fold\" open>");
+        assertThat(html).contains("<summary class=\"head\">");
+        assertThat(html).contains("id=\"expand-all\"").contains("id=\"collapse-all\"");
+        assertThat(html).contains("window.addEventListener('hashchange', reveal);");
     }
 
     /** With nothing in the store at all, the report says so and names the way in. */
@@ -156,7 +198,7 @@ class HtmlReportRendererTest {
     void escapesModelText() {
         final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
                 new ModelCard("FR-1", "<script>alert(1)</script>", FR_1, List.of(),
-                        List.of(new Block.Prose("Description", "a & b < c")))));
+                        List.of(Block.Prose.plain("Description", "a & b < c")))));
 
         final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
 
@@ -173,11 +215,12 @@ class HtmlReportRendererTest {
     private static ModelSection useCaseSection() {
         return new ModelSection("Use Cases", "use-cases", "goal, actors and the ordered main flow", List.of(
                 new ModelCard("UC1", "Bestellung aufgeben", UC_1, List.of(), List.of(
-                        new Block.Prose("Goal", "Der Kunde bestellt Artikel."),
-                        new Block.Refs("Primary actor", List.of(new Ref("Kunde", ID + "actor-1"))),
+                        Block.Prose.plain("Goal", "Der Kunde bestellt Artikel."),
+                        new Block.Refs("Primary actor",
+                                List.of(new Ref("Kunde", "TERM-1", ID + "actor-1"))),
                         new Block.Flow("Main flow", List.of(
                                 new FlowStep(1, "Kunde legt Artikel in den Warenkorb",
-                                        List.of(new Ref("FR-1", FR_1))),
+                                        List.of(Ref.of("FR-1", FR_1))),
                                 new FlowStep(2, "System bestaetigt die Bestellung", List.of())))))));
     }
 

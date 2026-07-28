@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
@@ -19,8 +18,6 @@ import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
-import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
-import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Builds the report's Cockburn-style use-case cards from the use-cases context's read
@@ -33,45 +30,46 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * as what it is - a goal, actors, and an ordered flow - because the owning context already did
  * the ordering and the joining.</p>
  *
- * <p><strong>Borrowed display ports.</strong> Actor and requirement references carry opaque
- * identities, so this builder borrows {@link ResolveTerms} (owned by ubiquitous-language) and
- * {@link ResolveRequirements} (owned by requirements) purely to render a business code instead
- * of a bare IRI - the same borrowing the use-cases MCP in-adapter does for {@code uc_get}
- * (ADR-008). Both are called exactly once per report, batched across every reference of every
- * use case, and an identity neither port resolves falls back to its IRI rather than being
+ * <p><strong>Actors are glossary terms.</strong> An actor reference is resolved against the
+ * report's {@link Glossary}, so the chip reads {@code Customer} rather than {@code TERM-1}.
+ * Requirement references keep the borrowed {@link ResolveRequirements} port (ADR-008, the same
+ * borrowing {@code uc_get} does), because a requirement's business code {@code FR-1} <em>is</em>
+ * how a human names it. Both are called once per report, batched across every reference of
+ * every use case, and an identity neither resolves falls back to its IRI rather than being
  * dropped.</p>
+ *
+ * <p><strong>No marked-up prose here.</strong> A requirement's text is marked up against the
+ * glossary because {@code arkreq:usesTerm} makes "this text is about that term" a fact the
+ * model can hold. A use case has no such edge - only actor roles - so a glossary word in its
+ * goal or a step would have no edge that could ever be pleaded missing. Showing it as a gap
+ * would demand a link the model has no place for; see {@link Span.TermGap}.</p>
  */
 public final class UseCaseCards {
 
     private final ListUseCases useCases;
-    private final ResolveTerms terms;
     private final ResolveRequirements requirements;
 
     /**
      * @param useCases     the use-cases context's list in-port
-     * @param terms        borrowed for actor display codes
      * @param requirements borrowed for realised-requirement display codes
      */
-    public UseCaseCards(
-            final ListUseCases useCases,
-            final ResolveTerms terms,
-            final ResolveRequirements requirements) {
+    public UseCaseCards(final ListUseCases useCases, final ResolveRequirements requirements) {
         this.useCases = Objects.requireNonNull(useCases, "useCases");
-        this.terms = Objects.requireNonNull(terms, "terms");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
     }
 
     /**
      * @param workspaceId the workspace to read
+     * @param glossary    the workspace's glossary, for actor labels
      * @return the use-case section, ordered by business code
      */
-    public ModelSection section(final WorkspaceId workspaceId) {
+    public ModelSection section(final WorkspaceId workspaceId, final Glossary glossary) {
+        Objects.requireNonNull(glossary, "glossary");
         final List<UseCase> all = useCases.list(workspaceId);
-        final Map<ResourceId, ResolvedTerm> actors = resolveActors(workspaceId, all);
         final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(workspaceId, all);
         final List<ModelCard> cards = all.stream()
                 .sorted(java.util.Comparator.comparing(uc -> uc.code().value()))
-                .map(uc -> card(uc, actors, reqs))
+                .map(uc -> card(uc, glossary, reqs))
                 .toList();
         return new ModelSection("Use Cases", "use-cases",
                 "goal, actors and the ordered main flow - as authored, not as triples", cards);
@@ -79,22 +77,24 @@ public final class UseCaseCards {
 
     private ModelCard card(
             final UseCase uc,
-            final Map<ResourceId, ResolvedTerm> actors,
+            final Glossary glossary,
             final Map<ResourceId, ResolvedRequirement> reqs) {
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(new Block.Prose("Goal", uc.goal()));
+        blocks.add(Block.Prose.plain("Goal", uc.goal()));
         addIfPresent(blocks, "Scope", uc.scope());
         addIfPresent(blocks, "Trigger", uc.trigger());
-        blocks.add(new Block.Refs("Primary actor", List.of(actorRef(uc.primaryActor(), actors))));
+        blocks.add(new Block.Refs("Primary actor", List.of(glossary.ref(uc.primaryActor().value()))));
         if (!uc.supportingActors().isEmpty()) {
-            blocks.add(new Block.Refs("Supporting actors",
-                    uc.supportingActors().stream().map(ref -> actorRef(ref, actors)).toList()));
+            blocks.add(new Block.Refs("Supporting actors", uc.supportingActors().stream()
+                    .map(ActorRef::value)
+                    .map(glossary::ref)
+                    .toList()));
         }
         addIfPresent(blocks, "Precondition", uc.precondition());
         addIfPresent(blocks, "Postcondition", uc.postcondition());
         blocks.add(new Block.Flow("Main flow", uc.steps().stream().map(step -> flowStep(step, reqs)).toList()));
         if (!uc.extensions().isEmpty()) {
-            blocks.add(new Block.Bullets("Extensions", uc.extensions()));
+            blocks.add(Block.Bullets.plain("Extensions", uc.extensions()));
         }
         return new ModelCard(uc.code().value(), uc.title(), uc.id().value().value(), List.of(), blocks);
     }
@@ -104,42 +104,23 @@ public final class UseCaseCards {
                 step.realises().stream().map(ref -> requirementRef(ref, reqs)).toList());
     }
 
-    private static Ref actorRef(final ActorRef ref, final Map<ResourceId, ResolvedTerm> actors) {
-        final ResolvedTerm resolved = actors.get(ref.value());
-        return new Ref(resolved != null ? resolved.code().value() : ref.value().value(), ref.value().value());
-    }
-
     private static Ref requirementRef(final RequirementRef ref, final Map<ResourceId, ResolvedRequirement> reqs) {
         final ResolvedRequirement resolved = reqs.get(ref.value());
-        return new Ref(resolved != null ? resolved.code().value() : ref.value().value(), ref.value().value());
+        return Ref.of(resolved != null ? resolved.code().value() : ref.value().value(), ref.value().value());
     }
 
     private static void addIfPresent(final List<Block> blocks, final String label, final String value) {
         if (value != null && !value.isBlank()) {
-            blocks.add(new Block.Prose(label, value));
+            blocks.add(Block.Prose.plain(label, value));
         }
     }
 
     /**
-     * Resolves every actor of every use case in one call. The merge function keeps the first
-     * entry per identity rather than letting a duplicate turn a display concern into an
-     * {@code IllegalStateException} - the same guard the MCP in-adapter applies, for the same
-     * reason: this path exists to render, never to throw.
+     * Resolves every requirement realised by any step of any use case in one call. The merge
+     * function keeps the first entry per identity rather than letting a duplicate turn a display
+     * concern into an {@code IllegalStateException} - the same guard the MCP in-adapter applies,
+     * for the same reason: this path exists to render, never to throw.
      */
-    private Map<ResourceId, ResolvedTerm> resolveActors(final WorkspaceId workspaceId, final List<UseCase> all) {
-        final ResourceId[] ids = all.stream()
-                .flatMap(uc -> Stream.concat(Stream.of(uc.primaryActor()), uc.supportingActors().stream()))
-                .map(ActorRef::value)
-                .distinct()
-                .toArray(ResourceId[]::new);
-        if (ids.length == 0) {
-            return Map.of();
-        }
-        return terms.getById(workspaceId, ids).stream()
-                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
-    }
-
-    /** Resolves every requirement realised by any step of any use case in one call. */
     private Map<ResourceId, ResolvedRequirement> resolveRequirements(
             final WorkspaceId workspaceId, final List<UseCase> all) {
         final ResourceId[] ids = all.stream()

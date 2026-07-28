@@ -5,9 +5,10 @@ package de.hauschel.arknet.mcp.report;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
@@ -15,80 +16,70 @@ import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
-import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Builds the report's bounded-context cards from the bounded-context context's read in-port.
  *
- * <p>Shows the domain vision statement as prose, the strategic classification (core /
- * supporting / generic) as a badge, and the context's ubiquitous language as linked chips into
- * the glossary section - resolved through the borrowed {@link ResolveTerms} port (ADR-008) in
- * one batched call.</p>
+ * <p>Shows the domain vision statement as prose and the strategic classification (core /
+ * supporting / generic) as a badge. The context's ubiquitous language is marked up inside the
+ * vision statement itself through {@link Glossary} - a term the context links to reads as a
+ * link where it is used, a glossary word the vision names without an
+ * {@code arknet:ubiquitousLanguageTerm} edge as a gap. Only linked terms the vision never names
+ * remain as chips; see {@link RequirementCards} for the same reasoning at length.</p>
  */
 public final class BoundedContextCards {
 
     private final ListBoundedContexts contexts;
-    private final ResolveTerms terms;
 
     /**
      * @param contexts the bounded-context context's list in-port
-     * @param terms    borrowed for glossary display codes
      */
-    public BoundedContextCards(final ListBoundedContexts contexts, final ResolveTerms terms) {
+    public BoundedContextCards(final ListBoundedContexts contexts) {
         this.contexts = Objects.requireNonNull(contexts, "contexts");
-        this.terms = Objects.requireNonNull(terms, "terms");
     }
 
     /**
      * @param workspaceId the workspace to read
+     * @param glossary    the workspace's glossary, for labelling and marking up references
      * @return the bounded-context section, ordered by business code
      */
-    public ModelSection section(final WorkspaceId workspaceId) {
-        final List<BoundedContext> all = contexts.list(workspaceId);
-        final Map<ResourceId, ResolvedTerm> resolved = resolveTerms(workspaceId, all);
-        final List<ModelCard> cards = all.stream()
+    public ModelSection section(final WorkspaceId workspaceId, final Glossary glossary) {
+        Objects.requireNonNull(glossary, "glossary");
+        final List<ModelCard> cards = contexts.list(workspaceId).stream()
                 .sorted(Comparator.comparing(context -> context.code().value()))
-                .map(context -> card(context, resolved))
+                .map(context -> card(context, glossary))
                 .toList();
         return new ModelSection("Bounded Contexts", "bounded-contexts",
                 "the strategic model boundaries and the language inside each", cards);
     }
 
-    private static ModelCard card(final BoundedContext context, final Map<ResourceId, ResolvedTerm> resolved) {
+    private static ModelCard card(final BoundedContext context, final Glossary glossary) {
         final List<Badge> badges = new ArrayList<>();
         if (context.subdomain() != null) {
             badges.add(new Badge("subdomain", Labels.humanise(context.subdomain().name())));
         }
+
+        final Set<ResourceId> linked = context.usesTerms().stream()
+                .map(TermRef::value)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(new Block.Prose("Domain vision", context.domainVision()));
+        blocks.add(new Block.Prose("Domain vision", glossary.markUp(context.domainVision(), linked)));
         if (context.ownedBy() != null) {
-            blocks.add(new Block.Prose("Owned by", context.ownedBy()));
+            blocks.add(Block.Prose.plain("Owned by", context.ownedBy()));
         }
-        if (!context.usesTerms().isEmpty()) {
-            blocks.add(new Block.Refs("Ubiquitous language",
-                    context.usesTerms().stream().map(ref -> termRef(ref, resolved)).toList()));
+        if (!linked.isEmpty()) {
+            final Set<ResourceId> mentioned = glossary.mentionedIn(List.of(context.domainVision()));
+            final List<Ref> rest = linked.stream()
+                    .filter(id -> !mentioned.contains(id))
+                    .map(glossary::ref)
+                    .toList();
+            if (!rest.isEmpty()) {
+                blocks.add(new Block.Refs(
+                        mentioned.isEmpty() ? "Ubiquitous language"
+                                : "Ubiquitous language (not named in the vision)", rest));
+            }
         }
         return new ModelCard(context.code().value(), context.name(), context.id().value().value(), badges, blocks);
-    }
-
-    private static Ref termRef(final TermRef ref, final Map<ResourceId, ResolvedTerm> resolved) {
-        final ResolvedTerm term = resolved.get(ref.value());
-        return new Ref(term != null ? term.code().value() : ref.value().value(), ref.value().value());
-    }
-
-    /** Resolves every glossary reference of every bounded context in one call; see {@link UseCaseCards}. */
-    private Map<ResourceId, ResolvedTerm> resolveTerms(
-            final WorkspaceId workspaceId, final List<BoundedContext> all) {
-        final ResourceId[] ids = all.stream()
-                .flatMap(context -> context.usesTerms().stream())
-                .map(TermRef::value)
-                .distinct()
-                .toArray(ResourceId[]::new);
-        if (ids.length == 0) {
-            return Map.of();
-        }
-        return terms.getById(workspaceId, ids).stream()
-                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 }

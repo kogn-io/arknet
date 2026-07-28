@@ -19,12 +19,13 @@ import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
-import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
+import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * The use-case card is the report's answer to "a use case is unreadable as triples": it must
- * carry the flow in order and the references as business codes.
+ * carry the flow in order and the references as something a human recognises.
  */
 class UseCaseCardsTest {
 
@@ -32,23 +33,23 @@ class UseCaseCardsTest {
     private static final ResourceId ACTOR = ResourceId.of("https://w3id.org/arknet/id/actor-1");
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
 
+    private static final Glossary GLOSSARY = Glossary.of(List.of(new Term(
+            new TermId(ACTOR), new TermCode("TERM-1"), "Kunde", "Wer bestellt.", null)));
+
     @Test
     void buildsACockburnStyleCardWithTheFlowInOrder() {
         final UseCaseCards cards = new UseCaseCards(
                 workspaceId -> List.of(useCase()),
-                (workspaceId, ids) -> List.of(new ResolvedTerm(ACTOR, new TermCode("Kunde"))),
                 (workspaceId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
-        final ModelSection section = cards.section(WORKSPACE);
+        final ModelSection section = cards.section(WORKSPACE, GLOSSARY);
 
         assertThat(section.title()).isEqualTo("Use Cases");
         assertThat(section.cards()).singleElement().satisfies(card -> {
             assertThat(card.code()).isEqualTo("UC1");
             assertThat(card.title()).isEqualTo("Bestellung aufgeben");
             assertThat(card.blocks()).element(0)
-                    .isEqualTo(new Block.Prose("Goal", "Der Kunde bestellt Artikel."));
-            assertThat(card.blocks()).contains(
-                    new Block.Refs("Primary actor", List.of(new Ref("Kunde", ACTOR.value()))));
+                    .isEqualTo(new Block.Prose("Goal", RichText.plain("Der Kunde bestellt Artikel.")));
             assertThat(card.blocks()).filteredOn(Block.Flow.class::isInstance)
                     .singleElement()
                     .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(Block.Flow.class))
@@ -60,16 +61,44 @@ class UseCaseCardsTest {
         });
     }
 
+    /**
+     * The chip carries the term itself; its running number stays available as the tooltip. An
+     * actor identity is opaque, so {@code TERM-1} told the reader nothing about who acts here.
+     */
+    @Test
+    void showsAnActorByItsLabelWithTheCodeAsTooltip() {
+        final UseCaseCards cards = new UseCaseCards(
+                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
+
+        assertThat(cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks()).contains(
+                new Block.Refs("Primary actor", List.of(new Ref("Kunde", "TERM-1", ACTOR.value()))));
+    }
+
+    /**
+     * A use case has no {@code usesTerm} edge - only actor roles - so a glossary word in its goal
+     * has no edge that could be pleaded missing. Marking it up would demand a link the model has
+     * nowhere to put, which is why only requirement and bounded-context prose is analysed.
+     */
+    @Test
+    void leavesGlossaryWordsInTheGoalUnmarked() {
+        final UseCaseCards cards = new UseCaseCards(
+                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
+
+        final Block.Prose goal = (Block.Prose) cards.section(WORKSPACE, GLOSSARY)
+                .cards().getFirst().blocks().getFirst();
+
+        assertThat(goal.text().spans()).containsExactly(new Span.Plain("Der Kunde bestellt Artikel."));
+    }
+
     @Test
     void resolvesStepRequirementsToTheirBusinessCodes() {
         final UseCaseCards cards = new UseCaseCards(
                 workspaceId -> List.of(useCase()),
-                (workspaceId, ids) -> List.of(),
                 (workspaceId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
-        final Block.Flow flow = flowOf(cards.section(WORKSPACE));
+        final Block.Flow flow = flowOf(cards.section(WORKSPACE, GLOSSARY));
 
-        assertThat(flow.steps().get(0).realises()).containsExactly(new Ref("FR-1", FR_1.value()));
+        assertThat(flow.steps().get(0).realises()).containsExactly(Ref.of("FR-1", FR_1.value()));
     }
 
     /**
@@ -79,26 +108,23 @@ class UseCaseCardsTest {
     @Test
     void fallsBackToTheBareIriWhenAReferenceCannotBeResolved() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()),
-                (workspaceId, ids) -> List.of(),
-                (workspaceId, ids) -> List.of());
+                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
 
-        final ModelSection section = cards.section(WORKSPACE);
+        final ModelSection section = cards.section(WORKSPACE, Glossary.empty());
 
         assertThat(section.cards().getFirst().blocks()).contains(
-                new Block.Refs("Primary actor", List.of(new Ref(ACTOR.value(), ACTOR.value()))));
+                new Block.Refs("Primary actor", List.of(Ref.of(ACTOR.value(), ACTOR.value()))));
         assertThat(flowOf(section).steps().get(0).realises())
-                .containsExactly(new Ref(FR_1.value(), FR_1.value()));
+                .containsExactly(Ref.of(FR_1.value(), FR_1.value()));
     }
 
     /** Optional fields that are absent are left out rather than rendered as empty blocks. */
     @Test
     void omitsAbsentOptionalFields() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of(),
-                (workspaceId, ids) -> List.of());
+                workspaceId -> List.of(useCase()), (workspaceId, ids) -> List.of());
 
-        final List<String> labels = cards.section(WORKSPACE).cards().getFirst().blocks().stream()
+        final List<String> labels = cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
 
         assertThat(labels).containsExactly("Goal", "Trigger", "Primary actor", "Postcondition", "Main flow");
@@ -107,9 +133,9 @@ class UseCaseCardsTest {
     @Test
     void sectionIsEmptyWhenThereAreNoUseCases() {
         final UseCaseCards cards = new UseCaseCards(
-                workspaceId -> List.of(), (workspaceId, ids) -> List.of(), (workspaceId, ids) -> List.of());
+                workspaceId -> List.of(), (workspaceId, ids) -> List.of());
 
-        assertThat(cards.section(WORKSPACE).isEmpty()).isTrue();
+        assertThat(cards.section(WORKSPACE, GLOSSARY).isEmpty()).isTrue();
     }
 
     private static Block.Flow flowOf(final ModelSection section) {
