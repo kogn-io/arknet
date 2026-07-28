@@ -166,6 +166,15 @@ Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assig
 | `bc_get` | Fetch a single bounded context with its linked glossary terms |
 | `bc_link_term` | Link a bounded context to a glossary term (`arknet:hasAggregate`; the term must exist) |
 
+Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
+
+| Tool | Description |
+|------|-------------|
+| `project_add` | Register a project; the calling client's origin directory becomes its first anchor (or pass `anchor`/`anchorType` explicitly for clients that cannot supply one) |
+| `project_attach_anchor` | Attach a further anchor to the project the call comes from -- for the same project worked on from a second directory |
+| `project_rename` | Rename the project the call comes from; identity and anchors are unaffected |
+| `project_list` | List all registered projects with their anchors and identities |
+
 Store report -- generic, cross-BC read path (readOnly; works for any BC without type mapping):
 
 | Tool | Description |

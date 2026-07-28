@@ -19,11 +19,15 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -44,6 +48,7 @@ class StoreReaderTest {
 
     private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-reader-test-fr-1";
+    private static final String PROJECT_IRI = "https://w3id.org/arknet/id/store-reader-test-project";
 
     /**
      * A handle carrying a payload that, if concatenated unescaped into {@code "<" + iri + ">"},
@@ -178,6 +183,53 @@ class StoreReaderTest {
         assertThat(storeReader.outgoing(WORKSPACE, headIri()))
                 .as("a revision is not a model resource - the generic read path does not reach it")
                 .isEmpty();
+    }
+
+    /**
+     * The second infrastructure graph (ADR-016 decision 7): a project describes itself - its
+     * anchors and its label - inside its own dataset, so that the registry stays a rebuildable
+     * index and a restored backup carries its identity with it. That record is routing machinery,
+     * not model: without the exclusion every store report would open with the anchors by which
+     * the calling client was routed here.
+     *
+     * <p>Written raw rather than through the project out-adapter on purpose - what is under test
+     * is {@link StoreReader}'s filter, and going through the adapter would make this test fail for
+     * reasons that have nothing to do with the filter.</p>
+     */
+    @Test
+    void noReadPathSurfacesTheProjectSelfDescription() {
+        writeSelfDescription();
+
+        assertThat(selectCount("SELECT ?s ?p ?o WHERE { GRAPH <"
+                + ArkprjVocabulary.IDENTITY_GRAPH + "> { ?s ?p ?o } }"))
+                .as("the self-description must be in the store - else this test is vacuous")
+                .isPositive();
+
+        assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProjectIdentity);
+        assertThat(storeReader.outgoing(WORKSPACE, PROJECT_IRI)).isEmpty();
+        assertThat(storeReader.incoming(WORKSPACE, PROJECT_IRI)).isEmpty();
+    }
+
+    /** Writes a minimal project self-description straight into the identity graph. */
+    private void writeSelfDescription() {
+        RDF rdf = new SimpleRdf();
+        Graph identity = rdf.createGraph();
+        IRI project = rdf.createIRI(PROJECT_IRI);
+        identity.add(project, rdf.createIRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                rdf.createIRI(ArkprjVocabulary.PROJECT_TYPE));
+        identity.add(project, rdf.createIRI(ArkprjVocabulary.ANCHOR_VALUE),
+                rdf.createLiteral("/home/somebody/DEV/noistill"));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI(ArkprjVocabulary.IDENTITY_GRAPH), identity);
+                return null;
+            });
+        }
+    }
+
+    private static boolean isProjectIdentity(Triple triple) {
+        return triple.subject().equals(PROJECT_IRI)
+                || triple.predicate().startsWith(ArkprjVocabulary.NAMESPACE);
     }
 
     private static boolean isProvenance(Triple triple) {
