@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
@@ -51,13 +52,28 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * rejected as a conflict. Which exception that surfaces as is a property of the store behind the
  * ports, not of this class, so {@code isWriteConflict} stays an injected, technology-neutral
  * {@link Predicate} (ADR-001: the store is swappable); {@link #DEFAULT_WRITE_CONFLICT} is the
- * ready-made one for the kognio-rdf-backed store every adapter here uses. {@link #create}
- * translates a positive answer into the same {@code duplicateCode} signal the synchronous check
- * throws (the signal {@code CodeAssignment}'s retry consumes, see {@code arknet-shared-kernel}).
- * {@link #update} deliberately does <em>not</em> translate: a conflict there is not a code
- * collision, and the pre-funnel adapters rethrew it raw - preserved as-is, not repaired in
- * passing (the ul adapter's unmigrated patch-update, which translates into its own
- * concurrent-modification signal, stays outside this funnel for exactly such differences).</p>
+ * ready-made one for the kognio-rdf-backed store every adapter here uses. Which domain signal a
+ * lost commit surfaces as is the caller's decision, not the funnel's: {@link #create}'s
+ * {@code commitConflict} translator receives the store's own conflict exception and returns the
+ * signal to throw in its place. The short overload binds it to {@code duplicateCode} - the signal
+ * {@code CodeAssignment}'s retry consumes (see {@code arknet-shared-kernel}), which is why the four
+ * model contexts need no translator of their own. {@link #update} deliberately does <em>not</em>
+ * translate: a conflict there is not a code collision, and the pre-funnel adapters rethrew it raw -
+ * preserved as-is, not repaired in passing (the ul adapter's unmigrated patch-update, which
+ * translates into its own concurrent-modification signal, stays outside this funnel for exactly
+ * such differences).</p>
+ *
+ * <p><strong>Why the translator is a parameter and not a fixed rule (issue #181).</strong> A lost
+ * commit means "somebody else wrote here first" and nothing more; the funnel cannot know
+ * <em>which</em> of its caller's uniqueness rules that writer actually broke. Where the business
+ * code is the only thing that can collide, mapping the conflict onto {@code duplicateCode} states
+ * a fact - and a healing retry consumes it before any user sees it. Where a context guards a
+ * second uniqueness rule of its own inside the {@code body} (the project registry's anchor
+ * uniqueness, ADR-016 decision 4) and has no such retry, the same mapping would state a
+ * <em>falsehood</em> straight to the caller: "label already taken" for a write that lost on an
+ * anchor. Only the caller can tell those apart, so only the caller may name the signal - and
+ * returning the conflict unchanged ({@link UnaryOperator#identity()}) stays available for the
+ * residual case where even the caller cannot attribute the loss to any of its rules.</p>
  *
  * <p><strong>The gate is structurally unavoidable.</strong> Both methods run
  * {@link ShaclWriteGate#enforce} on the candidate (plus the optional validation-only
@@ -180,8 +196,13 @@ public final class WriteFunnel {
     }
 
     /**
-     * Runs a guarded create: the subject must not exist yet and the business code must still be
-     * free; only then does {@code body} run, inside the same write transaction as both checks.
+     * Runs a guarded create whose lost commit races are reported as {@code duplicateCode} - the
+     * signal {@code CodeAssignment}'s retry consumes, and the right one wherever the business code
+     * is the only uniqueness rule the write can break. A context guarding a second rule of its own
+     * inside {@code body} wants
+     * {@link #create(DatasetId, String, String, String, ReadableGraph, ReadableGraph, Supplier,
+     * Supplier, UnaryOperator, Consumer)} instead (see that method and the class javadoc's
+     * "why the translator is a parameter").
      *
      * @param dataset         the dataset (workspace) to write into
      * @param graphIri        the named graph the checks are scoped to
@@ -202,6 +223,45 @@ public final class WriteFunnel {
             ReadableGraph candidate, ReadableGraph assertedContext,
             Supplier<RuntimeException> alreadyExists, Supplier<RuntimeException> duplicateCode,
             Consumer<DatasetTx> body) {
+        Objects.requireNonNull(duplicateCode, "duplicateCode");
+        create(dataset, graphIri, subjectIri, code, candidate, assertedContext, alreadyExists,
+                duplicateCode, conflict -> duplicateCode.get(), body);
+    }
+
+    /**
+     * Runs a guarded create: the subject must not exist yet and the business code must still be
+     * free; only then does {@code body} run, inside the same write transaction as both checks.
+     *
+     * @param dataset         the dataset (workspace) to write into
+     * @param graphIri        the named graph the checks are scoped to
+     * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
+     *                        (a {@code de.hauschel.arknet.kernel.ResourceId} value)
+     * @param code            the human-readable business code checked against
+     *                        {@code dcterms:identifier} (escaped here, pass it raw)
+     * @param candidate       the instance graph handed to the SHACL gate before the transaction
+     * @param assertedContext validation-only context triples for the gate (issue #63), or
+     *                        {@code null} if the shapes need none
+     * @param alreadyExists   the bounded context's signal for an opaque-identity collision
+     * @param duplicateCode   the bounded context's signal for a business-code collision, as found
+     *                        by the synchronous {@code dcterms:identifier} check
+     * @param commitConflict  translates a lost commit race (issue #144) into the signal the caller
+     *                        wants thrown, given the store's own conflict exception; return that
+     *                        exception unchanged to leave the loss untranslated. Runs after the
+     *                        transaction has been rolled back, so it may read the store to
+     *                        attribute the loss - the dataset handle is still open at that point,
+     *                        but no transaction is. A {@code null} result is treated as
+     *                        "untranslated" rather than allowed to mask the conflict. Should the
+     *                        translator itself throw (for instance while re-reading the store to
+     *                        attribute the loss, see {@link #translateCommitConflict}), that
+     *                        exception is what reaches the caller instead - with the original
+     *                        store conflict kept on it as {@linkplain Throwable#addSuppressed
+     *                        suppressed}, never dropped
+     * @param body            the write itself, given the live transaction after all checks passed
+     */
+    public void create(DatasetId dataset, String graphIri, String subjectIri, String code,
+            ReadableGraph candidate, ReadableGraph assertedContext,
+            Supplier<RuntimeException> alreadyExists, Supplier<RuntimeException> duplicateCode,
+            UnaryOperator<RuntimeException> commitConflict, Consumer<DatasetTx> body) {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(graphIri, "graphIri");
         Objects.requireNonNull(subjectIri, "subjectIri");
@@ -209,6 +269,7 @@ public final class WriteFunnel {
         Objects.requireNonNull(candidate, "candidate");
         Objects.requireNonNull(alreadyExists, "alreadyExists");
         Objects.requireNonNull(duplicateCode, "duplicateCode");
+        Objects.requireNonNull(commitConflict, "commitConflict");
         Objects.requireNonNull(body, "body");
 
         enforceGate(candidate, assertedContext);
@@ -237,11 +298,51 @@ public final class WriteFunnel {
                 });
             } catch (RuntimeException e) {
                 if (isWriteConflict.test(e)) {
-                    throw duplicateCode.get();
+                    throw translateCommitConflict(commitConflict, e);
                 }
                 throw e;
             }
         }
+    }
+
+    /**
+     * Runs {@code commitConflict} on a recognised commit conflict, without ever letting the
+     * conflict itself vanish - neither into a swallowed return value (that half is
+     * {@link Objects#requireNonNullElse}) nor into a translator that throws instead of returning.
+     *
+     * <p>A translator such as {@code KognioRdfProjectRegistry#attributeLostRegistration} re-reads
+     * the store after the rollback to name what the loser actually collided with (issue #181) -
+     * itself a query that can fail (e.g. an unrecognised anchor-type IRI surfacing as an
+     * {@link IllegalStateException} from {@code ProjectGraphs#anchorTypeFromIri}). Letting that
+     * failure simply propagate would erase the original {@code ConcurrencyConflictException}
+     * without a trace: not the cause, not a suppressed exception, nothing a caller could use to
+     * even tell a race happened. The translator's own exception is the more actionable diagnosis
+     * - it says what went wrong attributing the loss, where the original conflict says only
+     * "somebody else committed first" - so it is what reaches the caller, with the original
+     * conflict attached via {@link Throwable#addSuppressed} so the loser is never left with no
+     * information at all.</p>
+     *
+     * @param commitConflict the caller's translator, as documented on the caller-facing overload
+     * @param conflict       the store's own conflict exception, already recognised by
+     *                       {@code isWriteConflict}
+     * @return the exception to throw in place of {@code conflict}
+     */
+    private static RuntimeException translateCommitConflict(
+            UnaryOperator<RuntimeException> commitConflict, RuntimeException conflict) {
+        RuntimeException translated;
+        try {
+            translated = commitConflict.apply(conflict);
+        } catch (RuntimeException attributionFailed) {
+            // Throwable#addSuppressed(this) throws IllegalArgumentException; a translator that
+            // simply rethrows the conflict it was handed (rather than returning it, the documented
+            // "leave it untranslated" contract) would otherwise fail here instead of passing the
+            // conflict through cleanly.
+            if (attributionFailed != conflict) {
+                attributionFailed.addSuppressed(conflict);
+            }
+            return attributionFailed;
+        }
+        return Objects.requireNonNullElse(translated, conflict);
     }
 
     /**
