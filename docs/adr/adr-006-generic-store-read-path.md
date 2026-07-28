@@ -122,7 +122,7 @@ Anwendungsfall -- und der Report ist genau das Artefakt, das ein Fachbereich les
 
 **Der HTML-Report wird pro Bounded Context aus deren Lese-In-Ports zusammengesetzt**
 (`ListBoundedContexts`/`ListRequirements`/`ListUseCases`/`ListTerms`, plus
-`ResolveTerms`/`ResolveRequirements` fuer die Anzeige-Codes referenzierter Identitaeten).
+`ResolveRequirements` fuer die Anzeige-Codes referenzierter Requirement-Identitaeten).
 Der Kontext, der ein Modellelement geschrieben hat, weiss es zurueckzulesen; der Report fragt
 ihn, statt die Antwort im Composition Root neu herzuleiten. Dass ein treibender Adapter dafuer
 fremde In-Ports borgt, ist keine neue Freiheit, sondern die aus ADR-008 -- hier fuer eine
@@ -131,6 +131,33 @@ Anzeige statt fuer eine Tool-Antwort. Die BC-Cores bleiben unberuehrt.
 Unberuehrt bleiben ebenso die Entscheidungen 1, 3 und 4: kein eigener BC, derselbe geteilte
 `DatasetLifecycle`/`StoreReader`, derselbe Handle-Vertrag, keine RDF4J-Abhaengigkeit im
 Composition Root.
+
+**Glossar-Referenzen laufen ueber `ListTerms`, nicht ueber `ResolveTerms`.** Fuer die reine
+Anzeige haette die schmale Identitaets-Aufloesung genuegt; sie traegt aber kein `skos:prefLabel`
+und kennt ausschliesslich Identitaeten, auf die bereits eine Kante zeigt. Der Report liest das
+Glossar darum einmal ganz und haelt es als eine Projektion fuer alle Abschnitte -- was ihn
+nichts kostet, da er es als eigenen Abschnitt ohnehin rendert. Damit kann er zwei Fragen
+beantworten statt einer: wie heisst der Begriff hinter dieser Identitaet (`TERM-1` wird zu
+`Kunde`, die laufende Nummer wandert in den Tooltip) -- und nennt ein Text einen Begriff, auf
+den *keine* Kante zeigt.
+
+**Der Report zeigt die Luecke zwischen Prosa und Modell.** Requirement-Beschreibung/
+Akzeptanzkriterien und BC-Domain-Vision werden gegen das Glossar ausgezeichnet: eine Erwaehnung
+mit `arkreq:usesTerm`- bzw. `arknet:ubiquitousLanguageTerm`-Kante wird zum Link, eine Erwaehnung
+ohne Kante zur sichtbar abgesetzten Luecke. Das ist keine Kosmetik, sondern folgt aus der
+Rolle dieses Reports als Kontrollausgabe: die Kante entsteht ausschliesslich durch einen
+expliziten `req_link_term`/`bc_link_term`-Aufruf, die SHACL-Shape prueft nur ein *gesetztes*
+`usesTerm` -- Text und Modell laufen also nicht ausnahmsweise auseinander, sondern per Default.
+Beide Faelle gleich zu rendern hiesse, eine Beziehung zu behaupten, die der Store nicht haelt;
+sie gleich wegzulassen hiesse, die fehlende Kante unauffindbar zu machen. Der Abgleich ist
+bewusst woertlich (case-insensitiv, an Wortgrenzen): er verfehlt damit deutsche Beugungen,
+erklaert aber nie `Kundendienst` zur Erwaehnung von `Kunde` -- eine falsche Kante im
+Architekturmodell kostet mehr als eine fehlende. Use-Case-Prosa bleibt unausgezeichnet: dort
+gibt es ausser den Aktorrollen keine Term-Kante, eine gemeldete Luecke waere nicht behebbar.
+
+Der Agent sieht diese Luecke vorerst nicht -- `orphan_check` ist kantenbasiert und meldet einen
+Term als verwaist, waehrend er im Klartext mehrerer Requirements steht. Das ist bekannt und
+liegt als eigenes Vorhaben vor, nicht als stille Auslassung dieses Nachtrags.
 
 **Der Datenpfad des Agenten bleibt generisch.** Der Rueckgabewert von `store_overview` ist
 weiterhin der domaenenagnostische Text-Digest aus der einen `SELECT ?s ?p ?o`. Zwei Zielgruppen,
