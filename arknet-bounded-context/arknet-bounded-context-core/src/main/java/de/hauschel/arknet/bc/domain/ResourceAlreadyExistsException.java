@@ -6,7 +6,7 @@ package de.hauschel.arknet.bc.domain;
 import java.util.Objects;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when
@@ -22,25 +22,25 @@ public class ResourceAlreadyExistsException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient WorkspaceId workspaceId;
+    private final transient ProjectId projectId;
     private final transient ResourceId id;
 
     /**
      * Creates the exception.
      *
-     * @param workspaceId the workspace the identity collided in
+     * @param projectId the project the identity collided in
      * @param id          the resource identity that already exists
      */
-    public ResourceAlreadyExistsException(WorkspaceId workspaceId, ResourceId id) {
+    public ResourceAlreadyExistsException(ProjectId projectId, ResourceId id) {
         super("resource " + Objects.requireNonNull(id, "id").value()
-                + " already exists in workspace " + Objects.requireNonNull(workspaceId, "workspaceId").value());
-        this.workspaceId = workspaceId;
+                + " already exists in project " + Objects.requireNonNull(projectId, "projectId").value());
+        this.projectId = projectId;
         this.id = id;
     }
 
-    /** @return the workspace the identity collided in */
-    public WorkspaceId workspaceId() {
-        return workspaceId;
+    /** @return the project the identity collided in */
+    public ProjectId projectId() {
+        return projectId;
     }
 
     /** @return the resource identity that already exists */

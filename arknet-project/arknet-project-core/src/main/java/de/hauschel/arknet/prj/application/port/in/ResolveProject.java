@@ -19,7 +19,7 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  * once the anchor stops being a project-management-only concept and starts gating the store
  * itself - it is already the right shape here because the MCP adapter of this component needs it
  * today: {@link AttachAnchor} and {@link RenameProject} both take a {@link
- * de.hauschel.arknet.prj.domain.ProjectId}, and an agent driving those tools addresses its own
+ * de.hauschel.arknet.kernel.ProjectId}, and an agent driving those tools addresses its own
  * project by the anchor from its call context, not by an id it has never been told.</p>
  */
 public interface ResolveProject {

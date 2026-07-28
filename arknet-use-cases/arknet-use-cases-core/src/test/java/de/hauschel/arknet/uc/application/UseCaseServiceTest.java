@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.domain.ActorRef;
@@ -33,7 +33,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  */
 class UseCaseServiceTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
 
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
     private static final ResourceId PAYMENT_PROVIDER_ID =
@@ -131,7 +131,7 @@ class UseCaseServiceTest {
 
     @Test
     void addIsScopedPerWorkspace() {
-        WorkspaceId other = new WorkspaceId("other");
+        ProjectId other = new ProjectId("other");
         service.add(WS, newUseCase("a"));
 
         UseCase inOther = service.add(other, newUseCase("b"));

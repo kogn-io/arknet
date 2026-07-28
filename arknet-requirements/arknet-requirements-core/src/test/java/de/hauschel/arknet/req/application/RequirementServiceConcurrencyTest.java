@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -42,7 +42,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  */
 class RequirementServiceConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
     /** These concurrency races are orthogonal to {@code req_schema} - never exercised here. */
@@ -211,23 +211,23 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, Requirement requirement) {
-            delegate.create(workspaceId, requirement);
+        public void create(ProjectId projectId, Requirement requirement) {
+            delegate.create(projectId, requirement);
         }
 
         @Override
-        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
-            delegate.compareAndUpdate(workspaceId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
         @Override
-        public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
-            Optional<CurrentRequirement> result = delegate.findCurrentByCode(workspaceId, code);
+        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
+            Optional<CurrentRequirement> result = delegate.findCurrentByCode(projectId, code);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -236,14 +236,14 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public List<Requirement> findAll(WorkspaceId workspaceId) {
-            return delegate.findAll(workspaceId);
+        public List<Requirement> findAll(ProjectId projectId) {
+            return delegate.findAll(projectId);
         }
 
         @Override
-        public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId,
+        public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId,
                 List<ResourceId> ids) {
-            return delegate.findByIds(workspaceId, ids);
+            return delegate.findByIds(projectId, ids);
         }
     }
 
@@ -265,28 +265,28 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, Requirement requirement) {
-            delegate.create(workspaceId, requirement);
+        public void create(ProjectId projectId, Requirement requirement) {
+            delegate.create(projectId, requirement);
         }
 
         @Override
-        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
-            delegate.compareAndUpdate(workspaceId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
         @Override
-        public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
-            return delegate.findCurrentByCode(workspaceId, code);
+        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
+            return delegate.findCurrentByCode(projectId, code);
         }
 
         @Override
-        public List<Requirement> findAll(WorkspaceId workspaceId) {
-            List<Requirement> result = delegate.findAll(workspaceId);
+        public List<Requirement> findAll(ProjectId projectId) {
+            List<Requirement> result = delegate.findAll(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -295,9 +295,9 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId,
+        public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId,
                 List<ResourceId> ids) {
-            return delegate.findByIds(workspaceId, ids);
+            return delegate.findByIds(projectId, ids);
         }
     }
 
@@ -311,39 +311,39 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, Requirement requirement) {
-            delegate.create(workspaceId, requirement);
+        public void create(ProjectId projectId, Requirement requirement) {
+            delegate.create(projectId, requirement);
         }
 
         @Override
-        public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(workspaceId, updated.code())
+            delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new de.hauschel.arknet.req.domain.RequirementNotFoundException(
-                            workspaceId, updated.code()));
+                            projectId, updated.code()));
             throw new RequirementConcurrentlyModifiedException(
-                    workspaceId, updated.code());
+                    projectId, updated.code());
         }
 
         @Override
-        public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public Optional<CurrentRequirement> findCurrentByCode(WorkspaceId workspaceId, RequirementCode code) {
-            return delegate.findCurrentByCode(workspaceId, code);
+        public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
+            return delegate.findCurrentByCode(projectId, code);
         }
 
         @Override
-        public List<Requirement> findAll(WorkspaceId workspaceId) {
-            return delegate.findAll(workspaceId);
+        public List<Requirement> findAll(ProjectId projectId) {
+            return delegate.findAll(projectId);
         }
 
         @Override
-        public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId,
+        public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId,
                 List<ResourceId> ids) {
-            return delegate.findByIds(workspaceId, ids);
+            return delegate.findByIds(projectId, ids);
         }
     }
 }

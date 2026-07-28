@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 
 /**
@@ -73,16 +73,16 @@ public final class ModelViews {
     /**
      * Reads every context and assembles its section.
      *
-     * @param workspaceId the workspace to read
+     * @param projectId the project to read
      * @return the sections that could be read and carry at least one card, plus the failures
      */
-    public Views of(final WorkspaceId workspaceId) {
+    public Views of(final ProjectId projectId) {
         final List<ModelSection> sections = new ArrayList<>();
         final List<String> failures = new ArrayList<>();
-        final Glossary glossary = glossary(workspaceId, failures);
-        collect(sections, failures, "Bounded Contexts", () -> boundedContexts.section(workspaceId, glossary));
-        collect(sections, failures, "Requirements", () -> requirements.section(workspaceId, glossary));
-        collect(sections, failures, "Use Cases", () -> useCases.section(workspaceId, glossary));
+        final Glossary glossary = glossary(projectId, failures);
+        collect(sections, failures, "Bounded Contexts", () -> boundedContexts.section(projectId, glossary));
+        collect(sections, failures, "Requirements", () -> requirements.section(projectId, glossary));
+        collect(sections, failures, "Use Cases", () -> useCases.section(projectId, glossary));
         collect(sections, failures, "Glossary", () -> TermCards.section(glossary));
         return new Views(sections, failures);
     }
@@ -97,9 +97,9 @@ public final class ModelViews {
      * says so, because chips that suddenly read as IRIs would otherwise look like a modelling
      * mistake rather than a read error.</p>
      */
-    private Glossary glossary(final WorkspaceId workspaceId, final List<String> failures) {
+    private Glossary glossary(final ProjectId projectId, final List<String> failures) {
         try {
-            return Glossary.of(terms.list(workspaceId));
+            return Glossary.of(terms.list(projectId));
         } catch (final RuntimeException e) {
             failures.add("Glossary: could not be read (" + e.getClass().getSimpleName() + ": " + e.getMessage()
                     + ") - its terms appear under \"Other resources\" below, and references to them show as"

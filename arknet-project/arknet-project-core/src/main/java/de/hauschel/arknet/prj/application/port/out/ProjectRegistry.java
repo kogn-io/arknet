@@ -10,7 +10,7 @@ import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
@@ -26,7 +26,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  *
  * <p><strong>There is exactly one registry, so there is no routing parameter.</strong> Every
  * other bounded context's out-port (e.g. {@code BoundedContextRepository},
- * {@code RequirementRepository}) takes a {@code WorkspaceId}/{@code ProjectId} first parameter,
+ * {@code RequirementRepository}) takes a {@code ProjectId}/{@code ProjectId} first parameter,
  * because those repositories address one of many possible datasets. This port cannot: the
  * registry is what a caller consults <em>before</em> it knows which project's dataset it is
  * even talking to, and it lives permanently in the one reserved system dataset (ADR-016

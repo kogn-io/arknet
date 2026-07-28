@@ -17,29 +17,34 @@ import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServer
 
 import tools.jackson.databind.json.JsonMapper;
 
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
- * Pins the workspace-directory transport wiring (issue #137): the context extractor lifts the
- * client's {@value WorkspaceHttpTransportConfiguration#WORKSPACE_DIR_HEADER} header into the
- * per-call transport context (where the in-adapters read it), and the provider bean assembles.
+ * Pins the project-anchor transport wiring (ADR-016): the context extractor lifts the client's
+ * {@value AnchorHttpTransportConfiguration#ANCHOR_HEADER} header into the per-call transport
+ * context (where the in-adapters read it), and the provider bean assembles.
+ *
+ * <p>A missing header yielding an <em>empty</em> context is the load-bearing case here. It used to
+ * mean "fall back to the server's own directory"; it now means "this call names no project", which
+ * the in-adapters turn into a caller error. The two tests below therefore pin behaviour that has
+ * changed meaning without changing shape.</p>
  */
-class WorkspaceHttpTransportConfigurationTest {
+class AnchorHttpTransportConfigurationTest {
 
     @Test
-    void extractsTheWorkspaceDirHeaderIntoTheTransportContext() {
+    void extractsTheAnchorHeaderIntoTheTransportContext() {
         ServerRequest request = requestWithHeader("/home/dev/projects/noistill");
 
-        McpTransportContext context = WorkspaceHttpTransportConfiguration.extractWorkspaceDir(request);
+        McpTransportContext context = AnchorHttpTransportConfiguration.extractAnchor(request);
 
-        assertThat(context.get(WorkspaceResolver.WORKSPACE_DIR_KEY)).isEqualTo("/home/dev/projects/noistill");
+        assertThat(context.get(ProjectResolver.ANCHOR_KEY)).isEqualTo("/home/dev/projects/noistill");
     }
 
     @Test
     void aMissingHeaderYieldsAnEmptyContext() {
         ServerRequest request = requestWithHeader(null);
 
-        McpTransportContext context = WorkspaceHttpTransportConfiguration.extractWorkspaceDir(request);
+        McpTransportContext context = AnchorHttpTransportConfiguration.extractAnchor(request);
 
         assertThat(context).isSameAs(McpTransportContext.EMPTY);
     }
@@ -48,7 +53,7 @@ class WorkspaceHttpTransportConfigurationTest {
     void aBlankHeaderYieldsAnEmptyContext() {
         ServerRequest request = requestWithHeader("   ");
 
-        McpTransportContext context = WorkspaceHttpTransportConfiguration.extractWorkspaceDir(request);
+        McpTransportContext context = AnchorHttpTransportConfiguration.extractAnchor(request);
 
         assertThat(context).isSameAs(McpTransportContext.EMPTY);
     }
@@ -57,7 +62,7 @@ class WorkspaceHttpTransportConfigurationTest {
     @Test
     void buildsTheStreamableHttpTransportProvider() {
         WebMvcStreamableServerTransportProvider provider =
-                new WorkspaceHttpTransportConfiguration().webMvcStreamableServerTransportProvider(
+                new AnchorHttpTransportConfiguration().webMvcStreamableServerTransportProvider(
                         JsonMapper.builder().build(), new McpServerStreamableHttpProperties());
 
         assertThat(provider).isNotNull();
@@ -67,7 +72,7 @@ class WorkspaceHttpTransportConfigurationTest {
         ServerRequest request = mock(ServerRequest.class);
         ServerRequest.Headers headers = mock(ServerRequest.Headers.class);
         when(request.headers()).thenReturn(headers);
-        when(headers.firstHeader(WorkspaceHttpTransportConfiguration.WORKSPACE_DIR_HEADER)).thenReturn(value);
+        when(headers.firstHeader(AnchorHttpTransportConfiguration.ANCHOR_HEADER)).thenReturn(value);
         return request;
     }
 }

@@ -7,12 +7,12 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * Assigns a workspace-unique, human-readable business code ({@code BC-N}, {@code FR-N},
+ * Assigns a project-unique, human-readable business code ({@code BC-N}, {@code FR-N},
  * {@code TERM-N}, {@code UCn}, ...) to a brand-new resource, retrying whenever a concurrent
  * caller claims the same candidate code first.
  *
  * <p><strong>The race this closes (issue #144).</strong> Every bounded context computes its next
- * free code client-side - "read the highest running number in the workspace, add one" - and only
+ * free code client-side - "read the highest running number in the project, add one" - and only
  * then asks its out-adapter to {@code create()} the resource. That read and that write are two
  * separate store round trips, so two callers adding a resource of the same type at the same time
  * legitimately compute the <em>same</em> candidate code. The out-adapter's in-transaction

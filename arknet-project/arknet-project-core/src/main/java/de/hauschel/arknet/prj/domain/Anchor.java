@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.prj.domain;
 
+import de.hauschel.arknet.kernel.ProjectId;
 import java.util.Objects;
 
 /**

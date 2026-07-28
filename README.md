@@ -30,11 +30,12 @@ this repository builds and ships only the server itself.
 ### Prerequisite: start the MCP server daemon
 
 The arknet MCP server is a single, long-lived process that serves **all** arknet
-workspaces on the machine over Streamable HTTP at `127.0.0.1:47331` -- it is
+projects on the machine over Streamable HTTP at `127.0.0.1:47331` -- it is
 **not** a subprocess that Claude Code starts. An HTTP entry in `.mcp.json` is
 purely passive in Claude Code: it only connects to the URL, it does not start or
 manage anything. So you start the daemon yourself once before first use. There
-are four ways; **Docker is the recommended one** (no local Java/Maven needed).
+are three ways, all of them Docker: arknet exists only as a server, run locally
+or on the network.
 
 #### Option A: pre-built image from GHCR (recommended)
 
@@ -77,11 +78,10 @@ container's `eth0`, not to loopback -- a plain `127.0.0.1` bind would be
 unreachable from outside. That moves the trust boundary to the **host side**: the
 publish MUST explicitly bind to host loopback (`127.0.0.1:47331:47331`). A bare
 `-p 47331:47331` would expose the **unauthenticated** daemon to the whole LAN
-(ADR-009). The first volume maps the same host path the bare-jar run uses
-(`~/.arknet/rdf`, `arknet.rdf.storage`), so the model survives container
-restarts. The second volume (`arknet.report.dir`) is where `store_overview`
-writes its self-contained HTML report -- without it, the report write has no
-filesystem it shares with the calling client to fall back to and fails.
+(ADR-009). The first volume holds the store itself (`~/.arknet/rdf`,
+`arknet.rdf.storage`), so the model survives container restarts. The second
+volume (`arknet.report.dir`) is where `store_overview` writes its self-contained
+HTML report -- without it, the report has nowhere to go and its write fails.
 `ARKNET_REPORT_HOST_DIR` must name the same path as that volume's host side
 (`arknet.report.host-dir`): the container cannot discover its own bind mount's
 host-side path on its own, so without this the digest's `# HTML report: ...`
@@ -90,8 +90,8 @@ agent -- running outside the container -- cannot reach (issue #160).
 
 The container adopts that volume's existing owner automatically at startup (a
 fresh, container-only volume falls back to the image's own non-root user) --
-no host-side `chown`/`chmod` needed, even when reusing a directory the
-bare-jar path already wrote to. Set `PUID`/`PGID` (`-e PUID=... -e PGID=...`)
+no host-side `chown`/`chmod` needed, even when reusing a directory an earlier
+run already wrote to. Set `PUID`/`PGID` (`-e PUID=... -e PGID=...`)
 only if you want to force a specific uid:gid regardless of what currently owns
 the volume.
 
@@ -103,28 +103,51 @@ Wires up the port publish (host loopback) and volume mount for you:
 docker compose up --build
 ```
 
-#### Option D: from source (for contributors, local JDK 25 + Maven needed)
-
-```bash
-mvn -pl arknet-mcp -am package -DskipTests
-java -jar arknet-mcp/target/arknet-mcp-*.jar
-```
-
 As long as the process runs, any number of Claude Code sessions (including
-parallel worktrees of the same workspace) can share the same store without
+parallel worktrees of the same project) can share the same store without
 blocking each other on the NativeStore directory lock. If the daemon is not
 running, Claude Code reports the MCP connection as failed.
 
-Which workspace a call hits is decided by the directory the Claude Code session
-was started from: `.mcp.json` sends it in the header
-`X-Arknet-Workspace-Dir: ${PWD}`, and the server derives the WorkspaceId from it
-(via git-common-dir, just as in a stdio session). So **start Claude Code from
-the project directory** -- `${PWD}` carries environment-variable semantics, not
-a dynamic working directory. A call without that header falls back to the
-workspace of the daemon's working directory. The header is not authentication,
-only workspace routing at a loopback / single-user boundary (ADR-009). Because
-the workspace comes per call from the header, all projects share this one port
-without collision.
+### Register your project
+
+Which project a call hits is decided by an **anchor**: an opaque string your
+client presents and the server looks up. `.mcp.json` sends the directory the
+Claude Code session was started from, in the header
+`X-Arknet-Project-Anchor: ${PWD}`. So **start Claude Code from the project
+directory** -- `${PWD}` carries environment-variable semantics, not a dynamic
+working directory.
+
+The server never interprets that value: it does not shorten it, parse it, or
+guess. An anchor nobody registered is an error, not a route to a default
+project. Register once per project, from its directory:
+
+```
+project_add(label: "my-project")
+```
+
+Working on the same project from a second directory -- a git worktree, another
+checkout -- start Claude Code there and attach it:
+
+```
+project_attach_anchor(anchor: "/path/to/the/worktree")
+```
+
+If you used arknet before projects were registered, your data sits in a dataset
+named after the old derived id. `project_list` shows those under "unregistered
+datasets"; claim one from the directory it belongs to, and it keeps its data:
+
+```
+project_adopt(datasetId: "my-project", label: "my-project")
+```
+
+A client that cannot set headers can pass the anchor to any tool instead, via
+its optional `projectAnchor` parameter. The header stays the primary path: an
+anchor supplied as a tool argument comes from the language model, and a guessed
+one that happens to exist would silently hit the wrong project.
+
+The header is not authentication, only project routing at a loopback /
+single-user boundary (ADR-009). Because the project comes per call from the
+anchor, all projects share this one port without collision.
 
 ### MCP tools
 
@@ -171,15 +194,16 @@ Project BC (`arknet-project`) -- the project registry: which anchor a call arriv
 | Tool | Description |
 |------|-------------|
 | `project_add` | Register a project; the calling client's origin directory becomes its first anchor (or pass `anchor`/`anchorType` explicitly for clients that cannot supply one) |
+| `project_adopt` | Claim an existing dataset as the project the call comes from -- for data written before projects were registered, or a dataset restored from a backup; the dataset keeps its identity and all its data |
 | `project_attach_anchor` | Attach a further anchor to the project the call comes from -- for the same project worked on from a second directory |
 | `project_rename` | Rename the project the call comes from; identity and anchors are unaffected |
-| `project_list` | List all registered projects with their anchors and identities |
+| `project_list` | List all registered projects with their anchors and identities, plus any datasets no project claims yet (adoptable with `project_adopt`) |
 
 Store report -- generic, cross-BC read path (readOnly; works for any BC without type mapping):
 
 | Tool | Description |
 |------|-------------|
-| `store_overview` | Compact text digest of the workspace store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML report and returns its path. The report reads as the model rather than as triples -- use cases with their numbered flow, requirements with their acceptance criteria, glossary, bounded contexts -- and keeps a raw section for everything no bounded context claims, so nothing in the store can hide from it |
+| `store_overview` | Compact text digest of the project store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML report and returns its path. The report reads as the model rather than as triples -- use cases with their numbered flow, requirements with their acceptance criteria, glossary, bounded contexts -- and keeps a raw section for everything no bounded context claims, so nothing in the store can hide from it |
 | `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, or bare business id (`FR-1`). The revision trail is left out -- it is change history, not model ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 
 Traceability -- readOnly graph traversal over the same store snapshot (no second SPARQL path):
@@ -193,10 +217,10 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 ### Storage model (store-first)
 
 The model lives primarily in the local RDF store (kognio-rdf), **persistent
-across sessions** -- not in-memory and not in a Turtle file. Per workspace
-(= project, derived from the git top level or working directory) the store keeps
-an isolated dataset; default location `~/.arknet/rdf`, configurable via
-`arknet.rdf.storage`.
+across sessions** -- not in-memory and not in a Turtle file. One dataset holds
+the data of exactly one registered project, so the project boundary is the data
+boundary: two projects share no requirement, no use case, not one glossary term.
+Default location `~/.arknet/rdf`, configurable via `arknet.rdf.storage`.
 
 **Managing the model:** through the store-based BC tools (`req_*`, `term_*`,
 `uc_*`) -- not by text-editing a `.ttl`. SHACL validation applies uniformly at
@@ -215,7 +239,7 @@ addendum.
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
 | `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
-| `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`WorkspaceId`, opaque `ResourceId`/`ResourceIdFactory`) |
+| `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`ProjectId`, the `ProjectResolver` port, opaque `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-ubiquitous-language` | Second hexagonal BC: glossary terms as SKOS Concepts (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |

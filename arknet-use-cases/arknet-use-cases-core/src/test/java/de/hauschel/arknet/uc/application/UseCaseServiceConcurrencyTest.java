@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
@@ -25,7 +25,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 /**
  * Regression test for issue #144: {@link UseCaseService#add} used to compute the next business
  * code ({@code UCn}) client-side via {@code nextCode()} and then {@code create()} it with no
- * retry, so two racing {@code uc_add} calls in the same workspace both computed the same candidate
+ * retry, so two racing {@code uc_add} calls in the same project both computed the same candidate
  * code and one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard
  * fire as a caller-visible {@code DuplicateUseCaseCodeException} - even though nothing about its
  * own request was wrong.
@@ -38,7 +38,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  */
 class UseCaseServiceConcurrencyTest {
 
-    private static final WorkspaceId WS = WorkspaceId.DEFAULT;
+    private static final ProjectId WS = new ProjectId("test-project");
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
 
     private InMemoryUseCaseRepository store;
@@ -115,23 +115,23 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void create(WorkspaceId workspaceId, UseCase useCase) {
-            delegate.create(workspaceId, useCase);
+        public void create(ProjectId projectId, UseCase useCase) {
+            delegate.create(projectId, useCase);
         }
 
         @Override
-        public void update(WorkspaceId workspaceId, UseCase useCase) {
-            delegate.update(workspaceId, useCase);
+        public void update(ProjectId projectId, UseCase useCase) {
+            delegate.update(projectId, useCase);
         }
 
         @Override
-        public Optional<UseCase> findByCode(WorkspaceId workspaceId, UseCaseCode code) {
-            return delegate.findByCode(workspaceId, code);
+        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
+            return delegate.findByCode(projectId, code);
         }
 
         @Override
-        public List<UseCase> findAll(WorkspaceId workspaceId) {
-            List<UseCase> result = delegate.findAll(workspaceId);
+        public List<UseCase> findAll(ProjectId projectId) {
+            List<UseCase> result = delegate.findAll(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();

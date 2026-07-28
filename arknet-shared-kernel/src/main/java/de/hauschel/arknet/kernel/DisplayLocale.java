@@ -18,8 +18,8 @@ import java.util.Optional;
  * {@code skos:prefLabel "Kunde"@de} and {@code "Customer"@en} on the same concept are both
  * shape-legal. arknet does not guess which one to show - the <em>consumer</em> states the
  * language it wants to read in. This is a <strong>shared kernel</strong> concept exactly like
- * {@link WorkspaceId}: one value per process, configured once in the composition root and
- * injected into the bounded contexts. Unlike {@code WorkspaceId} it does not flow as a method
+ * {@link ProjectId}: one value per process, configured once in the composition root and
+ * injected into the bounded contexts. Unlike {@code ProjectId} it does not flow as a method
  * parameter through every port call - the language choice must be made <em>before</em> a domain
  * value object (whose label field is a single {@code String}) is constructed, i.e. inside the
  * out-adapter that reads the store.</p>

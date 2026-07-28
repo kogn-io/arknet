@@ -16,7 +16,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -48,7 +48,15 @@ import de.hauschel.arknet.ul.domain.Term;
  */
 class CrossBoundedContextStoreWiringTest {
 
-    private static final WorkspaceId WS = new WorkspaceId("cross-bc");
+    /**
+     * The project all four hexagons write into here.
+     *
+     * <p>These tests used to additionally pin {@code arknet.workspace.id}, a property removed with
+     * the derived resolution path (ADR-016 decision 9). Dropping it costs this test nothing: it
+     * drives the application services directly, and each of them takes the project as a parameter -
+     * the property only ever configured the resolver, which is not on this path.</p>
+     */
+    private static final ProjectId WS = new ProjectId("cross-bc");
 
     @TempDir
     Path storageDir;
@@ -60,8 +68,7 @@ class CrossBoundedContextStoreWiringTest {
     void useCaseResolvesRequirementAndActorWrittenByTheOtherContextsOverTheSharedStore() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=test-workspace")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     // One shared lifecycle, and the use-cases hexagon is wired as a tool bean.
@@ -107,8 +114,7 @@ class CrossBoundedContextStoreWiringTest {
     void useCaseWithUnknownReferencesIsRejectedWithDidacticMessageAndNothingPersisted() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=test-workspace")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     TermService terms = context.getBean(TermService.class);
@@ -143,8 +149,7 @@ class CrossBoundedContextStoreWiringTest {
     void requirementLinksATermWrittenByTheOtherContextOverTheSharedStore() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=test-workspace")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     RequirementService requirements = context.getBean(RequirementService.class);
@@ -171,8 +176,7 @@ class CrossBoundedContextStoreWiringTest {
     void linkingAnUnknownTermIsRejectedWithDidacticMessageAndNothingPersisted() {
         contextRunner
                 .withPropertyValues(
-                        "arknet.rdf.storage=" + storageDir,
-                        "arknet.workspace.id=test-workspace")
+                        "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     RequirementService requirements = context.getBean(RequirementService.class);

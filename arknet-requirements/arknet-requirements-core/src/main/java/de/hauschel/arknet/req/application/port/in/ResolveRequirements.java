@@ -6,7 +6,7 @@ package de.hauschel.arknet.req.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
@@ -26,21 +26,21 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  *
  * <p><strong>Never rejects.</strong> Unlike {@code GetRequirement} (single lookup by code, empty
  * if absent) this is a batch lookup by identity with no error case: an id that resolves to
- * nothing in the workspace is simply absent from the result. The caller - not this port -
+ * nothing in the project is simply absent from the result. The caller - not this port -
  * decides whether "missing" means "fall back to something else" or is itself an error.</p>
  */
 public interface ResolveRequirements {
 
     /**
      * Resolves {@code ids} to the {@link ResolvedRequirement}s they currently identify within
-     * {@code workspaceId}, in a single batch (one store round-trip, not one per id).
+     * {@code projectId}, in a single batch (one store round-trip, not one per id).
      *
-     * @param workspaceId the workspace (architecture model) to resolve requirements in
+     * @param projectId the project (architecture model) to resolve requirements in
      * @param ids         the opaque identities to resolve; may be empty
-     * @return the resolved requirements found; an id absent from the workspace is simply absent
+     * @return the resolved requirements found; an id absent from the project is simply absent
      *         here too, never {@code null}
      */
-    List<ResolvedRequirement> getById(WorkspaceId workspaceId, ResourceId... ids);
+    List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids);
 
     /**
      * The slim projection this port resolves an identity to: just enough for a caller to render a

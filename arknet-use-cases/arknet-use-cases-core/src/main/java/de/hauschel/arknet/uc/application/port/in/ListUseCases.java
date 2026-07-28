@@ -5,7 +5,7 @@ package de.hauschel.arknet.uc.application.port.in;
 
 import java.util.List;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.domain.UseCase;
 
 /**
@@ -16,8 +16,8 @@ public interface ListUseCases {
     /**
      * Returns all use cases currently under management in the given workspace.
      *
-     * @param workspaceId the workspace (architecture model) to list use cases from
+     * @param projectId the project (architecture model) to list use cases from
      * @return all use cases, never {@code null}
      */
-    List<UseCase> list(WorkspaceId workspaceId);
+    List<UseCase> list(ProjectId projectId);
 }

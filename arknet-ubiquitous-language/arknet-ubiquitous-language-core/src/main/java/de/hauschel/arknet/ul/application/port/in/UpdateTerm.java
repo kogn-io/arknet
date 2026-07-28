@@ -3,7 +3,7 @@
 
 package de.hauschel.arknet.ul.application.port.in;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -43,10 +43,10 @@ import de.hauschel.arknet.ul.domain.TermCode;
 public interface UpdateTerm {
 
     /**
-     * Updates the term identified by {@code code} within a workspace, leaving any {@code null}
+     * Updates the term identified by {@code code} within a project, leaving any {@code null}
      * argument unchanged.
      *
-     * @param workspaceId the workspace (architecture model) the term lives in
+     * @param projectId the project (architecture model) the term lives in
      * @param code        the term code, e.g. {@code TERM-1}
      * @param prefLabel   the new preferred label, or {@code null} to leave it unchanged
      * @param definition  the new definition, or {@code null} to leave it unchanged
@@ -54,5 +54,5 @@ public interface UpdateTerm {
      *                    unchanged
      * @return the updated term
      */
-    Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
+    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
 }

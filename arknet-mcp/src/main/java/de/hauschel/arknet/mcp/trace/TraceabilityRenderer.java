@@ -7,14 +7,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreResource;
 
 /**
  * Renders the compact, token-cheap text digests {@code trace_matrix}/{@code orphan_check}/
  * {@code impact_analysis} return, given a {@link TraceabilityGraph} already built over one
- * workspace's statements.
+ * project's statements.
  *
  * <p>Pure: it consumes only a {@link TraceabilityGraph} plus a {@link Prefixes} resolver, so it
  * is unit-testable without any store I/O - the same split {@link
@@ -39,20 +39,20 @@ public final class TraceabilityRenderer {
      * Renders {@code trace_matrix}: one line per requirement (FR and NFR alike) listing the
      * glossary terms it uses and the use case(s) realising it.
      *
-     * @param workspaceId the workspace the graph was read from
+     * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
      * @return the digest text
      */
-    public String traceMatrix(WorkspaceId workspaceId, TraceabilityGraph graph) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public String traceMatrix(ProjectId projectId, TraceabilityGraph graph) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         List<String> requirementIris = graph.requirementIris();
 
         StringBuilder out = new StringBuilder();
-        out.append("# Traceability matrix -- workspace ").append(workspaceId.value())
+        out.append("# Traceability matrix -- project ").append(projectId.value())
                 .append(" -- ").append(requirementIris.size()).append(" requirement(s)\n\n");
         if (requirementIris.isEmpty()) {
-            out.append("- no requirements in this workspace\n");
+            out.append("- no requirements in this project\n");
             return out.toString();
         }
         for (String requirementIri : requirementIris) {
@@ -68,12 +68,12 @@ public final class TraceabilityRenderer {
      * Renders {@code orphan_check}: requirements no use case realises, and glossary terms
      * never used (neither via {@code arkreq:usesTerm} nor as a use-case actor).
      *
-     * @param workspaceId the workspace the graph was read from
+     * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
      * @return the digest text
      */
-    public String orphanCheck(WorkspaceId workspaceId, TraceabilityGraph graph) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public String orphanCheck(ProjectId projectId, TraceabilityGraph graph) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
 
         List<String> orphanRequirements = graph.requirementIris().stream()
@@ -84,7 +84,7 @@ public final class TraceabilityRenderer {
                 .toList();
 
         StringBuilder out = new StringBuilder();
-        out.append("# Orphan check -- workspace ").append(workspaceId.value()).append('\n');
+        out.append("# Orphan check -- project ").append(projectId.value()).append('\n');
         out.append("\n## Requirements without a realising use case (")
                 .append(orphanRequirements.size()).append(")\n");
         appendLines(out, graph, orphanRequirements);
@@ -97,19 +97,19 @@ public final class TraceabilityRenderer {
      * Renders {@code impact_analysis}: every resource transitively affected if {@code
      * targetIri} changes (see {@link TraceabilityGraph#dependents(String)}).
      *
-     * @param workspaceId the workspace the graph was read from
+     * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
      * @param targetIri   the already-resolved target resource IRI
      * @return the digest text
      */
-    public String impactAnalysis(WorkspaceId workspaceId, TraceabilityGraph graph, String targetIri) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public String impactAnalysis(ProjectId projectId, TraceabilityGraph graph, String targetIri) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         Objects.requireNonNull(targetIri, "targetIri");
 
         List<String> affected = graph.dependents(targetIri);
         StringBuilder out = new StringBuilder();
-        out.append("# Impact analysis -- workspace ").append(workspaceId.value())
+        out.append("# Impact analysis -- project ").append(projectId.value())
                 .append(" -- target: ").append(displayLine(graph, targetIri)).append('\n');
         out.append("\n## Transitively affected (").append(affected.size()).append(")\n");
         appendLines(out, graph, affected);

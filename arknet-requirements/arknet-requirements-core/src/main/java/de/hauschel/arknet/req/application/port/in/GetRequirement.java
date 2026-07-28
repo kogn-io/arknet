@@ -5,7 +5,7 @@ package de.hauschel.arknet.req.application.port.in;
 
 import java.util.Optional;
 
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
@@ -17,11 +17,11 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 public interface GetRequirement {
 
     /**
-     * Looks up a requirement by its business code within a workspace.
+     * Looks up a requirement by its business code within a project.
      *
-     * @param workspaceId the workspace (architecture model) to look up the requirement in
+     * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code, e.g. {@code FR-1}
      * @return the requirement if present, otherwise {@link Optional#empty()}
      */
-    Optional<Requirement> get(WorkspaceId workspaceId, RequirementCode code);
+    Optional<Requirement> get(ProjectId projectId, RequirementCode code);
 }

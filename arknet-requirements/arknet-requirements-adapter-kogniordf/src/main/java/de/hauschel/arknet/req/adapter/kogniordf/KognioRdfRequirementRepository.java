@@ -31,7 +31,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -70,11 +70,11 @@ import de.hauschel.arknet.req.domain.TermRef;
  * other backend-specific type. The backend ({@link DatasetLifecycle} implementation) is
  * supplied by the composition root.</p>
  *
- * <p><strong>WorkspaceId (local, single-user).</strong> Each {@link WorkspaceId}
- * is mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are
+ * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId}
+ * is mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are
  * fully isolated datasets. A future remote/team adapter (against kognio-memory)
  * would use the same routing key differently (e.g. as a server-side project
- * selector), but the local embedded adapter already keeps workspaces separate.</p>
+ * selector), but the local embedded adapter already keeps projects separate.</p>
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity, issue #167).</strong> Because
  * identity is opaque and minted once, "insert or replace by identity" is no longer one coherent
@@ -198,8 +198,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public void create(WorkspaceId workspaceId, Requirement requirement) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public void create(ProjectId projectId, Requirement requirement) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(requirement, "requirement");
 
         // ResourceId#of (issue #83) validates IRIREF-safety at construction, so requirement.id()'s
@@ -231,10 +231,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
         IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
-        funnel.create(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
+        funnel.create(new DatasetId(projectId.value()), REQUIREMENTS_GRAPH, subjectIriString,
                 requirement.code().value(), graph, assertedContext,
-                () -> new ResourceAlreadyExistsException(workspaceId, requirement.id().value()),
-                () -> new DuplicateRequirementCodeException(workspaceId, requirement.code()),
+                () -> new ResourceAlreadyExistsException(projectId, requirement.id().value()),
+                () -> new DuplicateRequirementCodeException(projectId, requirement.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
     }
 
@@ -247,8 +247,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * otherwise leave open between the read and the write.
      */
     @Override
-    public void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, Requirement updated) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
 
         String subjectIriString = updated.id().value().value();
@@ -265,10 +265,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
         IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
-        funnel.compareAndUpdate(new DatasetId(workspaceId.value()), REQUIREMENTS_GRAPH, subjectIriString,
+        funnel.compareAndUpdate(new DatasetId(projectId.value()), REQUIREMENTS_GRAPH, subjectIriString,
                 expectedHead, graph, assertedContext,
-                () -> new RequirementNotFoundException(workspaceId, updated.code()),
-                () -> new RequirementConcurrentlyModifiedException(workspaceId, updated.code()),
+                () -> new RequirementNotFoundException(projectId, updated.code()),
+                () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
     }
 
@@ -427,8 +427,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public Optional<Requirement> findByCode(WorkspaceId workspaceId, RequirementCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
         String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory "
@@ -436,7 +436,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + requirementByCodeWhereClause(code)
                 + "} }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
             if (head.isEmpty()) {
                 return Optional.empty();
@@ -463,8 +463,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     @Override
     public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
-            WorkspaceId workspaceId, RequirementCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+            ProjectId projectId, RequirementCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
         String query = "SELECT ?s ?type ?title ?description ?status ?priority ?motivatedBy ?qualityCategory ?head "
@@ -474,7 +474,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
             if (found.isEmpty()) {
                 return Optional.empty();
@@ -490,8 +490,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public List<Requirement> findAll(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<Requirement> findAll(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
 
         String query = "SELECT ?s ?identifier ?title ?description ?type ?status ?priority ?motivatedBy "
                 + "?qualityCategory WHERE { GRAPH <"
@@ -507,7 +507,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
                 + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
             Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(handle);
             // Grouped by subject (issue #81 - see the class-level note above): priority/
@@ -650,8 +650,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * deliberately unspecified.</p>
      */
     @Override
-    public List<ResolveRequirements.ResolvedRequirement> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.isEmpty()) {
             return List.of();
@@ -668,7 +668,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "VALUES ?s { " + values + " } "
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, ResolveRequirements.ResolvedRequirement> bySubject = new LinkedHashMap<>();
             handle.sparqlQuery().select(query).forEach(row -> {
                 String subjectIri = iriOf(row, "s").getIRIString();

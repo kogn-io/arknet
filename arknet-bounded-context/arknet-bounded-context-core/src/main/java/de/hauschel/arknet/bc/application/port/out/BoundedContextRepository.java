@@ -12,7 +12,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: persistence capability the component needs from the outside.
@@ -21,9 +21,9 @@ import de.hauschel.arknet.kernel.WorkspaceId;
  * technology. Implementations live in adapter modules (e.g. an RDF-backed adapter) and must not
  * leak their mechanism into this contract.</p>
  *
- * <p>The {@link WorkspaceId} routing key identifies which architecture model a bounded context
+ * <p>The {@link ProjectId} routing key identifies which architecture model a bounded context
  * belongs to. A local single-user adapter may treat it as an implicit default; a remote/team
- * adapter uses it to address one of several workspaces.</p>
+ * adapter uses it to address one of several projects.</p>
  *
  * <p><strong>Create vs. compare-and-set update.</strong> Identity is opaque and minted once (see
  * {@link de.hauschel.arknet.kernel.ResourceIdFactory}), so "insert or replace by identity" is no
@@ -37,9 +37,9 @@ import de.hauschel.arknet.kernel.WorkspaceId;
 public interface BoundedContextRepository {
 
     /**
-     * Persists a brand-new bounded context whose identity does not yet exist in the workspace.
+     * Persists a brand-new bounded context whose identity does not yet exist in the project.
      *
-     * @param workspaceId    the workspace (architecture model) to store the bounded context in
+     * @param projectId    the project (architecture model) to store the bounded context in
      * @param boundedContext the bounded context to create
      * @throws ResourceAlreadyExistsException         if a bounded context with this identity
      *                                                already exists
@@ -49,7 +49,7 @@ public interface BoundedContextRepository {
      *                                                collision and business-label collision are
      *                                                distinct failure modes
      */
-    void create(WorkspaceId workspaceId, BoundedContext boundedContext);
+    void create(ProjectId projectId, BoundedContext boundedContext);
 
     /**
      * Replaces an existing bounded context by identity, but only if its current concurrency token
@@ -71,7 +71,7 @@ public interface BoundedContextRepository {
      * overwrites it. The guard closes the lost-update window between two funnel writers, not
      * between a funnel writer and a write that bypassed the funnel entirely.</p>
      *
-     * @param workspaceId  the workspace (architecture model) the bounded context lives in
+     * @param projectId  the project (architecture model) the bounded context lives in
      * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
      *                     bounded context (from {@link #findCurrentByCode}), or {@code null} if
      *                     the caller expects no revision to exist yet
@@ -84,16 +84,16 @@ public interface BoundedContextRepository {
      *                                                     current head - a concurrent write raced
      *                                                     ahead
      */
-    void compareAndUpdate(WorkspaceId workspaceId, String expectedHead, BoundedContext updated);
+    void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated);
 
     /**
-     * Finds a bounded context by its human-readable business code within a workspace.
+     * Finds a bounded context by its human-readable business code within a project.
      *
-     * @param workspaceId the workspace (architecture model) to look up the bounded context in
+     * @param projectId the project (architecture model) to look up the bounded context in
      * @param code        the bounded-context code (e.g. {@code BC-1})
      * @return the bounded context if present, otherwise {@link Optional#empty()}
      */
-    Optional<BoundedContext> findByCode(WorkspaceId workspaceId, BoundedContextCode code);
+    Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code);
 
     /**
      * Reads a bounded context's current state together with its concurrency token (the
@@ -109,12 +109,12 @@ public interface BoundedContextRepository {
      * does not mean the whole bounded context comes from a single read. Backs the read side of
      * the read-modify-write round trip {@link #compareAndUpdate} guards the write side of.
      *
-     * @param workspaceId the workspace (architecture model) to look up the bounded context in
+     * @param projectId the project (architecture model) to look up the bounded context in
      * @param code        the bounded-context code (e.g. {@code BC-1})
      * @return the bounded context and its current head, or {@link Optional#empty()} if no bounded
      *         context with this code exists
      */
-    Optional<CurrentBoundedContext> findCurrentByCode(WorkspaceId workspaceId, BoundedContextCode code);
+    Optional<CurrentBoundedContext> findCurrentByCode(ProjectId projectId, BoundedContextCode code);
 
     /**
      * A bounded context's state paired with its current concurrency token (the
@@ -125,10 +125,10 @@ public interface BoundedContextRepository {
     }
 
     /**
-     * Returns all bounded contexts stored in a workspace.
+     * Returns all bounded contexts stored in a project.
      *
-     * @param workspaceId the workspace (architecture model) to list bounded contexts from
+     * @param projectId the project (architecture model) to list bounded contexts from
      * @return all bounded contexts, never {@code null}
      */
-    List<BoundedContext> findAll(WorkspaceId workspaceId);
+    List<BoundedContext> findAll(ProjectId projectId);
 }

@@ -32,7 +32,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -56,8 +56,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  *
  * <p>Maps a {@link Term} to a W3C SKOS concept whose subject is its opaque {@link TermId}
  * (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
- * business code or the label), stored in one named graph shared by all terms of a workspace.
- * Each term is typed {@code skos:Concept}, placed into a per-workspace glossary via
+ * business code or the label), stored in one named graph shared by all terms of a project.
+ * Each term is typed {@code skos:Concept}, placed into a per-project glossary via
  * {@code skos:inScheme}, and carries {@code skos:prefLabel} (the term) and
  * {@code skos:definition} (its meaning); the human-readable running code
  * ({@link TermCode}, {@code TERM-1}) is additionally kept as {@code dcterms:identifier} -
@@ -70,8 +70,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * backend-specific type. The backend ({@link DatasetLifecycle} implementation) is
  * supplied by the composition root.</p>
  *
- * <p><strong>WorkspaceId (local, single-user).</strong> Each {@link WorkspaceId} is
- * mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are fully
+ * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId} is
+ * mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are fully
  * isolated datasets - and thus distinct glossaries. For the MVP there is exactly one
  * {@code skos:ConceptScheme} per workspace ({@link #GLOSSARY_SCHEME}); a per-bounded-context
  * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
@@ -146,7 +146,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * crashing primary subject takes the whole result list down with it - {@link #findByCode} and
  * {@link #findAll} therefore add {@code FILTER(isIRI(?s))} (mirroring the {@code
  * FILTER(isIRI(?target))} guard on cross-BC reference fields in the requirements/use-cases
- * adapters) so such a concept is skipped rather than crashing every other term in the workspace.
+ * adapters) so such a concept is skipped rather than crashing every other term in the project.
  * {@link #findByIds} needs no such filter: its subjects come from a {@code VALUES} clause bound to
  * caller-supplied {@link ResourceId}s, which can never denote a blank node.</p>
  *
@@ -211,8 +211,8 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public void create(WorkspaceId workspaceId, Term term) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public void create(ProjectId projectId, Term term) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(term, "term");
 
         // ResourceId#of (issue #83) validates IRIREF-safety at construction, so term.id()'s
@@ -227,7 +227,7 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.code().value()));
         graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), rdf.createLiteral(term.prefLabel()));
         graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), rdf.createLiteral(term.definition()));
-        // The per-workspace glossary itself, typed once (idempotent - RDF set semantics).
+        // The per-project glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
         // Optional actor facet: the same skos:Concept is additionally typed as an
@@ -244,10 +244,10 @@ public class KognioRdfTermRepository implements TermRepository {
 
         IRI graphIri = rdf.createIRI(TERMS_GRAPH);
 
-        funnel.create(new DatasetId(workspaceId.value()), TERMS_GRAPH, subjectIriString, term.code().value(),
+        funnel.create(new DatasetId(projectId.value()), TERMS_GRAPH, subjectIriString, term.code().value(),
                 graph, null,
-                () -> new ResourceAlreadyExistsException(workspaceId, term.id().value()),
-                () -> new DuplicateTermCodeException(workspaceId, term.code()),
+                () -> new ResourceAlreadyExistsException(projectId, term.id().value()),
+                () -> new DuplicateTermCodeException(projectId, term.code()),
                 tx -> tx.add(graphIri, graph));
     }
 
@@ -302,15 +302,15 @@ public class KognioRdfTermRepository implements TermRepository {
      * rather than per-field patches.</p>
      */
     @Override
-    public Term update(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+    public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
         TermConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                return attemptUpdate(workspaceId, code, prefLabel, definition, actorFacet);
+                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet);
             } catch (TermConcurrentlyModifiedException e) {
                 // A concurrent writer advanced the head between our read and our write - retry
                 // against the now-current state instead of surfacing a transient race.
@@ -345,13 +345,13 @@ public class KognioRdfTermRepository implements TermRepository {
      * code first) if all three field arguments are {@code null} - see the class-level "No-op
      * update" note on {@link #update}.</p>
      */
-    private Term attemptUpdate(WorkspaceId workspaceId, TermCode code, String prefLabel, String definition,
+    private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet) {
-        DatasetId dataset = new DatasetId(workspaceId.value());
+        DatasetId dataset = new DatasetId(projectId.value());
         CurrentTerm currentTerm;
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             currentTerm = readCurrentByCode(handle.sparqlQuery()::select, code)
-                    .orElseThrow(() -> new TermNotFoundException(workspaceId, code));
+                    .orElseThrow(() -> new TermNotFoundException(projectId, code));
         }
         TermAssembly current = currentTerm.assembly();
         String currentHead = currentTerm.head();
@@ -402,8 +402,8 @@ public class KognioRdfTermRepository implements TermRepository {
 
         funnel.compareAndUpdate(dataset, TERMS_GRAPH, subjectIriString, currentHead,
                 writeCandidate, assertedContext,
-                () -> new TermNotFoundException(workspaceId, code),
-                () -> new TermConcurrentlyModifiedException(workspaceId, code),
+                () -> new TermNotFoundException(projectId, code),
+                () -> new TermConcurrentlyModifiedException(projectId, code),
                 tx -> {
                     if (prefLabel != null) {
                         tx.update(deleteAllTriplesOf(subject, PREF_LABEL_PROPERTY));
@@ -490,11 +490,11 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public Optional<Term> findByCode(WorkspaceId workspaceId, TermCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return readAssemblyByCode(handle.sparqlQuery()::select, code).map(assembly -> assembly.toTerm(displayLocale));
         }
     }
@@ -617,8 +617,8 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public List<Term> findAll(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<Term> findAll(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
 
         String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
@@ -631,7 +631,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, TermAssembly> bySubject = new LinkedHashMap<>();
             handle.sparqlQuery().select(query).forEach(row -> {
                 TermAssembly assembly = assemblyFor(bySubject, row, null);
@@ -751,8 +751,8 @@ public class KognioRdfTermRepository implements TermRepository {
      * deliberately unspecified.</p>
      */
     @Override
-    public List<ResolveTerms.ResolvedTerm> findByIds(WorkspaceId workspaceId, List<ResourceId> ids) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.isEmpty()) {
             return List.of();
@@ -770,7 +770,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "?s a <" + CONCEPT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, ResolveTerms.ResolvedTerm> bySubject = new LinkedHashMap<>();
             handle.sparqlQuery().select(query).forEach(row -> {
                 String subjectIri = iriOf(row, "s").getIRIString();

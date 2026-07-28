@@ -15,7 +15,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 
@@ -25,7 +25,7 @@ import de.hauschel.arknet.persistence.UnresolvedReferenceException;
  * {@link ResourceId} within the shared workspace store.
  *
  * <p><strong>Strict cross-BC term resolution (issue #62/#66).</strong> Bounded contexts and
- * ubiquitous-language terms share one per-workspace store. This adapter looks up a code by
+ * ubiquitous-language terms share one per-project store. This adapter looks up a code by
  * {@code dcterms:identifier} among the {@code skos:Concept}s of the glossary graph; an unknown or
  * ambiguous code aborts with a didactic {@link UnresolvedReferenceException}. Resolution goes via
  * the identifier, never the {@code skos:prefLabel}, so a link survives relabelling a term. This
@@ -45,7 +45,7 @@ public final class KognioRdfTermLookup implements TermLookup {
     private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     // Mirrors the graph IRI the ubiquitous-language out-adapter writes into. The bounded
-    // contexts share one workspace dataset; resolving a term means reading across into that
+    // contexts share one project dataset; resolving a term means reading across into that
     // sibling graph.
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
@@ -62,27 +62,27 @@ public final class KognioRdfTermLookup implements TermLookup {
     }
 
     @Override
-    public ResourceId resolveByCode(WorkspaceId workspaceId, String termCode) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public ResourceId resolveByCode(ProjectId projectId, String termCode) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(termCode, "termCode");
 
         String query = "SELECT ?term WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?term a <" + CONCEPT_TYPE + "> ; "
                 + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(termCode) + "\" } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
                     .map(row -> iriOf(row, "term"))
                     .distinct()
                     .toList();
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Term '" + termCode
-                        + "' does not exist in workspace '" + workspaceId.value()
+                        + "' does not exist in project '" + projectId.value()
                         + "'. Create it first with term_add before a bounded context names it.");
             }
             if (matches.size() > 1) {
                 throw new UnresolvedReferenceException("Term identity '" + termCode
-                        + "' is ambiguous in workspace '" + workspaceId.value() + "' (" + matches.size()
+                        + "' is ambiguous in project '" + projectId.value() + "' (" + matches.size()
                         + " matches). Reference a term by its unique dcterms:identifier.");
             }
             return ResourceId.of(matches.get(0).getIRIString());

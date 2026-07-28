@@ -22,7 +22,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 
@@ -37,8 +37,8 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
  */
 class KognioRdfRequirementLookupTest {
 
-    private static final WorkspaceId WORKSPACE_A = new WorkspaceId("a");
-    private static final WorkspaceId WORKSPACE_B = new WorkspaceId("b");
+    private static final ProjectId WORKSPACE_A = new ProjectId("a");
+    private static final ProjectId WORKSPACE_B = new ProjectId("b");
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
 
     private DatasetLifecycleRdf4j lifecycle;
@@ -89,7 +89,7 @@ class KognioRdfRequirementLookupTest {
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** A requirement of another workspace must not satisfy this workspace's reference. */
+    /** A requirement of another workspace must not satisfy this project's reference. */
     @Test
     void aRequirementOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
         givenRequirement(WORKSPACE_B, "FR-1");
@@ -103,17 +103,17 @@ class KognioRdfRequirementLookupTest {
      * dataset - deliberately via raw SPARQL rather than the requirements adapter, so this test
      * does not couple the two bounded contexts. Returns the requirement's IRI.
      */
-    private String givenRequirement(WorkspaceId workspaceId, String requirementCode) {
+    private String givenRequirement(ProjectId projectId, String requirementCode) {
         String requirementIri = "https://w3id.org/arknet/model/requirement/" + requirementCode;
-        givenRequirementAtIri(workspaceId, requirementIri, requirementCode);
+        givenRequirementAtIri(projectId, requirementIri, requirementCode);
         return requirementIri;
     }
 
-    private void givenRequirementAtIri(WorkspaceId workspaceId, String requirementIri, String identifier) {
+    private void givenRequirementAtIri(ProjectId projectId, String requirementIri, String identifier) {
         String insert = "INSERT DATA { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "<" + requirementIri + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + identifier + "\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
                 return null;

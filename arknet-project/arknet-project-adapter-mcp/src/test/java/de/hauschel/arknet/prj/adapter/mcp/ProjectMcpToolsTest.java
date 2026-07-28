@@ -20,8 +20,10 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
 import de.hauschel.arknet.prj.application.port.in.RenameProject;
@@ -29,13 +31,13 @@ import de.hauschel.arknet.prj.application.port.in.ResolveProject;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
-import de.hauschel.arknet.prj.domain.ProjectId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
 /**
- * Scaffold-level check that the adapter declares exactly the four project tools, resolves the
+ * Scaffold-level check that the adapter declares exactly the five project tools, resolves the
  * caller's own project from its transport-context anchor rather than from any derived {@link
- * WorkspaceResolver} workspace, and never turns an unknown-anchor situation into a silent default
+ * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default
  * (ADR-016 decision 3).
  */
 class ProjectMcpToolsTest {
@@ -44,35 +46,94 @@ class ProjectMcpToolsTest {
     private final FakeAttachAnchor attachAnchor = new FakeAttachAnchor();
     private final FakeRenameProject renameProject = new FakeRenameProject();
     private final FakeListProjects listProjects = new FakeListProjects();
+    private final FakeAdoptProject adoptProject = new FakeAdoptProject();
+    private final FakeListAdoptableDatasets listAdoptable = new FakeListAdoptableDatasets();
     private final FakeResolveProject resolveProject = new FakeResolveProject();
-    private final ProjectMcpTools adapter =
-            new ProjectMcpTools(registerProject, attachAnchor, renameProject, listProjects, resolveProject);
+    private final ProjectMcpTools adapter = new ProjectMcpTools(registerProject, adoptProject,
+            attachAnchor, renameProject, listProjects, listAdoptable, resolveProject);
 
     @Test
-    void declaresTheFourProjectTools() {
+    void declaresTheFiveProjectTools() {
         final List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(4, names.size());
-        assertTrue(names.containsAll(
-                List.of("project_add", "project_attach_anchor", "project_rename", "project_list")));
+        assertEquals(5, names.size());
+        assertTrue(names.containsAll(List.of("project_add", "project_adopt", "project_attach_anchor",
+                "project_rename", "project_list")));
     }
 
     @Test
     void rejectsNullInPort() {
-        assertThrows(NullPointerException.class,
-                () -> new ProjectMcpTools(null, attachAnchor, renameProject, listProjects, resolveProject));
-        assertThrows(NullPointerException.class,
-                () -> new ProjectMcpTools(registerProject, null, renameProject, listProjects, resolveProject));
-        assertThrows(NullPointerException.class,
-                () -> new ProjectMcpTools(registerProject, attachAnchor, null, listProjects, resolveProject));
-        assertThrows(NullPointerException.class,
-                () -> new ProjectMcpTools(registerProject, attachAnchor, renameProject, null, resolveProject));
-        assertThrows(NullPointerException.class,
-                () -> new ProjectMcpTools(registerProject, attachAnchor, renameProject, listProjects, null));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                null, adoptProject, attachAnchor, renameProject, listProjects, listAdoptable, resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, null, attachAnchor, renameProject, listProjects, listAdoptable, resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, null, renameProject, listProjects, listAdoptable, resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, attachAnchor, null, listProjects, listAdoptable, resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, attachAnchor, renameProject, null, listAdoptable, resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, attachAnchor, renameProject, listProjects, null, resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, attachAnchor, renameProject, listProjects, listAdoptable, null));
+    }
+
+    @Test
+    void adoptPassesTheDatasetIdLabelAndContextAnchorThrough() {
+        final String rendered =
+                adapter.adopt(contextWithOrigin("/home/f/DEV/arknet"), "arknet", "arknet", null, null);
+
+        assertEquals(new ProjectId("arknet"), adoptProject.lastDatasetId);
+        assertEquals("arknet", adoptProject.lastLabel);
+        assertEquals(new Anchor("/home/f/DEV/arknet", AnchorType.PATH), adoptProject.lastAnchor);
+        assertTrue(rendered.contains("arknet"), rendered);
+    }
+
+    /**
+     * Adoption without any anchor must fail, and the message must point at {@code project_adopt}'s
+     * own parameter - sending such a caller to {@code project_add} would have it create a second,
+     * empty project beside the very data it is trying to reach.
+     */
+    @Test
+    void adoptWithoutAnyAnchorFailsAndPointsAtItsOwnParameter() {
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> adapter.adopt(contextWithOrigin(null), "arknet", "arknet", null, null));
+
+        assertTrue(ex.getMessage().contains("project_adopt"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("'anchor'"), ex.getMessage());
+    }
+
+    /**
+     * The adoptable datasets are rendered by {@code project_list} itself: a caller asking what
+     * exists should not have to know that "registered" and "present in the store" can differ
+     * before it can find out that they do.
+     */
+    @Test
+    void listRendersUnregisteredDatasetsAlongsideTheRegisteredProjects() {
+        listProjects.all = List.of(new Project(new ProjectId("p-1"), "registered",
+                List.of(new Anchor("/home/f/registered", AnchorType.PATH))));
+        listAdoptable.all = List.of(new ProjectId("arknet"), new ProjectId("zahlenwart"));
+
+        final String rendered = adapter.list();
+
+        assertTrue(rendered.contains("registered"), rendered);
+        assertTrue(rendered.contains("Unregistered datasets"), rendered);
+        assertTrue(rendered.contains("arknet"), rendered);
+        assertTrue(rendered.contains("zahlenwart"), rendered);
+    }
+
+    /** Nothing left to adopt means no section at all, so the listing stays quiet once migrated. */
+    @Test
+    void listOmitsTheUnregisteredSectionWhenThereIsNothingToAdopt() {
+        listProjects.all = List.of(new Project(new ProjectId("p-1"), "registered",
+                List.of(new Anchor("/home/f/registered", AnchorType.PATH))));
+
+        assertTrue(!adapter.list().contains("Unregistered datasets"), adapter.list());
     }
 
     @Test
@@ -268,6 +329,31 @@ class ProjectMcpToolsTest {
     }
 
     /** Structural fake implementing {@link ListProjects}. */
+    /** Structural fake implementing {@link AdoptProject}. */
+    private static final class FakeAdoptProject implements AdoptProject {
+        private ProjectId lastDatasetId;
+        private String lastLabel;
+        private Anchor lastAnchor;
+
+        @Override
+        public Project adopt(final ProjectId datasetId, final String label, final Anchor anchor) {
+            lastDatasetId = datasetId;
+            lastLabel = label;
+            lastAnchor = anchor;
+            return new Project(datasetId, label, List.of(anchor));
+        }
+    }
+
+    /** Structural fake implementing {@link ListAdoptableDatasets}. */
+    private static final class FakeListAdoptableDatasets implements ListAdoptableDatasets {
+        private List<ProjectId> all = List.of();
+
+        @Override
+        public List<ProjectId> adoptable() {
+            return all;
+        }
+    }
+
     private static final class FakeListProjects implements ListProjects {
         private List<Project> all = List.of();
 
@@ -301,7 +387,7 @@ class ProjectMcpToolsTest {
 
     /**
      * Builds an {@link McpSyncRequestContext} carrying a fixed origin directory under
-     * {@link WorkspaceResolver#WORKSPACE_DIR_KEY} - the single thing this adapter reads out of
+     * {@link ProjectResolver#ANCHOR_KEY} - the single thing this adapter reads out of
      * the framework context.
      *
      * <p>A dynamic proxy rather than a hand-written implementation of the interface. That
@@ -316,7 +402,7 @@ class ProjectMcpToolsTest {
     private static McpSyncRequestContext contextWithOriginDir(final String originDir) {
         final McpTransportContext transport = originDir == null
                 ? McpTransportContext.create(Map.of())
-                : McpTransportContext.create(Map.of(WorkspaceResolver.WORKSPACE_DIR_KEY, originDir));
+                : McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, originDir));
         return (McpSyncRequestContext) Proxy.newProxyInstance(
                 McpSyncRequestContext.class.getClassLoader(),
                 new Class<?>[] {McpSyncRequestContext.class},

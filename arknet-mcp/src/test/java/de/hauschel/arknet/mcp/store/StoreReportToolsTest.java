@@ -26,13 +26,13 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
-import de.hauschel.arknet.kernel.WorkspaceResolver;
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
-import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
@@ -56,7 +56,10 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class StoreReportToolsTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("noistill");
+    private static final ProjectId PROJECT = new ProjectId("noistill");
+    private static final String ANCHOR = "/home/dev/projects/noistill";
+    private static final ProjectId OTHER_PROJECT = new ProjectId("other-project");
+    private static final String OTHER_ANCHOR = "/elsewhere/other-project";
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-report-test-fr-1";
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/store-report-test-term-1";
 
@@ -86,49 +89,64 @@ class StoreReportToolsTest {
         term1 = new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null);
-        requirements.create(WORKSPACE, fr1);
-        terms.create(WORKSPACE, term1);
+        requirements.create(PROJECT, fr1);
+        terms.create(PROJECT, term1);
 
         Prefixes prefixes = Prefixes.defaults();
         StoreReader reader = new StoreReader(lifecycle);
-        // Shared server: the default workspace is resolved per call. This test drives calls with a
-        // null context (no origin), so the resolver returns the fixed test workspace and the report
-        // lands in the fallback reportDir - exactly the pre-#137 single-workspace behaviour.
-        WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        // Shared server: the project is resolved per call by looking up the caller's anchor
+        // (ADR-016). The stub below stands in for the registry with exactly two registered
+        // anchors, so these tests address two projects the way a real client does.
+        ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         tools = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces, reportDir, null);
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, reportDir, null);
+    }
+
+    /**
+     * Stands in for the project registry: two registered anchors, and a hard failure for anything
+     * else. Rejecting the unknown case rather than defaulting is the point - a stub that answered
+     * every anchor would let a test pass that a real deployment fails (ADR-016 decision 3).
+     */
+    private static ProjectId resolveTestAnchor(final String anchor) {
+        if (ANCHOR.equals(anchor)) {
+            return PROJECT;
+        }
+        if (OTHER_ANCHOR.equals(anchor)) {
+            return OTHER_PROJECT;
+        }
+        throw new UnresolvedProjectAnchorException(anchor, "no project registered for '" + anchor + "'");
     }
 
     /**
      * The HTML report's model sections come from the bounded contexts' read in-ports, not from
      * the snapshot. This test is about the generic read path and the write resilience around it,
      * so the in-ports are stubbed to the very objects the repositories above were seeded with -
-     * and, like the real services, they answer per workspace, so a report for a different
-     * workspace stays empty.
+     * and, like the real services, they answer per project, so a report for a different
+     * project stays empty.
      */
     private ModelViews modelViews() {
         return new ModelViews(
-                workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(term1) : List.of(),
-                new UseCaseCards(workspaceId -> List.of(), (workspaceId, ids) -> List.of()),
+                projectId -> PROJECT.equals(projectId) ? List.of(term1) : List.of(),
+                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(
-                        workspaceId -> WORKSPACE.equals(workspaceId) ? List.of(fr1) : List.of()),
-                new BoundedContextCards(workspaceId -> List.of()));
+                        projectId -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
+                new BoundedContextCards(projectId -> List.of()));
     }
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(WORKSPACE.value()));
+        lifecycle.close(new DatasetId(PROJECT.value()));
     }
 
     @Test
     void storeOverviewDigestSpansBothBoundedContextsAndWritesHtml() throws Exception {
-        String result = tools.storeOverview(null, null);
+        String result = tools.storeOverview(null, ANCHOR);
 
         // Digest is generic and contains resources from both BCs. Both identities are opaque
         // IRIs (requirement since #68, term since #71), unbound to any CURIE prefix, so the
         // digest handle falls back to their dcterms:identifier ("FR-1" / "TERM-1") instead of
         // the raw IRI.
-        assertThat(result).contains("# Workspace noistill");
+        assertThat(result).contains("# Project noistill");
         assertThat(result).doesNotContain(FR_1_IRI);
         assertThat(result).doesNotContain(TERM_1_IRI);
         assertThat(result).contains("FR-1").contains("-> resource_get(\"FR-1\")");
@@ -138,7 +156,7 @@ class StoreReportToolsTest {
 
         // HTML side effect: a self-contained file with no external dependencies, under a
         // workspace-scoped subdirectory of the fallback dir (issue #172).
-        Path html = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
+        Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
         assertThat(html).exists();
         String content = Files.readString(html);
         assertThat(content).contains("<!doctype html>").contains("arknet Store Report");
@@ -150,29 +168,56 @@ class StoreReportToolsTest {
     }
 
     /**
-     * Reproduces #158: a shared daemon cannot assume it shares a filesystem with every calling
-     * client (e.g. containerized, only {@code /data/rdf} mounted) - the origin dir the caller's
-     * {@code X-Arknet-Workspace-Dir} header names may not be writable (or even exist) from the
-     * daemon's own filesystem. The write must fall back to the server's report dir instead of
-     * failing the whole tool call.
+     * What #158 became under ADR-016: the report is written to the server's own report directory
+     * and never to anything the client sent, so a daemon that shares no filesystem with its caller
+     * (containerized, only {@code /data/rdf} mounted) cannot fail the tool call over it.
+     *
+     * <p>The anchor here is deliberately a path that exists but cannot hold a directory. Under the
+     * previous behaviour the header named the write target, so this was the case that had to fall
+     * back; now it must never be treated as a path at all - it is a lookup key that happens to look
+     * like one. Passing it through the transport context (rather than as a parameter) is what makes
+     * this the header path specifically.</p>
      */
     @Test
-    void storeOverviewFallsBackToServerReportDirWhenTheOriginDirCannotBeWritten(@TempDir final Path root)
-            throws Exception {
-        final Path blockedOriginDir = root.resolve("not-a-directory");
-        Files.writeString(blockedOriginDir, "a plain file blocking directory creation");
+    void storeOverviewWritesToTheServerReportDirEvenWhenTheAnchorLooksLikeAnUnwritablePath(
+            @TempDir final Path root) throws Exception {
+        final Path anchorThatIsAFile = root.resolve("not-a-directory");
+        Files.writeString(anchorThatIsAFile, "a plain file blocking directory creation");
 
         final McpTransportContext transportContext = McpTransportContext.create(
-                Map.of(WorkspaceResolver.WORKSPACE_DIR_KEY, blockedOriginDir.toString()));
+                Map.of(ProjectResolver.ANCHOR_KEY, ANCHOR));
         final McpSyncRequestContext context = mock(McpSyncRequestContext.class);
         when(context.transportContext()).thenReturn(transportContext);
 
         final String result = tools.storeOverview(context, null);
 
-        assertThat(result).contains("# Workspace noistill").doesNotContain("FAILED");
-        final Path fallbackHtml = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
-        assertThat(fallbackHtml).exists();
-        assertThat(result).contains("# HTML report: " + fallbackHtml.toAbsolutePath());
+        assertThat(result).contains("# Project noistill").doesNotContain("FAILED");
+        final Path serverHtml = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+        assertThat(serverHtml).exists();
+        assertThat(result).contains("# HTML report: " + serverHtml.toAbsolutePath());
+        assertThat(anchorThatIsAFile).isRegularFile();
+    }
+
+    /**
+     * The header path end to end: an anchor arriving in the transport context routes the call,
+     * with no explicit parameter involved. Its counterpart - an anchor nobody registered - fails
+     * rather than falling back (ADR-016 decision 3).
+     */
+    @Test
+    void storeOverviewRoutesByTheTransportAnchorAndRejectsAnUnregisteredOne() {
+        final McpSyncRequestContext context = mock(McpSyncRequestContext.class);
+        when(context.transportContext())
+                .thenReturn(McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, ANCHOR)));
+
+        assertThat(tools.storeOverview(context, null)).contains("# Project noistill").contains("FR-1");
+
+        final McpSyncRequestContext strangerContext = mock(McpSyncRequestContext.class);
+        when(strangerContext.transportContext()).thenReturn(
+                McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, "/somewhere/else/noistill")));
+
+        assertThatThrownBy(() -> tools.storeOverview(strangerContext, null))
+                .as("an identically named directory elsewhere is a different, unregistered anchor")
+                .isInstanceOf(UnresolvedProjectAnchorException.class);
     }
 
     /**
@@ -188,16 +233,16 @@ class StoreReportToolsTest {
 
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);
-        final WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces,
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects,
                 blockedFallbackDir, null);
 
-        final String result = toolsWithBrokenFallback.storeOverview(null, null);
+        final String result = toolsWithBrokenFallback.storeOverview(null, ANCHOR);
 
-        assertThat(result).contains("# Workspace noistill").contains("FR-1");
+        assertThat(result).contains("# Project noistill").contains("FR-1");
         assertThat(result)
-                .contains("# HTML report: FAILED to write to " + blockedFallbackDir.resolve(WORKSPACE.value()));
+                .contains("# HTML report: FAILED to write to " + blockedFallbackDir.resolve(PROJECT.value()));
         assertThat(result).contains("FileSystemException");
     }
 
@@ -212,40 +257,40 @@ class StoreReportToolsTest {
             throws Exception {
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);
-        final WorkspaceResolver workspaces = originDir -> WORKSPACE;
+        final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), workspaces, reportDir, hostDir);
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, reportDir, hostDir);
 
-        final String result = toolsWithHostDir.storeOverview(null, null);
+        final String result = toolsWithHostDir.storeOverview(null, ANCHOR);
 
-        final Path writtenHtml = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
+        final Path writtenHtml = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
         assertThat(writtenHtml).exists();
         assertThat(result)
-                .contains("# HTML report: " + hostDir.resolve(WORKSPACE.value()).resolve("store-report.html"))
+                .contains("# HTML report: " + hostDir.resolve(PROJECT.value()).resolve("store-report.html"))
                 .doesNotContain(reportDir.toString());
     }
 
     /**
-     * #172: every workspace served by a shared daemon falls back to the very same
-     * {@code fallbackReportDir} (e.g. a containerized daemon has no writable origin dir for
-     * ANY project). Without a workspace-scoped subdirectory, the second workspace's report
-     * would silently overwrite the first's under the identical file name.
+     * #172: every project served by a shared daemon writes into the very same
+     * {@code fallbackReportDir}. Without a project-scoped subdirectory, the second project's
+     * report would silently overwrite the first's under the identical file name - and since
+     * ADR-016 that directory is the <em>only</em> target, which makes the subdirectory the sole
+     * thing keeping the two apart.
      */
     @Test
-    void storeOverviewWritesEachWorkspaceToItsOwnSubdirectoryOfTheFallbackDir() throws Exception {
-        final WorkspaceId otherWorkspace = new WorkspaceId("other-workspace-172");
+    void storeOverviewWritesEachProjectToItsOwnSubdirectoryOfTheFallbackDir() throws Exception {
         try {
-            tools.storeOverview(null, null);
-            tools.storeOverview(null, otherWorkspace.value());
+            tools.storeOverview(null, ANCHOR);
+            tools.storeOverview(null, OTHER_ANCHOR);
 
-            final Path ownReport = reportDir.resolve(WORKSPACE.value()).resolve("store-report.html");
-            final Path otherReport = reportDir.resolve(otherWorkspace.value()).resolve("store-report.html");
+            final Path ownReport = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+            final Path otherReport = reportDir.resolve(OTHER_PROJECT.value()).resolve("store-report.html");
             assertThat(ownReport).exists();
             assertThat(otherReport).exists();
             assertThat(Files.readString(ownReport)).contains("FR-1");
             assertThat(Files.readString(otherReport)).doesNotContain("FR-1");
         } finally {
-            lifecycle.close(new DatasetId(otherWorkspace.value()));
+            lifecycle.close(new DatasetId(OTHER_PROJECT.value()));
         }
     }
 
@@ -257,8 +302,8 @@ class StoreReportToolsTest {
      */
     @Test
     void resourceGetResolvesFullIriAndBareIdToTheSameResource() {
-        String viaIri = tools.resourceGet(null, FR_1_IRI, null);
-        String viaBareId = tools.resourceGet(null, "FR-1", null);
+        String viaIri = tools.resourceGet(null, FR_1_IRI, ANCHOR);
+        String viaBareId = tools.resourceGet(null, "FR-1", ANCHOR);
 
         assertThat(viaBareId).isEqualTo(viaIri);
         assertThat(viaIri).contains("dcterms:title").contains("\"Login\"");
@@ -267,7 +312,7 @@ class StoreReportToolsTest {
 
     @Test
     void resourceGetRejectsUnknownPrefixWithDidacticMessage() {
-        assertThatThrownBy(() -> tools.resourceGet(null, "nope:X", null))
+        assertThatThrownBy(() -> tools.resourceGet(null, "nope:X", ANCHOR))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown prefix")
                 .hasMessageContaining("Known prefixes");
@@ -275,42 +320,52 @@ class StoreReportToolsTest {
 
     @Test
     void resourceGetRejectsUnknownBareIdWithGuidance() {
-        assertThatThrownBy(() -> tools.resourceGet(null, "FR-999", null))
+        assertThatThrownBy(() -> tools.resourceGet(null, "FR-999", ANCHOR))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("No resource found");
     }
 
     /**
-     * Reproduces #106: {@code resource_get} used to ignore its workspace parameter entirely
-     * and always read {@code defaultWorkspaceId}, unlike {@code store_overview} which already
-     * honored an optional {@code workspace} argument. Two workspaces each carry a requirement
-     * with the SAME business code ("FR-1") but different identities/titles - a caller passing
-     * the other workspace's id must get that workspace's resource back, not a silent hit in
-     * the default workspace.
+     * Reproduces #106: {@code resource_get} used to ignore its project parameter entirely and
+     * always read the default project, unlike {@code store_overview} which already honored one.
+     * Two projects each carry a requirement with the SAME business code ("FR-1") but different
+     * identities/titles - a caller passing the other project's anchor must get that project's
+     * resource back, not a silent hit in the one its transport would have selected.
+     *
+     * <p>Since ADR-016 the parameter carries an anchor rather than a raw project id, which is what
+     * keeps this convenience from being a second, unchecked way into any dataset on the machine:
+     * {@link #resolveTestAnchor} rejects anything unregistered, as the real registry does.</p>
      */
     @Test
-    void resourceGetHonorsExplicitWorkspaceParameter() {
-        WorkspaceId otherWorkspace = new WorkspaceId("other-workspace");
+    void resourceGetHonorsExplicitProjectAnchorParameter() {
         String otherFr1Iri = "https://w3id.org/arknet/id/store-report-test-fr-1-other";
 
         RequirementRepository requirements =
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(otherWorkspace, new Requirement(
+        requirements.create(OTHER_PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
-                "The system shall authenticate a user in the other workspace.",
+                "The system shall authenticate a user in the other project.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
                 List.of("Login succeeds with valid credentials")));
 
         try {
-            String fromOtherWorkspace = tools.resourceGet(null, "FR-1", otherWorkspace.value());
-            String fromDefaultWorkspace = tools.resourceGet(null, "FR-1", null);
+            String fromOtherProject = tools.resourceGet(null, "FR-1", OTHER_ANCHOR);
+            String fromDefaultProject = tools.resourceGet(null, "FR-1", ANCHOR);
 
-            assertThat(fromOtherWorkspace).contains("dcterms:title").contains("\"Andere Anmeldung\"");
-            assertThat(fromOtherWorkspace).doesNotContain("\"Login\"");
-            assertThat(fromDefaultWorkspace).contains("dcterms:title").contains("\"Login\"");
-            assertThat(fromDefaultWorkspace).doesNotContain("\"Andere Anmeldung\"");
+            assertThat(fromOtherProject).contains("dcterms:title").contains("\"Andere Anmeldung\"");
+            assertThat(fromOtherProject).doesNotContain("\"Login\"");
+            assertThat(fromDefaultProject).contains("dcterms:title").contains("\"Login\"");
+            assertThat(fromDefaultProject).doesNotContain("\"Andere Anmeldung\"");
         } finally {
-            lifecycle.close(new DatasetId(otherWorkspace.value()));
+            lifecycle.close(new DatasetId(OTHER_PROJECT.value()));
         }
+    }
+
+    /** An anchor no project is registered under is rejected, never quietly resolved. */
+    @Test
+    void resourceGetRejectsAnUnregisteredAnchor() {
+        assertThatThrownBy(() -> tools.resourceGet(null, "FR-1", "/never/registered"))
+                .isInstanceOf(UnresolvedProjectAnchorException.class)
+                .hasMessageContaining("/never/registered");
     }
 }

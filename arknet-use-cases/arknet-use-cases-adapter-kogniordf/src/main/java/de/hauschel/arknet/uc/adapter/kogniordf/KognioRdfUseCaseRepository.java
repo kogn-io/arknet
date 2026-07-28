@@ -25,7 +25,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -108,15 +108,15 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
  * case the same way it skips a blank-node {@code primaryActor}, rather than letting the
  * constructor's exception propagate out of {@link #findAll}/{@link #findByCode} and crash every
- * read for the whole workspace.</p>
+ * read for the whole project.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} +
  * {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any other
  * backend-specific type. The backend ({@link DatasetLifecycle} implementation) is supplied
  * by the composition root.</p>
  *
- * <p><strong>WorkspaceId (local, single-user).</strong> Each {@link WorkspaceId} is mapped
- * 1:1 to a kognio-rdf {@link DatasetId}, so distinct workspaces are fully isolated datasets.</p>
+ * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId} is mapped
+ * 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are fully isolated datasets.</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
@@ -189,17 +189,17 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public void create(WorkspaceId workspaceId, UseCase useCase) {
-        write(workspaceId, useCase, true);
+    public void create(ProjectId projectId, UseCase useCase) {
+        write(projectId, useCase, true);
     }
 
     @Override
-    public void update(WorkspaceId workspaceId, UseCase useCase) {
-        write(workspaceId, useCase, false);
+    public void update(ProjectId projectId, UseCase useCase) {
+        write(projectId, useCase, false);
     }
 
-    private void write(WorkspaceId workspaceId, UseCase useCase, boolean expectAbsent) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
         // ResourceId#of (issue #83) validates IRIREF-safety at construction, so useCase.id()'s
@@ -293,15 +293,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         IRI graphIri = rdf.createIRI(USE_CASES_GRAPH);
 
         if (expectAbsent) {
-            funnel.create(new DatasetId(workspaceId.value()), USE_CASES_GRAPH, subjectIriString,
+            funnel.create(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
                     useCase.code().value(), graph, assertedContext,
-                    () -> new ResourceAlreadyExistsException(workspaceId, useCase.id().value()),
-                    () -> new DuplicateUseCaseCodeException(workspaceId, useCase.code()),
+                    () -> new ResourceAlreadyExistsException(projectId, useCase.id().value()),
+                    () -> new DuplicateUseCaseCodeException(projectId, useCase.code()),
                     tx -> tx.add(graphIri, graph));
         } else {
-            funnel.update(new DatasetId(workspaceId.value()), USE_CASES_GRAPH, subjectIriString,
+            funnel.update(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
                     graph, assertedContext,
-                    () -> new UseCaseNotFoundException(workspaceId, useCase.code()),
+                    () -> new UseCaseNotFoundException(projectId, useCase.code()),
                     tx -> {
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
@@ -310,13 +310,13 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public Optional<UseCase> findByCode(WorkspaceId workspaceId, UseCaseCode code) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
+        Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
                 + SparqlTerms.escape(code.value()) + "\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
             if (head.isEmpty()) {
                 return Optional.empty();
@@ -326,11 +326,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public List<UseCase> findAll(WorkspaceId workspaceId) {
-        Objects.requireNonNull(workspaceId, "workspaceId");
+    public List<UseCase> findAll(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspaceId.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<UseCaseRow> rows = handle.sparqlQuery().select(query)
                     .map(row -> new UseCaseRow(iriOf(row, "s").getIRIString(),
                             new UseCaseCode(literalOf(row, "identifier").getLexicalForm())))
@@ -388,7 +388,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // ShaclWriteGate#enforce lets a store-first (ADR-005) use case through with zero main
             // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
             // mirror the primaryActor blank-node guard above: skip this one use case instead of
-            // letting the constructor throw out of findByCode/findAll for the whole workspace
+            // letting the constructor throw out of findByCode/findAll for the whole project
             // (issue #102).
             return Optional.empty();
         }
@@ -398,7 +398,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // UseCase.requireConsecutiveStepPositions, and store-first data (ADR-005) never runs
             // through that. Mirror the empty-steps guard above rather than letting the
             // constructor's IllegalArgumentException propagate out of findByCode/findAll for the
-            // whole workspace (issue #102).
+            // whole project (issue #102).
             return Optional.empty();
         }
         List<String> extensions = readExtensions(handle, subject);

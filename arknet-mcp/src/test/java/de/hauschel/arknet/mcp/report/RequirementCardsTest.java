@@ -10,7 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -30,7 +30,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class RequirementCardsTest {
 
-    private static final WorkspaceId WORKSPACE = new WorkspaceId("req-cards-test");
+    private static final ProjectId WORKSPACE = new ProjectId("req-cards-test");
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final ResourceId KUNDE = ResourceId.of(ID + "term-1");
     private static final ResourceId BESTELLUNG = ResourceId.of(ID + "term-2");
@@ -126,7 +126,7 @@ class RequirementCardsTest {
     }
 
     private static RequirementCards cardsFor(final Requirement requirement) {
-        return new RequirementCards(workspaceId -> List.of(requirement));
+        return new RequirementCards(projectId -> List.of(requirement));
     }
 
     private static Requirement requirement(

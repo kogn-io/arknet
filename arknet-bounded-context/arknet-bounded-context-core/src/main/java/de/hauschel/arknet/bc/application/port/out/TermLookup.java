@@ -4,7 +4,7 @@
 package de.hauschel.arknet.bc.application.port.out;
 
 import de.hauschel.arknet.kernel.ResourceId;
-import de.hauschel.arknet.kernel.WorkspaceId;
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: resolves a glossary term's human-typed business code to its opaque subject
@@ -27,11 +27,11 @@ public interface TermLookup {
 
     /**
      * Resolves {@code termCode} to the identity of the glossary term it currently names within
-     * {@code workspaceId}.
+     * {@code projectId}.
      *
-     * @param workspaceId the workspace (architecture model) to resolve the code in
+     * @param projectId the project (architecture model) to resolve the code in
      * @param termCode    the term's human-readable business code, e.g. {@code TERM-1}
      * @return the resolved term's opaque subject identity
      */
-    ResourceId resolveByCode(WorkspaceId workspaceId, String termCode);
+    ResourceId resolveByCode(ProjectId projectId, String termCode);
 }
