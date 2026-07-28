@@ -435,18 +435,20 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The four project tools ({@code project_add}, {@code project_attach_anchor},
-     * {@code project_rename}, {@code project_list}).
+     * The five project tools ({@code project_add}, {@code project_attach_anchor},
+     * {@code project_rename}, {@code project_list}, {@code project_adopt}).
      *
      * <p>Note what is <em>not</em> injected: no {@link ProjectResolver}. Every other
-     * {@code *McpTools} bean gets one to turn a call's origin directory into a {@link ProjectId}
-     * by deriving it (git top-level, slugging); this adapter reads the very same origin value but
-     * treats it as an opaque anchor and looks it up, which is the whole substance of ADR-016.
-     * Wiring it without a resolver is therefore not an omission but the point.</p>
+     * {@code *McpTools} bean gets one to turn a call's anchor into a {@link ProjectId}
+     * by looking it up in the registry; this adapter also treats the anchor as opaque and
+     * looks it up, which is the whole substance of ADR-016. Wiring it without a separate
+     * resolver is not an omission but intentional - this component answers the routing question
+     * and therefore cannot itself sit behind a routing answer.</p>
      *
-     * <p>This bean is additive (issue #178): registering the tools does not change how any other
-     * tool call is routed - the derived-workspace path in {@link #projectResolver} keeps running
-     * untouched until issue #179 switches over and tears it down.</p>
+     * <p>This bean implements the anchor registry resolver (issue #179, ADR-016): every
+     * tool call routes through anchor lookup instead of directory derivation. The old
+     * workspace-based path has been removed; registry lookup is now the sole routing
+     * mechanism for all project-scoped tool calls.</p>
      */
     @Bean
     ProjectMcpTools projectMcpTools(final ProjectService service) {

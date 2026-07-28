@@ -14,7 +14,7 @@ import de.hauschel.arknet.mcp.store.StoreResource;
 /**
  * Renders the compact, token-cheap text digests {@code trace_matrix}/{@code orphan_check}/
  * {@code impact_analysis} return, given a {@link TraceabilityGraph} already built over one
- * workspace's statements.
+ * project's statements.
  *
  * <p>Pure: it consumes only a {@link TraceabilityGraph} plus a {@link Prefixes} resolver, so it
  * is unit-testable without any store I/O - the same split {@link
