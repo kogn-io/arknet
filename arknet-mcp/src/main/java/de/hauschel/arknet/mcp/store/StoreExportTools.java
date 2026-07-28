@@ -90,7 +90,10 @@ public final class StoreExportTools {
 
     private String exportOne(final Project project, final String timestamp) {
         final Path targetDir = fallbackExportDir.resolve(timestamp);
-        final String fileName = sanitize(project.label()) + ".trig";
+        // The label alone can collide after sanitizing (e.g. "team/main" and "team main" both
+        // become "team_main"); the id is guaranteed unique, so appending it rules out silently
+        // overwriting one project's export with another's.
+        final String fileName = sanitize(project.label()) + "__" + sanitize(project.id().value()) + ".trig";
         final Path target = targetDir.resolve(fileName);
         final Path tmp = targetDir.resolve(fileName + ".tmp");
         try {
