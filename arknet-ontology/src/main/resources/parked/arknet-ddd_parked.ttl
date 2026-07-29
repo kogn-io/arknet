@@ -5,26 +5,15 @@
 #  Namespace  : https://w3id.org/arknet/ddd#
 #  License    : CC-BY-4.0
 #
-#  Split out of arknet-core.ttl: everything strategic-DDD beyond BoundedContext
-#  (Domain/Subdomain, ContextMap/ContextRelationship/RelationshipType) plus the
-#  full tactical-DDD block (Aggregate, Entity, ValueObject, DomainEvent,
-#  Command, Query, DomainService, Repository, Factory, Policy, Saga,
-#  Invariant). None of it has a BC or a Java reference today - per
-#  arknet-ontology/CLAUDE.md's parked/ rule it therefore lives here, not
-#  under src/main/resources/, and is not published under w3id.org/arknet/.
-#
-#  arknet-core.ttl's arknet:hasAggregate already points its rdfs:range at
-#  arkddd:Aggregate below, and arknet-requirements.ttl's header already names
-#  "Command -> Aggregate -> BoundedContext" as an intended future link - this
-#  module is where that future BC (an arknet-ddd or arknet-aggregate hexagon)
-#  would anchor once it exists. Move back to src/main/resources/ - and settle
-#  whether BoundedContext (still under arknet:core#, see
-#  https://github.com/kogn-io/arknet/discussions/55) should join this
-#  namespace at that point - only once a BC actually consumes this file.
+#  Scope: Context Mapping (ContextMap, ContextRelationship, RelationshipType)
+#  and the full tactical-DDD block (Aggregate, Entity, ValueObject,
+#  DomainEvent, Command, Query, DomainService, Repository, Factory, Policy,
+#  Saga, Invariant). Not currently in active use, and not published under
+#  w3id.org/arknet/. BoundedContext, Domain and Subdomain share this
+#  namespace but have an active consumer - see arknet-ddd.ttl.
 ##############################################################################
 
 @prefix arkddd: <https://w3id.org/arknet/ddd#> .
-@prefix arknet: <https://w3id.org/arknet/core#> .
 @prefix owl:    <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
@@ -40,9 +29,8 @@
 
 <https://w3id.org/arknet/ddd>
     a owl:Ontology ;
-    owl:imports      <https://w3id.org/arknet/core> ;
     dcterms:title       "arknet DDD Ontology (parked)"@en ;
-    dcterms:description "Strategic DDD beyond BoundedContext (Domain, ContextMap) and the full tactical-DDD layer (Aggregate, Entity, DomainEvent, Command, ...)."@en ;
+    dcterms:description "Context Mapping (ContextMap, ContextRelationship) and the full tactical-DDD layer (Aggregate, Entity, DomainEvent, Command, ...)."@en ;
     dcterms:version     "0.1.0" ;
     dcterms:created     "2026-07-29"^^xsd:date ;
     dcterms:rights      "CC-BY-4.0" ;
@@ -52,49 +40,8 @@
 
 
 ##############################################################################
-#  STRATEGIC DDD (beyond BoundedContext, which stays in arknet-core.ttl)
+#  CONTEXT MAP
 ##############################################################################
-
-# ── Domain & Subdomain ─────────────────────────────────────────────────────
-
-arkddd:Domain
-    a owl:Class ;
-    rdfs:label       "Domain"@en , "Fachdomaene"@de ;
-    rdfs:comment     "Die uebergeordnete Problemdomaene. Enthaelt Subdomains und Bounded Contexts."@de ;
-    skos:example     "E-Commerce, Logistik, Finanzwesen"@de .
-
-arkddd:Subdomain
-    a owl:Class ;
-    rdfs:subClassOf arkddd:Domain ;
-    rdfs:label       "Subdomain"@en , "Teildomaene"@de ;
-    rdfs:comment     "Eine Teildomaene mit einem bestimmten strategischen Wert (Core/Supporting/Generic)."@de .
-
-arkddd:partOf
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   arkddd:Domain ;
-    rdfs:label   "part of"@en ;
-    rdfs:comment "The domain this bounded context is part of."@en ,
-                 "Die Domaene, zu der dieser Bounded Context gehoert."@de .
-
-arkddd:hasContext
-    a owl:ObjectProperty ;
-    rdfs:domain  arkddd:Domain ;
-    rdfs:range   arknet:BoundedContext ;
-    rdfs:label   "has context"@en ;
-    rdfs:comment "A bounded context that is part of this domain. Inverse of partOf."@en ,
-                 "Ein Bounded Context, der zu dieser Domaene gehoert. Inverse von partOf."@de ;
-    owl:inverseOf arkddd:partOf .
-
-arkddd:hasSubdomain
-    a owl:ObjectProperty ;
-    rdfs:domain  arkddd:Domain ;
-    rdfs:range   arkddd:Subdomain ;
-    rdfs:label   "has subdomain"@en ;
-    rdfs:comment "A subdomain that is part of this domain."@en ,
-                 "Eine Teildomaene, die zu dieser Domaene gehoert."@de .
-
-# ── Context Map ────────────────────────────────────────────────────────────
 
 arkddd:ContextMap
     a owl:Class ;
@@ -163,14 +110,14 @@ arkddd:hasRelationship
 arkddd:upstream
     a owl:ObjectProperty ;
     rdfs:domain  arkddd:ContextRelationship ;
-    rdfs:range   arknet:BoundedContext ;
+    rdfs:range   arkddd:BoundedContext ;
     rdfs:label   "upstream"@en ;
     rdfs:comment "Der Bounded Context, der das Modell/Protokoll vorgibt."@de .
 
 arkddd:downstream
     a owl:ObjectProperty ;
     rdfs:domain  arkddd:ContextRelationship ;
-    rdfs:range   arknet:BoundedContext ;
+    rdfs:range   arkddd:BoundedContext ;
     rdfs:label   "downstream"@en ;
     rdfs:comment "Der Bounded Context, der das Modell/Protokoll konsumiert."@de .
 
@@ -358,7 +305,7 @@ arkddd:handledBy
 arkddd:publishedTo
     a owl:ObjectProperty ;
     rdfs:domain  arkddd:DomainEvent ;
-    rdfs:range   arknet:BoundedContext ;
+    rdfs:range   arkddd:BoundedContext ;
     rdfs:label   "published to"@en ;
     rdfs:comment "In welche Bounded Contexts wird dieses Event publiziert (Downstream-Consumer)?"@de .
 

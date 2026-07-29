@@ -10,7 +10,7 @@
 
 @prefix sh:      <http://www.w3.org/ns/shacl#> .
 @prefix arkproc: <https://w3id.org/arknet/process#> .
-@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkddd:  <https://w3id.org/arknet/ddd#> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
 @prefix pshapes: <https://w3id.org/arknet/shapes/process#> .
 
@@ -55,7 +55,7 @@ pshapes:Process-belongsTo
     sh:path     arkproc:belongsTo ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
-    sh:class    arknet:BoundedContext ;
+    sh:class    arkddd:BoundedContext ;
     sh:message  "Jeder Prozess muss einem Bounded Context zugeordnet sein."@de ;
     sh:severity sh:Violation .
 

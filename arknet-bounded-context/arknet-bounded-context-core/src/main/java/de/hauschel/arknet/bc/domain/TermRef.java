@@ -21,7 +21,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * the job of a driven lookup port against the shared store, not of this pure domain type.</p>
  *
  * <p><strong>Direction is deliberate (issue #62).</strong> The edge
- * ({@code arknet:ubiquitousLanguageTerm}) is owned by the naming bounded context, so the
+ * ({@code arkddd:ubiquitousLanguageTerm}) is owned by the naming bounded context, so the
  * dependency points bounded-context -&gt; ubiquitous-language, never the other way round -
  * structurally the same choice requirements made for {@code arkreq:usesTerm}. It also lives
  * <em>inside</em> the {@link BoundedContext} aggregate rather than beside it: the out-adapter

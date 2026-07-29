@@ -205,7 +205,7 @@ Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assig
 | `bc_add` | Create a new bounded context |
 | `bc_list` | List all bounded contexts |
 | `bc_get` | Fetch a single bounded context with its linked glossary terms |
-| `bc_link_term` | Link a bounded context to a glossary term (`arknet:ubiquitousLanguageTerm`; the term must exist) |
+| `bc_link_term` | Link a bounded context to a glossary term (`arkddd:ubiquitousLanguageTerm`; the term must exist) |
 
 Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
 
@@ -291,7 +291,8 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 
 | Module | Prefix | Concepts |
 |--------|--------|----------|
-| `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...) plus BoundedContext -- the one strategic-DDD concept `arknet-bounded-context` actually writes. Staying under `core#` rather than its own namespace is a deliberate, tracked shortcut ([discussion #55](https://github.com/kogn-io/arknet/discussions/55)) |
+| `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...), reusable across every module |
+| `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (Context Mapping, tactical DDD) |
 | `arknet-actor.ttl` | `arkproc:` | Actor, HumanActor, SystemActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module `arknet-use-cases`/`arknet-bounded-context` actually write |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
@@ -301,7 +302,7 @@ Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes the
 
 | Module | Prefix | Concepts |
 |--------|--------|----------|
-| `arknet-ddd.ttl` | `arkddd:` | Domain, ContextMap, ContextRelationship, RelationshipType, plus the full tactical-DDD layer (Aggregate, Entity, ValueObject, DomainEvent, Command, Query, DomainService, Repository, Factory, Policy, Saga, Invariant) -- split out of `arknet-core.ttl`; no BC, no Java reference |
+| `arknet-ddd_parked.ttl` | `arkddd:` | ContextMap, ContextRelationship, RelationshipType, plus the full tactical-DDD layer (Aggregate, Entity, ValueObject, DomainEvent, Command, Query, DomainService, Repository, Factory, Policy, Saga, Invariant); no BC, no Java reference. Shares its namespace with the active `arknet-ddd.ttl` above (BoundedContext, Domain, Subdomain) |
 | `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome -- `Actor` moved to `arknet-actor.ttl` above; the rest is unconsumed and `arkproc:Step` predates/duplicates the live `arkreq:Step` (different properties entirely) -- reconcile before reviving |
 | `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder, Concern |
 | `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |

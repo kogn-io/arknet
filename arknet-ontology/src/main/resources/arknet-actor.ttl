@@ -5,18 +5,17 @@
 #  Namespace  : https://w3id.org/arknet/process#
 #  License    : CC-BY-4.0
 #
-#  Split out of parked/arknet-process.ttl (issue #167): the Actor taxonomy is
-#  the only slice of that ontology arknet-use-cases actually writes today -
-#  arkproc:HumanActor/arkproc:SystemActor type a use case's primaryActor/
-#  supportingActor term, arkproc:actorRole is written on bounded-context
-#  terms. It therefore moved into src/main/resources/ per
-#  arknet-ontology/CLAUDE.md's rule (a BC references it), while the rest of
-#  the process ontology (Process, Step, State machine, BusinessRule, Outcome
-#  - none of it has a BC) stays parked. The namespace stays
-#  `https://w3id.org/arknet/process#` unchanged: it is already live in
-#  production data (skos:Concept individuals typed arkproc:HumanActor/
-#  arkproc:SystemActor), so renaming it would require a data migration this
-#  split does not need.
+#  Scope: the Actor taxonomy - HumanActor, SystemActor and actorRole - used
+#  to identify who or what participates in a use case (primaryActor/
+#  supportingActor) or fills a role on a bounded context.
+#
+#  Namespace note: this module lives under process#, not actor#, because
+#  arkproc:HumanActor/arkproc:SystemActor are already used as types on
+#  existing skos:Concept individuals - changing the namespace would require
+#  a data migration.
+#
+#  NOT included here (separate module):
+#    - Process, Step, State Machine, BusinessRule, Outcome → parked/arknet-process.ttl
 ##############################################################################
 
 @prefix arkproc: <https://w3id.org/arknet/process#> .
