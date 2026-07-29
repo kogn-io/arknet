@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import de.hauschel.arknet.kernel.ProjectId;
@@ -42,15 +43,20 @@ public final class DigestRenderer {
      * Renders the digest for a project snapshot.
      *
      * @param projectId the project the snapshot was read from
+     * @param label       the project's registered label (issue #187), or {@link Optional#empty()}
+     *                    if {@code projectId} is not (or no longer) found in the registry - the
+     *                    header then falls back to the raw id, exactly as before this label was
+     *                    available
      * @param snapshot    the snapshot to render
      * @return the digest text
      */
-    public String render(ProjectId projectId, StoreSnapshot snapshot) {
+    public String render(ProjectId projectId, Optional<String> label, StoreSnapshot snapshot) {
         Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(label, "label");
         Objects.requireNonNull(snapshot, "snapshot");
 
         StringBuilder out = new StringBuilder();
-        out.append("# Project ").append(projectId.value())
+        out.append("# Project ").append(headerName(projectId, label))
                 .append(" -- ").append(snapshot.resourceCount()).append(" resources, ")
                 .append(snapshot.tripleCount()).append(" triples, ")
                 .append(snapshot.typeCount()).append(" types\n");
@@ -66,6 +72,15 @@ public final class DigestRenderer {
         appendNextSteps(out);
         appendIntegrity(out, snapshot);
         return out.toString();
+    }
+
+    /**
+     * The project name shown in the header: the registered label with its id alongside (matching
+     * {@code project_list}'s own {@code "label (id: ...)"} rendering), or the raw id alone when no
+     * label is available.
+     */
+    private static String headerName(ProjectId projectId, Optional<String> label) {
+        return label.map(value -> value + " (id: " + projectId.value() + ")").orElseGet(projectId::value);
     }
 
     private void appendPrefixLegend(StringBuilder out, StoreSnapshot snapshot) {
