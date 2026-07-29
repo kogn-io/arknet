@@ -3,7 +3,7 @@
 #  Provenance (Revision) Ontology  :  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/provenance#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: arknet's PROV-O-based revision vocabulary. Every write through the
 #         shared write funnel records - atomically with the model write, in

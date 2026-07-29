@@ -3,7 +3,7 @@
 #  Project (Registry) Ontology  :  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/project#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: ADR-016's registered-anchor vocabulary. Project identity is
 #         REGISTERED, not derived. A client sends an opaque, typed anchor;

@@ -3,7 +3,7 @@
 #  Core Ontology  ·  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/core#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: generic, domain-agnostic utility vocabulary (reusable across every
 #  arknet module) plus BoundedContext - the one strategic-DDD concept a BC

@@ -3,7 +3,7 @@
 #  DDD Ontology (parked)  ·  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/ddd#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Split out of arknet-core.ttl: everything strategic-DDD beyond BoundedContext
 #  (Domain/Subdomain, ContextMap/ContextRelationship/RelationshipType) plus the

@@ -3,7 +3,7 @@
 #  Actor Ontology  ·  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/process#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Split out of parked/arknet-process.ttl (issue #167): the Actor taxonomy is
 #  the only slice of that ontology arknet-use-cases actually writes today -

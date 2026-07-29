@@ -3,7 +3,7 @@
 #  Requirements Ontology  :  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/requirements#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: Requirements Engineering (ISO/IEC/IEEE 29148) als Metamodell.
 #         Goals, funktionale und nicht-funktionale Requirements, Constraints,
