@@ -47,7 +47,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  * requirement via {@link ResourceIdFactory}; it never changes. The human-readable business code
  * ({@link RequirementCode}, {@code FR-N}/{@code NFR-N}) is assigned independently, where
  * {@code N} is one above the highest running number currently used by that type in the target
- * workspace (numbering is independent per type and per workspace). New requirements start
+ * project (numbering is independent per type and per project). New requirements start
  * {@link RequirementStatus#PROPOSED}. The only advancing status transition is
  * {@code PROPOSED -> ACCEPTED}; setting the status a requirement already has is a no-op, and
  * reverting an accepted requirement is rejected. Linking a glossary term is idempotent and

@@ -16,7 +16,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 public interface ListRequirements {
 
     /**
-     * Returns all requirements currently under management in the given workspace.
+     * Returns all requirements currently under management in the given project.
      *
      * @param projectId the project (architecture model) to list requirements from
      * @return all requirements, never {@code null}
