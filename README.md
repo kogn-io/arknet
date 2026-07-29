@@ -287,15 +287,30 @@ addendum.
 
 Modular layout under the namespace `https://w3id.org/arknet/`:
 
+Active modules (consumed by a BC, published under `w3id.org/arknet/`):
+
 | Module | Prefix | Concepts |
 |--------|--------|----------|
-| `arknet-core.ttl` | `arknet:` | BoundedContext, Aggregate, Entity, ValueObject, Command, DomainEvent, ContextMap |
-| `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome, Actor |
+| `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...) plus BoundedContext -- the one strategic-DDD concept `arknet-bounded-context` actually writes. Staying under `core#` rather than its own namespace is a deliberate, tracked shortcut ([discussion #55](https://github.com/kogn-io/arknet/discussions/55)) |
+| `arknet-actor.ttl` | `arkproc:` | Actor, HumanActor, SystemActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module `arknet-use-cases`/`arknet-bounded-context` actually write |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
-| `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder, Concern |
-| `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (planned) |
-| `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
+| `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
+
+Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes them yet, not published):
+
+| Module | Prefix | Concepts |
+|--------|--------|----------|
+| `arknet-ddd.ttl` | `arkddd:` | Domain, ContextMap, ContextRelationship, RelationshipType, plus the full tactical-DDD layer (Aggregate, Entity, ValueObject, DomainEvent, Command, Query, DomainService, Repository, Factory, Policy, Saga, Invariant) -- split out of `arknet-core.ttl`; no BC, no Java reference |
+| `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome -- `Actor` moved to `arknet-actor.ttl` above; the rest is unconsumed and `arkproc:Step` predates/duplicates the live `arkreq:Step` (different properties entirely) -- reconcile before reviving |
+| `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder, Concern |
+| `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
+
+Not created yet (no file at all, just an intended future namespace):
+
+| Module | Prefix | Concepts |
+|--------|--------|----------|
+| `arknet-tech.ttl` | `arktech:` | Service, Container, API, Database (planned) |
 
 ## Architecture
 
