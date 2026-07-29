@@ -1,0 +1,365 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  DDD Ontology (parked)  ·  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/ddd#
+#  License    : Apache-2.0
+#
+#  Split out of arknet-core.ttl: everything strategic-DDD beyond BoundedContext
+#  (Domain/Subdomain, ContextMap/ContextRelationship/RelationshipType) plus the
+#  full tactical-DDD block (Aggregate, Entity, ValueObject, DomainEvent,
+#  Command, Query, DomainService, Repository, Factory, Policy, Saga,
+#  Invariant). None of it has a BC or a Java reference today - per
+#  arknet-ontology/CLAUDE.md's parked/ rule it therefore lives here, not
+#  under src/main/resources/, and is not published under w3id.org/arknet/.
+#
+#  arknet-core.ttl's arknet:hasAggregate already points its rdfs:range at
+#  arkddd:Aggregate below, and arknet-requirements.ttl's header already names
+#  "Command -> Aggregate -> BoundedContext" as an intended future link - this
+#  module is where that future BC (an arknet-ddd or arknet-aggregate hexagon)
+#  would anchor once it exists. Move back to src/main/resources/ - and settle
+#  whether BoundedContext (still under arknet:core#, see
+#  https://github.com/kogn-io/arknet/discussions/55) should join this
+#  namespace at that point - only once a BC actually consumes this file.
+##############################################################################
+
+@prefix arkddd: <https://w3id.org/arknet/ddd#> .
+@prefix arknet: <https://w3id.org/arknet/core#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:   <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:   <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/ddd>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
+    dcterms:title       "arknet DDD Ontology (parked)"@en ;
+    dcterms:description "Strategic DDD beyond BoundedContext (Domain, ContextMap) and the full tactical-DDD layer (Aggregate, Entity, DomainEvent, Command, ...)."@en ;
+    dcterms:version     "0.1.0" ;
+    dcterms:created     "2026-07-29"^^xsd:date ;
+    dcterms:rights      "CC-BY-4.0" ;
+    vann:preferredNamespacePrefix "arkddd" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/ddd#" ;
+    owl:versionInfo     "0.1.0" .
+
+
+##############################################################################
+#  STRATEGIC DDD (beyond BoundedContext, which stays in arknet-core.ttl)
+##############################################################################
+
+# ── Domain & Subdomain ─────────────────────────────────────────────────────
+
+arkddd:Domain
+    a owl:Class ;
+    rdfs:label       "Domain"@en , "Fachdomaene"@de ;
+    rdfs:comment     "Die uebergeordnete Problemdomaene. Enthaelt Subdomains und Bounded Contexts."@de ;
+    skos:example     "E-Commerce, Logistik, Finanzwesen"@de .
+
+arkddd:Subdomain
+    a owl:Class ;
+    rdfs:subClassOf arkddd:Domain ;
+    rdfs:label       "Subdomain"@en , "Teildomaene"@de ;
+    rdfs:comment     "Eine Teildomaene mit einem bestimmten strategischen Wert (Core/Supporting/Generic)."@de .
+
+arkddd:partOf
+    a owl:ObjectProperty ;
+    rdfs:domain  arknet:BoundedContext ;
+    rdfs:range   arkddd:Domain ;
+    rdfs:label   "part of"@en ;
+    rdfs:comment "The domain this bounded context is part of."@en ,
+                 "Die Domaene, zu der dieser Bounded Context gehoert."@de .
+
+arkddd:hasContext
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Domain ;
+    rdfs:range   arknet:BoundedContext ;
+    rdfs:label   "has context"@en ;
+    rdfs:comment "A bounded context that is part of this domain. Inverse of partOf."@en ,
+                 "Ein Bounded Context, der zu dieser Domaene gehoert. Inverse von partOf."@de ;
+    owl:inverseOf arkddd:partOf .
+
+arkddd:hasSubdomain
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Domain ;
+    rdfs:range   arkddd:Subdomain ;
+    rdfs:label   "has subdomain"@en ;
+    rdfs:comment "A subdomain that is part of this domain."@en ,
+                 "Eine Teildomaene, die zu dieser Domaene gehoert."@de .
+
+# ── Context Map ────────────────────────────────────────────────────────────
+
+arkddd:ContextMap
+    a owl:Class ;
+    rdfs:label   "Context Map"@en , "Kontextkarte"@de ;
+    rdfs:comment "Zeigt die Beziehungen zwischen Bounded Contexts (strategische Uebersicht)."@de .
+
+arkddd:ContextRelationship
+    a owl:Class ;
+    rdfs:label   "Context Relationship"@en , "Kontextbeziehung"@de ;
+    rdfs:comment "Eine gerichtete Beziehung zwischen zwei Bounded Contexts mit explizitem Integrationstyp."@de .
+
+arkddd:RelationshipType
+    a owl:Class ;
+    rdfs:label "Relationship Type"@en ;
+    rdfs:comment "The kind of integration relationship between two bounded contexts, following DDD context mapping patterns."@en ,
+                 "Die Art der Integrationsbeziehung zwischen zwei Bounded Contexts nach den DDD-Context-Mapping-Mustern."@de .
+
+arkddd:Partnership
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Partnership"@en ;
+    rdfs:comment "Beide Teams koordinieren sich gemeinsam. Geteilter Erfolg."@de .
+
+arkddd:SharedKernel
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Shared Kernel"@en ;
+    rdfs:comment "Geteilter Kern-Code/Modell. Erfordert enge Koordination."@de .
+
+arkddd:CustomerSupplier
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Customer/Supplier"@en ;
+    rdfs:comment "Downstream ist Kunde, Upstream ist Lieferant."@de .
+
+arkddd:Conformist
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Conformist"@en ;
+    rdfs:comment "Downstream uebernimmt Upstream-Modell ohne Uebersetzungsschicht."@de .
+
+arkddd:AnticorruptionLayer
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Anticorruption Layer"@en ;
+    rdfs:comment "Downstream schuetzt sein Modell durch eine Uebersetzungsschicht."@de .
+
+arkddd:OpenHostService
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Open Host Service"@en ;
+    rdfs:comment "Upstream bietet ein definiertes, stabiles Protokoll fuer mehrere Downstream-Consumer."@de .
+
+arkddd:PublishedLanguage
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Published Language"@en ;
+    rdfs:comment "Upstream veroeffentlicht ein formales Austauschformat (oft kombiniert mit OHS)."@de .
+
+arkddd:SeparateWays
+    a owl:NamedIndividual , arkddd:RelationshipType ;
+    rdfs:label   "Separate Ways"@en ;
+    rdfs:comment "Keine Integration – bewusste Entkopplung."@de .
+
+arkddd:hasRelationship
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:ContextMap ;
+    rdfs:range   arkddd:ContextRelationship ;
+    rdfs:label   "has relationship"@en ;
+    rdfs:comment "A context relationship that is part of this context map."@en ,
+                 "Eine Kontextbeziehung, die Teil dieser Kontextkarte ist."@de .
+
+arkddd:upstream
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:ContextRelationship ;
+    rdfs:range   arknet:BoundedContext ;
+    rdfs:label   "upstream"@en ;
+    rdfs:comment "Der Bounded Context, der das Modell/Protokoll vorgibt."@de .
+
+arkddd:downstream
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:ContextRelationship ;
+    rdfs:range   arknet:BoundedContext ;
+    rdfs:label   "downstream"@en ;
+    rdfs:comment "Der Bounded Context, der das Modell/Protokoll konsumiert."@de .
+
+arkddd:relationshipType
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:ContextRelationship ;
+    rdfs:range   arkddd:RelationshipType ;
+    rdfs:label   "relationship type"@en ;
+    rdfs:comment "The relationship type that classifies this context relationship."@en ,
+                 "Der Beziehungstyp, der diese Kontextbeziehung klassifiziert."@de .
+
+
+##############################################################################
+#  TACTICAL DDD
+##############################################################################
+
+arkddd:Aggregate
+    a owl:Class ;
+    rdfs:label   "Aggregate"@en ;
+    rdfs:comment "Eine Gruppe von Entitaeten und Value Objects mit klarer Transaktionsgrenze. Hat genau eine Aggregate Root."@de ;
+    skos:example "Order (root), OrderLine, ShippingAddress"@de .
+
+arkddd:Entity
+    a owl:Class ;
+    rdfs:label   "Entity"@en ;
+    rdfs:comment "Ein Domaenenobjekt mit Identitaet, das ueber seinen Lebenszyklus veraendert wird."@de .
+
+arkddd:AggregateRoot
+    a owl:Class ;
+    rdfs:subClassOf arkddd:Entity ;
+    rdfs:label   "Aggregate Root"@en ;
+    rdfs:comment "Die einzige Entitaet, ueber die von aussen auf das Aggregate zugegriffen werden darf."@de .
+
+arkddd:ValueObject
+    a owl:Class ;
+    rdfs:label   "Value Object"@en ;
+    rdfs:comment "Ein unveraenderliches Domaenenobjekt ohne eigene Identitaet. Gleichheit ueber Werte definiert."@de ;
+    skos:example "Money, Address, EmailAddress, OrderNumber"@de .
+
+arkddd:DomainEvent
+    a owl:Class ;
+    rdfs:label   "Domain Event"@en ;
+    rdfs:comment "Ein unveraenderliches Faktum ueber etwas, das in der Domaene passiert ist. Past tense."@de ;
+    skos:example "OrderPlaced, OrderShipped, PaymentReceived"@de .
+
+arkddd:Command
+    a owl:Class ;
+    rdfs:label   "Command"@en ;
+    rdfs:comment "Eine intentionale Zustandsaenderung. Kann abgelehnt werden. Imperative Benennung."@de ;
+    skos:example "PlaceOrder, CancelOrder, ShipOrder"@de .
+
+arkddd:Query
+    a owl:Class ;
+    rdfs:label   "Query"@en ;
+    rdfs:comment "Leseanfrage ohne Seiteneffekte."@de ;
+    skos:example "GetOrderById, ListOrdersByCustomer"@de .
+
+arkddd:DomainService
+    a owl:Class ;
+    rdfs:label   "Domain Service"@en ;
+    rdfs:comment "Domaenenlogik, die keinen natuerlichen Heimat in einer Entity oder einem Aggregate hat."@de .
+
+arkddd:Repository
+    a owl:Class ;
+    rdfs:label   "Repository"@en ;
+    rdfs:comment "Persistenz-Abstraktion. Definiert als Interface im Domaenenmodell."@de .
+
+arkddd:Factory
+    a owl:Class ;
+    rdfs:label   "Factory"@en ;
+    rdfs:comment "Erzeugt komplexe Aggregates oder Entities."@de .
+
+arkddd:Policy
+    a owl:Class ;
+    rdfs:label   "Policy"@en ;
+    rdfs:comment "Eine Geschaeftsregel, die auf ein Domain Event reagiert (When X happens, Then Y)."@de .
+
+arkddd:Saga
+    a owl:Class ;
+    rdfs:label   "Saga / Process Manager"@en ;
+    rdfs:comment "Koordiniert Prozesse ueber mehrere Bounded Contexts hinweg. Verwaltet langlaeufige Transaktionen."@de .
+
+arkddd:Invariant
+    a owl:Class ;
+    rdfs:label   "Invariant"@en , "Invariante"@de ;
+    rdfs:comment "Geschaeftsregel, die innerhalb des Aggregates immer gilt."@de .
+
+
+# ── Tactical Properties ───────────────────────────────────────────────────
+
+arkddd:aggregateRoot
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Aggregate ;
+    rdfs:range   arkddd:AggregateRoot ;
+    rdfs:label   "aggregate root"@en ;
+    rdfs:comment "Genau eine Aggregate Root pro Aggregate (SHACL enforced)."@de .
+
+arkddd:hasEntity
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Aggregate ;
+    rdfs:range   arkddd:Entity ;
+    rdfs:label   "has entity"@en ;
+    rdfs:comment "An entity that is part of this aggregate."@en ,
+                 "Eine Entity, die Teil dieses Aggregates ist."@de .
+
+arkddd:hasValueObject
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Aggregate ;
+    rdfs:range   arkddd:ValueObject ;
+    rdfs:label   "has value object"@en ;
+    rdfs:comment "A value object that is part of this aggregate."@en ,
+                 "Ein Value Object, das Teil dieses Aggregates ist."@de .
+
+arkddd:hasEvent
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Aggregate ;
+    rdfs:range   arkddd:DomainEvent ;
+    rdfs:label   "has event"@en ;
+    rdfs:comment "A domain event raised by this aggregate."@en ,
+                 "Ein Domain Event, das von diesem Aggregate ausgeloest wird."@de .
+
+arkddd:hasCommand
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Aggregate ;
+    rdfs:range   arkddd:Command ;
+    rdfs:label   "has command"@en ;
+    rdfs:comment "A command handled by this aggregate."@en ,
+                 "Ein Command, das von diesem Aggregate behandelt wird."@de .
+
+arkddd:hasInvariant
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Aggregate ;
+    rdfs:range   arkddd:Invariant ;
+    rdfs:label   "has invariant"@en ;
+    rdfs:comment "An invariant that must always hold within this aggregate."@en ,
+                 "Eine Invariante, die innerhalb dieses Aggregates immer gelten muss."@de .
+
+arkddd:invariantExpression
+    a owl:DatatypeProperty ;
+    rdfs:domain  arkddd:Invariant ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "invariant expression"@en ;
+    rdfs:comment "Formaler Ausdruck der Invariante (z.B. OCL, SpEL, natural language)."@de .
+
+arkddd:triggeredBy
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:DomainEvent ;
+    rdfs:range   arkddd:Command ;
+    rdfs:label   "triggered by"@en ;
+    rdfs:comment "The command that triggered this domain event."@en ,
+                 "Das Command, das dieses Domain Event ausgeloest hat."@de .
+
+arkddd:triggers
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Command ;
+    rdfs:range   arkddd:DomainEvent ;
+    rdfs:label   "triggers"@en ;
+    rdfs:comment "The domain event triggered by this command."@en ,
+                 "Das Domain Event, das durch dieses Command ausgeloest wird."@de .
+
+arkddd:reactsTo
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Policy ;
+    rdfs:range   arkddd:DomainEvent ;
+    rdfs:label   "reacts to"@en ;
+    rdfs:comment "The domain event this policy reacts to."@en ,
+                 "Das Domain Event, auf das diese Policy reagiert."@de .
+
+arkddd:issues
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Policy ;
+    rdfs:range   arkddd:Command ;
+    rdfs:label   "issues"@en ;
+    rdfs:comment "The command issued by this policy in reaction to an event."@en ,
+                 "Das Command, das diese Policy als Reaktion auf ein Event ausloest."@de .
+
+arkddd:handledBy
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Command ;
+    rdfs:range   arkddd:Aggregate ;
+    rdfs:label   "handled by"@en ;
+    rdfs:comment "The aggregate that handles this command."@en ,
+                 "Das Aggregate, das dieses Command behandelt."@de .
+
+arkddd:publishedTo
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:DomainEvent ;
+    rdfs:range   arknet:BoundedContext ;
+    rdfs:label   "published to"@en ;
+    rdfs:comment "In welche Bounded Contexts wird dieses Event publiziert (Downstream-Consumer)?"@de .
+
+# END OF DDD ONTOLOGY (parked)
