@@ -151,7 +151,7 @@ class StoreExporterTest {
     /**
      * Regression test: {@code arkreq:usesTerm} carries no {@code sh:nodeKind} constraint, so its
      * target is RDF-legally allowed to be a blank node (see
-     * {@code KognioRdfRequirementRepository#replaceTriples}), and a store-first edge can and does
+     * {@code KognioRdfRequirementRepository#replaceTriplesForUpdate}), and a store-first edge can and does
      * point at one. Seeded directly through the raw dataset API - the requirement domain path
      * never produces one itself - to prove the export path serialises a blank-node subject's own
      * triples instead of silently dropping them.
