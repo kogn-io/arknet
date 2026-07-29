@@ -50,8 +50,9 @@ gearbeitet wird.
 ## Ontologie-Namespaces
 
 - **Basis:** `https://w3id.org/arknet/`
-- `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — BoundedContext, Aggregate, Entity, ValueObject, Command, DomainEvent, ContextMap
-- `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Process, Step, StateTransition, BusinessRule, Outcome, Actor
+- `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — generisches Utility-Vokabular (name, description, ...) plus BoundedContext (einziges strategisches DDD-Konzept mit Live-Nutzung durch arknet-bounded-context; Namespace-Fehlplatzierung bekannt und getrackt, https://github.com/kogn-io/arknet/discussions/55)
+- `https://w3id.org/arknet/ddd#` (Prefix: `arkddd:`, **geparkt**, `parked/arknet-ddd.ttl`) — Domain, ContextMap/ContextRelationship/RelationshipType, taktisches DDD (Aggregate, Entity, ValueObject, Command, DomainEvent, ...); kein BC, keine Java-Referenz
+- `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Actor/HumanActor/SystemActor/actorRole (Live, `arknet-actor.ttl`, von arknet-use-cases genutzt); Process, Step, StateTransition, BusinessRule, Outcome bleiben geparkt (`parked/arknet-process.ttl`, kein BC)
 - `https://w3id.org/arknet/requirements#` (Prefix: `arkreq:`) — Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release (OSLC-RM-aligned, doap:Version)
 - `https://w3id.org/arknet/architecture#` (Prefix: `arkarch:`) — Architecture, View, Viewpoint, ADR, Stakeholder, Concern (ISO 42010)
 - `https://w3id.org/arknet/tech#` (Prefix: `arktech:`) — Service, Container, API, Database, MessageBroker

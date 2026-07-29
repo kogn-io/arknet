@@ -1,21 +1,27 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  Core Ontology  ·  Version 0.1.0
+#  Core Ontology  ·  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/core#
 #  License    : Apache-2.0
 #
-#  Consolidated from:
-#    - doc42-ontology.ttl  (doc42.ddd-forge.dev)
-#    - ddd-forge.ttl       (ddd-forge.org)
-#    - dddpo.ttl           (dddprocess.org)
+#  Scope: generic, domain-agnostic utility vocabulary (reusable across every
+#  arknet module) plus BoundedContext - the one strategic-DDD concept a BC
+#  (arknet-bounded-context, bc_* tools) actually writes today. Everything
+#  else that used to live here - Domain/Subdomain/ContextMap/RelationshipType
+#  and the full tactical-DDD block (Aggregate, Entity, DomainEvent, Command,
+#  ...) - has no BC and no Java reference and moved to parked/arknet-ddd.ttl.
+#  BoundedContext staying under `core#` rather than its own namespace is a
+#  deliberate, tracked shortcut - see
+#  https://github.com/kogn-io/arknet/discussions/55.
 #
-#  Scope: Strategic + Tactical DDD concepts.
 #  NOT included here (separate modules):
-#    - Processes, Steps, State Machines  → arknet-process.ttl
-#    - ISO 42010, Views, ADRs           → arknet-architecture.ttl
+#    - Domain/Subdomain/ContextMap, tactical DDD → parked/arknet-ddd.ttl
+#    - Actors                            → arknet-actor.ttl
+#    - Processes, Steps, State Machines  → parked/arknet-process.ttl
+#    - ISO 42010, Views, ADRs           → parked/arknet-architecture.ttl
 #    - Technical layer (Service, API)    → arknet-tech.ttl
-#    - GDPR / Privacy                   → arknet-privacy.ttl
+#    - GDPR / Privacy                   → parked/arknet-privacy.ttl
 ##############################################################################
 
 @prefix arknet: <https://w3id.org/arknet/core#> .
@@ -35,32 +41,68 @@
 <https://w3id.org/arknet/core>
     a owl:Ontology ;
     dcterms:title       "arknet Core Ontology"@en ;
-    dcterms:description "DDD-Architekturmodelle, die Maschinen verstehen. Strategisches und taktisches Domain-Driven Design als OWL."@de ;
-    dcterms:version     "0.1.0" ;
+    dcterms:description "Generic utility vocabulary plus BoundedContext, the one strategic-DDD concept currently in production use."@en ;
+    dcterms:version     "0.2.0" ;
     dcterms:created     "2026-03-23"^^xsd:date ;
-    dcterms:rights      "Apache-2.0" ;
+    dcterms:rights      "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arknet" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/core#" ;
-    owl:versionInfo     "0.1.0" .
+    owl:versionInfo     "0.2.0" .
 
 
 ##############################################################################
-#  STRATEGIC DDD
+#  GENERIC UTILITY VOCABULARY
 ##############################################################################
 
-# ── Domain & Subdomain ─────────────────────────────────────────────────────
+arknet:name
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "name"@en ;
+    rdfs:comment "Der menschenlesbare Name eines Konzepts."@de .
 
-arknet:Domain
-    a owl:Class ;
-    rdfs:label       "Domain"@en , "Fachdomaene"@de ;
-    rdfs:comment     "Die uebergeordnete Problemdomaene. Enthaelt Subdomains und Bounded Contexts."@de ;
-    skos:example     "E-Commerce, Logistik, Finanzwesen"@de .
+arknet:description
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "description"@en ;
+    rdfs:comment "A free-text description of a concept."@en ,
+                 "Eine Freitext-Beschreibung eines Konzepts."@de .
 
-arknet:Subdomain
+arknet:since
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "since"@en ;
+    rdfs:comment "Version oder Datum, ab der dieses Konzept gilt."@de .
+
+arknet:deprecated
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:boolean ;
+    rdfs:label   "deprecated"@en ;
+    rdfs:comment "Marks this concept as deprecated."@en ,
+                 "Markiert dieses Konzept als veraltet."@de .
+
+arknet:externalDoc
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:anyURI ;
+    rdfs:label   "external documentation"@en ;
+    rdfs:comment "A link to external documentation for this concept."@en ,
+                 "Ein Verweis auf externe Dokumentation zu diesem Konzept."@de .
+
+arknet:qualityAttribute
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "quality attribute"@en ;
+    rdfs:comment "Qualitaetsattribut (z.B. availability:99.9, latency:<50ms)."@de .
+
+
+##############################################################################
+#  BOUNDED CONTEXT (the one strategic-DDD concept in production use)
+##############################################################################
+
+arknet:BoundedContext
     a owl:Class ;
-    rdfs:subClassOf arknet:Domain ;
-    rdfs:label       "Subdomain"@en , "Teildomaene"@de ;
-    rdfs:comment     "Eine Teildomaene mit einem bestimmten strategischen Wert (Core/Supporting/Generic)."@de .
+    rdfs:label   "Bounded Context"@en , "Abgegrenzter Kontext"@de ;
+    rdfs:comment "Eine explizite semantische Grenze, innerhalb der ein Domaenenmodell konsistent gilt."@de ;
+    skos:example "OrderManagement, InventoryContext, ShippingContext"@de .
 
 arknet:SubdomainType
     a owl:Class ;
@@ -83,110 +125,12 @@ arknet:GenericDomain
     rdfs:label   "Generic Domain"@en ;
     rdfs:comment "Generische Domaene – standardisierbar, oft Fremdsoftware."@de .
 
-# ── Bounded Context ────────────────────────────────────────────────────────
-
-arknet:BoundedContext
-    a owl:Class ;
-    rdfs:label   "Bounded Context"@en , "Abgegrenzter Kontext"@de ;
-    rdfs:comment "Eine explizite semantische Grenze, innerhalb der ein Domaenenmodell konsistent gilt."@de ;
-    skos:example "OrderManagement, InventoryContext, ShippingContext"@de .
-
-# ── Context Map ────────────────────────────────────────────────────────────
-
-arknet:ContextMap
-    a owl:Class ;
-    rdfs:label   "Context Map"@en , "Kontextkarte"@de ;
-    rdfs:comment "Zeigt die Beziehungen zwischen Bounded Contexts (strategische Uebersicht)."@de .
-
-arknet:ContextRelationship
-    a owl:Class ;
-    rdfs:label   "Context Relationship"@en , "Kontextbeziehung"@de ;
-    rdfs:comment "Eine gerichtete Beziehung zwischen zwei Bounded Contexts mit explizitem Integrationstyp."@de .
-
-# ── Relationship Types (as Individuals) ───────────────────────────────────
-
-arknet:RelationshipType
-    a owl:Class ;
-    rdfs:label "Relationship Type"@en ;
-    rdfs:comment "The kind of integration relationship between two bounded contexts, following DDD context mapping patterns."@en ,
-                 "Die Art der Integrationsbeziehung zwischen zwei Bounded Contexts nach den DDD-Context-Mapping-Mustern."@de .
-
-arknet:Partnership
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Partnership"@en ;
-    rdfs:comment "Beide Teams koordinieren sich gemeinsam. Geteilter Erfolg."@de .
-
-arknet:SharedKernel
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Shared Kernel"@en ;
-    rdfs:comment "Geteilter Kern-Code/Modell. Erfordert enge Koordination."@de .
-
-arknet:CustomerSupplier
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Customer/Supplier"@en ;
-    rdfs:comment "Downstream ist Kunde, Upstream ist Lieferant."@de .
-
-arknet:Conformist
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Conformist"@en ;
-    rdfs:comment "Downstream uebernimmt Upstream-Modell ohne Uebersetzungsschicht."@de .
-
-arknet:AnticorruptionLayer
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Anticorruption Layer"@en ;
-    rdfs:comment "Downstream schuetzt sein Modell durch eine Uebersetzungsschicht."@de .
-
-arknet:OpenHostService
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Open Host Service"@en ;
-    rdfs:comment "Upstream bietet ein definiertes, stabiles Protokoll fuer mehrere Downstream-Consumer."@de .
-
-arknet:PublishedLanguage
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Published Language"@en ;
-    rdfs:comment "Upstream veroeffentlicht ein formales Austauschformat (oft kombiniert mit OHS)."@de .
-
-arknet:SeparateWays
-    a owl:NamedIndividual , arknet:RelationshipType ;
-    rdfs:label   "Separate Ways"@en ;
-    rdfs:comment "Keine Integration – bewusste Entkopplung."@de .
-
-
-# ── Strategic Properties ───────────────────────────────────────────────────
-
-arknet:name
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "name"@en ;
-    rdfs:comment "Der menschenlesbare Name eines Konzepts."@de .
-
-arknet:description
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "description"@en ;
-    rdfs:comment "A free-text description of a concept."@en ,
-                 "Eine Freitext-Beschreibung eines Konzepts."@de .
-
 arknet:domainVision
     a owl:DatatypeProperty ;
     rdfs:domain  arknet:BoundedContext ;
     rdfs:range   xsd:string ;
     rdfs:label   "domain vision"@en ;
     rdfs:comment "Ein Satz, der beschreibt, was dieser Bounded Context leistet und warum er existiert."@de .
-
-arknet:responsibilities
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "responsibilities"@en ;
-    rdfs:comment "Freitext-Beschreibung der Verantwortlichkeiten des Bounded Context."@de .
-
-arknet:ubiquitousLanguageTerm
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   skos:Concept ;
-    rdfs:label   "ubiquitous language term"@en ;
-    rdfs:comment "Verweist auf einen Begriff der Ubiquitous Language, modelliert als skos:Concept (nicht mehr ein blosser String). Kann mehrfach vorkommen – ein Triple pro Begriff. Der Begriff traegt skos:prefLabel/skos:definition und liegt via skos:inScheme in einem Glossar (skos:ConceptScheme)."@de .
 
 arknet:subdomain
     a owl:ObjectProperty ;
@@ -195,349 +139,25 @@ arknet:subdomain
     rdfs:label   "subdomain type"@en ;
     rdfs:comment "Strategische Einordnung: CoreDomain | SupportingDomain | GenericDomain"@de .
 
-arknet:partOf
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   arknet:Domain ;
-    rdfs:label   "part of"@en ;
-    rdfs:comment "The domain this bounded context is part of."@en ,
-                 "Die Domaene, zu der dieser Bounded Context gehoert."@de .
-
-arknet:hasContext
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Domain ;
-    rdfs:range   arknet:BoundedContext ;
-    rdfs:label   "has context"@en ;
-    rdfs:comment "A bounded context that is part of this domain. Inverse of partOf."@en ,
-                 "Ein Bounded Context, der zu dieser Domaene gehoert. Inverse von partOf."@de ;
-    owl:inverseOf arknet:partOf .
-
-arknet:hasSubdomain
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Domain ;
-    rdfs:range   arknet:Subdomain ;
-    rdfs:label   "has subdomain"@en ;
-    rdfs:comment "A subdomain that is part of this domain."@en ,
-                 "Eine Teildomaene, die zu dieser Domaene gehoert."@de .
-
-arknet:hasRelationship
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:ContextMap ;
-    rdfs:range   arknet:ContextRelationship ;
-    rdfs:label   "has relationship"@en ;
-    rdfs:comment "A context relationship that is part of this context map."@en ,
-                 "Eine Kontextbeziehung, die Teil dieser Kontextkarte ist."@de .
-
-arknet:upstream
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:ContextRelationship ;
-    rdfs:range   arknet:BoundedContext ;
-    rdfs:label   "upstream"@en ;
-    rdfs:comment "Der Bounded Context, der das Modell/Protokoll vorgibt."@de .
-
-arknet:downstream
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:ContextRelationship ;
-    rdfs:range   arknet:BoundedContext ;
-    rdfs:label   "downstream"@en ;
-    rdfs:comment "Der Bounded Context, der das Modell/Protokoll konsumiert."@de .
-
-arknet:relationshipType
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:ContextRelationship ;
-    rdfs:range   arknet:RelationshipType ;
-    rdfs:label   "relationship type"@en ;
-    rdfs:comment "The relationship type that classifies this context relationship."@en ,
-                 "Der Beziehungstyp, der diese Kontextbeziehung klassifiziert."@de .
-
-
-##############################################################################
-#  TACTICAL DDD
-##############################################################################
-
-arknet:Aggregate
-    a owl:Class ;
-    rdfs:label   "Aggregate"@en ;
-    rdfs:comment "Eine Gruppe von Entitaeten und Value Objects mit klarer Transaktionsgrenze. Hat genau eine Aggregate Root."@de ;
-    skos:example "Order (root), OrderLine, ShippingAddress"@de .
-
-arknet:Entity
-    a owl:Class ;
-    rdfs:label   "Entity"@en ;
-    rdfs:comment "Ein Domaenenobjekt mit Identitaet, das ueber seinen Lebenszyklus veraendert wird."@de .
-
-arknet:AggregateRoot
-    a owl:Class ;
-    rdfs:subClassOf arknet:Entity ;
-    rdfs:label   "Aggregate Root"@en ;
-    rdfs:comment "Die einzige Entitaet, ueber die von aussen auf das Aggregate zugegriffen werden darf."@de .
-
-arknet:ValueObject
-    a owl:Class ;
-    rdfs:label   "Value Object"@en ;
-    rdfs:comment "Ein unveraenderliches Domaenenobjekt ohne eigene Identitaet. Gleichheit ueber Werte definiert."@de ;
-    skos:example "Money, Address, EmailAddress, OrderNumber"@de .
-
-arknet:DomainEvent
-    a owl:Class ;
-    rdfs:label   "Domain Event"@en ;
-    rdfs:comment "Ein unveraenderliches Faktum ueber etwas, das in der Domaene passiert ist. Past tense."@de ;
-    skos:example "OrderPlaced, OrderShipped, PaymentReceived"@de .
-
-arknet:Command
-    a owl:Class ;
-    rdfs:label   "Command"@en ;
-    rdfs:comment "Eine intentionale Zustandsaenderung. Kann abgelehnt werden. Imperative Benennung."@de ;
-    skos:example "PlaceOrder, CancelOrder, ShipOrder"@de .
-
-arknet:Query
-    a owl:Class ;
-    rdfs:label   "Query"@en ;
-    rdfs:comment "Leseanfrage ohne Seiteneffekte."@de ;
-    skos:example "GetOrderById, ListOrdersByCustomer"@de .
-
-arknet:DomainService
-    a owl:Class ;
-    rdfs:label   "Domain Service"@en ;
-    rdfs:comment "Domaenenlogik, die keinen natuerlichen Heimat in einer Entity oder einem Aggregate hat."@de .
-
-arknet:Repository
-    a owl:Class ;
-    rdfs:label   "Repository"@en ;
-    rdfs:comment "Persistenz-Abstraktion. Definiert als Interface im Domaenenmodell."@de .
-
-arknet:Factory
-    a owl:Class ;
-    rdfs:label   "Factory"@en ;
-    rdfs:comment "Erzeugt komplexe Aggregates oder Entities."@de .
-
-arknet:Policy
-    a owl:Class ;
-    rdfs:label   "Policy"@en ;
-    rdfs:comment "Eine Geschaeftsregel, die auf ein Domain Event reagiert (When X happens, Then Y)."@de .
-
-arknet:Saga
-    a owl:Class ;
-    rdfs:label   "Saga / Process Manager"@en ;
-    rdfs:comment "Koordiniert Prozesse ueber mehrere Bounded Contexts hinweg. Verwaltet langlaeufige Transaktionen."@de .
-
-arknet:Invariant
-    a owl:Class ;
-    rdfs:label   "Invariant"@en , "Invariante"@de ;
-    rdfs:comment "Geschaeftsregel, die innerhalb des Aggregates immer gilt."@de .
-
-
-# ── Tactical Properties ───────────────────────────────────────────────────
-
-arknet:hasAggregate
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   arknet:Aggregate ;
-    rdfs:label   "has aggregate"@en ;
-    rdfs:comment "An aggregate that belongs to this bounded context."@en ,
-                 "Ein Aggregate, das zu diesem Bounded Context gehoert."@de .
-
-arknet:aggregateRoot
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Aggregate ;
-    rdfs:range   arknet:AggregateRoot ;
-    rdfs:label   "aggregate root"@en ;
-    rdfs:comment "Genau eine Aggregate Root pro Aggregate (SHACL enforced)."@de .
-
-arknet:hasEntity
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Aggregate ;
-    rdfs:range   arknet:Entity ;
-    rdfs:label   "has entity"@en ;
-    rdfs:comment "An entity that is part of this aggregate."@en ,
-                 "Eine Entity, die Teil dieses Aggregates ist."@de .
-
-arknet:hasValueObject
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Aggregate ;
-    rdfs:range   arknet:ValueObject ;
-    rdfs:label   "has value object"@en ;
-    rdfs:comment "A value object that is part of this aggregate."@en ,
-                 "Ein Value Object, das Teil dieses Aggregates ist."@de .
-
-arknet:hasEvent
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Aggregate ;
-    rdfs:range   arknet:DomainEvent ;
-    rdfs:label   "has event"@en ;
-    rdfs:comment "A domain event raised by this aggregate."@en ,
-                 "Ein Domain Event, das von diesem Aggregate ausgeloest wird."@de .
-
-arknet:hasCommand
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Aggregate ;
-    rdfs:range   arknet:Command ;
-    rdfs:label   "has command"@en ;
-    rdfs:comment "A command handled by this aggregate."@en ,
-                 "Ein Command, das von diesem Aggregate behandelt wird."@de .
-
-arknet:hasInvariant
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Aggregate ;
-    rdfs:range   arknet:Invariant ;
-    rdfs:label   "has invariant"@en ;
-    rdfs:comment "An invariant that must always hold within this aggregate."@en ,
-                 "Eine Invariante, die innerhalb dieses Aggregates immer gelten muss."@de .
-
-arknet:invariantExpression
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:Invariant ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "invariant expression"@en ;
-    rdfs:comment "Formaler Ausdruck der Invariante (z.B. OCL, SpEL, natural language)."@de .
-
-arknet:triggeredBy
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:DomainEvent ;
-    rdfs:range   arknet:Command ;
-    rdfs:label   "triggered by"@en ;
-    rdfs:comment "The command that triggered this domain event."@en ,
-                 "Das Command, das dieses Domain Event ausgeloest hat."@de .
-
-arknet:triggers
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Command ;
-    rdfs:range   arknet:DomainEvent ;
-    rdfs:label   "triggers"@en ;
-    rdfs:comment "The domain event triggered by this command."@en ,
-                 "Das Domain Event, das durch dieses Command ausgeloest wird."@de .
-
-arknet:reactsTo
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Policy ;
-    rdfs:range   arknet:DomainEvent ;
-    rdfs:label   "reacts to"@en ;
-    rdfs:comment "The domain event this policy reacts to."@en ,
-                 "Das Domain Event, auf das diese Policy reagiert."@de .
-
-arknet:issues
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Policy ;
-    rdfs:range   arknet:Command ;
-    rdfs:label   "issues"@en ;
-    rdfs:comment "The command issued by this policy in reaction to an event."@en ,
-                 "Das Command, das diese Policy als Reaktion auf ein Event ausloest."@de .
-
-arknet:handledBy
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:Command ;
-    rdfs:range   arknet:Aggregate ;
-    rdfs:label   "handled by"@en ;
-    rdfs:comment "The aggregate that handles this command."@en ,
-                 "Das Aggregate, das dieses Command behandelt."@de .
-
-arknet:publishedTo
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:DomainEvent ;
-    rdfs:range   arknet:BoundedContext ;
-    rdfs:label   "published to"@en ;
-    rdfs:comment "In welche Bounded Contexts wird dieses Event publiziert (Downstream-Consumer)?"@de .
-
-
-##############################################################################
-#  UTILITY PROPERTIES
-##############################################################################
-
-arknet:since
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "since"@en ;
-    rdfs:comment "Version oder Datum, ab der dieses Konzept gilt."@de .
-
-arknet:deprecated
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:boolean ;
-    rdfs:label   "deprecated"@en ;
-    rdfs:comment "Marks this concept as deprecated."@en ,
-                 "Markiert dieses Konzept als veraltet."@de .
-
-arknet:externalDoc
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:anyURI ;
-    rdfs:label   "external documentation"@en ;
-    rdfs:comment "A link to external documentation for this concept."@en ,
-                 "Ein Verweis auf externe Dokumentation zu diesem Konzept."@de .
-
 arknet:ownedBy
     a owl:DatatypeProperty ;
     rdfs:range   xsd:string ;
     rdfs:label   "owned by"@en ;
     rdfs:comment "Team-Name oder Personen-URI, die fuer dieses Konzept verantwortlich sind."@de .
 
-arknet:qualityAttribute
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "quality attribute"@en ;
-    rdfs:comment "Qualitaetsattribut (z.B. availability:99.9, latency:<50ms)."@de .
+arknet:ubiquitousLanguageTerm
+    a owl:ObjectProperty ;
+    rdfs:domain  arknet:BoundedContext ;
+    rdfs:range   skos:Concept ;
+    rdfs:label   "ubiquitous language term"@en ;
+    rdfs:comment "Verweist auf einen Begriff der Ubiquitous Language, modelliert als skos:Concept (nicht mehr ein blosser String). Kann mehrfach vorkommen – ein Triple pro Begriff. Der Begriff traegt skos:prefLabel/skos:definition und liegt via skos:inScheme in einem Glossar (skos:ConceptScheme)."@de .
 
-
-##############################################################################
-#  ANALYSIS PROVENANCE
-##############################################################################
-
-arknet:AnalysisRun
-    a owl:Class ;
-    rdfs:label   "Analysis Run"@en , "Analyse-Lauf"@de ;
-    rdfs:comment "Metadaten eines automatischen Analyse-Laufs durch den arknet Skill."@de .
-
-arknet:analyzedAt
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:dateTime ;
-    rdfs:label   "analyzed at"@en ;
-    rdfs:comment "Zeitpunkt des Analyse-Laufs (ISO 8601)."@de .
-
-arknet:pluginVersion
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "plugin version"@en ;
-    rdfs:comment "Version des arknet-Plugins, das die Analyse durchgefuehrt hat."@de .
-
-arknet:gitCommit
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "git commit"@en ;
-    rdfs:comment "Short-Hash des Git-Commits zum Zeitpunkt der Analyse."@de .
-
-arknet:gitBranch
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "git branch"@en ;
-    rdfs:comment "Git-Branch zum Zeitpunkt der Analyse."@de .
-
-arknet:projectPath
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "project path"@en ;
-    rdfs:comment "Absoluter Pfad des analysierten Projekts."@de .
-
-arknet:strategy
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "analysis strategy"@en ;
-    rdfs:comment "Verwendete Analyse-Strategie: jdt oder text-search."@de .
-
-arknet:discoveredTypes
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:AnalysisRun ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "discovered types"@en ;
-    rdfs:comment "Komma-separierte Liste der Konzepttypen, die in diesem Lauf gesucht wurden."@de .
-
-arknet:source
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "source"@en ;
-    rdfs:comment "Herkunft eines Triples. 'analyze' = maschinell generiert (darf aktualisiert werden). Kein source = manuell (geschuetzt)."@de .
+arknet:hasAggregate
+    a owl:ObjectProperty ;
+    rdfs:domain  arknet:BoundedContext ;
+    rdfs:range   <https://w3id.org/arknet/ddd#Aggregate> ;
+    rdfs:label   "has aggregate"@en ;
+    rdfs:comment "An aggregate that belongs to this bounded context. Its range, arkddd:Aggregate, lives in the parked, not-yet-implemented parked/arknet-ddd.ttl - the bounded-context write path already preserves existing edges on this property (issue #65-style bypass) so a future aggregate-writing BC can attach to it without a migration."@en ,
+                 "Ein Aggregate, das zu diesem Bounded Context gehoert."@de .
 
 # END OF CORE ONTOLOGY

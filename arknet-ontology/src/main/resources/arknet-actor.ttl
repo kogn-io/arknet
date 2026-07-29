@@ -1,0 +1,76 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  Actor Ontology  ·  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/process#
+#  License    : Apache-2.0
+#
+#  Split out of parked/arknet-process.ttl (issue #167): the Actor taxonomy is
+#  the only slice of that ontology arknet-use-cases actually writes today -
+#  arkproc:HumanActor/arkproc:SystemActor type a use case's primaryActor/
+#  supportingActor term, arkproc:actorRole is written on bounded-context
+#  terms. It therefore moved into src/main/resources/ per
+#  arknet-ontology/CLAUDE.md's rule (a BC references it), while the rest of
+#  the process ontology (Process, Step, State machine, BusinessRule, Outcome
+#  - none of it has a BC) stays parked. The namespace stays
+#  `https://w3id.org/arknet/process#` unchanged: it is already live in
+#  production data (skos:Concept individuals typed arkproc:HumanActor/
+#  arkproc:SystemActor), so renaming it would require a data migration this
+#  split does not need.
+##############################################################################
+
+@prefix arkproc: <https://w3id.org/arknet/process#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/process>
+    a owl:Ontology ;
+    dcterms:title    "arknet Actor Ontology"@en ;
+    dcterms:description "Human and system actors participating in a bounded context or use case."@en ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-07-29"^^xsd:date ;
+    dcterms:rights   "CC-BY-4.0" ;
+    vann:preferredNamespacePrefix "arkproc" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
+    owl:versionInfo  "0.1.0" .
+
+
+##############################################################################
+#  ACTORS
+##############################################################################
+
+arkproc:Actor a owl:Class ;
+    rdfs:label "Actor"@en , "Akteur"@de ;
+    rdfs:comment "Person oder System, das an einem Prozess beteiligt ist."@de .
+
+arkproc:HumanActor a owl:Class ;
+    rdfs:subClassOf arkproc:Actor ;
+    rdfs:label "Human Actor"@en , "Menschlicher Akteur"@de ;
+    rdfs:comment "An actor representing a natural person who participates in the process."@en ,
+                 "Ein Akteur, der eine natuerliche Person repraesentiert, die am Prozess beteiligt ist."@de ;
+    skos:example "Kunde, Sachbearbeiter, Administrator" .
+
+arkproc:SystemActor a owl:Class ;
+    rdfs:subClassOf arkproc:Actor ;
+    rdfs:label "System Actor"@en , "Systemakteur"@de ;
+    rdfs:comment "An actor representing an external system or service that participates in the process."@en ,
+                 "Ein Akteur, der ein externes System oder einen externen Dienst repraesentiert, der am Prozess beteiligt ist."@de ;
+    skos:example "PaymentService, InventoryService, EmailService" .
+
+arkproc:actorRole a owl:DatatypeProperty ;
+    rdfs:domain arkproc:Actor ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "actor role"@en , "Akteursrolle"@de ;
+    rdfs:comment "Fachliche Rolle im Bounded Context."@de .
+
+# END OF ACTOR ONTOLOGY

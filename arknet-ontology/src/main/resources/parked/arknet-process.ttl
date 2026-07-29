@@ -1,14 +1,24 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  Process Ontology  ·  Version 0.1.0
+#  Process Ontology (parked)  ·  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/process#
 #  License    : Apache-2.0
 #
 #  Migrated from: dddpo.ttl (dddprocess.org)
 #
-#  Scope: Business processes, state machines, actors, business rules,
-#         outcomes. Imports arknet-core for DDD base concepts.
+#  Scope: Business processes, state machines, business rules, outcomes.
+#         Imports arknet-core for DDD base concepts.
+#
+#  The Actor taxonomy that used to open this file (Actor/HumanActor/
+#  SystemActor/actorRole) moved to arknet-actor.ttl - arknet-use-cases
+#  actually writes it, so per arknet-ontology/CLAUDE.md's rule it belongs in
+#  src/main/resources/, not here. Everything below still has no BC and no
+#  Java reference, so it stays parked. Both files share the process#
+#  namespace; arkproc:Step in particular predates and duplicates the live
+#  arkreq:Step (different properties entirely - stepId/stepName/stepOrder/
+#  performedBy here vs. position/stepText/stepRealises there) - reconcile
+#  the two before reviving this module, not after.
 ##############################################################################
 
 @prefix arkproc: <https://w3id.org/arknet/process#> .
@@ -29,43 +39,14 @@
 <https://w3id.org/arknet/process>
     a owl:Ontology ;
     owl:imports      <https://w3id.org/arknet/core> ;
-    dcterms:title    "arknet Process Ontology"@en ;
-    dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Akteure, Geschaeftsregeln und Outcomes fuer DDD."@de ;
-    dcterms:version  "0.1.0" ;
+    dcterms:title    "arknet Process Ontology (parked)"@en ;
+    dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Geschaeftsregeln und Outcomes fuer DDD. Akteure siehe arknet-actor.ttl."@de ;
+    dcterms:version  "0.2.0" ;
     dcterms:created  "2026-03-23"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkproc" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
-    owl:versionInfo  "0.1.0" .
-
-
-##############################################################################
-#  1. ACTORS
-##############################################################################
-
-arkproc:Actor a owl:Class ;
-    rdfs:label "Actor"@en , "Akteur"@de ;
-    rdfs:comment "Person oder System, das an einem Prozess beteiligt ist."@de .
-
-arkproc:HumanActor a owl:Class ;
-    rdfs:subClassOf arkproc:Actor ;
-    rdfs:label "Human Actor"@en , "Menschlicher Akteur"@de ;
-    rdfs:comment "An actor representing a natural person who participates in the process."@en ,
-                 "Ein Akteur, der eine natuerliche Person repraesentiert, die am Prozess beteiligt ist."@de ;
-    skos:example "Kunde, Sachbearbeiter, Administrator" .
-
-arkproc:SystemActor a owl:Class ;
-    rdfs:subClassOf arkproc:Actor ;
-    rdfs:label "System Actor"@en , "Systemakteur"@de ;
-    rdfs:comment "An actor representing an external system or service that participates in the process."@en ,
-                 "Ein Akteur, der ein externes System oder einen externen Dienst repraesentiert, der am Prozess beteiligt ist."@de ;
-    skos:example "PaymentService, InventoryService, EmailService" .
-
-arkproc:actorRole a owl:DatatypeProperty ;
-    rdfs:domain arkproc:Actor ;
-    rdfs:range  xsd:string ;
-    rdfs:label  "actor role"@en , "Akteursrolle"@de ;
-    rdfs:comment "Fachliche Rolle im Bounded Context."@de .
+    owl:versionInfo  "0.2.0" .
 
 
 ##############################################################################
