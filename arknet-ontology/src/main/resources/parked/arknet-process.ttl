@@ -10,19 +10,17 @@
 #  Scope: Business processes, state machines, business rules, outcomes.
 #         Imports arknet-core for DDD base concepts.
 #
-#  The Actor taxonomy that used to open this file (Actor/HumanActor/
-#  SystemActor/actorRole) moved to arknet-actor.ttl - arknet-use-cases
-#  actually writes it, so per arknet-ontology/CLAUDE.md's rule it belongs in
-#  src/main/resources/, not here. Everything below still has no BC and no
-#  Java reference, so it stays parked. Both files share the process#
-#  namespace; arkproc:Step in particular predates and duplicates the live
-#  arkreq:Step (different properties entirely - stepId/stepName/stepOrder/
-#  performedBy here vs. position/stepText/stepRealises there) - reconcile
-#  the two before reviving this module, not after.
+#  NOT included here (separate module):
+#    - Actor, HumanActor, SystemActor, actorRole → arknet-actor.ttl
+#
+#  Caveat: arkproc:Step predates and duplicates the live arkreq:Step
+#  (different properties entirely - stepId/stepName/stepOrder/performedBy
+#  here vs. position/stepText/stepRealises there). Reconcile the two before
+#  reviving this module.
 ##############################################################################
 
 @prefix arkproc: <https://w3id.org/arknet/process#> .
-@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkddd:  <https://w3id.org/arknet/ddd#> .
 @prefix owl:     <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
@@ -38,7 +36,7 @@
 
 <https://w3id.org/arknet/process>
     a owl:Ontology ;
-    owl:imports      <https://w3id.org/arknet/core> ;
+    owl:imports      <https://w3id.org/arknet/ddd> ;
     dcterms:title    "arknet Process Ontology (parked)"@en ;
     dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Geschaeftsregeln und Outcomes fuer DDD. Akteure siehe arknet-actor.ttl."@de ;
     dcterms:version  "0.2.0" ;
@@ -316,7 +314,7 @@ arkproc:processVersion a owl:DatatypeProperty ;
 
 arkproc:belongsTo a owl:ObjectProperty ;
     rdfs:domain arkproc:Process ;
-    rdfs:range  arknet:BoundedContext ;
+    rdfs:range  arkddd:BoundedContext ;
     rdfs:label  "belongs to"@en , "gehoert zu"@de ;
     rdfs:comment "The bounded context this process belongs to."@en ,
                  "Der Bounded Context, zu dem dieser Prozess gehoert."@de .

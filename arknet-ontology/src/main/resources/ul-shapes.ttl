@@ -10,7 +10,7 @@
 ##############################################################################
 
 @prefix sh:       <http://www.w3.org/ns/shacl#> .
-@prefix arknet:   <https://w3id.org/arknet/core#> .
+@prefix arkddd:   <https://w3id.org/arknet/ddd#> .
 @prefix skos:     <http://www.w3.org/2004/02/skos/core#> .
 @prefix ulshapes: <https://w3id.org/arknet/shapes/ul#> .
 
@@ -45,22 +45,22 @@ ulshapes:Term-inScheme
 ##############################################################################
 #  BOUNDED-CONTEXT LINK SHAPE
 #
-#  arknet:ubiquitousLanguageTerm verweist jetzt auf einen skos:Concept
-#  (breaking: frueher xsd:string). Eigene NodeShape auf arknet:BoundedContext,
+#  arkddd:ubiquitousLanguageTerm verweist jetzt auf einen skos:Concept
+#  (breaking: frueher xsd:string). Eigene NodeShape auf arkddd:BoundedContext,
 #  damit die Kern-BoundedContext-Shape (arknet-shapes.ttl) unangetastet bleibt.
 ##############################################################################
 
 ulshapes:BoundedContextTermsShape
     a sh:NodeShape ;
-    sh:targetClass arknet:BoundedContext ;
+    sh:targetClass arkddd:BoundedContext ;
     sh:property ulshapes:BoundedContext-ubiquitousLanguageTerm .
 
 ulshapes:BoundedContext-ubiquitousLanguageTerm
     a sh:PropertyShape ;
-    sh:path     arknet:ubiquitousLanguageTerm ;
+    sh:path     arkddd:ubiquitousLanguageTerm ;
     sh:nodeKind sh:IRI ;
     sh:class    skos:Concept ;
-    sh:message  "arknet:ubiquitousLanguageTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
+    sh:message  "arkddd:ubiquitousLanguageTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
     sh:severity sh:Violation .
 
 # END OF UL SHAPES

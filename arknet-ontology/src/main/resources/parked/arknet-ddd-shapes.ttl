@@ -2,13 +2,9 @@
 #  arknet – Architecture Knowledge Net
 #  DDD SHACL Shapes (parked)  ·  Version 0.1.0
 #
-#  Split out of arknet-shapes.ttl together with parked/arknet-ddd.ttl:
-#  AggregateShape and ContextRelationshipShape target classes
-#  (arkddd:Aggregate, arkddd:ContextRelationship) that no BC ever creates,
-#  so neither shape has ever fired - moving them here changes documentation,
-#  not runtime SHACL-gate behaviour. Not loaded by any *RepositoryFactory
-#  today; wire it in alongside parked/arknet-ddd.ttl once a BC consumes
-#  that module.
+#  AggregateShape and ContextRelationshipShape validate arkddd:Aggregate and
+#  arkddd:ContextRelationship (parked/arknet-ddd_parked.ttl) - not active until a
+#  bounded context consumes that module.
 #
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
 ##############################################################################
@@ -81,7 +77,7 @@ shapes:ContextRelationship-upstream
     sh:path     arkddd:upstream ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
-    sh:class    arknet:BoundedContext ;
+    sh:class    arkddd:BoundedContext ;
     sh:message  "ContextRelationship muss genau einen 'arkddd:upstream' BoundedContext haben."@de ;
     sh:severity sh:Violation .
 
@@ -90,7 +86,7 @@ shapes:ContextRelationship-downstream
     sh:path     arkddd:downstream ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
-    sh:class    arknet:BoundedContext ;
+    sh:class    arkddd:BoundedContext ;
     sh:message  "ContextRelationship muss genau einen 'arkddd:downstream' BoundedContext haben."@de ;
     sh:severity sh:Violation .
 

@@ -44,6 +44,7 @@ import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -57,7 +58,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
     private static final ProjectId WORKSPACE_A = new ProjectId("a");
     private static final ProjectId WORKSPACE_B = new ProjectId("b");
-    private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/core#BoundedContext";
+    private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
     private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
 
     private DatasetLifecycleRdf4j lifecycle;
@@ -71,7 +72,7 @@ class KognioRdfBoundedContextRepositoryTest {
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        repository = new KognioRdfBoundedContextRepository(datasetLifecycle, funnel);
+        repository = new KognioRdfBoundedContextRepository(datasetLifecycle, new UuidResourceIdFactory(), funnel);
     }
 
     @AfterEach
@@ -192,7 +193,7 @@ class KognioRdfBoundedContextRepositoryTest {
         Graph candidate = rdf.createGraph();
         candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(BOUNDED_CONTEXT_TYPE));
         candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#name"), rdf.createLiteral("x"));
-        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#domainVision"),
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/ddd#domainVision"),
                 rdf.createLiteral("A vision long enough to satisfy the ten-character minimum."));
 
         ShaclWriteGate gate = KognioRdfBoundedContextRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
@@ -251,7 +252,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
     /**
      * Replace-by-identity regression for the field {@link BoundedContext} does not carry at all:
-     * a store-first {@code arknet:hasAggregate} edge (set directly against the store, since
+     * a store-first {@code arkddd:hasAggregate} edge (set directly against the store, since
      * {@code bc_add}/{@code bc_link_term} never write one) must survive an unrelated
      * {@code update()} - e.g. the one {@code bc_link_term} performs - instead of being silently
      * dropped by the replace-by-identity rewrite.
@@ -265,7 +266,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
         String aggregateIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         String insertAggregate = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
-                + id.value().value() + "> <https://w3id.org/arknet/core#hasAggregate> <" + aggregateIri + "> } }";
+                + id.value().value() + "> <https://w3id.org/arknet/ddd#hasAggregate> <" + aggregateIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insertAggregate);
@@ -279,14 +280,14 @@ class KognioRdfBoundedContextRepositoryTest {
         repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
-                + "> <https://w3id.org/arknet/core#hasAggregate> <" + aggregateIri + "> } }";
+                + "> <https://w3id.org/arknet/ddd#hasAggregate> <" + aggregateIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             assertTrue(handle.sparqlQuery().ask(ask));
         }
     }
 
     /**
-     * Blank-node regression test for {@code arknet:ubiquitousLanguageTerm} (mirrors the
+     * Blank-node regression test for {@code arkddd:ubiquitousLanguageTerm} (mirrors the
      * requirements adapter's blank-node preservation test, issue #65): the predicate is not
      * range-constrained to {@code IRI} at the RDF level, so a store-first edge can legally target
      * a blank node - {@code [ a skos:Concept ]} written directly into the bounded-context graph.
@@ -304,7 +305,7 @@ class KognioRdfBoundedContextRepositoryTest {
         repository.create(WORKSPACE_A, original);
 
         String insertBlankTerm = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
-                + id.value().value() + "> <https://w3id.org/arknet/core#ubiquitousLanguageTerm> "
+                + id.value().value() + "> <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> "
                 + "[ a <http://www.w3.org/2004/02/skos/core#Concept> ] } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -319,7 +320,7 @@ class KognioRdfBoundedContextRepositoryTest {
         repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
-                + "> <https://w3id.org/arknet/core#ubiquitousLanguageTerm> ?term . "
+                + "> <https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> ?term . "
                 + "?term a <http://www.w3.org/2004/02/skos/core#Concept> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             assertTrue(handle.sparqlQuery().ask(ask), "blank-node edge must survive the update and still "
@@ -328,7 +329,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Blank-node regression test for {@code arknet:hasAggregate}: {@link BoundedContext} carries
+     * Blank-node regression test for {@code arkddd:hasAggregate}: {@link BoundedContext} carries
      * no field for aggregates at all, so - unlike {@code ubiquitousLanguageTerm} - there is no
      * IRI-typed round-trip through the domain object to fall back on. This pins that a blank-node
      * aggregate survives an unrelated {@code update()} exactly as an IRI-target one already does
@@ -343,7 +344,7 @@ class KognioRdfBoundedContextRepositoryTest {
         repository.create(WORKSPACE_A, original);
 
         String insertBlankAggregate = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
-                + id.value().value() + "> <https://w3id.org/arknet/core#hasAggregate> "
+                + id.value().value() + "> <https://w3id.org/arknet/ddd#hasAggregate> "
                 + "[ a <https://w3id.org/arknet/core#Aggregate> ] } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             handle.transactor().inTransaction(tx -> {
@@ -358,7 +359,7 @@ class KognioRdfBoundedContextRepositoryTest {
         repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
 
         String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + id.value().value()
-                + "> <https://w3id.org/arknet/core#hasAggregate> ?aggregate . "
+                + "> <https://w3id.org/arknet/ddd#hasAggregate> ?aggregate . "
                 + "?aggregate a <https://w3id.org/arknet/core#Aggregate> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             assertTrue(handle.sparqlQuery().ask(ask), "blank-node edge must survive the update and still "
@@ -384,6 +385,69 @@ class KognioRdfBoundedContextRepositoryTest {
                 + "> a <" + BOUNDED_CONTEXT_TYPE + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
             assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    /**
+     * Pins the on-disk shape of a subdomain classification (issue #189): a bounded context with
+     * {@link Subdomain#CORE_DOMAIN} does not carry {@code arkddd:subdomainType} directly - it
+     * carries {@code arkddd:partOf} to a freshly minted, distinct node typed
+     * {@code arkddd:Subdomain}, and that node carries {@code arkddd:subdomainType arkddd:CoreDomain}.
+     */
+    @Test
+    void writesSubdomainAsADerivedPartOfNode() {
+        BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), Subdomain.CORE_DOMAIN, null, List.of());
+        repository.create(WORKSPACE_A, bc);
+
+        String query = "SELECT ?subdomainNode WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + bc.id().value().value() + "> <https://w3id.org/arknet/ddd#partOf> ?subdomainNode } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            String subdomainNode = handle.sparqlQuery().select(query)
+                    .map(row -> ((IRI) row.getValue("subdomainNode").orElseThrow()).getIRIString())
+                    .findFirst().orElseThrow();
+            assertFalse(subdomainNode.equals(bc.id().value().value()),
+                    "the subdomain classification must live on its own node, not the bounded context itself");
+
+            String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + subdomainNode
+                    + "> a <https://w3id.org/arknet/ddd#Subdomain> ; "
+                    + "<https://w3id.org/arknet/ddd#subdomainType> <https://w3id.org/arknet/ddd#CoreDomain> } }";
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    /**
+     * Orphan-cleanup regression (issue #189): an update that changes the subdomain classification
+     * must not leave the superseded {@code arkddd:Subdomain} node's triples behind as disconnected
+     * garbage - {@link KognioRdfBoundedContextRepository#replaceTriples} follows the
+     * {@code arkddd:partOf} edge to delete it, mirroring the use-case adapter's step-following
+     * delete.
+     */
+    @Test
+    void updateDeletesTheSupersededSubdomainNode() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.",
+                Subdomain.CORE_DOMAIN, null, List.of());
+        repository.create(WORKSPACE_A, original);
+
+        String subdomainNodeQuery = "SELECT ?subdomainNode WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <"
+                + id.value().value() + "> <https://w3id.org/arknet/ddd#partOf> ?subdomainNode } }";
+        String originalSubdomainNode;
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            originalSubdomainNode = handle.sparqlQuery().select(subdomainNodeQuery)
+                    .map(row -> ((IRI) row.getValue("subdomainNode").orElseThrow()).getIRIString())
+                    .findFirst().orElseThrow();
+        }
+
+        BoundedContext changed = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.",
+                Subdomain.SUPPORTING_DOMAIN, null, List.of());
+        repository.compareAndUpdate(WORKSPACE_A, currentHeadOf(changed.code()), changed);
+
+        String ask = "ASK { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + originalSubdomainNode + "> ?p ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask(ask),
+                    "the superseded subdomain node must not survive the update as orphaned garbage");
         }
     }
 

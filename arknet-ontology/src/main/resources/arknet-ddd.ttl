@@ -1,0 +1,150 @@
+##############################################################################
+#  arknet – Architecture Knowledge Net
+#  DDD Ontology  ·  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/ddd#
+#  License    : CC-BY-4.0
+#
+#  Scope: BoundedContext and the strategic-DDD concepts it is placed within -
+#  Domain, Subdomain. Context Mapping (ContextMap, ContextRelationship,
+#  RelationshipType) and the full tactical-DDD block (Aggregate, Entity,
+#  ValueObject, DomainEvent, Command, ...) have no active consumer yet and
+#  stay in parked/arknet-ddd_parked.ttl, sharing this namespace.
+##############################################################################
+
+@prefix arkddd: <https://w3id.org/arknet/ddd#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:   <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:   <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/ddd>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
+    dcterms:title       "arknet DDD Ontology"@en ;
+    dcterms:description "BoundedContext and the strategic-DDD concepts (Domain, Subdomain) it is placed within."@en ;
+    dcterms:version     "0.1.0" ;
+    dcterms:created     "2026-07-29"^^xsd:date ;
+    dcterms:rights      "CC-BY-4.0" ;
+    vann:preferredNamespacePrefix "arkddd" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/ddd#" ;
+    owl:versionInfo     "0.1.0" .
+
+
+##############################################################################
+#  DOMAIN & SUBDOMAIN
+##############################################################################
+
+arkddd:Domain
+    a owl:Class ;
+    rdfs:label   "Domain"@en , "Fachdomaene"@de ;
+    rdfs:comment "Die uebergeordnete Problemdomaene. Enthaelt Subdomains und Bounded Contexts."@de ;
+    skos:example "E-Commerce, Logistik, Finanzwesen"@de .
+
+arkddd:SubdomainType
+    a owl:Class ;
+    rdfs:label   "Subdomain Type"@en ;
+    rdfs:comment "The category of strategic classification for a subdomain: core, supporting, or generic."@en ,
+                 "Die Kategorie der strategischen Einordnung einer Teildomaene: Core, Supporting oder Generic."@de .
+
+arkddd:CoreDomain
+    a owl:NamedIndividual , arkddd:SubdomainType ;
+    rdfs:label   "Core Domain"@en ;
+    rdfs:comment "Kerndomaene – hoechster strategischer Wert, eigene Entwicklung."@de .
+
+arkddd:SupportingDomain
+    a owl:NamedIndividual , arkddd:SubdomainType ;
+    rdfs:label   "Supporting Domain"@en ;
+    rdfs:comment "Unterstuetzende Domaene – notwendig, aber kein Wettbewerbsvorteil."@de .
+
+arkddd:GenericDomain
+    a owl:NamedIndividual , arkddd:SubdomainType ;
+    rdfs:label   "Generic Domain"@en ;
+    rdfs:comment "Generische Domaene – standardisierbar, oft Fremdsoftware."@de .
+
+arkddd:Subdomain
+    a owl:Class ;
+    rdfs:subClassOf arkddd:Domain ;
+    rdfs:label   "Subdomain"@en , "Teildomaene"@de ;
+    rdfs:comment "Eine Teildomaene mit einem bestimmten strategischen Wert (Core/Supporting/Generic)."@de .
+
+arkddd:subdomainType
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Subdomain ;
+    rdfs:range   arkddd:SubdomainType ;
+    rdfs:label   "subdomain type"@en ;
+    rdfs:comment "Strategische Einordnung: CoreDomain | SupportingDomain | GenericDomain"@de .
+
+arkddd:hasSubdomain
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Domain ;
+    rdfs:range   arkddd:Subdomain ;
+    rdfs:label   "has subdomain"@en ;
+    rdfs:comment "A subdomain that is part of this domain."@en ,
+                 "Eine Teildomaene, die zu dieser Domaene gehoert."@de .
+
+
+##############################################################################
+#  BOUNDED CONTEXT
+##############################################################################
+
+arkddd:BoundedContext
+    a owl:Class ;
+    rdfs:label   "Bounded Context"@en , "Abgegrenzter Kontext"@de ;
+    rdfs:comment "Eine explizite semantische Grenze, innerhalb der ein Domaenenmodell konsistent gilt."@de ;
+    skos:example "OrderManagement, InventoryContext, ShippingContext"@de .
+
+arkddd:partOf
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:BoundedContext ;
+    rdfs:range   arkddd:Domain ;
+    rdfs:label   "part of"@en ;
+    rdfs:comment "The domain (or, since Subdomain is a Domain, the specific subdomain) this bounded context is part of."@en ,
+                 "Die Domaene (bzw. die spezifische Teildomaene), zu der dieser Bounded Context gehoert."@de .
+
+arkddd:hasContext
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:Domain ;
+    rdfs:range   arkddd:BoundedContext ;
+    rdfs:label   "has context"@en ;
+    rdfs:comment "A bounded context that is part of this domain. Inverse of partOf."@en ,
+                 "Ein Bounded Context, der zu dieser Domaene gehoert. Inverse von partOf."@de ;
+    owl:inverseOf arkddd:partOf .
+
+arkddd:domainVision
+    a owl:DatatypeProperty ;
+    rdfs:domain  arkddd:BoundedContext ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "domain vision"@en ;
+    rdfs:comment "Ein Satz, der beschreibt, was dieser Bounded Context leistet und warum er existiert."@de .
+
+arkddd:ownedBy
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:string ;
+    rdfs:label   "owned by"@en ;
+    rdfs:comment "Team-Name oder Personen-URI, die fuer dieses Konzept verantwortlich sind."@de .
+
+arkddd:ubiquitousLanguageTerm
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:BoundedContext ;
+    rdfs:range   skos:Concept ;
+    rdfs:label   "ubiquitous language term"@en ;
+    rdfs:comment "Verweist auf einen Begriff der Ubiquitous Language, modelliert als skos:Concept (nicht mehr ein blosser String). Kann mehrfach vorkommen – ein Triple pro Begriff. Der Begriff traegt skos:prefLabel/skos:definition und liegt via skos:inScheme in einem Glossar (skos:ConceptScheme)."@de .
+
+arkddd:hasAggregate
+    a owl:ObjectProperty ;
+    rdfs:domain  arkddd:BoundedContext ;
+    rdfs:range   arkddd:Aggregate ;
+    rdfs:label   "has aggregate"@en ;
+    rdfs:comment "An aggregate that belongs to this bounded context. Its range, arkddd:Aggregate, is defined in the not-yet-published parked/arknet-ddd_parked.ttl."@en ,
+                 "Ein Aggregate, das zu diesem Bounded Context gehoert."@de .
+
+# END OF DDD ONTOLOGY

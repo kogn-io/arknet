@@ -24,7 +24,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * supporting / generic) as a badge. The context's ubiquitous language is marked up inside the
  * vision statement itself through {@link Glossary} - a term the context links to reads as a
  * link where it is used, a glossary word the vision names without an
- * {@code arknet:ubiquitousLanguageTerm} edge as a gap. Only linked terms the vision never names
+ * {@code arkddd:ubiquitousLanguageTerm} edge as a gap. Only linked terms the vision never names
  * remain as chips; see {@link RequirementCards} for the same reasoning at length.</p>
  */
 public final class BoundedContextCards {

@@ -50,8 +50,8 @@ gearbeitet wird.
 ## Ontologie-Namespaces
 
 - **Basis:** `https://w3id.org/arknet/`
-- `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — generisches Utility-Vokabular (name, description, ...) plus BoundedContext (einziges strategisches DDD-Konzept mit Live-Nutzung durch arknet-bounded-context; Namespace-Fehlplatzierung bekannt und getrackt, https://github.com/kogn-io/arknet/discussions/55)
-- `https://w3id.org/arknet/ddd#` (Prefix: `arkddd:`, **geparkt**, `parked/arknet-ddd.ttl`) — Domain, ContextMap/ContextRelationship/RelationshipType, taktisches DDD (Aggregate, Entity, ValueObject, Command, DomainEvent, ...); kein BC, keine Java-Referenz
+- `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — generisches Utility-Vokabular (name, description, ...), wiederverwendbar in jedem Modul
+- `https://w3id.org/arknet/ddd#` (Prefix: `arkddd:`) — BoundedContext, Domain, Subdomain (Live, `arknet-ddd.ttl`, von arknet-bounded-context genutzt); ContextMap/ContextRelationship/RelationshipType sowie das taktische DDD (Aggregate, Entity, ValueObject, Command, DomainEvent, ...) bleiben geparkt (`parked/arknet-ddd_parked.ttl`, kein BC), teilen sich aber den Namespace
 - `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Actor/HumanActor/SystemActor/actorRole (Live, `arknet-actor.ttl`, von arknet-use-cases genutzt); Process, Step, StateTransition, BusinessRule, Outcome bleiben geparkt (`parked/arknet-process.ttl`, kein BC)
 - `https://w3id.org/arknet/requirements#` (Prefix: `arkreq:`) — Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release (OSLC-RM-aligned, doap:Version)
 - `https://w3id.org/arknet/architecture#` (Prefix: `arkarch:`) — Architecture, View, Viewpoint, ADR, Stakeholder, Concern (ISO 42010)

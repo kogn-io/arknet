@@ -11,7 +11,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * identity in the shared workspace store.
  *
  * <p>This is the strict cross-BC reference resolution the bounded-context component needs for
- * {@code arknet:ubiquitousLanguageTerm} (issue #62/#66): the bounded-context component must not
+ * {@code arkddd:ubiquitousLanguageTerm} (issue #62/#66): the bounded-context component must not
  * depend on {@code arknet-ubiquitous-language-core}, so it cannot look a term up as a domain
  * object - it can only ask the shared store, through this port, which resource a code currently
  * names. Resolution goes via the term's {@code dcterms:identifier}, never its
