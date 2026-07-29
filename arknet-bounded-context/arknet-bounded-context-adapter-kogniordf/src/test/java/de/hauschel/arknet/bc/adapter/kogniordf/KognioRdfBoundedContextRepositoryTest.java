@@ -252,7 +252,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
     /**
      * Replace-by-identity regression for the field {@link BoundedContext} does not carry at all:
-     * a store-first {@code arknet:hasAggregate} edge (set directly against the store, since
+     * a store-first {@code arkddd:hasAggregate} edge (set directly against the store, since
      * {@code bc_add}/{@code bc_link_term} never write one) must survive an unrelated
      * {@code update()} - e.g. the one {@code bc_link_term} performs - instead of being silently
      * dropped by the replace-by-identity rewrite.
@@ -287,7 +287,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Blank-node regression test for {@code arknet:ubiquitousLanguageTerm} (mirrors the
+     * Blank-node regression test for {@code arkddd:ubiquitousLanguageTerm} (mirrors the
      * requirements adapter's blank-node preservation test, issue #65): the predicate is not
      * range-constrained to {@code IRI} at the RDF level, so a store-first edge can legally target
      * a blank node - {@code [ a skos:Concept ]} written directly into the bounded-context graph.
@@ -329,7 +329,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Blank-node regression test for {@code arknet:hasAggregate}: {@link BoundedContext} carries
+     * Blank-node regression test for {@code arkddd:hasAggregate}: {@link BoundedContext} carries
      * no field for aggregates at all, so - unlike {@code ubiquitousLanguageTerm} - there is no
      * IRI-typed round-trip through the domain object to fall back on. This pins that a blank-node
      * aggregate survives an unrelated {@code update()} exactly as an IRI-target one already does
