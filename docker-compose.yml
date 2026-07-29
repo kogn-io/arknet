@@ -27,15 +27,23 @@
 #     keeps the host path defined in exactly one place -- the volume mount and
 #     the env var both reference it, so they cannot drift out of sync.
 #
-# Container/host ownership of the mounted store and report dir: arknet-mcp/entrypoint.sh
-# adopts the store directory's EXISTING owner automatically at every start (a
-# fresh, container-only volume falls back to the image's own non-root user),
-# then applies that same identity to the report dir -- no manual chown/chmod
-# on the host is needed, and the ownership an earlier run left on ~/.arknet/rdf
-# is untouched. Set PUID/PGID below only if you want to force a specific
-# uid:gid regardless of what currently owns the store (e.g. provisioning a
-# fresh volume ahead of first use).
+#   * project_export's backup dir (~/.arknet/export) is mounted and named to the
+#     daemon the same way, for the same reason: without the mount the write
+#     fails outright (the container-internal default falls back to the image's
+#     root filesystem, not a writable path); without ARKNET_EXPORT_HOST_DIR the
+#     tool's result would name the container-internal /data/export.
+#
+# Container/host ownership of the mounted store, report and export dirs:
+# arknet-mcp/entrypoint.sh adopts the store directory's EXISTING owner
+# automatically at every start (a fresh, container-only volume falls back to
+# the image's own non-root user), then applies that same identity to the
+# report and export dirs -- no manual chown/chmod on the host is needed, and
+# the ownership an earlier run left on ~/.arknet/rdf is untouched. Set
+# PUID/PGID below only if you want to force a specific uid:gid regardless of
+# what currently owns the store (e.g. provisioning a fresh volume ahead of
+# first use).
 x-report-host-dir: &report-host-dir "${HOME}/.arknet/report"
+x-export-host-dir: &export-host-dir "${HOME}/.arknet/export"
 
 services:
   arknet-mcp:
@@ -45,6 +53,7 @@ services:
     image: ghcr.io/kogn-io/arknet:latest
     environment:
       ARKNET_REPORT_HOST_DIR: *report-host-dir
+      ARKNET_EXPORT_HOST_DIR: *export-host-dir
       # PUID: "1000"
       # PGID: "1000"
     ports:
@@ -54,4 +63,7 @@ services:
       - type: bind
         source: *report-host-dir
         target: /data/report
+      - type: bind
+        source: *export-host-dir
+        target: /data/export
     restart: unless-stopped
