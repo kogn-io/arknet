@@ -5,18 +5,12 @@
 #  Namespace  : https://w3id.org/arknet/core#
 #  License    : CC-BY-4.0
 #
-#  Scope: generic, domain-agnostic utility vocabulary (reusable across every
-#  arknet module) plus BoundedContext - the one strategic-DDD concept a BC
-#  (arknet-bounded-context, bc_* tools) actually writes today. Everything
-#  else that used to live here - Domain/Subdomain/ContextMap/RelationshipType
-#  and the full tactical-DDD block (Aggregate, Entity, DomainEvent, Command,
-#  ...) - has no BC and no Java reference and moved to parked/arknet-ddd.ttl.
-#  BoundedContext staying under `core#` rather than its own namespace is a
-#  deliberate, tracked shortcut - see
-#  https://github.com/kogn-io/arknet/discussions/55.
+#  Scope: generic, domain-agnostic utility vocabulary, reusable across every
+#  arknet module.
 #
 #  NOT included here (separate modules):
-#    - Domain/Subdomain/ContextMap, tactical DDD → parked/arknet-ddd.ttl
+#    - BoundedContext, Domain, Subdomain → arknet-ddd.ttl
+#    - ContextMap, tactical DDD          → parked/arknet-ddd_parked.ttl
 #    - Actors                            → arknet-actor.ttl
 #    - Processes, Steps, State Machines  → parked/arknet-process.ttl
 #    - ISO 42010, Views, ADRs           → parked/arknet-architecture.ttl
@@ -29,7 +23,6 @@
 @prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
-@prefix skos:   <http://www.w3.org/2004/02/skos/core#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix vann:   <http://purl.org/vocab/vann/> .
 
@@ -41,7 +34,7 @@
 <https://w3id.org/arknet/core>
     a owl:Ontology ;
     dcterms:title       "arknet Core Ontology"@en ;
-    dcterms:description "Generic utility vocabulary plus BoundedContext, the one strategic-DDD concept currently in production use."@en ;
+    dcterms:description "Generic, domain-agnostic utility vocabulary, reusable across every arknet module."@en ;
     dcterms:version     "0.2.0" ;
     dcterms:created     "2026-03-23"^^xsd:date ;
     dcterms:rights      "CC-BY-4.0" ;
@@ -92,72 +85,5 @@ arknet:qualityAttribute
     rdfs:range   xsd:string ;
     rdfs:label   "quality attribute"@en ;
     rdfs:comment "Qualitaetsattribut (z.B. availability:99.9, latency:<50ms)."@de .
-
-
-##############################################################################
-#  BOUNDED CONTEXT (the one strategic-DDD concept in production use)
-##############################################################################
-
-arknet:BoundedContext
-    a owl:Class ;
-    rdfs:label   "Bounded Context"@en , "Abgegrenzter Kontext"@de ;
-    rdfs:comment "Eine explizite semantische Grenze, innerhalb der ein Domaenenmodell konsistent gilt."@de ;
-    skos:example "OrderManagement, InventoryContext, ShippingContext"@de .
-
-arknet:SubdomainType
-    a owl:Class ;
-    rdfs:label "Subdomain Type"@en ;
-    rdfs:comment "The category of strategic classification for a subdomain: core, supporting, or generic."@en ,
-                 "Die Kategorie der strategischen Einordnung einer Teildomaene: Core, Supporting oder Generic."@de .
-
-arknet:CoreDomain
-    a owl:NamedIndividual , arknet:SubdomainType ;
-    rdfs:label   "Core Domain"@en ;
-    rdfs:comment "Kerndomaene – hoechster strategischer Wert, eigene Entwicklung."@de .
-
-arknet:SupportingDomain
-    a owl:NamedIndividual , arknet:SubdomainType ;
-    rdfs:label   "Supporting Domain"@en ;
-    rdfs:comment "Unterstuetzende Domaene – notwendig, aber kein Wettbewerbsvorteil."@de .
-
-arknet:GenericDomain
-    a owl:NamedIndividual , arknet:SubdomainType ;
-    rdfs:label   "Generic Domain"@en ;
-    rdfs:comment "Generische Domaene – standardisierbar, oft Fremdsoftware."@de .
-
-arknet:domainVision
-    a owl:DatatypeProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "domain vision"@en ;
-    rdfs:comment "Ein Satz, der beschreibt, was dieser Bounded Context leistet und warum er existiert."@de .
-
-arknet:subdomain
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   arknet:SubdomainType ;
-    rdfs:label   "subdomain type"@en ;
-    rdfs:comment "Strategische Einordnung: CoreDomain | SupportingDomain | GenericDomain"@de .
-
-arknet:ownedBy
-    a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
-    rdfs:label   "owned by"@en ;
-    rdfs:comment "Team-Name oder Personen-URI, die fuer dieses Konzept verantwortlich sind."@de .
-
-arknet:ubiquitousLanguageTerm
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   skos:Concept ;
-    rdfs:label   "ubiquitous language term"@en ;
-    rdfs:comment "Verweist auf einen Begriff der Ubiquitous Language, modelliert als skos:Concept (nicht mehr ein blosser String). Kann mehrfach vorkommen – ein Triple pro Begriff. Der Begriff traegt skos:prefLabel/skos:definition und liegt via skos:inScheme in einem Glossar (skos:ConceptScheme)."@de .
-
-arknet:hasAggregate
-    a owl:ObjectProperty ;
-    rdfs:domain  arknet:BoundedContext ;
-    rdfs:range   <https://w3id.org/arknet/ddd#Aggregate> ;
-    rdfs:label   "has aggregate"@en ;
-    rdfs:comment "An aggregate that belongs to this bounded context. Its range, arkddd:Aggregate, lives in the parked, not-yet-implemented parked/arknet-ddd.ttl - the bounded-context write path already preserves existing edges on this property (issue #65-style bypass) so a future aggregate-writing BC can attach to it without a migration."@en ,
-                 "Ein Aggregate, das zu diesem Bounded Context gehoert."@de .
 
 # END OF CORE ONTOLOGY

@@ -20,20 +20,20 @@
 #
 #  Cross-Modul-Mehrwert:
 #    ADR -> arkreq:Requirement (welche Anforderung adressiert die Entscheidung)
-#    ADR -> arknet:BoundedContext (welchen Teil des Systems betrifft sie)
+#    ADR -> arkddd:BoundedContext (welchen Teil des Systems betrifft sie)
 #    Viewpoint = formales Rueckgrat von arknets Projektion
 #                (SPARQL-Query + Template + Rolle).
 #
 #  Konvention: Instanzen nutzen arknet:name / arknet:description (Core-Reuse,
 #              Hausstil). ADRs tragen zusaetzlich dcterms:identifier (Nummer),
-#              da ADRs konventionell nummeriert sind (wie Requirements in #17).
+#              da ADRs konventionell nummeriert sind (wie Requirements).
 #
 #  Imports: arknet-core (BoundedContext, Domain, name, description),
 #           arknet-requirements (Requirement).
 ##############################################################################
 
 @prefix arkarch: <https://w3id.org/arknet/architecture#> .
-@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkddd:  <https://w3id.org/arknet/ddd#> .
 @prefix arkreq:  <https://w3id.org/arknet/requirements#> .
 @prefix owl:     <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -50,7 +50,7 @@
 
 <https://w3id.org/arknet/architecture>
     a owl:Ontology ;
-    owl:imports      <https://w3id.org/arknet/core> ;
+    owl:imports      <https://w3id.org/arknet/ddd> ;
     owl:imports      <https://w3id.org/arknet/requirements> ;
     dcterms:title    "arknet Architecture Ontology"@en ;
     dcterms:description "Architekturbeschreibung nach ISO/IEC/IEEE 42010: Stakeholder, Concerns, Views, Viewpoints und ADRs; verknuepft mit Requirements und der DDD-Schicht."@de ;
@@ -140,7 +140,7 @@ arkarch:concernMotivates a owl:ObjectProperty ;
     rdfs:domain arkarch:Concern ;
     rdfs:range  arkreq:Requirement ;
     rdfs:label  "motivates requirement"@en ;
-    rdfs:comment "Ein Concern (42010) kann als Anforderung (RE) formalisiert werden. Bruecke zu #17."@de .
+    rdfs:comment "Ein Concern (42010) kann als Anforderung (RE) formalisiert werden."@de .
 
 
 ##############################################################################
@@ -210,7 +210,7 @@ arkarch:renderedAs a owl:DatatypeProperty ;
 
 ##############################################################################
 #  4. ARCHITECTURE DECISION RECORDS (ADR)
-#     Kern-Link zu #17: ADR -> Requirement.
+#     Kern-Link: ADR -> Requirement.
 ##############################################################################
 
 arkarch:ArchitectureDecisionRecord a owl:Class ;
@@ -277,11 +277,11 @@ arkarch:addressesRequirement a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  arkreq:Requirement ;
     rdfs:label  "addresses requirement"@en ;
-    rdfs:comment "Kern-Traceability: diese Entscheidung adressiert/realisiert die angegebene Anforderung. Bruecke zu #17."@de .
+    rdfs:comment "Kern-Traceability: diese Entscheidung adressiert/realisiert die angegebene Anforderung."@de .
 
 arkarch:affectsContext a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
-    rdfs:range  arknet:BoundedContext ;
+    rdfs:range  arkddd:BoundedContext ;
     rdfs:label  "affects context"@en ;
     rdfs:comment "Welchen Bounded Context betrifft diese Entscheidung? Bruecke zur DDD-Schicht."@de .
 
