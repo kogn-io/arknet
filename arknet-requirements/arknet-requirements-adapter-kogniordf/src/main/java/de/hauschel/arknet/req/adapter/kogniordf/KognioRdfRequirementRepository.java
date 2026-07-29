@@ -101,7 +101,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  *
  * <p><strong>Term references arrive pre-resolved (issue #36, identity-carrying since #77).</strong>
  * {@link TermRef} carries the term's opaque subject {@link ResourceId} directly - resolving a
- * human-typed term code (e.g. {@code TERM-1}) against the shared workspace store, and rejecting
+ * human-typed term code (e.g. {@code TERM-1}) against the shared project store, and rejecting
  * an unknown or ambiguous code, is done once by {@code KognioRdfTermLookup} at the moment a term
  * is linked (in the application service), not here on every write. This adapter therefore neither
  * queries the sibling terms graph nor re-verifies that a referenced subject still denotes a
