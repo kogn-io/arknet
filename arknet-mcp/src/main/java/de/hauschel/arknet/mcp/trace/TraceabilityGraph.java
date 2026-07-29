@@ -26,9 +26,13 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * An in-memory directed multigraph over one project's statements, purpose-built for the
  * cross-bounded-context edges the traceability tools traverse (issue #131):
  * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
- * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), and the two-hop
- * {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
- * (UseCase -&gt; Step -&gt; Requirement).
+ * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
+ * (BoundedContext -&gt; Term, issue #185), and the two-hop {@code arkreq:mainStep}/
+ * {@code arkreq:extensionStep} then {@code arkreq:stepRealises} (UseCase -&gt; Step -&gt;
+ * Requirement). It also exposes the requirement/bounded-context prose ({@code
+ * dcterms:description}/{@code arkreq:acceptanceCriterion}/{@code arkddd:domainVision}) that
+ * {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to
+ * (issue #185).
  *
  * <p>Built once per read from a {@link StoreSnapshot} - the same generic {@code SELECT ?s ?p
  * ?o} {@link de.hauschel.arknet.mcp.store.StoreReader} already reads for {@code
@@ -39,8 +43,8 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * consumes only the neutral {@link Triple}/{@link RdfNode} model).</p>
  *
  * <p>Unlike {@code StoreReader}/{@code Prefixes}, this class is deliberately <em>not</em>
- * domain-agnostic - it knows the {@code arkreq:}/{@code skos:} predicate and type IRIs it
- * traverses. That is a bounded exception in the same spirit as {@code
+ * domain-agnostic - it knows the {@code arkreq:}/{@code arkddd:}/{@code skos:} predicate and
+ * type IRIs it traverses. That is a bounded exception in the same spirit as {@code
  * StoreResource#status()}/{@code #priority()} (issue #111): a fully generic "follow every
  * object-typed predicate" traversal would report noise indistinguishable from the specific
  * edges traceability cares about.</p>
@@ -48,10 +52,21 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 public final class TraceabilityGraph {
 
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
+    private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
+    private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
     private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
+    private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
     private static final String SKOS_PREF_LABEL = SKOS_NAMESPACE + "prefLabel";
+
+    // Literal-valued predicates whose text is scanned for unlinked glossary mentions (issue
+    // #185). Unlike the arkreq: object properties below, these are not centralised in {@code
+    // ArkreqVocabulary} - like DCTERMS_TITLE/DCTERMS_IDENTIFIER above, a literal predicate this
+    // class merely reads (never traverses as a graph edge) follows the same established local
+    // convention rather than growing that shared vocabulary class.
+    private static final String ACCEPTANCE_CRITERION = ARKREQ_NAMESPACE + "acceptanceCriterion";
+    private static final String DOMAIN_VISION = ARKDDD_NAMESPACE + "domainVision";
 
     // The traversed arkreq: object-property IRIs and the type IRIs below come from the single
     // shared source of truth (arknet-persistence-support), the very same constants the
@@ -65,10 +80,17 @@ public final class TraceabilityGraph {
     private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
 
+    // arkddd:ubiquitousLanguageTerm (BoundedContext -> Term) is the bounded-context analogue of
+    // arkreq:usesTerm above, but arkddd: has no ArkreqVocabulary-style shared constants class of
+    // its own yet - declared locally rather than growing ArkreqVocabulary with a foreign
+    // namespace's predicate.
+    private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD_NAMESPACE + "ubiquitousLanguageTerm";
+
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
+    private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
 
     /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").
@@ -76,8 +98,9 @@ public final class TraceabilityGraph {
      * {@code arkreq:Step} back to its owning use case - a step itself is never reported (see
      * {@link #dependents(String)}).
      */
-    private static final Set<String> DEPENDENT_EDGE_PREDICATES =
-            Set.of(USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP);
+    private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
+            USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
+            UBIQUITOUS_LANGUAGE_TERM);
 
     private final Map<String, List<Triple>> outgoingBySubject;
     private final Map<String, List<Triple>> incomingByObject;
@@ -182,15 +205,72 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return {@code true} if a term is used by a requirement ({@code arkreq:usesTerm}) or
-     *         plays an actor role in a use case ({@code arkreq:primaryActor}/
-     *         {@code arkreq:supportingActor})
+     * @return {@code true} if a term is used by a requirement ({@code arkreq:usesTerm}), plays
+     *         an actor role in a use case ({@code arkreq:primaryActor}/
+     *         {@code arkreq:supportingActor}), or is a bounded context's ubiquitous language
+     *         ({@code arkddd:ubiquitousLanguageTerm})
      */
     public boolean isReferencedTerm(String termIri) {
         Objects.requireNonNull(termIri, "termIri");
         return incomingByObject.getOrDefault(termIri, List.of()).stream()
                 .anyMatch(t -> USES_TERM.equals(t.predicate()) || PRIMARY_ACTOR.equals(t.predicate())
-                        || SUPPORTING_ACTOR.equals(t.predicate()));
+                        || SUPPORTING_ACTOR.equals(t.predicate())
+                        || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate()));
+    }
+
+    /** @return the IRIs of every {@code arkddd:BoundedContext}, sorted. */
+    public List<String> boundedContextIris() {
+        return subjectsOfType(BOUNDED_CONTEXT_TYPE);
+    }
+
+    /** @return the term IRIs a bounded context links via {@code arkddd:ubiquitousLanguageTerm}, sorted. */
+    public List<String> linkedTerms(String boundedContextIri) {
+        Objects.requireNonNull(boundedContextIri, "boundedContextIri");
+        return outgoingBySubject.getOrDefault(boundedContextIri, List.of()).stream()
+                .filter(t -> UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * @return the {@code dcterms:description} and {@code arkreq:acceptanceCriterion} texts of a
+     *         requirement, for scanning it for unlinked glossary mentions (issue #185)
+     */
+    public List<String> requirementProseTexts(String requirementIri) {
+        Objects.requireNonNull(requirementIri, "requirementIri");
+        List<String> texts = new ArrayList<>(literals(requirementIri, DCTERMS_DESCRIPTION));
+        texts.addAll(literals(requirementIri, ACCEPTANCE_CRITERION));
+        return texts;
+    }
+
+    /**
+     * @return the {@code arkddd:domainVision} text of a bounded context, for scanning it for
+     *         unlinked glossary mentions (issue #185)
+     */
+    public List<String> boundedContextProseTexts(String boundedContextIri) {
+        return literals(Objects.requireNonNull(boundedContextIri, "boundedContextIri"), DOMAIN_VISION);
+    }
+
+    /** @return the {@code prefLabel}/{@code title} label of every term IRI that carries one. */
+    public Map<String, String> termLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (String termIri : termIris()) {
+            labelOf(termIri).ifPresent(label -> labels.put(termIri, label));
+        }
+        return Map.copyOf(labels);
+    }
+
+    private List<String> literals(String subject, String predicate) {
+        return outgoingBySubject.getOrDefault(subject, List.of()).stream()
+                .filter(t -> predicate.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Literal.class::isInstance)
+                .map(o -> ((RdfNode.Literal) o).lexicalForm())
+                .toList();
     }
 
     /**

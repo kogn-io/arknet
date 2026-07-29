@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,11 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
+import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.domain.BoundedContext;
+import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
@@ -58,10 +64,12 @@ class TraceabilityGraphTest {
 
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/trace-test-term-1";
     private static final String TERM_2_IRI = "https://w3id.org/arknet/id/trace-test-term-2";
+    private static final String TERM_4_IRI = "https://w3id.org/arknet/id/trace-test-term-4";
     private static final String ACTOR_IRI = "https://w3id.org/arknet/id/trace-test-actor";
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/trace-test-fr-1";
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/trace-test-fr-2";
     private static final String UC_1_IRI = "https://w3id.org/arknet/id/trace-test-uc-1";
+    private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-test-bc-1";
 
     @TempDir
     Path storageDir;
@@ -89,6 +97,11 @@ class TraceabilityGraphTest {
         terms.create(WORKSPACE, new Term(
                 new TermId(ResourceId.of(ACTOR_IRI)), new TermCode("TERM-3"), "Customer",
                 "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")));
+        // TERM-4: never usesTerm'd, referenced only through BC-1's ubiquitousLanguageTerm edge -
+        // must NOT count as an orphan term either (issue #185).
+        terms.create(WORKSPACE, new Term(
+                new TermId(ResourceId.of(TERM_4_IRI)), new TermCode("TERM-4"), "Vertrag",
+                "A binding agreement.", null));
 
         // FR-1: uses TERM-1, realised by UC1. FR-2: uses nothing, realised by nothing (orphan).
         requirements.create(WORKSPACE, new Requirement(
@@ -111,6 +124,16 @@ class TraceabilityGraphTest {
                         List.of(new RequirementRef(ResourceId.of(FR_1_IRI))))),
                 List.of()));
 
+        // BC-1: links TERM-4 via ubiquitousLanguageTerm, its own vision text does not name it -
+        // graph-level accessors are what is under test here, text-mention matching is a
+        // TraceabilityRenderer concern (see TraceabilityRendererTest).
+        BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        boundedContexts.create(WORKSPACE, new BoundedContext(
+                new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
+                "Wir verarbeiten Bestellungen.", null, null,
+                List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(TERM_4_IRI)))));
+
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(WORKSPACE);
         graph = TraceabilityGraph.of(snapshot);
     }
@@ -126,8 +149,8 @@ class TraceabilityGraphTest {
     }
 
     @Test
-    void termIrisContainsAllThreeConceptsIncludingTheActorFacetted() {
-        assertThat(graph.termIris()).containsExactlyInAnyOrder(TERM_1_IRI, TERM_2_IRI, ACTOR_IRI);
+    void termIrisContainsAllFourConceptsIncludingTheActorFacetted() {
+        assertThat(graph.termIris()).containsExactlyInAnyOrder(TERM_1_IRI, TERM_2_IRI, ACTOR_IRI, TERM_4_IRI);
     }
 
     @Test
@@ -161,6 +184,39 @@ class TraceabilityGraphTest {
         assertThat(graph.isReferencedTerm(TERM_2_IRI)).isFalse();
     }
 
+    /** A term linked only through a bounded context's ubiquitous language is not orphaned either (issue #185). */
+    @Test
+    void isReferencedTermIsTrueForATermLinkedOnlyThroughABoundedContext() {
+        assertThat(graph.isReferencedTerm(TERM_4_IRI)).isTrue();
+    }
+
+    @Test
+    void boundedContextIrisContainsBc1() {
+        assertThat(graph.boundedContextIris()).containsExactly(BC_1_IRI);
+    }
+
+    @Test
+    void linkedTermsOfBc1ContainsTerm4() {
+        assertThat(graph.linkedTerms(BC_1_IRI)).containsExactly(TERM_4_IRI);
+    }
+
+    @Test
+    void boundedContextProseTextsOfBc1ContainsItsDomainVision() {
+        assertThat(graph.boundedContextProseTexts(BC_1_IRI)).containsExactly("Wir verarbeiten Bestellungen.");
+    }
+
+    @Test
+    void requirementProseTextsOfFr1ContainsDescriptionAndAcceptanceCriteria() {
+        assertThat(graph.requirementProseTexts(FR_1_IRI)).containsExactlyInAnyOrder(
+                "The system shall authenticate a user.", "Login succeeds with valid credentials");
+    }
+
+    @Test
+    void termLabelsMapsEveryTermIriToItsPrefLabel() {
+        assertThat(graph.termLabels()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                TERM_1_IRI, "Anmeldung", TERM_2_IRI, "Passwort", ACTOR_IRI, "Customer", TERM_4_IRI, "Vertrag"));
+    }
+
     @Test
     void dependentsOfTerm1TransitivelyReachesFr1AndUc1ButNotTheStep() {
         // TERM-1 -(usesTerm)- FR-1 -(stepRealises, backwards through the Step)- UC1.
@@ -170,6 +226,12 @@ class TraceabilityGraphTest {
     @Test
     void dependentsOfTheActorReachesUc1Directly() {
         assertThat(graph.dependents(ACTOR_IRI)).containsExactly(UC_1_IRI);
+    }
+
+    /** {@code arkddd:ubiquitousLanguageTerm} must be a traversable dependent edge too (issue #185). */
+    @Test
+    void dependentsOfTerm4ReachesBc1ViaTheUbiquitousLanguageTermEdge() {
+        assertThat(graph.dependents(TERM_4_IRI)).containsExactly(BC_1_IRI);
     }
 
     @Test
