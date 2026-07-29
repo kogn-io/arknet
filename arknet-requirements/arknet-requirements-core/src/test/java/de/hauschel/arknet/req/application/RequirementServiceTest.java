@@ -435,12 +435,12 @@ class RequirementServiceTest {
      * display) - in one batch, not per-id.
      */
     @Test
-    void getByIdResolvesKnownIdentitiesInOneBatch() {
+    void resolveExistingResolvesKnownIdentitiesInOneBatch() {
         Requirement first = service.add(WS, newFunctionalRequirement());
         Requirement second = service.add(WS, newFunctionalRequirement());
 
         List<ResolveRequirements.ResolvedRequirement> resolved =
-                service.getById(WS, first.id().value(), second.id().value());
+                service.resolveExisting(WS, first.id().value(), second.id().value());
 
         assertEquals(2, resolved.size());
         assertTrue(resolved.contains(new ResolveRequirements.ResolvedRequirement(first.id().value(), first.code())));
@@ -453,28 +453,28 @@ class RequirementServiceTest {
      * caller (not this port) decides what "missing" means for its own display.
      */
     @Test
-    void getByIdSilentlyOmitsUnknownIdentities() {
+    void resolveExistingSilentlyOmitsUnknownIdentities() {
         Requirement known = service.add(WS, newFunctionalRequirement());
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
         List<ResolveRequirements.ResolvedRequirement> resolved =
-                service.getById(WS, known.id().value(), unknown);
+                service.resolveExisting(WS, known.id().value(), unknown);
 
         assertEquals(List.of(new ResolveRequirements.ResolvedRequirement(known.id().value(), known.code())),
                 resolved);
     }
 
     @Test
-    void getByIdWithNoIdsReturnsAnEmptyList() {
-        assertEquals(List.of(), service.getById(WS));
+    void resolveExistingWithNoIdsReturnsAnEmptyList() {
+        assertEquals(List.of(), service.resolveExisting(WS));
     }
 
     @Test
-    void getByIdIsScopedPerWorkspace() {
+    void resolveExistingIsScopedPerWorkspace() {
         Requirement inWs = service.add(WS, newFunctionalRequirement());
         ProjectId other = new ProjectId("other");
 
-        assertEquals(List.of(), service.getById(other, inWs.id().value()));
+        assertEquals(List.of(), service.resolveExisting(other, inWs.id().value()));
     }
 
     /**
