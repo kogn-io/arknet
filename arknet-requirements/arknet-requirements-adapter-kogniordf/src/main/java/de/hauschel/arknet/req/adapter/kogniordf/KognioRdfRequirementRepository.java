@@ -666,7 +666,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
 
         // ResourceId#of (issue #83) validates IRIREF-safety at construction, so every id here is
-        // already guaranteed safe to embed - restores ResolveRequirements#getById's "never
+        // already guaranteed safe to embed - restores ResolveRequirements#resolveExisting's "never
         // rejects" contract, which this used to violate by throwing on an impossible identity.
         String values = ids.stream()
                 .map(id -> SparqlTerms.iriRef(id.value()))

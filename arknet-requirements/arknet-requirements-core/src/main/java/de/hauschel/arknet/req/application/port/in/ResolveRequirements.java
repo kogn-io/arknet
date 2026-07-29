@@ -40,7 +40,7 @@ public interface ResolveRequirements {
      * @return the resolved requirements found; an id absent from the project is simply absent
      *         here too, never {@code null}
      */
-    List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids);
+    List<ResolvedRequirement> resolveExisting(ProjectId projectId, ResourceId... ids);
 
     /**
      * The slim projection this port resolves an identity to: just enough for a caller to render a

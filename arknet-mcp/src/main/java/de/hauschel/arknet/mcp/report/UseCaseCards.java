@@ -132,7 +132,7 @@ public final class UseCaseCards {
         if (ids.length == 0) {
             return Map.of();
         }
-        return requirements.getById(projectId, ids).stream()
+        return requirements.resolveExisting(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
     }
 }

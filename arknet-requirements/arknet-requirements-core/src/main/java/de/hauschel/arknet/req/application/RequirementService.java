@@ -242,7 +242,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids) {
+    public List<ResolvedRequirement> resolveExisting(ProjectId projectId, ResourceId... ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.length == 0) {

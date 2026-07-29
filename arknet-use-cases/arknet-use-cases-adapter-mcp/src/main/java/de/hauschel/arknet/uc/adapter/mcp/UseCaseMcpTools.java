@@ -84,7 +84,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * depends on {@code arknet-ubiquitous-language-core}/{@code arknet-requirements-core}, and
  * {@code uc_add}'s own write path still resolves via the decoupled {@code ActorLookup}/
  * {@code RequirementLookup} out-ports (ADR-008). {@link #formatFull} calls
- * {@link ResolveTerms#getById}/{@link ResolveRequirements#getById} exactly once each per
+ * {@link ResolveTerms#getById}/{@link ResolveRequirements#resolveExisting} exactly once each per
  * rendering, batched across every {@link ActorRef}/{@link RequirementRef} involved; an id either
  * port could not resolve simply falls back to the bare IRI - rendering never throws and never
  * drops a reference.</p>
@@ -432,8 +432,9 @@ public final class UseCaseMcpTools {
 
     /**
      * Batch-resolves every requirement referenced by {@code uc}'s steps (the union of all
-     * {@code realises} references) in exactly one call to {@link ResolveRequirements#getById} -
-     * same merge-function reasoning as {@link #resolveActorsFor}.
+     * {@code realises} references) in exactly one call to
+     * {@link ResolveRequirements#resolveExisting} - same merge-function reasoning as
+     * {@link #resolveActorsFor}.
      */
     private Map<ResourceId, ResolvedRequirement> resolveRequirementsFor(
             final ProjectId projectId, final UseCase uc) {
@@ -445,7 +446,7 @@ public final class UseCaseMcpTools {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveRequirements.getById(projectId, ids).stream()
+        return resolveRequirements.resolveExisting(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
     }
 
