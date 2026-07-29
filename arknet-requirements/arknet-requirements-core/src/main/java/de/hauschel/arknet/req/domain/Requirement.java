@@ -37,8 +37,9 @@ import java.util.Objects;
  *                         only meaningful for {@link RequirementType#NON_FUNCTIONAL}
  * @param usesTerms        the glossary terms of the ubiquitous language this requirement
  *                         uses; maps to {@code arkreq:usesTerm}, {@code 0..n}, held as bare
- *                         identity references (never {@code null}; a {@code null} argument is
- *                         normalised to an empty list). Part of the requirement's own state
+ *                         identity references (never {@code null} or containing duplicates;
+ *                         a {@code null} argument is normalised to an empty list). Part of
+ *                         the requirement's own state
  *                         rather than a side edge: the out-adapter persists a requirement by
  *                         replacing it wholesale, so a link kept outside this record would be
  *                         silently dropped by the next status change.
@@ -82,6 +83,9 @@ public record Requirement(
         }
         if (new HashSet<>(acceptanceCriteria).size() != acceptanceCriteria.size()) {
             throw new IllegalArgumentException("acceptanceCriteria must not contain duplicate entries");
+        }
+        if (new HashSet<>(usesTerms).size() != usesTerms.size()) {
+            throw new IllegalArgumentException("usesTerms must not contain duplicate entries");
         }
         if (qualityCategory != null && type != RequirementType.NON_FUNCTIONAL) {
             throw new IllegalArgumentException("qualityCategory is only allowed for non-functional requirements");
