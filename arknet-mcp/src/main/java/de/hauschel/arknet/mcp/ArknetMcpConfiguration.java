@@ -345,8 +345,9 @@ public class ArknetMcpConfiguration {
 
     @Bean
     BoundedContextRepository boundedContextRepository(
-            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
-        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle, displayLocale);
+            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
+            final DisplayLocale displayLocale) {
+        return KognioRdfBoundedContextRepositoryFactory.over(datasetLifecycle, resourceIdFactory, displayLocale);
     }
 
     /**

@@ -40,6 +40,7 @@ import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -52,15 +53,29 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * ({@code io.kogn.rdf}, embeddable RDF store).
  *
  * <p>Maps a {@link BoundedContext} to its opaque {@link BoundedContextId} as the subject IRI
- * (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
- * business code), stored in one named graph shared by all bounded contexts: the type triple
- * ({@code a arknet:BoundedContext}), the mandatory {@code dcterms:identifier} (the business code
- * {@code BC-1}), {@code arknet:name} and {@code arknet:domainVision} literals, and up to two
- * optional triples for {@code arknet:subdomain} (an IRI individual) and {@code arknet:ownedBy}
- * (a literal), plus zero or more {@code arknet:ubiquitousLanguageTerm} edges. This class depends
- * only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} -
- * it never imports RDF4J. The backend ({@link DatasetLifecycle} implementation) is supplied by
- * the composition root.</p>
+ * (minted once by a {@link ResourceIdFactory}, never derived from the business code), stored in
+ * one named graph shared by all bounded contexts: the type triple ({@code a
+ * arkddd:BoundedContext}), the mandatory {@code dcterms:identifier} (the business code
+ * {@code BC-1}), the generic {@code arknet:name} literal and the {@code arkddd:domainVision}
+ * literal, an optional {@code arkddd:ownedBy} literal, plus zero or more
+ * {@code arkddd:ubiquitousLanguageTerm} edges. This class depends only on the neutral kognio-rdf
+ * ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J. The
+ * backend ({@link DatasetLifecycle} implementation) is supplied by the composition root.</p>
+ *
+ * <p><strong>Subdomain classification is a derived {@code arkddd:Subdomain} resource, not a flat
+ * property (issue #189).</strong> {@link BoundedContext#subdomain()} is only the strategic
+ * classification enum ({@link Subdomain#CORE_DOMAIN}/{@link Subdomain#SUPPORTING_DOMAIN}/
+ * {@link Subdomain#GENERIC_DOMAIN}), but the DDD ontology models it as
+ * {@code BoundedContext arkddd:partOf Subdomain ; Subdomain arkddd:subdomainType
+ * arkddd:CoreDomain|SupportingDomain|GenericDomain} - a class-typed node in between, matching
+ * {@code arkddd:Domain}/{@code arkddd:Subdomain}'s class-based modelling. When present, this
+ * adapter mints that node's opaque IRI afresh on every write via {@link ResourceIdFactory} - the
+ * same "derived value object, minted by the adapter, no stable identity of its own" pattern
+ * {@code KognioRdfUseCaseRepository} uses for a use case's steps. {@link #replaceTriples} follows
+ * the {@code arkddd:partOf} edge to delete the superseded node's triples on update, exactly as
+ * the use-case adapter follows {@code mainStep}/{@code extensionStep} - a plain subject-only
+ * delete would otherwise leave a fresh, disconnected {@code arkddd:Subdomain} node behind on
+ * every update that touches the classification.</p>
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity, issue #176).</strong> The
  * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
@@ -90,7 +105,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * ambiguous code, is done once by {@link KognioRdfTermLookup} at the moment a term is linked (in
  * the application service), not here on every write. Unlike the requirements adapter's
  * {@code arkreq:usesTerm}, the {@code shapes:BoundedContextShape} places no {@code sh:class}
- * constraint on {@code arknet:ubiquitousLanguageTerm}, so this adapter needs no validation-only
+ * constraint on {@code arkddd:ubiquitousLanguageTerm}, so this adapter needs no validation-only
  * asserted context for it - the plain {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)}
  * suffices.</p>
  *
@@ -101,8 +116,8 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * not {@code sh:Violation} (issue #66): a store-first bounded context minted during analysis,
  * before tactical design, has no aggregates yet, and that must not block the write.</p>
  *
- * <p><strong>Row multiplication (issue #81).</strong> {@code arknet:subdomain}'s
- * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arknet:ownedBy} carries no
+ * <p><strong>Row multiplication (issue #81).</strong> {@code arkddd:partOf}'s
+ * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arkddd:ownedBy} carries no
  * {@code sh:maxCount} at all, so a store-first (ADR-005) bounded context with two triples on
  * either predicate legally multiplies {@link #findAll}'s SPARQL rows for one subject.
  * {@link #findAll} groups rows per subject and takes the first-seen value deterministically for
@@ -113,37 +128,48 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final Logger LOG = LoggerFactory.getLogger(KognioRdfBoundedContextRepository.class);
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
+    private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
     private static final String BOUNDED_CONTEXT_GRAPH = "https://w3id.org/arknet/model/bounded-context";
 
-    private static final String BOUNDED_CONTEXT_TYPE = ARKNET_NAMESPACE + "BoundedContext";
+    private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
-    private static final String DOMAIN_VISION_PROPERTY = ARKNET_NAMESPACE + "domainVision";
-    private static final String SUBDOMAIN_PROPERTY = ARKNET_NAMESPACE + "subdomain";
-    private static final String OWNED_BY_PROPERTY = ARKNET_NAMESPACE + "ownedBy";
-    private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ARKNET_NAMESPACE + "ubiquitousLanguageTerm";
-    private static final String HAS_AGGREGATE_PROPERTY = ARKNET_NAMESPACE + "hasAggregate";
+    private static final String DOMAIN_VISION_PROPERTY = ARKDDD_NAMESPACE + "domainVision";
+    private static final String PART_OF_PROPERTY = ARKDDD_NAMESPACE + "partOf";
+    private static final String SUBDOMAIN_TYPE_PROPERTY = ARKDDD_NAMESPACE + "subdomainType";
+    private static final String SUBDOMAIN_CLASS = ARKDDD_NAMESPACE + "Subdomain";
+    private static final String OWNED_BY_PROPERTY = ARKDDD_NAMESPACE + "ownedBy";
+    private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ARKDDD_NAMESPACE + "ubiquitousLanguageTerm";
+    private static final String HAS_AGGREGATE_PROPERTY = ARKDDD_NAMESPACE + "hasAggregate";
 
-    private static final String CORE_DOMAIN = ARKNET_NAMESPACE + "CoreDomain";
-    private static final String SUPPORTING_DOMAIN = ARKNET_NAMESPACE + "SupportingDomain";
-    private static final String GENERIC_DOMAIN = ARKNET_NAMESPACE + "GenericDomain";
+    private static final String CORE_DOMAIN = ARKDDD_NAMESPACE + "CoreDomain";
+    private static final String SUPPORTING_DOMAIN = ARKDDD_NAMESPACE + "SupportingDomain";
+    private static final String GENERIC_DOMAIN = ARKDDD_NAMESPACE + "GenericDomain";
 
     private final DatasetLifecycle lifecycle;
+    private final ResourceIdFactory resourceIdFactory;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - read paths
-     *                  only, the write path goes through {@code funnel} (must not be {@code null})
-     * @param funnel    the shared write funnel (ADR-013) running the SHACL gate, dataset
-     *                  acquisition and existence/head checks for every
-     *                  {@link #create}/{@link #compareAndUpdate}
-     *                  (must not be {@code null})
+     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from - read
+     *                          paths only, the write path goes through {@code funnel} (must not
+     *                          be {@code null})
+     * @param resourceIdFactory mints the opaque IRI of the derived {@code arkddd:Subdomain} node
+     *                          when a bounded context carries a subdomain classification (must
+     *                          not be {@code null}); the bounded context's own identity is minted
+     *                          store-neutrally above the store
+     * @param funnel            the shared write funnel (ADR-013) running the SHACL gate, dataset
+     *                          acquisition and existence/head checks for every
+     *                          {@link #create}/{@link #compareAndUpdate}
+     *                          (must not be {@code null})
      */
-    KognioRdfBoundedContextRepository(DatasetLifecycle lifecycle, WriteFunnel funnel) {
+    KognioRdfBoundedContextRepository(
+            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
@@ -195,8 +221,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
     /**
      * Builds the candidate graph for one bounded context's triples: type, identifier, name,
-     * domainVision, optional subdomain and ownedBy, and zero or more
-     * {@code arknet:ubiquitousLanguageTerm} edges to the bounded context's already-resolved term
+     * domainVision, an optional derived {@code arkddd:Subdomain} node (see the class-level note
+     * on issue #189) and an optional ownedBy literal, and zero or more
+     * {@code arkddd:ubiquitousLanguageTerm} edges to the bounded context's already-resolved term
      * references. Shared by {@link #create} and {@link #compareAndUpdate} so both write paths
      * serialise a {@link BoundedContext} identically.
      */
@@ -211,8 +238,11 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         graph.add(subjectIri, rdf.createIRI(DOMAIN_VISION_PROPERTY),
                 rdf.createLiteral(boundedContext.domainVision()));
         if (boundedContext.subdomain() != null) {
-            graph.add(subjectIri, rdf.createIRI(SUBDOMAIN_PROPERTY),
+            IRI subdomainIri = mintSubdomainIri();
+            graph.add(subdomainIri, VocabRdf.TYPE, rdf.createIRI(SUBDOMAIN_CLASS));
+            graph.add(subdomainIri, rdf.createIRI(SUBDOMAIN_TYPE_PROPERTY),
                     rdf.createIRI(subdomainIriFor(boundedContext.subdomain())));
+            graph.add(subjectIri, rdf.createIRI(PART_OF_PROPERTY), subdomainIri);
         }
         if (boundedContext.ownedBy() != null) {
             graph.add(subjectIri, rdf.createIRI(OWNED_BY_PROPERTY), rdf.createLiteral(boundedContext.ownedBy()));
@@ -231,17 +261,24 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * them along instead of erasing them:
      *
      * <ul>
-     * <li>{@code arknet:ubiquitousLanguageTerm} edges whose target is not an IRI
+     * <li>{@code arkddd:ubiquitousLanguageTerm} edges whose target is not an IRI
      * ({@link #readUsesTerms} can never read those, since {@link ResourceId} cannot represent a
      * blank node) - the same preservation the requirements adapter does for
      * {@code arkreq:usesTerm}, issue #65.</li>
-     * <li><strong>All</strong> {@code arknet:hasAggregate} edges, regardless of target kind:
+     * <li><strong>All</strong> {@code arkddd:hasAggregate} edges, regardless of target kind:
      * {@link BoundedContext} has no field for its aggregates at all (issue #66 lowered the shape
      * to {@code sh:Warning} precisely so a bounded context minted before tactical design has none
      * yet), so unlike {@code ubiquitousLanguageTerm} there is no IRI-typed round-trip through the
      * domain object to fall back on - every edge, IRI or blank node, would otherwise be lost on
      * the very next {@code bc_link_term} call.</li>
      * </ul>
+     *
+     * <p>{@code deleteExisting} also follows the {@code arkddd:partOf} edge, mirroring
+     * {@code KognioRdfUseCaseRepository}'s step-following delete: the derived
+     * {@code arkddd:Subdomain} node {@link #buildCandidateGraph} mints is reachable only from the
+     * subject, so a subject-only delete would leave the superseded node's triples behind as
+     * disconnected, ever-accumulating garbage on every update that touches the classification
+     * (issue #189).</p>
      */
     private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
             boolean exists) {
@@ -251,8 +288,10 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         String selectAggregates = "SELECT ?aggregate WHERE { "
                 + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
                 + HAS_AGGREGATE_PROPERTY + "> ?aggregate } }";
-        String deleteExisting = "DELETE WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
-                + subject + " ?p ?o } }";
+        String deleteExisting = "DELETE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                + "{ " + subject + " <" + PART_OF_PROPERTY + "> ?s . ?s ?p ?o } } }";
 
         List<RDFTerm> unjoinableTerms = exists
                 ? tx.select(selectUnjoinableTerms).map(row -> termOf(row, "term")).toList()
@@ -340,8 +379,12 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     /**
      * The WHERE body shared by {@link #findByCode} and {@link #findCurrentByCode}: the mandatory
      * joins (type, identifier, name, domainVision) plus the two optional joins (subdomain,
-     * ownedBy) that scope a single-bounded-context read to one {@code code}. Extracted because
-     * both callers build a {@link BoundedContext} from the same row shape via
+     * ownedBy) that scope a single-bounded-context read to one {@code code}. The subdomain join
+     * follows the derived {@code arkddd:Subdomain} node's {@code arkddd:partOf}/
+     * {@code arkddd:subdomainType} hop (issue #189) but still projects a single {@code ?subdomain}
+     * binding - the {@code arkddd:CoreDomain}/{@code SupportingDomain}/{@code GenericDomain}
+     * individual - so {@link #subdomainOf} reads it exactly as it did the old flat property.
+     * Extracted because both callers build a {@link BoundedContext} from the same row shape via
      * {@link #boundedContextOf} - drift between two near-identical read paths is what issues
      * #80/#81 cost the requirements adapter, so this text lives in one place. The caller supplies
      * the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in
@@ -352,7 +395,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
                 + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
-                + "OPTIONAL { ?s <" + SUBDOMAIN_PROPERTY + "> ?subdomain } "
+                + "OPTIONAL { ?s <" + PART_OF_PROPERTY + "> ?subdomainNode . "
+                + "?subdomainNode <" + SUBDOMAIN_TYPE_PROPERTY + "> ?subdomain } "
                 + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } ";
     }
 
@@ -385,7 +429,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
                 + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
-                + "OPTIONAL { ?s <" + SUBDOMAIN_PROPERTY + "> ?subdomain } "
+                + "OPTIONAL { ?s <" + PART_OF_PROPERTY + "> ?subdomainNode . "
+                + "?subdomainNode <" + SUBDOMAIN_TYPE_PROPERTY + "> ?subdomain } "
                 + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -472,7 +517,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     // ---- ubiquitousLanguageTerm reading ------------------------------------------------
 
     /**
-     * Reads the {@code arknet:ubiquitousLanguageTerm} edges of one bounded context back as term
+     * Reads the {@code arkddd:ubiquitousLanguageTerm} edges of one bounded context back as term
      * references. Ordered by target IRI (RDF has no intrinsic statement order and
      * {@link BoundedContext} compares its {@code usesTerms} list positionally). A store-first
      * blank-node target is excluded by {@code FILTER(isIRI(?term))} - it is preserved across an
@@ -506,6 +551,16 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      */
     private IRI termIriFor(TermRef term) {
         return rdf.createIRI(term.value().value());
+    }
+
+    /**
+     * Mints an opaque IRI for the derived {@code arkddd:Subdomain} node from the same kernel
+     * scheme as the bounded context root, mirroring
+     * {@code KognioRdfUseCaseRepository#mintStepIri}: the node is a value object with no stable
+     * identity of its own (issue #189).
+     */
+    private IRI mintSubdomainIri() {
+        return rdf.createIRI(resourceIdFactory.newId().value());
     }
 
     // ---- helpers -----------------------------------------------------------------------
@@ -556,7 +611,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     /**
      * Reads a binding as the bare {@link RDFTerm} it is, without narrowing it to {@link IRI} -
      * used where the binding's kind is not known in advance (an
-     * {@code arknet:ubiquitousLanguageTerm} target may legally be a blank node).
+     * {@code arkddd:ubiquitousLanguageTerm} target may legally be a blank node).
      */
     private static RDFTerm termOf(BindingSet row, String name) {
         return row.getValue(name)

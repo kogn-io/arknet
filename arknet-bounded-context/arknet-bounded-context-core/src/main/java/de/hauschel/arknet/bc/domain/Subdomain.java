@@ -6,12 +6,14 @@ package de.hauschel.arknet.bc.domain;
 /**
  * Strategic DDD classification of a {@link BoundedContext}'s subdomain.
  *
- * <p>Maps to the {@code arknet:SubdomainType} individuals the ontology enumerates
- * ({@code arknet:CoreDomain}/{@code arknet:SupportingDomain}/{@code arknet:GenericDomain}) and
- * that {@code shapes:BoundedContext-subdomain} constrains via {@code sh:in}. This enum lists
- * exactly those three values, so a caller can never be offered a subdomain the write-gate would
- * reject. Optional on a bounded context: the shape places no {@code sh:minCount} on
- * {@code arknet:subdomain} (a {@code sh:Warning}-only property), consistent with the store-first
+ * <p>Maps to the {@code arkddd:SubdomainType} individuals the ontology enumerates
+ * ({@code arkddd:CoreDomain}/{@code arkddd:SupportingDomain}/{@code arkddd:GenericDomain}), one of
+ * which the out-adapter attaches via a derived {@code arkddd:Subdomain} node's
+ * {@code arkddd:subdomainType} (issue #189) - this enum lists exactly those three values, so a
+ * caller can never be offered a subdomain the ontology does not enumerate, though nothing in the
+ * current SHACL shapes constrains {@code arkddd:subdomainType} itself. Optional on a bounded
+ * context: {@code shapes:BoundedContext-partOf} places no {@code sh:minCount} on
+ * {@code arkddd:partOf} (a {@code sh:Warning}-only property), consistent with the store-first
  * lifecycle (ADR-005) in which the strategic classification may be decided after the context
  * itself is minted.</p>
  */
