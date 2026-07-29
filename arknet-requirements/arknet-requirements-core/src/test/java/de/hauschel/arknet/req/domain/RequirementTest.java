@@ -124,6 +124,13 @@ class RequirementTest {
     }
 
     @Test
+    void rejectsDuplicateUsesTerms() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                        null, null, null, List.of(TERM_1, TERM_1), CRITERIA));
+    }
+
+    @Test
     void allowsQualityCategoryOnNonFunctionalRequirement() {
         Requirement req = new Requirement(ID, new RequirementCode("NFR-1"), "t", "d",
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, "performance", null,
