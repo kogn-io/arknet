@@ -1,9 +1,17 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  SHACL Validation Shapes  ·  Version 0.1.0
+#  SHACL Validation Shapes  ·  Version 0.2.0
 #
 #  Prinzip: Closed-World-Assumption.
 #  Fehlende Pflichtfelder = Fehler in CI/CD, nicht "vielleicht woanders".
+#
+#  Loaded as SHAPES_RESOURCE by KognioRdfBoundedContextRepositoryFactory -
+#  the only consumer. Validates arknet:BoundedContext only: Aggregate and
+#  ContextRelationship shapes moved to parked/arknet-ddd-shapes.ttl (no BC
+#  ever creates those types, so they never fired here either - moving them
+#  out is a documentation fix, not a behaviour change). AnalysisRunShape
+#  was deleted outright, not parked, together with its arknet-core.ttl
+#  vocabulary (dead leftover, no code reference anywhere).
 #
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
 ##############################################################################
@@ -15,10 +23,8 @@
 
 
 ##############################################################################
-#  DDD SHAPES
+#  BOUNDED CONTEXT SHAPES
 ##############################################################################
-
-# ── BoundedContext ──────────────────────────────────────────────────────────
 
 shapes:BoundedContextShape
     a sh:NodeShape ;
@@ -53,8 +59,8 @@ shapes:BoundedContext-hasAggregate
     a sh:PropertyShape ;
     sh:path     arknet:hasAggregate ;
     sh:minCount 1 ;
-    sh:class    arknet:Aggregate ;
-    sh:message  "BoundedContext sollte mindestens ein 'arknet:hasAggregate' haben (dessen Wert vom Typ arknet:Aggregate ist)."@de ;
+    sh:class    <https://w3id.org/arknet/ddd#Aggregate> ;
+    sh:message  "BoundedContext sollte mindestens ein 'arknet:hasAggregate' haben (dessen Wert vom Typ arkddd:Aggregate ist)."@de ;
     sh:severity sh:Warning .
 
 shapes:BoundedContext-subdomain
@@ -70,126 +76,5 @@ shapes:BoundedContext-ownedBy
     sh:path     arknet:ownedBy ;
     sh:message  "BoundedContext sollte 'arknet:ownedBy' (Team-Name) haben."@de ;
     sh:severity sh:Warning .
-
-
-# ── Aggregate ──────────────────────────────────────────────────────────────
-
-shapes:AggregateShape
-    a sh:NodeShape ;
-    sh:targetClass arknet:Aggregate ;
-    sh:property shapes:Aggregate-name ;
-    sh:property shapes:Aggregate-aggregateRoot ;
-    sh:property shapes:Aggregate-hasCommand ;
-    sh:property shapes:Aggregate-hasEvent .
-
-shapes:Aggregate-name
-    a sh:PropertyShape ;
-    sh:path     arknet:name ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
-    sh:message  "Aggregate muss einen 'arknet:name' haben."@de ;
-    sh:severity sh:Violation .
-
-shapes:Aggregate-aggregateRoot
-    a sh:PropertyShape ;
-    sh:path     arknet:aggregateRoot ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:class    arknet:AggregateRoot ;
-    sh:message  "Aggregate muss GENAU EINEN 'arknet:aggregateRoot' haben."@de ;
-    sh:severity sh:Violation .
-
-shapes:Aggregate-hasCommand
-    a sh:PropertyShape ;
-    sh:path     arknet:hasCommand ;
-    sh:minCount 1 ;
-    sh:message  "Aggregate sollte mindestens einen 'arknet:hasCommand' haben."@de ;
-    sh:severity sh:Warning .
-
-shapes:Aggregate-hasEvent
-    a sh:PropertyShape ;
-    sh:path     arknet:hasEvent ;
-    sh:minCount 1 ;
-    sh:message  "Aggregate sollte mindestens ein 'arknet:hasEvent' haben."@de ;
-    sh:severity sh:Warning .
-
-
-# ── ContextRelationship ────────────────────────────────────────────────────
-
-shapes:ContextRelationshipShape
-    a sh:NodeShape ;
-    sh:targetClass arknet:ContextRelationship ;
-    sh:property shapes:ContextRelationship-upstream ;
-    sh:property shapes:ContextRelationship-downstream ;
-    sh:property shapes:ContextRelationship-relationshipType .
-
-shapes:ContextRelationship-upstream
-    a sh:PropertyShape ;
-    sh:path     arknet:upstream ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:class    arknet:BoundedContext ;
-    sh:message  "ContextRelationship muss genau einen 'arknet:upstream' BoundedContext haben."@de ;
-    sh:severity sh:Violation .
-
-shapes:ContextRelationship-downstream
-    a sh:PropertyShape ;
-    sh:path     arknet:downstream ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:class    arknet:BoundedContext ;
-    sh:message  "ContextRelationship muss genau einen 'arknet:downstream' BoundedContext haben."@de ;
-    sh:severity sh:Violation .
-
-shapes:ContextRelationship-relationshipType
-    a sh:PropertyShape ;
-    sh:path     arknet:relationshipType ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:in       ( arknet:Partnership arknet:SharedKernel arknet:CustomerSupplier
-                  arknet:Conformist arknet:AnticorruptionLayer
-                  arknet:OpenHostService arknet:PublishedLanguage
-                  arknet:SeparateWays ) ;
-    sh:message  "ContextRelationship muss einen gueltigen 'arknet:relationshipType' haben."@de ;
-    sh:severity sh:Violation .
-
-
-# ── AnalysisRun ──────────────────────────────────────────────────────────
-
-shapes:AnalysisRunShape
-    a sh:NodeShape ;
-    sh:targetClass arknet:AnalysisRun ;
-    sh:property shapes:AnalysisRun-analyzedAt ;
-    sh:property shapes:AnalysisRun-pluginVersion ;
-    sh:property shapes:AnalysisRun-strategy .
-
-shapes:AnalysisRun-analyzedAt
-    a sh:PropertyShape ;
-    sh:path     arknet:analyzedAt ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:dateTime ;
-    sh:message  "AnalysisRun muss genau ein 'arknet:analyzedAt' haben (xsd:dateTime)."@de ;
-    sh:severity sh:Violation .
-
-shapes:AnalysisRun-pluginVersion
-    a sh:PropertyShape ;
-    sh:path     arknet:pluginVersion ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
-    sh:message  "AnalysisRun muss genau eine 'arknet:pluginVersion' haben."@de ;
-    sh:severity sh:Violation .
-
-shapes:AnalysisRun-strategy
-    a sh:PropertyShape ;
-    sh:path     arknet:strategy ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
-    sh:in       ( "jdt" "text-search" ) ;
-    sh:message  "AnalysisRun muss eine 'arknet:strategy' haben (jdt oder text-search)."@de ;
-    sh:severity sh:Violation .
 
 # END OF SHAPES

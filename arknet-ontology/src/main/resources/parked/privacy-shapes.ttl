@@ -25,7 +25,7 @@
 
 privshapes:EntityDataCategoryShape
     a sh:NodeShape ;
-    sh:targetClass arknet:Entity ;
+    sh:targetClass <https://w3id.org/arknet/ddd#Entity> ;
     sh:property privshapes:Entity-hasDataCategory .
 
 privshapes:Entity-hasDataCategory
@@ -43,7 +43,7 @@ privshapes:Entity-hasDataCategory
 
 privshapes:AggregatePersonalDataLegalBasisShape
     a sh:NodeShape ;
-    sh:targetClass arknet:Aggregate ;
+    sh:targetClass <https://w3id.org/arknet/ddd#Aggregate> ;
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:severity sh:Violation ;
@@ -62,7 +62,7 @@ privshapes:AggregatePersonalDataLegalBasisShape
 
 privshapes:AggregatePersonalDataRetentionShape
     a sh:NodeShape ;
-    sh:targetClass arknet:Aggregate ;
+    sh:targetClass <https://w3id.org/arknet/ddd#Aggregate> ;
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:severity sh:Warning ;
@@ -81,7 +81,7 @@ privshapes:AggregatePersonalDataRetentionShape
 
 privshapes:AggregateSensitiveDataMeasuresShape
     a sh:NodeShape ;
-    sh:targetClass arknet:Aggregate ;
+    sh:targetClass <https://w3id.org/arknet/ddd#Aggregate> ;
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:severity sh:Violation ;

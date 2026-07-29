@@ -3,7 +3,7 @@
 #  Project (Registry) Ontology  :  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/project#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: ADR-016's registered-anchor vocabulary. Project identity is
 #         REGISTERED, not derived. A client sends an opaque, typed anchor;
@@ -77,7 +77,7 @@
     dcterms:description "arknet's registered-project vocabulary (ADR-016): a project holds one or more opaque, typed anchors that a client can anchor itself to; a dataset holds the data of exactly one project; an unknown anchor is an error, not a derived default."@en ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-28"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkprj" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/project#" ;
     owl:versionInfo  "0.1.0" .
