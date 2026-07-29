@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp.report;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +41,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void rendersAUseCaseAsAFlowRatherThanAsItsTriples() {
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
 
         assertThat(html).contains("id=\"sec-use-cases\"");
         assertThat(html).contains(">UC1<").contains(">Bestellung aufgeben<");
@@ -66,7 +67,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void suppressesUseCaseStepsFromTheRawSection() {
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
 
         assertThat(html).doesNotContain("id=\"r-" + anchorOf(STEP_1) + "\"");
         assertThat(html).doesNotContain("id=\"r-" + anchorOf(STEP_2) + "\"");
@@ -79,7 +80,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void keepsEverythingNoSectionClaimedInTheRawSection() {
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
 
         assertThat(html).contains("id=\"sec-other\"");
         assertThat(html).contains("id=\"r-" + anchorOf(REVISION) + "\"");
@@ -97,7 +98,7 @@ class HtmlReportRendererTest {
                 iri(orphan, RDF_TYPE, ARKREQ + "Step"),
                 literal(orphan, ARKREQ + "stepText", "Ein Schritt ohne Use Case")));
 
-        final String html = renderer.render(WORKSPACE, snapshot, "digest", views());
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot, "digest", views());
 
         assertThat(html).contains("id=\"r-" + anchorOf(orphan) + "\"");
     }
@@ -105,7 +106,7 @@ class HtmlReportRendererTest {
     /** Every card keeps its raw triples one click away, so the model view never has to be trusted blindly. */
     @Test
     void hangsTheRawTriplesOffEveryCard() {
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
 
         assertThat(html).contains("<details class=\"raw\">");
         assertThat(html).contains("raw triples");
@@ -118,7 +119,7 @@ class HtmlReportRendererTest {
         final ModelViews.Views views = new ModelViews.Views(
                 List.of(), List.of("Use Cases: could not be read (IllegalStateException: store closed)"));
 
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views);
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views);
 
         assertThat(html).contains("Incomplete report").contains("store closed");
     }
@@ -131,7 +132,7 @@ class HtmlReportRendererTest {
                         List.of(new Block.Refs("Uses terms",
                                 List.of(new Ref("Lieferschein", "TERM-404", ID + "nowhere")))))));
 
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(section));
 
         assertThat(html).contains(
                 "<span class=\"chip dead\" title=\"TERM-404 - not in this project\">Lieferschein</span>");
@@ -153,7 +154,7 @@ class HtmlReportRendererTest {
                                 new Span.TermGap("Bestellung", ID + "term-2", "TERM-2"),
                                 new Span.Plain(" an."))))))));
 
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(section));
 
         assertThat(html).contains("<a class=\"term\" href=\"#r-" + anchorOf(ID + "actor-1")
                 + "\" title=\"TERM-1\">Kunde</a>");
@@ -168,7 +169,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void foldsEveryCardAndOffersBulkControls() {
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
 
         assertThat(html).contains("<details class=\"fold\">").doesNotContain("<details class=\"fold\" open>");
         assertThat(html).contains("<summary class=\"head\">");
@@ -179,7 +180,7 @@ class HtmlReportRendererTest {
     /** With nothing in the store at all, the report says so and names the way in. */
     @Test
     void tellsTheReaderWhereToStartWhenTheWorkspaceIsEmpty() {
-        final String html = renderer.render(WORKSPACE, StoreSnapshot.of(List.of()), "digest", views());
+        final String html = renderer.render(WORKSPACE, Optional.empty(), StoreSnapshot.of(List.of()), "digest", views());
 
         assertThat(html).contains("holds no model yet").contains("uc_add");
     }
@@ -187,7 +188,7 @@ class HtmlReportRendererTest {
     /** The report must stay openable from a file:// URL with no network. */
     @Test
     void staysSelfContained() {
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
 
         assertThat(html).doesNotContain("<script src").doesNotContain("<link rel=\"stylesheet\"")
                 .doesNotContain("http://cdn").doesNotContain("https://cdn");
@@ -200,10 +201,35 @@ class HtmlReportRendererTest {
                 new ModelCard("FR-1", "<script>alert(1)</script>", FR_1, List.of(),
                         List.of(Block.Prose.plain("Description", "a & b < c")))));
 
-        final String html = renderer.render(WORKSPACE, snapshot(), "digest", views(section));
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(section));
 
         assertThat(html).doesNotContain("<script>alert(1)</script>");
         assertThat(html).contains("&lt;script&gt;alert(1)&lt;/script&gt;").contains("a &amp; b &lt; c");
+    }
+
+    /**
+     * Issue #187: a project registered with a human-readable label must show that label in the
+     * header, with the raw id kept alongside rather than replaced.
+     */
+    @Test
+    void headerNamesTheRegisteredLabelAlongsideTheId() {
+        final String html = renderer.render(
+                new ProjectId("ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8"), Optional.of("arknet-demo"),
+                snapshot(), "digest", views(useCaseSection()));
+
+        assertThat(html).contains(
+                "<span class=\"ws\">project: arknet-demo (id: ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8)</span>");
+    }
+
+    /**
+     * No label means no registry entry for this id - the header falls back to the raw id exactly
+     * as it did before this lookup existed.
+     */
+    @Test
+    void headerFallsBackToTheRawIdWhenNoLabelIsAvailable() {
+        final String html = renderer.render(WORKSPACE, Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+
+        assertThat(html).contains("<span class=\"ws\">project: report-test</span>");
     }
 
     // --- fixtures --------------------------------------------------------------

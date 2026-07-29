@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,10 @@ import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
+import de.hauschel.arknet.prj.application.port.in.FindProject;
+import de.hauschel.arknet.prj.domain.Anchor;
+import de.hauschel.arknet.prj.domain.AnchorType;
+import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
@@ -99,7 +104,8 @@ class StoreReportToolsTest {
         // anchors, so these tests address two projects the way a real client does.
         ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         tools = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, reportDir, null);
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, NO_LABELS,
+                reportDir, null);
     }
 
     /**
@@ -116,6 +122,14 @@ class StoreReportToolsTest {
         }
         throw new UnresolvedProjectAnchorException(anchor, "no project registered for '" + anchor + "'");
     }
+
+    /**
+     * Stands in for a project id that is not (or not yet) in the label registry - the header then
+     * falls back to the raw id, which is what most of these tests assert on
+     * ({@code "# Project noistill"}). The label-aware header itself is covered by
+     * {@link #storeOverviewNamesTheRegisteredLabelInTheDigestAndHtmlHeader()}.
+     */
+    private static final FindProject NO_LABELS = id -> Optional.empty();
 
     /**
      * The HTML report's model sections come from the bounded contexts' read in-ports, not from
@@ -235,7 +249,7 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects,
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, NO_LABELS,
                 blockedFallbackDir, null);
 
         final String result = toolsWithBrokenFallback.storeOverview(null, ANCHOR);
@@ -259,7 +273,8 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, reportDir, hostDir);
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, NO_LABELS,
+                reportDir, hostDir);
 
         final String result = toolsWithHostDir.storeOverview(null, ANCHOR);
 
@@ -268,6 +283,31 @@ class StoreReportToolsTest {
         assertThat(result)
                 .contains("# HTML report: " + hostDir.resolve(PROJECT.value()).resolve("store-report.html"))
                 .doesNotContain(reportDir.toString());
+    }
+
+    /**
+     * Issue #187: a project registered with a human-readable label must show it in both the
+     * digest and the HTML report header, with the raw id kept alongside rather than replaced.
+     */
+    @Test
+    void storeOverviewNamesTheRegisteredLabelInTheDigestAndHtmlHeader() throws Exception {
+        final Prefixes prefixes = Prefixes.defaults();
+        final StoreReader reader = new StoreReader(lifecycle);
+        final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
+        final FindProject withLabel = id -> PROJECT.equals(id)
+                ? Optional.of(new Project(PROJECT, "arknet-demo", List.of(new Anchor(ANCHOR, AnchorType.PATH))))
+                : Optional.empty();
+        final StoreReportTools toolsWithLabel = new StoreReportTools(
+                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, withLabel,
+                reportDir, null);
+
+        final String result = toolsWithLabel.storeOverview(null, ANCHOR);
+
+        assertThat(result).contains("# Project arknet-demo (id: noistill) --");
+
+        final Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+        assertThat(Files.readString(html)).contains(
+                "<span class=\"ws\">project: arknet-demo (id: noistill)</span>");
     }
 
     /**
