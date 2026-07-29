@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -18,6 +19,8 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
+import de.hauschel.arknet.prj.application.port.in.FindProject;
+import de.hauschel.arknet.prj.domain.Project;
 
 /**
  * Read-only store tools exposed over MCP: {@code store_overview} and {@code resource_get}.
@@ -51,6 +54,7 @@ public final class StoreReportTools {
     private final ResourceRenderer resourceRenderer;
     private final HandleResolver handleResolver;
     private final ProjectResolver projects;
+    private final FindProject findProject;
     private final Path fallbackReportDir;
     private final Path reportHostDir;
 
@@ -62,6 +66,9 @@ public final class StoreReportTools {
      *                          tool - a context whose read path throws is reported as a warning in
      *                          the HTML and its resources fall back to the generic raw view
      * @param projects          resolves each call's target project from its anchor
+     * @param findProject       looks up the resolved project's registered label for the digest and
+     *                          HTML headers (issue #187); an {@link Optional#empty()} result falls
+     *                          back to the raw id, unchanged from before this lookup existed
      * @param fallbackReportDir the directory a project-scoped subdirectory is created under for the
      *                          HTML report; the subdirectory keeps projects that share this
      *                          directory from overwriting each other's report (issue #172)
@@ -77,6 +84,7 @@ public final class StoreReportTools {
             final HtmlReportRenderer htmlRenderer,
             final ModelViews modelViews,
             final ProjectResolver projects,
+            final FindProject findProject,
             final Path fallbackReportDir,
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
@@ -87,6 +95,7 @@ public final class StoreReportTools {
         this.resourceRenderer = new ResourceRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.findProject = Objects.requireNonNull(findProject, "findProject");
         this.fallbackReportDir = Objects.requireNonNull(fallbackReportDir, "fallbackReportDir");
         this.reportHostDir = reportHostDir;
     }
@@ -108,10 +117,11 @@ public final class StoreReportTools {
                     + "what is registered.", required = false)
             final String projectAnchor) {
         final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final Optional<String> label = findProject.findById(projectId).map(Project::label);
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
-        final String digest = digestRenderer.render(projectId, snapshot);
-        final String html = htmlRenderer.render(projectId, snapshot, digest, modelViews.of(projectId));
+        final String digest = digestRenderer.render(projectId, label, snapshot);
+        final String html = htmlRenderer.render(projectId, label, snapshot, digest, modelViews.of(projectId));
         return digest + "\n" + writeReportLine(html, fallbackDirFor(projectId), projectId) + "\n";
     }
 

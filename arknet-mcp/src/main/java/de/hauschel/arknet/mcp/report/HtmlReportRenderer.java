@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -62,6 +63,10 @@ public final class HtmlReportRenderer {
      * Renders the complete HTML document.
      *
      * @param projectId the project the snapshot was read from
+     * @param label       the project's registered label (issue #187), or {@link Optional#empty()}
+     *                    if {@code projectId} is not (or no longer) found in the registry - the
+     *                    header then falls back to the raw id, exactly as before this label was
+     *                    available
      * @param snapshot    the flat statement snapshot, used for raw triples and the leftovers
      * @param digest      the agent digest text shown in the top panel
      * @param views       the per-bounded-context sections that make up the report's body
@@ -69,10 +74,12 @@ public final class HtmlReportRenderer {
      */
     public String render(
             final ProjectId projectId,
+            final Optional<String> label,
             final StoreSnapshot snapshot,
             final String digest,
             final ModelViews.Views views) {
         Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(label, "label");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(digest, "digest");
         Objects.requireNonNull(views, "views");
@@ -95,7 +102,7 @@ public final class HtmlReportRenderer {
                 .append(CSS)
                 .append("\n</style>\n</head>\n<body>\n<div class=\"wrap\">\n");
 
-        appendHeader(html, projectId, snapshot, carded.size());
+        appendHeader(html, projectId, label, snapshot, carded.size());
         appendFailures(html, views.failures());
         appendAgentPanel(html, digest);
         appendToolbar(html);
@@ -139,16 +146,27 @@ public final class HtmlReportRenderer {
     private void appendHeader(
             final StringBuilder html,
             final ProjectId projectId,
+            final Optional<String> label,
             final StoreSnapshot snapshot,
             final int elements) {
         html.append("  <header class=\"top\">\n")
                 .append("    <h1>arknet Store Report</h1>\n")
-                .append("    <span class=\"ws\">project: ").append(escape(projectId.value())).append("</span>\n")
+                .append("    <span class=\"ws\">project: ").append(escape(headerName(projectId, label)))
+                .append("</span>\n")
                 .append("    <span class=\"meta\"><b>").append(elements)
                 .append("</b> model elements &middot; <b>").append(snapshot.resourceCount())
                 .append("</b> resources &middot; <b>").append(snapshot.tripleCount())
                 .append("</b> triples</span>\n")
                 .append("  </header>\n");
+    }
+
+    /**
+     * The project name shown in the header: the registered label with its id alongside (matching
+     * {@code project_list}'s own {@code "label (id: ...)"} rendering), or the raw id alone when no
+     * label is available.
+     */
+    private static String headerName(final ProjectId projectId, final Optional<String> label) {
+        return label.map(value -> value + " (id: " + projectId.value() + ")").orElseGet(projectId::value);
     }
 
     private void appendFailures(final StringBuilder html, final List<String> failures) {

@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.prj.application.port.in.AdoptProject;
 import de.hauschel.arknet.prj.application.port.in.AttachAnchor;
+import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListAdoptableDatasets;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
@@ -70,7 +71,7 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  */
 public class ProjectService
         implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
-        ListAdoptableDatasets, ResolveProject {
+        ListAdoptableDatasets, ResolveProject, FindProject {
 
     /**
      * Bound on {@link #updateWithOptimisticRetry}'s retry loop, mirroring {@code
@@ -202,6 +203,12 @@ public class ProjectService
     public Project resolve(Anchor anchor) {
         Objects.requireNonNull(anchor, "anchor");
         return registry.findByAnchor(anchor).orElseThrow(() -> new UnknownAnchorException(anchor));
+    }
+
+    @Override
+    public Optional<Project> findById(ProjectId id) {
+        Objects.requireNonNull(id, "id");
+        return registry.findById(id);
     }
 
     /**
