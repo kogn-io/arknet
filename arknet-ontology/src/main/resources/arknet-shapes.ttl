@@ -63,7 +63,7 @@ shapes:BoundedContext-partOf
     a sh:PropertyShape ;
     sh:path     arkddd:partOf ;
     sh:maxCount 1 ;
-    sh:class    arkddd:Domain ;
+    sh:or       ( [ sh:class arkddd:Domain ] [ sh:class arkddd:Subdomain ] ) ;
     sh:message  "BoundedContext sollte 'arkddd:partOf' (eine Domain oder Subdomain) haben."@de ;
     sh:severity sh:Warning .
 
