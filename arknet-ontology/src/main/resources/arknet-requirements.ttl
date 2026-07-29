@@ -273,9 +273,9 @@ arkreq:supportingActor a owl:ObjectProperty ;
 arkreq:realizedBy a owl:ObjectProperty ;
     rdfs:subPropertyOf oslc_rm:implementedBy ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  arknet:Command ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Command> ;
     rdfs:label  "realized by"@en ;
-    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy."@de .
+    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy. Sein Wertebereich, arkddd:Command, lebt in der geparkten, noch nicht implementierten parked/arknet-ddd.ttl."@de .
 
 arkreq:includesUseCase a owl:ObjectProperty ;
     rdfs:domain arkreq:UseCase ;
