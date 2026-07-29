@@ -3,11 +3,16 @@
 
 package de.hauschel.arknet.mcp.trace;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreResource;
 
@@ -65,8 +70,10 @@ public final class TraceabilityRenderer {
     }
 
     /**
-     * Renders {@code orphan_check}: requirements no use case realises, and glossary terms
-     * never used (neither via {@code arkreq:usesTerm} nor as a use-case actor).
+     * Renders {@code orphan_check}: requirements no use case realises, glossary terms never
+     * used (neither via {@code arkreq:usesTerm}/actor role nor as a bounded context's ubiquitous
+     * language), and terms a requirement's or bounded context's prose names without the edge to
+     * back it up (issue #185).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
@@ -82,6 +89,7 @@ public final class TraceabilityRenderer {
         List<String> orphanTerms = graph.termIris().stream()
                 .filter(iri -> !graph.isReferencedTerm(iri))
                 .toList();
+        List<UnlinkedMention> unlinkedMentions = unlinkedMentions(graph);
 
         StringBuilder out = new StringBuilder();
         out.append("# Orphan check -- project ").append(projectId.value()).append('\n');
@@ -90,6 +98,8 @@ public final class TraceabilityRenderer {
         appendLines(out, graph, orphanRequirements);
         out.append("\n## Terms never referenced (").append(orphanTerms.size()).append(")\n");
         appendLines(out, graph, orphanTerms);
+        out.append("\n## Mentioned in text but not linked (").append(unlinkedMentions.size()).append(")\n");
+        appendUnlinkedMentions(out, graph, unlinkedMentions);
         return out.toString();
     }
 
@@ -126,6 +136,57 @@ public final class TraceabilityRenderer {
         }
     }
 
+    private void appendUnlinkedMentions(StringBuilder out, TraceabilityGraph graph, List<UnlinkedMention> mentions) {
+        if (mentions.isEmpty()) {
+            out.append("- none\n");
+            return;
+        }
+        for (UnlinkedMention mention : mentions) {
+            out.append("- ").append(handle(graph, mention.sourceIri()))
+                    .append(" mentions \"").append(mention.termLabel()).append('"')
+                    .append(" (").append(handle(graph, mention.termIri())).append(')')
+                    .append(" -- no ").append(mention.edgeLocalName()).append(" edge\n");
+        }
+    }
+
+    /**
+     * Every requirement/bounded-context prose mention of a glossary term the source does not
+     * link to (issue #185): a requirement's {@code dcterms:description}/{@code
+     * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, and a
+     * bounded context's {@code arkddd:domainVision} checked against its {@code
+     * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
+     * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
+     * {@link LabelMentions} engine, so a text mention means the same thing in both places.
+     */
+    private List<UnlinkedMention> unlinkedMentions(TraceabilityGraph graph) {
+        Map<String, String> termLabels = graph.termLabels();
+        if (termLabels.isEmpty()) {
+            return List.of();
+        }
+        LabelMentions<String> matcher = LabelMentions.of(
+                termLabels.keySet().stream().sorted().toList(), termLabels::get);
+
+        List<UnlinkedMention> found = new ArrayList<>();
+        for (String requirementIri : graph.requirementIris()) {
+            Set<String> linked = new HashSet<>(graph.usedTerms(requirementIri));
+            for (String termIri : matcher.mentionedIn(graph.requirementProseTexts(requirementIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
+                }
+            }
+        }
+        for (String boundedContextIri : graph.boundedContextIris()) {
+            Set<String> linked = new HashSet<>(graph.linkedTerms(boundedContextIri));
+            for (String termIri : matcher.mentionedIn(graph.boundedContextProseTexts(boundedContextIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(
+                            boundedContextIri, termIri, termLabels.get(termIri), "ubiquitousLanguageTerm"));
+                }
+            }
+        }
+        return found;
+    }
+
     private String codesOrNone(TraceabilityGraph graph, List<String> iris) {
         if (iris.isEmpty()) {
             return "(none)";
@@ -152,5 +213,15 @@ public final class TraceabilityRenderer {
 
     private String handle(TraceabilityGraph graph, String iri) {
         return graph.identifierOf(iri).orElseGet(() -> prefixes.toCurie(iri));
+    }
+
+    /**
+     * @param sourceIri     the requirement or bounded context whose prose names the term
+     * @param termIri       the mentioned term
+     * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
+     * @param edgeLocalName the missing edge's local name ({@code usesTerm} or
+     *                      {@code ubiquitousLanguageTerm}), for the "no ... edge" message
+     */
+    private record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
     }
 }
