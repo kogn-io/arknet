@@ -5,19 +5,15 @@
 #  Prinzip: Closed-World-Assumption.
 #  Fehlende Pflichtfelder = Fehler in CI/CD, nicht "vielleicht woanders".
 #
-#  Loaded as SHAPES_RESOURCE by KognioRdfBoundedContextRepositoryFactory -
-#  the only consumer. Validates arknet:BoundedContext only: Aggregate and
-#  ContextRelationship shapes moved to parked/arknet-ddd-shapes.ttl (no BC
-#  ever creates those types, so they never fired here either - moving them
-#  out is a documentation fix, not a behaviour change). AnalysisRunShape
-#  was deleted outright, not parked, together with its arknet-core.ttl
-#  vocabulary (dead leftover, no code reference anywhere).
+#  Validates arkddd:BoundedContext only. Aggregate and ContextRelationship
+#  shapes live in parked/arknet-ddd-shapes.ttl (no active consumer yet).
 #
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
 ##############################################################################
 
 @prefix sh:     <http://www.w3.org/ns/shacl#> .
 @prefix arknet: <https://w3id.org/arknet/core#> .
+@prefix arkddd: <https://w3id.org/arknet/ddd#> .
 @prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix shapes: <https://w3id.org/arknet/shapes#> .
 
@@ -28,11 +24,11 @@
 
 shapes:BoundedContextShape
     a sh:NodeShape ;
-    sh:targetClass arknet:BoundedContext ;
+    sh:targetClass arkddd:BoundedContext ;
     sh:property shapes:BoundedContext-name ;
     sh:property shapes:BoundedContext-domainVision ;
     sh:property shapes:BoundedContext-hasAggregate ;
-    sh:property shapes:BoundedContext-subdomain ;
+    sh:property shapes:BoundedContext-partOf ;
     sh:property shapes:BoundedContext-ownedBy .
 
 shapes:BoundedContext-name
@@ -47,34 +43,34 @@ shapes:BoundedContext-name
 
 shapes:BoundedContext-domainVision
     a sh:PropertyShape ;
-    sh:path     arknet:domainVision ;
+    sh:path     arkddd:domainVision ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 10 ;
-    sh:message  "BoundedContext muss eine 'arknet:domainVision' haben (min. 10 Zeichen). Formuliere in einem Satz: Was leistet dieser Context?"@de ;
+    sh:message  "BoundedContext muss eine 'arkddd:domainVision' haben (min. 10 Zeichen). Formuliere in einem Satz: Was leistet dieser Context?"@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-hasAggregate
     a sh:PropertyShape ;
-    sh:path     arknet:hasAggregate ;
+    sh:path     arkddd:hasAggregate ;
     sh:minCount 1 ;
-    sh:class    <https://w3id.org/arknet/ddd#Aggregate> ;
-    sh:message  "BoundedContext sollte mindestens ein 'arknet:hasAggregate' haben (dessen Wert vom Typ arkddd:Aggregate ist)."@de ;
+    sh:class    arkddd:Aggregate ;
+    sh:message  "BoundedContext sollte mindestens ein 'arkddd:hasAggregate' haben (dessen Wert vom Typ arkddd:Aggregate ist)."@de ;
     sh:severity sh:Warning .
 
-shapes:BoundedContext-subdomain
+shapes:BoundedContext-partOf
     a sh:PropertyShape ;
-    sh:path     arknet:subdomain ;
+    sh:path     arkddd:partOf ;
     sh:maxCount 1 ;
-    sh:in       ( arknet:CoreDomain arknet:SupportingDomain arknet:GenericDomain ) ;
-    sh:message  "BoundedContext sollte 'arknet:subdomain' (CoreDomain | SupportingDomain | GenericDomain) haben."@de ;
+    sh:class    arkddd:Domain ;
+    sh:message  "BoundedContext sollte 'arkddd:partOf' (eine Domain oder Subdomain) haben."@de ;
     sh:severity sh:Warning .
 
 shapes:BoundedContext-ownedBy
     a sh:PropertyShape ;
-    sh:path     arknet:ownedBy ;
-    sh:message  "BoundedContext sollte 'arknet:ownedBy' (Team-Name) haben."@de ;
+    sh:path     arkddd:ownedBy ;
+    sh:message  "BoundedContext sollte 'arkddd:ownedBy' (Team-Name) haben."@de ;
     sh:severity sh:Warning .
 
 # END OF SHAPES

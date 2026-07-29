@@ -30,12 +30,11 @@
 #    Goal -> Requirement -> UseCase -> Command -> Aggregate -> BoundedContext
 #    Requirement -> plannedFor -> Milestone -> deliveredIn -> Release
 #
-#  Imports: arknet-core (Command, Aggregate, BoundedContext),
-#           arknet-process (Actor), OSLC RM, DOAP.
+#  Imports: arknet-ddd (BoundedContext), arknet-process (Actor), OSLC RM, DOAP.
 ##############################################################################
 
 @prefix arkreq:  <https://w3id.org/arknet/requirements#> .
-@prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkddd:  <https://w3id.org/arknet/ddd#> .
 @prefix arkproc: <https://w3id.org/arknet/process#> .
 @prefix oslc_rm: <http://open-services.net/ns/rm#> .
 @prefix doap:    <http://usefulinc.com/ns/doap#> .
@@ -54,7 +53,7 @@
 
 <https://w3id.org/arknet/requirements>
     a owl:Ontology ;
-    owl:imports      <https://w3id.org/arknet/core> ;
+    owl:imports      <https://w3id.org/arknet/ddd> ;
     owl:imports      <https://w3id.org/arknet/process> ;
     owl:imports      <http://open-services.net/ns/rm#> ;
     owl:imports      <http://usefulinc.com/ns/doap#> ;
@@ -164,7 +163,7 @@ arkreq:dependsOn a owl:ObjectProperty ;
 
 arkreq:scopedTo a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
-    rdfs:range  arknet:BoundedContext ;
+    rdfs:range  arkddd:BoundedContext ;
     rdfs:label  "scoped to"@en ;
     rdfs:comment "Der Bounded Context, in dem diese Anforderung realisiert wird."@de .
 
@@ -275,7 +274,7 @@ arkreq:realizedBy a owl:ObjectProperty ;
     rdfs:domain arkreq:UseCase ;
     rdfs:range  <https://w3id.org/arknet/ddd#Command> ;
     rdfs:label  "realized by"@en ;
-    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy. Sein Wertebereich, arkddd:Command, lebt in der geparkten, noch nicht implementierten parked/arknet-ddd.ttl."@de .
+    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy. Sein Wertebereich, arkddd:Command, lebt in der geparkten, noch nicht implementierten parked/arknet-ddd_parked.ttl."@de .
 
 arkreq:includesUseCase a owl:ObjectProperty ;
     rdfs:domain arkreq:UseCase ;
