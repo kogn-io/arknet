@@ -57,4 +57,12 @@ if [ -n "$REPORT_DIR" ]; then
   chown -R "$TARGET_UID:$TARGET_GID" "$REPORT_DIR"
 fi
 
+# project_export's backup dir (issue: project_export AccessDeniedException on
+# /.arknet/export) -- same reasoning as REPORT_DIR above.
+EXPORT_DIR="${ARKNET_EXPORT_DIR:-}"
+if [ -n "$EXPORT_DIR" ]; then
+  mkdir -p "$EXPORT_DIR"
+  chown -R "$TARGET_UID:$TARGET_GID" "$EXPORT_DIR"
+fi
+
 exec su-exec "$TARGET_UID:$TARGET_GID" java -jar app.jar "$@"
