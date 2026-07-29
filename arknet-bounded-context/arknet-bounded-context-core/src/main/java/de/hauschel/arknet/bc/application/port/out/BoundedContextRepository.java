@@ -60,7 +60,7 @@ public interface BoundedContextRepository {
      * {@link #findCurrentByCode}, derives {@code updated}, and calls this method with the head it
      * observed - a mismatch means the read was already stale, and the caller must re-read and
      * retry rather than silently discard the concurrent change (an
-     * {@code arknet:ubiquitousLanguageTerm} edge a concurrent {@code bc_link_term} had just
+     * {@code arkddd:ubiquitousLanguageTerm} edge a concurrent {@code bc_link_term} had just
      * added).
      *
      * <p><strong>The token guards funnel writers, not store-first edits.</strong>

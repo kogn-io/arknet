@@ -11,7 +11,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Driving port: link a bounded context to a glossary term of the ubiquitous language it names.
  *
  * <p>Backs the MVP tool {@code bc_link_term}. The edge
- * ({@code arknet:ubiquitousLanguageTerm}) is owned by the bounded-context component - that is
+ * ({@code arkddd:ubiquitousLanguageTerm}) is owned by the bounded-context component - that is
  * what keeps the dependency direction bounded-context -&gt; ubiquitous-language rather than the
  * other way round (issue #62), structurally the same choice requirements made for
  * {@code arkreq:usesTerm}.</p>

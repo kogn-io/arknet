@@ -226,7 +226,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<BoundedContext> stored =
-                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS);
+                KognioRdfBoundedContextRepositoryFactory.over(realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(BoundedContext::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
@@ -349,7 +349,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * this caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
      * nothing and lose neither edge. Before the fix, {@code linkTerm} read outside any transaction
      * and wrote back unconditionally, so the second writer silently dropped the first writer's
-     * {@code arknet:ubiquitousLanguageTerm} edge.
+     * {@code arkddd:ubiquitousLanguageTerm} edge.
      *
      * <p>The interleaving is pinned by the {@code beforeTransaction} hook - which fires exactly
      * where the funnel's compare-and-set transaction opens - rather than by real threads, which
@@ -395,7 +395,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             default -> throw new IllegalArgumentException("fake lookup: unknown term code " + termCode);
         };
         return new BoundedContextService(
-                KognioRdfBoundedContextRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT),
+                KognioRdfBoundedContextRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT),
                 new UuidResourceIdFactory(), termLookup);
     }
 
@@ -435,7 +435,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             // This service pins the #144 interleaving inside the transaction; nothing to do before.
         });
         BoundedContextRepository repository =
-                KognioRdfBoundedContextRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
+                KognioRdfBoundedContextRepositoryFactory.over(guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         TermLookup unusedTermLookup = (projectId, termCode) -> {
             throw new UnsupportedOperationException("not exercised by this test");
         };

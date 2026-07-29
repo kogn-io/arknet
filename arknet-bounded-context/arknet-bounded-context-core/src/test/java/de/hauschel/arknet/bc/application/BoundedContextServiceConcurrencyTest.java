@@ -39,7 +39,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Issue #176 (lost update): {@link BoundedContextService#linkTerm} used to read via
  * {@code findByCode} outside any transaction and write back via an unconditional
  * replace-by-identity {@code update}, so two racing {@code bc_link_term} calls on the same bounded
- * context silently lost one of the two {@code arknet:ubiquitousLanguageTerm} edges - the second
+ * context silently lost one of the two {@code arkddd:ubiquitousLanguageTerm} edges - the second
  * writer never saw the first one's edge and overwrote it without any conflict being reported.</p>
  *
  * <p>Both races are reproduced deterministically, without real threads: a {@link
