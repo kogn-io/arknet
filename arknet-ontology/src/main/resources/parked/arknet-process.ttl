@@ -66,20 +66,20 @@ arkproc:stateName a owl:DatatypeProperty ;
 
 arkproc:stateOf a owl:ObjectProperty ;
     rdfs:domain arkproc:State ;
-    rdfs:range  arknet:Aggregate ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Aggregate> ;
     rdfs:label  "state of"@en , "Zustand von"@de ;
     rdfs:comment "The aggregate this state belongs to."@en ,
                  "Das Aggregate, zu dem dieser Zustand gehoert."@de .
 
 arkproc:initialState a owl:ObjectProperty ;
-    rdfs:domain arknet:Aggregate ;
+    rdfs:domain <https://w3id.org/arknet/ddd#Aggregate> ;
     rdfs:range  arkproc:State ;
     rdfs:label  "initial state"@en ;
     rdfs:comment "The state an aggregate instance starts in."@en ,
                  "Der Zustand, in dem eine Aggregate-Instanz startet."@de .
 
 arkproc:terminalState a owl:ObjectProperty ;
-    rdfs:domain arknet:Aggregate ;
+    rdfs:domain <https://w3id.org/arknet/ddd#Aggregate> ;
     rdfs:range  arkproc:State ;
     rdfs:label  "terminal state"@en ;
     rdfs:comment "A state in which no further transitions occur; the aggregate's lifecycle ends here."@en ,
@@ -325,7 +325,7 @@ arkproc:belongsTo a owl:ObjectProperty ;
 
 arkproc:triggeredBy a owl:ObjectProperty ;
     rdfs:domain arkproc:Process ;
-    rdfs:range  arknet:Command ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Command> ;
     rdfs:label  "triggered by"@en , "ausgeloest durch"@de ;
     rdfs:comment "The command that starts this process."@en ,
                  "Das Command, das diesen Prozess startet."@de .
