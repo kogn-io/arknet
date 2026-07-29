@@ -1,14 +1,24 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  Process Ontology  ·  Version 0.1.0
+#  Process Ontology (parked)  ·  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/process#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Migrated from: dddpo.ttl (dddprocess.org)
 #
-#  Scope: Business processes, state machines, actors, business rules,
-#         outcomes. Imports arknet-core for DDD base concepts.
+#  Scope: Business processes, state machines, business rules, outcomes.
+#         Imports arknet-core for DDD base concepts.
+#
+#  The Actor taxonomy that used to open this file (Actor/HumanActor/
+#  SystemActor/actorRole) moved to arknet-actor.ttl - arknet-use-cases
+#  actually writes it, so per arknet-ontology/CLAUDE.md's rule it belongs in
+#  src/main/resources/, not here. Everything below still has no BC and no
+#  Java reference, so it stays parked. Both files share the process#
+#  namespace; arkproc:Step in particular predates and duplicates the live
+#  arkreq:Step (different properties entirely - stepId/stepName/stepOrder/
+#  performedBy here vs. position/stepText/stepRealises there) - reconcile
+#  the two before reviving this module, not after.
 ##############################################################################
 
 @prefix arkproc: <https://w3id.org/arknet/process#> .
@@ -29,43 +39,14 @@
 <https://w3id.org/arknet/process>
     a owl:Ontology ;
     owl:imports      <https://w3id.org/arknet/core> ;
-    dcterms:title    "arknet Process Ontology"@en ;
-    dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Akteure, Geschaeftsregeln und Outcomes fuer DDD."@de ;
-    dcterms:version  "0.1.0" ;
+    dcterms:title    "arknet Process Ontology (parked)"@en ;
+    dcterms:description "Fachliche Prozesse, Zustandsmaschinen, Geschaeftsregeln und Outcomes fuer DDD. Akteure siehe arknet-actor.ttl."@de ;
+    dcterms:version  "0.2.0" ;
     dcterms:created  "2026-03-23"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkproc" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
-    owl:versionInfo  "0.1.0" .
-
-
-##############################################################################
-#  1. ACTORS
-##############################################################################
-
-arkproc:Actor a owl:Class ;
-    rdfs:label "Actor"@en , "Akteur"@de ;
-    rdfs:comment "Person oder System, das an einem Prozess beteiligt ist."@de .
-
-arkproc:HumanActor a owl:Class ;
-    rdfs:subClassOf arkproc:Actor ;
-    rdfs:label "Human Actor"@en , "Menschlicher Akteur"@de ;
-    rdfs:comment "An actor representing a natural person who participates in the process."@en ,
-                 "Ein Akteur, der eine natuerliche Person repraesentiert, die am Prozess beteiligt ist."@de ;
-    skos:example "Kunde, Sachbearbeiter, Administrator" .
-
-arkproc:SystemActor a owl:Class ;
-    rdfs:subClassOf arkproc:Actor ;
-    rdfs:label "System Actor"@en , "Systemakteur"@de ;
-    rdfs:comment "An actor representing an external system or service that participates in the process."@en ,
-                 "Ein Akteur, der ein externes System oder einen externen Dienst repraesentiert, der am Prozess beteiligt ist."@de ;
-    skos:example "PaymentService, InventoryService, EmailService" .
-
-arkproc:actorRole a owl:DatatypeProperty ;
-    rdfs:domain arkproc:Actor ;
-    rdfs:range  xsd:string ;
-    rdfs:label  "actor role"@en , "Akteursrolle"@de ;
-    rdfs:comment "Fachliche Rolle im Bounded Context."@de .
+    owl:versionInfo  "0.2.0" .
 
 
 ##############################################################################
@@ -85,20 +66,20 @@ arkproc:stateName a owl:DatatypeProperty ;
 
 arkproc:stateOf a owl:ObjectProperty ;
     rdfs:domain arkproc:State ;
-    rdfs:range  arknet:Aggregate ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Aggregate> ;
     rdfs:label  "state of"@en , "Zustand von"@de ;
     rdfs:comment "The aggregate this state belongs to."@en ,
                  "Das Aggregate, zu dem dieser Zustand gehoert."@de .
 
 arkproc:initialState a owl:ObjectProperty ;
-    rdfs:domain arknet:Aggregate ;
+    rdfs:domain <https://w3id.org/arknet/ddd#Aggregate> ;
     rdfs:range  arkproc:State ;
     rdfs:label  "initial state"@en ;
     rdfs:comment "The state an aggregate instance starts in."@en ,
                  "Der Zustand, in dem eine Aggregate-Instanz startet."@de .
 
 arkproc:terminalState a owl:ObjectProperty ;
-    rdfs:domain arknet:Aggregate ;
+    rdfs:domain <https://w3id.org/arknet/ddd#Aggregate> ;
     rdfs:range  arkproc:State ;
     rdfs:label  "terminal state"@en ;
     rdfs:comment "A state in which no further transitions occur; the aggregate's lifecycle ends here."@en ,
@@ -214,7 +195,7 @@ arkproc:outcomeDescription a owl:DatatypeProperty ;
 
 arkproc:outcomeTriggers a owl:ObjectProperty ;
     rdfs:domain arkproc:Outcome ;
-    rdfs:range  arknet:DomainEvent ;
+    rdfs:range  <https://w3id.org/arknet/ddd#DomainEvent> ;
     rdfs:label   "outcome triggers"@en , "Outcome loest aus"@de ;
     rdfs:comment "Dieses Outcome loest ein Event aus."@de .
 
@@ -344,14 +325,14 @@ arkproc:belongsTo a owl:ObjectProperty ;
 
 arkproc:triggeredBy a owl:ObjectProperty ;
     rdfs:domain arkproc:Process ;
-    rdfs:range  arknet:Command ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Command> ;
     rdfs:label  "triggered by"@en , "ausgeloest durch"@de ;
     rdfs:comment "The command that starts this process."@en ,
                  "Das Command, das diesen Prozess startet."@de .
 
 arkproc:triggeredByEvent a owl:ObjectProperty ;
     rdfs:domain arkproc:Process ;
-    rdfs:range  arknet:DomainEvent ;
+    rdfs:range  <https://w3id.org/arknet/ddd#DomainEvent> ;
     rdfs:label   "triggered by event"@en , "ausgeloest durch Event"@de ;
     rdfs:comment "Prozess wird durch ein Event aus einem anderen Context gestartet."@de .
 
@@ -410,7 +391,7 @@ arkproc:hasOutcome a owl:ObjectProperty ;
 
 arkproc:produces a owl:ObjectProperty ;
     rdfs:domain arkproc:Process ;
-    rdfs:range  arknet:DomainEvent ;
+    rdfs:range  <https://w3id.org/arknet/ddd#DomainEvent> ;
     rdfs:label  "produces"@en , "erzeugt"@de ;
     rdfs:comment "A domain event produced as a side effect of this process."@en ,
                  "Ein Domain Event, das als Nebeneffekt dieses Prozesses erzeugt wird."@de .

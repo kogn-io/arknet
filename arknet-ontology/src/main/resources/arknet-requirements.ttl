@@ -3,7 +3,7 @@
 #  Requirements Ontology  :  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/requirements#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: Requirements Engineering (ISO/IEC/IEEE 29148) als Metamodell.
 #         Goals, funktionale und nicht-funktionale Requirements, Constraints,
@@ -62,7 +62,7 @@
     dcterms:description "Requirements Engineering nach ISO 29148: Goals, Requirements, Constraints, Use Cases und Release-Planung; OSLC-RM-aligned und mit der DDD-Schicht verknuepft."@de ;
     dcterms:version  "0.2.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkreq" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/requirements#" ;
     owl:versionInfo  "0.2.0" .
@@ -273,9 +273,9 @@ arkreq:supportingActor a owl:ObjectProperty ;
 arkreq:realizedBy a owl:ObjectProperty ;
     rdfs:subPropertyOf oslc_rm:implementedBy ;
     rdfs:domain arkreq:UseCase ;
-    rdfs:range  arknet:Command ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Command> ;
     rdfs:label  "realized by"@en ;
-    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy."@de .
+    rdfs:comment "Bruecke zur taktischen DDD-Schicht: dieser Use Case wird durch das angegebene Command umgesetzt. Sub-Property von oslc_rm:implementedBy. Sein Wertebereich, arkddd:Command, lebt in der geparkten, noch nicht implementierten parked/arknet-ddd.ttl."@de .
 
 arkreq:includesUseCase a owl:ObjectProperty ;
     rdfs:domain arkreq:UseCase ;
