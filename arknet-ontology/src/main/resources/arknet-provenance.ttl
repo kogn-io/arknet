@@ -79,7 +79,7 @@
     dcterms:description "arknet's PROV-O-based revision vocabulary: every model write through the shared write funnel produces one immutable revision and moves the resource's head pointer. The head doubles as the optimistic-concurrency token of a conditional write. A revision records that a resource was written, not the state that write produced."@en ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-26"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkprov" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/provenance#" ;
     owl:versionInfo  "0.1.0" .

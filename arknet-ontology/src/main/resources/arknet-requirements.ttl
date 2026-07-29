@@ -62,7 +62,7 @@
     dcterms:description "Requirements Engineering nach ISO 29148: Goals, Requirements, Constraints, Use Cases und Release-Planung; OSLC-RM-aligned und mit der DDD-Schicht verknuepft."@de ;
     dcterms:version  "0.2.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkreq" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/requirements#" ;
     owl:versionInfo  "0.2.0" .

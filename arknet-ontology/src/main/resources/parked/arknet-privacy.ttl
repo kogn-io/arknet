@@ -37,7 +37,7 @@
     dcterms:description "DSGVO / Privacy-by-Design als OWL: Datenkategorien, Rechtsgrundlagen, Verarbeitungszwecke, Betroffenenrechte, technische Massnahmen und Datenschutz-Folgenabschaetzung."@de ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
-    dcterms:rights   "Apache-2.0" ;
+    dcterms:rights   "CC-BY-4.0" ;
     dcterms:source   "ddd-forge.ttl (ddd-forge.org), TEIL 4" ;
     vann:preferredNamespacePrefix "arkpriv" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/privacy#" ;
