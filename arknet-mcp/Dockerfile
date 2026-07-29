@@ -101,6 +101,21 @@ VOLUME /data/report
 # path as the -v/volumes source for /data/report, e.g.
 # -e ARKNET_REPORT_HOST_DIR=~/.arknet/report. Maps to arknet.report.host-dir.
 
+# project_export's backup location (arknet.export.dir). Without this, the
+# fallback export dir defaults to ${user.home}, which resolves to the
+# container's root filesystem ("/") for the uid the JVM runs as -- every
+# project_export call would fail with AccessDeniedException on /.arknet/export
+# instead of writing anywhere:
+#     -v ~/.arknet/export:/data/export
+ENV ARKNET_EXPORT_DIR=/data/export
+RUN mkdir -p /data/export && chown -R arknet:arknet /data/export
+VOLUME /data/export
+
+# Same host-path blind spot as ARKNET_REPORT_HOST_DIR above, for the same
+# reason: pass it at `docker run`/compose time naming the same path as the
+# -v/volumes source for /data/export, e.g. -e ARKNET_EXPORT_HOST_DIR=~/.arknet/export.
+# Maps to arknet.export.host-dir.
+
 # No USER here: entrypoint.sh needs root to reconcile arknet's uid/gid with the
 # mounted store's owner (optionally via PUID/PGID) and chown accordingly, then
 # drops to arknet itself via su-exec before exec-ing the JVM.

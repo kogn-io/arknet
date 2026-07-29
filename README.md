@@ -56,12 +56,14 @@ docker run --rm -d --name arknet-mcp \
   -v ~/.arknet/rdf:/data/rdf \
   -v ~/.arknet/report:/data/report \
   -e ARKNET_REPORT_HOST_DIR=$HOME/.arknet/report \
+  -v ~/.arknet/export:/data/export \
+  -e ARKNET_EXPORT_HOST_DIR=$HOME/.arknet/export \
   ghcr.io/kogn-io/arknet:latest
 ```
 
 Read the note under Option B on why the port publish must stay bound to
-`127.0.0.1` and what `ARKNET_REPORT_HOST_DIR` is for -- both apply here just
-the same.
+`127.0.0.1` and what `ARKNET_REPORT_HOST_DIR`/`ARKNET_EXPORT_HOST_DIR` are for
+-- both apply here just the same.
 
 #### Option B: Docker, built from source
 
@@ -76,6 +78,8 @@ docker run --rm -d --name arknet-mcp \
   -v ~/.arknet/rdf:/data/rdf \
   -v ~/.arknet/report:/data/report \
   -e ARKNET_REPORT_HOST_DIR=$HOME/.arknet/report \
+  -v ~/.arknet/export:/data/export \
+  -e ARKNET_EXPORT_HOST_DIR=$HOME/.arknet/export \
   arknet-mcp
 ```
 
@@ -94,7 +98,12 @@ HTML report -- without it, the report has nowhere to go and its write fails.
 (`arknet.report.host-dir`): the container cannot discover its own bind mount's
 host-side path on its own, so without this the digest's `# HTML report: ...`
 line would name the container-internal `/data/report`, which the calling
-agent -- running outside the container -- cannot reach (issue #160).
+agent -- running outside the container -- cannot reach (issue #160). The third
+volume (`arknet.export.dir`) is where `project_export` writes its backups --
+without it, the fallback export dir defaults to the container's root
+filesystem and every `project_export` call fails with an
+`AccessDeniedException`. `ARKNET_EXPORT_HOST_DIR` (`arknet.export.host-dir`)
+mirrors `ARKNET_REPORT_HOST_DIR` for the same reason.
 
 The container adopts that volume's existing owner automatically at startup (a
 fresh, container-only volume falls back to the image's own non-root user) --
