@@ -28,7 +28,7 @@
 #              Hausstil). ADRs tragen zusaetzlich dcterms:identifier (Nummer),
 #              da ADRs konventionell nummeriert sind (wie Requirements).
 #
-#  Imports: arknet-core (BoundedContext, Domain, name, description),
+#  Imports: arknet-ddd (BoundedContext), arknet-core (name, description via arknet-ddd),
 #           arknet-requirements (Requirement).
 ##############################################################################
 
