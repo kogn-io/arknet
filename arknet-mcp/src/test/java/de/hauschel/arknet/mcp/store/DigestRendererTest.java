@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp.store;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +39,7 @@ class DigestRendererTest {
                 iri(TERM + "login", RDF_TYPE, SKOS + "Concept"),
                 lit(TERM + "login", SKOS + "prefLabel", "Anmeldung")));
 
-        String digest = renderer.render(new ProjectId("noistill"), snapshot);
+        String digest = renderer.render(new ProjectId("noistill"), Optional.empty(), snapshot);
 
         assertThat(digest).contains("# Project noistill -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
@@ -66,7 +67,7 @@ class DigestRendererTest {
                 lit(opaqueIri, TITLE, "Login"),
                 lit(opaqueIri, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("noistill"), snapshot);
+        String digest = renderer.render(new ProjectId("noistill"), Optional.empty(), snapshot);
 
         assertThat(digest).doesNotContain(opaqueIri);
         assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
@@ -85,10 +86,38 @@ class DigestRendererTest {
                 lit(subject, TITLE, "Export"),
                 iri(subject, ARKREQ + "refinesTerm", danglingTarget)));
 
-        String digest = renderer.render(new ProjectId("ws"), snapshot);
+        String digest = renderer.render(new ProjectId("ws"), Optional.empty(), snapshot);
 
         assertThat(digest).contains("dangling reference(s)");
         assertThat(digest).contains(subject).contains(danglingTarget).contains("(missing)");
+    }
+
+    /**
+     * Issue #187: a project registered with a human-readable label must show that label in the
+     * header, with the raw id kept alongside - not the id alone, and not the label instead of the
+     * id (the id stays the write target and must remain visible for the report path etc.).
+     */
+    @Test
+    void headerNamesTheRegisteredLabelAlongsideTheId() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of());
+
+        String digest = renderer.render(
+                new ProjectId("ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8"), Optional.of("arknet-demo"), snapshot);
+
+        assertThat(digest).contains("# Project arknet-demo (id: ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8) --");
+    }
+
+    /**
+     * No label means no registry entry for this id - the header falls back to the raw id exactly
+     * as it did before this lookup existed, rather than printing an empty or placeholder name.
+     */
+    @Test
+    void headerFallsBackToTheRawIdWhenNoLabelIsAvailable() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of());
+
+        String digest = renderer.render(new ProjectId("kognio-chat-app"), Optional.empty(), snapshot);
+
+        assertThat(digest).contains("# Project kognio-chat-app --");
     }
 
     private static Triple iri(String subject, String predicate, String objectIri) {

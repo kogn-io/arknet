@@ -76,6 +76,22 @@ class ProjectServiceTest {
         assertTrue(ex.getMessage().contains("project_add"));
     }
 
+    /**
+     * Issue #187: {@code store_overview} looks a resolved {@link ProjectId} back up to show the
+     * registered label instead of the raw id - this is that lookup's driving-port surface.
+     */
+    @Test
+    void findByIdReturnsTheRegisteredProject() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+
+        assertEquals(Optional.of(project), service.findById(project.id()));
+    }
+
+    @Test
+    void findByIdOnAnUnregisteredIdReturnsEmpty() {
+        assertEquals(Optional.empty(), service.findById(new ProjectId("never-registered")));
+    }
+
     @Test
     void attachAddsASecondAnchorAndBothAnchorsThenResolveToTheSameProject() {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));

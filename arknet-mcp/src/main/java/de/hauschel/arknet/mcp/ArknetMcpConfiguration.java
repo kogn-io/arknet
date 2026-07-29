@@ -507,16 +507,22 @@ public class ArknetMcpConfiguration {
      * host-reachable equivalent of that directory when it is a container-internal mount point
      * the calling agent cannot reach directly (issue #160); unset on the non-containerized path,
      * where {@code fallbackReportDir} is already host-reachable.
+     *
+     * <p>{@code projectService} is passed as {@link de.hauschel.arknet.prj.application.port.in.FindProject},
+     * not {@link ProjectRegistry} directly: the digest and HTML headers name the resolved
+     * project's registered label instead of its raw id (issue #187) by borrowing the project
+     * hexagon's driving port, the same gateway role ADR-008 grants any other in-adapter of a
+     * neighbour bounded context.</p>
      */
     @Bean
     StoreReportTools storeReportTools(
             final StoreReader storeReader, final Prefixes prefixes, final ModelViews modelViews,
-            final ProjectResolver projectResolver,
+            final ProjectResolver projectResolver, final ProjectService projectService,
             @Value("${arknet.report.dir:${user.dir}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
                 storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, projectResolver,
-                fallbackReportDir, reportHostDir);
+                projectService, fallbackReportDir, reportHostDir);
     }
 
     /**
