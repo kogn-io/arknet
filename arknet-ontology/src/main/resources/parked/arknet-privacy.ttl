@@ -3,7 +3,7 @@
 #  Privacy / GDPR Ontology  ·  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/privacy#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Migrated from: ddd-forge.ttl (ddd-forge.org), TEIL 4 "DSGVO / Privacy by
 #                 Design". Re-licensed by the sole author into arknet.

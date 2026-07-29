@@ -3,7 +3,7 @@
 #  Architecture Ontology  :  Version 0.1.0
 #
 #  Namespace  : https://w3id.org/arknet/architecture#
-#  License    : Apache-2.0
+#  License    : CC-BY-4.0
 #
 #  Scope: Architecture Description nach ISO/IEC/IEEE 42010 als Metamodell:
 #         Architecture, ArchitectureDescription, Stakeholder, Concern,
@@ -85,7 +85,7 @@ arkarch:describes a owl:ObjectProperty ;
 
 arkarch:hasDomain a owl:ObjectProperty ;
     rdfs:domain arkarch:Architecture ;
-    rdfs:range  arknet:Domain ;
+    rdfs:range  <https://w3id.org/arknet/ddd#Domain> ;
     rdfs:label  "has domain"@en ;
     rdfs:comment "Verwurzelt die Architektur in der strategischen DDD-Schicht (Core)."@de .
 
