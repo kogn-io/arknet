@@ -12,10 +12,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
@@ -41,22 +41,20 @@ public final class Glossary {
 
     private final Map<ResourceId, Term> byId;
     private final List<Term> all;
-    private final List<Entry> entries;
+    private final LabelMentions<Term> mentions;
 
     private Glossary(final List<Term> terms) {
         final Map<ResourceId, Term> ids = new LinkedHashMap<>();
-        final List<Entry> matchers = new ArrayList<>();
         for (final Term term : terms) {
-            if (ids.putIfAbsent(term.id().value(), term) == null) {
-                matchers.add(new Entry(term, pattern(term.prefLabel())));
-            }
+            ids.putIfAbsent(term.id().value(), term);
         }
-        matchers.sort(Comparator
-                .comparingInt((Entry entry) -> entry.term().prefLabel().length()).reversed()
-                .thenComparing(entry -> entry.term().code().value()));
         this.byId = Map.copyOf(ids);
         this.all = List.copyOf(ids.values());
-        this.entries = List.copyOf(matchers);
+        // Sorted by code so that two same-length labels break their matching tie
+        // deterministically - LabelMentions.of only guarantees a stable sort of what it is given.
+        final List<Term> forMatching = new ArrayList<>(ids.values());
+        forMatching.sort(Comparator.comparing(term -> term.code().value()));
+        this.mentions = LabelMentions.of(forMatching, Term::prefLabel);
     }
 
     /**
@@ -123,20 +121,20 @@ public final class Glossary {
     public RichText markUp(final String text, final Set<ResourceId> linked) {
         Objects.requireNonNull(text, "text");
         final Set<ResourceId> edges = linked == null ? Set.of() : linked;
-        final List<Mention> mentions = mentions(text);
-        if (mentions.isEmpty()) {
+        final List<LabelMentions.Mention<Term>> found = mentions.in(text);
+        if (found.isEmpty()) {
             return RichText.plain(text);
         }
         final List<Span> spans = new ArrayList<>();
         int cursor = 0;
-        for (final Mention mention : mentions) {
+        for (final LabelMentions.Mention<Term> mention : found) {
             if (mention.start() > cursor) {
                 spans.add(new Span.Plain(text.substring(cursor, mention.start())));
             }
             final String matched = text.substring(mention.start(), mention.end());
-            final String iri = mention.term().id().value().value();
-            final String code = mention.term().code().value();
-            spans.add(edges.contains(mention.term().id().value())
+            final String iri = mention.item().id().value().value();
+            final String code = mention.item().code().value();
+            spans.add(edges.contains(mention.item().id().value())
                     ? new Span.TermLink(matched, iri, code)
                     : new Span.TermGap(matched, iri, code));
             cursor = mention.end();
@@ -155,74 +153,8 @@ public final class Glossary {
      * @return the mentioned identities, in first-appearance order
      */
     public Set<ResourceId> mentionedIn(final Collection<String> texts) {
-        if (texts == null) {
-            return Set.of();
-        }
-        final Set<ResourceId> found = new LinkedHashSet<>();
-        for (final String text : texts) {
-            if (text != null) {
-                for (final Mention mention : mentions(text)) {
-                    found.add(mention.term().id().value());
-                }
-            }
-        }
-        return found;
-    }
-
-    /**
-     * Every mention in one text, left to right and non-overlapping.
-     *
-     * <p>Longer labels are tried first, so a two-word term wins over a one-word term nested
-     * inside it; of two mentions that overlap, the one starting earlier survives. Without that
-     * an overlapping pair would produce spans whose concatenation no longer reproduces the
-     * text - the one property that makes marking up safe.</p>
-     */
-    private List<Mention> mentions(final String text) {
-        final List<Mention> hits = new ArrayList<>();
-        for (final Entry entry : entries) {
-            final Matcher matcher = entry.pattern().matcher(text);
-            while (matcher.find()) {
-                hits.add(new Mention(matcher.start(), matcher.end(), entry.term()));
-            }
-        }
-        hits.sort(Comparator.comparingInt(Mention::start)
-                .thenComparing(Comparator.comparingInt(Mention::end).reversed()));
-        final List<Mention> kept = new ArrayList<>();
-        int taken = 0;
-        for (final Mention hit : hits) {
-            if (hit.start() >= taken) {
-                kept.add(hit);
-                taken = hit.end();
-            }
-        }
-        return kept;
-    }
-
-    /**
-     * A whole-word, case-insensitive matcher for one label.
-     *
-     * <p>{@link Pattern#UNICODE_CHARACTER_CLASS} is what makes {@code \b} treat umlauts as word
-     * characters; without it {@code Uebergabe} would have a "word boundary" right after the
-     * space before it and never match. The boundary assertion is only added on a side where the
-     * label itself starts or ends with a word character - {@code \b} before a label like
-     * {@code (draft)} would demand the opposite of what is meant and match nothing.</p>
-     */
-    private static Pattern pattern(final String label) {
-        final String prefix = isWordChar(label.charAt(0)) ? "\\b" : "";
-        final String suffix = isWordChar(label.charAt(label.length() - 1)) ? "\\b" : "";
-        return Pattern.compile(prefix + Pattern.quote(label) + suffix,
-                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
-    }
-
-    private static boolean isWordChar(final char c) {
-        return Character.isLetterOrDigit(c) || c == '_';
-    }
-
-    /** One term plus the compiled matcher for its label - compiled once per report, not per text. */
-    private record Entry(Term term, Pattern pattern) {
-    }
-
-    /** One occurrence of a term's label in a text, as a half-open character range. */
-    private record Mention(int start, int end, Term term) {
+        return mentions.mentionedIn(texts).stream()
+                .map(term -> term.id().value())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 }

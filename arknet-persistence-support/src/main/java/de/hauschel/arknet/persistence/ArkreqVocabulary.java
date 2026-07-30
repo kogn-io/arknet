@@ -5,10 +5,11 @@ package de.hauschel.arknet.persistence;
 
 /**
  * The absolute IRIs of the {@code arkreq:} object properties that carry cross-resource edges in
- * the store, plus the type IRIs the traceability traversal tests those edges' endpoints against,
- * as Java {@code String} constants - the single source of truth shared by the code that
- * <em>writes</em> them (the {@code *-adapter-kogniordf} out-adapters) and the code that
- * <em>traverses</em> them ({@code arknet-mcp}'s traceability read path,
+ * the store, plus the one literal-valued property ({@code arkreq:acceptanceCriterion}) whose text
+ * the same reader scans, plus the type IRIs the traceability traversal tests those edges'
+ * endpoints against, as Java {@code String} constants - the single source of truth shared by the
+ * code that <em>writes</em> them (the {@code *-adapter-kogniordf} out-adapters) and the code that
+ * <em>reads</em> them ({@code arknet-mcp}'s traceability read path,
  * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}).
  *
  * <p><strong>Why here, and why this is technology, not domain vocabulary.</strong> These are RDF
@@ -30,10 +31,10 @@ package de.hauschel.arknet.persistence;
  * "orphans"). Naming each IRI once here removes that failure mode - a rename now touches one Java
  * constant (plus the {@code .ttl}).</p>
  *
- * <p>Scope is deliberately narrow: only the object-property predicates and the type IRIs the
- * traceability graph traverses/tests live here. Single-adapter predicates ({@code arkreq:status},
- * {@code arkreq:priority}, ...) are not cross-module-duplicated in the same way and stay with
- * their one owner.</p>
+ * <p>Scope is deliberately narrow: only the predicates and type IRIs the traceability graph
+ * traverses, reads or tests - whether traversed as an edge or merely read as a literal - live
+ * here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
+ * cross-module-duplicated in the same way and stay with their one owner.</p>
  */
 public final class ArkreqVocabulary {
 
@@ -57,6 +58,9 @@ public final class ArkreqVocabulary {
 
     /** {@code arkreq:stepRealises} - Step -&gt; the Requirement it realises. */
     public static final String STEP_REALISES = NAMESPACE + "stepRealises";
+
+    /** {@code arkreq:acceptanceCriterion} - Requirement -&gt; one testable "Done when ..." criterion. */
+    public static final String ACCEPTANCE_CRITERION = NAMESPACE + "acceptanceCriterion";
 
     /** {@code arkreq:FunctionalRequirement} - the type of a functional requirement. */
     public static final String FUNCTIONAL_REQUIREMENT_TYPE = NAMESPACE + "FunctionalRequirement";

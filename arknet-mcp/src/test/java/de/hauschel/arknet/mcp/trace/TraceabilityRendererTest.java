@@ -25,20 +25,29 @@ class TraceabilityRendererTest {
 
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
+    private static final String ARKDDD = "https://w3id.org/arknet/ddd#";
     private static final String SKOS = "http://www.w3.org/2004/02/skos/core#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String TITLE = "http://purl.org/dc/terms/title";
+    private static final String DESCRIPTION = "http://purl.org/dc/terms/description";
     private static final String PREF_LABEL = SKOS + "prefLabel";
     private static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
     private static final String USES_TERM = ARKREQ + "usesTerm";
     private static final String MAIN_STEP = ARKREQ + "mainStep";
     private static final String STEP_REALISES = ARKREQ + "stepRealises";
+    private static final String DOMAIN_VISION = ARKDDD + "domainVision";
+    private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
 
     private static final String FR_1 = ID + "fr-1";
     private static final String FR_2 = ID + "fr-2";
+    private static final String FR_3 = ID + "fr-3";
     private static final String TERM_1 = ID + "term-1";
+    private static final String TERM_8 = ID + "term-8";
+    private static final String TERM_9 = ID + "term-9";
+    private static final String TERM_10 = ID + "term-10";
     private static final String STEP_1 = ID + "step-1";
     private static final String UC_1 = ID + "uc-1";
+    private static final String BC_2 = ID + "bc-2";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
     private static final ProjectId WORKSPACE = new ProjectId("noistill");
@@ -69,6 +78,65 @@ class TraceabilityRendererTest {
         assertThat(report).contains("FR-2");
         assertThat(report).contains("## Terms never referenced (0)");
         assertThat(report).contains("- none");
+        assertThat(report).contains("## Mentioned in text but not linked (0)");
+    }
+
+    /**
+     * FR-3's description names "Kunde" (TERM-9) without a {@code usesTerm} edge, and BC-2's
+     * domain vision names "Bestellung" (TERM-8) without a {@code ubiquitousLanguageTerm} edge -
+     * exactly the misleading gap issue #185 closes: today's two lists would call TERM-8/TERM-9
+     * orphaned even though the text is using them.
+     */
+    @Test
+    void orphanCheckListsMentionsThatNameATermWithoutTheEdgeToBackItUp() {
+        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot());
+
+        String report = renderer.orphanCheck(WORKSPACE, graph);
+
+        assertThat(report).contains("## Mentioned in text but not linked (2)");
+        assertThat(report).contains("FR-3 mentions \"Kunde\" (TERM-9) -- no usesTerm edge");
+        assertThat(report).contains("BC-2 mentions \"Bestellung\" (TERM-8) -- no ubiquitousLanguageTerm edge");
+    }
+
+    /**
+     * A term linked only through a bounded context's ubiquitous language must not show up as
+     * "never referenced" - {@code arkddd:ubiquitousLanguageTerm} is as much a reference as
+     * {@code arkreq:usesTerm} (issue #185).
+     */
+    @Test
+    void orphanCheckDoesNotCountATermLinkedOnlyViaTheBoundedContextAsOrphaned() {
+        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot());
+
+        String report = renderer.orphanCheck(WORKSPACE, graph);
+
+        assertThat(report).doesNotContain("TERM-10");
+    }
+
+    private static StoreSnapshot unlinkedMentionFixtureSnapshot() {
+        return StoreSnapshot.of(List.of(
+                iri(FR_3, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_3, TITLE, "Bestandsdaten"),
+                lit(FR_3, IDENTIFIER, "FR-3"),
+                lit(FR_3, DESCRIPTION, "Der Kunde sieht seine Bestandsdaten ein."),
+
+                iri(TERM_9, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_9, PREF_LABEL, "Kunde"),
+                lit(TERM_9, IDENTIFIER, "TERM-9"),
+
+                iri(TERM_8, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_8, PREF_LABEL, "Bestellung"),
+                lit(TERM_8, IDENTIFIER, "TERM-8"),
+
+                // Linked via ubiquitousLanguageTerm but never named in the vision - must stay
+                // invisible to the unlinked-mention check and must not be reported as orphaned.
+                iri(TERM_10, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_10, PREF_LABEL, "Vertrag"),
+                lit(TERM_10, IDENTIFIER, "TERM-10"),
+
+                iri(BC_2, RDF_TYPE, ARKDDD + "BoundedContext"),
+                lit(BC_2, IDENTIFIER, "BC-2"),
+                lit(BC_2, DOMAIN_VISION, "Wir verwalten die Bestellung."),
+                iri(BC_2, UBIQUITOUS_LANGUAGE_TERM, TERM_10)));
     }
 
     /**
