@@ -139,17 +139,22 @@ class RequirementServiceConcurrencyTest {
     /**
      * A read-modify-write that keeps losing the race on every single attempt (a repository whose
      * {@code compareAndUpdate} always reports a conflict) must fail loudly with {@link
-     * RequirementConcurrentlyModifiedException} instead of looping forever.
+     * RequirementConcurrentlyModifiedException} instead of looping forever - and must actually have
+     * retried {@link RequirementService#MAX_RETRY_ATTEMPTS} times rather than giving up on the very
+     * first attempt, which a stray {@code assertThrows} alone would not catch (a retry loop
+     * accidentally removed down to a single try would still throw here).
      */
     @Test
     void linkTermGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
+        AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
         RequirementService underTest =
-                new RequirementService(new AlwaysConflictingRepository(store), resourceIdFactory,
-                        termLookup, UNUSED_SCHEMA_SOURCE);
+                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
 
         assertThrows(RequirementConcurrentlyModifiedException.class,
                 () -> underTest.linkTerm(WS, code, "TERM-1"));
+
+        assertEquals(RequirementService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }
 
     /**
@@ -306,9 +311,14 @@ class RequirementServiceConcurrencyTest {
     private static final class AlwaysConflictingRepository implements RequirementRepository {
 
         private final RequirementRepository delegate;
+        private int compareAndUpdateAttempts;
 
         AlwaysConflictingRepository(RequirementRepository delegate) {
             this.delegate = delegate;
+        }
+
+        int compareAndUpdateAttempts() {
+            return compareAndUpdateAttempts;
         }
 
         @Override
@@ -318,6 +328,7 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
+            compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new de.hauschel.arknet.req.domain.RequirementNotFoundException(

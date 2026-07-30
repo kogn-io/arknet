@@ -84,6 +84,15 @@ class RequirementMcpToolsTest {
                         null, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
+                        stub, null, stub, stub, stub, stub, stub, resolveTerms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, null, stub, stub, stub, stub, resolveTerms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
                         stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(

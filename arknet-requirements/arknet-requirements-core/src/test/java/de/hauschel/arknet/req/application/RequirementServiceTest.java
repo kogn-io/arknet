@@ -65,16 +65,37 @@ class RequirementServiceTest {
     }
 
     @Test
-    void addAssignsFirstFunctionalCodeAndProposedStatus() {
+    void addAssignsFirstFunctionalCode() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
                 null, null, null, List.of("Done when it works")));
 
         assertEquals(new RequirementCode("FR-1"), added.code());
+    }
+
+    @Test
+    void addSetsProposedStatusByDefault() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
+                null, null, null, List.of("Done when it works")));
+
+        assertEquals(RequirementStatus.PROPOSED, added.status());
+    }
+
+    /**
+     * Every field {@code add} was given comes back unchanged on the returned {@link Requirement}
+     * and is what a subsequent read from the repository sees too - one fact (faithful roundtrip
+     * of the supplied fields), asserted from both ends.
+     */
+    @Test
+    void addPersistsAllSuppliedFields() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
+                null, null, null, List.of("Done when it works")));
+
         assertEquals("User can log in", added.title());
         assertEquals("The system shall let a registered user authenticate.", added.description());
         assertEquals(RequirementType.FUNCTIONAL, added.type());
-        assertEquals(RequirementStatus.PROPOSED, added.status());
         assertEquals(List.of("Done when it works"), added.acceptanceCriteria());
         assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
     }
