@@ -20,6 +20,7 @@ import java.util.TreeSet;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
@@ -53,24 +54,16 @@ public final class TraceabilityGraph {
 
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
-    private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
     private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
     private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
     private static final String SKOS_PREF_LABEL = SKOS_NAMESPACE + "prefLabel";
 
-    // Literal-valued predicates whose text is scanned for unlinked glossary mentions (issue
-    // #185). Unlike the arkreq: object properties below, these are not centralised in {@code
-    // ArkreqVocabulary} - like DCTERMS_TITLE/DCTERMS_IDENTIFIER above, a literal predicate this
-    // class merely reads (never traverses as a graph edge) follows the same established local
-    // convention rather than growing that shared vocabulary class.
-    private static final String ACCEPTANCE_CRITERION = ARKREQ_NAMESPACE + "acceptanceCriterion";
-    private static final String DOMAIN_VISION = ARKDDD_NAMESPACE + "domainVision";
-
-    // The traversed arkreq: object-property IRIs and the type IRIs below come from the single
-    // shared source of truth (arknet-persistence-support), the very same constants the
-    // requirements/ubiquitous-language/use-cases out-adapters serialize them with - so a
+    // The traversed arkreq: object-property IRIs, the literal-valued arkreq:acceptanceCriterion/
+    // arkddd:domainVision predicates and the type IRIs below come from the single shared source
+    // of truth (arknet-persistence-support), the very same constants the requirements/
+    // bounded-context/ubiquitous-language/use-cases out-adapters serialize them with - so a
     // predicate or type rename cannot silently desync the write side from this read-side
     // traversal (issue #134).
     private static final String USES_TERM = ArkreqVocabulary.USES_TERM;
@@ -79,11 +72,13 @@ public final class TraceabilityGraph {
     private static final String MAIN_STEP = ArkreqVocabulary.MAIN_STEP;
     private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
+    private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
+    private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
-    // arkddd:ubiquitousLanguageTerm (BoundedContext -> Term) is the bounded-context analogue of
-    // arkreq:usesTerm above, but arkddd: has no ArkreqVocabulary-style shared constants class of
-    // its own yet - declared locally rather than growing ArkreqVocabulary with a foreign
-    // namespace's predicate.
+    // arkddd:ubiquitousLanguageTerm (BoundedContext -> Term) and arkddd:BoundedContext below are,
+    // unlike arkreq:acceptanceCriterion/arkddd:domainVision above, used only within this class -
+    // ArkdddVocabulary's scope is deliberately limited to predicates duplicated across modules
+    // (see its javadoc), so these two stay local rather than growing that shared class further.
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD_NAMESPACE + "ubiquitousLanguageTerm";
 
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;

@@ -87,8 +87,9 @@ public final class TraceabilityMcpTools {
 
     @McpTool(name = "impact_analysis",
             description = "What is transitively affected if the given resource changes: follows"
-                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises backwards (who references"
-                    + " this) to every reachable requirement, term or use case. The id is a CURIE (e.g."
+                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises and"
+                    + " arkddd:ubiquitousLanguageTerm backwards (who references this) to every reachable"
+                    + " requirement, term, use case or bounded context. The id is a CURIE (e.g."
                     + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
                     + " via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
