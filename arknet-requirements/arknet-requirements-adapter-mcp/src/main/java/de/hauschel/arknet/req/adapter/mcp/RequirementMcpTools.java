@@ -17,13 +17,13 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
-import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -90,7 +90,7 @@ public final class RequirementMcpTools {
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
     private final GetRequirement getRequirement;
-    private final SetRequirementStatus setRequirementStatus;
+    private final AcceptRequirement acceptRequirement;
     private final LinkTerm linkTerm;
     private final UpdateRequirement updateRequirement;
     private final GetRequirementSchema getRequirementSchema;
@@ -104,7 +104,7 @@ public final class RequirementMcpTools {
      * @param addRequirement        in-port backing {@code req_add}
      * @param listRequirements      in-port backing {@code req_list}
      * @param getRequirement        in-port backing {@code req_get}
-     * @param setRequirementStatus  in-port backing {@code req_set_status}
+     * @param acceptRequirement     in-port backing {@code req_set_status}
      * @param linkTerm              in-port backing {@code req_link_term}
      * @param updateRequirement     in-port backing {@code req_update}
      * @param getRequirementSchema  in-port backing {@code req_schema}
@@ -116,7 +116,7 @@ public final class RequirementMcpTools {
             final AddRequirement addRequirement,
             final ListRequirements listRequirements,
             final GetRequirement getRequirement,
-            final SetRequirementStatus setRequirementStatus,
+            final AcceptRequirement acceptRequirement,
             final LinkTerm linkTerm,
             final UpdateRequirement updateRequirement,
             final GetRequirementSchema getRequirementSchema,
@@ -125,7 +125,7 @@ public final class RequirementMcpTools {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
-        this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
+        this.acceptRequirement = Objects.requireNonNull(acceptRequirement, "acceptRequirement");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
@@ -241,7 +241,7 @@ public final class RequirementMcpTools {
     }
 
     @McpTool(name = "req_set_status", description = "Change the lifecycle status of a requirement.")
-    public String setStatus(
+    public String accept(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
             @McpToolParam(description = "Target status: PROPOSED or ACCEPTED") final String status,
@@ -254,9 +254,16 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final RequirementCode code = new RequirementCode(id);
+        // The requirements lifecycle permits exactly one transition (issue #190): the tool's
+        // external "status" parameter is kept for API stability, but AcceptRequirement itself no
+        // longer takes a target status - only ACCEPTED can ever legally result from this call.
         final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
-        final Requirement updated =
-                setRequirementStatus.setStatus(projectId, code, requirementStatus);
+        if (requirementStatus != RequirementStatus.ACCEPTED) {
+            throw new IllegalArgumentException(
+                    "req_set_status only supports transitioning a requirement to ACCEPTED, not "
+                            + requirementStatus);
+        }
+        final Requirement updated = acceptRequirement.accept(projectId, code);
         return format(projectId, updated);
     }
 

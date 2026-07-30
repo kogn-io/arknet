@@ -13,13 +13,13 @@ import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
-import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
@@ -49,13 +49,14 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@code N} is one above the highest running number currently used by that type in the target
  * project (numbering is independent per type and per project). New requirements start
  * {@link RequirementStatus#PROPOSED}. The only advancing status transition is
- * {@code PROPOSED -> ACCEPTED}; setting the status a requirement already has is a no-op, and
- * reverting an accepted requirement is rejected. Linking a glossary term is idempotent and
- * independent of the status lifecycle - terms may be linked to a requirement in any status.</p>
+ * {@code PROPOSED -> ACCEPTED} - see {@link Requirement#accept()}, which owns that rule (issue
+ * #190); this service only threads it through the read-modify-write round trip. Linking a
+ * glossary term is idempotent and independent of the status lifecycle - terms may be linked to a
+ * requirement in any status.</p>
  *
  * <p><strong>Concurrency (issue #108).</strong> {@link #add} retries its next-code computation
  * against a fresh read whenever a concurrent caller claims the same code first, and {@link
- * #setStatus}/{@link #linkTerm}/{@link #update} retry their whole read-modify-write round trip
+ * #accept}/{@link #linkTerm}/{@link #update} retry their whole read-modify-write round trip
  * via {@link RequirementRepository#compareAndUpdate} whenever a concurrent writer commits in
  * between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed
  * caller; only sustained, pathological contention on the very same requirement surfaces as
@@ -70,12 +71,12 @@ import de.hauschel.arknet.req.domain.TermRef;
  * invariants (non-blank title/description, a non-empty, duplicate-free acceptance-criteria
  * list), so a caller cannot use {@code update} to put the requirement into a state {@code
  * req_add} itself could never have created. Status and linked terms are untouched - {@link
- * #setStatus} and {@link #linkTerm} remain the only way to change those. The priority parameter
+ * #accept} and {@link #linkTerm} remain the only way to change those. The priority parameter
  * is an interim step that issue #169's generic {@code resource_update} facade is meant to
  * replace; see {@link UpdateRequirement}.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
-        SetRequirementStatus, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
+        AcceptRequirement, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops (issue #108).
@@ -151,19 +152,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement setStatus(ProjectId projectId, RequirementCode code, RequirementStatus status) {
+    public Requirement accept(ProjectId projectId, RequirementCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        Objects.requireNonNull(status, "status");
-        return updateWithOptimisticRetry(projectId, code, current -> {
-            if (current.status() == status) {
-                return current;
-            }
-            requireLegalTransition(current.status(), status);
-            return new Requirement(current.id(), current.code(), current.title(),
-                    current.description(), current.type(), status, current.priority(), current.motivatedBy(),
-                    current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria());
-        });
+        return updateWithOptimisticRetry(projectId, code, Requirement::accept);
     }
 
     @Override
@@ -202,7 +194,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     /**
-     * Read-modify-write helper shared by {@link #setStatus}, {@link #linkTerm} and {@link #update}: reads the
+     * Read-modify-write helper shared by {@link #accept}, {@link #linkTerm} and {@link #update}: reads the
      * current requirement and its concurrency token together via
      * {@link RequirementRepository#findCurrentByCode}, derives the next state via {@code mutation},
      * and writes it back via {@link RequirementRepository#compareAndUpdate} - retrying with a
@@ -212,8 +204,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * full-snapshot comparison to a head comparison in issue #167/ADR-014 decision 4).
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
-     * a no-op: the existing idempotency rules ({@code setStatus} to the same status, linking an
-     * already-linked term) skip the write entirely, exactly as before this fix.</p>
+     * a no-op: the existing idempotency rules ({@link Requirement#accept()} on an already-accepted
+     * requirement, linking an already-linked term) skip the write entirely, exactly as before this
+     * fix.</p>
      *
      * @throws RequirementNotFoundException            if no requirement with {@code code} exists
      * @throws RequirementConcurrentlyModifiedException if the write keeps losing the race across
@@ -280,14 +273,6 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             return Integer.parseInt(value.substring(dash + 1));
         } catch (NumberFormatException e) {
             return 0;
-        }
-    }
-
-    private static void requireLegalTransition(RequirementStatus from, RequirementStatus to) {
-        boolean legal = from == RequirementStatus.PROPOSED && to == RequirementStatus.ACCEPTED;
-        if (!legal) {
-            throw new IllegalStateException(
-                    "illegal status transition " + from + " -> " + to);
         }
     }
 }

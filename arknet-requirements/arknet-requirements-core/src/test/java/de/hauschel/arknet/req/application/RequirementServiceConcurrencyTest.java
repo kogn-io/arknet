@@ -95,17 +95,17 @@ class RequirementServiceConcurrencyTest {
 
     /**
      * Same race, exercised via {@code req_set_status} racing against a concurrent {@code
-     * req_link_term}: the status change must not silently drop the concurrently linked term.
+     * req_link_term}: accepting a requirement must not silently drop the concurrently linked term.
      */
     @Test
-    void setStatusSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
+    void acceptSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1"));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement result = underTest.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, result.status());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
