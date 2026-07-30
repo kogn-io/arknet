@@ -21,12 +21,12 @@ import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
-import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -338,7 +338,7 @@ class RequirementMcpToolsTest {
 
     /** Structural stub implementing the seven driving in-ports. */
     private static final class Stub
-            implements AddRequirement, ListRequirements, GetRequirement, SetRequirementStatus, LinkTerm,
+            implements AddRequirement, ListRequirements, GetRequirement, AcceptRequirement, LinkTerm,
             UpdateRequirement, GetRequirementSchema {
 
         private RequirementCode lastLinkedRequirement;
@@ -372,7 +372,7 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public Requirement setStatus(ProjectId projectId, RequirementCode code, RequirementStatus status) {
+        public Requirement accept(ProjectId projectId, RequirementCode code) {
             throw new UnsupportedOperationException();
         }
 

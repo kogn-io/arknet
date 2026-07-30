@@ -91,4 +91,30 @@ public record Requirement(
             throw new IllegalArgumentException("qualityCategory is only allowed for non-functional requirements");
         }
     }
+
+    /**
+     * Advances this requirement to {@link RequirementStatus#ACCEPTED} - the only status
+     * transition the requirements lifecycle permits (issue #190). Calling this on a requirement
+     * that is already {@link RequirementStatus#ACCEPTED} is a no-op, returning {@code this}
+     * unchanged, so a caller never has to check the current status first; any other status -
+     * today only {@link RequirementStatus#PROPOSED} - transitions cleanly. This is the rule
+     * itself, not a generic setter: a richer lifecycle (rejected, deprecated, ...) would extend
+     * this method, not reintroduce a caller-supplied target status.
+     *
+     * @return a new {@link Requirement} with status {@link RequirementStatus#ACCEPTED}, or
+     *         {@code this} if already accepted
+     * @throws IllegalStateException if this requirement's status is neither
+     *         {@link RequirementStatus#PROPOSED} nor already {@link RequirementStatus#ACCEPTED}
+     */
+    public Requirement accept() {
+        if (status() == RequirementStatus.ACCEPTED) {
+            return this;
+        }
+        if (status() != RequirementStatus.PROPOSED) {
+            throw new IllegalStateException(
+                    "illegal status transition " + status() + " -> " + RequirementStatus.ACCEPTED);
+        }
+        return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.ACCEPTED, priority(),
+                motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria());
+    }
 }

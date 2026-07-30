@@ -163,11 +163,11 @@ class RequirementServiceTest {
     }
 
     @Test
-    void setStatusAcceptsProposedToAccepted() {
+    void acceptTransitionsProposedToAccepted() {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals("desc a", accepted.description());
@@ -175,11 +175,11 @@ class RequirementServiceTest {
     }
 
     @Test
-    void setStatusPreservesPriorityMotivatedByAndQualityCategory() {
+    void acceptPreservesPriorityMotivatedByAndQualityCategory() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security", List.of("Done when it works"))).code();
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(Priority.COULD_HAVE, accepted.priority());
         assertEquals("https://w3id.org/arknet/model/goal/g", accepted.motivatedBy());
@@ -187,29 +187,20 @@ class RequirementServiceTest {
     }
 
     @Test
-    void setStatusToSameStatusIsIdempotent() {
+    void acceptIsIdempotentWhenAlreadyAccepted() {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+        service.accept(WS, code);
 
-        Requirement result = service.setStatus(WS, code, RequirementStatus.PROPOSED);
+        Requirement result = service.accept(WS, code);
 
-        assertEquals(RequirementStatus.PROPOSED, result.status());
+        assertEquals(RequirementStatus.ACCEPTED, result.status());
     }
 
     @Test
-    void setStatusRejectsRevertingAcceptedToProposed() {
-        RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
-        service.setStatus(WS, code, RequirementStatus.ACCEPTED);
-
-        assertThrows(IllegalStateException.class,
-                () -> service.setStatus(WS, code, RequirementStatus.PROPOSED));
-    }
-
-    @Test
-    void setStatusThrowsWhenRequirementUnknown() {
+    void acceptThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.setStatus(WS, new RequirementCode("FR-42"), RequirementStatus.ACCEPTED));
+                () -> service.accept(WS, new RequirementCode("FR-42")));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -254,7 +245,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security",
                 List.of("Done when it works"))).code();
-        service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        service.accept(WS, code);
         service.linkTerm(WS, code, "TERM-1");
 
         Requirement updated = service.update(WS, code, "New title", null, null, null);
@@ -392,11 +383,11 @@ class RequirementServiceTest {
      * linked terms along rather than silently dropping them.
      */
     @Test
-    void setStatusPreservesLinkedTerms() {
+    void acceptPreservesLinkedTerms() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
         service.linkTerm(WS, code, "TERM-1");
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
@@ -404,14 +395,14 @@ class RequirementServiceTest {
     }
 
     /**
-     * Same regression as {@link #setStatusPreservesLinkedTerms}, for the mandatory
-     * acceptance criteria (issue #91): a status change must not drop them either.
+     * Same regression as {@link #acceptPreservesLinkedTerms}, for the mandatory
+     * acceptance criteria (issue #91): accepting a requirement must not drop them either.
      */
     @Test
-    void setStatusPreservesAcceptanceCriteria() {
+    void acceptPreservesAcceptanceCriteria() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(List.of("Done when it works"), accepted.acceptanceCriteria());
         assertEquals(List.of("Done when it works"), service.get(WS, code).orElseThrow().acceptanceCriteria());
