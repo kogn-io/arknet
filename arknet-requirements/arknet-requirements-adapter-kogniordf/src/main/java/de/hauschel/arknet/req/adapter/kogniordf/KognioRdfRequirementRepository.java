@@ -631,32 +631,24 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Batch variant of {@link #findByCode}, keyed by opaque identity instead of business code -
-     * backs {@link ResolveRequirements} (issue #88). One {@code VALUES}-bound query for the whole
-     * batch, not one query per id: the caller (a sibling bounded context's driving adapter,
-     * rendering several requirement references at once) must not pay an N+1 store round-trip.
+     * Batch lookup of requirements by opaque identity, keyed for {@link ResolveRequirements}
+     * (issue #88): resolves every id in {@code ids} present in the project to a
+     * {@link ResolveRequirements.ResolvedRequirement}, in one {@code VALUES}-bound query - an id
+     * absent from the project is simply absent from the result, never an error. Returns the slim
+     * {@link ResolveRequirements.ResolvedRequirement} projection ({@code identifier} only), not
+     * the full {@link Requirement} aggregate. At most one result per subject; if a subject's
+     * identifier constraint is violated (store-first, no enforced {@code sh:maxCount}), which of
+     * its candidate identifiers wins is deliberately unspecified.
      *
-     * <p>Returns the slim {@link ResolveRequirements.ResolvedRequirement} projection, not the full
-     * {@link Requirement} aggregate: the query below therefore joins only {@code identifier}, not
-     * {@code title}/{@code description} - fields {@link ResolveRequirements} never reads.</p>
-     *
-     * <p><strong>No type filter, unlike the sibling ubiquitous-language adapter.</strong>
-     * {@code KognioRdfTermRepository#findByIds} joins {@code ?s a <skos:Concept>} because every
-     * subject in the terms graph carries that one type. Requirements, in contrast, are typed
-     * either {@code arkreq:FunctionalRequirement} or {@code arkreq:NonFunctionalRequirement}; a
-     * type filter here would either need both alternatives (no benefit - {@code dcterms:identifier}
-     * alone already scopes the join to requirements graph subjects that carry a code) or would
-     * arbitrarily exclude one requirement type. The join is therefore only over
-     * {@code VALUES ?s} + {@code dcterms:identifier}.</p>
-     *
-     * <p><strong>Exactly one {@link ResolveRequirements.ResolvedRequirement} per resolved
-     * subject.</strong> {@code RequirementShape}'s identifier constraint carries no
-     * {@code sh:maxCount}, so the single mandatory join below (identifier) is not guaranteed to
-     * bind exactly one row per subject. Grouping by subject and keeping the first row's binding
-     * turns that cardinality back into "the requirements" the port promises, not "one row per
-     * predicate combination" - which is what a naive per-row mapping would leak to every caller.
-     * Which identifier ends up chosen in that (pathological, store-first-only) case is
-     * deliberately unspecified.</p>
+     * <p><strong>Why.</strong> One query for the whole batch, not one per id, because the caller
+     * (a sibling bounded context's driving adapter, rendering several requirement references at
+     * once) must not pay an N+1 store round-trip. Unlike the sibling ubiquitous-language adapter's
+     * {@code KognioRdfTermRepository#findByIds}, this join carries no type filter: that adapter
+     * joins {@code ?s a <skos:Concept>} because every terms-graph subject carries that one type,
+     * but requirements are typed either {@code arkreq:FunctionalRequirement} or
+     * {@code arkreq:NonFunctionalRequirement}, and a filter here would either need both
+     * alternatives (no benefit - {@code dcterms:identifier} already scopes the join to subjects
+     * that carry a code) or arbitrarily exclude one requirement type.</p>
      */
     @Override
     public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId, List<ResourceId> ids) {
@@ -693,34 +685,27 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     // ---- usesTerm reading --------------------------------------------------------------
 
     /**
-     * Reads the {@code arkreq:usesTerm} edges of one requirement back as term references.
+     * Reads the {@code arkreq:usesTerm} edges of one requirement back as term references, ordered
+     * by target IRI (RDF has no intrinsic statement order, and {@link Requirement} compares its
+     * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
+     * {@code arkreq:usesTerm} carries no {@code sh:nodeKind} constraint, so a store-first
+     * (ADR-005) edge may legally target a blank node, which
+     * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent; such an edge never appears in
+     * {@link Requirement#usesTerms()}. Every edge written through {@code req_link_term} targets a
+     * resolved subject IRI by construction, so this exclusion cannot bite via the MCP tools; a
+     * store-first blank-node edge instead survives a later update via
+     * {@link #replaceTriplesForUpdate}, which re-attaches it after rewriting the subject's triples
+     * (issue #65).
      *
-     * <p><strong>No longer a join (issue #77).</strong> The edge's target IRI <em>is</em> the
-     * {@link TermRef} - {@link TermRef#value()} wraps it directly - so this reads only the
-     * requirements graph; the sibling terms graph is never consulted here. Ordered by the
-     * target IRI, because RDF has no intrinsic statement order and {@link Requirement} compares
-     * its {@code usesTerms} list positionally.</p>
-     *
-     * <p><strong>Still lossy for one, narrower case.</strong> {@code arkreq:usesTerm} carries no
-     * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
-     * node - which {@link de.hauschel.arknet.kernel.ResourceId} cannot represent. The
-     * {@code FILTER(isIRI(?term))} below excludes exactly that case; {@link
-     * Requirement#usesTerms()} never reflects such an edge. {@link #replaceTriplesForUpdate},
-     * reached via {@link #compareAndUpdate}, nonetheless survives it: it separately queries,
-     * inside the same write transaction, for exactly the edges that are not IRIs and
-     * re-attaches them after rewriting the subject's triples (issue #65) - so a read-modify-write
-     * ({@code req_set_status}, {@code req_link_term}) carries the dropped edge along instead of
-     * erasing it. Every edge written through {@code req_link_term} targets a resolved subject IRI
-     * by construction, so this cannot bite via the MCP tools.</p>
-     *
-     * <p><strong>The "identifier but no {@code skos:Concept} type" category is gone (issue
-     * #77).</strong> While this read still joined the terms graph by {@code dcterms:identifier},
-     * a target carrying an identifier but not the type bound a row here, yet the resolution query
-     * demanded the type and so rejected, on the next {@link #compareAndUpdate}, the very
-     * {@link TermRef} this read had produced - the requirement became unwritable, and #65 could not preserve the
-     * edge because the read did bind it. Carrying identity removes that mismatch at its root
-     * rather than reconciling it: there is no second query stating a different condition, because
-     * there is no resolution on the read path at all.</p>
+     * <p><strong>History (issue #77).</strong> The edge's target IRI <em>is</em> the
+     * {@link TermRef} now - {@link TermRef#value()} wraps it directly - so this reads only the
+     * requirements graph; the sibling terms graph is never consulted here. Before #77, this read
+     * joined the terms graph by {@code dcterms:identifier}, so a target carrying an identifier but
+     * not the {@code skos:Concept} type still bound a row here, yet the resolution query demanded
+     * that type and rejected, on the next {@link #compareAndUpdate}, the very {@link TermRef} this
+     * read had produced - an unwritable requirement that #65 could not preserve because the read
+     * did bind it. Carrying identity removes that mismatch at its root: there is no resolution on
+     * the read path at all anymore.</p>
      */
     private List<TermRef> readUsesTerms(Function<String, Stream<BindingSet>> selectFn, String subject) {
         String query = "SELECT ?term WHERE { "
@@ -779,21 +764,24 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /**
-     * Filters blank entries and deduplicates by lexical form - issue #103. {@link
-     * #readAcceptanceCriteria}/{@link #readAcceptanceCriteriaBySubject} read each {@code
-     * arkreq:acceptanceCriterion} literal via {@code literalOf(...).getLexicalForm()}, which
-     * discards its language tag and datatype; {@code RequirementShape} places no {@code
-     * sh:languageIn}/uniqueness constraint on the property, so a store-first (ADR-005) requirement
-     * can legally carry two literals that normalize to the same string (e.g. the same text tagged
-     * {@code @en} and {@code @de}) or a whitespace-only literal alongside a valid one. {@link
-     * Requirement}'s constructor rejects both a duplicate and a blank entry unconditionally, so
-     * without this step {@link #findByCode}/{@link #findAll} would throw for such a requirement
-     * instead of returning it - the same read-path-crashes-on-write-time-only-invariant class of
-     * bug #91 already fixed for the all-empty case, one level deeper: here the list is non-empty
-     * yet still constructor-illegal. {@code distinct()} keeps the first occurrence in the query's
-     * {@code ORDER BY ?criterion} order, so which of two colliding literals "wins" is deterministic
-     * per read but otherwise unspecified - store-first duplicate/blank criteria are a gap to
-     * surface, not a case worth resolving more cleverly than that.
+     * Filters blank entries and deduplicates {@code criteria} by lexical form, keeping the
+     * first-occurring value for each duplicate. Which of two colliding literals "wins" is
+     * therefore deterministic per read (driven by the caller's {@code ORDER BY ?criterion}) but
+     * otherwise unspecified.
+     *
+     * <p><strong>Why (issue #103).</strong> {@link #readAcceptanceCriteria}/
+     * {@link #readAcceptanceCriteriaBySubject} read each {@code arkreq:acceptanceCriterion}
+     * literal via {@code literalOf(...).getLexicalForm()}, discarding its language tag and
+     * datatype; {@code RequirementShape} places no {@code sh:languageIn}/uniqueness constraint on
+     * the property, so a store-first (ADR-005) requirement can legally carry two literals that
+     * normalize to the same string (e.g. the same text tagged {@code @en} and {@code @de}) or a
+     * whitespace-only literal alongside a valid one. {@link Requirement}'s constructor rejects
+     * both a duplicate and a blank entry unconditionally, so without this step
+     * {@link #findByCode}/{@link #findAll} would throw for such a requirement instead of returning
+     * it - the same read-path-crashes-on-write-time-only-invariant class of bug #91 already fixed
+     * for the all-empty case, one level deeper: here the list is non-empty yet still
+     * constructor-illegal. Store-first duplicate/blank criteria are a gap to surface, not a case
+     * worth resolving more cleverly than that.</p>
      */
     private static List<String> sanitizeAcceptanceCriteria(List<String> criteria) {
         return criteria.stream()
