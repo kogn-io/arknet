@@ -156,7 +156,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String PRIORITY_PROPERTY = ARKREQ_NAMESPACE + "priority";
     private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
-    private static final String ACCEPTANCE_CRITERION_PROPERTY = ARKREQ_NAMESPACE + "acceptanceCriterion";
+    private static final String ACCEPTANCE_CRITERION_PROPERTY = ArkreqVocabulary.ACCEPTANCE_CRITERION;
 
     /**
      * Stands in for a requirement that predates #91: {@code arkreq:acceptanceCriterion} became

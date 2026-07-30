@@ -42,6 +42,7 @@ import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -134,7 +135,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
-    private static final String DOMAIN_VISION_PROPERTY = ARKDDD_NAMESPACE + "domainVision";
+    private static final String DOMAIN_VISION_PROPERTY = ArkdddVocabulary.DOMAIN_VISION;
     private static final String PART_OF_PROPERTY = ARKDDD_NAMESPACE + "partOf";
     private static final String SUBDOMAIN_TYPE_PROPERTY = ARKDDD_NAMESPACE + "subdomainType";
     private static final String SUBDOMAIN_CLASS = ARKDDD_NAMESPACE + "Subdomain";

@@ -67,9 +67,11 @@ public final class TraceabilityMcpTools {
     }
 
     @McpTool(name = "orphan_check",
-            description = "Finds orphaned artifacts: requirements no use case realises, and glossary terms"
-                    + " never referenced (neither used by a requirement nor playing an actor role in a use"
-                    + " case). Reported as two lists.",
+            description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
+                    + " referenced (neither used by a requirement, playing an actor role in a use case, nor a"
+                    + " bounded context's ubiquitous language), and terms a requirement's or bounded context's"
+                    + " text names without the usesTerm/ubiquitousLanguageTerm edge to back it up. Reported as"
+                    + " three lists.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
             final McpSyncRequestContext context,
@@ -85,8 +87,9 @@ public final class TraceabilityMcpTools {
 
     @McpTool(name = "impact_analysis",
             description = "What is transitively affected if the given resource changes: follows"
-                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises backwards (who references"
-                    + " this) to every reachable requirement, term or use case. The id is a CURIE (e.g."
+                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises and"
+                    + " arkddd:ubiquitousLanguageTerm backwards (who references this) to every reachable"
+                    + " requirement, term, use case or bounded context. The id is a CURIE (e.g."
                     + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
                     + " via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
