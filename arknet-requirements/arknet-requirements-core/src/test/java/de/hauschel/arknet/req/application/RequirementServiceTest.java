@@ -65,16 +65,37 @@ class RequirementServiceTest {
     }
 
     @Test
-    void addAssignsFirstFunctionalCodeAndProposedStatus() {
+    void addAssignsFirstFunctionalCode() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
                 null, null, null, List.of("Done when it works")));
 
         assertEquals(new RequirementCode("FR-1"), added.code());
+    }
+
+    @Test
+    void addSetsProposedStatusByDefault() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
+                null, null, null, List.of("Done when it works")));
+
+        assertEquals(RequirementStatus.PROPOSED, added.status());
+    }
+
+    /**
+     * Every field {@code add} was given comes back unchanged on the returned {@link Requirement}
+     * and is what a subsequent read from the repository sees too - one fact (faithful roundtrip
+     * of the supplied fields), asserted from both ends.
+     */
+    @Test
+    void addPersistsAllSuppliedFields() {
+        Requirement added = service.add(WS, new NewRequirement("User can log in",
+                "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
+                null, null, null, List.of("Done when it works")));
+
         assertEquals("User can log in", added.title());
         assertEquals("The system shall let a registered user authenticate.", added.description());
         assertEquals(RequirementType.FUNCTIONAL, added.type());
-        assertEquals(RequirementStatus.PROPOSED, added.status());
         assertEquals(List.of("Done when it works"), added.acceptanceCriteria());
         assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
     }
@@ -163,11 +184,11 @@ class RequirementServiceTest {
     }
 
     @Test
-    void setStatusAcceptsProposedToAccepted() {
+    void acceptTransitionsProposedToAccepted() {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals("desc a", accepted.description());
@@ -175,11 +196,11 @@ class RequirementServiceTest {
     }
 
     @Test
-    void setStatusPreservesPriorityMotivatedByAndQualityCategory() {
+    void acceptPreservesPriorityMotivatedByAndQualityCategory() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security", List.of("Done when it works"))).code();
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(Priority.COULD_HAVE, accepted.priority());
         assertEquals("https://w3id.org/arknet/model/goal/g", accepted.motivatedBy());
@@ -187,29 +208,20 @@ class RequirementServiceTest {
     }
 
     @Test
-    void setStatusToSameStatusIsIdempotent() {
+    void acceptIsIdempotentWhenAlreadyAccepted() {
         RequirementCode code = service.add(WS,
                 new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+        service.accept(WS, code);
 
-        Requirement result = service.setStatus(WS, code, RequirementStatus.PROPOSED);
+        Requirement result = service.accept(WS, code);
 
-        assertEquals(RequirementStatus.PROPOSED, result.status());
+        assertEquals(RequirementStatus.ACCEPTED, result.status());
     }
 
     @Test
-    void setStatusRejectsRevertingAcceptedToProposed() {
-        RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
-        service.setStatus(WS, code, RequirementStatus.ACCEPTED);
-
-        assertThrows(IllegalStateException.class,
-                () -> service.setStatus(WS, code, RequirementStatus.PROPOSED));
-    }
-
-    @Test
-    void setStatusThrowsWhenRequirementUnknown() {
+    void acceptThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.setStatus(WS, new RequirementCode("FR-42"), RequirementStatus.ACCEPTED));
+                () -> service.accept(WS, new RequirementCode("FR-42")));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -254,7 +266,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security",
                 List.of("Done when it works"))).code();
-        service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        service.accept(WS, code);
         service.linkTerm(WS, code, "TERM-1");
 
         Requirement updated = service.update(WS, code, "New title", null, null, null);
@@ -392,11 +404,11 @@ class RequirementServiceTest {
      * linked terms along rather than silently dropping them.
      */
     @Test
-    void setStatusPreservesLinkedTerms() {
+    void acceptPreservesLinkedTerms() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
         service.linkTerm(WS, code, "TERM-1");
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
@@ -404,14 +416,14 @@ class RequirementServiceTest {
     }
 
     /**
-     * Same regression as {@link #setStatusPreservesLinkedTerms}, for the mandatory
-     * acceptance criteria (issue #91): a status change must not drop them either.
+     * Same regression as {@link #acceptPreservesLinkedTerms}, for the mandatory
+     * acceptance criteria (issue #91): accepting a requirement must not drop them either.
      */
     @Test
-    void setStatusPreservesAcceptanceCriteria() {
+    void acceptPreservesAcceptanceCriteria() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        Requirement accepted = service.setStatus(WS, code, RequirementStatus.ACCEPTED);
+        Requirement accepted = service.accept(WS, code);
 
         assertEquals(List.of("Done when it works"), accepted.acceptanceCriteria());
         assertEquals(List.of("Done when it works"), service.get(WS, code).orElseThrow().acceptanceCriteria());
@@ -435,12 +447,12 @@ class RequirementServiceTest {
      * display) - in one batch, not per-id.
      */
     @Test
-    void getByIdResolvesKnownIdentitiesInOneBatch() {
+    void resolveExistingResolvesKnownIdentitiesInOneBatch() {
         Requirement first = service.add(WS, newFunctionalRequirement());
         Requirement second = service.add(WS, newFunctionalRequirement());
 
         List<ResolveRequirements.ResolvedRequirement> resolved =
-                service.getById(WS, first.id().value(), second.id().value());
+                service.resolveExisting(WS, first.id().value(), second.id().value());
 
         assertEquals(2, resolved.size());
         assertTrue(resolved.contains(new ResolveRequirements.ResolvedRequirement(first.id().value(), first.code())));
@@ -453,28 +465,28 @@ class RequirementServiceTest {
      * caller (not this port) decides what "missing" means for its own display.
      */
     @Test
-    void getByIdSilentlyOmitsUnknownIdentities() {
+    void resolveExistingSilentlyOmitsUnknownIdentities() {
         Requirement known = service.add(WS, newFunctionalRequirement());
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
         List<ResolveRequirements.ResolvedRequirement> resolved =
-                service.getById(WS, known.id().value(), unknown);
+                service.resolveExisting(WS, known.id().value(), unknown);
 
         assertEquals(List.of(new ResolveRequirements.ResolvedRequirement(known.id().value(), known.code())),
                 resolved);
     }
 
     @Test
-    void getByIdWithNoIdsReturnsAnEmptyList() {
-        assertEquals(List.of(), service.getById(WS));
+    void resolveExistingWithNoIdsReturnsAnEmptyList() {
+        assertEquals(List.of(), service.resolveExisting(WS));
     }
 
     @Test
-    void getByIdIsScopedPerWorkspace() {
+    void resolveExistingIsScopedPerWorkspace() {
         Requirement inWs = service.add(WS, newFunctionalRequirement());
         ProjectId other = new ProjectId("other");
 
-        assertEquals(List.of(), service.getById(other, inWs.id().value()));
+        assertEquals(List.of(), service.resolveExisting(other, inWs.id().value()));
     }
 
     /**

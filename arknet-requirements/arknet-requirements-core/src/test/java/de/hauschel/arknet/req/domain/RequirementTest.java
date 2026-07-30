@@ -124,6 +124,13 @@ class RequirementTest {
     }
 
     @Test
+    void rejectsDuplicateUsesTerms() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                        null, null, null, List.of(TERM_1, TERM_1), CRITERIA));
+    }
+
+    @Test
     void allowsQualityCategoryOnNonFunctionalRequirement() {
         Requirement req = new Requirement(ID, new RequirementCode("NFR-1"), "t", "d",
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, "performance", null,
@@ -177,6 +184,30 @@ class RequirementTest {
     @Test
     void rejectsBlankCode() {
         assertThrows(IllegalArgumentException.class, () -> new RequirementCode(" "));
+    }
+
+    /** Issue #190: the transition rule itself lives on {@link Requirement#accept()}. */
+    @Test
+    void acceptTransitionsProposedToAccepted() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA);
+
+        Requirement accepted = req.accept();
+
+        assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals(req.title(), accepted.title());
+        assertEquals(req.acceptanceCriteria(), accepted.acceptanceCriteria());
+    }
+
+    /** Accepting an already-accepted requirement is a no-op, not a rejection. */
+    @Test
+    void acceptOnAnAlreadyAcceptedRequirementIsANoOp() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.ACCEPTED, null, null, null, null, CRITERIA);
+
+        Requirement result = req.accept();
+
+        assertEquals(req, result);
     }
 
     @Test

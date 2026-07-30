@@ -15,6 +15,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -40,7 +41,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 final class InMemoryRequirementRepository implements RequirementRepository {
 
     private final Map<ProjectId, Map<RequirementId, Requirement>> byProject = new LinkedHashMap<>();
-    private final Map<RequirementId, String> headByIdentity = new LinkedHashMap<>();
+    private final Map<RequirementId, RevisionToken> headByIdentity = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Requirement requirement) {
@@ -58,11 +59,11 @@ final class InMemoryRequirementRepository implements RequirementRepository {
             throw new DuplicateRequirementCodeException(projectId, requirement.code());
         }
         requirements.put(requirement.id(), requirement);
-        headByIdentity.put(requirement.id(), UUID.randomUUID().toString());
+        headByIdentity.put(requirement.id(), new RevisionToken(UUID.randomUUID().toString()));
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
         Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
         Requirement current = requirements.get(updated.id());
         if (current == null) {
@@ -72,7 +73,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
             throw new RequirementConcurrentlyModifiedException(projectId, updated.code());
         }
         requirements.put(updated.id(), updated);
-        headByIdentity.put(updated.id(), UUID.randomUUID().toString());
+        headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
     }
 
     @Override

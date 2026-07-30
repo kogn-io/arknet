@@ -12,35 +12,27 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
  * Driving port: correct the title, description, acceptance criteria and/or MoSCoW priority of an
- * already-created requirement.
+ * already-created requirement, leaving {@code status} and {@code usesTerms} to their own ports
+ * ({@code req_set_status}, {@code req_link_term}).
  *
- * <p>Backs the MVP tool {@code req_update} (issue #162). Requirements elicited during an
- * interview are sometimes sharpened afterwards - e.g. a domain fact only surfaces once the
- * conversation continues - and until this port existed there was no way to correct a requirement
- * already in the store short of duplicating it under a new code. Unlike {@code req_add}'s
- * required arguments, every field here is optional: {@code null} leaves that field unchanged, so
- * a caller can correct only the description without having to restate the title.</p>
+ * <p>Every field is optional: {@code null} leaves that field unchanged, so a caller can correct
+ * only the description without restating the title. A non-{@code null} value must still satisfy
+ * {@link Requirement}'s own invariants (non-blank, non-empty/duplicate-free criteria). A
+ * {@code null} {@code priority} leaves an already-set one untouched - it is never a "remove the
+ * priority" signal, since {@code null} is already the sentinel for every other field here;
+ * un-setting a priority once set is out of scope, and would need a distinct signal rather than
+ * overloading {@code null} (the same rule the sibling {@code UpdateTerm} port applies to its
+ * Actor facette).</p>
  *
- * <p><strong>Priority (issue #170).</strong> {@code req_add} accepted a {@link Priority} from the
- * start, but nothing could change it afterwards: {@code req_set_status} only covers {@code
- * RequirementStatus}, so a whole register mis-prioritised as {@code MUST_HAVE} could only be
- * corrected by re-creating every requirement - losing its code and every {@code usesTerm} /
- * {@code realises} reference pointing at it. That is why {@code priority} joined this port's
- * optional fields.</p>
- *
- * <p><strong>Deliberately interim.</strong> The {@code priority} parameter is throw-away: issue
- * #169's generic {@code resource_update} facade (ADR-014 phase 3) is meant to set fields
- * generically and to absorb the growing pile of per-bounded-context update tools this parameter
- * adds to. It exists because the mis-prioritised register needed a correction path before that
- * facade lands - not because widening this signature per field is the intended direction. Once
- * the facade exists, this parameter goes, not the other way round.</p>
- *
- * <p><strong>No clearing.</strong> A {@code null} {@code priority} leaves an already-set one
- * untouched - it is not a "remove the priority" signal, since {@code null} is already the
- * sentinel for every other field here. Un-setting a priority once set is out of scope (no caller
- * need has surfaced; the concrete one was {@code MUST_HAVE} to {@code SHOULD_HAVE}), and would
- * need a distinct signal rather than overloading {@code null} - the same rule the sibling
- * {@code UpdateTerm} port applies to its Actor facette.</p>
+ * <p><strong>Background.</strong> Backs the MVP tool {@code req_update} (issue #162): requirements
+ * elicited during an interview are sometimes sharpened afterwards, and until this port existed the
+ * only correction path was duplicating the requirement under a new code. {@code priority} joined
+ * the optional fields later (issue #170) because nothing else could change it once set -
+ * {@code req_set_status} covers only {@code RequirementStatus} - and re-creating a requirement to
+ * fix its priority loses its code and every {@code usesTerm}/{@code realises} reference. That
+ * parameter is deliberately interim: issue #169's generic {@code resource_update} facade (ADR-014
+ * phase 3) is meant to absorb it and the growing pile of per-bounded-context update tools it
+ * belongs to; once that facade exists, this parameter goes, not the other way round.</p>
  */
 public interface UpdateRequirement {
 

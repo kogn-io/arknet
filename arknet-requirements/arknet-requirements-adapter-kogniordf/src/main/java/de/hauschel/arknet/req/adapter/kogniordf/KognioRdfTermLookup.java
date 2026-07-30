@@ -22,7 +22,7 @@ import de.hauschel.arknet.req.application.port.out.TermLookup;
 /**
  * Out-adapter: {@link TermLookup} backed by the kognio-rdf substrate, resolving a glossary
  * term's human-typed {@code dcterms:identifier} (e.g. {@code TERM-1}) to its opaque subject
- * {@link ResourceId} within the shared workspace store.
+ * {@link ResourceId} within the shared project store.
  *
  * <p><strong>Strict cross-BC term resolution (issue #36, extracted into its own port for
  * #77).</strong> Requirements and ubiquitous-language terms share one per-project store. This
