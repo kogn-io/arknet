@@ -602,7 +602,10 @@ class KognioRdfRequirementRepositoryTest {
 
         assertEquals(1, all.size());
         assertEquals(new RequirementCode("FR-1"), all.get(0).code());
-        assertTrue(List.of(Priority.MUST_HAVE, Priority.SHOULD_HAVE).contains(all.get(0).priority()));
+        // First-seen wins (issue #81): MUST_HAVE is the first arkreq:priority triple
+        // givenRequirementWithTwoPriorities inserts, and RDF4J's MemoryStore preserves insertion
+        // order for equal-subject/-predicate statements, so this is deterministic, not incidental.
+        assertEquals(Priority.MUST_HAVE, all.get(0).priority());
     }
 
     /** The chosen priority is deterministic across repeated reads against the same store state. */

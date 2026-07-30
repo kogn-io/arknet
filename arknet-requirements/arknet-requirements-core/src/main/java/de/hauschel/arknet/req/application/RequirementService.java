@@ -86,8 +86,13 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * now-current state before trying again; this bound only exists so a pathological, sustained
      * storm of concurrent writers against the very same requirement fails loudly instead of
      * looping forever.
+     *
+     * <p>Package-private rather than {@code private} so {@code RequirementServiceConcurrencyTest}
+     * (same package) can assert the exact number of {@code compareAndUpdate} attempts a permanently
+     * contended retry loop makes before giving up, instead of only asserting that it eventually
+     * gives up.</p>
      */
-    private static final int MAX_RETRY_ATTEMPTS = 20;
+    static final int MAX_RETRY_ATTEMPTS = 20;
 
     private final RequirementRepository repository;
     private final ResourceIdFactory resourceIdFactory;
