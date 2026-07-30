@@ -16,11 +16,11 @@ This is what a use case looks like once it is in the store -- rendered by
 ## Repository
 
 Code and pull requests live on GitHub
-([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). For bugs,
-feature requests, and questions, please open a thread in
-[GitHub Discussions](https://github.com/kogn-io/arknet/discussions) -- the issue
-tracker is closed while the project is pre-1.0 and planned by a single
-maintainer.
+([`github.com/kogn-io/arknet`](https://github.com/kogn-io/arknet)). Bugs and
+feature requests go to the
+[issue tracker](https://github.com/kogn-io/arknet/issues); open-ended
+questions go to
+[GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
 
 ## Requirements
 
