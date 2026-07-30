@@ -5,8 +5,9 @@
 - **arknet** (Architecture + Knowledge Net) — DDD-Architekturmodelle, die Maschinen verstehen
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
 - Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0).
-  Der GitHub-Issue-Tracker ist bewusst abgeschaltet; Fragen und Vorschlaege laufen ueber
-  GitHub Discussions. Siehe README "Repository"-Abschnitt.
+  Bugs/Feature-Requests laufen ueber den GitHub-Issue-Tracker (Label-Schema
+  `prio:*`/`type:*`/`deferred`), offene Fragen ueber GitHub Discussions. Siehe README
+  "Repository"-Abschnitt.
 
 ## Architektur
 
