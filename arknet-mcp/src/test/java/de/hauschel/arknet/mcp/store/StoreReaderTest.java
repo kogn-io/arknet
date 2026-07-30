@@ -47,7 +47,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
  */
 class StoreReaderTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("noistill");
+    private static final ProjectId WORKSPACE = new ProjectId("sample-project");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-reader-test-fr-1";
     private static final String PROJECT_IRI = "https://w3id.org/arknet/id/store-reader-test-project";
 
@@ -219,7 +219,7 @@ class StoreReaderTest {
         identity.add(project, rdf.createIRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
                 rdf.createIRI(ArkprjVocabulary.PROJECT_TYPE));
         identity.add(project, rdf.createIRI(ArkprjVocabulary.ANCHOR_VALUE),
-                rdf.createLiteral("/home/somebody/DEV/noistill"));
+                rdf.createLiteral("/home/somebody/DEV/sample-project"));
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.add(rdf.createIRI(ArkprjVocabulary.IDENTITY_GRAPH), identity);

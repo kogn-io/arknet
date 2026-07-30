@@ -65,9 +65,9 @@ class KognioRdfDatasetInventoryTest {
     @Test
     void reportsEveryDatasetPresentInTheStore() {
         create("arknet");
-        create("zahlenwart");
+        create("second-project");
 
-        assertEquals(Set.of(new ProjectId("arknet"), new ProjectId("zahlenwart")),
+        assertEquals(Set.of(new ProjectId("arknet"), new ProjectId("second-project")),
                 inventory.existingDatasets());
     }
 

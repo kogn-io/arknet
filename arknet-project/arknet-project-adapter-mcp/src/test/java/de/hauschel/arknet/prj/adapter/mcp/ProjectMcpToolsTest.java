@@ -117,14 +117,14 @@ class ProjectMcpToolsTest {
     void listRendersUnregisteredDatasetsAlongsideTheRegisteredProjects() {
         listProjects.all = List.of(new Project(new ProjectId("p-1"), "registered",
                 List.of(new Anchor("/home/f/registered", AnchorType.PATH))));
-        listAdoptable.all = List.of(new ProjectId("arknet"), new ProjectId("zahlenwart"));
+        listAdoptable.all = List.of(new ProjectId("arknet"), new ProjectId("second-project"));
 
         final String rendered = adapter.list();
 
         assertTrue(rendered.contains("registered"), rendered);
         assertTrue(rendered.contains("Unregistered datasets"), rendered);
         assertTrue(rendered.contains("arknet"), rendered);
-        assertTrue(rendered.contains("zahlenwart"), rendered);
+        assertTrue(rendered.contains("second-project"), rendered);
     }
 
     /** Nothing left to adopt means no section at all, so the listing stays quiet once migrated. */
@@ -252,14 +252,14 @@ class ProjectMcpToolsTest {
                 new Project(new ProjectId("id-1"), "arknet",
                         List.of(new Anchor("/home/f/DEV/arknet", AnchorType.PATH),
                                 new Anchor("/home/f/DEV/arknet-wt", AnchorType.PATH))),
-                new Project(new ProjectId("id-2"), "noistill",
-                        List.of(new Anchor("/home/f/DEV/noistill", AnchorType.PATH))));
+                new Project(new ProjectId("id-2"), "sample-project",
+                        List.of(new Anchor("/home/f/DEV/sample-project", AnchorType.PATH))));
 
         final String rendered = adapter.list();
 
         assertTrue(rendered.contains("arknet [path:/home/f/DEV/arknet, path:/home/f/DEV/arknet-wt] (id: id-1)"),
                 rendered);
-        assertTrue(rendered.contains("noistill [path:/home/f/DEV/noistill] (id: id-2)"), rendered);
+        assertTrue(rendered.contains("sample-project [path:/home/f/DEV/sample-project] (id: id-2)"), rendered);
     }
 
     @Test

@@ -54,8 +54,7 @@
              die der Modulschnitt NICHT erzwingen kann (#60). Kein BOM-Artefakt vorhanden,
              daher hier gepinnt. -->
         <archunit.version>1.4.2</archunit.version>
-        <!-- Spring AI 2.0 ist die Tech-Linie fuer arknets MCP-Layer (siehe ADR-Kandidat).
-             Version konsistent zu kogn-io/kognio-memory (Schwesterprojekt) uebernommen.
+        <!-- Spring AI 2.0 ist die Tech-Linie fuer arknets MCP-Layer (siehe ADR-004).
              Die Spring-AI-BOM managed den kompletten MCP-Stack transitiv (u.a. mcp-core 2.0.0),
              deshalb wird die MCP-SDK-Version hier NICHT mehr separat gepinnt (loest #27:
              frueher pinnte arknet mcp-core auf 1.1.0 -> Doppelversion im Reaktor). -->
@@ -107,7 +106,7 @@
     <dependencyManagement>
         <dependencies>
             <!-- Shared Kernel: von mehreren Bounded Contexts (requirements, ubiquitous-language)
-                 geteilte Domain-Bausteine (WorkspaceId). Version zentral hier gemanaged. -->
+                 geteilte Domain-Bausteine (ProjectId). Version zentral hier gemanaged. -->
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-shared-kernel</artifactId>

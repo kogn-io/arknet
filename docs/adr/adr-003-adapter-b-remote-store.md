@@ -1,4 +1,4 @@
-# ADR-003: Adapter B -- remote Store gegen kognio-memory (+ Security-Richtung)
+# ADR-003: Adapter B -- remote Store-Backend (+ Security-Richtung)
 
 - Status: Proposed (2026-07-14) -- Richtungsentscheidung; kein Code in arknet, bis Adapter B ansteht
 - Verwandt: ADR-001, ADR-004, ADR-009 (MCP-Transport -- prueft Adapter B explizit
@@ -8,17 +8,17 @@
 ## Kontext
 
 ADR-001 haelt den Store hinter einem domaennahen Out-Port austauschbar und benennt
-Adapter B als remote Variante: ein MCP-Client gegen kognio-memory, das Team / Multi-Project
-/ Auth selbst traegt. Adapter B bleibt ein separates, nicht mit ausgeliefertes Modul, bis der
-Bedarf konkret wird. Dieses ADR haelt fest, *wie* Adapter B angebunden und abgesichert wird --
-als Richtung, noch nicht als Umsetzung.
+Adapter B als remote Variante: ein MCP-Client gegen ein separates Remote-Backend, das Team /
+Multi-Project / Auth selbst traegt. Adapter B bleibt ein separates, nicht mit ausgeliefertes Modul,
+bis der Bedarf konkret wird. Dieses ADR haelt fest, *wie* Adapter B angebunden und abgesichert wird
+-- als Richtung, noch nicht als Umsetzung.
 
 ## Entscheidung
 
-1. **Anbindung.** Adapter B (`requirements-adapter-kogniomemory`) implementiert den
-   domaennahen Out-Port als MCP-Client gegen kognio-memory. arknet ist damit zugleich
+1. **Anbindung.** Adapter B (Modulname folgt bei Umsetzung) implementiert den
+   domaennahen Out-Port als MCP-Client gegen das Remote-Backend. arknet ist damit zugleich
    MCP-Server (fuer den treibenden Agenten) und MCP-Client (fuer den Store). Der Adapter
-   uebersetzt Domaenenobjekte (`Requirement` etc.) auf kognio-memory-Aufrufe; die
+   uebersetzt Domaenenobjekte (`Requirement` etc.) auf die Aufrufe des Remote-Backends; die
    **WorkspaceId** (ADR-001, Invariante) wird zum Project-Selektor.
 
 2. **Security.** Adapter B authentifiziert als MCP-Client per OAuth 2.0 nach dem

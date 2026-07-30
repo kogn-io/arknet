@@ -23,10 +23,11 @@ allow a reasonable window for a fix before any public disclosure.
 ## Scope
 
 arknet runs as a local, single-user MCP daemon bound to loopback
-(`127.0.0.1`); the Workspace-Dir header is routing, not authentication (see
-[ADR-009](docs/adr/adr-009-mcp-http-daemon-transport.md)). Reports
-about that trust boundary are in scope; reports that assume the daemon is
-exposed to an untrusted network are not -- do not expose it.
+(`127.0.0.1`); the project-anchor header (`X-Arknet-Project-Anchor`) is routing, not
+authentication (see [ADR-009](docs/adr/adr-009-mcp-http-daemon-transport.md) for the
+transport/trust boundary and [ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)
+for the anchor itself). Reports about that trust boundary are in scope; reports that assume
+the daemon is exposed to an untrusted network are not -- do not expose it.
 
 ## Supported versions
 

@@ -217,13 +217,13 @@ class ProjectServiceTest {
      */
     @Test
     void adoptableListsOnlyDatasetsNoProjectClaims() {
-        datasets.with(new ProjectId("arknet")).with(new ProjectId("zahlenwart"));
+        datasets.with(new ProjectId("arknet")).with(new ProjectId("second-project"));
 
-        assertEquals(List.of(new ProjectId("arknet"), new ProjectId("zahlenwart")), service.adoptable());
+        assertEquals(List.of(new ProjectId("arknet"), new ProjectId("second-project")), service.adoptable());
 
         service.adopt(new ProjectId("arknet"), "arknet", pathAnchor("/home/fred/DEV/arknet"));
 
-        assertEquals(List.of(new ProjectId("zahlenwart")), service.adoptable());
+        assertEquals(List.of(new ProjectId("second-project")), service.adoptable());
     }
 
     /**

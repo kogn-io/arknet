@@ -3,7 +3,7 @@
 - Status: Proposed (2026-07-19)
 - Verwandt: ADR-001 (lokaler Single-User-Client -- diese ADR aendert nur Transport und
   Betriebsmodell, nicht die lokale Client-Natur), ADR-004 (Spring-AI-2.0-Tech-Linie -- dieselbe
-  Linie, nur der HTTP- statt der stdio-Transport-Baustein), ADR-003 (Adapter B/kognio-memory --
+  Linie, nur der HTTP- statt der stdio-Transport-Baustein), ADR-003 (Adapter B/Remote-Backend --
   explizit NICHT die Loesung hier, siehe Alternativen), ADR-016 (loest Punkt 3 ab -- der Client
   sendet einen registrierten Anker statt eines abzuleitenden Herkunftsverzeichnisses, und der
   Gegenstand hinter der Id heisst dort Projekt statt Workspace; Transport, Betriebsmodell und
@@ -103,6 +103,6 @@ Remote-/Team-Modus (ADR-003) braeuchte echte Auth und ist hier bewusst nicht gel
   `{pid, port}`, Follower verbinden sich per Connect-Probe, kein zentraler Admin-Start noetig).
   Braucht keinen manuellen Start, aber mehr bewegliche Teile (Sidecar-Protokoll, Jitter-Backoff,
   Hand-off bei Leader-Crash). Verworfen zugunsten des einfacheren zentralisierten Daemons.
-- **Adapter B / kognio-memory (ADR-003) als Unterbau.** Ist der Remote-Team-Store mit eigenem
+- **Adapter B / Remote-Backend (ADR-003) als Unterbau.** Ist der Remote-Team-Store mit eigenem
   Auth -- wuerde ADR-001 Punkt 1 ("lokaler Single-User-Client") brechen, fuer ein rein
   lokales Mehrprozess-Problem. Verworfen.
