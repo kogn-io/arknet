@@ -61,8 +61,8 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class StoreReportToolsTest {
 
-    private static final ProjectId PROJECT = new ProjectId("noistill");
-    private static final String ANCHOR = "/home/dev/projects/noistill";
+    private static final ProjectId PROJECT = new ProjectId("sample-project");
+    private static final String ANCHOR = "/home/dev/projects/sample-project";
     private static final ProjectId OTHER_PROJECT = new ProjectId("other-project");
     private static final String OTHER_ANCHOR = "/elsewhere/other-project";
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-report-test-fr-1";
@@ -126,7 +126,7 @@ class StoreReportToolsTest {
     /**
      * Stands in for a project id that is not (or not yet) in the label registry - the header then
      * falls back to the raw id, which is what most of these tests assert on
-     * ({@code "# Project noistill"}). The label-aware header itself is covered by
+     * ({@code "# Project sample-project"}). The label-aware header itself is covered by
      * {@link #storeOverviewNamesTheRegisteredLabelInTheDigestAndHtmlHeader()}.
      */
     private static final FindProject NO_LABELS = id -> Optional.empty();
@@ -160,7 +160,7 @@ class StoreReportToolsTest {
         // IRIs (requirement since #68, term since #71), unbound to any CURIE prefix, so the
         // digest handle falls back to their dcterms:identifier ("FR-1" / "TERM-1") instead of
         // the raw IRI.
-        assertThat(result).contains("# Project noistill");
+        assertThat(result).contains("# Project sample-project");
         assertThat(result).doesNotContain(FR_1_IRI);
         assertThat(result).doesNotContain(TERM_1_IRI);
         assertThat(result).contains("FR-1").contains("-> resource_get(\"FR-1\")");
@@ -205,7 +205,7 @@ class StoreReportToolsTest {
 
         final String result = tools.storeOverview(context, null);
 
-        assertThat(result).contains("# Project noistill").doesNotContain("FAILED");
+        assertThat(result).contains("# Project sample-project").doesNotContain("FAILED");
         final Path serverHtml = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
         assertThat(serverHtml).exists();
         assertThat(result).contains("# HTML report: " + serverHtml.toAbsolutePath());
@@ -223,11 +223,11 @@ class StoreReportToolsTest {
         when(context.transportContext())
                 .thenReturn(McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, ANCHOR)));
 
-        assertThat(tools.storeOverview(context, null)).contains("# Project noistill").contains("FR-1");
+        assertThat(tools.storeOverview(context, null)).contains("# Project sample-project").contains("FR-1");
 
         final McpSyncRequestContext strangerContext = mock(McpSyncRequestContext.class);
         when(strangerContext.transportContext()).thenReturn(
-                McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, "/somewhere/else/noistill")));
+                McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, "/somewhere/else/sample-project")));
 
         assertThatThrownBy(() -> tools.storeOverview(strangerContext, null))
                 .as("an identically named directory elsewhere is a different, unregistered anchor")
@@ -254,7 +254,7 @@ class StoreReportToolsTest {
 
         final String result = toolsWithBrokenFallback.storeOverview(null, ANCHOR);
 
-        assertThat(result).contains("# Project noistill").contains("FR-1");
+        assertThat(result).contains("# Project sample-project").contains("FR-1");
         assertThat(result)
                 .contains("# HTML report: FAILED to write to " + blockedFallbackDir.resolve(PROJECT.value()));
         assertThat(result).contains("FileSystemException");
@@ -303,11 +303,11 @@ class StoreReportToolsTest {
 
         final String result = toolsWithLabel.storeOverview(null, ANCHOR);
 
-        assertThat(result).contains("# Project arknet-demo (id: noistill) --");
+        assertThat(result).contains("# Project arknet-demo (id: sample-project) --");
 
         final Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
         assertThat(Files.readString(html)).contains(
-                "<span class=\"ws\">project: arknet-demo (id: noistill)</span>");
+                "<span class=\"ws\">project: arknet-demo (id: sample-project)</span>");
     }
 
     /**

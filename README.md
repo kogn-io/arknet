@@ -274,13 +274,14 @@ addendum.
 | Module | Description |
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
-| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
+| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`ProjectId`, the `ProjectResolver` port, opaque `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-ubiquitous-language` | Second hexagonal BC: glossary terms as SKOS Concepts (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-use-cases` | Third hexagonal BC: flow-oriented Cockburn use cases (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-bounded-context` | Fourth hexagonal BC: BoundedContext lifecycle, assigns glossary terms to a domain cut (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
+| `arknet-project` | Fifth hexagonal BC: the project registry, mapping a client's opaque anchor to the project whose dataset holds its data (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter); unlike the other four BCs it is not itself project-scoped ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
 | `arknet-architecture-tests` | ArchUnit rules for the dependency invariants the module cut cannot enforce (only `src/test`, no production code) |
 
 ## Ontology

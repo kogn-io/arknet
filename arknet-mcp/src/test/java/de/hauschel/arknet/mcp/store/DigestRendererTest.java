@@ -39,9 +39,9 @@ class DigestRendererTest {
                 iri(TERM + "login", RDF_TYPE, SKOS + "Concept"),
                 lit(TERM + "login", SKOS + "prefLabel", "Anmeldung")));
 
-        String digest = renderer.render(new ProjectId("noistill"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
 
-        assertThat(digest).contains("# Project noistill -- 2 resources, 6 triples, 2 types");
+        assertThat(digest).contains("# Project sample-project -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
         assertThat(digest).contains("req:").contains(REQ);
         assertThat(digest).contains("# Handle for resource_get is the IRI (as a CURIE), NOT the label.");
@@ -67,7 +67,7 @@ class DigestRendererTest {
                 lit(opaqueIri, TITLE, "Login"),
                 lit(opaqueIri, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("noistill"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
 
         assertThat(digest).doesNotContain(opaqueIri);
         assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
@@ -115,9 +115,9 @@ class DigestRendererTest {
     void headerFallsBackToTheRawIdWhenNoLabelIsAvailable() {
         StoreSnapshot snapshot = StoreSnapshot.of(List.of());
 
-        String digest = renderer.render(new ProjectId("kognio-chat-app"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("chat-app-project"), Optional.empty(), snapshot);
 
-        assertThat(digest).contains("# Project kognio-chat-app --");
+        assertThat(digest).contains("# Project chat-app-project --");
     }
 
     private static Triple iri(String subject, String predicate, String objectIri) {

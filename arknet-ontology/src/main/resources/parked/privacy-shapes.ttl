@@ -5,7 +5,7 @@
 #  Validates GDPR annotations on DDD building blocks.
 #  Core DDD shapes (BoundedContext, Aggregate) are in arknet-shapes.ttl.
 #
-#  Migrated from: ddd-forge project-shape.ttl (ddd-forge.org), DSGVO section.
+#  Migrated from: ddd-forge project-shape.ttl, DSGVO section.
 #
 #  Named NodeShapes fuer RDF4J SHACL Sail Kompatibilitaet. Conditional
 #  constraints use SPARQL-based constraints with full IRIs (no prefix

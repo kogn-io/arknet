@@ -5,7 +5,7 @@
 #  Namespace  : https://w3id.org/arknet/privacy#
 #  License    : CC-BY-4.0
 #
-#  Migrated from: ddd-forge.ttl (ddd-forge.org), TEIL 4 "DSGVO / Privacy by
+#  Migrated from: ddd-forge.ttl, TEIL 4 "DSGVO / Privacy by
 #                 Design". Re-licensed by the sole author into arknet.
 #
 #  Scope: GDPR data categories, legal bases (Art. 6), processing purposes,
@@ -38,7 +38,7 @@
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-11"^^xsd:date ;
     dcterms:rights   "CC-BY-4.0" ;
-    dcterms:source   "ddd-forge.ttl (ddd-forge.org), TEIL 4" ;
+    dcterms:source   "ddd-forge.ttl, TEIL 4" ;
     vann:preferredNamespacePrefix "arkpriv" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/privacy#" ;
     rdfs:seeAlso     <https://w3id.org/dpv> ;

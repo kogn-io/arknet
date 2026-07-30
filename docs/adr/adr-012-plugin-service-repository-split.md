@@ -72,3 +72,11 @@ zeigt direkt auf den Plugin-Content, ohne `git-subdir`-Indirektion.
   der geteilten CI, dem gemeinsamen Marketplace-Klonziel oder daran, dass ein Service-Release
   versehentlich Plugin-Dateien im selben Commit mitzieht. Verworfen als kosmetischer statt
   struktureller Fix.
+
+## Nachtrag 2026-07-30: Issue-Tracker-Entscheidung ueberholt
+
+Der unter "Negativ / bewusst in Kauf genommen" genannte Punkt, `arknet` bleibe "zunaechst beim
+bestehenden internen Tracker", ist ueberholt: die Issues sind seit 2026-07-30 auf GitHub Issues
+umgezogen, `arknet` und `arknet-plugin` nutzen jetzt denselben Tracker-Typ. Der urspruengliche
+Text bleibt oben unveraendert stehen (Entscheidungslage zum Zeitpunkt der Annahme dieser ADR),
+dieser Nachtrag haelt nur die Ueberholung fest.

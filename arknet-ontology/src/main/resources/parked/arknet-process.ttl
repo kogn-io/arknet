@@ -5,7 +5,7 @@
 #  Namespace  : https://w3id.org/arknet/process#
 #  License    : CC-BY-4.0
 #
-#  Migrated from: dddpo.ttl (dddprocess.org)
+#  Migrated from: dddpo.ttl (dddprocess project)
 #
 #  Scope: Business processes, state machines, business rules, outcomes.
 #         Imports arknet-core for DDD base concepts.

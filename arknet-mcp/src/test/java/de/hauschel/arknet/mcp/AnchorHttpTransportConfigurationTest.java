@@ -33,11 +33,11 @@ class AnchorHttpTransportConfigurationTest {
 
     @Test
     void extractsTheAnchorHeaderIntoTheTransportContext() {
-        ServerRequest request = requestWithHeader("/home/dev/projects/noistill");
+        ServerRequest request = requestWithHeader("/home/dev/projects/sample-project");
 
         McpTransportContext context = AnchorHttpTransportConfiguration.extractAnchor(request);
 
-        assertThat(context.get(ProjectResolver.ANCHOR_KEY)).isEqualTo("/home/dev/projects/noistill");
+        assertThat(context.get(ProjectResolver.ANCHOR_KEY)).isEqualTo("/home/dev/projects/sample-project");
     }
 
     @Test

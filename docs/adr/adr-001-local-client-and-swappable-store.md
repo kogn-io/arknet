@@ -13,8 +13,8 @@ arknet verwaltet Architekturmodelle (DDD, Requirements, ...) als RDF und exponie
 MCP-first fuer KI-Agenten. Zwei Nutzungsszenarien stehen im Raum: ein einzelner Architekt
 arbeitet lokal an einem oder mehreren Modellen; oder ein Team arbeitet gemeinsam an einem
 Modell. arknet soll dabei schlank und lokal bleiben (lokaler MCP-Server, embeddable Store), aber der Weg
-zum Team-Szenario darf nicht verbaut werden. Fuer das Team-Szenario existiert ein remote
-Backend (kognio-memory), das Team / Multi-Project / Auth selbst traegt.
+zum Team-Szenario darf nicht verbaut werden. Fuer das Team-Szenario existiert ein separates remote
+Backend, das Team / Multi-Project / Auth selbst traegt.
 
 ## Entscheidung
 
@@ -29,11 +29,11 @@ Backend (kognio-memory), das Team / Multi-Project / Auth selbst traegt.
    erfuellen denselben Port:
    - **Adapter A -- lokal:** `arknet-requirements-adapter-kogniordf` ueber kognio-rdf
      (embeddable RDF-Substrat). Single-User, lokales Dataset.
-   - **Adapter B -- remote (spaeter):** `arknet-requirements-adapter-kogniomemory`, ein
-     MCP-Client gegen kognio-memory. Dieses Backend traegt Team / Multi-Project / Auth selbst.
+   - **Adapter B -- remote (spaeter):** ein MCP-Client gegen ein separates Remote-Backend
+     (Modulname folgt bei Umsetzung). Dieses Backend traegt Team / Multi-Project / Auth selbst.
 
    arknet ist damit zugleich MCP-Server (fuer den treibenden Agenten) und MCP-Client (fuer
-   kognio-memory als Store).
+   das Remote-Backend als Store).
 
 3. **Invarianten, die den Weg offenhalten** (ab sofort, auch im Single-User-Bau):
    Out-Ports bleiben domaennah und backend-agnostisch; eine **WorkspaceId** laeuft durch
