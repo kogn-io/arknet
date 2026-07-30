@@ -6,7 +6,6 @@ package de.hauschel.arknet.req.adapter.mcp;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -17,21 +16,19 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
-import de.hauschel.arknet.req.application.port.in.SetRequirementStatus;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
-import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
-import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
@@ -72,30 +69,23 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * it arrives opaque, is matched whole against what was registered, and either hits exactly
  * one project or fails with an error message naming the possible remedies.</p>
  *
- * <p><strong>Term display resolution (issue #77 nachtrag).</strong> {@link TermRef} carries a
- * linked term's opaque subject identity, not its business code - but a human who typed
- * {@code TERM-1} into {@code req_link_term} expects to see {@code TERM-1} again, not a raw IRI
- * they cannot re-type. This adapter is the gate into the requirements hexagon, not part of its
- * core, so it may borrow a driving port of a <em>different</em> hexagon
- * ({@link ResolveTerms}, owned by ubiquitous-language) to answer that purely for display - the
- * requirements core itself still never depends on {@code arknet-ubiquitous-language-core}, and
- * {@code req_link_term}'s own write path still resolves via the decoupled {@code TermLookup}
- * out-port. {@link #format} always calls {@link ResolveTerms#getById} exactly once per
- * rendering, batched across every {@link TermRef} involved (never once per {@link TermRef}, and
- * for {@code req_list} never once per requirement); an id {@link ResolveTerms} could not resolve
- * simply falls back to the bare IRI - {@link #format} never throws and never drops a term.</p>
+ * <p><strong>Rendering.</strong> This class only dispatches tool calls to their in-port and
+ * turns the result into the returned string via {@link RequirementPresenter} - it holds no
+ * rendering logic of its own (issue #190). See {@link RequirementPresenter} for the term
+ * display resolution (issue #77 nachtrag) that borrows {@link ResolveTerms} purely for
+ * display.</p>
  */
 public final class RequirementMcpTools {
 
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
     private final GetRequirement getRequirement;
-    private final SetRequirementStatus setRequirementStatus;
+    private final AcceptRequirement acceptRequirement;
     private final LinkTerm linkTerm;
     private final UpdateRequirement updateRequirement;
     private final GetRequirementSchema getRequirementSchema;
-    private final ResolveTerms resolveTerms;
     private final ProjectResolver projects;
+    private final RequirementPresenter presenter;
 
     /**
      * Creates the adapter with its seven driving in-ports, the borrowed ubiquitous-language
@@ -104,7 +94,7 @@ public final class RequirementMcpTools {
      * @param addRequirement        in-port backing {@code req_add}
      * @param listRequirements      in-port backing {@code req_list}
      * @param getRequirement        in-port backing {@code req_get}
-     * @param setRequirementStatus  in-port backing {@code req_set_status}
+     * @param acceptRequirement     in-port backing {@code req_set_status}
      * @param linkTerm              in-port backing {@code req_link_term}
      * @param updateRequirement     in-port backing {@code req_update}
      * @param getRequirementSchema  in-port backing {@code req_schema}
@@ -116,7 +106,7 @@ public final class RequirementMcpTools {
             final AddRequirement addRequirement,
             final ListRequirements listRequirements,
             final GetRequirement getRequirement,
-            final SetRequirementStatus setRequirementStatus,
+            final AcceptRequirement acceptRequirement,
             final LinkTerm linkTerm,
             final UpdateRequirement updateRequirement,
             final GetRequirementSchema getRequirementSchema,
@@ -125,12 +115,12 @@ public final class RequirementMcpTools {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
-        this.setRequirementStatus = Objects.requireNonNull(setRequirementStatus, "setRequirementStatus");
+        this.acceptRequirement = Objects.requireNonNull(acceptRequirement, "acceptRequirement");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
-        this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.presenter = new RequirementPresenter(resolveTerms);
     }
 
     /**
@@ -196,7 +186,7 @@ public final class RequirementMcpTools {
                 new NewRequirement(title, description, requirementType, requirementPriority,
                         blankToNull(motivatedBy), blankToNull(qualityCategory),
                         acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria)));
-        return format(projectId, created);
+        return presenter.format(projectId, created);
     }
 
     @McpTool(name = "req_list", description = "List all managed requirements.",
@@ -216,8 +206,8 @@ public final class RequirementMcpTools {
             return "(no requirements)";
         }
         // One batch resolution across every requirement's linked terms, not one per requirement.
-        final Map<ResourceId, ResolvedTerm> termsById = resolveTermsFor(projectId, all);
-        return all.stream().map(r -> format(r, termsById))
+        final Map<ResourceId, ResolvedTerm> termsById = presenter.resolveTermsFor(projectId, all);
+        return all.stream().map(r -> presenter.format(r, termsById))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
 
@@ -236,12 +226,12 @@ public final class RequirementMcpTools {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final RequirementCode code = new RequirementCode(id);
         return getRequirement.get(projectId, code)
-                .map(r -> format(projectId, r))
+                .map(r -> presenter.format(projectId, r))
                 .orElse("Requirement not found: " + code.value());
     }
 
     @McpTool(name = "req_set_status", description = "Change the lifecycle status of a requirement.")
-    public String setStatus(
+    public String accept(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
             @McpToolParam(description = "Target status: PROPOSED or ACCEPTED") final String status,
@@ -254,10 +244,17 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final RequirementCode code = new RequirementCode(id);
+        // The requirements lifecycle permits exactly one transition (issue #190): the tool's
+        // external "status" parameter is kept for API stability, but AcceptRequirement itself no
+        // longer takes a target status - only ACCEPTED can ever legally result from this call.
         final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
-        final Requirement updated =
-                setRequirementStatus.setStatus(projectId, code, requirementStatus);
-        return format(projectId, updated);
+        if (requirementStatus != RequirementStatus.ACCEPTED) {
+            throw new IllegalArgumentException(
+                    "req_set_status only supports transitioning a requirement to ACCEPTED, not "
+                            + requirementStatus);
+        }
+        final Requirement updated = acceptRequirement.accept(projectId, code);
+        return presenter.format(projectId, updated);
     }
 
     @McpTool(name = "req_link_term",
@@ -280,7 +277,7 @@ public final class RequirementMcpTools {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final Requirement updated =
                 linkTerm.linkTerm(projectId, new RequirementCode(reqId), termId);
-        return format(projectId, updated);
+        return presenter.format(projectId, updated);
     }
 
     @McpTool(name = "req_update",
@@ -319,7 +316,7 @@ public final class RequirementMcpTools {
         final Requirement updated = updateRequirement.update(projectId, code, blankToNull(title),
                 blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria),
                 requirementPriority);
-        return format(projectId, updated);
+        return presenter.format(projectId, updated);
     }
 
     @McpTool(name = "req_schema",
@@ -329,73 +326,9 @@ public final class RequirementMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String schema() {
         return getRequirementSchema.schema().stream()
-                .map(RequirementMcpTools::formatSchemaTerm)
+                .map(presenter::formatSchemaTerm)
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("");
-    }
-
-    /** Renders a single requirement, resolving its own linked terms in one batch call. */
-    private String format(final ProjectId projectId, final Requirement r) {
-        return format(r, resolveTermsFor(projectId, List.of(r)));
-    }
-
-    /**
-     * Renders {@code r} using an already-resolved {@code termsById} lookup - never itself calls
-     * {@link ResolveTerms}, so callers control the batching (one call for a single requirement,
-     * one call total for {@code req_list}). Never throws: a {@link TermRef} missing from
-     * {@code termsById} (unresolvable, or simply not looked up) falls back to its bare IRI.
-     */
-    private static String format(final Requirement r, final Map<ResourceId, ResolvedTerm> termsById) {
-        final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
-        final String terms = r.usesTerms().isEmpty()
-                ? ""
-                : " [terms: " + r.usesTerms().stream().map(ref -> renderTerm(ref, termsById))
-                        .reduce((a, b) -> a + ", " + b).orElse("") + "]";
-        final String criteria = " [done when: " + String.join("; ", r.acceptanceCriteria()) + "]";
-        return "%s [%s] %s (%s)%s%s%s".formatted(
-                r.code().value(), r.type(), r.title(), r.status(), priority, terms, criteria);
-    }
-
-    /** Renders one schema term as {@code term: definition (values: A, B, ...)}. */
-    private static String formatSchemaTerm(final RequirementSchemaTerm t) {
-        return "%s: %s (values: %s)".formatted(t.term(), t.definition(), String.join(", ", t.values()));
-    }
-
-    /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
-    private static String renderTerm(final TermRef ref, final Map<ResourceId, ResolvedTerm> termsById) {
-        final ResolvedTerm term = termsById.get(ref.value());
-        return term != null ? term.code().value() : ref.value().value();
-    }
-
-    /**
-     * Batch-resolves every term referenced by {@code requirements} in exactly one call to
-     * {@link ResolveTerms#getById} - the union of all their {@link TermRef}s, deduplicated, not
-     * one call per requirement and not one call per {@link TermRef}. Missing ids are simply
-     * absent from the returned map, which {@link #renderTerm} treats as "fall back to the IRI".
-     *
-     * <p><strong>Structurally cannot throw on a duplicate key (issue #77, second nachtrag).</strong>
-     * {@link ResolveTerms} promises at most one {@link ResolvedTerm} per identity, but this method
-     * must not rely on every implementation upholding that: a plain {@code Collectors.toMap(t ->
-     * t.id(), t -> t)} throws {@code IllegalStateException} the moment two returned
-     * {@link ResolvedTerm}s share an identity, turning a display concern into a thrown exception -
-     * the very thing this rendering path exists to avoid. The merge function below keeps the
-     * first entry for a duplicate key instead; which one is kept is immaterial here, since
-     * rendering only ever reads {@link ResolvedTerm#code()} and any legitimate duplicate (e.g. a
-     * store-first term with more than one {@code dcterms:identifier}, see
-     * {@code KognioRdfTermRepository#findByIds}) carries the same code on every row.</p>
-     */
-    private Map<ResourceId, ResolvedTerm> resolveTermsFor(
-            final ProjectId projectId, final List<Requirement> requirements) {
-        final ResourceId[] ids = requirements.stream()
-                .flatMap(r -> r.usesTerms().stream())
-                .map(TermRef::value)
-                .distinct()
-                .toArray(ResourceId[]::new);
-        if (ids.length == 0) {
-            return Map.of();
-        }
-        return resolveTerms.getById(projectId, ids).stream()
-                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 
     private static String blankToNull(final String value) {

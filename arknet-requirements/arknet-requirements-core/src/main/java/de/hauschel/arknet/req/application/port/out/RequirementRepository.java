@@ -53,27 +53,27 @@ public interface RequirementRepository {
 
     /**
      * Replaces an existing requirement by identity, but only if its current concurrency token
-     * (the {@code arkprov:head} revision recorded by the last funnel write, ADR-014) still equals
-     * {@code expectedHead} - the compare-and-set guard against the lost-update race (issue #108,
-     * degenerated from a full-snapshot comparison to a head comparison by issue #167/ADR-014
-     * decision 4). A read-modify-write round trip (e.g. {@code req_link_term}, {@code
+     * still equals {@code expectedHead}; otherwise the write is rejected and nothing is
+     * persisted. A read-modify-write round trip (e.g. {@code req_link_term}, {@code
      * req_set_status}) reads the current state and head together via {@link #findCurrentByCode},
      * derives {@code updated}, and calls this method with the head it observed - a mismatch means
      * the read was already stale, and the caller must re-read and retry rather than silently
      * discard the concurrent change.
      *
-     * <p><strong>The token guards funnel writers, not store-first edits.</strong>
-     * {@code expectedHead} only ever changes when a write goes through the shared
-     * {@code WriteFunnel} (ADR-014); a direct store-first (ADR-005) edit to this requirement's
-     * triples leaves the head untouched. Such an edit therefore passes this method's
-     * compare-and-set check undetected, and the subsequent replace-by-identity write silently
-     * overwrites it. The guard closes the lost-update window between two funnel writers, not
-     * between a funnel writer and a write that bypassed the funnel entirely.</p>
+     * <p><strong>Guards funnel writers, not store-first edits.</strong> {@code expectedHead} is
+     * the {@code arkprov:head} revision recorded by the last write through the shared
+     * {@code WriteFunnel} (ADR-014 compare-and-set guard against the lost-update race from issue
+     * #108, degenerated from a full-snapshot comparison to a head comparison by issue #167). A
+     * direct store-first (ADR-005) edit to this requirement's triples leaves the head untouched,
+     * so such an edit passes this method's check undetected and the subsequent
+     * replace-by-identity write silently overwrites it: the guard closes the lost-update window
+     * between two funnel writers, not between a funnel writer and a write that bypassed the
+     * funnel entirely.</p>
      *
      * @param projectId  the project (architecture model) the requirement lives in
-     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
-     *                     requirement (from {@link #findCurrentByCode}), or {@code null} if the
-     *                     caller expects no revision to exist yet
+     * @param expectedHead the {@link RevisionToken} the caller last observed for this requirement
+     *                     (from {@link #findCurrentByCode}), or {@code null} if the caller expects
+     *                     no revision to exist yet
      * @param updated      the requirement to store in place of the current one, if its head still
      *                     matches {@code expectedHead}
      * @throws RequirementNotFoundException              if no requirement with this identity
@@ -82,7 +82,7 @@ public interface RequirementRepository {
      *                                                    the stored requirement's current head - a
      *                                                    concurrent write raced ahead
      */
-    void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated);
 
     /**
      * Finds a requirement by its human-readable business code within a project.
@@ -94,19 +94,19 @@ public interface RequirementRepository {
     Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code);
 
     /**
-     * Reads a requirement's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). The core
-     * fields (type, title, description, status, priority, motivatedBy, qualityCategory) and the
-     * head itself come from one query call - one snapshot - which is the load-bearing guarantee
-     * here, not an ordering of clauses within that query. {@code usesTerms} and
-     * {@code acceptanceCriteria}, in contrast, are deliberately filled in by later, independent
-     * follow-up reads; that is safe precisely because a later read can only be fresher, never
-     * staler, than the head: a funnel write that commits in between moves the head, so the
-     * subsequent {@link #compareAndUpdate} then fails its comparison and the caller re-reads
-     * instead of overwriting a state it never actually saw. The pairing is therefore conservative
-     * - state is never older than the head it is paired with - never optimistic; it does not mean
-     * the whole requirement comes from a single read. Backs the read side of the read-modify-write
-     * round trip {@link #compareAndUpdate} guards the write side of.
+     * Reads a requirement's current state together with its concurrency token, backing the read
+     * side of the read-modify-write round trip whose write side {@link #compareAndUpdate} guards.
+     *
+     * <p><strong>What "together" guarantees.</strong> The core fields (type, title, description,
+     * status, priority, motivatedBy, qualityCategory) and the head itself (the
+     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014) come from one
+     * query call - one snapshot. {@code usesTerms} and {@code acceptanceCriteria}, in contrast,
+     * are filled in by later, independent follow-up reads; that is safe because a later read can
+     * only be fresher, never staler, than the head - a funnel write committing in between moves
+     * the head, so the subsequent {@link #compareAndUpdate} fails its comparison and the caller
+     * re-reads instead of overwriting state it never saw. The pairing is therefore conservative
+     * (state is never older than its paired head), not a guarantee that the whole requirement
+     * comes from a single read.</p>
      *
      * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
@@ -116,11 +116,11 @@ public interface RequirementRepository {
     Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code);
 
     /**
-     * A requirement's state paired with its current concurrency token (the {@code arkprov:head}
-     * revision IRI, or {@code null} if the requirement predates the funnel's revision recording),
-     * as read together by {@link #findCurrentByCode}.
+     * A requirement's state paired with its current concurrency token (the {@link RevisionToken},
+     * or {@code null} if the requirement predates the funnel's revision recording), as read
+     * together by {@link #findCurrentByCode}.
      */
-    record CurrentRequirement(Requirement value, String head) {
+    record CurrentRequirement(Requirement value, RevisionToken head) {
     }
 
     /**

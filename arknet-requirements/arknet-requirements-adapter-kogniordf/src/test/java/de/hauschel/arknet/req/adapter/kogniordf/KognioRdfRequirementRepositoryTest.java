@@ -38,6 +38,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -88,7 +89,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code updated} through it - there is no unconditional {@code update} left on the port.
      */
     private void replaceViaCompareAndUpdate(ProjectId projectId, Requirement updated) {
-        String head = repository.findCurrentByCode(projectId, updated.code())
+        RevisionToken head = repository.findCurrentByCode(projectId, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
         repository.compareAndUpdate(projectId, head, updated);
@@ -210,7 +211,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
         repository.create(WORKSPACE_A, proposed);
-        String head = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        RevisionToken head = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
@@ -234,7 +235,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
         repository.create(WORKSPACE_A, original);
-        String staleHead = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        RevisionToken staleHead = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         Requirement concurrentlyAccepted = new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
@@ -274,7 +275,7 @@ class KognioRdfRequirementRepositoryTest {
         givenTerm(WORKSPACE_A, "TERM-1");
         Requirement created = requirementUsing(termRef("TERM-1"));
         repository.create(WORKSPACE_A, created);
-        String head = repository.findCurrentByCode(WORKSPACE_A, created.code()).orElseThrow().head();
+        RevisionToken head = repository.findCurrentByCode(WORKSPACE_A, created.code()).orElseThrow().head();
 
         Requirement accepted = new Requirement(created.id(), created.code(), created.title(), created.description(),
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
@@ -601,7 +602,10 @@ class KognioRdfRequirementRepositoryTest {
 
         assertEquals(1, all.size());
         assertEquals(new RequirementCode("FR-1"), all.get(0).code());
-        assertTrue(List.of(Priority.MUST_HAVE, Priority.SHOULD_HAVE).contains(all.get(0).priority()));
+        // First-seen wins (issue #81): MUST_HAVE is the first arkreq:priority triple
+        // givenRequirementWithTwoPriorities inserts, and RDF4J's MemoryStore preserves insertion
+        // order for equal-subject/-predicate statements, so this is deterministic, not incidental.
+        assertEquals(Priority.MUST_HAVE, all.get(0).priority());
     }
 
     /** The chosen priority is deterministic across repeated reads against the same store state. */
@@ -1221,7 +1225,7 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
         assertEquals(1, revisionsOf(id).size(), "create must record exactly one revision");
-        String headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        RevisionToken headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
 
         repository.compareAndUpdate(WORKSPACE_A, headAfterCreate, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
@@ -1232,7 +1236,7 @@ class KognioRdfRequirementRepositoryTest {
         List<String> heads = headsOf(id);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head(),
+        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head().value(),
                 "findCurrentByCode must observe the advanced head");
     }
 

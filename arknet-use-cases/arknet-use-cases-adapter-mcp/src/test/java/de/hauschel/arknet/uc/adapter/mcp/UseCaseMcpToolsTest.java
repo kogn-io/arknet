@@ -422,7 +422,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedRequirement> getById(ProjectId projectId, ResourceId... ids) {
+        public List<ResolvedRequirement> resolveExisting(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(r -> wanted.contains(r.id())).toList();
         }
