@@ -21,6 +21,7 @@ import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
@@ -216,7 +217,7 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
             delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
@@ -270,7 +271,7 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
             delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
@@ -316,7 +317,7 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new de.hauschel.arknet.req.domain.RequirementNotFoundException(

@@ -39,6 +39,7 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -246,7 +247,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * otherwise leave open between the read and the write.
      */
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
 
@@ -265,7 +266,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
         funnel.compareAndUpdate(new DatasetId(projectId.value()), REQUIREMENTS_GRAPH, subjectIriString,
-                expectedHead, graph, assertedContext,
+                expectedHead == null ? null : expectedHead.value(), graph, assertedContext,
                 () -> new RequirementNotFoundException(projectId, updated.code()),
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph));
@@ -497,9 +498,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
             BindingSet row = found.get();
             Requirement requirement = requirementOf(row, code, handle);
-            String head = row.getValue("head")
+            RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString())
+                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                     .orElse(null);
             return Optional.of(new RequirementRepository.CurrentRequirement(requirement, head));
         }
