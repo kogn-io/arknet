@@ -1,7 +1,7 @@
 # ADR-010: Review-UI als read-only Vaadin-OSS-Adapter
 
 - Status: Proposed (2026-07-20) -- wird Accepted, sobald das UI-Modul geschnitten und gebaut wird
-- Verwandt: ADR-002, ADR-004, ADR-006, ADR-008
+- Verwandt: ADR-004, ADR-006, ADR-008
 
 ## Kontext
 
@@ -16,8 +16,8 @@ nachvollziehen will.
 
 Eine UI-Technologie fuer diesen Review-Kanal war zu waehlen. Die Rahmenbedingungen setzen enge
 Kraefte: arknet ist ein reiner Java/Spring/hexagonaler Stack ohne zweite Sprache; es ist ein
-lokaler Single-User-Client (ADR-001); es folgt einem Open-Core-Modell, dessen Community Edition
-aus OSS-Bausteinen baubar bleiben muss (ADR-002). ADR-004 hat fuer den MCP-Layer bereits eine
+lokaler Single-User-Client (ADR-001); es soll vollstaendig aus OSS-Bausteinen baubar und
+auslieferbar bleiben. ADR-004 hat fuer den MCP-Layer bereits eine
 Technologie-Linie gesetzt statt sie pro Modul zu bewerten -- dieselbe Frage stellt sich hier
 fuer die UI.
 
@@ -30,9 +30,9 @@ Screen bewertet.
    JS-Build-Toolchain im Reaktor.
 
 2. **Ausschliesslich OSS-Komponenten (Vaadin Flow, Apache 2.0). Kein Vaadin Pro/Commercial**
-   (Charts, Board, Grid-Pro, Rich Text Editor Pro). Grund: die Community Edition muss aus
-   OSS-Abhaengigkeiten baubar und auslieferbar bleiben (ADR-002) -- ein proprietaeres
-   UI-Toolkit unter der OSS-CE waere ein Wertungswiderspruch.
+   (Charts, Board, Grid-Pro, Rich Text Editor Pro). Grund: arknet muss vollstaendig aus
+   OSS-Abhaengigkeiten baubar und auslieferbar bleiben -- ein proprietaeres UI-Toolkit
+   waere ein Wertungswiderspruch dazu.
 
 3. Die UI ist ein weiterer **treibender Adapter auf demselben Composition Root**, der
    in-process ueber die bestehenden Lese-In-Ports liest -- die `*_list`/`*_get`-In-Ports der
@@ -57,7 +57,7 @@ Screen bewertet.
   Composition-Root-Reinheit aus ADR-006 traegt weiter (RDF4J bleibt in den
   `*-adapter-kogniordf`-Modulen), und der Adapter-komponiert-ueber-In-Ports-Schnitt aus ADR-008
   deckt einen lesenden Adapter, der mehrere BC-In-Ports fuer die Anzeige zieht, bereits ab.
-- OSS-only haelt die Community Edition baubar und als OSS auslieferbar (ADR-002).
+- OSS-only haelt arknet vollstaendig baubar und als OSS auslieferbar.
 
 **Negativ / bewusst deferred (YAGNI):**
 
@@ -88,8 +88,8 @@ Screen bewertet.
   Java-Projekt -- ein dauerhafter Stack-Bruch fuer eine reine Review-UI. Verworfen zugunsten
   der Stack-Konsistenz.
 - **Vaadin Pro/Commercial.** Liefert Charts (Vollgraph) und Pro-Grids out-of-the-box. Ein
-  proprietaeres UI-Toolkit unter der OSS-Community-Edition widerspricht dem Open-Core-Modell
-  (ADR-002). Verworfen.
+  proprietaeres UI-Toolkit widerspricht dem Anspruch, arknet vollstaendig aus OSS-Bausteinen
+  zu bauen. Verworfen.
 - **Keine eigene UI -- das generierte `store-report.html` (ADR-006) genuegt.** Verworfen: der
   Store-Report ist ein flacher Digest/HTML-Dump zum Nachschlagen, keine navigierbare,
   filterbare Review-Arbeitsflaeche (Master-Detail, Traceability-Matrix, Status-/Prio-Filter) --

@@ -111,7 +111,7 @@ Composition Root: die Antwort liegt dort, wo die Frage gestellt wird.
   vollstaendig deploybar.** Fuer arknet folgenlos -- ein Prozess, ein Composition Root, beide
   BCs sind ohnehin immer zusammen im selben `arknet-mcp` gebunden. Der Distributions-Schnitt
   (welche BCs zusammen ausgeliefert werden) ist laut Projektstand ohnehin offen und soll,
-  wenn er faellt, entlang der **Editionsgrenze** (Community/Closed, ADR-002/ADR-003) verlaufen,
+  wenn er faellt, entlang der **Adapter-Grenze** (lokal/remote, ADR-003) verlaufen,
   nicht entlang einzelner BCs -- diese Entscheidung nimmt dem nichts vorweg.
 - **Der Praezedenzfall bindet.** Naechste Cross-BC-Anzeige-Bedarfe (#66) sollten denselben
   Schnitt waehlen (In-Adapter -> fremder In-Port, nie-wirft-Batch-Port), nicht wieder

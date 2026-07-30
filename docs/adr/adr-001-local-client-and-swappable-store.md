@@ -1,7 +1,7 @@
 # ADR-001: Lokaler Single-User-Client und austauschbarer Store
 
 - Status: Proposed (2026-07-13)
-- Verwandt: ADR-002, ADR-003, ADR-005, ADR-009 (MCP-Transport -- praezisiert, wie der
+- Verwandt: ADR-003, ADR-005, ADR-009 (MCP-Transport -- praezisiert, wie der
   lokale MCP-Server erreichbar ist, ohne die Single-User-Client-Entscheidung hier zu
   aendern), ADR-011 (loest die hier deferrierte Provenance ein), ADR-016 (loest die unten
   festgehaltene Herkunft der Store-Identitaet ab, benennt ihren Gegenstand vom Workspace zum
@@ -46,7 +46,6 @@ Backend (kognio-memory), das Team / Multi-Project / Auth selbst traegt.
 
 **Positiv:** Team-Faehigkeit wird zum reinen Adapter-Austausch, ohne den Core mit
 Auth/Tenancy zu belasten. Der Single-User-Bau bleibt schlank; nichts Spekulatives im Core.
-Die Port-Grenze traegt zugleich die Editions-/Monetarisierungsgrenze (siehe ADR-002).
 
 **Negativ / bewusst deferred (YAGNI):** Kein Workspace-Management (CRUD/Listing) -- weiterhin
 deferred, bis der Bedarf konkret ist (das Routing selbst traegt bereits mehrere Projekte).

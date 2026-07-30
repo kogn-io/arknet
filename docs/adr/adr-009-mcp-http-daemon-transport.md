@@ -93,7 +93,7 @@ Remote-/Team-Modus (ADR-003) braeuchte echte Auth und ist hier bewusst nicht gel
   nicht setzbar).
 - **RDF4J Server (`rdf4j-http-server`).** Offiziell nur als WAR fuer Tomcat/Jetty dokumentiert,
   kein verifizierter leichtgewichtiger Embed-Pfad in eine eigene Spring-Boot-JVM. Verworfen (zu
-  schwer fuer die Community Edition).
+  schwer fuer arknets lokalen Client).
 - **RDF4J `LmdbStore` statt `NativeStore`.** Echte Multi-Prozess-Faehigkeit (Lock nur pro
   Transaktion) waere die Wurzelloesung ohne jeden Server. Weiterhin als Experimental markiert,
   braucht native (LWJGL-)Abhaengigkeiten, und die Store-Auswahl liegt in `io.kogn.rdf`
@@ -104,5 +104,5 @@ Remote-/Team-Modus (ADR-003) braeuchte echte Auth und ist hier bewusst nicht gel
   Braucht keinen manuellen Start, aber mehr bewegliche Teile (Sidecar-Protokoll, Jitter-Backoff,
   Hand-off bei Leader-Crash). Verworfen zugunsten des einfacheren zentralisierten Daemons.
 - **Adapter B / kognio-memory (ADR-003) als Unterbau.** Ist der Remote-Team-Store mit eigenem
-  Auth, Closed Edition (ADR-002) -- wuerde ADR-001 Punkt 1 ("lokaler Single-User-Client") fuer die
-  Community Edition brechen, fuer ein rein lokales Mehrprozess-Problem. Verworfen.
+  Auth -- wuerde ADR-001 Punkt 1 ("lokaler Single-User-Client") brechen, fuer ein rein
+  lokales Mehrprozess-Problem. Verworfen.

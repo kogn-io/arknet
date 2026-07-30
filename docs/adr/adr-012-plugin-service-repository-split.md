@@ -1,8 +1,7 @@
 # ADR-012: Plugin und Service in getrennten Repositories statt einem Monorepo
 
 - Status: Accepted (2026-07-25)
-- Verwandt: ADR-002 (Open-Core-Editionen -- Lizenz/Distribution, orthogonal zur Repo-Struktur
-  hier), ADR-009 (geteilter MCP-HTTP-Daemon -- der Service, dessen Betriebsmodell von dieser
+- Verwandt: ADR-009 (geteilter MCP-HTTP-Daemon -- der Service, dessen Betriebsmodell von dieser
   ADR unberuehrt bleibt)
 
 ## Kontext
@@ -40,7 +39,7 @@ Zwei Repositories statt eins:
 Die Plugin-Inhalte wurden history-erhaltend per `git subtree split`/`git subtree add`
 uebertragen -- zwei getrennte Splits fuer `.claude-plugin/` und `skills/`, da beide
 Top-Level-Verzeichnisse ohne gemeinsamen Prefix sind. Der Marketplace-Eintrag
-(`ai-tools/claude-code-marketplace`) wurde auf die neue Repo-URL umgestellt.
+wurde auf die neue Repo-URL umgestellt.
 
 ## Konsequenzen
 
@@ -59,8 +58,8 @@ zeigt direkt auf den Plugin-Content, ohne `git-subdir`-Indirektion.
   vorher implizit durch das gemeinsame Repo geloest war -- der Skill liest die Ontologie-Datei
   direkt aus `arknet-ontology/`, die nur im Service-Repo existiert (arknet-plugin#1).
 - **Zwei Repos statt eines zu pflegen**, inklusive zwei getrennter Issue-Tracker-Entscheidungen
-  (`arknet` bleibt beim bestehenden Forgejo-Tracker, `arknet-plugin` bekommt GitHub Issues --
-  bewusst unterschiedlich, weil das Plugin-Repo deutlich kleiner ist).
+  (`arknet` bleibt zunaechst beim bestehenden internen Tracker, `arknet-plugin` bekommt GitHub
+  Issues -- bewusst unterschiedlich, weil das Plugin-Repo deutlich kleiner ist).
 
 ## Alternativen
 

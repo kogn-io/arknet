@@ -1,17 +1,17 @@
 # ADR-003: Adapter B -- remote Store gegen kognio-memory (+ Security-Richtung)
 
 - Status: Proposed (2026-07-14) -- Richtungsentscheidung; kein Code in arknet, bis Adapter B ansteht
-- Verwandt: ADR-001, ADR-002, ADR-004, ADR-009 (MCP-Transport -- prueft Adapter B explizit
+- Verwandt: ADR-001, ADR-004, ADR-009 (MCP-Transport -- prueft Adapter B explizit
   als Alternative fuer arknet-mcps lokales Mehrprozess-Problem und verwirft sie, weil sie
-  ADR-001 Punkt 1 fuer die Community Edition braeche)
+  ADR-001 Punkt 1 braeche)
 
 ## Kontext
 
 ADR-001 haelt den Store hinter einem domaennahen Out-Port austauschbar und benennt
 Adapter B als remote Variante: ein MCP-Client gegen kognio-memory, das Team / Multi-Project
-/ Auth selbst traegt. ADR-002 ordnet Adapter B der proprietaeren Closed Edition zu. Dieses
-ADR haelt fest, *wie* Adapter B angebunden und abgesichert wird -- als Richtung, noch nicht
-als Umsetzung.
+/ Auth selbst traegt. Adapter B bleibt ein separates, nicht mit ausgeliefertes Modul, bis der
+Bedarf konkret wird. Dieses ADR haelt fest, *wie* Adapter B angebunden und abgesichert wird --
+als Richtung, noch nicht als Umsetzung.
 
 ## Entscheidung
 

@@ -1,7 +1,7 @@
 # ADR-004: Spring AI 2.0 als Tech-Linie fuer den MCP-Layer
 
 - Status: Proposed (2026-07-13)
-- Verwandt: ADR-002, ADR-003, ADR-009 (MCP-Transport -- wechselt den Transport-Baustein
+- Verwandt: ADR-003, ADR-009 (MCP-Transport -- wechselt den Transport-Baustein
   innerhalb dieser Tech-Linie von stdio auf HTTP, aendert nichts an der Annotation-basierten
   SDK-Generation, die diese ADR entscheidet), ADR-010 (UI-Tech-Linie -- dieselbe
   Setzen-statt-pro-Modul-Bewerten-Frage fuer den UI-Layer)
