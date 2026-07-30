@@ -31,6 +31,7 @@ import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -83,7 +84,7 @@ class StoreReaderTest {
 
     /** Reads {@code updated}'s current head and immediately applies it through the CAS guard. */
     private void replaceViaCompareAndUpdate(Requirement updated) {
-        String head = requirements.findCurrentByCode(WORKSPACE, updated.code())
+        RevisionToken head = requirements.findCurrentByCode(WORKSPACE, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
         requirements.compareAndUpdate(WORKSPACE, head, updated);
