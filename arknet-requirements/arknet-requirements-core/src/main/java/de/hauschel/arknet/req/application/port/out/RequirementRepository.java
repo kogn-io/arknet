@@ -71,9 +71,9 @@ public interface RequirementRepository {
      * between a funnel writer and a write that bypassed the funnel entirely.</p>
      *
      * @param projectId  the project (architecture model) the requirement lives in
-     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
-     *                     requirement (from {@link #findCurrentByCode}), or {@code null} if the
-     *                     caller expects no revision to exist yet
+     * @param expectedHead the {@link RevisionToken} the caller last observed for this requirement
+     *                     (from {@link #findCurrentByCode}), or {@code null} if the caller expects
+     *                     no revision to exist yet
      * @param updated      the requirement to store in place of the current one, if its head still
      *                     matches {@code expectedHead}
      * @throws RequirementNotFoundException              if no requirement with this identity
@@ -82,7 +82,7 @@ public interface RequirementRepository {
      *                                                    the stored requirement's current head - a
      *                                                    concurrent write raced ahead
      */
-    void compareAndUpdate(ProjectId projectId, String expectedHead, Requirement updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated);
 
     /**
      * Finds a requirement by its human-readable business code within a project.
@@ -116,11 +116,11 @@ public interface RequirementRepository {
     Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code);
 
     /**
-     * A requirement's state paired with its current concurrency token (the {@code arkprov:head}
-     * revision IRI, or {@code null} if the requirement predates the funnel's revision recording),
-     * as read together by {@link #findCurrentByCode}.
+     * A requirement's state paired with its current concurrency token (the {@link RevisionToken},
+     * or {@code null} if the requirement predates the funnel's revision recording), as read
+     * together by {@link #findCurrentByCode}.
      */
-    record CurrentRequirement(Requirement value, String head) {
+    record CurrentRequirement(Requirement value, RevisionToken head) {
     }
 
     /**
