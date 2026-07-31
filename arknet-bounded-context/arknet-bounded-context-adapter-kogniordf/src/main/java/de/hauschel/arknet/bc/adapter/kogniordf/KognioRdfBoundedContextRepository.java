@@ -30,6 +30,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
@@ -203,7 +204,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * write.
      */
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
 
@@ -214,7 +215,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
         Graph graph = buildCandidateGraph(subjectIri, updated);
 
         funnel.compareAndUpdate(new DatasetId(projectId.value()), BOUNDED_CONTEXT_GRAPH, subjectIriString,
-                expectedHead, graph, null,
+                expectedHead == null ? null : expectedHead.value(), graph, null,
                 () -> new BoundedContextNotFoundException(projectId, updated.code()),
                 () -> new BoundedContextConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
@@ -369,9 +370,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             }
             BindingSet row = found.get();
             BoundedContext boundedContext = boundedContextOf(row, code, handle);
-            String head = row.getValue("head")
+            RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString())
+                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                     .orElse(null);
             return Optional.of(new BoundedContextRepository.CurrentBoundedContext(boundedContext, head));
         }

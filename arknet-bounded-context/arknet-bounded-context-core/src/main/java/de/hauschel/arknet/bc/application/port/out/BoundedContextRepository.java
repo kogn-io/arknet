@@ -72,9 +72,9 @@ public interface BoundedContextRepository {
      * between a funnel writer and a write that bypassed the funnel entirely.</p>
      *
      * @param projectId  the project (architecture model) the bounded context lives in
-     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
-     *                     bounded context (from {@link #findCurrentByCode}), or {@code null} if
-     *                     the caller expects no revision to exist yet
+     * @param expectedHead the {@link RevisionToken} the caller last observed for this bounded
+     *                     context (from {@link #findCurrentByCode}), or {@code null} if the caller
+     *                     expects no revision to exist yet
      * @param updated      the bounded context to store in place of the current one, if its head
      *                     still matches {@code expectedHead}
      * @throws BoundedContextNotFoundException             if no bounded context with this identity
@@ -84,7 +84,7 @@ public interface BoundedContextRepository {
      *                                                     current head - a concurrent write raced
      *                                                     ahead
      */
-    void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated);
 
     /**
      * Finds a bounded context by its human-readable business code within a project.
@@ -118,10 +118,10 @@ public interface BoundedContextRepository {
 
     /**
      * A bounded context's state paired with its current concurrency token (the
-     * {@code arkprov:head} revision IRI, or {@code null} if the bounded context predates the
-     * funnel's revision recording), as read together by {@link #findCurrentByCode}.
+     * {@link RevisionToken}, or {@code null} if the bounded context predates the funnel's revision
+     * recording), as read together by {@link #findCurrentByCode}.
      */
-    record CurrentBoundedContext(BoundedContext value, String head) {
+    record CurrentBoundedContext(BoundedContext value, RevisionToken head) {
     }
 
     /**

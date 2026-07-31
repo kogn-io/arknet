@@ -30,6 +30,7 @@ import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
+import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
@@ -142,12 +143,12 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     }
 
     @Override
-    public void compareAndUpdate(String expectedHead, Project project) {
+    public void compareAndUpdate(RevisionToken expectedHead, Project project) {
         Objects.requireNonNull(project, "project");
         write(expectedHead, project, true);
     }
 
-    private void write(String expectedHead, Project project, boolean exists) {
+    private void write(RevisionToken expectedHead, Project project, boolean exists) {
         String projectIriString = ProjectGraphs.projectIri(project.id());
         String projectSubject = SparqlTerms.iriRef(projectIriString);
         IRI graphIri = rdf.createIRI(ArkprjVocabulary.REGISTRY_GRAPH);
@@ -155,7 +156,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
         if (exists) {
             funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
-                    expectedHead, candidate, null,
+                    expectedHead == null ? null : expectedHead.value(), candidate, null,
                     () -> new ProjectNotFoundException(project.id()),
                     () -> new StaleProjectException(project.id()),
                     tx -> writeBody(tx, graphIri, projectSubject, project, candidate, true));
@@ -407,9 +408,9 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
             BindingSet row = found.get();
             List<Anchor> anchors = readAnchors(handle.sparqlQuery()::select, projectSubject);
             Project project = new Project(id, literalOf(row, "label").getLexicalForm(), anchors);
-            String head = row.getValue("head")
+            RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString())
+                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                     .orElse(null);
             return Optional.of(new ProjectRegistry.CurrentProject(project, head));
         }

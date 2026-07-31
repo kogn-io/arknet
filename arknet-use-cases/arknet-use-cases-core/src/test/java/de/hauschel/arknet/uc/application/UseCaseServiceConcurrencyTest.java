@@ -19,6 +19,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -162,7 +163,7 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
             delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
@@ -212,7 +213,7 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
             delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
@@ -252,7 +253,7 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new UseCaseNotFoundException(projectId, updated.code()));

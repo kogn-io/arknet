@@ -36,6 +36,7 @@ import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
+import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
@@ -161,7 +162,7 @@ class KognioRdfProjectRegistryTest {
         Anchor ownAnchor = pathAnchor("/home/dev/mine");
         Project mine = new Project(freshId(), "mine", List.of(ownAnchor));
         registry.register(mine);
-        String head = registry.findCurrentById(mine.id()).orElseThrow().head();
+        RevisionToken head = registry.findCurrentById(mine.id()).orElseThrow().head();
 
         Project attemptsToStealAnchor = new Project(mine.id(), "mine", List.of(ownAnchor, foreignAnchor));
 
@@ -208,7 +209,7 @@ class KognioRdfProjectRegistryTest {
 
         Project mine = new Project(freshId(), "mine", List.of(pathAnchor("/b")));
         registry.register(mine);
-        String head = registry.findCurrentById(mine.id()).orElseThrow().head();
+        RevisionToken head = registry.findCurrentById(mine.id()).orElseThrow().head();
 
         Project renamed = new Project(mine.id(), "taken", mine.anchors());
 
@@ -225,7 +226,7 @@ class KognioRdfProjectRegistryTest {
         Anchor oldAnchor = pathAnchor("/home/dev/old-checkout");
         Project project = new Project(freshId(), "arknet", List.of(oldAnchor));
         registry.register(project);
-        String head = registry.findCurrentById(project.id()).orElseThrow().head();
+        RevisionToken head = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Anchor newAnchor = pathAnchor("/home/dev/new-checkout");
         Project switched = new Project(project.id(), "arknet", List.of(newAnchor));
@@ -252,14 +253,14 @@ class KognioRdfProjectRegistryTest {
 
         ProjectRegistry.CurrentProject current = registry.findCurrentById(project.id()).orElseThrow();
         assertEquals(project, current.project());
-        assertTrue(current.head() != null && !current.head().isBlank());
+        assertTrue(current.head() != null && !current.head().value().isBlank());
     }
 
     @Test
     void compareAndUpdateSucceedsWithTheCurrentHead() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
         registry.register(project);
-        String head = registry.findCurrentById(project.id()).orElseThrow().head();
+        RevisionToken head = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Project renamed = new Project(project.id(), "renamed", project.anchors());
         registry.compareAndUpdate(head, renamed);
@@ -271,7 +272,7 @@ class KognioRdfProjectRegistryTest {
     void compareAndUpdateRejectsAStaleHead() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
         registry.register(project);
-        String staleHead = registry.findCurrentById(project.id()).orElseThrow().head();
+        RevisionToken staleHead = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Project firstRename = new Project(project.id(), "renamed-once", project.anchors());
         registry.compareAndUpdate(staleHead, firstRename);

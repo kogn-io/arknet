@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
@@ -188,7 +189,7 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
             delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
@@ -238,7 +239,7 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
             delegate.compareAndUpdate(projectId, expectedHead, updated);
         }
 
@@ -279,7 +280,7 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new BoundedContextNotFoundException(projectId, updated.code()));
