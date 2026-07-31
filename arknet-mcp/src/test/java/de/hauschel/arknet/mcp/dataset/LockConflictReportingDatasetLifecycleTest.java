@@ -42,10 +42,10 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
  * {@link #rethrowsAnAcquireFailureThePredicateDoesNotRecognise()} cover the decorator's own logic
  * in isolation against a hand-rolled stub, as a fallback/addition to the real-lock proof above -
  * they pin down delegation, message/cause composition and the pass-through path without needing a
- * second RDF4J store per case. {@link #aNonWritableStorageDirectoryIsNotMisdiagnosedAsALockConflict()}
- * is a second real-store proof for the pass-through path: a storage directory the process cannot
- * write to fails {@code acquire} for an entirely different reason RDF4J does not translate into
- * {@code RepositoryLockedException}, and the default predicate must not catch it anyway.</p>
+ * second RDF4J store per case. The pass-through path is deliberately proven against a stub rather
+ * than against a real store made to fail differently (e.g. a non-writable storage directory): such
+ * a case does not fail at all for a process that may write regardless of the permission bits, so
+ * it would report a defect on any machine that runs its build as root.</p>
  */
 class LockConflictReportingDatasetLifecycleTest {
 
@@ -117,21 +117,6 @@ class LockConflictReportingDatasetLifecycleTest {
                 new FailingLifecycle(original), storageDir, e -> false);
 
         assertThatThrownBy(() -> guarded.acquire(id)).isSameAs(original);
-    }
-
-    @Test
-    void aNonWritableStorageDirectoryIsNotMisdiagnosedAsALockConflict() {
-        storageDir.toFile().setWritable(false);
-        try {
-            final DatasetId id = new DatasetId("unwritable-storage-test");
-            final DatasetLifecycle delegate = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-            final LockConflictReportingDatasetLifecycle guarded = new LockConflictReportingDatasetLifecycle(
-                    delegate, storageDir, KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT);
-
-            assertThatThrownBy(() -> guarded.acquire(id)).isNotInstanceOf(DatasetLockConflictException.class);
-        } finally {
-            storageDir.toFile().setWritable(true);
-        }
     }
 
     /** Never actually opened - only ever compared by reference above. */
