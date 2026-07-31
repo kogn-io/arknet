@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
+import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
@@ -308,7 +309,7 @@ class ProjectServiceTest {
         }
 
         @Override
-        public void compareAndUpdate(String expectedHead, Project project) {
+        public void compareAndUpdate(RevisionToken expectedHead, Project project) {
             if (!firstWriteSeen) {
                 firstWriteSeen = true;
                 throw new StaleProjectException(project.id());

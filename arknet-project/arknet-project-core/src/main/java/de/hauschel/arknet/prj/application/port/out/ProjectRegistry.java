@@ -104,7 +104,7 @@ public interface ProjectRegistry {
      * @param head    the concurrency token last observed for this project, or {@code null} if
      *                the project was never written through the shared write funnel (ADR-014)
      */
-    record CurrentProject(Project project, String head) {
+    record CurrentProject(Project project, RevisionToken head) {
     }
 
     /**
@@ -112,9 +112,9 @@ public interface ProjectRegistry {
      * equals {@code expectedHead} - the compare-and-set guard against the lost-update race,
      * mirroring {@code RequirementRepository#compareAndUpdate}.
      *
-     * @param expectedHead the concurrency token the caller last observed for this project (from
-     *                     {@link #findCurrentById}), or {@code null} if the caller expects no
-     *                     token to exist yet
+     * @param expectedHead the {@link RevisionToken} the caller last observed for this project
+     *                     (from {@link #findCurrentById}), or {@code null} if the caller expects
+     *                     no token to exist yet
      * @param project      the project to store in place of the current one, if its token still
      *                     matches {@code expectedHead}
      * @throws ProjectNotFoundException       if no project with this identity is registered at
@@ -127,5 +127,5 @@ public interface ProjectRegistry {
      * @throws AnchorAlreadyRegisteredException if the write would attach an anchor already
      *                                        belonging to a different project
      */
-    void compareAndUpdate(String expectedHead, Project project);
+    void compareAndUpdate(RevisionToken expectedHead, Project project);
 }

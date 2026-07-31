@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
+import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
@@ -42,7 +43,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
 final class InMemoryProjectRegistry implements ProjectRegistry {
 
     private final Map<ProjectId, Project> byId = new LinkedHashMap<>();
-    private final Map<ProjectId, String> headById = new LinkedHashMap<>();
+    private final Map<ProjectId, RevisionToken> headById = new LinkedHashMap<>();
     private final AtomicInteger writeCount = new AtomicInteger();
 
     @Override
@@ -60,7 +61,7 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
             });
         }
         byId.put(project.id(), project);
-        headById.put(project.id(), UUID.randomUUID().toString());
+        headById.put(project.id(), new RevisionToken(UUID.randomUUID().toString()));
         writeCount.incrementAndGet();
     }
 
@@ -87,7 +88,7 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
     }
 
     @Override
-    public void compareAndUpdate(String expectedHead, Project project) {
+    public void compareAndUpdate(RevisionToken expectedHead, Project project) {
         Project current = byId.get(project.id());
         if (current == null) {
             throw new ProjectNotFoundException(project.id());
@@ -108,7 +109,7 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
             });
         }
         byId.put(project.id(), project);
-        headById.put(project.id(), UUID.randomUUID().toString());
+        headById.put(project.id(), new RevisionToken(UUID.randomUUID().toString()));
         writeCount.incrementAndGet();
     }
 
