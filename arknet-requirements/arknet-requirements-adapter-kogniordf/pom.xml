@@ -62,6 +62,12 @@
             <groupId>org.eclipse.rdf4j</groupId>
             <artifactId>rdf4j-rio-turtle</artifactId>
         </dependency>
+        <!-- Explicit rather than only transitive (via rdf-dataset-rdf4j) - DEFAULT_LOCK_CONFLICT
+             names org.eclipse.rdf4j.repository.RepositoryLockedException directly. -->
+        <dependency>
+            <groupId>org.eclipse.rdf4j</groupId>
+            <artifactId>rdf4j-repository-api</artifactId>
+        </dependency>
         <!-- Explizit statt nur transitiv (ueber rdf4j) - #81: WARN-Log bei mehrwertigen,
              stillschweigend auf den ersten Wert reduzierten Feldern (priority/qualityCategory
              ohne sh:maxCount). Version aus dem rdf4j-bom gemanaged. -->

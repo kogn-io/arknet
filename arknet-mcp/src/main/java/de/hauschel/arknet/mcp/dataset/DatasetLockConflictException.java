@@ -4,8 +4,8 @@
 package de.hauschel.arknet.mcp.dataset;
 
 /**
- * Thrown by {@link LockSafeDatasetLifecycle} when opening the shared RDF store fails because
- * another process already holds the storage directory's file lock (issue #64).
+ * Thrown by {@link LockConflictReportingDatasetLifecycle} when opening the shared RDF store fails
+ * because another process already holds the storage directory's file lock (issue #64).
  *
  * <p>Without this translation, the failure a caller actually sees is RDF4J's own
  * {@code RepositoryLockedException} - meaningful to someone who knows the store is a
