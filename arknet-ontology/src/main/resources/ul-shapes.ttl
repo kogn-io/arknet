@@ -30,7 +30,7 @@ ulshapes:Term-prefLabel
     sh:path     skos:prefLabel ;
     sh:minCount 1 ;
     sh:minLength 1 ;
-    sh:message  "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff)."@de ;
+    sh:message  "A glossary term (skos:Concept) needs at least one skos:prefLabel (the term)."@en , "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff)."@de ;
     sh:severity sh:Violation .
 
 ulshapes:Term-inScheme
@@ -38,7 +38,7 @@ ulshapes:Term-inScheme
     sh:path     skos:inScheme ;
     sh:minCount 1 ;
     sh:class    skos:ConceptScheme ;
-    sh:message  "Best Practice: Ein Begriff sollte via skos:inScheme in einem Glossar (skos:ConceptScheme) liegen."@de ;
+    sh:message  "Best practice: A term should be placed in a glossary (skos:ConceptScheme) via skos:inScheme."@en , "Best Practice: Ein Begriff sollte via skos:inScheme in einem Glossar (skos:ConceptScheme) liegen."@de ;
     sh:severity sh:Warning .
 
 
@@ -60,7 +60,7 @@ ulshapes:BoundedContext-ubiquitousLanguageTerm
     sh:path     arkddd:ubiquitousLanguageTerm ;
     sh:nodeKind sh:IRI ;
     sh:class    skos:Concept ;
-    sh:message  "arkddd:ubiquitousLanguageTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
+    sh:message  "arkddd:ubiquitousLanguageTerm must reference a skos:Concept (IRI), not a string."@en , "arkddd:ubiquitousLanguageTerm muss auf einen skos:Concept (IRI) verweisen, nicht auf einen String."@de ;
     sh:severity sh:Violation .
 
 # END OF UL SHAPES

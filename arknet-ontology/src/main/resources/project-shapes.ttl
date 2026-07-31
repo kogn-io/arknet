@@ -37,14 +37,14 @@ prjshapes:Project-identifier
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:minLength 1 ;
-    sh:message  "A Project needs exactly one non-empty dcterms:identifier - this IS the project's human-readable name and must be unique across all projects."@en ;
+    sh:message  "A Project needs exactly one non-empty dcterms:identifier - this IS the project's human-readable name and must be unique across all projects."@en , "Ein Project braucht genau einen nicht-leeren dcterms:identifier - das IST der menschenlesbare Name des Projekts und muss projektuebergreifend eindeutig sein."@de ;
     sh:severity sh:Violation .
 
 prjshapes:Project-anchor
     a sh:PropertyShape ;
     sh:path     arkprj:anchor ;
     sh:minCount 1 ;
-    sh:message  "A Project needs at least one arkprj:anchor. There is no default anchor and no fallback (ADR-016 point 3) - a project without an anchor cannot be reached by any client."@en ;
+    sh:message  "A Project needs at least one arkprj:anchor. There is no default anchor and no fallback (ADR-016 point 3) - a project without an anchor cannot be reached by any client."@en , "Ein Project braucht mindestens einen arkprj:anchor. Es gibt keinen Default-Anker und keinen Fallback (ADR-016 Punkt 3) - ein Projekt ohne Anker ist von keinem Client erreichbar."@de ;
     sh:severity sh:Violation .
 
 
@@ -64,7 +64,7 @@ prjshapes:Anchor-value
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:minLength 1 ;
-    sh:message  "An Anchor needs exactly one non-empty arkprj:anchorValue - the opaque string the server looks up, never interprets."@en ;
+    sh:message  "An Anchor needs exactly one non-empty arkprj:anchorValue - the opaque string the server looks up, never interprets."@en , "Ein Anchor braucht genau einen nicht-leeren arkprj:anchorValue - die opake Zeichenkette, die der Server nachschlaegt, niemals interpretiert."@de ;
     sh:severity sh:Violation .
 
 prjshapes:Anchor-type
@@ -73,7 +73,7 @@ prjshapes:Anchor-type
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:in       ( arkprj:PathAnchor arkprj:UrlAnchor arkprj:UuidAnchor ) ;
-    sh:message  "An Anchor needs exactly one arkprj:anchorType, one of PathAnchor, UrlAnchor, or UuidAnchor."@en ;
+    sh:message  "An Anchor needs exactly one arkprj:anchorType, one of PathAnchor, UrlAnchor, or UuidAnchor."@en , "Ein Anchor braucht genau einen arkprj:anchorType, einen von PathAnchor, UrlAnchor oder UuidAnchor."@de ;
     sh:severity sh:Violation .
 
 # END OF PROJECT SHAPES

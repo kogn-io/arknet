@@ -45,7 +45,7 @@ rshapes:Requirement-identifier
     sh:datatype xsd:string ;
     sh:minLength 2 ;
     sh:pattern  "^[A-Za-z][A-Za-z0-9_.-]*$" ;
-    sh:message  "Requirement braucht genau eine dcterms:identifier (z.B. FR-12), Format: Buchstabe gefolgt von Buchstaben/Ziffern/_.-"@de ;
+    sh:message  "A Requirement needs exactly one dcterms:identifier (e.g. FR-12), format: a letter followed by letters/digits/_.-"@en , "Requirement braucht genau eine dcterms:identifier (z.B. FR-12), Format: Buchstabe gefolgt von Buchstaben/Ziffern/_.-"@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-title
@@ -55,7 +55,7 @@ rshapes:Requirement-title
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "Requirement braucht genau eine dcterms:title."@de ;
+    sh:message  "A Requirement needs exactly one dcterms:title."@en , "Requirement braucht genau eine dcterms:title."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-description
@@ -65,7 +65,7 @@ rshapes:Requirement-description
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "Requirement braucht genau eine dcterms:description (die normative Aussage, min. 5 Zeichen)."@de ;
+    sh:message  "A Requirement needs exactly one dcterms:description (the normative statement, min. 5 characters)."@en , "Requirement braucht genau eine dcterms:description (die normative Aussage, min. 5 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-priority
@@ -73,7 +73,7 @@ rshapes:Requirement-priority
     sh:path     arkreq:priority ;
     sh:maxCount 1 ;
     sh:in       ( arkreq:MustHave arkreq:ShouldHave arkreq:CouldHave arkreq:WontHave ) ;
-    sh:message  "Requirement sollte eine arkreq:priority (MoSCoW: MustHave | ShouldHave | CouldHave | WontHave) haben."@de ;
+    sh:message  "A Requirement should have an arkreq:priority (MoSCoW: MustHave | ShouldHave | CouldHave | WontHave)."@en , "Requirement sollte eine arkreq:priority (MoSCoW: MustHave | ShouldHave | CouldHave | WontHave) haben."@de ;
     sh:severity sh:Warning .
 
 rshapes:Requirement-status
@@ -82,21 +82,21 @@ rshapes:Requirement-status
     sh:maxCount 1 ;
     sh:in       ( arkreq:Proposed arkreq:Accepted arkreq:Implemented
                   arkreq:Verified arkreq:Rejected arkreq:Deprecated ) ;
-    sh:message  "arkreq:status muss einer der gueltigen Lifecycle-Werte sein (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@de ;
+    sh:message  "arkreq:status must be one of the valid lifecycle values (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@en , "arkreq:status muss einer der gueltigen Lifecycle-Werte sein (Proposed | Accepted | Implemented | Verified | Rejected | Deprecated)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-motivatedBy
     a sh:PropertyShape ;
     sh:path     arkreq:motivatedBy ;
     sh:class    arkreq:Goal ;
-    sh:message  "Best Practice: Verknuepfe die Anforderung ueber arkreq:motivatedBy mit einem Goal (Traceability zum WARUM)."@de ;
+    sh:message  "Best practice: link the requirement to a Goal via arkreq:motivatedBy (traceability to the WHY)."@en , "Best Practice: Verknuepfe die Anforderung ueber arkreq:motivatedBy mit einem Goal (Traceability zum WARUM)."@de ;
     sh:severity sh:Warning .
 
 rshapes:Requirement-motivatedBy-count
     a sh:PropertyShape ;
     sh:path     arkreq:motivatedBy ;
     sh:maxCount 1 ;
-    sh:message  "Requirement darf hoechstens ein arkreq:motivatedBy haben (Domain-Feld ist einwertig)."@de ;
+    sh:message  "A Requirement may have at most one arkreq:motivatedBy (the domain field is single-valued)."@en , "Requirement darf hoechstens ein arkreq:motivatedBy haben (Domain-Feld ist einwertig)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-usesTerm
@@ -104,7 +104,7 @@ rshapes:Requirement-usesTerm
     sh:path     arkreq:usesTerm ;
     sh:nodeKind sh:IRI ;
     sh:class    skos:Concept ;
-    sh:message  "arkreq:usesTerm muss auf einen Glossar-Begriff (skos:Concept, IRI) verweisen -- lege ihn zuerst mit term_add an."@de ;
+    sh:message  "arkreq:usesTerm must reference a glossary term (skos:Concept, IRI) -- create it first with term_add."@en , "arkreq:usesTerm muss auf einen Glossar-Begriff (skos:Concept, IRI) verweisen -- lege ihn zuerst mit term_add an."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-acceptanceCriterion
@@ -113,7 +113,7 @@ rshapes:Requirement-acceptanceCriterion
     sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "Requirement braucht mindestens ein arkreq:acceptanceCriterion (testbares Done-when, min. 5 Zeichen)."@de ;
+    sh:message  "A Requirement needs at least one arkreq:acceptanceCriterion (a testable done-when, min. 5 characters)."@en , "Requirement braucht mindestens ein arkreq:acceptanceCriterion (testbares Done-when, min. 5 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 
@@ -131,7 +131,7 @@ rshapes:NFR-qualityCategory
     sh:path     arkreq:qualityCategory ;
     sh:minCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Non-Functional Requirement sollte eine arkreq:qualityCategory nennen (z.B. performance, security, reliability)."@de ;
+    sh:message  "A Non-Functional Requirement should state an arkreq:qualityCategory (e.g. performance, security, reliability)."@en , "Non-Functional Requirement sollte eine arkreq:qualityCategory nennen (z.B. performance, security, reliability)."@de ;
     sh:severity sh:Warning .
 
 
@@ -150,7 +150,7 @@ rshapes:Goal-statement
     sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "Goal braucht eine arkreq:goalStatement (min. 5 Zeichen)."@de ;
+    sh:message  "A Goal needs an arkreq:goalStatement (min. 5 characters)."@en , "Goal braucht eine arkreq:goalStatement (min. 5 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 
@@ -169,7 +169,7 @@ rshapes:Constraint-statement
     sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "Constraint braucht eine arkreq:constraintStatement (min. 5 Zeichen)."@de ;
+    sh:message  "A Constraint needs an arkreq:constraintStatement (min. 5 characters)."@en , "Constraint braucht eine arkreq:constraintStatement (min. 5 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 
@@ -195,7 +195,7 @@ rshapes:UseCase-identifier
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "Use Case braucht genau eine dcterms:identifier (z.B. UC-3)."@de ;
+    sh:message  "A Use Case needs exactly one dcterms:identifier (e.g. UC-3)."@en , "Use Case braucht genau eine dcterms:identifier (z.B. UC-3)."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-title
@@ -205,7 +205,7 @@ rshapes:UseCase-title
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "Use Case braucht genau eine dcterms:title."@de ;
+    sh:message  "A Use Case needs exactly one dcterms:title."@en , "Use Case braucht genau eine dcterms:title."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-goal
@@ -213,14 +213,14 @@ rshapes:UseCase-goal
     sh:path     arkreq:useCaseGoal ;
     sh:minCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Use Case sollte ein arkreq:useCaseGoal (goal-in-context) nennen."@de ;
+    sh:message  "A Use Case should state an arkreq:useCaseGoal (goal-in-context)."@en , "Use Case sollte ein arkreq:useCaseGoal (goal-in-context) nennen."@de ;
     sh:severity sh:Warning .
 
 rshapes:UseCase-goal-count
     a sh:PropertyShape ;
     sh:path     arkreq:useCaseGoal ;
     sh:maxCount 1 ;
-    sh:message  "Use Case darf hoechstens ein arkreq:useCaseGoal haben (Domain-Feld ist einwertig)."@de ;
+    sh:message  "A Use Case may have at most one arkreq:useCaseGoal (the domain field is single-valued)."@en , "Use Case darf hoechstens ein arkreq:useCaseGoal haben (Domain-Feld ist einwertig)."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-primaryActor
@@ -229,7 +229,7 @@ rshapes:UseCase-primaryActor
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:class    arkproc:Actor ;
-    sh:message  "Use Case braucht genau einen arkreq:primaryActor."@de ;
+    sh:message  "A Use Case needs exactly one arkreq:primaryActor."@en , "Use Case braucht genau einen arkreq:primaryActor."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-satisfies
@@ -237,7 +237,7 @@ rshapes:UseCase-satisfies
     sh:path     oslc_rm:satisfies ;
     sh:minCount 1 ;
     sh:class    arkreq:Requirement ;
-    sh:message  "Best Practice: Use Case sollte ueber oslc_rm:satisfies mindestens eine Anforderung erfuellen (Traceability)."@de ;
+    sh:message  "Best practice: a Use Case should satisfy at least one requirement via oslc_rm:satisfies (traceability)."@en , "Best Practice: Use Case sollte ueber oslc_rm:satisfies mindestens eine Anforderung erfuellen (Traceability)."@de ;
     sh:severity sh:Warning .
 
 rshapes:UseCase-mainStep
@@ -245,7 +245,7 @@ rshapes:UseCase-mainStep
     sh:path     arkreq:mainStep ;
     sh:minCount 1 ;
     sh:class    arkreq:Step ;
-    sh:message  "Use Case sollte einen Hauptablauf aus arkreq:mainStep-Schritten haben."@de ;
+    sh:message  "A Use Case should have a main flow of arkreq:mainStep steps."@en , "Use Case sollte einen Hauptablauf aus arkreq:mainStep-Schritten haben."@de ;
     sh:severity sh:Warning .
 
 
@@ -267,7 +267,7 @@ rshapes:Step-position
     sh:maxCount 1 ;
     sh:datatype xsd:integer ;
     sh:minInclusive 1 ;
-    sh:message  "Step braucht genau eine arkreq:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:message  "A Step needs exactly one arkreq:position (1-based order, >= 1)."@en , "Step braucht genau eine arkreq:position (1-basierte Ordnung, >= 1)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Step-text
@@ -277,14 +277,14 @@ rshapes:Step-text
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 3 ;
-    sh:message  "Step braucht genau einen arkreq:stepText (min. 3 Zeichen)."@de ;
+    sh:message  "A Step needs exactly one arkreq:stepText (min. 3 characters)."@en , "Step braucht genau einen arkreq:stepText (min. 3 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Step-realises
     a sh:PropertyShape ;
     sh:path     arkreq:stepRealises ;
     sh:class    arkreq:Requirement ;
-    sh:message  "arkreq:stepRealises muss auf ein arkreq:Requirement zeigen."@de ;
+    sh:message  "arkreq:stepRealises must point to an arkreq:Requirement."@en , "arkreq:stepRealises muss auf ein arkreq:Requirement zeigen."@de ;
     sh:severity sh:Violation .
 
 
@@ -306,7 +306,7 @@ rshapes:Milestone-title
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "Milestone braucht genau einen arkreq:milestoneTitle."@de ;
+    sh:message  "A Milestone needs exactly one arkreq:milestoneTitle."@en , "Milestone braucht genau einen arkreq:milestoneTitle."@de ;
     sh:severity sh:Violation .
 
 rshapes:Milestone-dueDate
@@ -314,7 +314,7 @@ rshapes:Milestone-dueDate
     sh:path     arkreq:dueDate ;
     sh:maxCount 1 ;
     sh:datatype xsd:date ;
-    sh:message  "arkreq:dueDate muss ein xsd:date sein."@de ;
+    sh:message  "arkreq:dueDate must be an xsd:date."@en , "arkreq:dueDate muss ein xsd:date sein."@de ;
     sh:severity sh:Violation .
 
 rshapes:Milestone-state
@@ -322,7 +322,7 @@ rshapes:Milestone-state
     sh:path     arkreq:milestoneState ;
     sh:maxCount 1 ;
     sh:in       ( arkreq:Open arkreq:Closed ) ;
-    sh:message  "arkreq:milestoneState muss Open oder Closed sein."@de ;
+    sh:message  "arkreq:milestoneState must be Open or Closed."@en , "arkreq:milestoneState muss Open oder Closed sein."@de ;
     sh:severity sh:Violation .
 
 
@@ -342,7 +342,7 @@ rshapes:Release-version
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:pattern  "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" ;
-    sh:message  "Release braucht genau eine arkreq:releaseVersion nach Semantic Versioning (z.B. 1.4.2 oder 1.0.0-rc.1)."@de ;
+    sh:message  "A Release needs exactly one arkreq:releaseVersion following Semantic Versioning (e.g. 1.4.2 or 1.0.0-rc.1)."@en , "Release braucht genau eine arkreq:releaseVersion nach Semantic Versioning (z.B. 1.4.2 oder 1.0.0-rc.1)."@de ;
     sh:severity sh:Violation .
 
 # END OF REQUIREMENTS SHAPES

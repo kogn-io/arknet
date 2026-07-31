@@ -33,7 +33,7 @@ privshapes:Entity-hasDataCategory
     sh:path     arkpriv:hasDataCategory ;
     sh:minCount 1 ;
     sh:class    arkpriv:DataCategory ;
-    sh:message  "DSGVO: Entity hat keine Datenkategorie-Annotation. Personenbezogene Daten?"@de ;
+    sh:message  "GDPR: Entity has no Data Category annotation. Personal data?"@en , "DSGVO: Entity hat keine Datenkategorie-Annotation. Personenbezogene Daten?"@de ;
     sh:severity sh:Warning .
 
 
@@ -47,7 +47,7 @@ privshapes:AggregatePersonalDataLegalBasisShape
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:severity sh:Violation ;
-        sh:message "DSGVO-Verstoss: Personenbezogene Daten ohne Rechtsgrundlage (Art. 6)."@de ;
+        sh:message "GDPR violation: Personal data without Legal Basis (Art. 6)."@en , "DSGVO-Verstoss: Personenbezogene Daten ohne Rechtsgrundlage (Art. 6)."@de ;
         sh:select """
             SELECT $this WHERE {
                 $this <https://w3id.org/arknet/privacy#hasDataCategory> <https://w3id.org/arknet/privacy#PersonalData> .
@@ -66,7 +66,7 @@ privshapes:AggregatePersonalDataRetentionShape
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:severity sh:Warning ;
-        sh:message "DSGVO: Personenbezogene Daten ohne Aufbewahrungsfrist (Art. 5(1)(e))."@de ;
+        sh:message "GDPR: Personal data without retention period (Art. 5(1)(e))."@en , "DSGVO: Personenbezogene Daten ohne Aufbewahrungsfrist (Art. 5(1)(e))."@de ;
         sh:select """
             SELECT $this WHERE {
                 $this <https://w3id.org/arknet/privacy#hasDataCategory> <https://w3id.org/arknet/privacy#PersonalData> .
@@ -85,7 +85,7 @@ privshapes:AggregateSensitiveDataMeasuresShape
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:severity sh:Violation ;
-        sh:message "DSGVO-Verstoss: Art. 9 Daten ohne technische Massnahmen (Art. 32)."@de ;
+        sh:message "GDPR violation: Art. 9 data without technical measures (Art. 32)."@en , "DSGVO-Verstoss: Art. 9 Daten ohne technische Massnahmen (Art. 32)."@de ;
         sh:select """
             SELECT $this WHERE {
                 $this <https://w3id.org/arknet/privacy#hasDataCategory> <https://w3id.org/arknet/privacy#SensitivePersonalData> .

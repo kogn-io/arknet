@@ -98,11 +98,11 @@ Skills (`/arknet:adr`, `/arknet:req-interview`) leben in einem separaten Reposit
 Service releasen unabhaengig voneinander (ADR-012). Die Root-`.mcp.json` dieses
 Repos bleibt fuers eigene Dogfooding gegen den hier gebauten MCP-Server bestehen.
 
-Sprachkonvention fuer nicht-code Artefakte, die dieses Repo ausliefert (SHACL
-`sh:message`, Maven-`<description>`): **Englisch** -- die Zielgruppe ist
-englischsprachig. **Ausnahme Ontologie-Beschriftungen:** `rdfs:label` und
-`rdfs:comment` in den `arknet-*.ttl` sind **zweisprachig**, Englisch zuerst
-(`rdfs:label "Actor Role"@en , "Akteursrolle"@de`) -- der Bestand ist so
+Sprachkonvention fuer nicht-code Artefakte, die dieses Repo ausliefert
+(Maven-`<description>`): **Englisch** -- die Zielgruppe ist englischsprachig.
+**Ausnahme Ontologie-Beschriftungen:** `rdfs:label`, `rdfs:comment` und SHACL-
+`sh:message` in den `arknet-*.ttl`/`*-shapes.ttl` sind **zweisprachig**, Englisch
+zuerst (`rdfs:label "Actor Role"@en , "Akteursrolle"@de`) -- der Bestand ist so
 gewachsen, und Konsistenz innerhalb einer Datei wiegt hier schwerer als die
 Englisch-Regel. Neue Beschriftungen also immer `@en` **und** `@de` anlegen;
 vorhandene einsprachige nicht nachtraeglich vereinheitlichen. Was **in den Store**
@@ -110,8 +110,7 @@ geschrieben wird
 (Requirement-/Use-Case-/Term-Text) bleibt **Deutsch** -- arknets eigene
 Ubiquitous Language, unberuehrt von dieser Regel. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
-Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand. Die SHACL-`sh:message` sind
-einsprachig und noch nicht auf die Englisch-Regel gezogen.
+Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.
 
 ## Regel fuer diese Datei
 
