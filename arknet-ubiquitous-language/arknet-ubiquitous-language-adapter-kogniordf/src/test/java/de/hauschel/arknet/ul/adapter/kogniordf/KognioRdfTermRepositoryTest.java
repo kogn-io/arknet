@@ -10,8 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -25,6 +23,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.ConcurrencyConflictException;
@@ -74,14 +73,22 @@ class KognioRdfTermRepositoryTest {
     private static final ProjectId WORKSPACE_B = new ProjectId("b");
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
 
+    /**
+     * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
+     * which left its directories behind - harmless while the store is {@code IN_MEMORY}, but
+     * still an inode left in {@code /tmp} for every test run. Deleted after {@link #tearDown()}
+     * has shut the store down.
+     */
+    @TempDir
+    Path storageRoot;
+
     private DatasetLifecycleRdf4j lifecycle;
     private TermRepository repository;
 
     @BeforeEach
-    void setUp() throws IOException {
-        Path tmp = Files.createTempDirectory("arknet-ul-it");
+    void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
     }
