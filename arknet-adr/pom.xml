@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-adr</artifactId>
+    <packaging>pom</packaging>
+    <description>Architecture decision record component (hexagonal): arkarch:ArchitectureDecisionRecord mintable store-first (adr_add/adr_list/adr_get/adr_set_status/adr_supersede) as its own hexagon</description>
+
+    <modules>
+        <module>arknet-adr-core</module>
+        <module>arknet-adr-adapter-kogniordf</module>
+        <module>arknet-adr-adapter-mcp</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-adr-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-adr-adapter-mcp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

@@ -207,6 +207,16 @@ Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assig
 | `bc_get` | Fetch a single bounded context with its linked glossary terms |
 | `bc_link_term` | Link a bounded context to a glossary term (`arkddd:ubiquitousLanguageTerm`; the term must exist) |
 
+ADR BC (`arknet-adr`) -- architecture decision records, store-backed and numbered independently of the hand-written markdown records under `docs/adr/`:
+
+| Tool | Description |
+|------|-------------|
+| `adr_add` | Record a new decision in one call (title, context, decision, optional consequences, considered options and decision date, plus the requirement codes it addresses and the bounded-context codes it affects; each referenced resource must already exist). Starts out PROPOSED |
+| `adr_list` | List all decisions, one compact line each |
+| `adr_get` | Fetch a single decision with its full text and both directions of the supersedes relation (e.g. ADR-1) |
+| `adr_set_status` | Change a decision's lifecycle status; today the only supported transition is PROPOSED -> ACCEPTED |
+| `adr_supersede` | Record that one decision replaces an older one (`arkarch:supersedes`). Only the forward edge is stored -- the superseded decision reports it as "superseded by" from a reverse read, not from a second triple |
+
 Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
 
 | Tool | Description |
@@ -230,7 +240,7 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 |------|-------------|
 | `trace_matrix` | Per requirement (FR/NFR): the glossary terms used (`arkreq:usesTerm`) and the realizing use case(s) (via the step flow) |
 | `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms never referenced (usage or bounded-context language), and text mentions of a term missing its `usesTerm`/`ubiquitousLanguageTerm` edge |
-| `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes (see sample below) |
+| `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes, following the requirement/use-case/glossary/bounded-context edges plus an ADR's `addressesRequirement`/`affectsContext`/`supersedes` (see sample below) |
 
 ```
 > impact_analysis(handle: "TERM-4")
@@ -259,7 +269,7 @@ boundary: two projects share no requirement, no use case, not one glossary term.
 Default location `~/.arknet/rdf`, configurable via `arknet.rdf.storage`.
 
 **Managing the model:** through the store-based BC tools (`req_*`, `term_*`,
-`uc_*`) -- not by text-editing a `.ttl`. SHACL validation applies uniformly at
+`uc_*`, `bc_*`, `adr_*`) -- not by text-editing a `.ttl`. SHACL validation applies uniformly at
 the store's write gate: an invalid write is rejected and nothing is persisted.
 
 The formerly tolerated file-based `arknet_*` tools
@@ -274,14 +284,15 @@ addendum.
 | Module | Description |
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
-| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
+| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project / adr) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`ProjectId`, the `ProjectResolver` port, opaque `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-ubiquitous-language` | Second hexagonal BC: glossary terms as SKOS Concepts (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-use-cases` | Third hexagonal BC: flow-oriented Cockburn use cases (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-bounded-context` | Fourth hexagonal BC: BoundedContext lifecycle, assigns glossary terms to a domain cut (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
-| `arknet-project` | Fifth hexagonal BC: the project registry, mapping a client's opaque anchor to the project whose dataset holds its data (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter); unlike the other four BCs it is not itself project-scoped ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
+| `arknet-project` | Fifth hexagonal BC: the project registry, mapping a client's opaque anchor to the project whose dataset holds its data (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter); unlike the other BCs it is not itself project-scoped ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
+| `arknet-adr` | Sixth hexagonal BC: architecture decision records -- context, decision, consequences and considered options, plus the edges to the requirement a decision addresses, the bounded context it affects and the older decision it supersedes (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter). Store-backed and numbered independently of the hand-written markdown decision records under `docs/adr/` |
 | `arknet-architecture-tests` | ArchUnit rules for the dependency invariants the module cut cannot enforce (only `src/test`, no production code) |
 
 ## Ontology
@@ -298,6 +309,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 | `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
+| `arknet-architecture.ttl` | `arkarch:` | ArchitectureDecisionRecord, its text properties, the supersedes/supersededBy/relatedTo/addressesRequirement/affectsContext relations and the five ADRStatus individuals -- the ISO-42010 slice `arknet-adr` actually writes. Namespace shared with the parked `arknet-architecture_parked.ttl` below |
 
 Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes them yet, not published):
 
@@ -305,7 +317,7 @@ Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes the
 |--------|--------|----------|
 | `arknet-ddd_parked.ttl` | `arkddd:` | ContextMap, ContextRelationship, RelationshipType, plus the full tactical-DDD layer (Aggregate, Entity, ValueObject, DomainEvent, Command, Query, DomainService, Repository, Factory, Policy, Saga, Invariant); no BC, no Java reference. Shares its namespace with the active `arknet-ddd.ttl` above (BoundedContext, Domain, Subdomain) |
 | `arknet-process.ttl` | `arkproc:` | Process, Step, State, StateTransition, BusinessRule, Outcome -- `Actor` moved to `arknet-actor.ttl` above; the rest is unconsumed and `arkproc:Step` predates/duplicates the live `arkreq:Step` (different properties entirely) -- reconcile before reviving |
-| `arknet-architecture.ttl` | `arkarch:` | Architecture, View, Viewpoint, ADR, Stakeholder, Concern |
+| `arknet-architecture_parked.ttl` | `arkarch:` | Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint, View -- the rest of the ISO-42010 architecture description; no BC, no Java reference. Shares its namespace with the active `arknet-architecture.ttl` above (ADR) |
 | `arknet-privacy.ttl` | `arkpriv:` | DataCategory, LegalBasis, ProcessingPurpose, DataSubjectRight, TechnicalMeasure, PrivacyImpactAssessment |
 
 Not created yet (no file at all, just an intended future namespace):

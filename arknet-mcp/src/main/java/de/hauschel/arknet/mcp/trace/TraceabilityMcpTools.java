@@ -21,7 +21,8 @@ import de.hauschel.arknet.mcp.store.StoreReader;
  *
  * <p>Like {@link de.hauschel.arknet.mcp.store.StoreReportTools}, this is an in-adapter of the
  * composition root, not of a bounded context - it is a generic technical read path over
- * whatever the requirements/ubiquitous-language/use-cases hexagons wrote, not a fourth BC (ADR-006).
+ * whatever the requirements/ubiquitous-language/use-cases/bounded-context/adr hexagons wrote, not a
+ * bounded context of its own (ADR-006).
  * It differs from {@code store_overview}/{@code resource_get} by doing graph traversal rather
  * than a full-snapshot digest or a single-resource fetch, but reuses the very same {@link
  * StoreReader} read path and {@link HandleResolver} handle contract - see the ADR-006 addendum.
@@ -87,9 +88,11 @@ public final class TraceabilityMcpTools {
 
     @McpTool(name = "impact_analysis",
             description = "What is transitively affected if the given resource changes: follows"
-                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises and"
-                    + " arkddd:ubiquitousLanguageTerm backwards (who references this) to every reachable"
-                    + " requirement, term, use case or bounded context. The id is a CURIE (e.g."
+                    + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises,"
+                    + " arkddd:ubiquitousLanguageTerm and"
+                    + " arkarch:addressesRequirement/affectsContext/supersedes backwards (who"
+                    + " references this) to every reachable requirement, term, use case, bounded context"
+                    + " or architecture decision. The id is a CURIE (e.g."
                     + " req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is resolved"
                     + " via dcterms:identifier.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))

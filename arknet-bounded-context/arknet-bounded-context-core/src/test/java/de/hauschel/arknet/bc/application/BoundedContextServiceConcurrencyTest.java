@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
@@ -213,6 +214,12 @@ class BoundedContextServiceConcurrencyTest {
             }
             return result;
         }
+
+        @Override
+        public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
+                ProjectId projectId, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, ids);
+        }
     }
 
     /**
@@ -263,6 +270,12 @@ class BoundedContextServiceConcurrencyTest {
         public List<BoundedContext> findAll(ProjectId projectId) {
             return delegate.findAll(projectId);
         }
+
+        @Override
+        public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
+                ProjectId projectId, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, ids);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -301,6 +314,12 @@ class BoundedContextServiceConcurrencyTest {
         @Override
         public List<BoundedContext> findAll(ProjectId projectId) {
             return delegate.findAll(projectId);
+        }
+
+        @Override
+        public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
+                ProjectId projectId, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, ids);
         }
     }
 }

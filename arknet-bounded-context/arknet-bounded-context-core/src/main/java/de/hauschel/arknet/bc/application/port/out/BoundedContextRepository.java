@@ -11,8 +11,10 @@ import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * Driven port: persistence capability the component needs from the outside.
@@ -131,4 +133,24 @@ public interface BoundedContextRepository {
      * @return all bounded contexts, never {@code null}
      */
     List<BoundedContext> findAll(ProjectId projectId);
+
+    /**
+     * Finds every bounded context in a project whose identity is among {@code ids}, in one store
+     * round-trip - backs {@link ResolveBoundedContexts}. This is a batch lookup, not a per-id
+     * existence check: an id absent from the project is simply absent from the result, never an
+     * error.
+     *
+     * <p>Returns the slim {@link ResolveBoundedContexts.ResolvedBoundedContext} projection, not the
+     * full {@link BoundedContext} aggregate, for the same reason
+     * {@code TermRepository#findByIds}/{@code RequirementRepository#findByIds} do: the only consumer
+     * is {@link ResolveBoundedContexts}, which exists purely to answer "what code names this
+     * identity" for display - joining fields such as {@code name}/{@code domainVision} the caller
+     * never reads would needlessly exclude a store-first context that carries an identity and a code
+     * but happens to miss one of them.</p>
+     *
+     * @param projectId the project (architecture model) to look up bounded contexts in
+     * @param ids       the opaque identities to resolve; an empty list yields an empty result
+     * @return the resolved bounded contexts found, in no particular order, never {@code null}
+     */
+    List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(ProjectId projectId, List<ResourceId> ids);
 }

@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -29,6 +30,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
@@ -451,6 +453,56 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                     .map(entry -> entry.getValue().toBoundedContext(
                             termsBySubject.getOrDefault(entry.getKey(), List.of())))
                     .toList();
+        }
+    }
+
+    /**
+     * Batch identity-to-code resolution backing the {@code ResolveBoundedContexts} in-port: one
+     * {@code VALUES}-bound query, never one per id.
+     *
+     * <p>Joins only {@code dcterms:identifier} - not {@code name}/{@code domainVision} - so a
+     * store-first (ADR-005) context that carries an identity and a code but misses one of the
+     * otherwise-mandatory fields still resolves, exactly as {@code KognioRdfTermRepository#findByIds}
+     * decided for the glossary. Rows are grouped per subject rather than mapped 1:1 (the #81
+     * pattern): {@code dcterms:identifier} carries no enforceable {@code sh:maxCount}, so a
+     * store-first context with two identifier triples would otherwise report the same identity
+     * twice - the very contract violation {@code ResolveBoundedContexts} ("the contexts", not "one
+     * row per predicate combination") exists to rule out. No {@code FILTER(isIRI(?s))} is needed
+     * here: the subjects come from a {@code VALUES} clause bound to caller-supplied
+     * {@link ResourceId}s, which can never denote a blank node.</p>
+     */
+    @Override
+    public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
+            ProjectId projectId, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        // ResourceId#of validates IRIREF-safety at construction, so every id here is already
+        // guaranteed safe to embed - which is what keeps ResolveBoundedContexts' "never rejects"
+        // contract intact.
+        String values = ids.stream()
+                .map(id -> SparqlTerms.iriRef(id.value()))
+                .distinct()
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
+                + "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            Map<String, ResolveBoundedContexts.ResolvedBoundedContext> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
+                bySubject.putIfAbsent(subjectIri, new ResolveBoundedContexts.ResolvedBoundedContext(
+                        ResourceId.of(subjectIri),
+                        new BoundedContextCode(literalOf(row, "identifier").getLexicalForm())));
+            });
+            return List.copyOf(bySubject.values());
         }
     }
 

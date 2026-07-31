@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
@@ -214,6 +215,31 @@ class BoundedContextServiceTest {
         assertEquals("orders-team", linked.ownedBy());
         BoundedContext reread = service.get(WS, added.code()).orElseThrow();
         assertEquals(List.of(new TermRef(TERM_1), new TermRef(TERM_2)), reread.usesTerms());
+    }
+
+    /**
+     * The batch identity-to-code direction a sibling hexagon's in-adapter borrows (ADR-008, today the
+     * ADR context rendering {@code arkarch:affectsContext}). Never rejects: an unknown identity is
+     * simply absent from the result.
+     */
+    @Test
+    void resolveExistingReturnsTheCodesOfTheIdentitiesItKnows() {
+        BoundedContext first = service.add(WS, newBoundedContext());
+        BoundedContext second = service.add(WS, newBoundedContext());
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/nowhere");
+
+        List<ResolveBoundedContexts.ResolvedBoundedContext> resolved = service.resolveExisting(
+                WS, first.id().value(), second.id().value(), unknown);
+
+        assertEquals(List.of(
+                new ResolveBoundedContexts.ResolvedBoundedContext(first.id().value(), first.code()),
+                new ResolveBoundedContexts.ResolvedBoundedContext(second.id().value(), second.code())),
+                resolved);
+    }
+
+    @Test
+    void resolveExistingOfNoIdentitiesQueriesNothing() {
+        assertEquals(List.of(), service.resolveExisting(WS));
     }
 
     private static NewBoundedContext newBoundedContext() {
