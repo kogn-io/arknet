@@ -76,7 +76,8 @@ class DependencyRulesTest {
             "de.hauschel.arknet.ul..",
             "de.hauschel.arknet.uc..",
             "de.hauschel.arknet.bc..",
-            "de.hauschel.arknet.adr.."
+            "de.hauschel.arknet.adr..",
+            "de.hauschel.arknet.prj.."
     };
 
     /**
