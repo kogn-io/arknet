@@ -1,18 +1,19 @@
 ##############################################################################
 #  arknet - Architecture Knowledge Net
-#  Architecture SHACL Shapes  :  Version 0.1.0
+#  Architecture SHACL Shapes (parked)  :  Version 0.1.0
 #
-#  Validates ISO-42010-Konzepte (arkarch:).
-#  Core DDD shapes: arknet-shapes.ttl. Requirements: requirements-shapes.ttl.
+#  Validates the ISO-42010 architecture-description concepts (arkarch:
+#  Architecture, Stakeholder, Concern, Viewpoint, View). Not currently in
+#  active use. The ADR shapes share this namespace but have an active
+#  consumer - see architecture-shapes.ttl.
 #
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
-#  Instanzen nutzen arknet:name (Core-Reuse); ADRs zusaetzlich dcterms:identifier.
+#  Instanzen nutzen arknet:name (Core-Reuse).
 ##############################################################################
 
 @prefix sh:      <http://www.w3.org/ns/shacl#> .
 @prefix arkarch: <https://w3id.org/arknet/architecture#> .
 @prefix arknet:  <https://w3id.org/arknet/core#> .
-@prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
 @prefix ashapes: <https://w3id.org/arknet/shapes/architecture#> .
 
@@ -147,81 +148,4 @@ ashapes:View-addresses
     sh:message  "Best practice: A View should address at least one Concern."@en , "Best Practice: Eine View sollte mindestens ein Concern adressieren."@de ;
     sh:severity sh:Warning .
 
-
-##############################################################################
-#  ADR SHAPES
-##############################################################################
-
-ashapes:ADRShape
-    a sh:NodeShape ;
-    sh:targetClass arkarch:ArchitectureDecisionRecord ;
-    sh:property ashapes:ADR-identifier ;
-    sh:property ashapes:ADR-name ;
-    sh:property ashapes:ADR-status ;
-    sh:property ashapes:ADR-context ;
-    sh:property ashapes:ADR-decision ;
-    sh:property ashapes:ADR-consequences ;
-    sh:property ashapes:ADR-alternatives .
-
-ashapes:ADR-identifier
-    a sh:PropertyShape ;
-    sh:path     dcterms:identifier ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
-    sh:minLength 2 ;
-    sh:message  "An ADR needs exactly one dcterms:identifier (e.g. ADR-0007)."@en , "ADR braucht genau eine dcterms:identifier (z.B. ADR-0007)."@de ;
-    sh:severity sh:Violation .
-
-ashapes:ADR-name
-    a sh:PropertyShape ;
-    sh:path     arknet:name ;
-    sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:message  "An ADR needs an arknet:name (title of the decision)."@en , "ADR braucht einen arknet:name (Titel der Entscheidung)."@de ;
-    sh:severity sh:Violation .
-
-ashapes:ADR-status
-    a sh:PropertyShape ;
-    sh:path     arkarch:adrStatus ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:in       ( arkarch:Proposed arkarch:Accepted arkarch:Rejected
-                  arkarch:Deprecated arkarch:Superseded ) ;
-    sh:message  "An ADR needs exactly one arkarch:adrStatus (Proposed | Accepted | Rejected | Deprecated | Superseded)."@en , "ADR braucht genau einen arkarch:adrStatus (Proposed | Accepted | Rejected | Deprecated | Superseded)."@de ;
-    sh:severity sh:Violation .
-
-ashapes:ADR-context
-    a sh:PropertyShape ;
-    sh:path     arkarch:adrContext ;
-    sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:minLength 5 ;
-    sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?)."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?)."@de ;
-    sh:severity sh:Violation .
-
-ashapes:ADR-decision
-    a sh:PropertyShape ;
-    sh:path     arkarch:adrDecision ;
-    sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:minLength 5 ;
-    sh:message  "An ADR must have an arkarch:adrDecision (what was decided?)."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?)."@de ;
-    sh:severity sh:Violation .
-
-ashapes:ADR-consequences
-    a sh:PropertyShape ;
-    sh:path     arkarch:adrConsequences ;
-    sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:message  "Best practice: An ADR should document arkarch:adrConsequences (consequences of the decision)."@en , "Best Practice: ADR sollte arkarch:adrConsequences dokumentieren (Folgen der Entscheidung)."@de ;
-    sh:severity sh:Warning .
-
-ashapes:ADR-alternatives
-    a sh:PropertyShape ;
-    sh:path     arkarch:adrAlternatives ;
-    sh:datatype xsd:string ;
-    sh:message  "Best practice: An ADR should document considered alternatives (arkarch:adrAlternatives)."@en , "Best Practice: ADR sollte erwogene Alternativen (arkarch:adrAlternatives) dokumentieren."@de ;
-    sh:severity sh:Warning .
-
-# END OF ARCHITECTURE SHAPES
+# END OF ARCHITECTURE SHAPES (PARKED)

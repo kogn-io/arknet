@@ -31,6 +31,7 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -582,6 +583,63 @@ class KognioRdfBoundedContextRepositoryTest {
 
         assertEquals("Renamed", repository.findByCode(WORKSPACE_A, original.code()).orElseThrow().name());
         assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
+    }
+
+    // ---- batch identity resolution (backs the ResolveBoundedContexts in-port) ---------------
+
+    /**
+     * The batch a sibling hexagon's in-adapter borrows through {@code ResolveBoundedContexts}
+     * (ADR-008): one {@code VALUES}-bound query, never rejecting - an identity the project does not
+     * hold is simply absent from the result.
+     */
+    @Test
+    void findByIdsResolvesOnlyTheIdentitiesTheProjectHolds() {
+        BoundedContext first = boundedContext(new BoundedContextCode("BC-1"), null, null, List.of());
+        BoundedContext second = boundedContext(new BoundedContextCode("BC-2"), null, null, List.of());
+        repository.create(WORKSPACE_A, first);
+        repository.create(WORKSPACE_A, second);
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
+
+        List<ResolveBoundedContexts.ResolvedBoundedContext> resolved = repository.findByIds(
+                WORKSPACE_A, List.of(first.id().value(), second.id().value(), unknown));
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(new ResolveBoundedContexts.ResolvedBoundedContext(
+                first.id().value(), first.code())));
+        assertTrue(resolved.contains(new ResolveBoundedContexts.ResolvedBoundedContext(
+                second.id().value(), second.code())));
+    }
+
+    @Test
+    void findByIdsOfAnEmptyListQueriesNothing() {
+        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of()));
+    }
+
+    /**
+     * A store-first (ADR-005) bounded context without {@code arknet:name}/{@code arkddd:domainVision}
+     * is invisible to {@code findByCode}/{@code findAll} - but it still carries an identity and a
+     * code, and the display resolution must therefore still find it. That is why this join covers
+     * {@code dcterms:identifier} alone.
+     */
+    @Test
+    void findByIdsResolvesABoundedContextThatCarriesNothingButTypeAndIdentifier() {
+        String subject = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        String insert = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + subject + "> a <"
+                + BOUNDED_CONTEXT_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"BC-7\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+
+        List<ResolveBoundedContexts.ResolvedBoundedContext> resolved =
+                repository.findByIds(WORKSPACE_A, List.of(ResourceId.of(subject)));
+
+        assertEquals(List.of(new ResolveBoundedContexts.ResolvedBoundedContext(
+                ResourceId.of(subject), new BoundedContextCode("BC-7"))), resolved);
+        assertTrue(repository.findByCode(WORKSPACE_A, new BoundedContextCode("BC-7")).isEmpty(),
+                "precondition: the single-context read path cannot surface it at all");
     }
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */

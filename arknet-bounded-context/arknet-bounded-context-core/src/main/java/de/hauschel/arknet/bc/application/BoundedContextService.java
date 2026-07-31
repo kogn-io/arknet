@@ -13,6 +13,7 @@ import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
@@ -23,6 +24,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -52,7 +54,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * local store are the normal case, not a remote/multi-writer concern (ADR-001).</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
-        GetBoundedContext, LinkTerm {
+        GetBoundedContext, LinkTerm, ResolveBoundedContexts {
 
     private static final String CODE_PREFIX = "BC";
 
@@ -115,6 +117,16 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return repository.findByCode(projectId, code);
+    }
+
+    @Override
+    public List<ResolvedBoundedContext> resolveExisting(ProjectId projectId, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.length == 0) {
+            return List.of();
+        }
+        return repository.findByIds(projectId, List.of(ids));
     }
 
     @Override

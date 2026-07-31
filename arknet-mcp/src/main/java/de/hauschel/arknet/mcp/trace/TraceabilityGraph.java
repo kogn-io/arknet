@@ -20,6 +20,7 @@ import java.util.TreeSet;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
@@ -28,10 +29,12 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * cross-bounded-context edges the traceability tools traverse (issue #131):
  * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
  * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
- * (BoundedContext -&gt; Term, issue #185), and the two-hop {@code arkreq:mainStep}/
- * {@code arkreq:extensionStep} then {@code arkreq:stepRealises} (UseCase -&gt; Step -&gt;
- * Requirement). It also exposes the requirement/bounded-context prose ({@code
- * dcterms:description}/{@code arkreq:acceptanceCriterion}/{@code arkddd:domainVision}) that
+ * (BoundedContext -&gt; Term, issue #185), the three ADR edges
+ * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
+ * (ADR -&gt; BoundedContext) and {@code arkarch:supersedes} (ADR -&gt; ADR, issue #69), and the
+ * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
+ * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/bounded-context prose
+ * ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}/{@code arkddd:domainVision}) that
  * {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to
  * (issue #185).
  *
@@ -44,8 +47,8 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * consumes only the neutral {@link Triple}/{@link RdfNode} model).</p>
  *
  * <p>Unlike {@code StoreReader}/{@code Prefixes}, this class is deliberately <em>not</em>
- * domain-agnostic - it knows the {@code arkreq:}/{@code arkddd:}/{@code skos:} predicate and
- * type IRIs it traverses. That is a bounded exception in the same spirit as {@code
+ * domain-agnostic - it knows the {@code arkreq:}/{@code arkddd:}/{@code arkarch:}/{@code skos:}
+ * predicate and type IRIs it traverses. That is a bounded exception in the same spirit as {@code
  * StoreResource#status()}/{@code #priority()} (issue #111): a fully generic "follow every
  * object-typed predicate" traversal would report noise indistinguishable from the specific
  * edges traceability cares about.</p>
@@ -75,6 +78,14 @@ public final class TraceabilityGraph {
     private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
+    // The three arkarch: edges an architecture decision owns (issue #69). Unlike ArkreqVocabulary/
+    // ArkdddVocabulary, whose scope is deliberately the cross-module subset only, ArkarchVocabulary
+    // mirrors its whole (ADR-only) ontology module - so these come from the same shared source the
+    // ADR out-adapter serializes them with, and a rename cannot silently desync the two sides.
+    private static final String ADDRESSES_REQUIREMENT = ArkarchVocabulary.ADDRESSES_REQUIREMENT;
+    private static final String AFFECTS_CONTEXT = ArkarchVocabulary.AFFECTS_CONTEXT;
+    private static final String SUPERSEDES = ArkarchVocabulary.SUPERSEDES;
+
     // arkddd:ubiquitousLanguageTerm (BoundedContext -> Term) and arkddd:BoundedContext below are,
     // unlike arkreq:acceptanceCriterion/arkddd:domainVision above, used only within this class -
     // ArkdddVocabulary's scope is deliberately limited to predicates duplicated across modules
@@ -92,10 +103,20 @@ public final class TraceabilityGraph {
      * {@code mainStep}/{@code extensionStep} are in this set purely to hop a reached
      * {@code arkreq:Step} back to its owning use case - a step itself is never reported (see
      * {@link #dependents(String)}).
+     *
+     * <p>The three {@code arkarch:} edges are here because an architecture decision is exactly the
+     * kind of artifact "what breaks if this changes" is asked about: change a requirement and the
+     * decision that addresses it is affected; change a bounded context and the decision affecting it
+     * is; supersede a decision and its successor is. Only {@code arkarch:supersedes} is listed for
+     * the ADR-to-ADR relation, never its {@code owl:inverseOf} partner {@code supersededBy} - that
+     * one is never asserted as a triple, so listing it would traverse an edge no writer produces
+     * (issue #69). {@code arkarch:relatedTo} stays out on purpose: a symmetric "see also" cross-link
+     * would make every related decision reachable from every other one and turn an impact report
+     * into a cluster dump.</p>
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
-            UBIQUITOUS_LANGUAGE_TERM);
+            UBIQUITOUS_LANGUAGE_TERM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT, SUPERSEDES);
 
     private final Map<String, List<Triple>> outgoingBySubject;
     private final Map<String, List<Triple>> incomingByObject;

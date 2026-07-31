@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -19,6 +20,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * In-memory test double for {@link BoundedContextRepository}.
@@ -87,5 +89,14 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
     @Override
     public List<BoundedContext> findAll(ProjectId projectId) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    @Override
+    public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
+            ProjectId projectId, List<ResourceId> ids) {
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(bc -> ids.contains(bc.id().value()))
+                .map(bc -> new ResolveBoundedContexts.ResolvedBoundedContext(bc.id().value(), bc.code()))
+                .toList();
     }
 }

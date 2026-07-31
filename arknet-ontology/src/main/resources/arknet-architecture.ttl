@@ -1,0 +1,198 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Architecture Ontology  :  Version 0.1.0
+#
+#  Namespace  : https://w3id.org/arknet/architecture#
+#  License    : CC-BY-4.0
+#
+#  Scope: Architecture Decision Records (ADR) nach ISO/IEC/IEEE 42010 -
+#  ArchitectureDecisionRecord, seine Textfelder, seine Beziehungen und der
+#  ADR-Lebenszyklus als Individuen. Die uebrige 42010-Architekturbeschreibung
+#  (Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint,
+#  View) hat noch keinen aktiven Konsumenten und bleibt in
+#  parked/arknet-architecture_parked.ttl, teilt sich aber diesen Namespace.
+#
+#  GENERISCH: Allgemeines 42010-Metamodell fuer JEDES Projekt.
+#
+#  Standard-Situation (im Gegensatz zum Requirements-Modul):
+#    Fuer ISO 42010 existiert KEIN adoptiertes, dereferenzierbares RDF-Vokabular
+#    zum Wiederverwenden -- nur akademische Vorschlaege (OntolAD, OWL-2-Formal-
+#    isierungen) ohne stabile publizierte Namespace. Daher arkarch-eigen.
+#    Prior art: OntolAD (Formal Ontology for Architectural Descriptions, OWL 2).
+#
+#  Cross-Modul-Mehrwert:
+#    ADR -> arkreq:Requirement (welche Anforderung adressiert die Entscheidung)
+#    ADR -> arkddd:BoundedContext (welchen Teil des Systems betrifft sie)
+#
+#  Konvention: Instanzen nutzen arknet:name / arknet:description (Core-Reuse,
+#              Hausstil). ADRs tragen zusaetzlich dcterms:identifier (Nummer),
+#              da ADRs konventionell nummeriert sind (wie Requirements).
+#
+#  Imports: arknet-ddd (BoundedContext), arknet-core (name, description via arknet-ddd),
+#           arknet-requirements (Requirement).
+##############################################################################
+
+@prefix arkarch: <https://w3id.org/arknet/architecture#> .
+@prefix arkddd:  <https://w3id.org/arknet/ddd#> .
+@prefix arkreq:  <https://w3id.org/arknet/requirements#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vann:    <http://purl.org/vocab/vann/> .
+
+
+# ============================================================
+#  Ontology Metadata
+# ============================================================
+
+<https://w3id.org/arknet/architecture>
+    a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/ddd> ;
+    owl:imports      <https://w3id.org/arknet/requirements> ;
+    dcterms:title    "arknet Architecture Ontology"@en ;
+    dcterms:description "Architecture Decision Records (ISO/IEC/IEEE 42010): context, decision, consequences, considered options, lifecycle status, and the links to requirements and the DDD layer."@en ;
+    dcterms:version  "0.1.0" ;
+    dcterms:created  "2026-07-11"^^xsd:date ;
+    dcterms:rights   "CC-BY-4.0" ;
+    vann:preferredNamespacePrefix "arkarch" ;
+    vann:preferredNamespaceUri    "https://w3id.org/arknet/architecture#" ;
+    owl:versionInfo  "0.1.0" .
+
+
+##############################################################################
+#  1. ARCHITECTURE DECISION RECORDS (ADR)
+#     Kern-Link: ADR -> Requirement.
+##############################################################################
+
+arkarch:ArchitectureDecisionRecord a owl:Class ;
+    rdfs:label   "Architecture Decision Record"@en , "Architekturentscheidung"@de ;
+    rdfs:comment "Eine dokumentierte Architekturentscheidung mit Kontext, Entscheidung, Konsequenzen und erwogenen Alternativen (Nygard/MADR-Stil)."@de .
+
+# -- ADR data properties -----------------------------------------------------
+
+arkarch:adrContext a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "context"@en ;
+    rdfs:comment "Warum musste diese Entscheidung getroffen werden? Kraefte und Rahmenbedingungen."@de .
+
+arkarch:adrDecision a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "decision"@en ;
+    rdfs:comment "Die getroffene Entscheidung."@de .
+
+arkarch:adrConsequences a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "consequences"@en ;
+    rdfs:comment "Positive und negative Folgen der Entscheidung."@de .
+
+arkarch:adrAlternatives a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "considered options"@en , "erwogene Alternativen"@de ;
+    rdfs:comment "Erwogene, aber verworfene Optionen mit kurzer Begruendung (MADR: Considered Options)."@de .
+
+arkarch:decisionDate a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  xsd:date ;
+    rdfs:label  "decision date"@en ;
+    rdfs:comment "The date on which this decision was made."@en ,
+                 "Das Datum, an dem diese Entscheidung getroffen wurde."@de .
+
+# -- ADR relationships -------------------------------------------------------
+
+arkarch:supersedes a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    rdfs:label  "supersedes"@en ;
+    rdfs:comment "Diese Entscheidung loest eine aeltere ab."@de .
+
+arkarch:supersededBy a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    owl:inverseOf arkarch:supersedes ;
+    rdfs:label  "superseded by"@en ;
+    rdfs:comment "The newer decision that replaces this one. Inverse of supersedes."@en ,
+                 "Die neuere Entscheidung, die diese ersetzt. Inverse von supersedes."@de .
+
+arkarch:relatedTo a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ArchitectureDecisionRecord ;
+    a owl:SymmetricProperty ;
+    rdfs:label  "related to"@en ;
+    rdfs:comment "Lose Querverweis-Beziehung zwischen ADRs."@de .
+
+arkarch:addressesRequirement a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkreq:Requirement ;
+    rdfs:label  "addresses requirement"@en ;
+    rdfs:comment "Kern-Traceability: diese Entscheidung adressiert/realisiert die angegebene Anforderung."@de .
+
+arkarch:affectsContext a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkddd:BoundedContext ;
+    rdfs:label  "affects context"@en ;
+    rdfs:comment "Welchen Bounded Context betrifft diese Entscheidung? Bruecke zur DDD-Schicht."@de .
+
+
+##############################################################################
+#  2. ADR STATUS  (Lifecycle, as Individuals)
+##############################################################################
+
+arkarch:ADRStatus a owl:Class ;
+    rdfs:label "ADR Status"@en ;
+    rdfs:comment "Lebenszyklus-Status einer Architekturentscheidung."@de .
+
+arkarch:Proposed a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Proposed"@en ;
+    rdfs:comment "Vorgeschlagen, noch nicht angenommen."@de .
+
+arkarch:Accepted a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Accepted"@en ;
+    rdfs:comment "Angenommen und gueltig."@de .
+
+arkarch:Rejected a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Rejected"@en ;
+    rdfs:comment "Abgelehnt; nicht umgesetzt."@de .
+
+arkarch:Deprecated a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Deprecated"@en ;
+    rdfs:comment "Ueberholt, aber nicht durch eine konkrete Nachfolge-Entscheidung ersetzt."@de .
+
+arkarch:Superseded a owl:NamedIndividual , arkarch:ADRStatus ;
+    rdfs:label "Superseded"@en ;
+    rdfs:comment "Durch eine neuere Entscheidung ersetzt (siehe arkarch:supersededBy)."@de .
+
+arkarch:adrStatus a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ADRStatus ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "status"@en ;
+    rdfs:comment "The current lifecycle status of this architecture decision record."@en ,
+                 "Der aktuelle Lebenszyklus-Status dieser Architekturentscheidung."@de .
+
+
+##############################################################################
+#  3. OWL RESTRICTIONS
+##############################################################################
+
+# Every ADR has exactly one dcterms:identifier (its number)
+arkarch:ArchitectureDecisionRecord rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty dcterms:identifier ;
+    owl:cardinality 1
+] .
+
+# Every ADR has exactly one status
+arkarch:ArchitectureDecisionRecord rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty arkarch:adrStatus ;
+    owl:cardinality 1
+] .
+
+# END OF ARCHITECTURE ONTOLOGY

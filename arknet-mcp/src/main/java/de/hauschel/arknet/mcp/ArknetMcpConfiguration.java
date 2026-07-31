@@ -24,9 +24,15 @@ import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
+import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools;
+import de.hauschel.arknet.adr.application.AdrService;
+import de.hauschel.arknet.adr.application.port.out.AdrRepository;
+import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
 import de.hauschel.arknet.bc.application.BoundedContextService;
+import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfDatasetInventory;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectRepositoryFactory;
@@ -67,7 +73,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Five hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Six hexagons are wired:</p>
  *
  * <ul>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
@@ -108,6 +114,17 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code bc_list}'s reverse direction (identity back to a displayable term code) is the
  *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
  *       {@link BoundedContextMcpTools} (ADR-008).</li>
+ *   <li><strong>adr</strong> ({@link AdrMcpTools} over {@link AdrService} over an RDF-persisted
+ *       ADR repository) - the five ADR tools ({@code adr_add}/{@code adr_list}/{@code adr_get}/
+ *       {@code adr_set_status}/{@code adr_supersede}), assembled through
+ *       {@link KognioRdfAdrRepositoryFactory}. {@code adr_add}'s two cross-BC code-to-identity
+ *       resolutions are separate {@code KognioRdfRequirementLookup}/
+ *       {@code KognioRdfBoundedContextLookup} beans over the same shared dataset lifecycle;
+ *       {@code adr_get}/{@code adr_list}'s reverse direction (identity back to a displayable code)
+ *       is the requirements hexagon's own {@link ResolveRequirements} and the bounded-context
+ *       hexagon's own {@link ResolveBoundedContexts} in-port, wired straight into
+ *       {@link AdrMcpTools} (ADR-008). Its third relation, {@code supersedes}, is self-referential
+ *       and therefore resolved inside {@link AdrService} - no port is borrowed for it.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
  *       RDF-persisted registry) - the five project tools ({@code project_add}/
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
@@ -121,12 +138,13 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
- * {@code arknet.rdf.storage}, no competing locks); the four model hexagons additionally share the
+ * {@code arknet.rdf.storage}, no competing locks); the five model hexagons additionally share the
  * single {@link ProjectResolver} bean. Every tool call resolves its {@link ProjectId} per request
  * by looking up the anchor the caller sent - in the request header (see
  * {@link AnchorHttpTransportConfiguration}) or as an explicit tool parameter - so requirements,
- * glossary terms, use cases and bounded contexts of the <em>same</em> project land in the same
- * dataset and can reference each other, while different projects stay isolated.</p>
+ * glossary terms, use cases, bounded contexts and architecture decisions of the <em>same</em>
+ * project land in the same dataset and can reference each other, while different projects stay
+ * isolated.</p>
  *
  * <p><strong>What is no longer wired here, and why that is the point (ADR-016 decision 9).</strong>
  * There used to be a resolver bean deriving that identity from the caller's directory
@@ -382,6 +400,66 @@ public class ArknetMcpConfiguration {
             final BoundedContextService service, final ResolveTerms resolveTerms,
             final ProjectResolver projectResolver) {
         return new BoundedContextMcpTools(service, service, service, service, resolveTerms, projectResolver);
+    }
+
+    // --- ADR hexagon -----------------------------------------------------------
+
+    @Bean
+    AdrRepository adrRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfAdrRepositoryFactory.over(datasetLifecycle, displayLocale);
+    }
+
+    /**
+     * Resolves a requirement's human-typed business code (e.g. {@code FR-1}) to its opaque subject
+     * identity - the strict cross-BC lookup {@code adr_add}'s {@code addressesRequirements}
+     * references need. A second, ADR-owned bean rather than a shared one with the use-cases hexagon:
+     * each hexagon declares the capability it needs on its own out-port, and the two implementations
+     * only happen to read the same sibling graph. Acquires datasets from the same shared
+     * {@link DatasetLifecycle} as {@link #requirementRepository}, so it reads the same project the
+     * requirements hexagon writes into.
+     */
+    @Bean
+    de.hauschel.arknet.adr.application.port.out.RequirementLookup adrRequirementLookup(
+            final DatasetLifecycle datasetLifecycle) {
+        return new de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfRequirementLookup(datasetLifecycle);
+    }
+
+    /**
+     * Resolves a bounded context's human-typed business code (e.g. {@code BC-1}) to its opaque
+     * subject identity - the strict cross-BC lookup {@code adr_add}'s {@code affectsContexts}
+     * references need. Acquires datasets from the same shared {@link DatasetLifecycle} as
+     * {@link #boundedContextRepository}, so it reads the same project the bounded-context hexagon
+     * writes into.
+     */
+    @Bean
+    BoundedContextLookup adrBoundedContextLookup(final DatasetLifecycle datasetLifecycle) {
+        return new de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfBoundedContextLookup(datasetLifecycle);
+    }
+
+    @Bean
+    AdrService adrService(
+            final AdrRepository repository, final ResourceIdFactory resourceIdFactory,
+            final de.hauschel.arknet.adr.application.port.out.RequirementLookup adrRequirementLookup,
+            final BoundedContextLookup adrBoundedContextLookup) {
+        return new AdrService(repository, resourceIdFactory, adrRequirementLookup, adrBoundedContextLookup);
+    }
+
+    /**
+     * {@code resolveRequirements}/{@code resolveBoundedContexts} are the requirements and
+     * bounded-context hexagons' own driving ports (implemented by their {@code RequirementService}/
+     * {@code BoundedContextService} beans) - borrowed here purely so {@code adr_get}/
+     * {@code adr_list} can render an addressed requirement's or an affected context's business code
+     * instead of a bare IRI (ADR-008). This wires an In-Adapter to two <em>different</em> hexagons'
+     * In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem anderen BC"
+     * precision in CLAUDE.md. The third relation, {@code supersedes}, points back into the ADR
+     * hexagon itself and is resolved by {@link AdrService}, so it needs no borrowed port at all.
+     */
+    @Bean
+    AdrMcpTools adrMcpTools(
+            final AdrService service, final ResolveRequirements resolveRequirements,
+            final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
+        return new AdrMcpTools(service, service, service, service, service,
+                resolveRequirements, resolveBoundedContexts, projectResolver);
     }
 
     // --- Project hexagon (the registry, ADR-016) -------------------------------

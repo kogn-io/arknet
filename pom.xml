@@ -86,6 +86,7 @@
         <module>arknet-use-cases</module>
         <module>arknet-bounded-context</module>
         <module>arknet-project</module>
+        <module>arknet-adr</module>
         <module>arknet-architecture-tests</module>
     </modules>
 
