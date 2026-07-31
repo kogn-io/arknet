@@ -61,9 +61,9 @@ public interface UseCaseRepository {
      * re-read and retry rather than silently discard the concurrent change.
      *
      * @param projectId    the project (architecture model) the use case lives in
-     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
-     *                     use case (from {@link #findCurrentByCode}), or {@code null} if the
-     *                     caller expects no revision to exist yet
+     * @param expectedHead the {@link RevisionToken} the caller last observed for this use case
+     *                     (from {@link #findCurrentByCode}), or {@code null} if the caller expects
+     *                     no revision to exist yet
      * @param updated      the use case to store in place of the current one, if its head still
      *                     matches {@code expectedHead}
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
@@ -72,7 +72,7 @@ public interface UseCaseRepository {
      *                                                stored use case's current head - a
      *                                                concurrent write raced ahead
      */
-    void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated);
 
     /**
      * Finds a use case by its human-readable business code within a project.
@@ -97,11 +97,11 @@ public interface UseCaseRepository {
     Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code);
 
     /**
-     * A use case's state paired with its current concurrency token (the {@code arkprov:head}
-     * revision IRI, or {@code null} if the use case predates the funnel's revision recording), as
-     * read together by {@link #findCurrentByCode}.
+     * A use case's state paired with its current concurrency token (the {@link RevisionToken}, or
+     * {@code null} if the use case predates the funnel's revision recording), as read together by
+     * {@link #findCurrentByCode}.
      */
-    record CurrentUseCase(UseCase value, String head) {
+    record CurrentUseCase(UseCase value, RevisionToken head) {
     }
 
     /**

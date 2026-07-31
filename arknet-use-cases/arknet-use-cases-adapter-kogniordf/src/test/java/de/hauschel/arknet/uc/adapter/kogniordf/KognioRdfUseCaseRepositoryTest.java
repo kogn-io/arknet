@@ -40,6 +40,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
+import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
@@ -118,7 +119,7 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code KognioRdfRequirementRepositoryTest#replaceViaCompareAndUpdate}.
      */
     private void replaceViaCompareAndUpdate(ProjectId projectId, UseCase updated) {
-        String head = repository.findCurrentByCode(projectId, updated.code())
+        RevisionToken head = repository.findCurrentByCode(projectId, updated.code())
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
         repository.compareAndUpdate(projectId, head, updated);
@@ -291,7 +292,7 @@ class KognioRdfUseCaseRepositoryTest {
     void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
         seedReferences(WORKSPACE_A);
         repository.create(WORKSPACE_A, placeOrder());
-        String head = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        RevisionToken head = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
@@ -311,7 +312,7 @@ class KognioRdfUseCaseRepositoryTest {
     void compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale() {
         seedReferences(WORKSPACE_A);
         repository.create(WORKSPACE_A, placeOrder());
-        String staleHead = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        RevisionToken staleHead = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         UseCase concurrentlyRevised = new UseCase(ID_1, CODE_1, "Place order (concurrently revised)",
                 "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
@@ -723,7 +724,7 @@ class KognioRdfUseCaseRepositoryTest {
         String subject = ID_1.value().value();
 
         assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
-        String headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        RevisionToken headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
@@ -736,7 +737,7 @@ class KognioRdfUseCaseRepositoryTest {
                 + "> { <" + subject + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head(),
+        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head().value(),
                 "findCurrentByCode must observe the advanced head");
     }
 

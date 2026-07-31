@@ -32,6 +32,7 @@ import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
@@ -199,11 +200,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
         write(projectId, updated, false, expectedHead);
     }
 
-    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, String expectedHead) {
+    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
@@ -305,7 +306,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     tx -> tx.add(graphIri, graph));
         } else {
             funnel.compareAndUpdate(new DatasetId(projectId.value()), USE_CASES_GRAPH, subjectIriString,
-                    expectedHead, graph, assertedContext,
+                    expectedHead == null ? null : expectedHead.value(), graph, assertedContext,
                     () -> new UseCaseNotFoundException(projectId, useCase.code()),
                     () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
                     tx -> {
@@ -452,11 +453,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         if (useCase.isEmpty()) {
             return Optional.empty();
         }
-        String headIri = row.get().getValue("head")
+        RevisionToken head = row.get().getValue("head")
                 .filter(IRI.class::isInstance)
-                .map(value -> ((IRI) value).getIRIString())
+                .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                 .orElse(null);
-        return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), headIri));
+        return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), head));
     }
 
     /**

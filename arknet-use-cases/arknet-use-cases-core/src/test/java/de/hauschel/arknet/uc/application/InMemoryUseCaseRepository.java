@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
@@ -37,7 +38,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     private final Map<ProjectId, Map<UseCaseId, UseCase>> byProject = new LinkedHashMap<>();
-    private final Map<UseCaseId, String> headByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, RevisionToken> headByIdentity = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, UseCase useCase) {
@@ -51,11 +52,11 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
             throw new DuplicateUseCaseCodeException(projectId, useCase.code());
         }
         useCases.put(useCase.id(), useCase);
-        headByIdentity.put(useCase.id(), UUID.randomUUID().toString());
+        headByIdentity.put(useCase.id(), new RevisionToken(UUID.randomUUID().toString()));
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, UseCase updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
         Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
         UseCase current = useCases.get(updated.id());
         if (current == null) {
@@ -65,7 +66,7 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
             throw new UseCaseConcurrentlyModifiedException(projectId, updated.code());
         }
         useCases.put(updated.id(), updated);
-        headByIdentity.put(updated.id(), UUID.randomUUID().toString());
+        headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
     }
 
     @Override
