@@ -34,7 +34,7 @@ shapes:Aggregate-name
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Aggregate muss einen 'arknet:name' haben."@de ;
+    sh:message  "Aggregate must have an 'arknet:name'."@en , "Aggregate muss einen 'arknet:name' haben."@de ;
     sh:severity sh:Violation .
 
 shapes:Aggregate-aggregateRoot
@@ -43,21 +43,21 @@ shapes:Aggregate-aggregateRoot
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:class    arkddd:AggregateRoot ;
-    sh:message  "Aggregate muss GENAU EINEN 'arkddd:aggregateRoot' haben."@de ;
+    sh:message  "Aggregate must have EXACTLY ONE 'arkddd:aggregateRoot'."@en , "Aggregate muss GENAU EINEN 'arkddd:aggregateRoot' haben."@de ;
     sh:severity sh:Violation .
 
 shapes:Aggregate-hasCommand
     a sh:PropertyShape ;
     sh:path     arkddd:hasCommand ;
     sh:minCount 1 ;
-    sh:message  "Aggregate sollte mindestens einen 'arkddd:hasCommand' haben."@de ;
+    sh:message  "Aggregate should have at least one 'arkddd:hasCommand'."@en , "Aggregate sollte mindestens einen 'arkddd:hasCommand' haben."@de ;
     sh:severity sh:Warning .
 
 shapes:Aggregate-hasEvent
     a sh:PropertyShape ;
     sh:path     arkddd:hasEvent ;
     sh:minCount 1 ;
-    sh:message  "Aggregate sollte mindestens ein 'arkddd:hasEvent' haben."@de ;
+    sh:message  "Aggregate should have at least one 'arkddd:hasEvent'."@en , "Aggregate sollte mindestens ein 'arkddd:hasEvent' haben."@de ;
     sh:severity sh:Warning .
 
 
@@ -78,7 +78,7 @@ shapes:ContextRelationship-upstream
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:class    arkddd:BoundedContext ;
-    sh:message  "ContextRelationship muss genau einen 'arkddd:upstream' BoundedContext haben."@de ;
+    sh:message  "ContextRelationship must have exactly one 'arkddd:upstream' BoundedContext."@en , "ContextRelationship muss genau einen 'arkddd:upstream' BoundedContext haben."@de ;
     sh:severity sh:Violation .
 
 shapes:ContextRelationship-downstream
@@ -87,7 +87,7 @@ shapes:ContextRelationship-downstream
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:class    arkddd:BoundedContext ;
-    sh:message  "ContextRelationship muss genau einen 'arkddd:downstream' BoundedContext haben."@de ;
+    sh:message  "ContextRelationship must have exactly one 'arkddd:downstream' BoundedContext."@en , "ContextRelationship muss genau einen 'arkddd:downstream' BoundedContext haben."@de ;
     sh:severity sh:Violation .
 
 shapes:ContextRelationship-relationshipType
@@ -99,7 +99,7 @@ shapes:ContextRelationship-relationshipType
                   arkddd:Conformist arkddd:AnticorruptionLayer
                   arkddd:OpenHostService arkddd:PublishedLanguage
                   arkddd:SeparateWays ) ;
-    sh:message  "ContextRelationship muss einen gueltigen 'arkddd:relationshipType' haben."@de ;
+    sh:message  "ContextRelationship must have a valid 'arkddd:relationshipType'."@en , "ContextRelationship muss einen gueltigen 'arkddd:relationshipType' haben."@de ;
     sh:severity sh:Violation .
 
 # END OF DDD SHAPES (parked)

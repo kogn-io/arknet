@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -598,6 +599,46 @@ class KognioRdfUseCaseRepositoryTest {
         WriteConstraintViolationException ex = assertThrows(WriteConstraintViolationException.class,
                 () -> gate.enforce(new RDF4JGraph(twoTitles)));
         assertTrue(ex.getMessage().contains("title"), ex.getMessage());
+    }
+
+    /**
+     * Issue #75 durchstich test: {@code rshapes:UseCase-title} carries an {@code sh:message} with
+     * both an {@code @en} and a {@code @de} literal since the bilingual translation pass. This
+     * proves the fallback chain in {@link DisplayLocale#select} actually discriminates between the
+     * two against the REAL {@code ShaclValidationRdf4j} engine (not the recording fake used in
+     * {@code ShaclWriteGateTest}) - a requested English locale must surface the English sentence,
+     * a requested German locale the German one, from the very same shape violation.
+     */
+    @Test
+    void gateSelectsMessageLanguageAccordingToDisplayLocale() {
+        ValueFactory vf = SimpleValueFactory.getInstance();
+        IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
+        IRI useCaseClass = vf.createIRI("https://w3id.org/arknet/requirements#UseCase");
+        IRI actorClass = vf.createIRI("https://w3id.org/arknet/process#Actor");
+        IRI primaryActor = vf.createIRI("https://w3id.org/arknet/requirements#primaryActor");
+
+        Model twoTitles = new LinkedHashModel();
+        twoTitles.add(useCase, RDF.TYPE, useCaseClass);
+        twoTitles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order"));
+        twoTitles.add(useCase, primaryActor, actor);
+        twoTitles.add(actor, RDF.TYPE, actorClass);
+
+        ShaclWriteGate englishGate = KognioRdfUseCaseRepositoryFactory
+                .buildGate(new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
+        WriteConstraintViolationException englishEx = assertThrows(WriteConstraintViolationException.class,
+                () -> englishGate.enforce(new RDF4JGraph(twoTitles)));
+        assertTrue(englishEx.getMessage().contains("A Use Case needs exactly one dcterms:title"),
+                englishEx.getMessage());
+
+        ShaclWriteGate germanGate = KognioRdfUseCaseRepositoryFactory
+                .buildGate(new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
+        WriteConstraintViolationException germanEx = assertThrows(WriteConstraintViolationException.class,
+                () -> germanGate.enforce(new RDF4JGraph(twoTitles)));
+        assertTrue(germanEx.getMessage().contains("Use Case braucht genau eine dcterms:title"),
+                germanEx.getMessage());
     }
 
     /**

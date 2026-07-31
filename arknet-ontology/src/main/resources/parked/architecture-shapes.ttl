@@ -34,7 +34,7 @@ ashapes:Architecture-name
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "Architecture muss genau einen arknet:name haben (min. 2 Zeichen)."@de ;
+    sh:message  "An Architecture must have exactly one arknet:name (min. 2 characters)."@en , "Architecture muss genau einen arknet:name haben (min. 2 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 ashapes:Architecture-hasStakeholder
@@ -42,7 +42,7 @@ ashapes:Architecture-hasStakeholder
     sh:path     arkarch:hasStakeholder ;
     sh:minCount 1 ;
     sh:class    arkarch:Stakeholder ;
-    sh:message  "Best Practice: Eine Architektur sollte mindestens einen Stakeholder benennen (ISO 42010)."@de ;
+    sh:message  "Best practice: An Architecture should name at least one Stakeholder (ISO 42010)."@en , "Best Practice: Eine Architektur sollte mindestens einen Stakeholder benennen (ISO 42010)."@de ;
     sh:severity sh:Warning .
 
 
@@ -62,7 +62,7 @@ ashapes:Stakeholder-name
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Stakeholder muss genau einen arknet:name haben."@de ;
+    sh:message  "A Stakeholder must have exactly one arknet:name."@en , "Stakeholder muss genau einen arknet:name haben."@de ;
     sh:severity sh:Violation .
 
 ashapes:Stakeholder-hasConcern
@@ -70,7 +70,7 @@ ashapes:Stakeholder-hasConcern
     sh:path     arkarch:hasConcern ;
     sh:minCount 1 ;
     sh:class    arkarch:Concern ;
-    sh:message  "Best Practice: Ein Stakeholder ohne Concern ist im 42010-Sinn irrelevant -- benenne mindestens ein Anliegen."@de ;
+    sh:message  "Best practice: A Stakeholder without a Concern is irrelevant in the 42010 sense -- name at least one concern."@en , "Best Practice: Ein Stakeholder ohne Concern ist im 42010-Sinn irrelevant -- benenne mindestens ein Anliegen."@de ;
     sh:severity sh:Warning .
 
 ashapes:ConcernShape
@@ -84,7 +84,7 @@ ashapes:Concern-name
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Concern muss genau einen arknet:name haben."@de ;
+    sh:message  "A Concern must have exactly one arknet:name."@en , "Concern muss genau einen arknet:name haben."@de ;
     sh:severity sh:Violation .
 
 
@@ -105,7 +105,7 @@ ashapes:Viewpoint-name
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Viewpoint muss genau einen arknet:name haben."@de ;
+    sh:message  "A Viewpoint must have exactly one arknet:name."@en , "Viewpoint muss genau einen arknet:name haben."@de ;
     sh:severity sh:Violation .
 
 ashapes:Viewpoint-purpose
@@ -113,7 +113,7 @@ ashapes:Viewpoint-purpose
     sh:path     arkarch:viewpointPurpose ;
     sh:minCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Viewpoint sollte einen arkarch:viewpointPurpose nennen (welche Concerns rahmt er?)."@de ;
+    sh:message  "A Viewpoint should state an arkarch:viewpointPurpose (which concerns does it frame?)."@en , "Viewpoint sollte einen arkarch:viewpointPurpose nennen (welche Concerns rahmt er?)."@de ;
     sh:severity sh:Warning .
 
 ashapes:Viewpoint-sparqlQuery
@@ -121,7 +121,7 @@ ashapes:Viewpoint-sparqlQuery
     sh:path     arkarch:sparqlQuery ;
     sh:maxCount 1 ;
     sh:datatype xsd:anyURI ;
-    sh:message  "arkarch:sparqlQuery muss ein URI-Verweis auf die .sparql-Datei sein."@de ;
+    sh:message  "arkarch:sparqlQuery must be a URI reference to the .sparql file."@en , "arkarch:sparqlQuery muss ein URI-Verweis auf die .sparql-Datei sein."@de ;
     sh:severity sh:Violation .
 
 ashapes:ViewShape
@@ -136,7 +136,7 @@ ashapes:View-conformsToViewpoint
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:class    arkarch:Viewpoint ;
-    sh:message  "Eine View muss genau einem Viewpoint entsprechen (ISO 42010: Views werden durch Viewpoints geregelt)."@de ;
+    sh:message  "A View must conform to exactly one Viewpoint (ISO 42010: Views are governed by Viewpoints)."@en , "Eine View muss genau einem Viewpoint entsprechen (ISO 42010: Views werden durch Viewpoints geregelt)."@de ;
     sh:severity sh:Violation .
 
 ashapes:View-addresses
@@ -144,7 +144,7 @@ ashapes:View-addresses
     sh:path     arkarch:addresses ;
     sh:minCount 1 ;
     sh:class    arkarch:Concern ;
-    sh:message  "Best Practice: Eine View sollte mindestens ein Concern adressieren."@de ;
+    sh:message  "Best practice: A View should address at least one Concern."@en , "Best Practice: Eine View sollte mindestens ein Concern adressieren."@de ;
     sh:severity sh:Warning .
 
 
@@ -170,7 +170,7 @@ ashapes:ADR-identifier
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "ADR braucht genau eine dcterms:identifier (z.B. ADR-0007)."@de ;
+    sh:message  "An ADR needs exactly one dcterms:identifier (e.g. ADR-0007)."@en , "ADR braucht genau eine dcterms:identifier (z.B. ADR-0007)."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-name
@@ -178,7 +178,7 @@ ashapes:ADR-name
     sh:path     arknet:name ;
     sh:minCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "ADR braucht einen arknet:name (Titel der Entscheidung)."@de ;
+    sh:message  "An ADR needs an arknet:name (title of the decision)."@en , "ADR braucht einen arknet:name (Titel der Entscheidung)."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-status
@@ -188,7 +188,7 @@ ashapes:ADR-status
     sh:maxCount 1 ;
     sh:in       ( arkarch:Proposed arkarch:Accepted arkarch:Rejected
                   arkarch:Deprecated arkarch:Superseded ) ;
-    sh:message  "ADR braucht genau einen arkarch:adrStatus (Proposed | Accepted | Rejected | Deprecated | Superseded)."@de ;
+    sh:message  "An ADR needs exactly one arkarch:adrStatus (Proposed | Accepted | Rejected | Deprecated | Superseded)."@en , "ADR braucht genau einen arkarch:adrStatus (Proposed | Accepted | Rejected | Deprecated | Superseded)."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-context
@@ -197,7 +197,7 @@ ashapes:ADR-context
     sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?)."@de ;
+    sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?)."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?)."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-decision
@@ -206,7 +206,7 @@ ashapes:ADR-decision
     sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?)."@de ;
+    sh:message  "An ADR must have an arkarch:adrDecision (what was decided?)."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?)."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-consequences
@@ -214,14 +214,14 @@ ashapes:ADR-consequences
     sh:path     arkarch:adrConsequences ;
     sh:minCount 1 ;
     sh:datatype xsd:string ;
-    sh:message  "Best Practice: ADR sollte arkarch:adrConsequences dokumentieren (Folgen der Entscheidung)."@de ;
+    sh:message  "Best practice: An ADR should document arkarch:adrConsequences (consequences of the decision)."@en , "Best Practice: ADR sollte arkarch:adrConsequences dokumentieren (Folgen der Entscheidung)."@de ;
     sh:severity sh:Warning .
 
 ashapes:ADR-alternatives
     a sh:PropertyShape ;
     sh:path     arkarch:adrAlternatives ;
     sh:datatype xsd:string ;
-    sh:message  "Best Practice: ADR sollte erwogene Alternativen (arkarch:adrAlternatives) dokumentieren."@de ;
+    sh:message  "Best practice: An ADR should document considered alternatives (arkarch:adrAlternatives)."@en , "Best Practice: ADR sollte erwogene Alternativen (arkarch:adrAlternatives) dokumentieren."@de ;
     sh:severity sh:Warning .
 
 # END OF ARCHITECTURE SHAPES

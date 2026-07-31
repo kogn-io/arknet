@@ -38,7 +38,7 @@ shapes:BoundedContext-name
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "BoundedContext muss genau einen 'arknet:name' haben (min. 2 Zeichen)."@de ;
+    sh:message  "A BoundedContext must have exactly one 'arknet:name' (min. 2 characters)."@en , "BoundedContext muss genau einen 'arknet:name' haben (min. 2 Zeichen)."@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-domainVision
@@ -48,7 +48,7 @@ shapes:BoundedContext-domainVision
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
     sh:minLength 10 ;
-    sh:message  "BoundedContext muss eine 'arkddd:domainVision' haben (min. 10 Zeichen). Formuliere in einem Satz: Was leistet dieser Context?"@de ;
+    sh:message  "A BoundedContext must have an 'arkddd:domainVision' (min. 10 characters). Express in one sentence: What does this context do?"@en , "BoundedContext muss eine 'arkddd:domainVision' haben (min. 10 Zeichen). Formuliere in einem Satz: Was leistet dieser Context?"@de ;
     sh:severity sh:Violation .
 
 shapes:BoundedContext-hasAggregate
@@ -56,7 +56,7 @@ shapes:BoundedContext-hasAggregate
     sh:path     arkddd:hasAggregate ;
     sh:minCount 1 ;
     sh:class    arkddd:Aggregate ;
-    sh:message  "BoundedContext sollte mindestens ein 'arkddd:hasAggregate' haben (dessen Wert vom Typ arkddd:Aggregate ist)."@de ;
+    sh:message  "A BoundedContext should have at least one 'arkddd:hasAggregate' (whose value is of type arkddd:Aggregate)."@en , "BoundedContext sollte mindestens ein 'arkddd:hasAggregate' haben (dessen Wert vom Typ arkddd:Aggregate ist)."@de ;
     sh:severity sh:Warning .
 
 shapes:BoundedContext-partOf
@@ -64,13 +64,13 @@ shapes:BoundedContext-partOf
     sh:path     arkddd:partOf ;
     sh:maxCount 1 ;
     sh:or       ( [ sh:class arkddd:Domain ] [ sh:class arkddd:Subdomain ] ) ;
-    sh:message  "BoundedContext sollte 'arkddd:partOf' (eine Domain oder Subdomain) haben."@de ;
+    sh:message  "A BoundedContext should have 'arkddd:partOf' (a Domain or Subdomain)."@en , "BoundedContext sollte 'arkddd:partOf' (eine Domain oder Subdomain) haben."@de ;
     sh:severity sh:Warning .
 
 shapes:BoundedContext-ownedBy
     a sh:PropertyShape ;
     sh:path     arkddd:ownedBy ;
-    sh:message  "BoundedContext sollte 'arkddd:ownedBy' (Team-Name) haben."@de ;
+    sh:message  "A BoundedContext should have 'arkddd:ownedBy' (team name)."@en , "BoundedContext sollte 'arkddd:ownedBy' (Team-Name) haben."@de ;
     sh:severity sh:Warning .
 
 # END OF SHAPES
