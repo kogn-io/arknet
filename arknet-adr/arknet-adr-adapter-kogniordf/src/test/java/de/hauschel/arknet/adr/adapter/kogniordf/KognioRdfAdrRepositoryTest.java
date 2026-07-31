@@ -138,6 +138,69 @@ class KognioRdfAdrRepositoryTest {
         assertNull(found.decisionDate());
     }
 
+    /**
+     * Round-trip regression for #91: {@code REJECTED} and {@code DEPRECATED} must survive a
+     * write+read cycle the same way {@code PROPOSED}/{@code ACCEPTED} already do, both as the
+     * lifecycle individual persisted and the enum value read back.
+     */
+    @Test
+    void createsAndFindsAdrWithRejectedStatus() {
+        Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.REJECTED, null, null, null,
+                List.of(), List.of(), List.of());
+
+        repository.create(PROJECT_A, created);
+        Optional<Adr> found = repository.findByCode(PROJECT_A, new AdrCode("ADR-1"));
+
+        assertEquals(Optional.of(created), found);
+        assertEquals(AdrStatus.REJECTED, found.orElseThrow().status());
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + created.id().value().value() + "> <"
+                + ArkarchVocabulary.ADR_STATUS + "> <" + ArkarchVocabulary.REJECTED + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    @Test
+    void createsAndFindsAdrWithDeprecatedStatus() {
+        Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.DEPRECATED, null, null, null,
+                List.of(), List.of(), List.of());
+
+        repository.create(PROJECT_A, created);
+        Optional<Adr> found = repository.findByCode(PROJECT_A, new AdrCode("ADR-1"));
+
+        assertEquals(Optional.of(created), found);
+        assertEquals(AdrStatus.DEPRECATED, found.orElseThrow().status());
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + created.id().value().value() + "> <"
+                + ArkarchVocabulary.ADR_STATUS + "> <" + ArkarchVocabulary.DEPRECATED + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    @Test
+    void compareAndUpdateTransitionsToRejected() {
+        Adr original = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of());
+        repository.create(PROJECT_A, original);
+
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.reject());
+
+        assertEquals(AdrStatus.REJECTED,
+                repository.findByCode(PROJECT_A, original.code()).orElseThrow().status());
+    }
+
+    @Test
+    void compareAndUpdateTransitionsToDeprecated() {
+        Adr original = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
+                List.of(), List.of(), List.of());
+        repository.create(PROJECT_A, original);
+
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.deprecate());
+
+        assertEquals(AdrStatus.DEPRECATED,
+                repository.findByCode(PROJECT_A, original.code()).orElseThrow().status());
+    }
+
     @Test
     void findAllReturnsEveryStoredAdr() {
         repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));

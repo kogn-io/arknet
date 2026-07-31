@@ -22,8 +22,10 @@ import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
+import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrStatus;
@@ -92,19 +94,24 @@ public final class AdrMcpTools {
     private final ListAdrs listAdrs;
     private final GetAdr getAdr;
     private final AcceptAdr acceptAdr;
+    private final RejectAdr rejectAdr;
+    private final DeprecateAdr deprecateAdr;
     private final SupersedeAdr supersedeAdr;
     private final ResolveRequirements resolveRequirements;
     private final ResolveBoundedContexts resolveBoundedContexts;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its five driving in-ports, the two borrowed display ports and the
+     * Creates the adapter with its seven driving in-ports, the two borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
      * @param listAdrs               in-port backing {@code adr_list}
      * @param getAdr                 in-port backing {@code adr_get}
-     * @param acceptAdr              in-port backing {@code adr_set_status}
+     * @param acceptAdr              in-port backing {@code adr_set_status}'s {@code ACCEPTED} target
+     * @param rejectAdr              in-port backing {@code adr_set_status}'s {@code REJECTED} target
+     * @param deprecateAdr           in-port backing {@code adr_set_status}'s {@code DEPRECATED}
+     *                               target
      * @param supersedeAdr           in-port backing {@code adr_supersede}
      * @param resolveRequirements    requirements driving port used only to render an addressed
      *                               requirement's business code instead of its bare IRI
@@ -117,6 +124,8 @@ public final class AdrMcpTools {
             final ListAdrs listAdrs,
             final GetAdr getAdr,
             final AcceptAdr acceptAdr,
+            final RejectAdr rejectAdr,
+            final DeprecateAdr deprecateAdr,
             final SupersedeAdr supersedeAdr,
             final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts,
@@ -125,6 +134,8 @@ public final class AdrMcpTools {
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
         this.getAdr = Objects.requireNonNull(getAdr, "getAdr");
         this.acceptAdr = Objects.requireNonNull(acceptAdr, "acceptAdr");
+        this.rejectAdr = Objects.requireNonNull(rejectAdr, "rejectAdr");
+        this.deprecateAdr = Objects.requireNonNull(deprecateAdr, "deprecateAdr");
         this.supersedeAdr = Objects.requireNonNull(supersedeAdr, "supersedeAdr");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
@@ -236,31 +247,40 @@ public final class AdrMcpTools {
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
-            + "decision. Today the only supported transition is PROPOSED -> ACCEPTED.")
+            + "decision. Supported transitions: PROPOSED -> ACCEPTED, PROPOSED -> REJECTED, and "
+            + "ACCEPTED -> DEPRECATED (for a decision that became obsolete without a successor - use "
+            + "adr_supersede instead when a newer decision replaces it).")
     public String setStatus(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
-            @McpToolParam(description = "Target status: PROPOSED or ACCEPTED") final String status,
+            @McpToolParam(description = "Target status: ACCEPTED, REJECTED or DEPRECATED")
+            final String status,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
-        // The implemented lifecycle permits exactly one transition: the tool's external "status"
-        // parameter mirrors req_set_status's surface, but AcceptAdr itself takes no target status -
-        // only ACCEPTED can ever legally result from this call. AdrStatus.valueOf is parsed
-        // defensively rather than let directly: REJECTED/DEPRECATED/SUPERSEDED are real ontology
-        // values the enum deliberately does not implement, and those must reject with this method's
-        // own message, not the JDK's raw "No enum constant ...".
+        // The tool's external "status" parameter mirrors req_set_status's surface, but each of the
+        // three transition ports (AcceptAdr/RejectAdr/DeprecateAdr) takes no target status of its
+        // own - the caller-visible dispatch happens only here. AdrStatus.valueOf is parsed
+        // defensively rather than let directly: PROPOSED is a real enum value that is simply not a
+        // legal target of this tool (you never transition into it), and SUPERSEDED is a real
+        // ontology value AdrStatus deliberately never implements at all (it stays derived-only from
+        // adr_supersede) - both, and anything unparseable, must reject with this method's own
+        // message, not the JDK's raw "No enum constant ...".
+        final AdrCode code = new AdrCode(id);
         AdrStatus target;
         try {
             target = AdrStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             target = null;
         }
-        if (target != AdrStatus.ACCEPTED) {
-            throw new IllegalArgumentException(
-                    "adr_set_status only supports transitioning an ADR to ACCEPTED, not " + status);
-        }
-        return format(projectId, acceptAdr.accept(projectId, new AdrCode(id)));
+        return switch (target) {
+            case ACCEPTED -> format(projectId, acceptAdr.accept(projectId, code));
+            case REJECTED -> format(projectId, rejectAdr.reject(projectId, code));
+            case DEPRECATED -> format(projectId, deprecateAdr.deprecate(projectId, code));
+            case null, default -> throw new IllegalArgumentException(
+                    "adr_set_status only supports transitioning an ADR to ACCEPTED, REJECTED or "
+                            + "DEPRECATED, not " + status);
+        };
     }
 
     @McpTool(name = "adr_supersede", description = "Record that one architecture decision replaces an "

@@ -72,6 +72,58 @@ class AdrTest {
         assertSame(accepted, accepted.accept());
     }
 
+    /**
+     * Accepting a rejected or deprecated decision would silently resurrect it - now that those are
+     * real terminal-ish states, {@code accept()} must refuse rather than accept from anywhere but
+     * {@code PROPOSED}.
+     */
+    @Test
+    void acceptThrowsFromRejectedOrDeprecated() {
+        Adr rejected = withStatus(AdrStatus.REJECTED);
+        Adr deprecated = withStatus(AdrStatus.DEPRECATED);
+
+        assertThrows(IllegalStateException.class, rejected::accept);
+        assertThrows(IllegalStateException.class, deprecated::accept);
+    }
+
+    @Test
+    void rejectTransitionsOnceAndIsIdempotent() {
+        Adr proposed = adr("name", "context", "decision");
+
+        Adr rejected = proposed.reject();
+
+        assertEquals(AdrStatus.REJECTED, rejected.status());
+        assertSame(rejected, rejected.reject());
+    }
+
+    @Test
+    void rejectThrowsFromAcceptedOrDeprecated() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+        Adr deprecated = withStatus(AdrStatus.DEPRECATED);
+
+        assertThrows(IllegalStateException.class, accepted::reject);
+        assertThrows(IllegalStateException.class, deprecated::reject);
+    }
+
+    @Test
+    void deprecateTransitionsOnceAndIsIdempotent() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+
+        Adr deprecated = accepted.deprecate();
+
+        assertEquals(AdrStatus.DEPRECATED, deprecated.status());
+        assertSame(deprecated, deprecated.deprecate());
+    }
+
+    @Test
+    void deprecateThrowsFromProposedOrRejected() {
+        Adr proposed = adr("name", "context", "decision");
+        Adr rejected = withStatus(AdrStatus.REJECTED);
+
+        assertThrows(IllegalStateException.class, proposed::deprecate);
+        assertThrows(IllegalStateException.class, rejected::deprecate);
+    }
+
     @Test
     void supersedeAppendsAndIsIdempotent() {
         Adr adr = adr("name", "context", "decision");
@@ -91,6 +143,11 @@ class AdrTest {
 
     private static Adr adr(String name, String context, String decision) {
         return new Adr(ID, new AdrCode("ADR-1"), name, AdrStatus.PROPOSED, context, decision,
+                null, null, null, null, null, null);
+    }
+
+    private static Adr withStatus(AdrStatus status) {
+        return new Adr(ID, new AdrCode("ADR-1"), "name", status, "context", "decision",
                 null, null, null, null, null, null);
     }
 }

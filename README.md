@@ -214,7 +214,7 @@ ADR BC (`arknet-adr`) -- architecture decision records, store-backed and numbere
 | `adr_add` | Record a new decision in one call (title, context, decision, optional consequences, considered options and decision date, plus the requirement codes it addresses and the bounded-context codes it affects; each referenced resource must already exist). Starts out PROPOSED |
 | `adr_list` | List all decisions, one compact line each |
 | `adr_get` | Fetch a single decision with its full text and both directions of the supersedes relation (e.g. ADR-1) |
-| `adr_set_status` | Change a decision's lifecycle status; today the only supported transition is PROPOSED -> ACCEPTED |
+| `adr_set_status` | Change a decision's lifecycle status: PROPOSED -> ACCEPTED, PROPOSED -> REJECTED, or ACCEPTED -> DEPRECATED |
 | `adr_supersede` | Record that one decision replaces an older one (`arkarch:supersedes`). Only the forward edge is stored -- the superseded decision reports it as "superseded by" from a reverse read, not from a second triple |
 
 Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
