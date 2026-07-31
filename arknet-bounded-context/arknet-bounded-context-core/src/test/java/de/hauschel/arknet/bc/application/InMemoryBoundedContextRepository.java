@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
@@ -40,7 +41,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 final class InMemoryBoundedContextRepository implements BoundedContextRepository {
 
     private final Map<ProjectId, Map<BoundedContextId, BoundedContext>> byProject = new LinkedHashMap<>();
-    private final Map<BoundedContextId, String> headByIdentity = new LinkedHashMap<>();
+    private final Map<BoundedContextId, RevisionToken> headByIdentity = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, BoundedContext boundedContext) {
@@ -54,11 +55,11 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
             throw new DuplicateBoundedContextCodeException(projectId, boundedContext.code());
         }
         contexts.put(boundedContext.id(), boundedContext);
-        headByIdentity.put(boundedContext.id(), UUID.randomUUID().toString());
+        headByIdentity.put(boundedContext.id(), new RevisionToken(UUID.randomUUID().toString()));
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, BoundedContext updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
         Map<BoundedContextId, BoundedContext> contexts = byProject.getOrDefault(projectId, Map.of());
         if (!contexts.containsKey(updated.id())) {
             throw new BoundedContextNotFoundException(projectId, updated.code());
@@ -67,7 +68,7 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
             throw new BoundedContextConcurrentlyModifiedException(projectId, updated.code());
         }
         contexts.put(updated.id(), updated);
-        headByIdentity.put(updated.id(), UUID.randomUUID().toString());
+        headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
     }
 
     @Override

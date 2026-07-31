@@ -32,6 +32,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.RevisionToken;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
@@ -468,8 +469,8 @@ class KognioRdfBoundedContextRepositoryTest {
         assertEquals(1, afterCreate.size(), "create must record exactly one revision");
         assertEquals(afterCreate, headsOf(subject), "the head must point at the sole revision");
 
-        repository.compareAndUpdate(WORKSPACE_A, afterCreate.get(0), new BoundedContext(bc.id(), bc.code(),
-                "Renamed", bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()));
+        repository.compareAndUpdate(WORKSPACE_A, new RevisionToken(afterCreate.get(0)), new BoundedContext(bc.id(),
+                bc.code(), "Renamed", bc.domainVision(), bc.subdomain(), bc.ownedBy(), bc.usesTerms()));
 
         assertEquals(2, revisionsOf(subject).size(), "update must record exactly one more revision");
         List<String> heads = headsOf(subject);
@@ -517,7 +518,7 @@ class KognioRdfBoundedContextRepositoryTest {
                 repository.findCurrentByCode(WORKSPACE_A, new BoundedContextCode("BC-1")).orElseThrow();
 
         assertEquals(bc, current.value());
-        assertEquals(headsOf(bc.id().value().value()), List.of(current.head()));
+        assertEquals(headsOf(bc.id().value().value()), List.of(current.head().value()));
     }
 
     @Test
@@ -536,7 +537,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
         repository.create(WORKSPACE_A, original);
-        String staleHead = currentHeadOf(original.code());
+        RevisionToken staleHead = currentHeadOf(original.code());
 
         // A concurrent writer commits first, moving the head away from what the loser observed.
         BoundedContext byTheWinner = new BoundedContext(id, original.code(), "Renamed by the winner",
@@ -585,7 +586,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
-    private String currentHeadOf(BoundedContextCode code) {
+    private RevisionToken currentHeadOf(BoundedContextCode code) {
         return repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
     }
 
