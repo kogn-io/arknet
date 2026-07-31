@@ -200,6 +200,66 @@ class AdrServiceTest {
     }
 
     @Test
+    void rejectTransitionsFromProposedToRejected() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+
+        AdrDetail rejected = service.reject(PROJECT, code);
+
+        assertEquals(AdrStatus.REJECTED, rejected.adr().status());
+        assertEquals(AdrStatus.REJECTED, service.get(PROJECT, code).orElseThrow().adr().status());
+    }
+
+    @Test
+    void rejectingAnAlreadyRejectedAdrIsANoOp() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.reject(PROJECT, code);
+
+        AdrDetail again = service.reject(PROJECT, code);
+
+        assertEquals(AdrStatus.REJECTED, again.adr().status());
+    }
+
+    @Test
+    void rejectThrowsWhenAdrUnknown() {
+        AdrNotFoundException ex = assertThrows(AdrNotFoundException.class,
+                () -> service.reject(PROJECT, new AdrCode("ADR-42")));
+
+        assertSame(PROJECT, ex.projectId());
+        assertEquals(new AdrCode("ADR-42"), ex.adrCode());
+    }
+
+    @Test
+    void deprecateTransitionsFromAcceptedToDeprecated() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        AdrDetail deprecated = service.deprecate(PROJECT, code);
+
+        assertEquals(AdrStatus.DEPRECATED, deprecated.adr().status());
+        assertEquals(AdrStatus.DEPRECATED, service.get(PROJECT, code).orElseThrow().adr().status());
+    }
+
+    @Test
+    void deprecatingAnAlreadyDeprecatedAdrIsANoOp() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.accept(PROJECT, code);
+        service.deprecate(PROJECT, code);
+
+        AdrDetail again = service.deprecate(PROJECT, code);
+
+        assertEquals(AdrStatus.DEPRECATED, again.adr().status());
+    }
+
+    @Test
+    void deprecateThrowsWhenAdrUnknown() {
+        AdrNotFoundException ex = assertThrows(AdrNotFoundException.class,
+                () -> service.deprecate(PROJECT, new AdrCode("ADR-42")));
+
+        assertSame(PROJECT, ex.projectId());
+        assertEquals(new AdrCode("ADR-42"), ex.adrCode());
+    }
+
+    @Test
     void supersedeRecordsTheForwardEdgeAndReportsBothDirections() {
         AdrCode older = service.add(PROJECT, newAdr()).adr().code();
         AdrCode newer = service.add(PROJECT, newAdr()).adr().code();

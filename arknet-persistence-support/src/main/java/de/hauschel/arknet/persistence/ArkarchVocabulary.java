@@ -33,12 +33,12 @@ package de.hauschel.arknet.persistence;
  * {@link #RELATED_TO} are never asserted by any tool: the codebase materialises no
  * {@code owl:inverseOf} pair as a second physical triple, and {@code relatedTo} has no tool at all.
  * The ADR out-adapter nevertheless names both - it must preserve such store-first (ADR-005) edges
- * across its replace-by-identity write instead of erasing them. {@link #REJECTED},
- * {@link #DEPRECATED} and {@link #SUPERSEDED} are named because the shipped
- * {@code ashapes:ADR-status} shape admits all five lifecycle individuals while the Java
- * {@code AdrStatus} enum implements only {@code Proposed}/{@code Accepted} - the same deliberate
- * subset {@code RequirementStatus} takes of the requirements lifecycle. The vocabulary mirrors what
- * arknet ships, not what the tools currently reach.</p>
+ * across its replace-by-identity write instead of erasing them. {@link #SUPERSEDED} is likewise
+ * named without being written: the shipped {@code ashapes:ADR-status} shape admits it as a fifth
+ * lifecycle individual, but the Java {@code AdrStatus} enum deliberately never implements it -
+ * {@code Superseded} stays derived-only from the {@code supersedes}/{@code supersededBy}
+ * reverse-read, the same reasoning that keeps {@code supersededBy} itself unmaterialised. The
+ * vocabulary mirrors what arknet ships, not what the tools currently write.</p>
  */
 public final class ArkarchVocabulary {
 
@@ -89,13 +89,17 @@ public final class ArkarchVocabulary {
     /** {@code arkarch:Accepted} - accepted and in force. */
     public static final String ACCEPTED = NAMESPACE + "Accepted";
 
-    /** {@code arkarch:Rejected} - rejected; shipped in the ontology, not implemented in Java yet. */
+    /** {@code arkarch:Rejected} - rejected while still proposed. */
     public static final String REJECTED = NAMESPACE + "Rejected";
 
-    /** {@code arkarch:Deprecated} - obsolete without a successor; shipped, not implemented yet. */
+    /** {@code arkarch:Deprecated} - obsolete without a successor. */
     public static final String DEPRECATED = NAMESPACE + "Deprecated";
 
-    /** {@code arkarch:Superseded} - replaced by a newer decision; shipped, not implemented yet. */
+    /**
+     * {@code arkarch:Superseded} - replaced by a newer decision; shipped in the ontology, deliberately
+     * never written by {@code AdrStatus} - it stays derived-only from the
+     * {@code supersedes}/{@code supersededBy} reverse-read instead.
+     */
     public static final String SUPERSEDED = NAMESPACE + "Superseded";
 
     private ArkarchVocabulary() {

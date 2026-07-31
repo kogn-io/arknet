@@ -458,7 +458,7 @@ public class ArknetMcpConfiguration {
     AdrMcpTools adrMcpTools(
             final AdrService service, final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
-        return new AdrMcpTools(service, service, service, service, service,
+        return new AdrMcpTools(service, service, service, service, service, service, service,
                 resolveRequirements, resolveBoundedContexts, projectResolver);
     }
 

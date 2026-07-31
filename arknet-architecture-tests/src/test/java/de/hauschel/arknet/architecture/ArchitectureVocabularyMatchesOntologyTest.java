@@ -44,10 +44,11 @@ import de.hauschel.arknet.persistence.ArkarchVocabulary;
  *
  * <p><strong>One asymmetry the shapes file rather than this test guards.</strong> The SHACL shape
  * {@code ashapes:ADR-status} admits all five lifecycle individuals while the Java {@code AdrStatus}
- * enum implements only {@code Proposed}/{@code Accepted}. That is a deliberate subset (the same one
- * {@code RequirementStatus} takes), so {@link ArkarchVocabulary} names all five and this test holds
- * it against all five - a vocabulary constant is a serialization fact, not a claim that a tool
- * writes it.</p>
+ * enum implements only {@code Proposed}/{@code Accepted}/{@code Rejected}/{@code Deprecated} (#91).
+ * {@code Superseded} is deliberately left out - it stays derived-only from the
+ * {@code supersedes}/{@code supersededBy} reverse-read rather than a fifth status value, so
+ * {@link ArkarchVocabulary} names all five and this test holds it against all five - a vocabulary
+ * constant is a serialization fact, not a claim that a tool writes it.</p>
  */
 class ArchitectureVocabularyMatchesOntologyTest {
 

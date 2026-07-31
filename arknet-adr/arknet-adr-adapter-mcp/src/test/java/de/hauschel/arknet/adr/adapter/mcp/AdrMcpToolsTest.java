@@ -20,8 +20,10 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
+import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -69,7 +71,7 @@ class AdrMcpToolsTest {
     private final RecordingResolveRequirements requirements = new RecordingResolveRequirements();
     private final RecordingResolveBoundedContexts contexts = new RecordingResolveBoundedContexts();
     private final AdrMcpTools adapter =
-            new AdrMcpTools(stub, stub, stub, stub, stub, requirements, contexts, PROJECTS);
+            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, requirements, contexts, PROJECTS);
 
     /**
      * ADR-016 decision 2: the explicit tool parameter is a full second delivery path, open to a client
@@ -112,19 +114,31 @@ class AdrMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(null, stub, stub, stub, stub, requirements, contexts, PROJECTS));
+                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, null, requirements, contexts, PROJECTS));
+                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, contexts, PROJECTS));
+                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, requirements, contexts,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, requirements, null, PROJECTS));
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, requirements, null,
+                        PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, requirements, contexts, null));
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, requirements, contexts, null));
     }
 
     @Test
@@ -270,7 +284,7 @@ class AdrMcpToolsTest {
     }
 
     @Test
-    void setStatusAcceptsOnlyTheAcceptedTransition() {
+    void setStatusAcceptsTheAcceptedTransition() {
         String rendered = adapter.setStatus(null, "ADR-1", "ACCEPTED", ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastAcceptedCode);
@@ -278,22 +292,58 @@ class AdrMcpToolsTest {
     }
 
     @Test
+    void setStatusAcceptsTheRejectedTransition() {
+        String rendered = adapter.setStatus(null, "ADR-1", "REJECTED", ANCHOR);
+
+        assertEquals(new AdrCode("ADR-1"), stub.lastRejectedCode);
+        assertTrue(rendered.contains("ADR-1"), rendered);
+    }
+
+    @Test
+    void setStatusAcceptsTheDeprecatedTransition() {
+        String rendered = adapter.setStatus(null, "ADR-1", "DEPRECATED", ANCHOR);
+
+        assertEquals(new AdrCode("ADR-1"), stub.lastDeprecatedCode);
+        assertTrue(rendered.contains("ADR-1"), rendered);
+    }
+
+    /**
+     * A target is case-insensitive and trimmed, same as before REJECTED/DEPRECATED existed - proven
+     * here for REJECTED so the parsing path is not assumed to still work untested.
+     */
+    @Test
+    void setStatusIsCaseInsensitiveAndTrimmed() {
+        adapter.setStatus(null, "ADR-1", "  rejected  ", ANCHOR);
+
+        assertEquals(new AdrCode("ADR-1"), stub.lastRejectedCode);
+    }
+
+    @Test
     void setStatusRejectsAnyOtherTargetStatus() {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.setStatus(null, "ADR-1", "PROPOSED", ANCHOR));
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "REJECTED", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", ANCHOR));
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", ANCHOR));
     }
 
     @Test
     void setStatusRejectionMessageNamesTheTargetInsteadOfLeakingTheRawEnumFailure() {
-        // REJECTED/DEPRECATED/SUPERSEDED are real ashapes:ADR-status values AdrStatus deliberately
-        // does not implement; a completely unknown string must be rejected the same way. Neither may
-        // surface AdrStatus.valueOf's raw "No enum constant ..." message.
-        IllegalArgumentException known = assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "REJECTED", ANCHOR));
-        assertTrue(known.getMessage().contains("ACCEPTED"), known.getMessage());
-        assertFalse(known.getMessage().contains("No enum constant"), known.getMessage());
+        // PROPOSED is a real AdrStatus value that is simply not a legal target of this tool (you
+        // never transition into it via adr_set_status). SUPERSEDED is a real ashapes:ADR-status
+        // value AdrStatus deliberately never implements at all. A completely unknown string must be
+        // rejected the same way as both. None of the three may surface AdrStatus.valueOf's raw
+        // "No enum constant ..." message.
+        IllegalArgumentException proposed = assertThrows(IllegalArgumentException.class,
+                () -> adapter.setStatus(null, "ADR-1", "PROPOSED", ANCHOR));
+        assertTrue(proposed.getMessage().contains("ACCEPTED"), proposed.getMessage());
+        assertFalse(proposed.getMessage().contains("No enum constant"), proposed.getMessage());
+
+        IllegalArgumentException superseded = assertThrows(IllegalArgumentException.class,
+                () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", ANCHOR));
+        assertTrue(superseded.getMessage().contains("ACCEPTED"), superseded.getMessage());
+        assertFalse(superseded.getMessage().contains("No enum constant"), superseded.getMessage());
 
         IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
                 () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", ANCHOR));
@@ -322,11 +372,14 @@ class AdrMcpToolsTest {
         return new AdrDetail(adr, supersedes, supersededBy);
     }
 
-    /** Structural stub implementing the five driving in-ports. */
-    private static final class Stub implements AddAdr, ListAdrs, GetAdr, AcceptAdr, SupersedeAdr {
+    /** Structural stub implementing the seven driving in-ports. */
+    private static final class Stub
+            implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr {
 
         private NewAdr lastAddCommand;
         private AdrCode lastAcceptedCode;
+        private AdrCode lastRejectedCode;
+        private AdrCode lastDeprecatedCode;
         private AdrCode lastSupersedingCode;
         private AdrCode lastSupersededCode;
         private AdrDetail nextDetail;
@@ -357,6 +410,18 @@ class AdrMcpToolsTest {
         @Override
         public AdrDetail accept(ProjectId projectId, AdrCode code) {
             lastAcceptedCode = code;
+            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+        }
+
+        @Override
+        public AdrDetail reject(ProjectId projectId, AdrCode code) {
+            lastRejectedCode = code;
+            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+        }
+
+        @Override
+        public AdrDetail deprecate(ProjectId projectId, AdrCode code) {
+            lastDeprecatedCode = code;
             return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
         }
 

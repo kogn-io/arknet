@@ -602,15 +602,16 @@ public class KognioRdfAdrRepository implements AdrRepository {
         return switch (status) {
             case PROPOSED -> ArkarchVocabulary.PROPOSED;
             case ACCEPTED -> ArkarchVocabulary.ACCEPTED;
+            case REJECTED -> ArkarchVocabulary.REJECTED;
+            case DEPRECATED -> ArkarchVocabulary.DEPRECATED;
         };
     }
 
     /**
-     * Maps a lifecycle individual back to the Java enum, or {@code null} for one of the three
-     * shipped-but-unimplemented values ({@code Rejected}/{@code Deprecated}/{@code Superseded}) and
-     * for anything else. A {@code null} makes {@link Adr}'s constructor reject the row rather than
-     * silently mislabel a decision - the honest outcome while {@link AdrStatus} covers a deliberate
-     * subset of the ontology.
+     * Maps a lifecycle individual back to the Java enum, or {@code null} for the one
+     * shipped-but-unimplemented value ({@code Superseded}) and for anything else. A {@code null}
+     * makes {@link Adr}'s constructor reject the row rather than silently mislabel a decision - the
+     * honest outcome while {@link AdrStatus} covers a deliberate subset of the ontology.
      */
     private static AdrStatus statusFromIri(String iri) {
         if (ArkarchVocabulary.PROPOSED.equals(iri)) {
@@ -618,6 +619,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
         if (ArkarchVocabulary.ACCEPTED.equals(iri)) {
             return AdrStatus.ACCEPTED;
+        }
+        if (ArkarchVocabulary.REJECTED.equals(iri)) {
+            return AdrStatus.REJECTED;
+        }
+        if (ArkarchVocabulary.DEPRECATED.equals(iri)) {
+            return AdrStatus.DEPRECATED;
         }
         return null;
     }

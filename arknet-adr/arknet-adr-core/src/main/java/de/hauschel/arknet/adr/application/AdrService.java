@@ -16,8 +16,10 @@ import java.util.function.UnaryOperator;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
+import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
@@ -47,13 +49,17 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code ADR-N}) is assigned independently, where {@code N} is one above the highest running number
  * currently used in the target project (numbering is independent per project, starting at 1). A new
  * decision always starts {@link AdrStatus#PROPOSED} - {@code adr_add} takes no status, because a
- * decision recorded as already accepted would skip the one transition this lifecycle has.</p>
+ * decision recorded as already accepted would skip the transitions this lifecycle has. From
+ * {@code PROPOSED} a decision may become {@link AdrStatus#ACCEPTED} or {@link AdrStatus#REJECTED};
+ * an accepted one may further become {@link AdrStatus#DEPRECATED}. {@link AdrStatus#SUPERSEDED} is
+ * not a value this service ever writes - it stays derived-only from {@code adr_supersede}'s
+ * {@code supersedes}/{@code supersededBy} reverse-read (see {@link Adr#supersede}).</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code adr_add} claims the same {@code ADR-N} first, via
- * {@link CodeAssignment#createRetryingOnCodeCollision}, and both read-modify-write paths
- * ({@link #accept}, {@link #supersede}) retry their whole round trip via
- * {@link AdrRepository#compareAndUpdate} whenever a concurrent writer commits in between - see
+ * {@link CodeAssignment#createRetryingOnCodeCollision}, and every read-modify-write path
+ * ({@link #accept}, {@link #reject}, {@link #deprecate}, {@link #supersede}) retries its whole round
+ * trip via {@link AdrRepository#compareAndUpdate} whenever a concurrent writer commits in between - see
  * {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed caller; only
  * sustained, pathological contention on the very same decision surfaces as
  * {@link AdrConcurrentlyModifiedException}. Parallel sessions of one user against one local store
@@ -66,7 +72,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * must not be retried. The self-referential {@code supersedes} target needs no lookup port at all:
  * it is this hexagon's own resource, resolved through {@link AdrRepository#findByCode}.</p>
  */
-public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, SupersedeAdr {
+public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -179,6 +185,20 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, Supersed
     }
 
     @Override
+    public AdrDetail reject(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, Adr::reject));
+    }
+
+    @Override
+    public AdrDetail deprecate(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, Adr::deprecate));
+    }
+
+    @Override
     public AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
@@ -197,8 +217,9 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, Supersed
     }
 
     /**
-     * Read-modify-write helper behind {@link #accept} and {@link #supersede}: reads the current
-     * decision and its concurrency token together via {@link AdrRepository#findCurrentByCode},
+     * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate} and
+     * {@link #supersede}: reads the current decision and its concurrency token together via
+     * {@link AdrRepository#findCurrentByCode},
      * derives the next state via {@code mutation}, and writes it back via
      * {@link AdrRepository#compareAndUpdate} - retrying with a fresh read whenever a concurrent
      * writer commits a change in between. This is the guard the bounded-context and requirements
