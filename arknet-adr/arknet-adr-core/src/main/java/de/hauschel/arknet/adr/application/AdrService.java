@@ -4,6 +4,7 @@
 package de.hauschel.arknet.adr.application;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,14 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, Supersed
      */
     private static final int MAX_RETRY_ATTEMPTS = 20;
 
+    /**
+     * Orders {@code ADR-N} code strings by their parsed running number, not by {@link String}'s
+     * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
+     * order once a project passes ten decisions.
+     */
+    private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
+            Comparator.comparingInt(code -> runningNumber(new AdrCode(code)));
+
     private final AdrRepository repository;
     private final ResourceIdFactory resourceIdFactory;
     private final RequirementLookup requirementLookup;
@@ -144,12 +153,14 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, Supersed
         Map<AdrId, TreeSet<String>> supersededBy = new LinkedHashMap<>();
         for (Adr adr : all) {
             for (AdrId superseded : adr.supersedes()) {
-                supersededBy.computeIfAbsent(superseded, key -> new TreeSet<>()).add(adr.code().value());
+                supersededBy.computeIfAbsent(superseded, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
+                        .add(adr.code().value());
             }
         }
         return all.stream()
                 .map(adr -> new AdrDetail(adr, codesOf(adr.supersedes(), codes),
-                        supersededBy.getOrDefault(adr.id(), new TreeSet<>()).stream().map(AdrCode::new).toList()))
+                        supersededBy.getOrDefault(adr.id(), new TreeSet<>(CODE_BY_RUNNING_NUMBER)).stream()
+                                .map(AdrCode::new).toList()))
                 .toList();
     }
 

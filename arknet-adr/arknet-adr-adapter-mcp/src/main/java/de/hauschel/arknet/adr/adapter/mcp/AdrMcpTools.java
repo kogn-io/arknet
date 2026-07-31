@@ -246,11 +246,19 @@ public final class AdrMcpTools {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         // The implemented lifecycle permits exactly one transition: the tool's external "status"
         // parameter mirrors req_set_status's surface, but AcceptAdr itself takes no target status -
-        // only ACCEPTED can ever legally result from this call.
-        final AdrStatus target = AdrStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        // only ACCEPTED can ever legally result from this call. AdrStatus.valueOf is parsed
+        // defensively rather than let directly: REJECTED/DEPRECATED/SUPERSEDED are real ontology
+        // values the enum deliberately does not implement, and those must reject with this method's
+        // own message, not the JDK's raw "No enum constant ...".
+        AdrStatus target;
+        try {
+            target = AdrStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            target = null;
+        }
         if (target != AdrStatus.ACCEPTED) {
             throw new IllegalArgumentException(
-                    "adr_set_status only supports transitioning an ADR to ACCEPTED, not " + target);
+                    "adr_set_status only supports transitioning an ADR to ACCEPTED, not " + status);
         }
         return format(projectId, acceptAdr.accept(projectId, new AdrCode(id)));
     }

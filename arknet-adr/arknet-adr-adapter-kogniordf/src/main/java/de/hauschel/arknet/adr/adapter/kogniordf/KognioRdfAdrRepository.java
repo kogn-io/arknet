@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -131,6 +132,16 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final String SUPERSEDES_PROPERTY = ArkarchVocabulary.SUPERSEDES;
     private static final String SUPERSEDED_BY_PROPERTY = ArkarchVocabulary.SUPERSEDED_BY;
     private static final String RELATED_TO_PROPERTY = ArkarchVocabulary.RELATED_TO;
+
+    /**
+     * Orders {@code ADR-N} code strings by their parsed running number, not by {@link String}'s
+     * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
+     * order once a project passes ten decisions. Mirrors {@code AdrService}'s identically-named,
+     * identically-behaved helper (arknet-adr-core has no dependency this adapter could reuse it
+     * through).
+     */
+    private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
+            Comparator.comparingInt(KognioRdfAdrRepository::runningNumber);
 
     private final DatasetLifecycle lifecycle;
     private final WriteFunnel funnel;
@@ -284,39 +295,52 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
     }
 
+    @Override
+    public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return readSingleWithHead(handle, code);
+        }
+    }
+
     /**
      * Reads a decision's current state together with its concurrency token. The scalar-field rows
-     * and the head itself come from this method's one query call - one snapshot, which is the
+     * and the head itself come from this method's one query call (analogous to
+     * {@code KognioRdfBoundedContextRepository#findCurrentByCode}) - one snapshot, which is the
      * load-bearing guarantee, not an ordering of clauses within that query. The three edge lists are
      * filled in by further, independent queries; those later reads are safe precisely because they
      * can only be fresher, never staler, than the head: a concurrent funnel write landing in between
      * moves the head, so {@link #compareAndUpdate} then fails its comparison and the caller re-reads
      * instead of silently overwriting a state it never actually saw.
      */
-    @Override
-    public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(code, "code");
-
-        String headQuery = "SELECT ?s ?head WHERE { GRAPH <" + ADR_GRAPH + "> { "
-                + "?s a <" + ADR_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
-                + SparqlTerms.escape(code.value()) + "\" . FILTER(isIRI(?s)) } "
+    private Optional<CurrentAdr> readSingleWithHead(DatasetHandle handle, AdrCode code) {
+        String query = "SELECT ?s ?name ?status ?context ?decision "
+                + "?consequences ?alternatives ?decisionDate ?head WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + adrWhereBody("\"" + SparqlTerms.escape(code.value()) + "\"") + "} "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Optional<Adr> found = readSingle(handle, code);
-            if (found.isEmpty()) {
-                return Optional.empty();
-            }
-            String head = handle.sparqlQuery().select(headQuery)
-                    .map(row -> row.getValue("head").orElse(null))
-                    .filter(IRI.class::isInstance)
-                    .map(value -> ((IRI) value).getIRIString())
-                    .findFirst()
-                    .orElse(null);
-            return Optional.of(new CurrentAdr(found.get(), head));
-        }
+        Map<String, AdrAssembly> bySubject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> {
+            String subjectIri = iriOf(row, "s").getIRIString();
+            bySubject.computeIfAbsent(subjectIri, iri -> new AdrAssembly(new AdrId(ResourceId.of(iri)), code))
+                    .addCandidatesFrom(row);
+        });
+        return bySubject.entrySet().stream()
+                .findFirst()
+                .map(entry -> {
+                    String subject = SparqlTerms.iriRef(entry.getKey());
+                    AdrAssembly assembly = entry.getValue();
+                    Adr adr = assembly.toAdr(
+                            readRefs(handle.sparqlQuery()::select, subject, ADDRESSES_REQUIREMENT_PROPERTY,
+                                    id -> new RequirementRef(id)),
+                            readRefs(handle.sparqlQuery()::select, subject, AFFECTS_CONTEXT_PROPERTY,
+                                    id -> new BoundedContextRef(id)),
+                            readRefs(handle.sparqlQuery()::select, subject, SUPERSEDES_PROPERTY, AdrId::new));
+                    return new CurrentAdr(adr, assembly.head());
+                });
     }
 
     @Override
@@ -385,11 +409,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            // Sorted and deduplicated: RDF has no intrinsic statement order, and a subject with two
-            // identifier triples would otherwise report the same successor twice.
+            // Sorted by running number (not String's lexicographic order - "ADR-10" would otherwise
+            // sort before "ADR-2") and deduplicated: RDF has no intrinsic statement order, and a
+            // subject with two identifier triples would otherwise report the same successor twice.
             return handle.sparqlQuery().select(query)
                     .map(row -> literalOf(row, "identifier").getLexicalForm())
-                    .collect(Collectors.toCollection(TreeSet::new))
+                    .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
                     .stream()
                     .map(AdrCode::new)
                     .toList();
@@ -517,6 +542,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
             add("consequences", literalOrNull(row, "consequences"));
             add("alternatives", literalOrNull(row, "alternatives"));
             add("decisionDate", decisionDateOf(row));
+            add("head", headOf(row));
         }
 
         private void add(String field, Object value) {
@@ -538,6 +564,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     requirements, contexts, supersedes);
         }
 
+        /** The concurrency token collected alongside the scalar fields by {@link #readSingleWithHead}. */
+        private String head() {
+            return (String) firstDistinct("head");
+        }
+
         private Object firstDistinct(String field) {
             List<Object> values = candidates.getOrDefault(field, List.of());
             if (values.isEmpty()) {
@@ -553,6 +584,19 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     // ---- term helpers ------------------------------------------------------------------
+
+    /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */
+    private static int runningNumber(String code) {
+        int dash = code.lastIndexOf('-');
+        if (dash < 0 || dash == code.length() - 1) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(code.substring(dash + 1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
 
     private static String statusIriFor(AdrStatus status) {
         return switch (status) {
@@ -582,6 +626,19 @@ public class KognioRdfAdrRepository implements AdrRepository {
         return row.getValue("status")
                 .filter(IRI.class::isInstance)
                 .map(value -> statusFromIri(((IRI) value).getIRIString()))
+                .orElse(null);
+    }
+
+    /**
+     * Reads the {@code ?head} binding {@link #readSingleWithHead}'s query optionally projects. Absent
+     * for every other caller of {@link AdrAssembly#addCandidatesFrom} - their queries never bind
+     * {@code ?head} - so this simply returns {@code null} for them, matching the pre-existing
+     * absent-head handling.
+     */
+    private static String headOf(BindingSet row) {
+        return row.getValue("head")
+                .filter(IRI.class::isInstance)
+                .map(value -> ((IRI) value).getIRIString())
                 .orElse(null);
     }
 

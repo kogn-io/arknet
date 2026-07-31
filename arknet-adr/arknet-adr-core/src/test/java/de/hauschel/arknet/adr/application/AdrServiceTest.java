@@ -307,6 +307,30 @@ class AdrServiceTest {
         assertEquals(List.of(older), newerDetail.supersedes());
     }
 
+    /**
+     * {@code supersededBy} must sort by parsed running number, not by {@link String}'s natural
+     * (lexicographic) order - which would put {@code ADR-10}/{@code ADR-11} before {@code ADR-2}
+     * through {@code ADR-9} once a project passes ten decisions.
+     */
+    @Test
+    void listSortsSupersededByRunningNumberNotLexicographically() {
+        AdrCode target = service.add(PROJECT, newAdr()).adr().code();
+        for (int i = 0; i < 10; i++) {
+            AdrCode superseding = service.add(PROJECT, newAdr()).adr().code();
+            service.supersede(PROJECT, superseding, target);
+        }
+
+        AdrDetail targetDetail = service.list(PROJECT).stream()
+                .filter(d -> d.adr().code().equals(target)).findFirst().orElseThrow();
+
+        assertEquals(
+                List.of(new AdrCode("ADR-2"), new AdrCode("ADR-3"), new AdrCode("ADR-4"),
+                        new AdrCode("ADR-5"), new AdrCode("ADR-6"), new AdrCode("ADR-7"),
+                        new AdrCode("ADR-8"), new AdrCode("ADR-9"), new AdrCode("ADR-10"),
+                        new AdrCode("ADR-11")),
+                targetDetail.supersededBy());
+    }
+
     private static NewAdr newAdr() {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",

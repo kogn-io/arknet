@@ -286,6 +286,22 @@ class AdrMcpToolsTest {
     }
 
     @Test
+    void setStatusRejectionMessageNamesTheTargetInsteadOfLeakingTheRawEnumFailure() {
+        // REJECTED/DEPRECATED/SUPERSEDED are real ashapes:ADR-status values AdrStatus deliberately
+        // does not implement; a completely unknown string must be rejected the same way. Neither may
+        // surface AdrStatus.valueOf's raw "No enum constant ..." message.
+        IllegalArgumentException known = assertThrows(IllegalArgumentException.class,
+                () -> adapter.setStatus(null, "ADR-1", "REJECTED", ANCHOR));
+        assertTrue(known.getMessage().contains("ACCEPTED"), known.getMessage());
+        assertFalse(known.getMessage().contains("No enum constant"), known.getMessage());
+
+        IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
+                () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", ANCHOR));
+        assertTrue(unknown.getMessage().contains("ACCEPTED"), unknown.getMessage());
+        assertFalse(unknown.getMessage().contains("No enum constant"), unknown.getMessage());
+    }
+
+    @Test
     void supersedePassesBothCodesThroughToTheInPort() {
         adapter.supersede(null, "ADR-2", "ADR-1", ANCHOR);
 

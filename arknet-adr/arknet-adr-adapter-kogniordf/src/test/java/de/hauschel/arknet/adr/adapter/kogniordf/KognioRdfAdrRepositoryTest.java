@@ -276,6 +276,25 @@ class KognioRdfAdrRepositoryTest {
         assertEquals(List.of(), repository.findSupersedingCodes(PROJECT_A, created.id()));
     }
 
+    /**
+     * Codes must sort by their parsed running number, not by {@link String}'s natural (lexicographic)
+     * order - which would put {@code ADR-10}/{@code ADR-11} before {@code ADR-2}/{@code ADR-3}.
+     */
+    @Test
+    void findSupersedingCodesSortsByRunningNumberNotLexicographically() {
+        Adr superseded = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, superseded);
+
+        for (String code : List.of("ADR-11", "ADR-2", "ADR-10", "ADR-3")) {
+            repository.create(PROJECT_A, adr(freshId(), new AdrCode(code), AdrStatus.PROPOSED, null, null, null,
+                    List.of(), List.of(), List.of(superseded.id())));
+        }
+
+        assertEquals(
+                List.of(new AdrCode("ADR-2"), new AdrCode("ADR-3"), new AdrCode("ADR-10"), new AdrCode("ADR-11")),
+                repository.findSupersedingCodes(PROJECT_A, superseded.id()));
+    }
+
     @Test
     void findCodesByIdsResolvesOnlyWhatExists() {
         Adr first = adr(new AdrCode("ADR-1"));
@@ -465,6 +484,33 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void findCurrentByCodeReturnsEmptyForAnUnknownCode() {
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-9")));
+    }
+
+    /**
+     * {@code findCurrentByCode} now joins {@code ?head} into the very same {@code SELECT} as the
+     * scalar fields (the fix for the lost-update race a separate, later head query allowed - a
+     * concurrent {@code compareAndUpdate} landing between the two reads let the caller's stale state
+     * pair with a fresher head and win a CAS it should have lost). That join must survive the #81
+     * row-multiplication pattern this adapter otherwise tolerates: a store-first second
+     * {@code arkarch:adrContext} triple multiplies the query's rows, and the head - one triple,
+     * repeated identically on every row of the cross product - must still collapse to the single
+     * value {@link #currentHeadOf} observes, not be lost or duplicated by the extra join.
+     */
+    @Test
+    void findCurrentByCodeKeepsTheHeadCorrectUnderRowMultiplication() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created);
+        String subject = created.id().value().value();
+        String expectedHead = currentHeadOf(created.code());
+
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + subject + "> <"
+                + ArkarchVocabulary.ADR_CONTEXT + "> \"a second, store-first context value\" } }");
+
+        AdrRepository.CurrentAdr current =
+                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-1")).orElseThrow();
+
+        assertEquals(created.context(), current.value().context(), "first-seen value still wins");
+        assertEquals(expectedHead, current.head(), "the head must not be affected by row multiplication");
     }
 
     /**
