@@ -17,6 +17,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
@@ -169,11 +170,25 @@ public class ArknetMcpConfiguration {
      * is created via {@link KognioRdfRequirementRepositoryFactory#persistentLifecycle(Path)},
      * which returns the technology-neutral {@link DatasetLifecycle} - so this composition root
      * stays free of any direct RDF4J dependency.</p>
+     *
+     * <p>Wrapped in {@link LockConflictReportingDatasetLifecycle} (issue #64): if this shared
+     * instance is not actually the only one holding {@code storageDir} open - a second daemon
+     * instance, or a client/subagent MCP config that spawns arknet as a local {@code stdio}
+     * subprocess instead of pointing at the one running daemon - the first {@code acquire} call
+     * fails with a raw RDF4J lock exception. The wrapper recognises that failure via the injected
+     * {@code isLockConflict} predicate ({@link KognioRdfRequirementRepositoryFactory#DEFAULT_LOCK_CONFLICT},
+     * the one place RDF4J is allowed to be named) and translates it into a message naming the
+     * actual cause and its remedy instead of leaving a caller to decode an RDF4J internal; a
+     * failure the predicate does not recognise - a permissions problem, a full disk, a corrupted
+     * store - passes through unchanged rather than being misdiagnosed as a lock conflict. arknet-mcp
+     * itself stays free of any direct RDF4J dependency either way.</p>
      */
     @Bean
     DatasetLifecycle datasetLifecycle(
             @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
-        return KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+        return new LockConflictReportingDatasetLifecycle(
+                KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir), storageDir,
+                KognioRdfRequirementRepositoryFactory.DEFAULT_LOCK_CONFLICT);
     }
 
     // --- Requirements hexagon --------------------------------------------------

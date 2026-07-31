@@ -9,12 +9,14 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Literal;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.vocabulary.RDFS;
+import org.eclipse.rdf4j.repository.RepositoryLockedException;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
 
@@ -55,6 +57,21 @@ public final class KognioRdfRequirementRepositoryFactory {
     private static final String SHAPES_RESOURCE = "/requirements-shapes.ttl";
     private static final String AXIOMS_RESOURCE = "/arknet-requirements.ttl";
     private static final String REQUIREMENTS_NS = "https://w3id.org/arknet/requirements#";
+
+    /**
+     * Recognises a {@link DatasetLifecycle#acquire} failure caused by a second instance
+     * already holding the storage directory's file lock (issue #64), as the kognio-rdf
+     * RDF4J-backed hosting adapter reports it: {@link DatasetLifecycleRdf4j#acquire} lets
+     * RDF4J's {@code SailRepository#initializeInternal} translate its own
+     * {@code SailLockedException} into {@link RepositoryLockedException} before it ever
+     * reaches a caller, so this one type is the complete signal - no cause chain to walk.
+     * This is the predicate arknet-mcp's shared {@code DatasetLifecycle} bean wants; it is
+     * offered as a default rather than hard-wired, because a different store behind
+     * {@link DatasetLifecycle} (ADR-001) may fail its lock conflicts differently, and this
+     * factory - the one place allowed to name RDF4J - would then be the wrong place to
+     * encode that for it.
+     */
+    public static final Predicate<RuntimeException> DEFAULT_LOCK_CONFLICT = RepositoryLockedException.class::isInstance;
 
     private KognioRdfRequirementRepositoryFactory() {
     }
