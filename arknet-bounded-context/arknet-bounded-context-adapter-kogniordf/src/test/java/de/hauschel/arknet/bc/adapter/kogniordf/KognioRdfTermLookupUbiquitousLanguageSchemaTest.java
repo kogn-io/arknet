@@ -5,14 +5,13 @@ package de.hauschel.arknet.bc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
@@ -46,15 +45,23 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
 
     private static final ProjectId WORKSPACE = new ProjectId("bc-ul-schema");
 
+    /**
+     * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
+     * which left its directories behind - harmless while the store is {@code IN_MEMORY}, but
+     * still an inode left in {@code /tmp} for every test run. Deleted after {@link #tearDown()}
+     * has shut the store down.
+     */
+    @TempDir
+    Path storageRoot;
+
     private DatasetLifecycleRdf4j lifecycle;
     private TermRepository ulTermRepository;
     private TermLookup bcTermLookup;
 
     @BeforeEach
-    void setUp() throws IOException {
-        Path tmp = Files.createTempDirectory("arknet-bc-ul-schema-it");
+    void setUp() {
         DatasetLifecycle datasetLifecycle = new DatasetLifecycleRdf4j(
-                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), tmp);
+                new DatasetStoreConfig(DatasetStoreConfig.Persistence.IN_MEMORY, false), storageRoot);
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ulTermRepository = KognioRdfTermRepositoryFactory.over(datasetLifecycle);
         bcTermLookup = new KognioRdfTermLookup(datasetLifecycle);
