@@ -125,6 +125,16 @@ parallel worktrees of the same project) can share the same store without
 blocking each other on the NativeStore directory lock. If the daemon is not
 running, Claude Code reports the MCP connection as failed.
 
+**Never run a second daemon instance -- of any kind -- against the same
+`~/.arknet/rdf` (or bind-mounted equivalent) directory.** A second `docker run`,
+a second `docker compose up`, or a hand-rolled `stdio` MCP entry that launches
+the server as a local process all try to open the same NativeStore directory a
+second time and collide on its file lock. This applies to every client that
+talks to arknet, including any custom subagent configuration you write
+yourself: point it at the one running daemon's HTTP endpoint
+(`http://127.0.0.1:47331/mcp`), never at an inline/stdio server definition of
+its own.
+
 ### Register your project
 
 Which project a call hits is decided by an **anchor**: an opaque string your
