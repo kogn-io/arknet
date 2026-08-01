@@ -168,7 +168,7 @@ public final class DigestRenderer {
         out.append("- Details of ONE resource : resource_get(\"<curie-or-iri>\")"
                 + " -> all triples + in/out links\n");
         out.append("- Neighbours / what points here: resource_get(...) also lists incoming refs\n");
-        out.append("- Human view              : the written HTML report (path returned above)\n");
+        out.append("- Human view              : the written HTML report (path returned below)\n");
     }
 
     private void appendIntegrity(StringBuilder out, StoreSnapshot snapshot) {
