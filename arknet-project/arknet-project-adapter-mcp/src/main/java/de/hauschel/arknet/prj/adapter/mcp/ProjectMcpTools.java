@@ -51,8 +51,8 @@ import de.hauschel.arknet.prj.domain.Project;
  * therefore addressed only by the {@link Anchor}s a client actually presented and registered
  * (never by a short code a human could mistype into someone else's project), and rendered with
  * their full opaque {@link de.hauschel.arknet.kernel.ProjectId} so a later surface without an
- * anchor of its own (a web UI, e.g. issue #149's review UI) still has a stable, tool-addressable
- * value to hold onto.</p>
+ * anchor of its own (a web UI without a client working directory of its own) still has a stable,
+ * tool-addressable value to hold onto.</p>
  *
  * <p><strong>No {@link ProjectResolver} here, on purpose.</strong> Every other bounded context's
  * MCP adapter turns the caller's anchor into a {@code ProjectId} through {@link ProjectResolver},
@@ -354,7 +354,7 @@ public final class ProjectMcpTools {
      * Renders a project as its label, every anchor it is reachable by (typed, e.g.
      * {@code path:/home/f/DEV/arknet}), and its opaque identity - the identity is not a
      * caller-facing tool parameter anywhere in this adapter, but a later surface without an
-     * anchor of its own (issue #149) needs a stable value to address a project by.
+     * anchor of its own needs a stable value to address a project by.
      */
     private static String format(final Project project) {
         final String anchors = project.anchors().stream()

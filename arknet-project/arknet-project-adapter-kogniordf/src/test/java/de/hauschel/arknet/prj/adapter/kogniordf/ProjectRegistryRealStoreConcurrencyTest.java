@@ -62,9 +62,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Regression tests for {@link KognioRdfProjectRegistry#register} against a real RDF4J-backed store
  * (on-disk {@code NativeStore}) with real threads: two registrations whose transactions genuinely
  * <em>overlap</em>, so that both pass their in-transaction uniqueness guards before either commits
- * and only the second commit is rejected - by the store, not by a guard (issue #181, the
+ * and only the second commit is rejected - by the store, not by a guard, the
  * {@code arknet-project} counterpart of the four model contexts' {@code
- * *RealStoreConcurrencyTest}s, issue #144).
+ * *RealStoreConcurrencyTest}s.
  *
  * <p><strong>What this proves.</strong> Two things the four model contexts' tests cannot cover,
  * because this context differs from them in two ways. First: it guards <em>two</em> uniqueness
@@ -81,8 +81,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * conflict detection, and that lives in each sail rather than in a shared layer above them:
  * {@code rdf4j-sail-memory} and {@code rdf4j-sail-nativerdf} are two separate code paths. The
  * daemon runs on the {@code NativeStore}, so this store is built {@code PERSISTENT} - with the very
- * {@link DatasetStoreConfig#persistentDefault()} configuration the composition root uses (issue
- * #180). {@link KognioRdfProjectRegistryTest} stays {@code IN_MEMORY} on purpose: what it asserts
+ * {@link DatasetStoreConfig#persistentDefault()} configuration the composition root uses.
+ * {@link KognioRdfProjectRegistryTest} stays {@code IN_MEMORY} on purpose: what it asserts
  * sits above the store, where the faster sail is the legitimate choice.</p>
  *
  * <p><strong>Driven at the out-port, not through {@code ProjectService}.</strong> The service's
@@ -116,7 +116,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
     /**
      * The {@code NativeStore}'s on-disk home, managed by JUnit rather than by
      * {@code Files.createTempDirectory}: a persistent store fills its directory, and JUnit deletes
-     * this one after {@link #tearDown()} has shut the store down (issue #180).
+     * this one after {@link #tearDown()} has shut the store down.
      */
     @TempDir
     Path storageRoot;
@@ -141,7 +141,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
      *
      * <p>Before the {@code commitConflict} translator existed, the loser was thrown
      * {@link DuplicateProjectLabelException} for a label no project had ever registered, because
-     * {@code WriteFunnel#create} reported every lost commit as a code collision (issue #181). Both
+     * {@code WriteFunnel#create} reported every lost commit as a code collision. Both
      * callers deliberately register a different label here, so nothing but the anchor can be the
      * real cause and a label complaint cannot be right by accident.</p>
      */
@@ -217,8 +217,9 @@ class ProjectRegistryRealStoreConcurrencyTest {
      * keeps it swappable).
      *
      * <p>What must not happen is the adapter inventing an explanation: reporting
-     * {@link DuplicateProjectLabelException} for a label that is demonstrably free - the defect
-     * issue #181 uncovered - would send the caller after a collision that never existed.</p>
+     * {@link DuplicateProjectLabelException} for a label that is demonstrably free - a defect
+     * uncovered before the {@code commitConflict} translator existed - would send the caller
+     * after a collision that never existed.</p>
      */
     @Test
     void aLostCommitNoRuleExplainsSurfacesAsTheStoresOwnConflict() {

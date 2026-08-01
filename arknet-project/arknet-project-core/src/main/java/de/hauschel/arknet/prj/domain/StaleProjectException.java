@@ -15,8 +15,8 @@ import java.util.Objects;
  *
  * <p>An expected-but-rare domain outcome, not a programming error: sustained, high-frequency
  * concurrent writes to the very same project registration - the same lost-update race the other
- * three bounded contexts guard against on their own aggregates (issue #108/#144), applied here to
- * the registry the fourth, project, bounded context owns. Distinct from
+ * three bounded contexts guard against on their own aggregates, applied here to the registry the
+ * fourth, project, bounded context owns. Distinct from
  * {@link ProjectNotFoundException} - the project exists throughout, it is just never observed to
  * still match the caller's stale read for long enough to commit.</p>
  */

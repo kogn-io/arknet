@@ -65,8 +65,8 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * <p><strong>Concurrency.</strong> {@link #attach} and {@link #rename} both read-modify-write via
  * {@link ProjectRegistry#findCurrentById}/{@link ProjectRegistry#compareAndUpdate} and retry the
  * whole round trip against a fresh read whenever a concurrent writer commits in between - see
- * {@link #updateWithOptimisticRetry}, the same pattern {@code RequirementService} established for
- * issue #108. Neither race is visible to a well-formed caller; only sustained, pathological
+ * {@link #updateWithOptimisticRetry}, the same pattern {@code RequirementService} established.
+ * Neither race is visible to a well-formed caller; only sustained, pathological
  * contention on the very same project surfaces as {@link StaleProjectException}.</p>
  */
 public class ProjectService

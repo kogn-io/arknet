@@ -84,7 +84,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  * ask {@code contains} about <em>before</em> the write commits, which a randomly minted anchor
  * identity could never offer.</p>
  *
- * <p><strong>Two uniqueness rules, so a lost race needs attributing (issue #181).</strong> Both
+ * <p><strong>Two uniqueness rules, so a lost race needs attributing.</strong> Both
  * guards above pass when two registrations genuinely overlap - neither transaction sees the other's
  * uncommitted write under {@code SERIALIZABLE} - and the loser is rejected by the store at commit
  * time, which reveals only that it lost, not what it collided with. Unlike the four model contexts,
@@ -93,8 +93,8 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  * state and names the actual collision. The shared {@link WriteFunnel} takes that decision as a
  * parameter for exactly this reason.</p>
  *
- * <p><strong>Replace-by-identity leaves no orphaned anchor nodes.</strong> {@link #writeBody}, on
- * an update, first deletes the project subject's own triples <em>and</em> the triples of every
+ * <p><strong>Replace-by-identity leaves no orphaned anchor nodes.</strong> {@link #replaceExistingProject}
+ * first deletes the project subject's own triples <em>and</em> the triples of every
  * anchor node the project held <em>before</em> the update (read via {@link #deleteProjectAndItsAnchors}
  * before anything is deleted), then runs the anchor-uniqueness check, then re-adds the candidate
  * graph. An anchor kept across the update maps to the same deterministic node (see
@@ -139,39 +139,35 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     @Override
     public void register(Project project) {
         Objects.requireNonNull(project, "project");
-        write(null, project, false);
+        String projectIriString = ProjectGraphs.projectIri(project.id());
+        IRI graphIri = rdf.createIRI(ArkprjVocabulary.REGISTRY_GRAPH);
+        Graph candidate = ProjectGraphs.buildGraph(project);
+
+        funnel.create(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString, project.label(),
+                candidate, null,
+                () -> new ResourceAlreadyExistsException(project.id()),
+                () -> new DuplicateProjectLabelException(project.label()),
+                conflict -> attributeLostRegistration(project, conflict),
+                tx -> insertNewProject(tx, graphIri, project, candidate));
     }
 
     @Override
     public void compareAndUpdate(RevisionToken expectedHead, Project project) {
         Objects.requireNonNull(project, "project");
-        write(expectedHead, project, true);
-    }
-
-    private void write(RevisionToken expectedHead, Project project, boolean exists) {
         String projectIriString = ProjectGraphs.projectIri(project.id());
         String projectSubject = SparqlTerms.iriRef(projectIriString);
         IRI graphIri = rdf.createIRI(ArkprjVocabulary.REGISTRY_GRAPH);
         Graph candidate = ProjectGraphs.buildGraph(project);
 
-        if (exists) {
-            funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
-                    expectedHead == null ? null : expectedHead.value(), candidate, null,
-                    () -> new ProjectNotFoundException(project.id()),
-                    () -> new StaleProjectException(project.id()),
-                    tx -> writeBody(tx, graphIri, projectSubject, project, candidate, true));
-        } else {
-            funnel.create(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString, project.label(),
-                    candidate, null,
-                    () -> new ResourceAlreadyExistsException(project.id()),
-                    () -> new DuplicateProjectLabelException(project.label()),
-                    conflict -> attributeLostRegistration(project, conflict),
-                    tx -> writeBody(tx, graphIri, projectSubject, project, candidate, false));
-        }
+        funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
+                expectedHead == null ? null : expectedHead.value(), candidate, null,
+                () -> new ProjectNotFoundException(project.id()),
+                () -> new StaleProjectException(project.id()),
+                tx -> replaceExistingProject(tx, graphIri, projectSubject, project, candidate));
     }
 
     /**
-     * Names what a registration that lost a commit race actually collided with (issue #181).
+     * Names what a registration that lost a commit race actually collided with.
      *
      * <p>{@link WriteFunnel#create}'s own conflict translation cannot do this: a lost commit tells
      * it only that somebody wrote first, and this context guards <em>two</em> uniqueness rules, not
@@ -231,16 +227,28 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     }
 
     /**
-     * Replaces the project's triples inside an already-open write transaction - see the class
-     * javadoc's "replace-by-identity leaves no orphaned anchor nodes" section for the ordering
-     * this relies on: delete this project's own old state first, check anchor uniqueness against
-     * what is left, only then add the new candidate.
+     * Writes a freshly minted project's triples inside an already-open write transaction - the
+     * tail of {@link #register}, reached once the funnel's own existence check has decided the
+     * write may proceed. Unlike {@link #replaceExistingProject}, there is nothing under this
+     * identity yet, so there is nothing to delete first.
      */
-    private void writeBody(DatasetTx tx, IRI graphIri, String projectSubject, Project project, Graph candidate,
-            boolean exists) {
-        if (exists) {
-            deleteProjectAndItsAnchors(tx, graphIri, projectSubject);
-        }
+    private void insertNewProject(DatasetTx tx, IRI graphIri, Project project, Graph candidate) {
+        checkLabelUniqueness(tx, graphIri, project);
+        checkAnchorUniqueness(tx, graphIri, project);
+        tx.add(graphIri, candidate);
+    }
+
+    /**
+     * Replaces an already-registered project's triples inside an already-open write transaction -
+     * the tail of {@link #compareAndUpdate}, reached once the funnel's own head comparison has
+     * decided the write may proceed. See the class javadoc's "replace-by-identity leaves no
+     * orphaned anchor nodes" section for the ordering this relies on: delete this project's own
+     * old state first, check label and anchor uniqueness against what is left, only then add the
+     * new candidate.
+     */
+    private void replaceExistingProject(DatasetTx tx, IRI graphIri, String projectSubject, Project project,
+            Graph candidate) {
+        deleteProjectAndItsAnchors(tx, graphIri, projectSubject);
         checkLabelUniqueness(tx, graphIri, project);
         checkAnchorUniqueness(tx, graphIri, project);
         tx.add(graphIri, candidate);
@@ -249,7 +257,8 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     /**
      * Deletes the project subject's own triples and the triples of every anchor node it held
      * before this write - both read <em>before</em> anything is deleted, inside this same write
-     * transaction, so nothing is lost if a later step in {@link #writeBody} rejects the write.
+     * transaction, so nothing is lost if a later step in {@link #replaceExistingProject} rejects
+     * the write.
      */
     private void deleteProjectAndItsAnchors(DatasetTx tx, IRI graphIri, String projectSubject) {
         String selectAnchors = "SELECT ?a WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
