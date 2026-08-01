@@ -184,7 +184,7 @@ class TraceabilityRendererTest {
     void actorUseCaseMatrixReportsBothDirectionsOfActorInvolvement() {
         TraceabilityGraph graph = TraceabilityGraph.of(actorUseCaseFixtureSnapshot());
 
-        String matrix = renderer.actorUseCaseMatrix(WORKSPACE, graph);
+        String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
 
         assertThat(matrix).contains("# Actor/use-case matrix -- project sample-project");
         assertThat(matrix).contains("## Actors (2)");
@@ -201,7 +201,7 @@ class TraceabilityRendererTest {
     void actorUseCaseMatrixReportsNoneForAProjectWithoutUseCases() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
 
-        String matrix = renderer.actorUseCaseMatrix(WORKSPACE, graph);
+        String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
 
         assertThat(matrix).contains("## Actors (0)").contains("## Use cases (1)");
     }
@@ -210,7 +210,7 @@ class TraceabilityRendererTest {
     void termCooccurrenceFindsTermsNamedTogetherInRequirementAndUseCaseText() {
         TraceabilityGraph graph = TraceabilityGraph.of(termCooccurrenceFixtureSnapshot());
 
-        String report = renderer.termCooccurrence(WORKSPACE, graph);
+        String report = renderer.termCooccurrence(PROJECT, graph);
 
         assertThat(report).contains("# Term co-occurrence -- project sample-project");
         assertThat(report).contains("## Term pairs named together in the same text (1)");
@@ -223,7 +223,7 @@ class TraceabilityRendererTest {
     void termCooccurrenceReportsNoneWhenNoTwoTermsShareAText() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
 
-        String report = renderer.termCooccurrence(WORKSPACE, graph);
+        String report = renderer.termCooccurrence(PROJECT, graph);
 
         assertThat(report).contains("## Term pairs named together in the same text (0)");
         assertThat(report).contains("- none");
@@ -246,7 +246,7 @@ class TraceabilityRendererTest {
                 lit(FR_10, DESCRIPTION, "Der Kunde meldet sich an."),
                 lit(FR_10, ACCEPTANCE_CRITERION, "Die Bestellung wird angezeigt."))));
 
-        String report = renderer.termCooccurrence(WORKSPACE, graph);
+        String report = renderer.termCooccurrence(PROJECT, graph);
 
         assertThat(report).contains("## Term pairs named together in the same text (1)");
         assertThat(report).contains("TERM-A").contains("TERM-B").contains("1 text(s)");

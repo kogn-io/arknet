@@ -128,7 +128,7 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         return renderer.actorUseCaseMatrix(projectId, readGraph(projectId));
     }
 
@@ -146,7 +146,7 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         return renderer.termCooccurrence(projectId, readGraph(projectId));
     }
 
