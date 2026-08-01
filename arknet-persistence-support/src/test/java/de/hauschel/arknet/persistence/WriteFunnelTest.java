@@ -694,7 +694,7 @@ class WriteFunnelTest {
     /** One funnel wiring per test: recording lifecycle/handle/tx plus a recording gate. */
     private final class Fixture {
 
-        private final DatasetId dataset = new DatasetId("workspace");
+        private final DatasetId dataset = new DatasetId("project");
         private final FakeTx tx;
         private final FakeHandle handle;
         private final FakeLifecycle lifecycle;

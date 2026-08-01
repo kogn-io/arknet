@@ -8,7 +8,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: resolves a glossary term's human-typed business code to its opaque subject
- * identity in the shared workspace store.
+ * identity in the shared project store.
  *
  * <p>This is the strict cross-BC reference resolution the bounded-context component needs for
  * {@code arkddd:ubiquitousLanguageTerm}: the bounded-context component must not

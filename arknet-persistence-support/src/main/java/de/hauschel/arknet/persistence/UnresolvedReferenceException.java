@@ -5,10 +5,10 @@ package de.hauschel.arknet.persistence;
 
 /**
  * Thrown when a cross-bounded-context reference cannot be resolved unambiguously against the
- * target workspace's store during strict resolve-before-write.
+ * target project's store during strict resolve-before-write.
  *
  * <p><strong>Strict reference resolution.</strong> Several bounded contexts share one
- * per-workspace store. Before a candidate graph is written, every cross-BC reference it carries
+ * per-project store. Before a candidate graph is written, every cross-BC reference it carries
  * is resolved against that store by looking up the referenced resource's stable identity. If the
  * identity matches no resource, or more than one, the write is aborted and nothing is persisted -
  * dangling cross-references are never created. Two concrete shapes of this pattern exist so far:

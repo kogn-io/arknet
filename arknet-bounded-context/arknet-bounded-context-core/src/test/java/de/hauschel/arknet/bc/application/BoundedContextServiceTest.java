@@ -121,7 +121,7 @@ class BoundedContextServiceTest {
     }
 
     @Test
-    void addIsScopedPerWorkspace() {
+    void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
         service.add(WS, newBoundedContext());
 

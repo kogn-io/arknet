@@ -56,8 +56,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  */
 class KognioRdfRequirementRepositoryTest {
 
-    private static final ProjectId WORKSPACE_A = new ProjectId("a");
-    private static final ProjectId WORKSPACE_B = new ProjectId("b");
+    private static final ProjectId PROJECT_A = new ProjectId("a");
+    private static final ProjectId PROJECT_B = new ProjectId("b");
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -108,8 +108,8 @@ class KognioRdfRequirementRepositoryTest {
                 freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, requirement);
-        Optional<Requirement> found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1"));
+        repository.create(PROJECT_A, requirement);
+        Optional<Requirement> found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1"));
 
         assertEquals(Optional.of(requirement), found);
         assertEquals("The system shall authenticate a user.", found.orElseThrow().description());
@@ -121,15 +121,15 @@ class KognioRdfRequirementRepositoryTest {
                 freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, first);
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        repository.create(PROJECT_A, first);
+        assertEquals(1, repository.findAll(PROJECT_A).size());
 
         Requirement second = new Requirement(
                 freshId(), new RequirementCode("FR-2"), "Logout", "The system shall end a user session.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, second);
+        repository.create(PROJECT_A, second);
 
-        List<Requirement> all = repository.findAll(WORKSPACE_A);
+        List<Requirement> all = repository.findAll(PROJECT_A);
         assertEquals(2, all.size());
         assertTrue(all.contains(first));
         assertTrue(all.contains(second));
@@ -141,16 +141,16 @@ class KognioRdfRequirementRepositoryTest {
         Requirement requirement = new Requirement(id, new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, requirement);
+        repository.create(PROJECT_A, requirement);
 
         Requirement collidingId = new Requirement(id, new RequirementCode("FR-2"), "Logout",
                 "The system shall end a user session.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
         assertThrows(ResourceAlreadyExistsException.class,
-                () -> repository.create(WORKSPACE_A, collidingId));
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        assertEquals(Optional.of(requirement), repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")));
+                () -> repository.create(PROJECT_A, collidingId));
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(Optional.of(requirement), repository.findByCode(PROJECT_A, new RequirementCode("FR-1")));
     }
 
     /**
@@ -163,16 +163,16 @@ class KognioRdfRequirementRepositoryTest {
         Requirement first = new Requirement(freshId(), code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, first);
+        repository.create(PROJECT_A, first);
 
         Requirement collidingCode = new Requirement(freshId(), code, "Logout",
                 "The system shall end a user session.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
         assertThrows(DuplicateRequirementCodeException.class,
-                () -> repository.create(WORKSPACE_A, collidingCode));
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        assertEquals(Optional.of(first), repository.findByCode(WORKSPACE_A, code));
+                () -> repository.create(PROJECT_A, collidingCode));
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(Optional.of(first), repository.findByCode(PROJECT_A, code));
     }
 
     @Test
@@ -184,12 +184,12 @@ class KognioRdfRequirementRepositoryTest {
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, proposed);
-        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
+        repository.create(PROJECT_A, proposed);
+        replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
-        assertEquals(Optional.of(accepted), repository.findByCode(WORKSPACE_A, code));
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        assertEquals(accepted, repository.findAll(WORKSPACE_A).get(0));
+        assertEquals(Optional.of(accepted), repository.findByCode(PROJECT_A, code));
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(accepted, repository.findAll(PROJECT_A).get(0));
     }
 
     /** The opaque identity is preserved across an update - only the requirement's state changes. */
@@ -197,15 +197,15 @@ class KognioRdfRequirementRepositoryTest {
     void updatePreservesTheOpaqueIdentity() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
-        repository.create(WORKSPACE_A, new Requirement(id, code, "Login",
+        repository.create(PROJECT_A, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
-        replaceViaCompareAndUpdate(WORKSPACE_A, new Requirement(id, code, "Login",
+        replaceViaCompareAndUpdate(PROJECT_A, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
-        assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
+        assertEquals(id, repository.findByCode(PROJECT_A, code).orElseThrow().id());
     }
 
     // ---- compareAndUpdate: CAS guard against lost updates, head-based ----
@@ -217,15 +217,15 @@ class KognioRdfRequirementRepositoryTest {
         Requirement proposed = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, proposed);
-        RevisionToken head = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        repository.create(PROJECT_A, proposed);
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
         Requirement accepted = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
 
-        repository.compareAndUpdate(WORKSPACE_A, head, accepted);
+        repository.compareAndUpdate(PROJECT_A, head, accepted);
 
-        assertEquals(Optional.of(accepted), repository.findByCode(WORKSPACE_A, code));
+        assertEquals(Optional.of(accepted), repository.findByCode(PROJECT_A, code));
     }
 
     /**
@@ -241,21 +241,21 @@ class KognioRdfRequirementRepositoryTest {
         Requirement original = new Requirement(id, code, "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
                 List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, original);
-        RevisionToken staleHead = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        repository.create(PROJECT_A, original);
+        RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         Requirement concurrentlyAccepted = new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
                 null, null, null, null, List.of("Login succeeds with valid credentials"));
-        replaceViaCompareAndUpdate(WORKSPACE_A, concurrentlyAccepted);
+        replaceViaCompareAndUpdate(PROJECT_A, concurrentlyAccepted);
 
         Requirement staleAttempt = new Requirement(id, code, "Login renamed",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                 null, null, null, null, List.of("Login succeeds with valid credentials"));
 
         assertThrows(RequirementConcurrentlyModifiedException.class,
-                () -> repository.compareAndUpdate(WORKSPACE_A, staleHead, staleAttempt));
-        assertEquals(Optional.of(concurrentlyAccepted), repository.findByCode(WORKSPACE_A, code));
+                () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt));
+        assertEquals(Optional.of(concurrentlyAccepted), repository.findByCode(PROJECT_A, code));
     }
 
     @Test
@@ -267,9 +267,9 @@ class KognioRdfRequirementRepositoryTest {
                 List.of("Login succeeds with valid credentials"));
 
         assertThrows(RequirementNotFoundException.class,
-                () -> repository.compareAndUpdate(WORKSPACE_A, null, neverCreated));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
-        assertEquals(Optional.empty(), repository.findCurrentByCode(WORKSPACE_A, code));
+                () -> repository.compareAndUpdate(PROJECT_A, null, neverCreated));
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, code));
     }
 
     /**
@@ -279,17 +279,17 @@ class KognioRdfRequirementRepositoryTest {
      */
     @Test
     void compareAndUpdatePreservesLinkedTermsAndAcceptanceCriteria() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-1");
         Requirement created = requirementUsing(termRef("TERM-1"));
-        repository.create(WORKSPACE_A, created);
-        RevisionToken head = repository.findCurrentByCode(WORKSPACE_A, created.code()).orElseThrow().head();
+        repository.create(PROJECT_A, created);
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, created.code()).orElseThrow().head();
 
         Requirement accepted = new Requirement(created.id(), created.code(), created.title(), created.description(),
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
                 created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria());
-        repository.compareAndUpdate(WORKSPACE_A, head, accepted);
+        repository.compareAndUpdate(PROJECT_A, head, accepted);
 
-        Requirement found = repository.findByCode(WORKSPACE_A, created.code()).orElseThrow();
+        Requirement found = repository.findByCode(PROJECT_A, created.code()).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
         assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
         assertEquals(List.of("Login succeeds with valid credentials"), found.acceptanceCriteria());
@@ -297,7 +297,7 @@ class KognioRdfRequirementRepositoryTest {
 
     @Test
     void findByCodeReturnsEmptyForUnknownCode() {
-        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, new RequirementCode("FR-99")));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, new RequirementCode("FR-99")));
     }
 
     @Test
@@ -306,9 +306,9 @@ class KognioRdfRequirementRepositoryTest {
                 freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, requirement);
+        repository.create(PROJECT_A, requirement);
 
-        assertTrue(repository.findAll(WORKSPACE_B).isEmpty());
+        assertTrue(repository.findAll(PROJECT_B).isEmpty());
     }
 
     @Test
@@ -318,8 +318,8 @@ class KognioRdfRequirementRepositoryTest {
                 "95% of requests shall complete in under 200ms.",
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, requirement);
-        Optional<Requirement> found = repository.findByCode(WORKSPACE_A, new RequirementCode("NFR-1"));
+        repository.create(PROJECT_A, requirement);
+        Optional<Requirement> found = repository.findByCode(PROJECT_A, new RequirementCode("NFR-1"));
 
         assertEquals(Optional.of(requirement), found);
         assertEquals(RequirementType.NON_FUNCTIONAL, found.get().type());
@@ -333,14 +333,14 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED,
                 Priority.MUST_HAVE, "https://w3id.org/arknet/model/goal/fast-ux", "performance", null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, requirement);
-        Optional<Requirement> found = repository.findByCode(WORKSPACE_A, new RequirementCode("NFR-1"));
+        repository.create(PROJECT_A, requirement);
+        Optional<Requirement> found = repository.findByCode(PROJECT_A, new RequirementCode("NFR-1"));
 
         assertEquals(Optional.of(requirement), found);
         assertEquals(Priority.MUST_HAVE, found.orElseThrow().priority());
         assertEquals("https://w3id.org/arknet/model/goal/fast-ux", found.orElseThrow().motivatedBy());
         assertEquals("performance", found.orElseThrow().qualityCategory());
-        assertTrue(repository.findAll(WORKSPACE_A).contains(requirement));
+        assertTrue(repository.findAll(PROJECT_A).contains(requirement));
     }
 
     @Test
@@ -349,9 +349,9 @@ class KognioRdfRequirementRepositoryTest {
                 freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
-        repository.create(WORKSPACE_A, requirement);
-        Optional<Requirement> found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1"));
-        Requirement foundViaFindAll = repository.findAll(WORKSPACE_A).get(0);
+        repository.create(PROJECT_A, requirement);
+        Optional<Requirement> found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1"));
+        Requirement foundViaFindAll = repository.findAll(PROJECT_A).get(0);
 
         assertEquals(Optional.of(requirement), found);
         assertEquals(requirement, foundViaFindAll);
@@ -374,8 +374,8 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> repository.create(WORKSPACE_A, tooShortDescription));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+                () -> repository.create(PROJECT_A, tooShortDescription));
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
 
     /**
@@ -414,13 +414,13 @@ class KognioRdfRequirementRepositoryTest {
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                 null, null, null, null, criteria);
 
-        repository.create(WORKSPACE_A, requirement);
+        repository.create(PROJECT_A, requirement);
 
         assertEquals(List.copyOf(criteria).stream().sorted().toList(),
-                repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1"))
+                repository.findByCode(PROJECT_A, new RequirementCode("FR-1"))
                         .orElseThrow().acceptanceCriteria().stream().sorted().toList());
         assertEquals(requirement.acceptanceCriteria().stream().sorted().toList(),
-                repository.findAll(WORKSPACE_A).get(0).acceptanceCriteria().stream().sorted().toList());
+                repository.findAll(PROJECT_A).get(0).acceptanceCriteria().stream().sorted().toList());
     }
 
     /**
@@ -432,16 +432,16 @@ class KognioRdfRequirementRepositoryTest {
     void acceptanceCriteriaSurviveAReplacingUpdate() {
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = requirementUsing();
-        repository.create(WORKSPACE_A, created);
+        repository.create(PROJECT_A, created);
 
-        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement reloaded = repository.findByCode(PROJECT_A, code).orElseThrow();
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(),
                 reloaded.acceptanceCriteria());
-        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
-        Requirement found = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement found = repository.findByCode(PROJECT_A, code).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
         assertEquals(reloaded.acceptanceCriteria(), found.acceptanceCriteria());
     }
@@ -458,9 +458,9 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findByCodeSubstitutesAPlaceholderForARequirementPredatingAcceptanceCriterion() {
         RequirementId id = freshId();
-        givenLegacyRequirementWithoutAcceptanceCriterion(WORKSPACE_A, id, "FR-1");
+        givenLegacyRequirementWithoutAcceptanceCriterion(PROJECT_A, id, "FR-1");
 
-        Requirement found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow();
+        Requirement found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
 
         assertEquals(1, found.acceptanceCriteria().size());
         assertTrue(found.acceptanceCriteria().get(0).contains("Altdatensatz"), found.acceptanceCriteria().toString());
@@ -470,9 +470,9 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findAllSubstitutesAPlaceholderForARequirementPredatingAcceptanceCriterion() {
         RequirementId id = freshId();
-        givenLegacyRequirementWithoutAcceptanceCriterion(WORKSPACE_A, id, "FR-1");
+        givenLegacyRequirementWithoutAcceptanceCriterion(PROJECT_A, id, "FR-1");
 
-        List<Requirement> all = repository.findAll(WORKSPACE_A);
+        List<Requirement> all = repository.findAll(PROJECT_A);
 
         assertEquals(1, all.size());
         assertEquals(1, all.get(0).acceptanceCriteria().size());
@@ -513,9 +513,9 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findByCodeDeduplicatesAcceptanceCriteriaDifferingOnlyByLanguageTag() {
         RequirementId id = freshId();
-        givenRequirementWithDuplicateAcceptanceCriterionByLanguageTag(WORKSPACE_A, id, "FR-1");
+        givenRequirementWithDuplicateAcceptanceCriterionByLanguageTag(PROJECT_A, id, "FR-1");
 
-        Requirement found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow();
+        Requirement found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
 
         assertEquals(List.of("Login succeeds with valid credentials"), found.acceptanceCriteria());
     }
@@ -529,9 +529,9 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findAllFiltersOutABlankAcceptanceCriterionAlongsideAValidOne() {
         RequirementId id = freshId();
-        givenRequirementWithBlankAndValidAcceptanceCriterion(WORKSPACE_A, id, "FR-1");
+        givenRequirementWithBlankAndValidAcceptanceCriterion(PROJECT_A, id, "FR-1");
 
-        List<Requirement> all = repository.findAll(WORKSPACE_A);
+        List<Requirement> all = repository.findAll(PROJECT_A);
 
         assertEquals(1, all.size());
         assertEquals(List.of("Login succeeds with valid credentials"), all.get(0).acceptanceCriteria());
@@ -603,9 +603,9 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findAllReturnsExactlyOneRequirementForASubjectWithTwoPriorities() {
         RequirementId id = freshId();
-        givenRequirementWithTwoPriorities(WORKSPACE_A, id, "FR-1");
+        givenRequirementWithTwoPriorities(PROJECT_A, id, "FR-1");
 
-        List<Requirement> all = repository.findAll(WORKSPACE_A);
+        List<Requirement> all = repository.findAll(PROJECT_A);
 
         assertEquals(1, all.size());
         assertEquals(new RequirementCode("FR-1"), all.get(0).code());
@@ -619,10 +619,10 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findAllPicksTheSamePriorityOnRepeatedReads() {
         RequirementId id = freshId();
-        givenRequirementWithTwoPriorities(WORKSPACE_A, id, "FR-1");
+        givenRequirementWithTwoPriorities(PROJECT_A, id, "FR-1");
 
-        Priority first = repository.findAll(WORKSPACE_A).get(0).priority();
-        Priority second = repository.findAll(WORKSPACE_A).get(0).priority();
+        Priority first = repository.findAll(PROJECT_A).get(0).priority();
+        Priority second = repository.findAll(PROJECT_A).get(0).priority();
 
         assertEquals(first, second);
     }
@@ -638,10 +638,10 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findByCodeStillWorksForARequirementWithAnAdditionalUnrelatedType() {
         RequirementId id = freshId();
-        givenRequirementWithAnAdditionalType(WORKSPACE_A, id, "FR-1",
+        givenRequirementWithAnAdditionalType(PROJECT_A, id, "FR-1",
                 "https://w3id.org/arknet/architecture#Stakeholder");
 
-        Requirement found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow();
+        Requirement found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
 
         assertEquals(RequirementType.FUNCTIONAL, found.type());
         assertEquals("Login", found.title());
@@ -708,11 +708,11 @@ class KognioRdfRequirementRepositoryTest {
         Requirement second = new Requirement(freshId(), new RequirementCode("FR-2"), "Logout",
                 "The system shall end a user session.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, first);
-        repository.create(WORKSPACE_A, second);
+        repository.create(PROJECT_A, first);
+        repository.create(PROJECT_A, second);
 
         List<ResolveRequirements.ResolvedRequirement> resolved = repository.findByIds(
-                WORKSPACE_A, List.of(first.id().value(), second.id().value()));
+                PROJECT_A, List.of(first.id().value(), second.id().value()));
 
         assertEquals(2, resolved.size());
         assertTrue(resolved.contains(new ResolveRequirements.ResolvedRequirement(first.id().value(), first.code())));
@@ -726,11 +726,11 @@ class KognioRdfRequirementRepositoryTest {
         Requirement known = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, known);
+        repository.create(PROJECT_A, known);
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
         List<ResolveRequirements.ResolvedRequirement> resolved =
-                repository.findByIds(WORKSPACE_A, List.of(known.id().value(), unknown));
+                repository.findByIds(PROJECT_A, List.of(known.id().value(), unknown));
 
         assertEquals(List.of(new ResolveRequirements.ResolvedRequirement(known.id().value(), known.code())),
                 resolved);
@@ -738,17 +738,17 @@ class KognioRdfRequirementRepositoryTest {
 
     @Test
     void findByIdsWithEmptyIdsReturnsAnEmptyListWithoutQuerying() {
-        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of()));
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
     }
 
     @Test
-    void findByIdsIsScopedPerWorkspace() {
-        Requirement inWorkspaceA = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+    void findByIdsIsScopedPerProject() {
+        Requirement inProjectA = new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
-        repository.create(WORKSPACE_A, inWorkspaceA);
+        repository.create(PROJECT_A, inProjectA);
 
-        assertEquals(List.of(), repository.findByIds(WORKSPACE_B, List.of(inWorkspaceA.id().value())));
+        assertEquals(List.of(), repository.findByIds(PROJECT_B, List.of(inProjectA.id().value())));
     }
 
     /**
@@ -762,10 +762,10 @@ class KognioRdfRequirementRepositoryTest {
     @Test
     void findByIdsReturnsExactlyOneResolvedRequirementForASubjectWithSeveralIdentifiers() {
         RequirementId id = freshId();
-        givenRequirementWithTwoIdentifiers(WORKSPACE_A, id, "FR-1", "FR-1-ALT");
+        givenRequirementWithTwoIdentifiers(PROJECT_A, id, "FR-1", "FR-1-ALT");
 
         List<ResolveRequirements.ResolvedRequirement> resolved =
-                repository.findByIds(WORKSPACE_A, List.of(id.value()));
+                repository.findByIds(PROJECT_A, List.of(id.value()));
 
         assertEquals(1, resolved.size());
         assertEquals(id.value(), resolved.get(0).id());
@@ -795,25 +795,25 @@ class KognioRdfRequirementRepositoryTest {
 
     @Test
     void createsAndFindsUsesTermEdge() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-1");
         Requirement requirement = requirementUsing(termRef("TERM-1"));
 
-        repository.create(WORKSPACE_A, requirement);
+        repository.create(PROJECT_A, requirement);
 
         assertEquals(Optional.of(requirement),
-                repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")));
+                repository.findByCode(PROJECT_A, new RequirementCode("FR-1")));
         assertEquals(List.of(termRef("TERM-1")),
-                repository.findAll(WORKSPACE_A).get(0).usesTerms());
+                repository.findAll(PROJECT_A).get(0).usesTerms());
     }
 
     @Test
     void createsAndFindsSeveralUsesTermEdges() {
-        givenTerm(WORKSPACE_A, "TERM-1");
-        givenTerm(WORKSPACE_A, "TERM-2");
+        givenTerm(PROJECT_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-2");
 
-        repository.create(WORKSPACE_A, requirementUsing(termRef("TERM-1"), termRef("TERM-2")));
+        repository.create(PROJECT_A, requirementUsing(termRef("TERM-1"), termRef("TERM-2")));
 
-        List<TermRef> found = repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1"))
+        List<TermRef> found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1"))
                 .orElseThrow().usesTerms();
         assertEquals(2, found.size());
         assertTrue(found.containsAll(List.of(termRef("TERM-1"), termRef("TERM-2"))));
@@ -832,10 +832,10 @@ class KognioRdfRequirementRepositoryTest {
     void createPersistsAUsesTermEdgeEvenWhenItsTargetDoesNotExistInTheStore() {
         TermRef doesNotExist = termRef("TERM-99");
 
-        repository.create(WORKSPACE_A, requirementUsing(doesNotExist));
+        repository.create(PROJECT_A, requirementUsing(doesNotExist));
 
         assertEquals(List.of(doesNotExist),
-                repository.findByCode(WORKSPACE_A, new RequirementCode("FR-1")).orElseThrow().usesTerms());
+                repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow().usesTerms());
     }
 
     /**
@@ -845,33 +845,33 @@ class KognioRdfRequirementRepositoryTest {
      */
     @Test
     void usesTermEdgesSurviveAReplacingUpdate() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-1");
         RequirementCode code = new RequirementCode("FR-1");
-        repository.create(WORKSPACE_A, requirementUsing(termRef("TERM-1")));
+        repository.create(PROJECT_A, requirementUsing(termRef("TERM-1")));
 
-        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement reloaded = repository.findByCode(PROJECT_A, code).orElseThrow();
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
-        Requirement found = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement found = repository.findByCode(PROJECT_A, code).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, found.status());
         assertEquals(List.of(termRef("TERM-1")), found.usesTerms());
     }
 
     @Test
     void unlinkingATermRemovesTheEdge() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-1");
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = requirementUsing(termRef("TERM-1"));
-        repository.create(WORKSPACE_A, created);
+        repository.create(PROJECT_A, created);
 
-        replaceViaCompareAndUpdate(WORKSPACE_A, new Requirement(created.id(), created.code(), created.title(),
+        replaceViaCompareAndUpdate(PROJECT_A, new Requirement(created.id(), created.code(), created.title(),
                 created.description(), created.type(), created.status(), created.priority(),
                 created.motivatedBy(), created.qualityCategory(), List.of(), List.of("Login succeeds with valid credentials")));
 
-        assertEquals(List.of(), repository.findByCode(WORKSPACE_A, code).orElseThrow().usesTerms());
+        assertEquals(List.of(), repository.findByCode(PROJECT_A, code).orElseThrow().usesTerms());
     }
 
     /**
@@ -1013,14 +1013,14 @@ class KognioRdfRequirementRepositoryTest {
      */
     @Test
     void usesTermEdgeToATermWithoutIdentifierIsReadableAndSurvivesAnOrdinaryUpdate() {
-        String termIri = givenTermWithoutIdentifier(WORKSPACE_A);
+        String termIri = givenTermWithoutIdentifier(PROJECT_A);
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = requirementUsing();
-        repository.create(WORKSPACE_A, created);
-        givenUsesTermEdge(WORKSPACE_A, created.id(), termIri);
+        repository.create(PROJECT_A, created);
+        givenUsesTermEdge(PROJECT_A, created.id(), termIri);
         TermRef expected = new TermRef(ResourceId.of(termIri));
 
-        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement reloaded = repository.findByCode(PROJECT_A, code).orElseThrow();
         assertEquals(List.of(expected), reloaded.usesTerms(),
                 "reading no longer joins into the terms graph, so a missing dcterms:identifier "
                         + "on the target no longer hides the edge");
@@ -1028,9 +1028,9 @@ class KognioRdfRequirementRepositoryTest {
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
-        assertEquals(List.of(expected), repository.findByCode(WORKSPACE_A, code).orElseThrow().usesTerms(),
+        assertEquals(List.of(expected), repository.findByCode(PROJECT_A, code).orElseThrow().usesTerms(),
                 "the edge is now part of the ordinary record, carried forward by the replacing "
                         + "update without needing the preservation mechanism at all");
     }
@@ -1053,18 +1053,18 @@ class KognioRdfRequirementRepositoryTest {
     void storeFirstUsesTermEdgeToABlankNodeSurvivesAReplacingUpdateWithoutCrashing() {
         RequirementCode code = new RequirementCode("FR-1");
         Requirement created = requirementUsing();
-        repository.create(WORKSPACE_A, created);
-        givenUsesTermEdgeToFreshBlankNodeConcept(WORKSPACE_A, created.id());
+        repository.create(PROJECT_A, created);
+        givenUsesTermEdgeToFreshBlankNodeConcept(PROJECT_A, created.id());
 
-        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement reloaded = repository.findByCode(PROJECT_A, code).orElseThrow();
         assertEquals(List.of(), reloaded.usesTerms(), "blank-node edge must stay invisible to the read");
 
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
-        assertTrue(usesTermEdgeTargetsAConceptBlankNode(WORKSPACE_A, reloaded.id()),
+        assertTrue(usesTermEdgeTargetsAConceptBlankNode(PROJECT_A, reloaded.id()),
                 "blank-node edge must survive the replacing update and still point at its typed node - "
                         + "not merely at some blank node");
     }
@@ -1077,18 +1077,18 @@ class KognioRdfRequirementRepositoryTest {
      */
     @Test
     void ordinaryUsesTermEdgeIsNotDuplicatedByPreservation() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-1");
         RequirementCode code = new RequirementCode("FR-1");
-        repository.create(WORKSPACE_A, requirementUsing(termRef("TERM-1")));
+        repository.create(PROJECT_A, requirementUsing(termRef("TERM-1")));
 
-        Requirement reloaded = repository.findByCode(WORKSPACE_A, code).orElseThrow();
+        Requirement reloaded = repository.findByCode(PROJECT_A, code).orElseThrow();
         Requirement accepted = new Requirement(reloaded.id(), reloaded.code(), reloaded.title(),
                 reloaded.description(), reloaded.type(), RequirementStatus.ACCEPTED, reloaded.priority(),
                 reloaded.motivatedBy(), reloaded.qualityCategory(), reloaded.usesTerms(), List.of("Login succeeds with valid credentials"));
-        replaceViaCompareAndUpdate(WORKSPACE_A, accepted);
+        replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
         String termIri = "https://w3id.org/arknet/model/term/TERM-1";
-        assertEquals(1, countUsesTermEdges(WORKSPACE_A, reloaded.id(), termIri));
+        assertEquals(1, countUsesTermEdges(PROJECT_A, reloaded.id(), termIri));
     }
 
     private static Requirement requirementUsing(TermRef... terms) {
@@ -1103,7 +1103,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Writes a glossary term straight into the sibling terms graph of the shared workspace
+     * Writes a glossary term straight into the sibling terms graph of the shared project
      * dataset - deliberately via raw SPARQL rather than the ubiquitous-language adapter, so
      * this test does not couple the two bounded contexts. The cross-BC wiring itself is
      * covered by {@code CrossBoundedContextStoreWiringTest} in arknet-mcp.
@@ -1227,14 +1227,14 @@ class KognioRdfRequirementRepositoryTest {
     void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
         RequirementId id = freshId();
         RequirementCode code = new RequirementCode("FR-1");
-        repository.create(WORKSPACE_A, new Requirement(id, code, "Login",
+        repository.create(PROJECT_A, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
         assertEquals(1, revisionsOf(id).size(), "create must record exactly one revision");
-        RevisionToken headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head();
+        RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
 
-        repository.compareAndUpdate(WORKSPACE_A, headAfterCreate, new Requirement(id, code, "Login",
+        repository.compareAndUpdate(PROJECT_A, headAfterCreate, new Requirement(id, code, "Login",
                 "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
                 RequirementStatus.ACCEPTED, null, null, null, null, List.of("Login succeeds with valid credentials")));
 
@@ -1243,7 +1243,7 @@ class KognioRdfRequirementRepositoryTest {
         List<String> heads = headsOf(id);
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, code).orElseThrow().head().value(),
+        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head().value(),
                 "findCurrentByCode must observe the advanced head");
     }
 
@@ -1259,7 +1259,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     private List<String> selectIris(String query) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();

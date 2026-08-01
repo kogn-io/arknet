@@ -52,7 +52,7 @@ class RequirementMcpToolsTest {
     private static final RequirementId ID =
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
 
-    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    /** Fake resolver: every call routes to the same fixed project, ignoring the origin. */
     private static final ProjectId PROJECT = new ProjectId("test-project");
 
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */

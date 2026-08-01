@@ -26,7 +26,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 /**
  * In-memory test double for {@link BoundedContextRepository}.
  *
- * <p>A hand-rolled fake (not a mock): it actually stores bounded contexts, keyed by workspace
+ * <p>A hand-rolled fake (not a mock): it actually stores bounded contexts, keyed by project
  * then opaque identity, so the service's policy can be exercised end-to-end. Insertion order is
  * preserved to make {@link #findAll(ProjectId)} assertions deterministic. {@link #create}
  * mirrors the real out-adapter's in-transaction guards: an identity collision rejects with

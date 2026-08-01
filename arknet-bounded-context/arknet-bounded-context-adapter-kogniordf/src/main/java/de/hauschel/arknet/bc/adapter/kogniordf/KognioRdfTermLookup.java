@@ -22,7 +22,7 @@ import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 /**
  * Out-adapter: {@link TermLookup} backed by the kognio-rdf substrate, resolving a glossary
  * term's human-typed {@code dcterms:identifier} (e.g. {@code TERM-1}) to its opaque subject
- * {@link ResourceId} within the shared workspace store.
+ * {@link ResourceId} within the shared project store.
  *
  * <p><strong>Strict cross-BC term resolution.</strong> Bounded contexts and
  * ubiquitous-language terms share one per-project store. This adapter looks up a code by

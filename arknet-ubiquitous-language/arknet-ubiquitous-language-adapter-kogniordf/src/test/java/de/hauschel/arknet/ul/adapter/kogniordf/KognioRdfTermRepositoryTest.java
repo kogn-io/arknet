@@ -69,8 +69,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  */
 class KognioRdfTermRepositoryTest {
 
-    private static final ProjectId WORKSPACE_A = new ProjectId("a");
-    private static final ProjectId WORKSPACE_B = new ProjectId("b");
+    private static final ProjectId PROJECT_A = new ProjectId("a");
+    private static final ProjectId PROJECT_B = new ProjectId("b");
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
 
     /**
@@ -108,8 +108,8 @@ class KognioRdfTermRepositoryTest {
         Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift",
                 "Rueckerstattung eines bereits gezahlten Betrags.", null);
 
-        repository.create(WORKSPACE_A, term);
-        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        repository.create(PROJECT_A, term);
+        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertEquals(Optional.of(term), found);
         assertEquals("Gutschrift", found.orElseThrow().prefLabel());
@@ -119,13 +119,13 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findAllContainsAllCreatedTerms() {
         Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        repository.create(WORKSPACE_A, first);
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        repository.create(PROJECT_A, first);
+        assertEquals(1, repository.findAll(PROJECT_A).size());
 
         Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
-        repository.create(WORKSPACE_A, second);
+        repository.create(PROJECT_A, second);
 
-        List<Term> all = repository.findAll(WORKSPACE_A);
+        List<Term> all = repository.findAll(PROJECT_A);
         assertEquals(2, all.size());
         assertTrue(all.contains(first));
         assertTrue(all.contains(second));
@@ -135,14 +135,14 @@ class KognioRdfTermRepositoryTest {
     void createRejectsAnAlreadyExistingIdentityAndPersistsNothingElse() {
         TermId id = freshId();
         Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        repository.create(WORKSPACE_A, term);
+        repository.create(PROJECT_A, term);
 
         Term collidingId = new Term(id, new TermCode("TERM-2"), "Bestellung", "def b", null);
 
         assertThrows(ResourceAlreadyExistsException.class,
-                () -> repository.create(WORKSPACE_A, collidingId));
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        assertEquals(Optional.of(term), repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")));
+                () -> repository.create(PROJECT_A, collidingId));
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(Optional.of(term), repository.findByCode(PROJECT_A, new TermCode("TERM-1")));
     }
 
     /**
@@ -154,35 +154,35 @@ class KognioRdfTermRepositoryTest {
     void createRejectsADuplicateCodeUnderADifferentIdentityAndPersistsNothingElse() {
         TermCode code = new TermCode("TERM-1");
         Term first = new Term(freshId(), code, "Gutschrift", "def a", null);
-        repository.create(WORKSPACE_A, first);
+        repository.create(PROJECT_A, first);
 
         Term collidingCode = new Term(freshId(), code, "Bestellung", "def b", null);
 
         assertThrows(DuplicateTermCodeException.class,
-                () -> repository.create(WORKSPACE_A, collidingCode));
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        assertEquals(Optional.of(first), repository.findByCode(WORKSPACE_A, code));
+                () -> repository.create(PROJECT_A, collidingCode));
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(Optional.of(first), repository.findByCode(PROJECT_A, code));
     }
 
     @Test
     void updateRejectsAnUnknownCode() {
         assertThrows(TermNotFoundException.class,
-                () -> repository.update(WORKSPACE_A, new TermCode("TERM-1"), "Erstattung", null, null));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+                () -> repository.update(PROJECT_A, new TermCode("TERM-1"), "Erstattung", null, null));
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
 
     @Test
     void updateChangesOnlyTheGivenFieldAndPersistsTheChange() {
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A,
+        repository.create(PROJECT_A,
                 new Term(freshId(), code, "Gutschrift", "Erste Definition.", null));
 
-        Term result = repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
+        Term result = repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null);
 
         assertEquals("Gutschrift", result.prefLabel());
         assertEquals("Ueberarbeitete Definition.", result.definition());
-        assertEquals(Optional.of(result), repository.findByCode(WORKSPACE_A, code));
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        assertEquals(Optional.of(result), repository.findByCode(PROJECT_A, code));
+        assertEquals(1, repository.findAll(PROJECT_A).size());
     }
 
     /** The opaque identity is preserved across an update - only the term's state changes. */
@@ -190,11 +190,11 @@ class KognioRdfTermRepositoryTest {
     void updatePreservesTheOpaqueIdentity() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
 
-        repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
+        repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null);
 
-        assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
+        assertEquals(id, repository.findByCode(PROJECT_A, code).orElseThrow().id());
     }
 
     /**
@@ -210,15 +210,15 @@ class KognioRdfTermRepositoryTest {
     void updateChangingOnlyDefinitionPreservesEveryPrefLabelLanguageVariant() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Customer\"@en");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Customer\"@en");
 
-        repository.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
+        repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null);
 
-        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Kunde", "de"),
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"),
                 "the German prefLabel variant must survive an update that never touches prefLabel");
-        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Customer", "en"),
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"),
                 "the English prefLabel variant must survive an update that never touches prefLabel");
-        assertEquals("Ueberarbeitete Definition.", repository.findByCode(WORKSPACE_A, code).orElseThrow().definition());
+        assertEquals("Ueberarbeitete Definition.", repository.findByCode(PROJECT_A, code).orElseThrow().definition());
     }
 
     /**
@@ -230,12 +230,12 @@ class KognioRdfTermRepositoryTest {
     void updateChangingOnlyActorFacetPreservesMultiValuedPrefLabelAndDefinition() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Eine Definition.", "\"Kunde\"@de, \"Customer\"@en");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Eine Definition.", "\"Kunde\"@de, \"Customer\"@en");
 
-        Term result = repository.update(WORKSPACE_A, code, null, null, new ActorFacet(ActorKind.HUMAN, "Besteller"));
+        Term result = repository.update(PROJECT_A, code, null, null, new ActorFacet(ActorKind.HUMAN, "Besteller"));
 
-        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Kunde", "de"));
-        assertTrue(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Customer", "en"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
         assertEquals("Eine Definition.", result.definition());
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), result.actorFacet());
     }
@@ -250,14 +250,14 @@ class KognioRdfTermRepositoryTest {
     void updateChangingOnlyActorKindPreservesTheExistingActorRole() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A,
+        repository.create(PROJECT_A,
                 new Term(id, code, "Kunde", "def a", new ActorFacet(ActorKind.HUMAN, "Besteller")));
 
-        Term result = repository.update(WORKSPACE_A, code, null, null, new ActorFacet(ActorKind.SYSTEM, null));
+        Term result = repository.update(PROJECT_A, code, null, null, new ActorFacet(ActorKind.SYSTEM, null));
 
         assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"), result.actorFacet());
         assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"),
-                repository.findByCode(WORKSPACE_A, code).orElseThrow().actorFacet());
+                repository.findByCode(PROJECT_A, code).orElseThrow().actorFacet());
     }
 
     /** Explicitly replacing {@code prefLabel} does collapse every prior variant to the one new value. */
@@ -265,13 +265,13 @@ class KognioRdfTermRepositoryTest {
     void updateGivenAPrefLabelReplacesEveryPriorVariantWithTheSingleNewValue() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
 
-        Term result = repository.update(WORKSPACE_A, code, "Bestandskunde", null, null);
+        Term result = repository.update(PROJECT_A, code, "Bestandskunde", null, null);
 
         assertEquals("Bestandskunde", result.prefLabel());
-        assertFalse(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Kunde", "de"));
-        assertFalse(subjectHasLanguageTaggedPrefLabel(WORKSPACE_A, id, "Customer", "en"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
+        assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
     }
 
     /**
@@ -294,14 +294,14 @@ class KognioRdfTermRepositoryTest {
     void updateTranslatesAGenuineWriteConflictIntoTermConcurrentlyModifiedException() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
 
         TermRepository conflicting = KognioRdfTermRepositoryFactory.over(new ConflictingWriteLifecycle(lifecycle));
 
         assertThrows(TermConcurrentlyModifiedException.class,
-                () -> conflicting.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null));
+                () -> conflicting.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null));
         assertEquals(Optional.of(new Term(id, code, "Gutschrift", "Erste Definition.", null)),
-                repository.findByCode(WORKSPACE_A, code));
+                repository.findByCode(PROJECT_A, code));
     }
 
     /** Whether {@code subjectIri} carries a {@code skos:prefLabel} literal with exactly this value and tag. */
@@ -483,16 +483,16 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void findByCodeReturnsEmptyForUnknownCode() {
-        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, new TermCode("TERM-99")));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, new TermCode("TERM-99")));
     }
 
     @Test
     void projectsAreIsolated() {
         Term term = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
-        repository.create(WORKSPACE_A, term);
+        repository.create(PROJECT_A, term);
 
-        assertTrue(repository.findAll(WORKSPACE_B).isEmpty());
+        assertTrue(repository.findAll(PROJECT_B).isEmpty());
     }
 
     /**
@@ -520,14 +520,14 @@ class KognioRdfTermRepositoryTest {
         Term term = new Term(id, new TermCode("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
 
-        repository.create(WORKSPACE_A, term);
-        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        repository.create(PROJECT_A, term);
+        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertEquals(Optional.of(term), found);
         ActorFacet facet = found.orElseThrow().actorFacet();
         assertEquals(ActorKind.HUMAN, facet.kind());
         assertEquals("Besteller", facet.role());
-        assertTrue(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#HumanActor"));
+        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
     }
 
     @Test
@@ -536,14 +536,14 @@ class KognioRdfTermRepositoryTest {
         Term term = new Term(id, new TermCode("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
                 new ActorFacet(ActorKind.SYSTEM, "PaymentService"));
 
-        repository.create(WORKSPACE_A, term);
-        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        repository.create(PROJECT_A, term);
+        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertEquals(Optional.of(term), found);
         ActorFacet facet = found.orElseThrow().actorFacet();
         assertEquals(ActorKind.SYSTEM, facet.kind());
         assertEquals("PaymentService", facet.role());
-        assertTrue(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#SystemActor"));
+        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#SystemActor"));
     }
 
     @Test
@@ -551,21 +551,21 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
 
-        repository.create(WORKSPACE_A, term);
-        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        repository.create(PROJECT_A, term);
+        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertNull(found.orElseThrow().actorFacet());
-        assertFalse(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#HumanActor"));
-        assertFalse(subjectHasType(WORKSPACE_A, id, "https://w3id.org/arknet/process#SystemActor"));
+        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
+        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#SystemActor"));
     }
 
     @Test
     void findAllReconstructsActorFacet() {
         Term withFacet = new Term(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
-        repository.create(WORKSPACE_A, withFacet);
+        repository.create(PROJECT_A, withFacet);
 
-        List<Term> all = repository.findAll(WORKSPACE_A);
+        List<Term> all = repository.findAll(PROJECT_A);
 
         assertEquals(1, all.size());
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
@@ -580,11 +580,11 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByCodePicksThePrefLabelInTheRequestedLanguage() {
         TermId id = freshId();
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.",
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Person, die bestellt.",
                 "\"Kunde\"@de, \"Customer\"@en");
         TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
-        Optional<Term> found = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        Optional<Term> found = germanReader.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertEquals("Kunde", found.orElseThrow().prefLabel());
     }
@@ -597,11 +597,11 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByCodeFallsBackToTheSystemDefaultLanguage() {
         TermId id = freshId();
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.",
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Person, die bestellt.",
                 "\"Customer\"@en, \"Client\"@fr");
         TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
-        Optional<Term> found = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        Optional<Term> found = germanReader.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertEquals("Customer", found.orElseThrow().prefLabel());
     }
@@ -610,10 +610,10 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByCodeFallsBackToAnUntaggedPrefLabel() {
         TermId id = freshId();
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.", "\"Kunde\"");
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Person, die bestellt.", "\"Kunde\"");
         TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
-        Optional<Term> found = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1"));
+        Optional<Term> found = germanReader.findByCode(PROJECT_A, new TermCode("TERM-1"));
 
         assertEquals("Kunde", found.orElseThrow().prefLabel());
     }
@@ -626,12 +626,12 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByCodeFallsBackDeterministicallyAsLastResort() {
         TermId id = freshId();
-        givenMultilingualConcept(WORKSPACE_A, id, "TERM-1", "Person, die bestellt.",
+        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Person, die bestellt.",
                 "\"Client\"@fr, \"Cliente\"@es");
         TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
-        String first = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel();
-        String second = germanReader.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel();
+        String first = germanReader.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().prefLabel();
+        String second = germanReader.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().prefLabel();
 
         assertEquals("Cliente", first);
         assertEquals(first, second);
@@ -640,11 +640,11 @@ class KognioRdfTermRepositoryTest {
     /** The same multilingual selection applies to findAll, not only findByCode. */
     @Test
     void findAllPicksThePrefLabelInTheRequestedLanguage() {
-        givenMultilingualConcept(WORKSPACE_A, freshId(), "TERM-1", "Person, die bestellt.",
+        givenMultilingualConcept(PROJECT_A, freshId(), "TERM-1", "Person, die bestellt.",
                 "\"Kunde\"@de, \"Customer\"@en");
         TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
-        List<Term> all = germanReader.findAll(WORKSPACE_A);
+        List<Term> all = germanReader.findAll(PROJECT_A);
 
         assertEquals(1, all.size());
         assertEquals("Kunde", all.get(0).prefLabel());
@@ -653,13 +653,13 @@ class KognioRdfTermRepositoryTest {
     /** Distinct display locales over the same store surface distinct labels for the same concept. */
     @Test
     void findByCodeHonoursTheConfiguredDisplayLocale() {
-        givenMultilingualConcept(WORKSPACE_A, freshId(), "TERM-1", "Person, die bestellt.",
+        givenMultilingualConcept(PROJECT_A, freshId(), "TERM-1", "Person, die bestellt.",
                 "\"Kunde\"@de, \"Customer\"@en");
 
         assertEquals("Kunde", readerFor(Locale.GERMAN, Locale.ENGLISH)
-                .findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel());
+                .findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().prefLabel());
         assertEquals("Customer", readerFor(Locale.ENGLISH, Locale.GERMAN)
-                .findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().prefLabel());
+                .findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().prefLabel());
     }
 
     /** A term repository reading the shared store under an explicit display-language preference. */
@@ -703,9 +703,9 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByCodeDoesNotThrowForATermWithTwoDefinitions() {
         TermId id = freshId();
-        givenTermWithTwoDefinitions(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
+        givenTermWithTwoDefinitions(PROJECT_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
 
-        Term found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow();
+        Term found = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow();
 
         assertTrue(List.of("Erste Definition.", "Zweite Definition.").contains(found.definition()));
     }
@@ -714,9 +714,9 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findAllDoesNotThrowForATermWithTwoDefinitions() {
         TermId id = freshId();
-        givenTermWithTwoDefinitions(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
+        givenTermWithTwoDefinitions(PROJECT_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
 
-        List<Term> all = repository.findAll(WORKSPACE_A);
+        List<Term> all = repository.findAll(PROJECT_A);
 
         assertEquals(1, all.size());
         assertTrue(List.of("Erste Definition.", "Zweite Definition.").contains(all.get(0).definition()));
@@ -731,10 +731,10 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByCodePicksTheSameDefinitionOnRepeatedReads() {
         TermId id = freshId();
-        givenTermWithTwoDefinitions(WORKSPACE_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
+        givenTermWithTwoDefinitions(PROJECT_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
 
-        String first = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().definition();
-        String second = repository.findByCode(WORKSPACE_A, new TermCode("TERM-1")).orElseThrow().definition();
+        String first = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().definition();
+        String second = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().definition();
 
         assertEquals(first, second);
     }
@@ -767,11 +767,11 @@ class KognioRdfTermRepositoryTest {
     void findByIdsResolvesKnownIdentitiesInOneQuery() {
         Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
         Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
-        repository.create(WORKSPACE_A, first);
-        repository.create(WORKSPACE_A, second);
+        repository.create(PROJECT_A, first);
+        repository.create(PROJECT_A, second);
 
         List<ResolveTerms.ResolvedTerm> resolved =
-                repository.findByIds(WORKSPACE_A, List.of(first.id().value(), second.id().value()));
+                repository.findByIds(PROJECT_A, List.of(first.id().value(), second.id().value()));
 
         assertEquals(2, resolved.size());
         assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(first.id().value(), first.code())));
@@ -782,26 +782,26 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByIdsSilentlyOmitsUnknownIdentities() {
         Term known = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        repository.create(WORKSPACE_A, known);
+        repository.create(PROJECT_A, known);
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
         List<ResolveTerms.ResolvedTerm> resolved =
-                repository.findByIds(WORKSPACE_A, List.of(known.id().value(), unknown));
+                repository.findByIds(PROJECT_A, List.of(known.id().value(), unknown));
 
         assertEquals(List.of(new ResolveTerms.ResolvedTerm(known.id().value(), known.code())), resolved);
     }
 
     @Test
     void findByIdsWithEmptyIdsReturnsAnEmptyListWithoutQuerying() {
-        assertEquals(List.of(), repository.findByIds(WORKSPACE_A, List.of()));
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
     }
 
     @Test
-    void findByIdsIsScopedPerWorkspace() {
-        Term inWorkspaceA = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        repository.create(WORKSPACE_A, inWorkspaceA);
+    void findByIdsIsScopedPerProject() {
+        Term inProjectA = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        repository.create(PROJECT_A, inProjectA);
 
-        assertEquals(List.of(), repository.findByIds(WORKSPACE_B, List.of(inWorkspaceA.id().value())));
+        assertEquals(List.of(), repository.findByIds(PROJECT_B, List.of(inProjectA.id().value())));
     }
 
     /**
@@ -818,9 +818,9 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByIdsReturnsExactlyOneResolvedTermForASubjectWithSeveralIdentifiers() {
         TermId id = freshId();
-        givenTermWithTwoIdentifiers(WORKSPACE_A, id, "TERM-1", "TERM-1-ALT");
+        givenTermWithTwoIdentifiers(PROJECT_A, id, "TERM-1", "TERM-1-ALT");
 
-        List<ResolveTerms.ResolvedTerm> resolved = repository.findByIds(WORKSPACE_A, List.of(id.value()));
+        List<ResolveTerms.ResolvedTerm> resolved = repository.findByIds(PROJECT_A, List.of(id.value()));
 
         assertEquals(1, resolved.size());
         assertEquals(id.value(), resolved.get(0).id());
@@ -836,9 +836,9 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findByIdsResolvesATermWithoutAnyPrefLabel() {
         TermId id = freshId();
-        givenTermWithoutPrefLabel(WORKSPACE_A, id, "TERM-1");
+        givenTermWithoutPrefLabel(PROJECT_A, id, "TERM-1");
 
-        List<ResolveTerms.ResolvedTerm> resolved = repository.findByIds(WORKSPACE_A, List.of(id.value()));
+        List<ResolveTerms.ResolvedTerm> resolved = repository.findByIds(PROJECT_A, List.of(id.value()));
 
         assertEquals(List.of(new ResolveTerms.ResolvedTerm(id.value(), new TermCode("TERM-1"))), resolved);
     }
@@ -889,10 +889,10 @@ class KognioRdfTermRepositoryTest {
     @Test
     void findAllSkipsATermWithABlankNodeSubjectInsteadOfCrashing() {
         Term validTerm = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        repository.create(WORKSPACE_A, validTerm);
-        givenBlankNodeTerm(WORKSPACE_A, "TERM-9", "Blinder Fleck", "def blank");
+        repository.create(PROJECT_A, validTerm);
+        givenBlankNodeTerm(PROJECT_A, "TERM-9", "Blinder Fleck", "def blank");
 
-        List<Term> all = repository.findAll(WORKSPACE_A);
+        List<Term> all = repository.findAll(PROJECT_A);
 
         assertEquals(List.of(validTerm), all);
     }
@@ -900,9 +900,9 @@ class KognioRdfTermRepositoryTest {
     /** Same guard, exercised through {@code findByCode} instead of {@code findAll}. */
     @Test
     void findByCodeReturnsEmptyForATermWithABlankNodeSubjectInsteadOfCrashing() {
-        givenBlankNodeTerm(WORKSPACE_A, "TERM-9", "Blinder Fleck", "def blank");
+        givenBlankNodeTerm(PROJECT_A, "TERM-9", "Blinder Fleck", "def blank");
 
-        Optional<Term> found = repository.findByCode(WORKSPACE_A, new TermCode("TERM-9"));
+        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-9"));
 
         assertEquals(Optional.empty(), found);
     }
@@ -944,7 +944,7 @@ class KognioRdfTermRepositoryTest {
     @Test
     void createRecordsExactlyOneRevisionWithAQueryableHead() {
         TermId id = freshId();
-        repository.create(WORKSPACE_A, new Term(id, new TermCode("TERM-1"), "Gutschrift",
+        repository.create(PROJECT_A, new Term(id, new TermCode("TERM-1"), "Gutschrift",
                 "Eine dem Kundenkonto gutgeschriebene Erstattung.", null));
 
         List<String> revisions = revisionsOf(id);
@@ -963,10 +963,10 @@ class KognioRdfTermRepositoryTest {
     void updateRecordsExactlyOneFurtherRevisionAndAdvancesTheHead() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
         List<String> headAfterCreate = headsOf(id);
 
-        repository.update(WORKSPACE_A, code, null, "Zweite Definition.", null);
+        repository.update(PROJECT_A, code, null, "Zweite Definition.", null);
 
         List<String> revisions = revisionsOf(id);
         assertEquals(2, revisions.size(), "update must record exactly one more revision");
@@ -989,11 +989,11 @@ class KognioRdfTermRepositoryTest {
     void updateWithNoFieldsIsANoOpThatRecordsNoRevision() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A,
+        repository.create(PROJECT_A,
                 new Term(id, code, "Gutschrift", "Erste Definition.", null));
         List<String> headAfterCreate = headsOf(id);
 
-        Term result = repository.update(WORKSPACE_A, code, null, null, null);
+        Term result = repository.update(PROJECT_A, code, null, null, null);
 
         assertEquals(1, revisionsOf(id).size(), "a field-less update must record no further revision");
         assertEquals(headAfterCreate, headsOf(id), "a field-less update must not move the head");
@@ -1017,22 +1017,22 @@ class KognioRdfTermRepositoryTest {
     void updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null));
 
         AtomicBoolean pending = new AtomicBoolean(true);
         TermRepository racing = KognioRdfTermRepositoryFactory.over(
                 new HeadAdvancingLifecycle(lifecycle, () -> {
                     if (pending.compareAndSet(true, false)) {
-                        repository.update(WORKSPACE_A, code, null, "Definition des Konkurrenten.", null);
+                        repository.update(PROJECT_A, code, null, "Definition des Konkurrenten.", null);
                     }
                 }));
 
-        Term result = racing.update(WORKSPACE_A, code, "Gutschriftsbeleg", null, null);
+        Term result = racing.update(PROJECT_A, code, "Gutschriftsbeleg", null, null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         Term expected = new Term(id, code, "Gutschriftsbeleg", "Definition des Konkurrenten.", null);
         assertEquals(expected, result, "the retry must return the state it re-read, not its stale first read");
-        assertEquals(Optional.of(expected), repository.findByCode(WORKSPACE_A, code),
+        assertEquals(Optional.of(expected), repository.findByCode(PROJECT_A, code),
                 "both writers' changes must survive - neither patch is silently lost");
         assertEquals(3, revisionsOf(id).size(),
                 "create, the concurrent update and the retried update - the losing attempt records none");
@@ -1152,23 +1152,23 @@ class KognioRdfTermRepositoryTest {
     void updateReflectsAConcurrentWriteThatCommitsBetweenTheStateAndHeadReads() {
         TermId id = freshId();
         TermCode code = new TermCode("TERM-1");
-        repository.create(WORKSPACE_A, new Term(id, code, "Alt", "Erste Definition.", null));
+        repository.create(PROJECT_A, new Term(id, code, "Alt", "Erste Definition.", null));
 
         AtomicBoolean pending = new AtomicBoolean(true);
         TermRepository racing = KognioRdfTermRepositoryFactory.over(
                 new SelectRacingLifecycle(lifecycle, () -> {
                     if (pending.compareAndSet(true, false)) {
-                        repository.update(WORKSPACE_A, code, "Neu", null, null);
+                        repository.update(PROJECT_A, code, "Neu", null, null);
                     }
                 }));
 
-        Term result = racing.update(WORKSPACE_A, code, null, "Ueberarbeitete Definition.", null);
+        Term result = racing.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         Term expected = new Term(id, code, "Neu", "Ueberarbeitete Definition.", null);
         assertEquals(expected, result,
                 "the returned term must carry the concurrent writer's fresh prefLabel, not a stale read");
-        assertEquals(Optional.of(expected), repository.findByCode(WORKSPACE_A, code),
+        assertEquals(Optional.of(expected), repository.findByCode(PROJECT_A, code),
                 "both writers' changes must survive - neither patch is silently lost");
     }
 
@@ -1304,7 +1304,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     private List<String> selectIris(String query) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();

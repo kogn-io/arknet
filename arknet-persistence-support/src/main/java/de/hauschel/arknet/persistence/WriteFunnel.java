@@ -207,7 +207,7 @@ public final class WriteFunnel {
      * Supplier, UnaryOperator, Consumer)} instead (see that method and the class javadoc's
      * "why the translator is a parameter").
      *
-     * @param dataset         the dataset (workspace) to write into
+     * @param dataset         the dataset (project) to write into
      * @param graphIri        the named graph the checks are scoped to
      * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
      *                        (a {@code de.hauschel.arknet.kernel.ResourceId} value)
@@ -234,7 +234,7 @@ public final class WriteFunnel {
      * Runs a guarded create: the subject must not exist yet and the business code must still be
      * free; only then does {@code body} run, inside the same write transaction as both checks.
      *
-     * @param dataset         the dataset (workspace) to write into
+     * @param dataset         the dataset (project) to write into
      * @param graphIri        the named graph the checks are scoped to
      * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
      *                        (a {@code de.hauschel.arknet.kernel.ResourceId} value)
@@ -338,7 +338,7 @@ public final class WriteFunnel {
      * inside the same write transaction as the check. No code check (an update never rewrites
      * the code triple through this path) and no conflict translation (see the class javadoc).
      *
-     * @param dataset         the dataset (workspace) to write into
+     * @param dataset         the dataset (project) to write into
      * @param graphIri        the named graph the check is scoped to
      * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
      * @param candidate       the instance graph handed to the SHACL gate before the transaction
@@ -384,7 +384,7 @@ public final class WriteFunnel {
      * catch and translated into the identical {@code headMismatch} signal - the caller cannot
      * tell, and does not need to, which of the two actually happened.</p>
      *
-     * @param dataset         the dataset (workspace) to write into
+     * @param dataset         the dataset (project) to write into
      * @param graphIri        the named graph the check is scoped to
      * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
      * @param expectedHead    the {@code arkprov:head} revision IRI the caller last observed for

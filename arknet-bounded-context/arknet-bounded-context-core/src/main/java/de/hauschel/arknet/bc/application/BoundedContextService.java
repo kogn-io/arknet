@@ -39,7 +39,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * bounded context via {@link ResourceIdFactory}; it never changes. The human-readable business
  * code ({@link BoundedContextCode}, {@code BC-N}) is assigned independently, where {@code N} is
  * one above the highest running number currently used in the target project (numbering is
- * independent per workspace, starting at 1). Linking a glossary term is idempotent - a term may
+ * independent per project, starting at 1). Linking a glossary term is idempotent - a term may
  * be linked to a bounded context at any time; the edge lives inside the aggregate and is
  * therefore carried along by every subsequent replace-by-identity write.</p>
  *
