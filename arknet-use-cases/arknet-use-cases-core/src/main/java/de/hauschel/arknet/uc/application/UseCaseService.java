@@ -44,7 +44,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * case via {@link ResourceIdFactory}; it never changes. The human-readable business code
  * ({@link UseCaseCode}, {@code UCn}) is assigned independently, where {@code n} is one above
  * the highest running number currently used in the target project (numbering is independent
- * per workspace, starting at 1).</p>
+ * per project, starting at 1).</p>
  *
  * <p><strong>Reference resolution (issue #89).</strong> {@code NewUseCase}'s actor/requirement
  * fields are raw human-typed strings, not domain refs - resolving them to the referenced

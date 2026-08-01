@@ -37,7 +37,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 public interface UpdateUseCase {
 
     /**
-     * Updates the use case identified by {@code code} within a workspace, leaving any
+     * Updates the use case identified by {@code code} within a project, leaving any
      * {@code null}/omitted argument unchanged.
      *
      * @param projectId       the project (architecture model) the use case lives in

@@ -127,14 +127,14 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void addNumbersRunningPerWorkspace() {
+    void addNumbersRunningPerProject() {
         assertEquals(new UseCaseCode("UC1"), service.add(WS, newUseCase("a")).code());
         assertEquals(new UseCaseCode("UC2"), service.add(WS, newUseCase("b")).code());
         assertEquals(new UseCaseCode("UC3"), service.add(WS, newUseCase("c")).code());
     }
 
     @Test
-    void addIsScopedPerWorkspace() {
+    void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
         service.add(WS, newUseCase("a"));
 

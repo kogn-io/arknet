@@ -58,7 +58,7 @@ class UseCaseMcpToolsTest {
         return new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/" + slug));
     }
 
-    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    /** Fake resolver: every call routes to the same fixed project, ignoring the origin. */
     private static final ProjectId PROJECT = new ProjectId("test-project");
 
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */

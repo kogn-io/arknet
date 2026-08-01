@@ -75,8 +75,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  */
 class KognioRdfUseCaseRepositoryTest {
 
-    private static final ProjectId WORKSPACE_A = new ProjectId("a");
-    private static final ProjectId WORKSPACE_B = new ProjectId("b");
+    private static final ProjectId PROJECT_A = new ProjectId("a");
+    private static final ProjectId PROJECT_B = new ProjectId("b");
 
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
@@ -132,8 +132,8 @@ class KognioRdfUseCaseRepositoryTest {
         repository.compareAndUpdate(projectId, head, updated);
     }
 
-    private void seed(ProjectId workspace, String graph, String triples) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
+    private void seed(ProjectId project, String graph, String triples) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update("INSERT DATA { GRAPH <" + graph + "> { " + triples + " } }");
                 return null;
@@ -142,40 +142,40 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /** Counts {@code arkreq:Step} resources in the use-cases graph - guards delete-by-edge. */
-    private long countSteps(ProjectId workspace) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
+    private long countSteps(ProjectId project) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             return handle.sparqlQuery().select("SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                     + "?s a <https://w3id.org/arknet/requirements#Step> } }").count();
         }
     }
 
-    private void seedRequirement(ProjectId workspace, String label) {
-        seed(workspace, REQUIREMENTS_GRAPH,
+    private void seedRequirement(ProjectId project, String label) {
+        seed(project, REQUIREMENTS_GRAPH,
                 "<https://w3id.org/arknet/model/requirement/" + label + "> "
                         + "a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + label + "\" .");
     }
 
-    private void seedHumanActor(ProjectId workspace, String slug, String prefLabel) {
-        seed(workspace, TERMS_GRAPH,
+    private void seedHumanActor(ProjectId project, String slug, String prefLabel) {
+        seed(project, TERMS_GRAPH,
                 "<https://w3id.org/arknet/model/term/" + slug + "> "
                         + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
                         + "<https://w3id.org/arknet/process#HumanActor> ; "
                         + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
     }
 
-    private void seedSystemActor(ProjectId workspace, String slug, String prefLabel) {
-        seed(workspace, TERMS_GRAPH,
+    private void seedSystemActor(ProjectId project, String slug, String prefLabel) {
+        seed(project, TERMS_GRAPH,
                 "<https://w3id.org/arknet/model/term/" + slug + "> "
                         + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
                         + "<https://w3id.org/arknet/process#SystemActor> ; "
                         + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
     }
 
-    private void seedReferences(ProjectId workspace) {
-        seedRequirement(workspace, "FR-1");
-        seedHumanActor(workspace, "customer", "Customer");
-        seedSystemActor(workspace, "payment-provider", "PaymentProvider");
+    private void seedReferences(ProjectId project) {
+        seedRequirement(project, "FR-1");
+        seedHumanActor(project, "customer", "Customer");
+        seedSystemActor(project, "payment-provider", "PaymentProvider");
     }
 
     private static UseCase placeOrder() {
@@ -195,10 +195,10 @@ class KognioRdfUseCaseRepositoryTest {
 
     @Test
     void createsAndFindsUseCaseByCodeWithStepsAndReferences() {
-        seedReferences(WORKSPACE_A);
+        seedReferences(PROJECT_A);
 
-        repository.create(WORKSPACE_A, placeOrder());
-        Optional<UseCase> found = repository.findByCode(WORKSPACE_A, CODE_1);
+        repository.create(PROJECT_A, placeOrder());
+        Optional<UseCase> found = repository.findByCode(PROJECT_A, CODE_1);
 
         assertTrue(found.isPresent());
         UseCase uc = found.orElseThrow();
@@ -223,15 +223,15 @@ class KognioRdfUseCaseRepositoryTest {
 
     @Test
     void findAllContainsAllSavedUseCases() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
         UseCase second = new UseCase(ID_2, CODE_2, "Reset password", "User resets password",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "User requests a reset link", List.of())), List.of());
-        repository.create(WORKSPACE_A, second);
+        repository.create(PROJECT_A, second);
 
-        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        List<UseCase> all = repository.findAll(PROJECT_A);
         assertEquals(2, all.size());
         assertTrue(all.stream().anyMatch(uc -> uc.code().equals(CODE_1)));
         assertTrue(all.stream().anyMatch(uc -> uc.code().equals(CODE_2)));
@@ -239,74 +239,74 @@ class KognioRdfUseCaseRepositoryTest {
 
     @Test
     void updateReplacesByIdentityAndLeavesNoOrphanSteps() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
         // placeOrder has 2 main steps + 1 extension step = 3 step resources.
-        assertEquals(3, countSteps(WORKSPACE_A));
+        assertEquals(3, countSteps(PROJECT_A));
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        replaceViaCompareAndUpdate(WORKSPACE_A, revised);
+        replaceViaCompareAndUpdate(PROJECT_A, revised);
 
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
-        UseCase found = repository.findByCode(WORKSPACE_A, CODE_1).orElseThrow();
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1).orElseThrow();
         assertEquals("Place order (revised)", found.title());
         assertEquals(1, found.steps().size());
         assertTrue(found.supportingActors().isEmpty());
         assertTrue(found.extensions().isEmpty());
         // The old opaque step resources must be gone - delete follows mainStep/extensionStep edges.
-        assertEquals(1, countSteps(WORKSPACE_A));
+        assertEquals(1, countSteps(PROJECT_A));
     }
 
     @Test
     void createRejectsExistingIdentity() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
         ResourceAlreadyExistsException ex = assertThrows(ResourceAlreadyExistsException.class,
-                () -> repository.create(WORKSPACE_A, placeOrder(ID_1, CODE_2)));
+                () -> repository.create(PROJECT_A, placeOrder(ID_1, CODE_2)));
 
         assertEquals(ID_1.value(), ex.id());
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A).size());
     }
 
     @Test
     void createRejectsDuplicateCode() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
         DuplicateUseCaseCodeException ex = assertThrows(DuplicateUseCaseCodeException.class,
-                () -> repository.create(WORKSPACE_A, placeOrder(ID_2, CODE_1)));
+                () -> repository.create(PROJECT_A, placeOrder(ID_2, CODE_1)));
 
         assertEquals(CODE_1, ex.code());
-        assertEquals(1, repository.findAll(WORKSPACE_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A).size());
     }
 
     @Test
     void updateRejectsMissingIdentity() {
-        seedReferences(WORKSPACE_A);
+        seedReferences(PROJECT_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.compareAndUpdate(WORKSPACE_A, null, placeOrder()));
+                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder()));
 
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
 
     // ---- compareAndUpdate: CAS guard against lost updates (issue #165) ----
 
     @Test
     void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
-        RevisionToken head = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
+        RevisionToken head = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.compareAndUpdate(WORKSPACE_A, head, revised);
+        repository.compareAndUpdate(PROJECT_A, head, revised);
 
-        assertEquals(Optional.of(revised), repository.findByCode(WORKSPACE_A, CODE_1));
+        assertEquals(Optional.of(revised), repository.findByCode(PROJECT_A, CODE_1));
     }
 
     /**
@@ -317,45 +317,45 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
-        RevisionToken staleHead = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
+        RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         UseCase concurrentlyRevised = new UseCase(ID_1, CODE_1, "Place order (concurrently revised)",
                 "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        replaceViaCompareAndUpdate(WORKSPACE_A, concurrentlyRevised);
+        replaceViaCompareAndUpdate(PROJECT_A, concurrentlyRevised);
 
         UseCase staleAttempt = new UseCase(ID_1, CODE_1, "Place order (stale attempt)",
                 "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> repository.compareAndUpdate(WORKSPACE_A, staleHead, staleAttempt));
-        assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(WORKSPACE_A, CODE_1));
+                () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt));
+        assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(PROJECT_A, CODE_1));
     }
 
     @Test
     void compareAndUpdateThrowsWhenTheIdentityDoesNotExistAtAll() {
-        seedReferences(WORKSPACE_A);
+        seedReferences(PROJECT_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.compareAndUpdate(WORKSPACE_A, null, placeOrder()));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
-        assertEquals(Optional.empty(), repository.findCurrentByCode(WORKSPACE_A, CODE_1));
+                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder()));
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1));
     }
 
     @Test
     void findByCodeReturnsEmptyForUnknownCode() {
-        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, new UseCaseCode("UC99")));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, new UseCaseCode("UC99")));
     }
 
     @Test
     void projectsAreIsolated() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
-        assertTrue(repository.findAll(WORKSPACE_B).isEmpty());
+        assertTrue(repository.findAll(PROJECT_B).isEmpty());
     }
 
     /**
@@ -368,16 +368,16 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void useCaseSurvivesItsPrimaryActorsPrefLabelBeingDeleted() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
-        deletePrefLabel(WORKSPACE_A, CUSTOMER.value());
+        deletePrefLabel(PROJECT_A, CUSTOMER.value());
 
-        Optional<UseCase> byCode = repository.findByCode(WORKSPACE_A, CODE_1);
+        Optional<UseCase> byCode = repository.findByCode(PROJECT_A, CODE_1);
         assertTrue(byCode.isPresent(), "findByCode must still return the use case");
         assertEquals(CUSTOMER, byCode.orElseThrow().primaryActor());
 
-        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        List<UseCase> all = repository.findAll(PROJECT_A);
         assertEquals(1, all.size(), "findAll must not silently drop the use case");
         assertEquals(CUSTOMER, all.get(0).primaryActor());
     }
@@ -389,19 +389,19 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void useCaseSurvivesItsPrimaryActorBeingRenamed() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
-        renamePrefLabel(WORKSPACE_A, CUSTOMER.value(), "Customer", "Kunde");
+        renamePrefLabel(PROJECT_A, CUSTOMER.value(), "Customer", "Kunde");
 
-        UseCase found = repository.findByCode(WORKSPACE_A, CODE_1).orElseThrow();
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1).orElseThrow();
         assertEquals(CUSTOMER, found.primaryActor());
     }
 
-    private void deletePrefLabel(ProjectId workspace, ResourceId subject) {
+    private void deletePrefLabel(ProjectId project, ResourceId subject) {
         String delete = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + subject.value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(delete);
                 return null;
@@ -409,12 +409,12 @@ class KognioRdfUseCaseRepositoryTest {
         }
     }
 
-    private void renamePrefLabel(ProjectId workspace, ResourceId subject, String oldLabel, String newLabel) {
+    private void renamePrefLabel(ProjectId project, ResourceId subject, String oldLabel, String newLabel) {
         String update = "DELETE { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
                 + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + oldLabel + "\" } } "
                 + "INSERT { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
                 + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + newLabel + "\" } } WHERE {}";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(workspace.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(update);
                 return null;
@@ -433,11 +433,11 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void findAllSkipsUseCaseWithBlankNodePrimaryActorInsteadOfFailingTheWholeList() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
         UseCaseCode orphanCode = new UseCaseCode("UC-ORPHAN");
-        seed(WORKSPACE_A, USE_CASES_GRAPH,
+        seed(PROJECT_A, USE_CASES_GRAPH,
                 "<https://w3id.org/arknet/id/uc-orphan> "
                         + "a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/title> \"Orphan use case\" ; "
@@ -445,11 +445,11 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<https://w3id.org/arknet/requirements#primaryActor> _:orphanActor ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + orphanCode.value() + "\" .");
 
-        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        List<UseCase> all = repository.findAll(PROJECT_A);
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
-        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, orphanCode));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, orphanCode));
     }
 
     /**
@@ -463,11 +463,11 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void findAllSkipsUseCaseWithNoStepsInsteadOfFailingTheWholeList() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
         UseCaseCode noStepsCode = new UseCaseCode("UC-NO-STEPS");
-        seed(WORKSPACE_A, USE_CASES_GRAPH,
+        seed(PROJECT_A, USE_CASES_GRAPH,
                 "<https://w3id.org/arknet/id/uc-no-steps> "
                         + "a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/title> \"No steps use case\" ; "
@@ -476,11 +476,11 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<" + CUSTOMER.value().value() + "> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + noStepsCode.value() + "\" .");
 
-        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        List<UseCase> all = repository.findAll(PROJECT_A);
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
-        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, noStepsCode));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, noStepsCode));
     }
 
     /**
@@ -497,11 +497,11 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void findAllSkipsUseCaseWithDuplicateStepPositionsInsteadOfFailingTheWholeList() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
 
         UseCaseCode duplicatePositionCode = new UseCaseCode("UC-DUP-POSITION");
-        seed(WORKSPACE_A, USE_CASES_GRAPH,
+        seed(PROJECT_A, USE_CASES_GRAPH,
                 "<https://w3id.org/arknet/id/uc-dup-position> "
                         + "a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/title> \"Duplicate position use case\" ; "
@@ -512,31 +512,31 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<https://w3id.org/arknet/id/uc-dup-position-step-1> , "
                         + "<https://w3id.org/arknet/id/uc-dup-position-step-2> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + duplicatePositionCode.value() + "\" .");
-        seed(WORKSPACE_A, USE_CASES_GRAPH,
+        seed(PROJECT_A, USE_CASES_GRAPH,
                 "<https://w3id.org/arknet/id/uc-dup-position-step-1> "
                         + "a <https://w3id.org/arknet/requirements#Step> ; "
                         + "<https://w3id.org/arknet/requirements#position> \"1\"^^<"
                         + XSD.INTEGER + "> ; "
                         + "<https://w3id.org/arknet/requirements#stepText> \"Customer selects items\" ; "
                         + "<https://w3id.org/arknet/requirements#stepRealises> <" + FR_1.value() + "> .");
-        seed(WORKSPACE_A, USE_CASES_GRAPH,
+        seed(PROJECT_A, USE_CASES_GRAPH,
                 "<https://w3id.org/arknet/id/uc-dup-position-step-2> "
                         + "a <https://w3id.org/arknet/requirements#Step> ; "
                         + "<https://w3id.org/arknet/requirements#position> \"1\"^^<"
                         + XSD.INTEGER + "> ; "
                         + "<https://w3id.org/arknet/requirements#stepText> \"Customer confirms and pays\" .");
 
-        List<UseCase> all = repository.findAll(WORKSPACE_A);
+        List<UseCase> all = repository.findAll(PROJECT_A);
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
-        assertEquals(Optional.empty(), repository.findByCode(WORKSPACE_A, duplicatePositionCode));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, duplicatePositionCode));
     }
 
     @Test
     void createRejectsStepViolatingShaclShapes() {
-        seedRequirement(WORKSPACE_A, "FR-1");
-        seedHumanActor(WORKSPACE_A, "customer", "Customer");
+        seedRequirement(PROJECT_A, "FR-1");
+        seedHumanActor(PROJECT_A, "customer", "Customer");
 
         // stepText "ok" is non-blank (valid domain) but below the shape's minLength of 3.
         UseCase invalid = new UseCase(ID_1, CODE_1, "Bad", "Some goal", null, null,
@@ -544,8 +544,8 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(new Step(1, "ok", List.of(FR_1_REF))), List.of());
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> repository.create(WORKSPACE_A, invalid));
-        assertTrue(repository.findAll(WORKSPACE_A).isEmpty());
+                () -> repository.create(PROJECT_A, invalid));
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
 
     /**
@@ -726,17 +726,17 @@ class KognioRdfUseCaseRepositoryTest {
      */
     @Test
     void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
-        seedReferences(WORKSPACE_A);
-        repository.create(WORKSPACE_A, placeOrder());
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder());
         String subject = ID_1.value().value();
 
         assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
-        RevisionToken headAfterCreate = repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head();
+        RevisionToken headAfterCreate = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.compareAndUpdate(WORKSPACE_A, headAfterCreate, revised);
+        repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised);
 
         List<String> revisions = revisionsOf(subject);
         assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");
@@ -744,7 +744,7 @@ class KognioRdfUseCaseRepositoryTest {
                 + "> { <" + subject + "> <" + ArkprovVocabulary.HEAD + "> ?v } }");
         assertEquals(1, heads.size(), "the head is rewritten, never duplicated");
         assertTrue(revisions.contains(heads.get(0)), "the head must be one of the resource's revisions");
-        assertEquals(heads.get(0), repository.findCurrentByCode(WORKSPACE_A, CODE_1).orElseThrow().head().value(),
+        assertEquals(heads.get(0), repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head().value(),
                 "findCurrentByCode must observe the advanced head");
     }
 
@@ -755,7 +755,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     private List<String> selectIris(String query) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE_A.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> ((io.kogn.rdf.terms.IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();

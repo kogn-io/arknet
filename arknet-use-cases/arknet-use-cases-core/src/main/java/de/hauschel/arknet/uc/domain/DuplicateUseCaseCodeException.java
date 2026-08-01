@@ -10,7 +10,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Thrown when {@link de.hauschel.arknet.uc.application.port.out.UseCaseRepository#create}
  * is called with a {@link UseCaseCode} that already labels a different use case in the
- * targeted workspace.
+ * targeted project.
  *
  * <p>Distinct from {@link ResourceAlreadyExistsException}: that one flags an opaque-identity
  * collision (a programming error - identities are minted once and never reused), while this one

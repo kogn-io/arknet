@@ -22,7 +22,7 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 /**
  * Out-adapter: {@link RequirementLookup} backed by the kognio-rdf substrate, resolving a
  * requirement's human-typed {@code dcterms:identifier} (e.g. {@code FR-1}) to its opaque subject
- * {@link ResourceId} within the shared workspace store.
+ * {@link ResourceId} within the shared project store.
  *
  * <p><strong>Strict cross-BC requirement resolution (issue #89).</strong> Use-cases and
  * requirements share one per-project store. This adapter looks up a code by

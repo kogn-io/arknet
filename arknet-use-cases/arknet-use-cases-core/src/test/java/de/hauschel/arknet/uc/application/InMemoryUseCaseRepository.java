@@ -25,7 +25,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * In-memory test double for {@link UseCaseRepository}.
  *
  * <p>A hand-rolled fake (not a mock): it actually stores use cases, keyed by
- * workspace then opaque identity, so the service's policy can be exercised end-to-end.
+ * project then opaque identity, so the service's policy can be exercised end-to-end.
  * Insertion order is preserved to make {@link #findAll(ProjectId)} assertions
  * deterministic.</p>
  *

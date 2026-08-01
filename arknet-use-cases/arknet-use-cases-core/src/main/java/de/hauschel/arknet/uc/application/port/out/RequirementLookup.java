@@ -8,7 +8,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: resolves a requirement's human-typed business code to its opaque subject identity
- * in the shared workspace store.
+ * in the shared project store.
  *
  * <p>This is the strict cross-BC reference resolution the use-cases component needs for
  * {@code arkreq:stepRealises} (issue #89, the use-cases analogue of requirements' #77): the
