@@ -35,18 +35,30 @@ class TraceabilityRendererTest {
     private static final String USES_TERM = ARKREQ + "usesTerm";
     private static final String MAIN_STEP = ARKREQ + "mainStep";
     private static final String STEP_REALISES = ARKREQ + "stepRealises";
+    private static final String PRIMARY_ACTOR = ARKREQ + "primaryActor";
+    private static final String SUPPORTING_ACTOR = ARKREQ + "supportingActor";
+    private static final String USE_CASE_GOAL = ARKREQ + "useCaseGoal";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
 
     private static final String FR_1 = ID + "fr-1";
     private static final String FR_2 = ID + "fr-2";
     private static final String FR_3 = ID + "fr-3";
+    private static final String FR_10 = ID + "fr-10";
     private static final String TERM_1 = ID + "term-1";
     private static final String TERM_8 = ID + "term-8";
     private static final String TERM_9 = ID + "term-9";
     private static final String TERM_10 = ID + "term-10";
+    private static final String TERM_A = ID + "term-a";
+    private static final String TERM_B = ID + "term-b";
+    private static final String TERM_C = ID + "term-c";
     private static final String STEP_1 = ID + "step-1";
     private static final String UC_1 = ID + "uc-1";
+    private static final String UC_A = ID + "uc-a";
+    private static final String UC_B = ID + "uc-b";
+    private static final String UC_10 = ID + "uc-10";
+    private static final String ACTOR_A = ID + "actor-a";
+    private static final String ACTOR_B = ID + "actor-b";
     private static final String BC_2 = ID + "bc-2";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
@@ -165,6 +177,102 @@ class TraceabilityRendererTest {
 
         assertThat(impact).contains("## Transitively affected (0)");
         assertThat(impact).contains("- none");
+    }
+
+    @Test
+    void actorUseCaseMatrixReportsBothDirectionsOfActorInvolvement() {
+        TraceabilityGraph graph = TraceabilityGraph.of(actorUseCaseFixtureSnapshot());
+
+        String matrix = renderer.actorUseCaseMatrix(WORKSPACE, graph);
+
+        assertThat(matrix).contains("# Actor/use-case matrix -- project sample-project");
+        assertThat(matrix).contains("## Actors (2)");
+        assertThat(matrix).contains("## Use cases (2)");
+        String actorsSection = matrix.substring(matrix.indexOf("## Actors"), matrix.indexOf("## Use cases"));
+        assertThat(actorsSection).contains("ACTOR-A").contains("use cases : UCA, UCB");
+        assertThat(actorsSection).contains("ACTOR-B").contains("use cases : UCA");
+        String useCasesSection = matrix.substring(matrix.indexOf("## Use cases"));
+        assertThat(useCasesSection).contains("UCA").contains("actors    : ACTOR-A, ACTOR-B");
+        assertThat(useCasesSection).contains("UCB").contains("actors    : ACTOR-A");
+    }
+
+    @Test
+    void actorUseCaseMatrixReportsNoneForAProjectWithoutUseCases() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+
+        String matrix = renderer.actorUseCaseMatrix(WORKSPACE, graph);
+
+        assertThat(matrix).contains("## Actors (0)").contains("## Use cases (1)");
+    }
+
+    @Test
+    void termCooccurrenceFindsTermsNamedTogetherInRequirementAndUseCaseText() {
+        TraceabilityGraph graph = TraceabilityGraph.of(termCooccurrenceFixtureSnapshot());
+
+        String report = renderer.termCooccurrence(WORKSPACE, graph);
+
+        assertThat(report).contains("# Term co-occurrence -- project sample-project");
+        assertThat(report).contains("## Term pairs named together in the same text (1)");
+        assertThat(report).contains("TERM-A").contains("TERM-B").contains("2 text(s)");
+        assertThat(report).contains("FR-10").contains("UC10");
+        assertThat(report).doesNotContain("TERM-C");
+    }
+
+    @Test
+    void termCooccurrenceReportsNoneWhenNoTwoTermsShareAText() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+
+        String report = renderer.termCooccurrence(WORKSPACE, graph);
+
+        assertThat(report).contains("## Term pairs named together in the same text (0)");
+        assertThat(report).contains("- none");
+    }
+
+    private static StoreSnapshot actorUseCaseFixtureSnapshot() {
+        return StoreSnapshot.of(List.of(
+                iri(ACTOR_A, RDF_TYPE, SKOS + "Concept"),
+                lit(ACTOR_A, PREF_LABEL, "Customer"),
+                lit(ACTOR_A, IDENTIFIER, "ACTOR-A"),
+
+                iri(ACTOR_B, RDF_TYPE, SKOS + "Concept"),
+                lit(ACTOR_B, PREF_LABEL, "Support agent"),
+                lit(ACTOR_B, IDENTIFIER, "ACTOR-B"),
+
+                iri(UC_A, RDF_TYPE, ARKREQ + "UseCase"),
+                lit(UC_A, TITLE, "Place order"),
+                lit(UC_A, IDENTIFIER, "UCA"),
+                iri(UC_A, PRIMARY_ACTOR, ACTOR_A),
+                iri(UC_A, SUPPORTING_ACTOR, ACTOR_B),
+
+                iri(UC_B, RDF_TYPE, ARKREQ + "UseCase"),
+                lit(UC_B, TITLE, "Cancel order"),
+                lit(UC_B, IDENTIFIER, "UCB"),
+                iri(UC_B, PRIMARY_ACTOR, ACTOR_A)));
+    }
+
+    private static StoreSnapshot termCooccurrenceFixtureSnapshot() {
+        return StoreSnapshot.of(List.of(
+                iri(TERM_A, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_A, PREF_LABEL, "Kunde"),
+                lit(TERM_A, IDENTIFIER, "TERM-A"),
+
+                iri(TERM_B, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_B, PREF_LABEL, "Bestellung"),
+                lit(TERM_B, IDENTIFIER, "TERM-B"),
+
+                iri(TERM_C, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_C, PREF_LABEL, "Vertrag"),
+                lit(TERM_C, IDENTIFIER, "TERM-C"),
+
+                iri(FR_10, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_10, TITLE, "Bestandsdaten"),
+                lit(FR_10, IDENTIFIER, "FR-10"),
+                lit(FR_10, DESCRIPTION, "Der Kunde sieht seine Bestellung ein."),
+
+                iri(UC_10, RDF_TYPE, ARKREQ + "UseCase"),
+                lit(UC_10, TITLE, "View order"),
+                lit(UC_10, IDENTIFIER, "UC10"),
+                lit(UC_10, USE_CASE_GOAL, "Kunde bestaetigt die Bestellung")));
     }
 
     private static StoreSnapshot fixtureSnapshot() {

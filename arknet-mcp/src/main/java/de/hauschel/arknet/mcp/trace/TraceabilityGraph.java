@@ -36,7 +36,10 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/bounded-context prose
  * ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}/{@code arkddd:domainVision}) that
  * {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to
- * (issue #185).
+ * (issue #185). {@code actor_usecase_matrix} needs the {@code primaryActor}/{@code
+ * supportingActor} edges in the <em>forward</em> direction too ({@link #actorsOf(String)}/{@link
+ * #useCasesOf(String)}), and {@code term_cooccurrence} reuses the same prose-scanning idea for a
+ * use case's {@code arkreq:useCaseGoal} ({@link #useCaseProseTexts(String)}, issue #108).
  *
  * <p>Built once per read from a {@link StoreSnapshot} - the same generic {@code SELECT ?s ?p
  * ?o} {@link de.hauschel.arknet.mcp.store.StoreReader} already reads for {@code
@@ -76,6 +79,7 @@ public final class TraceabilityGraph {
     private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
     private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
+    private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
     // The three arkarch: edges an architecture decision owns (issue #69). Unlike ArkreqVocabulary/
@@ -94,6 +98,7 @@ public final class TraceabilityGraph {
 
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE;
+    private static final String USE_CASE_TYPE = ArkreqVocabulary.USE_CASE_TYPE;
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
@@ -220,6 +225,47 @@ public final class TraceabilityGraph {
         return List.copyOf(useCases);
     }
 
+    /** @return the IRIs of every {@code arkreq:UseCase}, sorted. */
+    public List<String> useCaseIris() {
+        return subjectsOfType(USE_CASE_TYPE);
+    }
+
+    /**
+     * The actor(s) a use case references: its {@code arkreq:primaryActor} plus every
+     * {@code arkreq:supportingActor} - the forward direction of the same two edges
+     * {@link #DEPENDENT_EDGE_PREDICATES} already traverses backwards for {@link #dependents(String)}
+     * (issue #108).
+     *
+     * @return the actor term IRIs, sorted, deduplicated
+     */
+    public List<String> actorsOf(String useCaseIri) {
+        Objects.requireNonNull(useCaseIri, "useCaseIri");
+        return outgoingBySubject.getOrDefault(useCaseIri, List.of()).stream()
+                .filter(t -> PRIMARY_ACTOR.equals(t.predicate()) || SUPPORTING_ACTOR.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * The use case(s) an actor plays a role in, as primary or supporting actor - the reverse
+     * lookup of {@link #actorsOf(String)} (issue #108).
+     *
+     * @return the use-case IRIs, sorted, deduplicated
+     */
+    public List<String> useCasesOf(String actorIri) {
+        Objects.requireNonNull(actorIri, "actorIri");
+        return incomingByObject.getOrDefault(actorIri, List.of()).stream()
+                .filter(t -> PRIMARY_ACTOR.equals(t.predicate()) || SUPPORTING_ACTOR.equals(t.predicate()))
+                .map(Triple::subject)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     /**
      * @return {@code true} if a term is used by a requirement ({@code arkreq:usesTerm}), plays
      *         an actor role in a use case ({@code arkreq:primaryActor}/
@@ -269,6 +315,15 @@ public final class TraceabilityGraph {
      */
     public List<String> boundedContextProseTexts(String boundedContextIri) {
         return literals(Objects.requireNonNull(boundedContextIri, "boundedContextIri"), DOMAIN_VISION);
+    }
+
+    /**
+     * @return the {@code arkreq:useCaseGoal} text of a use case - the closest thing a use case
+     *         has to a description - for {@code term_cooccurrence} to scan alongside a
+     *         requirement's prose (issue #108)
+     */
+    public List<String> useCaseProseTexts(String useCaseIri) {
+        return literals(Objects.requireNonNull(useCaseIri, "useCaseIri"), USE_CASE_GOAL);
     }
 
     /** @return the {@code prefLabel}/{@code title} label of every term IRI that carries one. */

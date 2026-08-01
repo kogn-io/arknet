@@ -4,11 +4,15 @@
 package de.hauschel.arknet.mcp.trace;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ProjectId;
@@ -18,8 +22,8 @@ import de.hauschel.arknet.mcp.store.StoreResource;
 
 /**
  * Renders the compact, token-cheap text digests {@code trace_matrix}/{@code orphan_check}/
- * {@code impact_analysis} return, given a {@link TraceabilityGraph} already built over one
- * project's statements.
+ * {@code impact_analysis}/{@code actor_usecase_matrix}/{@code term_cooccurrence} return, given a
+ * {@link TraceabilityGraph} already built over one project's statements.
  *
  * <p>Pure: it consumes only a {@link TraceabilityGraph} plus a {@link Prefixes} resolver, so it
  * is unit-testable without any store I/O - the same split {@link
@@ -126,6 +130,130 @@ public final class TraceabilityRenderer {
         return out.toString();
     }
 
+    /**
+     * Renders {@code actor_usecase_matrix}: the raw bipartite view of which actor plays a role
+     * (primary or supporting) in which use case, in both directions - no clustering, no verdict
+     * about bounded-context boundaries, just the {@code arkreq:primaryActor}/{@code
+     * supportingActor} edges as data for a human or agent to draw that boundary themselves
+     * (issue #108).
+     *
+     * @param projectId the project the graph was read from
+     * @param graph       the traceability graph to report on
+     * @return the digest text
+     */
+    public String actorUseCaseMatrix(ProjectId projectId, TraceabilityGraph graph) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(graph, "graph");
+        List<String> useCaseIris = graph.useCaseIris();
+        Set<String> actorIris = new TreeSet<>();
+        for (String useCaseIri : useCaseIris) {
+            actorIris.addAll(graph.actorsOf(useCaseIri));
+        }
+
+        StringBuilder out = new StringBuilder();
+        out.append("# Actor/use-case matrix -- project ").append(projectId.value()).append('\n');
+        out.append("\n## Actors (").append(actorIris.size()).append(")\n");
+        if (actorIris.isEmpty()) {
+            out.append("- none\n");
+        }
+        for (String actorIri : actorIris) {
+            out.append("- ").append(displayLine(graph, actorIri)).append('\n');
+            out.append("    use cases : ").append(codesOrNone(graph, graph.useCasesOf(actorIri))).append('\n');
+        }
+        out.append("\n## Use cases (").append(useCaseIris.size()).append(")\n");
+        if (useCaseIris.isEmpty()) {
+            out.append("- none\n");
+        }
+        for (String useCaseIri : useCaseIris) {
+            out.append("- ").append(displayLine(graph, useCaseIri)).append('\n');
+            out.append("    actors    : ").append(codesOrNone(graph, graph.actorsOf(useCaseIri))).append('\n');
+        }
+        return out.toString();
+    }
+
+    /**
+     * Renders {@code term_cooccurrence}: which glossary terms are named together in the same
+     * requirement or use-case text - literal text co-occurrence, no comparison against the model's
+     * edges. Raw data for the question "is this one term or two homonyms with a different meaning
+     * per context?", deliberately stopping short of any clustering verdict (issue #108).
+     *
+     * @param projectId the project the graph was read from
+     * @param graph       the traceability graph to report on
+     * @return the digest text
+     */
+    public String termCooccurrence(ProjectId projectId, TraceabilityGraph graph) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(graph, "graph");
+        List<Cooccurrence> pairs = termCooccurrences(graph);
+
+        StringBuilder out = new StringBuilder();
+        out.append("# Term co-occurrence -- project ").append(projectId.value()).append('\n');
+        out.append("\n## Term pairs named together in the same text (").append(pairs.size()).append(")\n");
+        if (pairs.isEmpty()) {
+            out.append("- none\n");
+            return out.toString();
+        }
+        for (Cooccurrence pair : pairs) {
+            out.append("- ").append(displayLine(graph, pair.firstTermIri()))
+                    .append(" + ").append(displayLine(graph, pair.secondTermIri()))
+                    .append(" -- ").append(pair.sourceIris().size()).append(" text(s): ")
+                    .append(pair.sourceIris().stream()
+                            .map(iri -> handle(graph, iri))
+                            .sorted()
+                            .collect(Collectors.joining(", ")))
+                    .append('\n');
+        }
+        return out.toString();
+    }
+
+    /**
+     * Scans every requirement's prose ({@link TraceabilityGraph#requirementProseTexts(String)})
+     * and every use case's goal ({@link TraceabilityGraph#useCaseProseTexts(String)}) for term
+     * mentions via the same {@link LabelMentions} engine {@code orphan_check} uses, and pairs up
+     * every two terms found together in one text string - the literal unit of "co-occurrence"
+     * (issue #108).
+     */
+    private List<Cooccurrence> termCooccurrences(TraceabilityGraph graph) {
+        Map<String, String> termLabels = graph.termLabels();
+        if (termLabels.isEmpty()) {
+            return List.of();
+        }
+        LabelMentions<String> matcher = LabelMentions.of(
+                termLabels.keySet().stream().sorted().toList(), termLabels::get);
+
+        Map<TermPair, Set<String>> sourcesByPair = new LinkedHashMap<>();
+        for (String requirementIri : graph.requirementIris()) {
+            for (String text : graph.requirementProseTexts(requirementIri)) {
+                recordCooccurrences(matcher, text, requirementIri, sourcesByPair);
+            }
+        }
+        for (String useCaseIri : graph.useCaseIris()) {
+            for (String text : graph.useCaseProseTexts(useCaseIri)) {
+                recordCooccurrences(matcher, text, useCaseIri, sourcesByPair);
+            }
+        }
+
+        return sourcesByPair.entrySet().stream()
+                .map(entry -> new Cooccurrence(
+                        entry.getKey().firstTermIri(), entry.getKey().secondTermIri(), Set.copyOf(entry.getValue())))
+                .sorted(Comparator.comparing(Cooccurrence::firstTermIri).thenComparing(Cooccurrence::secondTermIri))
+                .toList();
+    }
+
+    private void recordCooccurrences(
+            LabelMentions<String> matcher, String text, String sourceIri, Map<TermPair, Set<String>> sourcesByPair) {
+        if (text == null) {
+            return;
+        }
+        List<String> mentioned = matcher.mentionedIn(List.of(text)).stream().sorted().toList();
+        for (int i = 0; i < mentioned.size(); i++) {
+            for (int j = i + 1; j < mentioned.size(); j++) {
+                TermPair pair = new TermPair(mentioned.get(i), mentioned.get(j));
+                sourcesByPair.computeIfAbsent(pair, key -> new LinkedHashSet<>()).add(sourceIri);
+            }
+        }
+    }
+
     private void appendLines(StringBuilder out, TraceabilityGraph graph, List<String> iris) {
         if (iris.isEmpty()) {
             out.append("- none\n");
@@ -223,5 +351,17 @@ public final class TraceabilityRenderer {
      *                      {@code ubiquitousLanguageTerm}), for the "no ... edge" message
      */
     private record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
+    }
+
+    /** An unordered pair of term IRIs, canonicalised {@code firstTermIri < secondTermIri} by the caller. */
+    private record TermPair(String firstTermIri, String secondTermIri) {
+    }
+
+    /**
+     * @param firstTermIri  the lexicographically smaller of the two co-occurring term IRIs
+     * @param secondTermIri the lexicographically larger of the two co-occurring term IRIs
+     * @param sourceIris    every requirement/use-case IRI whose text names both terms
+     */
+    private record Cooccurrence(String firstTermIri, String secondTermIri, Set<String> sourceIris) {
     }
 }

@@ -243,4 +243,29 @@ class TraceabilityGraphTest {
     void dependentsOfTheOrphanTermIsEmpty() {
         assertThat(graph.dependents(TERM_2_IRI)).isEmpty();
     }
+
+    @Test
+    void useCaseIrisContainsUc1() {
+        assertThat(graph.useCaseIris()).containsExactly(UC_1_IRI);
+    }
+
+    @Test
+    void actorsOfUc1ContainsTheActor() {
+        assertThat(graph.actorsOf(UC_1_IRI)).containsExactly(ACTOR_IRI);
+    }
+
+    @Test
+    void useCasesOfTheActorContainsUc1() {
+        assertThat(graph.useCasesOf(ACTOR_IRI)).containsExactly(UC_1_IRI);
+    }
+
+    @Test
+    void useCasesOfATermThatIsNeverAnActorIsEmpty() {
+        assertThat(graph.useCasesOf(TERM_1_IRI)).isEmpty();
+    }
+
+    @Test
+    void useCaseProseTextsOfUc1ContainsItsGoal() {
+        assertThat(graph.useCaseProseTexts(UC_1_IRI)).containsExactly("Customer authenticates");
+    }
 }
