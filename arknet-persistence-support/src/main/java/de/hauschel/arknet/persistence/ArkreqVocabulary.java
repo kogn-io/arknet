@@ -62,11 +62,21 @@ public final class ArkreqVocabulary {
     /** {@code arkreq:acceptanceCriterion} - Requirement -&gt; one testable "Done when ..." criterion. */
     public static final String ACCEPTANCE_CRITERION = NAMESPACE + "acceptanceCriterion";
 
+    /**
+     * {@code arkreq:useCaseGoal} - the goal a use case's primary actor pursues; the closest thing
+     * a use case has to a description, so this is what the term-co-occurrence read path
+     * (issue #108) scans as its use-case prose text.
+     */
+    public static final String USE_CASE_GOAL = NAMESPACE + "useCaseGoal";
+
     /** {@code arkreq:FunctionalRequirement} - the type of a functional requirement. */
     public static final String FUNCTIONAL_REQUIREMENT_TYPE = NAMESPACE + "FunctionalRequirement";
 
     /** {@code arkreq:NonFunctionalRequirement} - the type of a non-functional requirement. */
     public static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = NAMESPACE + "NonFunctionalRequirement";
+
+    /** {@code arkreq:UseCase} - the type of a flow-oriented use case. */
+    public static final String USE_CASE_TYPE = NAMESPACE + "UseCase";
 
     /** {@code arkreq:Step} - the type of a use case's main-flow/extension step. */
     public static final String STEP_TYPE = NAMESPACE + "Step";

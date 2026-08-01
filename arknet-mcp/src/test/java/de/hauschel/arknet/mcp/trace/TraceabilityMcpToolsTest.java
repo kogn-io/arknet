@@ -204,4 +204,62 @@ class TraceabilityMcpToolsTest {
                     .hasMessageContaining("No resource found");
         });
     }
+
+    @Test
+    void actorUseCaseMatrixReportsTheActorAndItsUseCaseInBothDirections() {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            ProjectId ws = registerProject(context);
+            TermService terms = context.getBean(TermService.class);
+            UseCaseService useCases = context.getBean(UseCaseService.class);
+            TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
+
+            Term actor = terms.add(ws, new NewTerm("Customer", "A person placing an order.",
+                    new ActorFacet(ActorKind.HUMAN, "orderer")));
+            useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+                    List.of(), null, null,
+                    List.of(new NewStep(1, "Customer enters credentials", List.of())),
+                    List.of()));
+
+            String matrix = tools.actorUseCaseMatrix(null, ANCHOR);
+
+            assertThat(matrix).contains("# Actor/use-case matrix -- project " + ws.value());
+            String actorsSection = matrix.substring(matrix.indexOf("## Actors"), matrix.indexOf("## Use cases"));
+            assertThat(actorsSection).contains(actor.code().value()).contains("use cases : UC1");
+            String useCasesSection = matrix.substring(matrix.indexOf("## Use cases"));
+            assertThat(useCasesSection).contains("UC1").contains("actors    : " + actor.code().value());
+        });
+    }
+
+    @Test
+    void termCooccurrenceFindsTermsNamedTogetherInRequirementAndUseCaseText() {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            ProjectId ws = registerProject(context);
+            RequirementService requirements = context.getBean(RequirementService.class);
+            TermService terms = context.getBean(TermService.class);
+            UseCaseService useCases = context.getBean(UseCaseService.class);
+            TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
+
+            Term kunde = terms.add(ws, new NewTerm("Kunde", "A customer.",
+                    new ActorFacet(ActorKind.HUMAN, "orderer")));
+            Term bestellung = terms.add(ws, new NewTerm("Bestellung", "An order.", null));
+            terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null));
+
+            requirements.add(ws, new NewRequirement("Bestandsdaten",
+                    "Der Kunde sieht seine Bestellung ein.", RequirementType.FUNCTIONAL, null, null, null,
+                    List.of("Die Bestandsdaten werden korrekt angezeigt")));
+            useCases.add(ws, new NewUseCase("View order", "Kunde bestaetigt die Bestellung", null, null,
+                    "Kunde", List.of(), null, null,
+                    List.of(new NewStep(1, "Kunde ruft die Bestellung auf", List.of())),
+                    List.of()));
+
+            String report = tools.termCooccurrence(null, ANCHOR);
+
+            assertThat(report).contains("# Term co-occurrence -- project " + ws.value());
+            assertThat(report).contains("## Term pairs named together in the same text (1)");
+            assertThat(report).contains(kunde.code().value()).contains(bestellung.code().value());
+            assertThat(report).contains("2 text(s)");
+        });
+    }
 }

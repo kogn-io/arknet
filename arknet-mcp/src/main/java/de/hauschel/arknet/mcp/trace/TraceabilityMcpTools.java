@@ -17,7 +17,9 @@ import de.hauschel.arknet.mcp.store.StoreReader;
 
 /**
  * Read-only traceability reporting tools exposed over MCP: {@code trace_matrix}, {@code
- * orphan_check} and {@code impact_analysis} (issue #131).
+ * orphan_check}, {@code impact_analysis} (issue #131), {@code actor_usecase_matrix} and {@code
+ * term_cooccurrence} (issue #108, raw strategic-design read tools - no bounded-context
+ * clustering or verdict, just the data for a human or agent to draw that boundary).
  *
  * <p>Like {@link de.hauschel.arknet.mcp.store.StoreReportTools}, this is an in-adapter of the
  * composition root, not of a bounded context - it is a generic technical read path over
@@ -109,6 +111,42 @@ public final class TraceabilityMcpTools {
         final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
         final String targetIri = handleResolver.resolve(projectId, id);
         return renderer.impactAnalysis(projectId, readGraph(projectId), targetIri);
+    }
+
+    @McpTool(name = "actor_usecase_matrix",
+            description = "Raw bipartite view of actor/use-case involvement: for every actor, which use"
+                    + " case(s) reference it via arkreq:primaryActor/supportingActor; for every use case, its"
+                    + " full actor set. No clustering, no bounded-context judgement - a shared actor across"
+                    + " many use cases does not by itself mean they belong to the same context.",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+    public String actorUseCaseMatrix(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        return renderer.actorUseCaseMatrix(projectId, readGraph(projectId));
+    }
+
+    @McpTool(name = "term_cooccurrence",
+            description = "Which glossary terms are named together in the same requirement or use-case"
+                    + " text - literal text co-occurrence only, not a model-edge comparison. Raw data for"
+                    + " deciding whether two contexts use the same term the same way or a homonym with two"
+                    + " meanings; draws no conclusion itself.",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+    public String termCooccurrence(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Optional anchor identifying the project to analyse, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        return renderer.termCooccurrence(projectId, readGraph(projectId));
     }
 
     private TraceabilityGraph readGraph(final ProjectId projectId) {
