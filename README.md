@@ -33,7 +33,9 @@ The arknet MCP server exposes the model as tools over the Model Context
 Protocol. To use it from Claude Code together with the maintained skills
 (`/arknet:adr`, `/arknet:req-interview`), install the
 [`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin) plugin --
-this repository builds and ships only the server itself.
+this repository builds and ships only the server itself. Its
+[README](https://github.com/kogn-io/arknet-plugin#getting-started) has a
+"Getting started" walkthrough for actually using the skills once installed.
 
 ### Prerequisite: start the MCP server daemon
 
