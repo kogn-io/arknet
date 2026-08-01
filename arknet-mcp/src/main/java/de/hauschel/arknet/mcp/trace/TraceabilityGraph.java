@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
+import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
@@ -331,6 +332,56 @@ public final class TraceabilityGraph {
             labelOf(termIri).ifPresent(label -> labels.put(termIri, label));
         }
         return Map.copyOf(labels);
+    }
+
+    /**
+     * Every requirement/bounded-context prose mention of a glossary term the source does not
+     * link to (issue #185): a requirement's {@code dcterms:description}/{@code
+     * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, and a
+     * bounded context's {@code arkddd:domainVision} checked against its {@code
+     * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
+     * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
+     * {@link LabelMentions} engine, so a text mention means the same thing in both places.
+     *
+     * @return the unlinked mentions found across every requirement and bounded context
+     */
+    public List<UnlinkedMention> unlinkedMentions() {
+        Map<String, String> termLabels = termLabels();
+        if (termLabels.isEmpty()) {
+            return List.of();
+        }
+        LabelMentions<String> matcher = LabelMentions.of(
+                termLabels.keySet().stream().sorted().toList(), termLabels::get);
+
+        List<UnlinkedMention> found = new ArrayList<>();
+        for (String requirementIri : requirementIris()) {
+            Set<String> linked = new HashSet<>(usedTerms(requirementIri));
+            for (String termIri : matcher.mentionedIn(requirementProseTexts(requirementIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
+                }
+            }
+        }
+        for (String boundedContextIri : boundedContextIris()) {
+            Set<String> linked = new HashSet<>(linkedTerms(boundedContextIri));
+            for (String termIri : matcher.mentionedIn(boundedContextProseTexts(boundedContextIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(
+                            boundedContextIri, termIri, termLabels.get(termIri), "ubiquitousLanguageTerm"));
+                }
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    /**
+     * @param sourceIri     the requirement or bounded context whose prose names the term
+     * @param termIri       the mentioned term
+     * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
+     * @param edgeLocalName the missing edge's local name ({@code usesTerm} or
+     *                      {@code ubiquitousLanguageTerm}), for the "no ... edge" message
+     */
+    public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
     }
 
     private List<String> literals(String subject, String predicate) {
