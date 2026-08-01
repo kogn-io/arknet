@@ -56,7 +56,7 @@ public final class BoundedContextCards {
     private static ModelCard card(final BoundedContext context, final Glossary glossary) {
         final List<Badge> badges = new ArrayList<>();
         if (context.subdomain() != null) {
-            badges.add(new Badge("subdomain", Labels.humanise(context.subdomain().name())));
+            badges.add(new Badge(Badge.Kind.Known.SUBDOMAIN, Labels.humanise(context.subdomain().name())));
         }
 
         final Set<ResourceId> linked = context.usesTerms().stream()

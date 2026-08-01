@@ -49,7 +49,7 @@ public final class TermCards {
         blocks.add(Block.Prose.plain("Definition", term.definition()));
         final ActorFacet facet = term.actorFacet();
         if (facet != null) {
-            badges.add(new Badge("actor", Labels.humanise(facet.kind().name()) + " actor"));
+            badges.add(new Badge(Badge.Kind.Known.ACTOR, Labels.humanise(facet.kind().name()) + " actor"));
             if (facet.role() != null) {
                 blocks.add(Block.Prose.plain("Role", facet.role()));
             }

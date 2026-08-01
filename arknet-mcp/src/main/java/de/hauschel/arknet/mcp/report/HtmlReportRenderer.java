@@ -460,7 +460,7 @@ public final class HtmlReportRenderer {
      * simply falls back to the family's neutral look - no badge can render invisibly.
      */
     private static String badgePill(final Badge badge) {
-        final String cls = "pill " + sanitize(badge.kind()).toLowerCase(Locale.ROOT)
+        final String cls = "pill " + sanitize(badge.kind().cssClass()).toLowerCase(Locale.ROOT)
                 + " v-" + sanitize(badge.value()).toLowerCase(Locale.ROOT);
         return "<span class=\"" + escape(cls) + "\">" + escape(badge.value()) + "</span>";
     }

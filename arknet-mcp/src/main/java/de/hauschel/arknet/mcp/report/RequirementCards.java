@@ -60,10 +60,10 @@ public final class RequirementCards {
 
     private static ModelCard card(final Requirement requirement, final Glossary glossary) {
         final List<Badge> badges = new ArrayList<>();
-        badges.add(new Badge("type", requirement.type().idPrefix()));
-        badges.add(new Badge("status", Labels.humanise(requirement.status().name())));
+        badges.add(new Badge(Badge.Kind.Known.TYPE, requirement.type().idPrefix()));
+        badges.add(new Badge(Badge.Kind.Known.STATUS, Labels.humanise(requirement.status().name())));
         if (requirement.priority() != null) {
-            badges.add(new Badge("priority", Labels.humanise(requirement.priority().name())));
+            badges.add(new Badge(Badge.Kind.Known.PRIORITY, Labels.humanise(requirement.priority().name())));
         }
 
         final Set<ResourceId> linked = requirement.usesTerms().stream()
