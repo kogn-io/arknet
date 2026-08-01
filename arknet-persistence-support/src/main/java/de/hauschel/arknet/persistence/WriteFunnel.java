@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
@@ -45,7 +46,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * minted once and never reused), a code collision is an expected, rejectable outcome a human can
  * cause. {@link #update} rejects a missing subject via {@code notFound}.</p>
  *
- * <p><strong>The second interleaving (issue #144).</strong> The synchronous existence checks only
+ * <p><strong>The second interleaving.</strong> The synchronous existence checks only
  * catch a concurrent create that already fully committed; two <em>genuinely overlapping</em>
  * transactions instead run under the store's {@code SERIALIZABLE} isolation
  * (kogn-io/rdf-core#18), both existence checks pass, and the loser's {@code commit()} itself is
@@ -63,7 +64,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * translates into its own concurrent-modification signal, stays outside this funnel for exactly
  * such differences).</p>
  *
- * <p><strong>Why the translator is a parameter and not a fixed rule (issue #181).</strong> A lost
+ * <p><strong>Why the translator is a parameter and not a fixed rule.</strong> A lost
  * commit means "somebody else wrote here first" and nothing more; the funnel cannot know
  * <em>which</em> of its caller's uniqueness rules that writer actually broke. Where the business
  * code is the only thing that can collide, mapping the conflict onto {@code duplicateCode} states
@@ -77,9 +78,9 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  *
  * <p><strong>The gate is structurally unavoidable.</strong> Both methods run
  * {@link ShaclWriteGate#enforce} on the candidate (plus the optional validation-only
- * {@code assertedContext}, issue #63) before opening the transaction; a violation throws
+ * {@code assertedContext}) before opening the transaction; a violation throws
  * {@link WriteConstraintViolationException} and nothing is acquired or persisted. What the
- * {@code body} then writes is the adapter's own business - the deliberate #65-style bypass
+ * {@code body} then writes is the adapter's own business - the deliberate bypass
  * (re-attaching preserved, never-newly-asserted edges past the gate, ADR-007 Nachtrag)
  * remains possible and remains the adapter's decision.</p>
  *
@@ -95,7 +96,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * activity carries no resolved agent yet - agent attribution is additive (ADR-014
  * decision 5).</p>
  *
- * <p><strong>What the head promises now (ADR-014 decisions 3+4, issue #167).</strong> Revision
+ * <p><strong>What the head promises now (ADR-014 decisions 3+4).</strong> Revision
  * and head follow every write this funnel runs - {@link #create}, {@link #update} and
  * {@link #compareAndUpdate} each call {@link #recordRevision} after their body, so the head
  * always points at the latest write regardless of which of the three a caller reached. The
@@ -105,7 +106,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * ADR-013 decision 5, are resolved into {@link #compareAndUpdate} rather than integrated
  * unchanged - a full-snapshot comparison (requirements) or an in-adapter-transaction field merge
  * (glossary) each degenerate to a head comparison against this method's {@code expectedHead}. The
- * bounded context's {@code bc_link_term} joined them in issue #176 - its read-modify-write used to
+ * bounded context's {@code bc_link_term} joined them - its read-modify-write used to
  * run through the unguarded {@link #update} and could silently lose one of two concurrently linked
  * edges. But the head is a usable <em>concurrency token</em> only where a caller actually goes
  * through {@link #compareAndUpdate}: that method closes the lost-update window a plain
@@ -113,8 +114,8 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * moving with a write and the write being guarded by that head are two different properties; only
  * {@link #compareAndUpdate} callers get both. {@link #update} remains part of the funnel's
  * contract for a bounded context with no CAS need, but has no caller left in this codebase: the
- * use-case adapter's replace-by-identity write used to run through it, until issue #165's
- * {@code uc_update} moved it onto {@link #compareAndUpdate} as well, joining {@code req_update},
+ * use-case adapter's replace-by-identity write used to run through it, until {@code uc_update}
+ * moved it onto {@link #compareAndUpdate} as well, joining {@code req_update},
  * {@code term_update} and {@code bc_link_term}.</p>
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
@@ -124,7 +125,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
 public final class WriteFunnel {
 
     /**
-     * Recognises a lost {@code SERIALIZABLE} write conflict (issue #144) as the kognio-rdf ports
+     * Recognises a lost {@code SERIALIZABLE} write conflict as the kognio-rdf ports
      * report it: since {@code io.kogn.rdf} 0.2.x (kogn-io/rdf-core#30) the RDF4J-backed
      * transactor translates the store's own commit-time exception into the neutral
      * {@link ConcurrencyConflictException} itself, so recognising it needs no RDF4J type and
@@ -162,7 +163,7 @@ public final class WriteFunnel {
      * @param gate            the SHACL write-gate validating every candidate graph before the
      *                        write transaction opens (must not be {@code null})
      * @param isWriteConflict recognises the store's commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144) - pass
+     *                        {@code SERIALIZABLE} transaction conflict - pass
      *                        {@link #DEFAULT_WRITE_CONFLICT} for the kognio-rdf-backed store
      *                        (must not be {@code null})
      */
@@ -183,7 +184,7 @@ public final class WriteFunnel {
      * @param gate            the SHACL write-gate validating every candidate graph before the
      *                        write transaction opens (must not be {@code null})
      * @param isWriteConflict recognises the store's commit-time exception of a lost
-     *                        {@code SERIALIZABLE} transaction conflict (issue #144) - pass
+     *                        {@code SERIALIZABLE} transaction conflict - pass
      *                        {@link #DEFAULT_WRITE_CONFLICT} for the kognio-rdf-backed store
      *                        (must not be {@code null})
      * @param clock           the clock each revision's generation instant is read from (must not
@@ -213,12 +214,11 @@ public final class WriteFunnel {
      * @param code            the human-readable business code checked against
      *                        {@code dcterms:identifier} (escaped here, pass it raw)
      * @param candidate       the instance graph handed to the SHACL gate before the transaction
-     * @param assertedContext validation-only context triples for the gate (issue #63), or
+     * @param assertedContext validation-only context triples for the gate, or
      *                        {@code null} if the shapes need none
      * @param alreadyExists   the bounded context's signal for an opaque-identity collision
      * @param duplicateCode   the bounded context's signal for a business-code collision - also
      *                        thrown when the commit itself loses a {@code SERIALIZABLE} conflict
-     *                        (issue #144)
      * @param body            the write itself, given the live transaction after all checks passed
      */
     public void create(DatasetId dataset, String graphIri, String subjectIri, String code,
@@ -241,12 +241,12 @@ public final class WriteFunnel {
      * @param code            the human-readable business code checked against
      *                        {@code dcterms:identifier} (escaped here, pass it raw)
      * @param candidate       the instance graph handed to the SHACL gate before the transaction
-     * @param assertedContext validation-only context triples for the gate (issue #63), or
+     * @param assertedContext validation-only context triples for the gate, or
      *                        {@code null} if the shapes need none
      * @param alreadyExists   the bounded context's signal for an opaque-identity collision
      * @param duplicateCode   the bounded context's signal for a business-code collision, as found
      *                        by the synchronous {@code dcterms:identifier} check
-     * @param commitConflict  translates a lost commit race (issue #144) into the signal the caller
+     * @param commitConflict  translates a lost commit race into the signal the caller
      *                        wants thrown, given the store's own conflict exception; return that
      *                        exception unchanged to leave the loss untranslated. Runs after the
      *                        transaction has been rolled back, so it may read the store to
@@ -274,37 +274,23 @@ public final class WriteFunnel {
         Objects.requireNonNull(commitConflict, "commitConflict");
         Objects.requireNonNull(body, "body");
 
-        enforceGate(candidate, assertedContext);
-
-        IRI graph = rdf.createIRI(graphIri);
-        IRI subject = rdf.createIRI(subjectIri);
-        IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
-        Literal codeLiteral = rdf.createLiteral(code);
-
-        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            try {
-                handle.transactor().inTransaction(tx -> {
-                    if (tx.contains(graph, subject, null, null)) {
-                        throw alreadyExists.get();
-                    }
-                    // Identity is opaque and unique by construction, but the human-readable code
-                    // is a separate triple the subject existence check alone cannot rule out -
-                    // checked here, inside the same write transaction, so no concurrent create
-                    // can race in between.
-                    if (tx.contains(graph, null, identifierProperty, codeLiteral)) {
-                        throw duplicateCode.get();
-                    }
-                    body.accept(tx);
-                    recordRevision(tx, subjectIri);
-                    return null;
-                });
-            } catch (RuntimeException e) {
-                if (isWriteConflict.test(e)) {
-                    throw translateCommitConflict(commitConflict, e);
-                }
-                throw e;
+        guardedWrite(dataset, candidate, assertedContext, subjectIri, tx -> {
+            IRI graph = rdf.createIRI(graphIri);
+            IRI subject = rdf.createIRI(subjectIri);
+            if (tx.contains(graph, subject, null, null)) {
+                throw alreadyExists.get();
             }
-        }
+            IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
+            Literal codeLiteral = rdf.createLiteral(code);
+            // Identity is opaque and unique by construction, but the human-readable code
+            // is a separate triple the subject existence check alone cannot rule out -
+            // checked here, inside the same write transaction, so no concurrent create
+            // can race in between.
+            if (tx.contains(graph, null, identifierProperty, codeLiteral)) {
+                throw duplicateCode.get();
+            }
+            return readHead(tx, subjectIri);
+        }, body, commitConflict);
     }
 
     /**
@@ -313,7 +299,7 @@ public final class WriteFunnel {
      * {@link Objects#requireNonNullElse}) nor into a translator that throws instead of returning.
      *
      * <p>A translator such as {@code KognioRdfProjectRegistry#attributeLostRegistration} re-reads
-     * the store after the rollback to name what the loser actually collided with (issue #181) -
+     * the store after the rollback to name what the loser actually collided with -
      * itself a query that can fail (e.g. an unrecognised anchor-type IRI surfacing as an
      * {@link IllegalStateException} from {@code ProjectGraphs#anchorTypeFromIri}). Letting that
      * failure simply propagate would erase the original {@code ConcurrencyConflictException}
@@ -356,7 +342,7 @@ public final class WriteFunnel {
      * @param graphIri        the named graph the check is scoped to
      * @param subjectIri      the subject's opaque IRI; expected IRIREF-safe by construction
      * @param candidate       the instance graph handed to the SHACL gate before the transaction
-     * @param assertedContext validation-only context triples for the gate (issue #63), or
+     * @param assertedContext validation-only context triples for the gate, or
      *                        {@code null} if the shapes need none
      * @param notFound        the bounded context's signal for a missing subject
      * @param body            the write itself, given the live transaction after the check passed
@@ -371,28 +357,21 @@ public final class WriteFunnel {
         Objects.requireNonNull(notFound, "notFound");
         Objects.requireNonNull(body, "body");
 
-        enforceGate(candidate, assertedContext);
-
-        IRI graph = rdf.createIRI(graphIri);
-        IRI subject = rdf.createIRI(subjectIri);
-
-        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
-            handle.transactor().inTransaction(tx -> {
-                if (!tx.contains(graph, subject, null, null)) {
-                    throw notFound.get();
-                }
-                body.accept(tx);
-                recordRevision(tx, subjectIri);
-                return null;
-            });
-        }
+        guardedWrite(dataset, candidate, assertedContext, subjectIri, tx -> {
+            IRI graph = rdf.createIRI(graphIri);
+            IRI subject = rdf.createIRI(subjectIri);
+            if (!tx.contains(graph, subject, null, null)) {
+                throw notFound.get();
+            }
+            return readHead(tx, subjectIri);
+        }, body, null);
     }
 
     /**
      * Runs a guarded compare-and-set update (ADR-014 decision 3): the subject must already
      * exist and its current {@code arkprov:head} - read inside this same write transaction -
      * must equal {@code expectedHead}; only then does {@code body} run. This is the resolution
-     * of the two special paths ADR-013 kept outside the funnel (issue #167): a stale caller (one
+     * of the two special paths ADR-013 kept outside the funnel: a stale caller (one
      * whose read is no longer current) is rejected via {@code headMismatch}, exactly like a
      * missing subject is rejected via {@code notFound} - the same supplier-signal shape, so a
      * head conflict is now the same pattern in every bounded context.
@@ -400,8 +379,8 @@ public final class WriteFunnel {
      * <p><strong>Two ways to observe a conflict, one signal.</strong> A caller whose read is
      * already stale by the time this method's transaction opens is caught by the synchronous
      * head comparison below. A caller whose read was current but loses a genuinely overlapping
-     * {@code SERIALIZABLE} transaction at commit time (the same "second interleaving" issue #144
-     * documents for {@link #create}) is caught by {@code isWriteConflict} in the surrounding
+     * {@code SERIALIZABLE} transaction at commit time (the same "second interleaving" documented
+     * above for {@link #create}) is caught by {@code isWriteConflict} in the surrounding
      * catch and translated into the identical {@code headMismatch} signal - the caller cannot
      * tell, and does not need to, which of the two actually happened.</p>
      *
@@ -412,7 +391,7 @@ public final class WriteFunnel {
      *                        this subject, or {@code null} if the caller expects no revision to
      *                        exist yet (the subject predates the funnel's revision recording)
      * @param candidate       the instance graph handed to the SHACL gate before the transaction
-     * @param assertedContext validation-only context triples for the gate (issue #63), or
+     * @param assertedContext validation-only context triples for the gate, or
      *                        {@code null} if the shapes need none
      * @param notFound        the bounded context's signal for a missing subject
      * @param headMismatch    the bounded context's signal for a stale {@code expectedHead}
@@ -430,29 +409,47 @@ public final class WriteFunnel {
         Objects.requireNonNull(headMismatch, "headMismatch");
         Objects.requireNonNull(body, "body");
 
-        enforceGate(candidate, assertedContext);
+        guardedWrite(dataset, candidate, assertedContext, subjectIri, tx -> {
+            IRI graph = rdf.createIRI(graphIri);
+            IRI subject = rdf.createIRI(subjectIri);
+            if (!tx.contains(graph, subject, null, null)) {
+                throw notFound.get();
+            }
+            Optional<IRI> currentHead = readHead(tx, subjectIri);
+            String currentHeadIri = currentHead.map(IRI::getIRIString).orElse(null);
+            if (!Objects.equals(currentHeadIri, expectedHead)) {
+                throw headMismatch.get();
+            }
+            return currentHead;
+        }, body, conflict -> headMismatch.get());
+    }
 
-        IRI graph = rdf.createIRI(graphIri);
-        IRI subject = rdf.createIRI(subjectIri);
+    /**
+     * Runs the transactional skeleton shared by {@link #create}, {@link #update} and
+     * {@link #compareAndUpdate}: {@link #enforceGate}, {@code acquire}, open the write
+     * transaction, run {@code checks} (the per-method existence/head checks, returning the
+     * subject's current head - {@link Optional#empty()} if it has none yet), then {@code body},
+     * then {@link #recordRevision}. A commit conflict recognised by {@code isWriteConflict} is
+     * translated through {@code commitConflict} if given; {@code null} rethrows it unchanged,
+     * which is what {@link #update} passes to run no conflict translation at all (see the class
+     * javadoc).
+     */
+    private void guardedWrite(DatasetId dataset, ReadableGraph candidate, ReadableGraph assertedContext,
+            String subjectIri, Function<DatasetTx, Optional<IRI>> checks, Consumer<DatasetTx> body,
+            UnaryOperator<RuntimeException> commitConflict) {
+        enforceGate(candidate, assertedContext);
 
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             try {
                 handle.transactor().inTransaction(tx -> {
-                    if (!tx.contains(graph, subject, null, null)) {
-                        throw notFound.get();
-                    }
-                    Optional<IRI> currentHead = readHead(tx, subjectIri);
-                    String currentHeadIri = currentHead.map(IRI::getIRIString).orElse(null);
-                    if (!Objects.equals(currentHeadIri, expectedHead)) {
-                        throw headMismatch.get();
-                    }
+                    Optional<IRI> previousHead = checks.apply(tx);
                     body.accept(tx);
-                    recordRevision(tx, subjectIri, currentHead);
+                    recordRevision(tx, subjectIri, previousHead);
                     return null;
                 });
             } catch (RuntimeException e) {
-                if (isWriteConflict.test(e)) {
-                    throw headMismatch.get();
+                if (commitConflict != null && isWriteConflict.test(e)) {
+                    throw translateCommitConflict(commitConflict, e);
                 }
                 throw e;
             }
@@ -464,19 +461,9 @@ public final class WriteFunnel {
      * {@code arkprov:Revision} entity chained to the superseded head via
      * {@code prov:wasRevisionOf}, and the rewritten {@code arkprov:head} pointer - all inside
      * the caller's still-open write transaction, so the revision commits or aborts with the
-     * model write. Runs after the {@code body} so a failing body never reaches it. Reads the
-     * current head itself; used by {@link #create} and {@link #update}, which have not read it
-     * beforehand.
-     */
-    private void recordRevision(DatasetTx tx, String subjectIri) {
-        recordRevision(tx, subjectIri, readHead(tx, subjectIri));
-    }
-
-    /**
-     * Same as {@link #recordRevision(DatasetTx, String)}, but takes the current head as already
-     * read by the caller instead of reading it again - used by {@link #compareAndUpdate}, whose
-     * CAS check already read it in the same transaction, saving a second {@code SELECT} for the
-     * same value.
+     * model write. Runs after the {@code body} so a failing body never reaches it. Takes the
+     * subject's current head as already read by {@code guardedWrite}'s {@code checks} step,
+     * inside the same transaction, rather than reading it again.
      */
     private void recordRevision(DatasetTx tx, String subjectIri, Optional<IRI> previousHead) {
         String subject = SparqlTerms.iriRef(subjectIri);
@@ -506,8 +493,9 @@ public final class WriteFunnel {
 
     /**
      * Reads a resource's current {@code arkprov:head} pointer, if it has ever been written
-     * through this funnel - shared by {@link #recordRevision} (chaining the new revision to its
-     * predecessor) and {@link #compareAndUpdate} (the compare-and-set check itself).
+     * through this funnel - called from each method's {@code checks} step (for
+     * {@link #compareAndUpdate} this is also the compare-and-set check itself) and handed to
+     * {@link #recordRevision}, which chains the new revision to it.
      */
     private Optional<IRI> readHead(DatasetTx tx, String subjectIri) {
         String subject = SparqlTerms.iriRef(subjectIri);

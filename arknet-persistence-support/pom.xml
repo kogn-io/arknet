@@ -27,7 +27,7 @@
             <artifactId>rdf-dataset</artifactId>
         </dependency>
         <!-- DatasetLifecycle/DatasetHandle/DatasetId live in this dedicated hosting port module
-             since kognio-rdf 0.2.x (#173); DatasetTx (used above) stays in rdf-dataset. -->
+             since kognio-rdf 0.2.x; DatasetTx (used above) stays in rdf-dataset. -->
         <dependency>
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset-hosting</artifactId>

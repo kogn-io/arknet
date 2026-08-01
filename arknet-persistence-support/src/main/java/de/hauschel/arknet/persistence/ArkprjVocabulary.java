@@ -55,7 +55,7 @@ public final class ArkprjVocabulary {
     /** {@code arkprj:Project} - the registered project itself. */
     public static final String PROJECT_TYPE = NAMESPACE + "Project";
 
-    /** {@code arkprj:Anchor} - one opaque, typed hold a client identifies its project by. */
+    /** {@code arkprj:Anchor} - one opaque, typed token a client identifies its project by. */
     public static final String ANCHOR_CLASS = NAMESPACE + "Anchor";
 
     /** {@code arkprj:anchor} - project to anchor, {@code 1..n}. */

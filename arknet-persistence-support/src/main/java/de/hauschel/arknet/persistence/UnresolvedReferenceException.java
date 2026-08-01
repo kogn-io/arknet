@@ -13,9 +13,9 @@ package de.hauschel.arknet.persistence;
  * identity matches no resource, or more than one, the write is aborted and nothing is persisted -
  * dangling cross-references are never created. Two concrete shapes of this pattern exist so far:
  * a requirement's {@code arkreq:usesTerm} edge, resolved by the term's {@code dcterms:identifier}
- * (requirements BC, issue #36); and a use case's {@code stepRealises}/actor references, resolved
+ * (requirements BC); and a use case's {@code stepRealises}/actor references, resolved
  * by {@code dcterms:identifier} (requirements) or {@code skos:prefLabel} (actors) respectively
- * (use-cases BC, issue #41).</p>
+ * (use-cases BC).</p>
  *
  * <p>The message is deliberately didactic: it names the missing/ambiguous reference and points
  * at the tool that would create or disambiguate it (e.g. {@code term_add}, {@code req_add}).</p>
