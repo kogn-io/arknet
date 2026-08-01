@@ -24,6 +24,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -439,6 +440,108 @@ class RequirementServiceTest {
         Requirement linked = service.linkTerm(WS, code, "TERM-1");
 
         assertEquals(List.of("Done when it works"), linked.acceptanceCriteria());
+    }
+
+    /**
+     * Regression for issue #157: a requirement that predates the mandatory acceptance-criterion
+     * invariant reads back with the read-time legacy placeholder standing in for its
+     * {@code acceptanceCriteria} (see {@link
+     * de.hauschel.arknet.req.application.port.out.RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}).
+     * {@code accept} never supplies a replacement, so writing it through must reject instead of
+     * turning that placeholder into a real, persisted literal - and must leave the requirement's
+     * status untouched, exactly as if the write had never been attempted.
+     */
+    @Test
+    void acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.accept(WS, code));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals(RequirementStatus.PROPOSED, service.get(WS, code).orElseThrow().status());
+    }
+
+    /** Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder}, via {@code linkTerm}. */
+    @Test
+    void linkTermRejectsALegacyRequirementInsteadOfPersistingThePlaceholder() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.linkTerm(WS, code, "TERM-1"));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals(List.of(), service.get(WS, code).orElseThrow().usesTerms());
+    }
+
+    /**
+     * Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder},
+     * via {@code update} - but only when the caller leaves {@code acceptanceCriteria} {@code null}
+     * ("unchanged"), the same argument that used to carry the placeholder straight into the store.
+     */
+    @Test
+    void updateRejectsALegacyRequirementWhenAcceptanceCriteriaAreLeftUnchanged() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, "New title", null, null, null));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals("legacy title", service.get(WS, code).orElseThrow().title());
+    }
+
+    /**
+     * The escape hatch: a caller closing the gap by supplying real acceptance criteria to
+     * {@code update} must succeed - the guard only blocks a write that would carry the
+     * placeholder forward unchanged, not one that explicitly replaces it.
+     */
+    @Test
+    void updateAcceptsALegacyRequirementWhenExplicitAcceptanceCriteriaAreSupplied() {
+        RequirementCode code = givenLegacyRequirement();
+
+        Requirement updated = service.update(WS, code, null, null, List.of("Real done-when criterion"), null);
+
+        assertEquals(List.of("Real done-when criterion"), updated.acceptanceCriteria());
+        assertEquals(List.of("Real done-when criterion"), service.get(WS, code).orElseThrow().acceptanceCriteria());
+    }
+
+    /**
+     * Once real acceptance criteria have been supplied, the requirement is no longer legacy: a
+     * subsequent {@code accept} (which supplies no replacement of its own) must succeed instead of
+     * throwing again.
+     */
+    @Test
+    void acceptSucceedsOnceALegacyRequirementsAcceptanceCriteriaHaveBeenSupplied() {
+        RequirementCode code = givenLegacyRequirement();
+        service.update(WS, code, null, null, List.of("Real done-when criterion"), null);
+
+        Requirement accepted = service.accept(WS, code);
+
+        assertEquals(RequirementStatus.ACCEPTED, accepted.status());
+        assertEquals(List.of("Real done-when criterion"), accepted.acceptanceCriteria());
+    }
+
+    /**
+     * Stores a requirement the way {@code repository.createLegacy} models a pre-invariant
+     * requirement: some non-blank text stands in for {@code acceptanceCriteria} ({@link
+     * Requirement}'s constructor rejects an empty list unconditionally, so the domain object
+     * itself can never represent "no criteria at all"), but {@link
+     * InMemoryRequirementRepository#createLegacy} marks the identity so {@link
+     * RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()} reports
+     * {@code true} for it - mirroring the real adapter's structural signal.
+     */
+    private RequirementCode givenLegacyRequirement() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement legacy = new Requirement(
+                new RequirementId(resourceIdFactory.newId()), code, "legacy title",
+                "A requirement predating the acceptance-criterion invariant.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, List.of(),
+                List.of("(legacy placeholder - no acceptance criterion on record)"));
+        repository.createLegacy(WS, legacy);
+        return code;
     }
 
     /**

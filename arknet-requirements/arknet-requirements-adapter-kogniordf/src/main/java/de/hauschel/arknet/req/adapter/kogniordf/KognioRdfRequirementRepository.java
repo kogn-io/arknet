@@ -419,14 +419,29 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Builds one {@link Requirement} from a row of {@link #requirementByCodeWhereClause}'s
      * projection ({@code ?s ?type ?title ?description ?status ?priority ?motivatedBy
-     * ?qualityCategory}), including the two follow-up reads {@link #readUsesTerms} and
-     * {@link #readAcceptanceCriteria} (via {@code handle}) and the legacy-placeholder
-     * substitution ({@link #acceptanceCriteriaOrLegacyPlaceholder}). Shared by
+     * ?qualityCategory}), including the follow-up read {@link #readUsesTerms} (via {@code
+     * handle}) and the legacy-placeholder substitution ({@link
+     * #acceptanceCriteriaOrLegacyPlaceholder}) for {@code acceptanceCriteria}. Shared by
      * {@link #findByCode} and {@link #findCurrentByCode} so both single-requirement read paths
      * build a {@link Requirement} the same way - drift between near-identical read paths in this
      * class was a real bug twice before (the {@link #findAll} row-grouping fix).
      */
     private Requirement requirementOf(BindingSet row, RequirementCode code, DatasetHandle handle) {
+        String subjectIriString = iriOf(row, "s").getIRIString();
+        return requirementOf(row, code, handle, acceptanceCriteriaOrLegacyPlaceholder(
+                readAcceptanceCriteria(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString))));
+    }
+
+    /**
+     * {@link #requirementOf(BindingSet, RequirementCode, DatasetHandle)} with the caller already
+     * holding the resolved {@code acceptanceCriteria} list - the seam {@link #findCurrentByCode}
+     * uses so it can read {@link #readAcceptanceCriteria} exactly once and still learn, before
+     * building the {@link Requirement}, whether the result it is about to embed is a real store
+     * value or the legacy placeholder (see {@link
+     * RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}).
+     */
+    private Requirement requirementOf(
+            BindingSet row, RequirementCode code, DatasetHandle handle, List<String> acceptanceCriteria) {
         String subjectIriString = iriOf(row, "s").getIRIString();
         return new Requirement(
                 new RequirementId(ResourceId.of(subjectIriString)),
@@ -439,9 +454,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 motivatedByOf(row),
                 qualityCategoryOf(row),
                 readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
-                acceptanceCriteriaOrLegacyPlaceholder(
-                        readAcceptanceCriteria(handle.sparqlQuery()::select,
-                                SparqlTerms.iriRef(subjectIriString))));
+                acceptanceCriteria);
     }
 
     @Override
@@ -477,7 +490,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * both call {@link #requirementOf} on their row, so the two read paths cannot drift apart
      * field-by-field the way two near-identical read paths in this class already did twice before
      * - plus one {@code OPTIONAL} join into
-     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head.
+     * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head, and the {@code
+     * acceptanceCriteriaIsSynthesized} flag {@link #findByCode} has no need for: this method reads
+     * {@link #readAcceptanceCriteria} itself (rather than delegating to {@link
+     * #requirementOf(BindingSet, RequirementCode, DatasetHandle)}) so it can tell, before the
+     * {@link Requirement} is built, whether {@link #sanitizeAcceptanceCriteria} left anything at
+     * all - i.e. whether the subject carries a real {@code arkreq:acceptanceCriterion} triple or
+     * none, the fact {@link RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}
+     * exists to carry back to the caller (see {@link
+     * de.hauschel.arknet.req.application.RequirementService#updateWithOptimisticRetry}, which
+     * rejects a write that would otherwise turn this read-time placeholder into a real, persisted
+     * literal).
      */
     @Override
     public Optional<RequirementRepository.CurrentRequirement> findCurrentByCode(
@@ -498,12 +521,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 return Optional.empty();
             }
             BindingSet row = found.get();
-            Requirement requirement = requirementOf(row, code, handle);
+            String subjectIriString = iriOf(row, "s").getIRIString();
+            List<String> sanitizedCriteria = sanitizeAcceptanceCriteria(
+                    readAcceptanceCriteria(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)));
+            boolean acceptanceCriteriaIsSynthesized = sanitizedCriteria.isEmpty();
+            List<String> acceptanceCriteria = acceptanceCriteriaIsSynthesized
+                    ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER
+                    : sanitizedCriteria;
+            Requirement requirement = requirementOf(row, code, handle, acceptanceCriteria);
             RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                     .orElse(null);
-            return Optional.of(new RequirementRepository.CurrentRequirement(requirement, head));
+            return Optional.of(new RequirementRepository.CurrentRequirement(
+                    requirement, head, acceptanceCriteriaIsSynthesized));
         }
     }
 

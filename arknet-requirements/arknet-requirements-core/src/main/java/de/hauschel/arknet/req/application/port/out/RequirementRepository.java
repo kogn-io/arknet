@@ -119,8 +119,26 @@ public interface RequirementRepository {
      * A requirement's state paired with its current concurrency token (the {@link RevisionToken},
      * or {@code null} if the requirement predates the funnel's revision recording), as read
      * together by {@link #findCurrentByCode}.
+     *
+     * @param value                          the requirement as currently read, with {@code
+     *                                        acceptanceCriteriaIsSynthesized} explaining whether
+     *                                        {@code value.acceptanceCriteria()} is a real store
+     *                                        value or a read-time stand-in
+     * @param head                           the concurrency token, or {@code null}
+     * @param acceptanceCriteriaIsSynthesized whether {@code value.acceptanceCriteria()} is the
+     *                                        adapter's fixed legacy-placeholder text rather than
+     *                                        criteria actually recorded in the store - {@code
+     *                                        true} exactly when the underlying subject carries no
+     *                                        {@code arkreq:acceptanceCriterion} triple at all (a
+     *                                        requirement that predates the mandatory-criterion
+     *                                        invariant). A caller that carries this flag's {@code
+     *                                        value} forward into a write (e.g. a read-modify-write
+     *                                        round trip that leaves {@code acceptanceCriteria}
+     *                                        untouched) would otherwise turn that read-time
+     *                                        stand-in into a real, persisted literal - the bug
+     *                                        this flag exists to let a caller reject instead.
      */
-    record CurrentRequirement(Requirement value, RevisionToken head) {
+    record CurrentRequirement(Requirement value, RevisionToken head, boolean acceptanceCriteriaIsSynthesized) {
     }
 
     /**

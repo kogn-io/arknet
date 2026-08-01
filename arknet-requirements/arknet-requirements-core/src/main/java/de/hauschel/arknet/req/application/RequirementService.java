@@ -25,6 +25,7 @@ import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
+import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -73,7 +74,13 @@ import de.hauschel.arknet.req.domain.TermRef;
  * req_add} itself could never have created. Status and linked terms are untouched - {@link
  * #accept} and {@link #linkTerm} remain the only way to change those. The priority parameter
  * is an interim step that a generic {@code resource_update} facade is meant to
- * replace; see {@link UpdateRequirement}.</p>
+ * replace; see {@link UpdateRequirement}. If a requirement predates the mandatory
+ * acceptance-criterion invariant (its criteria are currently a read-time placeholder, never a
+ * store fact), {@code accept}/{@code linkTerm}/an {@code update} that leaves {@code
+ * acceptanceCriteria} {@code null} all throw {@link MissingAcceptanceCriteriaException} instead
+ * of silently turning that placeholder into a persisted literal - see
+ * {@link #updateWithOptimisticRetry}. Passing real criteria to {@code update} is exactly how a
+ * caller closes that gap.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         AcceptRequirement, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
@@ -213,7 +220,20 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * requirement, linking an already-linked term) skip the write entirely, exactly as before this
      * fix.</p>
      *
+     * <p><strong>Legacy acceptance-criteria guard.</strong> If {@code current}'s acceptance
+     * criteria are a read-time placeholder (no {@code arkreq:acceptanceCriterion} triple actually
+     * exists yet, see {@link RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()})
+     * and {@code mutation} did not itself replace them with a real, explicit list, the write is
+     * rejected with {@link MissingAcceptanceCriteriaException} instead of proceeding: a plain
+     * replace-by-identity write would otherwise turn that placeholder into a genuine, persisted
+     * literal, after which the gap it was meant to surface becomes permanently invisible. Only
+     * {@link #update} can supply a real replacement here ({@code acceptanceCriteria != null}); a
+     * no-op mutation never reaches this check, since it already returned above.</p>
+     *
      * @throws RequirementNotFoundException            if no requirement with {@code code} exists
+     * @throws MissingAcceptanceCriteriaException      if the write would carry a legacy
+     *                                                  placeholder forward as a real, persisted
+     *                                                  acceptance criterion
      * @throws RequirementConcurrentlyModifiedException if the write keeps losing the race across
      *                                                   every retry attempt
      */
@@ -226,6 +246,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             Requirement updated = mutation.apply(current.value());
             if (updated.equals(current.value())) {
                 return current.value();
+            }
+            if (current.acceptanceCriteriaIsSynthesized()
+                    && updated.acceptanceCriteria().equals(current.value().acceptanceCriteria())) {
+                throw new MissingAcceptanceCriteriaException(projectId, code);
             }
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated);

@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -477,6 +478,49 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(1, all.size());
         assertEquals(1, all.get(0).acceptanceCriteria().size());
         assertTrue(all.get(0).acceptanceCriteria().get(0).contains("Altdatensatz"));
+    }
+
+    /**
+     * Regression for issue #157: {@link #findByCode}/{@link #findAll} surface the legacy
+     * placeholder to keep the read path from crashing, but that placeholder is a read-time
+     * stand-in, not a store fact - {@link RequirementRepository.CurrentRequirement} must say so
+     * explicitly, otherwise nothing stops a caller's read-modify-write round trip
+     * ({@code accept}/{@code update}/{@code linkTerm}) from writing it back as a genuine,
+     * persisted {@code arkreq:acceptanceCriterion} literal on the very next
+     * {@link #compareAndUpdate}.
+     */
+    @Test
+    void findCurrentByCodeSignalsSynthesizedAcceptanceCriteriaForARequirementPredatingAcceptanceCriterion() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithoutAcceptanceCriterion(PROJECT_A, id, "FR-1");
+
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertTrue(current.acceptanceCriteriaIsSynthesized());
+        assertTrue(current.value().acceptanceCriteria().get(0).contains("Altdatensatz"));
+    }
+
+    /**
+     * Counterpart to {@link
+     * #findCurrentByCodeSignalsSynthesizedAcceptanceCriteriaForARequirementPredatingAcceptanceCriterion}:
+     * a requirement written with a real {@code arkreq:acceptanceCriterion} triple must not be
+     * flagged as synthesized, or the guard this signal backs would reject writes it should let
+     * through.
+     */
+    @Test
+    void findCurrentByCodeDoesNotSignalSynthesizedAcceptanceCriteriaForARegularRequirement() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(PROJECT_A, new Requirement(id, code, "Login", "The system shall authenticate a user.",
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of("Login succeeds with valid credentials")));
+
+        RequirementRepository.CurrentRequirement current =
+                repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+
+        assertFalse(current.acceptanceCriteriaIsSynthesized());
+        assertEquals(List.of("Login succeeds with valid credentials"), current.value().acceptanceCriteria());
     }
 
     /**
