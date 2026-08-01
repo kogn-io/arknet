@@ -23,7 +23,7 @@ import de.hauschel.arknet.ul.application.port.in.ListTerms;
  * The context that wrote it already knows how to read it back; this class asks it, rather than
  * re-deriving the answer in the composition root. See the ADR-006 addendum.</p>
  *
- * <p><strong>Never fails the tool.</strong> The report gained a dependency on four contexts'
+ * <p><strong>Never fails the tool.</strong> The report gained a dependency on five contexts'
  * read paths, and {@code store_overview} is the very tool a user reaches for when they suspect
  * something is wrong with the store. A section whose in-port throws is therefore dropped with
  * a recorded failure instead of taking the whole response down - and because the raw view
@@ -36,6 +36,7 @@ public final class ModelViews {
     private final RequirementCards requirements;
     private final ListTerms terms;
     private final BoundedContextCards boundedContexts;
+    private final AdrCards adrs;
 
     /**
      * @param terms           the ubiquitous-language context's list in-port, read once into the
@@ -43,16 +44,19 @@ public final class ModelViews {
      * @param useCases        builds the use-case section
      * @param requirements    builds the requirements section
      * @param boundedContexts builds the bounded-context section
+     * @param adrs            builds the architecture-decisions section
      */
     public ModelViews(
             final ListTerms terms,
             final UseCaseCards useCases,
             final RequirementCards requirements,
-            final BoundedContextCards boundedContexts) {
+            final BoundedContextCards boundedContexts,
+            final AdrCards adrs) {
         this.terms = Objects.requireNonNull(terms, "terms");
         this.useCases = Objects.requireNonNull(useCases, "useCases");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
         this.boundedContexts = Objects.requireNonNull(boundedContexts, "boundedContexts");
+        this.adrs = Objects.requireNonNull(adrs, "adrs");
     }
 
     /**
@@ -85,6 +89,7 @@ public final class ModelViews {
         collect(sections, failures, RequirementCards.SECTION_TITLE,
                 () -> requirements.section(projectId, glossary));
         collect(sections, failures, UseCaseCards.SECTION_TITLE, () -> useCases.section(projectId, glossary));
+        collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));
         collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
         return new Views(sections, failures);
     }
