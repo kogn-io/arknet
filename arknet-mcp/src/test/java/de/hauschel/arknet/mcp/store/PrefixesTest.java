@@ -63,6 +63,18 @@ class PrefixesTest {
     }
 
     @Test
+    void shortensBoundedContextVocabularyIriToCurie() {
+        assertThat(prefixes.toCurie("https://w3id.org/arknet/ddd#domainVision"))
+                .isEqualTo("arkddd:domainVision");
+    }
+
+    @Test
+    void expandsBoundedContextVocabularyCurie() {
+        assertThat(prefixes.toIri("arkddd:BoundedContext"))
+                .contains("https://w3id.org/arknet/ddd#BoundedContext");
+    }
+
+    @Test
     void picksMostSpecificNamespaceWhenShortening() {
         // core base https://w3id.org/arknet/model/ would also match; the more specific
         // requirement/ namespace must win.

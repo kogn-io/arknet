@@ -27,7 +27,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class BoundedContextCardsTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("bc-cards-test");
+    private static final ProjectId PROJECT = new ProjectId("bc-cards-test");
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final ResourceId BESTELLUNG = ResourceId.of(ID + "term-1");
     private static final ResourceId LIEFERADRESSE = ResourceId.of(ID + "term-2");
@@ -72,7 +72,7 @@ class BoundedContextCardsTest {
         final BoundedContextCards cards = cardsFor(context(
                 "Nimmt jede Bestellung auf.", List.of(BESTELLUNG)));
 
-        assertThat(cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks())
+        assertThat(cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks())
                 .extracting(Block::label)
                 .doesNotContain("Ubiquitous language", "Ubiquitous language (not named in the vision)");
     }
@@ -82,7 +82,7 @@ class BoundedContextCardsTest {
     }
 
     private static Block block(final BoundedContextCards cards, final String label) {
-        return cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks().stream()
+        return cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
                 .filter(b -> b.label().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("no block " + label));
     }

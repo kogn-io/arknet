@@ -17,7 +17,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
+import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.mcp.store.RdfNode;
+import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
@@ -58,13 +60,9 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  */
 public final class TraceabilityGraph {
 
-    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
-    private static final String DCTERMS_IDENTIFIER = "http://purl.org/dc/terms/identifier";
-    private static final String DCTERMS_TITLE = "http://purl.org/dc/terms/title";
     private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
-    private static final String SKOS_PREF_LABEL = SKOS_NAMESPACE + "prefLabel";
 
     // The traversed arkreq: object-property IRIs, the literal-valued arkreq:acceptanceCriterion/
     // arkddd:domainVision predicates and the type IRIs below come from the single shared source
@@ -129,24 +127,22 @@ public final class TraceabilityGraph {
     private final Map<String, String> identifierBySubject;
     private final Map<String, String> labelBySubject;
 
-    private TraceabilityGraph(List<Triple> triples) {
+    private TraceabilityGraph(List<StoreResource> resources) {
         Map<String, List<Triple>> outgoing = new LinkedHashMap<>();
         Map<String, List<Triple>> incoming = new LinkedHashMap<>();
         Map<String, Set<String>> types = new LinkedHashMap<>();
         Map<String, String> identifiers = new LinkedHashMap<>();
         Map<String, String> labels = new LinkedHashMap<>();
-        for (Triple triple : triples) {
-            outgoing.computeIfAbsent(triple.subject(), s -> new ArrayList<>()).add(triple);
-            if (triple.object() instanceof RdfNode.Resource resourceObject) {
-                incoming.computeIfAbsent(resourceObject.iri(), s -> new ArrayList<>()).add(triple);
-                if (RDF_TYPE.equals(triple.predicate())) {
-                    types.computeIfAbsent(triple.subject(), s -> new LinkedHashSet<>()).add(resourceObject.iri());
-                }
-            } else if (triple.object() instanceof RdfNode.Literal literalObject) {
-                if (DCTERMS_IDENTIFIER.equals(triple.predicate())) {
-                    identifiers.putIfAbsent(triple.subject(), literalObject.lexicalForm());
-                } else if (DCTERMS_TITLE.equals(triple.predicate()) || SKOS_PREF_LABEL.equals(triple.predicate())) {
-                    labels.putIfAbsent(triple.subject(), literalObject.lexicalForm());
+        for (StoreResource resource : resources) {
+            outgoing.put(resource.iri(), resource.outgoing());
+            resource.identifier().ifPresent(value -> identifiers.putIfAbsent(resource.iri(), value));
+            resource.label().ifPresent(value -> labels.putIfAbsent(resource.iri(), value));
+            for (Triple triple : resource.outgoing()) {
+                if (triple.object() instanceof RdfNode.Resource resourceObject) {
+                    incoming.computeIfAbsent(resourceObject.iri(), s -> new ArrayList<>()).add(triple);
+                    if (RDF_TYPE.equals(triple.predicate())) {
+                        types.computeIfAbsent(triple.subject(), s -> new LinkedHashSet<>()).add(resourceObject.iri());
+                    }
                 }
             }
         }
@@ -162,15 +158,18 @@ public final class TraceabilityGraph {
     /**
      * Builds a graph from every statement of a project snapshot.
      *
+     * <p>Label/identifier lookups ({@link #labelOf(String)}/{@link #identifierOf(String)}) defer
+     * to each subject's already-built {@link StoreResource#label()}/{@link
+     * StoreResource#identifier()} rather than re-scanning the raw triples, so this graph can never
+     * disagree with {@code store_overview}/{@code resource_get} about what a resource's label is
+     * (issue #103).</p>
+     *
      * @param snapshot the snapshot to traverse (as read by {@code StoreReader#readSnapshot})
      * @return the assembled graph
      */
     public static TraceabilityGraph of(StoreSnapshot snapshot) {
         Objects.requireNonNull(snapshot, "snapshot");
-        List<Triple> triples = snapshot.resources().stream()
-                .flatMap(resource -> resource.outgoing().stream())
-                .toList();
-        return new TraceabilityGraph(triples);
+        return new TraceabilityGraph(snapshot.resources());
     }
 
     /** @return the IRIs of every {@code arkreq:FunctionalRequirement}/{@code NonFunctionalRequirement}, sorted. */
@@ -335,6 +334,56 @@ public final class TraceabilityGraph {
         return Map.copyOf(labels);
     }
 
+    /**
+     * Every requirement/bounded-context prose mention of a glossary term the source does not
+     * link to (issue #185): a requirement's {@code dcterms:description}/{@code
+     * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, and a
+     * bounded context's {@code arkddd:domainVision} checked against its {@code
+     * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
+     * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
+     * {@link LabelMentions} engine, so a text mention means the same thing in both places.
+     *
+     * @return the unlinked mentions found across every requirement and bounded context
+     */
+    public List<UnlinkedMention> unlinkedMentions() {
+        Map<String, String> termLabels = termLabels();
+        if (termLabels.isEmpty()) {
+            return List.of();
+        }
+        LabelMentions<String> matcher = LabelMentions.of(
+                termLabels.keySet().stream().sorted().toList(), termLabels::get);
+
+        List<UnlinkedMention> found = new ArrayList<>();
+        for (String requirementIri : requirementIris()) {
+            Set<String> linked = new HashSet<>(usedTerms(requirementIri));
+            for (String termIri : matcher.mentionedIn(requirementProseTexts(requirementIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
+                }
+            }
+        }
+        for (String boundedContextIri : boundedContextIris()) {
+            Set<String> linked = new HashSet<>(linkedTerms(boundedContextIri));
+            for (String termIri : matcher.mentionedIn(boundedContextProseTexts(boundedContextIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(
+                            boundedContextIri, termIri, termLabels.get(termIri), "ubiquitousLanguageTerm"));
+                }
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    /**
+     * @param sourceIri     the requirement or bounded context whose prose names the term
+     * @param termIri       the mentioned term
+     * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
+     * @param edgeLocalName the missing edge's local name ({@code usesTerm} or
+     *                      {@code ubiquitousLanguageTerm}), for the "no ... edge" message
+     */
+    public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
+    }
+
     private List<String> literals(String subject, String predicate) {
         return outgoingBySubject.getOrDefault(subject, List.of()).stream()
                 .filter(t -> predicate.equals(t.predicate()))
@@ -400,7 +449,7 @@ public final class TraceabilityGraph {
         return Optional.ofNullable(identifierBySubject.get(Objects.requireNonNull(iri, "iri")));
     }
 
-    /** @return the {@code dcterms:title} or {@code skos:prefLabel} of {@code iri}, if present. */
+    /** @return {@code iri}'s {@link StoreResource#label()}, if present. */
     public Optional<String> labelOf(String iri) {
         return Optional.ofNullable(labelBySubject.get(Objects.requireNonNull(iri, "iri")));
     }

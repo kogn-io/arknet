@@ -10,7 +10,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Composition root of the arknet MCP server.
  *
  * <p>Bootstraps a Spring Boot application that runs as a single, long-running MCP server
- * per workspace over <strong>Streamable HTTP, bound to loopback only</strong> (see
+ * shared by every project on the machine over <strong>Streamable HTTP, bound to loopback
+ * only</strong> (see
  * {@code application.properties}) - a daemon an admin starts once and leaves running,
  * rather than a process Claude Code spawns per session (issue #137: the latter had every
  * session open its own {@code NativeStore}, colliding on the directory lock as soon as two

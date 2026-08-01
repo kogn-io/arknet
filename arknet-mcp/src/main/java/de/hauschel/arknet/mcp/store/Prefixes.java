@@ -64,8 +64,8 @@ public final class Prefixes {
 
     /**
      * The default arknet bindings: instance namespaces (requirement, term, actor) plus the
-     * standard vocabularies the bounded contexts write (arkreq, arkproc, arknet core, skos,
-     * dcterms, rdf, rdfs, xsd).
+     * standard vocabularies the bounded contexts write (arkreq, arkproc, arkarch, arkddd,
+     * arknet core, skos, dcterms, rdf, rdfs, xsd).
      *
      * <p>No {@code arkprov:}/{@code prov:}/revision bindings: {@code StoreReader} excludes the
      * provenance graph from every read path (ADR-014), so no provenance IRI ever reaches a
@@ -84,6 +84,7 @@ public final class Prefixes {
                 new Prefix("arkreq", "https://w3id.org/arknet/requirements#"),
                 new Prefix("arkproc", "https://w3id.org/arknet/process#"),
                 new Prefix("arkarch", "https://w3id.org/arknet/architecture#"),
+                new Prefix("arkddd", "https://w3id.org/arknet/ddd#"),
                 new Prefix("skos", "http://www.w3.org/2004/02/skos/core#"),
                 new Prefix("dcterms", "http://purl.org/dc/terms/"),
                 new Prefix("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"),

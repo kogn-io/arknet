@@ -36,7 +36,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class ModelViewsTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("views-test");
+    private static final ProjectId PROJECT = new ProjectId("views-test");
 
     @Test
     void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
@@ -48,7 +48,7 @@ class ModelViewsTest {
                 new RequirementCards(projectId -> List.of()),
                 new BoundedContextCards(projectId -> List.of()));
 
-        final ModelViews.Views result = views.of(WORKSPACE);
+        final ModelViews.Views result = views.of(PROJECT);
 
         assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
         assertThat(result.failures()).singleElement().asString()
@@ -74,7 +74,7 @@ class ModelViewsTest {
                 new RequirementCards(projectId -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())));
 
-        final ModelViews.Views result = views.of(WORKSPACE);
+        final ModelViews.Views result = views.of(PROJECT);
 
         assertThat(result.sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Use Cases");
@@ -93,7 +93,7 @@ class ModelViewsTest {
                 new RequirementCards(projectId -> List.of()),
                 new BoundedContextCards(projectId -> List.of()));
 
-        final ModelViews.Views result = views.of(WORKSPACE);
+        final ModelViews.Views result = views.of(PROJECT);
 
         assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
         assertThat(result.failures()).isEmpty();
@@ -111,7 +111,7 @@ class ModelViewsTest {
                 new RequirementCards(projectId -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())));
 
-        assertThat(views.of(WORKSPACE).sections()).extracting(ModelSection::title)
+        assertThat(views.of(PROJECT).sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Glossary");
     }
 

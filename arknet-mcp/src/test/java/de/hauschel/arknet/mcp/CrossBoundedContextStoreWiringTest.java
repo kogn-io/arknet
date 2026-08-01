@@ -56,7 +56,7 @@ class CrossBoundedContextStoreWiringTest {
      * drives the application services directly, and each of them takes the project as a parameter -
      * the property only ever configured the resolver, which is not on this path.</p>
      */
-    private static final ProjectId WS = new ProjectId("cross-bc");
+    private static final ProjectId PROJECT = new ProjectId("cross-bc");
 
     @TempDir
     Path storageDir;
@@ -79,18 +79,18 @@ class CrossBoundedContextStoreWiringTest {
                     TermService terms = context.getBean(TermService.class);
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
-                    // req_add (FR) and term_add (actor) into the same shared workspace store.
-                    Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
+                    // req_add (FR) and term_add (actor) into the same shared project store.
+                    Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed")));
-                    terms.add(WS, new NewTerm("Customer", "A person placing an order.",
+                    terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
                             new ActorFacet(ActorKind.HUMAN, "orderer")));
 
                     // uc_add referencing that FR (by its code) and that actor (by name); the
                     // service resolves both raw strings to opaque identities via ActorLookup/
                     // RequirementLookup before the real UseCase is constructed (issue #89).
-                    UseCase created = useCases.add(WS, new NewUseCase("Place order",
+                    UseCase created = useCases.add(PROJECT, new NewUseCase("Place order",
                             "Customer places an order", null, null, "Customer",
                             List.of(), null, null,
                             List.of(new NewStep(1, "Customer selects items and confirms",
@@ -100,7 +100,7 @@ class CrossBoundedContextStoreWiringTest {
                     // uc_get reads the resolved cross-context edges back (looked up by code).
                     // The resolved identity, not a label, is what the reference now carries -
                     // assert it is stable/consistent with what was just created.
-                    UseCase reloaded = useCases.get(WS, created.code()).orElseThrow();
+                    UseCase reloaded = useCases.get(PROJECT, created.code()).orElseThrow();
                     assertThat(reloaded.primaryActor()).isEqualTo(created.primaryActor());
                     ResourceId frId = fr.id().value();
                     assertThat(reloaded.steps()).singleElement()
@@ -123,7 +123,7 @@ class CrossBoundedContextStoreWiringTest {
                     // The actor exists, but the referenced requirement FR-1 was never created:
                     // strict step-realises resolution must abort on the unknown FR (order in the
                     // out-adapter resolves the primary actor first, hence seed it).
-                    terms.add(WS, new NewTerm("Customer", "A person placing an order.",
+                    terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
                             new ActorFacet(ActorKind.HUMAN, "orderer")));
 
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
@@ -131,12 +131,12 @@ class CrossBoundedContextStoreWiringTest {
                             List.of(new NewStep(1, "does something", List.of("FR-1"))),
                             List.of());
 
-                    assertThatThrownBy(() -> useCases.add(WS, danglingFr))
+                    assertThatThrownBy(() -> useCases.add(PROJECT, danglingFr))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("FR-1")
                             .hasMessageContaining("req_add");
 
-                    assertThat(useCases.list(WS)).isEmpty();
+                    assertThat(useCases.list(PROJECT)).isEmpty();
                 });
     }
 
@@ -155,15 +155,15 @@ class CrossBoundedContextStoreWiringTest {
                     RequirementService requirements = context.getBean(RequirementService.class);
                     TermService terms = context.getBean(TermService.class);
 
-                    Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
+                    Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed")));
-                    Term order = terms.add(WS, new NewTerm("Order", "A customer's request to buy.", null));
+                    Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null));
 
-                    requirements.linkTerm(WS, fr.code(), order.code().value());
+                    requirements.linkTerm(PROJECT, fr.code(), order.code().value());
 
-                    assertThat(requirements.get(WS, fr.code()).orElseThrow().usesTerms())
+                    assertThat(requirements.get(PROJECT, fr.code()).orElseThrow().usesTerms())
                             .containsExactly(new TermRef(order.id().value()));
                 });
     }
@@ -181,17 +181,17 @@ class CrossBoundedContextStoreWiringTest {
                     assertThat(context).hasNotFailed();
                     RequirementService requirements = context.getBean(RequirementService.class);
 
-                    Requirement fr = requirements.add(WS, new NewRequirement("Customer can order",
+                    Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed")));
 
-                    assertThatThrownBy(() -> requirements.linkTerm(WS, fr.code(), "TERM-99"))
+                    assertThatThrownBy(() -> requirements.linkTerm(PROJECT, fr.code(), "TERM-99"))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("TERM-99")
                             .hasMessageContaining("term_add");
 
-                    assertThat(requirements.get(WS, fr.code()).orElseThrow().usesTerms()).isEmpty();
+                    assertThat(requirements.get(PROJECT, fr.code()).orElseThrow().usesTerms()).isEmpty();
                 });
     }
 }

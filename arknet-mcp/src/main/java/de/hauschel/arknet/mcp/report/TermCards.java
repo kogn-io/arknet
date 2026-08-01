@@ -26,6 +26,9 @@ import de.hauschel.arknet.ul.domain.Term;
  */
 public final class TermCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Glossary";
+
     private TermCards() {
     }
 
@@ -39,7 +42,7 @@ public final class TermCards {
                 .sorted(Comparator.comparing(Term::prefLabel, String.CASE_INSENSITIVE_ORDER))
                 .map(TermCards::card)
                 .toList();
-        return new ModelSection("Glossary", "glossary",
+        return new ModelSection(SECTION_TITLE, "glossary",
                 "the ubiquitous language - one agreed meaning per term", cards);
     }
 
@@ -49,7 +52,7 @@ public final class TermCards {
         blocks.add(Block.Prose.plain("Definition", term.definition()));
         final ActorFacet facet = term.actorFacet();
         if (facet != null) {
-            badges.add(new Badge("actor", Labels.humanise(facet.kind().name()) + " actor"));
+            badges.add(new Badge(Badge.Kind.Known.ACTOR, Labels.humanise(facet.kind().name()) + " actor"));
             if (facet.role() != null) {
                 blocks.add(Block.Prose.plain("Role", facet.role()));
             }

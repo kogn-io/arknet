@@ -4,6 +4,7 @@
 package de.hauschel.arknet.mcp.report;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,6 +47,9 @@ import de.hauschel.arknet.uc.domain.UseCase;
  */
 public final class UseCaseCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Use Cases";
+
     private final ListUseCases useCases;
     private final ResolveRequirements requirements;
 
@@ -68,10 +72,10 @@ public final class UseCaseCards {
         final List<UseCase> all = useCases.list(projectId);
         final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(projectId, all);
         final List<ModelCard> cards = all.stream()
-                .sorted(java.util.Comparator.comparing(uc -> uc.code().value()))
+                .sorted(Comparator.comparing(uc -> uc.code().value()))
                 .map(uc -> card(uc, glossary, reqs))
                 .toList();
-        return new ModelSection("Use Cases", "use-cases",
+        return new ModelSection(SECTION_TITLE, "use-cases",
                 "goal, actors and the ordered main flow - as authored, not as triples", cards);
     }
 

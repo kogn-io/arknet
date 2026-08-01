@@ -29,6 +29,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  */
 public final class BoundedContextCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Bounded Contexts";
+
     private final ListBoundedContexts contexts;
 
     /**
@@ -49,14 +52,14 @@ public final class BoundedContextCards {
                 .sorted(Comparator.comparing(context -> context.code().value()))
                 .map(context -> card(context, glossary))
                 .toList();
-        return new ModelSection("Bounded Contexts", "bounded-contexts",
+        return new ModelSection(SECTION_TITLE, "bounded-contexts",
                 "the strategic model boundaries and the language inside each", cards);
     }
 
     private static ModelCard card(final BoundedContext context, final Glossary glossary) {
         final List<Badge> badges = new ArrayList<>();
         if (context.subdomain() != null) {
-            badges.add(new Badge("subdomain", Labels.humanise(context.subdomain().name())));
+            badges.add(new Badge(Badge.Kind.Known.SUBDOMAIN, Labels.humanise(context.subdomain().name())));
         }
 
         final Set<ResourceId> linked = context.usesTerms().stream()
@@ -68,18 +71,8 @@ public final class BoundedContextCards {
         if (context.ownedBy() != null) {
             blocks.add(Block.Prose.plain("Owned by", context.ownedBy()));
         }
-        if (!linked.isEmpty()) {
-            final Set<ResourceId> mentioned = glossary.mentionedIn(List.of(context.domainVision()));
-            final List<Ref> rest = linked.stream()
-                    .filter(id -> !mentioned.contains(id))
-                    .map(glossary::ref)
-                    .toList();
-            if (!rest.isEmpty()) {
-                blocks.add(new Block.Refs(
-                        mentioned.isEmpty() ? "Ubiquitous language"
-                                : "Ubiquitous language (not named in the vision)", rest));
-            }
-        }
+        UnmentionedTerms.addTo(blocks, linked, glossary, List.of(context.domainVision()),
+                "Ubiquitous language", "not named in the vision");
         return new ModelCard(context.code().value(), context.name(), context.id().value().value(), badges, blocks);
     }
 }

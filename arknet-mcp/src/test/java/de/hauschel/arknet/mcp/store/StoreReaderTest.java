@@ -47,7 +47,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
  */
 class StoreReaderTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("sample-project");
+    private static final ProjectId PROJECT = new ProjectId("sample-project");
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/store-reader-test-fr-1";
     private static final String PROJECT_IRI = "https://w3id.org/arknet/id/store-reader-test-project";
 
@@ -70,7 +70,7 @@ class StoreReaderTest {
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(WORKSPACE, requirementTitled("Login"));
+        requirements.create(PROJECT, requirementTitled("Login"));
         storeReader = new StoreReader(lifecycle);
     }
 
@@ -84,32 +84,32 @@ class StoreReaderTest {
 
     /** Reads {@code updated}'s current head and immediately applies it through the CAS guard. */
     private void replaceViaCompareAndUpdate(Requirement updated) {
-        RevisionToken head = requirements.findCurrentByCode(WORKSPACE, updated.code())
+        RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        requirements.compareAndUpdate(WORKSPACE, head, updated);
+        requirements.compareAndUpdate(PROJECT, head, updated);
     }
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(WORKSPACE.value()));
+        lifecycle.close(new DatasetId(PROJECT.value()));
     }
 
     @Test
     void outgoingRejectsAnIriThatCannotAppearUnescapedInASparqlIrirefInsteadOfExecutingIt() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> storeReader.outgoing(WORKSPACE, INJECTION_PAYLOAD));
+                .isThrownBy(() -> storeReader.outgoing(PROJECT, INJECTION_PAYLOAD));
     }
 
     @Test
     void incomingRejectsAnIriThatCannotAppearUnescapedInASparqlIrirefInsteadOfExecutingIt() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> storeReader.incoming(WORKSPACE, INJECTION_PAYLOAD));
+                .isThrownBy(() -> storeReader.incoming(PROJECT, INJECTION_PAYLOAD));
     }
 
     @Test
     void outgoingStillReturnsTheStatementsOfAWellFormedIri() {
-        List<Triple> outgoing = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+        List<Triple> outgoing = storeReader.outgoing(PROJECT, FR_1_IRI);
 
         assertThat(outgoing).isNotEmpty();
         assertThat(outgoing).allMatch(triple -> triple.subject().equals(FR_1_IRI));
@@ -125,7 +125,7 @@ class StoreReaderTest {
      */
     @Test
     void outgoingDoesNotDuplicateStatementsLivingInANamedGraph() {
-        List<Triple> outgoing = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+        List<Triple> outgoing = storeReader.outgoing(PROJECT, FR_1_IRI);
 
         Set<Triple> distinct = new HashSet<>(outgoing);
         assertThat(outgoing).hasSameSizeAs(distinct);
@@ -147,8 +147,8 @@ class StoreReaderTest {
                 .as("the write in setUp must have recorded a revision - else this test is vacuous")
                 .isPositive();
 
-        assertThat(storeReader.outgoing(WORKSPACE, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
-        assertThat(storeReader.incoming(WORKSPACE, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
+        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
+        assertThat(storeReader.incoming(PROJECT, FR_1_IRI)).noneMatch(StoreReaderTest::isProvenance);
         assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProvenance);
     }
 
@@ -160,8 +160,8 @@ class StoreReaderTest {
      */
     @Test
     void furtherWritesGrowTheTrailInTheStoreButNotTheReadPath() {
-        List<Triple> incomingAfterOneWrite = storeReader.incoming(WORKSPACE, FR_1_IRI);
-        List<Triple> outgoingAfterOneWrite = storeReader.outgoing(WORKSPACE, FR_1_IRI);
+        List<Triple> incomingAfterOneWrite = storeReader.incoming(PROJECT, FR_1_IRI);
+        List<Triple> outgoingAfterOneWrite = storeReader.outgoing(PROJECT, FR_1_IRI);
         long trailAfterOneWrite = provenanceStatementCount();
         String firstHead = headIri();
 
@@ -175,13 +175,13 @@ class StoreReaderTest {
                 .as("and moved the head - so the read path is hiding something that really changed")
                 .isNotEqualTo(firstHead);
 
-        assertThat(storeReader.incoming(WORKSPACE, FR_1_IRI))
+        assertThat(storeReader.incoming(PROJECT, FR_1_IRI))
                 .as("two further writes must not add neighbour rows")
                 .hasSameSizeAs(incomingAfterOneWrite);
-        assertThat(storeReader.outgoing(WORKSPACE, FR_1_IRI))
+        assertThat(storeReader.outgoing(PROJECT, FR_1_IRI))
                 .as("nor statement rows")
                 .hasSameSizeAs(outgoingAfterOneWrite);
-        assertThat(storeReader.outgoing(WORKSPACE, headIri()))
+        assertThat(storeReader.outgoing(PROJECT, headIri()))
                 .as("a revision is not a model resource - the generic read path does not reach it")
                 .isEmpty();
     }
@@ -207,8 +207,8 @@ class StoreReaderTest {
                 .isPositive();
 
         assertThat(snapshotTriples()).noneMatch(StoreReaderTest::isProjectIdentity);
-        assertThat(storeReader.outgoing(WORKSPACE, PROJECT_IRI)).isEmpty();
-        assertThat(storeReader.incoming(WORKSPACE, PROJECT_IRI)).isEmpty();
+        assertThat(storeReader.outgoing(PROJECT, PROJECT_IRI)).isEmpty();
+        assertThat(storeReader.incoming(PROJECT, PROJECT_IRI)).isEmpty();
     }
 
     /** Writes a minimal project self-description straight into the identity graph. */
@@ -220,7 +220,7 @@ class StoreReaderTest {
                 rdf.createIRI(ArkprjVocabulary.PROJECT_TYPE));
         identity.add(project, rdf.createIRI(ArkprjVocabulary.ANCHOR_VALUE),
                 rdf.createLiteral("/home/somebody/DEV/sample-project"));
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.add(rdf.createIRI(ArkprjVocabulary.IDENTITY_GRAPH), identity);
                 return null;
@@ -239,7 +239,7 @@ class StoreReaderTest {
     }
 
     private List<Triple> snapshotTriples() {
-        return storeReader.readSnapshot(WORKSPACE).resources().stream()
+        return storeReader.readSnapshot(PROJECT).resources().stream()
                 .flatMap(resource -> resource.outgoing().stream())
                 .toList();
     }
@@ -253,7 +253,7 @@ class StoreReaderTest {
     private String headIri() {
         String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
                 + FR_1_IRI + "> <" + ArkprovVocabulary.HEAD + "> ?v } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .findFirst()
@@ -262,14 +262,14 @@ class StoreReaderTest {
     }
 
     private long selectCount(String query) {
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(WORKSPACE.value()))) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             return handle.sparqlQuery().select(query).count();
         }
     }
 
     @Test
     void readSnapshotDoesNotDuplicateStatementsLivingInANamedGraph() {
-        StoreSnapshot snapshot = storeReader.readSnapshot(WORKSPACE);
+        StoreSnapshot snapshot = storeReader.readSnapshot(PROJECT);
 
         List<Triple> triples = snapshot.resources().stream()
                 .flatMap(resource -> resource.outgoing().stream())

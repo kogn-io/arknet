@@ -63,13 +63,13 @@ class TraceabilityRendererTest {
     private static final String BC_2 = ID + "bc-2";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
-    private static final ProjectId WORKSPACE = new ProjectId("sample-project");
+    private static final ProjectId PROJECT = new ProjectId("sample-project");
 
     @Test
     void traceMatrixReportsUsedTermsAndRealisingUseCasePerRequirement() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
 
-        String matrix = renderer.traceMatrix(WORKSPACE, graph);
+        String matrix = renderer.traceMatrix(PROJECT, graph);
 
         assertThat(matrix).contains("# Traceability matrix -- project sample-project -- 2 requirement(s)");
         assertThat(matrix).contains("FR-1 [FunctionalRequirement] \"Login\"");
@@ -84,7 +84,7 @@ class TraceabilityRendererTest {
     void orphanCheckListsFr2AsUnrealisedRequirement() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
 
-        String report = renderer.orphanCheck(WORKSPACE, graph);
+        String report = renderer.orphanCheck(PROJECT, graph);
 
         assertThat(report).contains("# Orphan check -- project sample-project");
         assertThat(report).contains("## Requirements without a realising use case (1)");
@@ -104,7 +104,7 @@ class TraceabilityRendererTest {
     void orphanCheckListsMentionsThatNameATermWithoutTheEdgeToBackItUp() {
         TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot());
 
-        String report = renderer.orphanCheck(WORKSPACE, graph);
+        String report = renderer.orphanCheck(PROJECT, graph);
 
         assertThat(report).contains("## Mentioned in text but not linked (2)");
         assertThat(report).contains("FR-3 mentions \"Kunde\" (TERM-9) -- no usesTerm edge");
@@ -120,7 +120,7 @@ class TraceabilityRendererTest {
     void orphanCheckDoesNotCountATermLinkedOnlyViaTheBoundedContextAsOrphaned() {
         TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot());
 
-        String report = renderer.orphanCheck(WORKSPACE, graph);
+        String report = renderer.orphanCheck(PROJECT, graph);
 
         assertThat(report).doesNotContain("TERM-10");
     }
@@ -162,7 +162,7 @@ class TraceabilityRendererTest {
     void impactAnalysisCollapsesTheStepHopAndNeverReportsTheStepItself() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
 
-        String impact = renderer.impactAnalysis(WORKSPACE, graph, TERM_1);
+        String impact = renderer.impactAnalysis(PROJECT, graph, TERM_1);
 
         assertThat(impact).contains("# Impact analysis -- project sample-project -- target: TERM-1");
         assertThat(impact).contains("## Transitively affected (2)");
@@ -174,7 +174,7 @@ class TraceabilityRendererTest {
     void impactAnalysisOfAnUnreferencedResourceReportsNone() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
 
-        String impact = renderer.impactAnalysis(WORKSPACE, graph, FR_2);
+        String impact = renderer.impactAnalysis(PROJECT, graph, FR_2);
 
         assertThat(impact).contains("## Transitively affected (0)");
         assertThat(impact).contains("- none");

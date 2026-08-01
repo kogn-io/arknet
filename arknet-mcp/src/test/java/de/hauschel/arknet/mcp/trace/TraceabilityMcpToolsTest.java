@@ -83,32 +83,32 @@ class TraceabilityMcpToolsTest {
     void traceMatrixReportsUsedTermsAndRealisingUseCasesPerRequirement() {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            ProjectId ws = registerProject(context);
+            ProjectId project = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Term term = terms.add(ws, new NewTerm("Anmeldung", "The act of proving one's identity.", null));
-            terms.add(ws, new NewTerm("Customer", "A person placing an order.",
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null));
+            terms.add(project, new NewTerm("Customer", "A person placing an order.",
                     new ActorFacet(ActorKind.HUMAN, "orderer")));
 
-            Requirement fr1 = requirements.add(ws, new NewRequirement("Login",
+            Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Login succeeds with valid credentials")));
-            requirements.linkTerm(ws, fr1.code(), term.code().value());
-            Requirement fr2 = requirements.add(ws, new NewRequirement("Logout",
+            requirements.linkTerm(project, fr1.code(), term.code().value());
+            Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Logout succeeds")));
 
-            useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of()));
 
             String matrix = tools.traceMatrix(null, ANCHOR);
 
-            assertThat(matrix).contains("# Traceability matrix -- project " + ws.value());
+            assertThat(matrix).contains("# Traceability matrix -- project " + project.value());
             assertThat(matrix).contains(fr1.code().value()).contains(fr2.code().value());
             assertThat(matrix).contains("uses terms  : " + term.code().value());
             assertThat(matrix).contains("realised by : UC1");
@@ -122,31 +122,31 @@ class TraceabilityMcpToolsTest {
     void orphanCheckListsUnrealisedRequirementsAndUnusedTermsButNotTheActor() {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            ProjectId ws = registerProject(context);
+            ProjectId project = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            terms.add(ws, new NewTerm("Passwort", "A secret credential.", null));
-            terms.add(ws, new NewTerm("Customer", "A person placing an order.",
+            terms.add(project, new NewTerm("Passwort", "A secret credential.", null));
+            terms.add(project, new NewTerm("Customer", "A person placing an order.",
                     new ActorFacet(ActorKind.HUMAN, "orderer")));
 
-            Requirement fr1 = requirements.add(ws, new NewRequirement("Login",
+            Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Login succeeds with valid credentials")));
-            Requirement fr2 = requirements.add(ws, new NewRequirement("Logout",
+            Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Logout succeeds")));
 
-            useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of()));
 
             String report = tools.orphanCheck(null, ANCHOR);
 
-            assertThat(report).contains("# Orphan check -- project " + ws.value());
+            assertThat(report).contains("# Orphan check -- project " + project.value());
             assertThat(report).contains("## Requirements without a realising use case (1)");
             assertThat(report).contains(fr2.code().value());
             String requirementsSection = report.substring(
@@ -163,29 +163,29 @@ class TraceabilityMcpToolsTest {
     void impactAnalysisResolvesABareBusinessIdAndReportsTransitiveDependents() {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            ProjectId ws = registerProject(context);
+            ProjectId project = registerProject(context);
             RequirementService requirements = context.getBean(RequirementService.class);
             TermService terms = context.getBean(TermService.class);
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Term term = terms.add(ws, new NewTerm("Anmeldung", "The act of proving one's identity.", null));
-            terms.add(ws, new NewTerm("Customer", "A person placing an order.",
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null));
+            terms.add(project, new NewTerm("Customer", "A person placing an order.",
                     new ActorFacet(ActorKind.HUMAN, "orderer")));
 
-            Requirement fr1 = requirements.add(ws, new NewRequirement("Login",
+            Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
                     List.of("Login succeeds with valid credentials")));
-            requirements.linkTerm(ws, fr1.code(), term.code().value());
+            requirements.linkTerm(project, fr1.code(), term.code().value());
 
-            useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
+            useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
                     List.of()));
 
             String impact = tools.impactAnalysis(null, term.code().value(), ANCHOR);
 
-            assertThat(impact).contains("# Impact analysis -- project " + ws.value());
+            assertThat(impact).contains("# Impact analysis -- project " + project.value());
             assertThat(impact).contains("target: " + term.code().value());
             assertThat(impact).contains("## Transitively affected (2)");
             assertThat(impact).contains(fr1.code().value()).contains("UC1");
@@ -196,7 +196,7 @@ class TraceabilityMcpToolsTest {
     void impactAnalysisRejectsAnUnknownBareIdWithGuidance() {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            ProjectId ws = registerProject(context);
+            ProjectId project = registerProject(context);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             assertThatThrownBy(() -> tools.impactAnalysis(null, "FR-999", ANCHOR))
