@@ -13,7 +13,7 @@ import de.hauschel.arknet.prj.domain.Project;
  *
  * <p>Distinct from {@link ResolveProject}, which resolves a client-supplied anchor: a caller here
  * already holds a {@link ProjectId} (typically from an anchor resolved earlier in the same call)
- * and wants the project's other attributes - today, its label (issue #187). The gateway role
+ * and wants the project's other attributes - today, its label. The gateway role
  * ADR-008 grants an in-adapter of a neighbour bounded context is exactly this: the store report
  * borrows this port to show a project's registered label instead of its raw id.</p>
  */

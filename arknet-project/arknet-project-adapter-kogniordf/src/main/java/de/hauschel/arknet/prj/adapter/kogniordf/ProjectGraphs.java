@@ -28,7 +28,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * self-description, in the project's own dataset) build the identical triple shape from - so the
  * two write paths ADR-016 deliberately keeps separate (decisions 6 and 7) cannot drift apart
  * triple-by-triple the way two near-identical read/write paths in sibling out-adapters already
- * have (issues #80/#81).
+ * have.
  *
  * <p><strong>Deterministic anchor identity is the load-bearing decision of this adapter.</strong>
  * An anchor's subject IRI is not minted (no {@code ResourceIdFactory}, no

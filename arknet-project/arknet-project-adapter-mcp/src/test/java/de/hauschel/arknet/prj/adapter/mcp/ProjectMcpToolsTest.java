@@ -328,7 +328,6 @@ class ProjectMcpToolsTest {
         }
     }
 
-    /** Structural fake implementing {@link ListProjects}. */
     /** Structural fake implementing {@link AdoptProject}. */
     private static final class FakeAdoptProject implements AdoptProject {
         private ProjectId lastDatasetId;
@@ -354,6 +353,7 @@ class ProjectMcpToolsTest {
         }
     }
 
+    /** Structural fake implementing {@link ListProjects}. */
     private static final class FakeListProjects implements ListProjects {
         private List<Project> all = List.of();
 

@@ -78,8 +78,8 @@ class ProjectServiceTest {
     }
 
     /**
-     * Issue #187: {@code store_overview} looks a resolved {@link ProjectId} back up to show the
-     * registered label instead of the raw id - this is that lookup's driving-port surface.
+     * {@code store_overview} looks a resolved {@link ProjectId} back up to show the registered
+     * label instead of the raw id - this is that lookup's driving-port surface.
      */
     @Test
     void findByIdReturnsTheRegisteredProject() {

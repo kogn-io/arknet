@@ -55,7 +55,7 @@ class KognioRdfProjectRegistryTest {
     /**
      * Where the store would persist to. It does not - this test runs {@code IN_MEMORY} - but the
      * lifecycle takes a storage root regardless, and letting JUnit own it keeps the directory from
-     * outliving the test the way {@code Files.createTempDirectory} let it (issue #180).
+     * outliving the test the way {@code Files.createTempDirectory} let it.
      */
     @TempDir
     Path storageRoot;

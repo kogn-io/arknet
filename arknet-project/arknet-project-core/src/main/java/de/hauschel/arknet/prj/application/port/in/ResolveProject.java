@@ -15,8 +15,8 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  * that received an {@link java.util.Optional} would be tempted to invent exactly the kind of
  * fallback ADR-016 removes.</p>
  *
- * <p>This is the port later store-addressing work (issue #179) will route every request through
- * once the anchor stops being a project-management-only concept and starts gating the store
+ * <p>This is the port later store-addressing work will route every request through once the
+ * anchor stops being a project-management-only concept and starts gating the store
  * itself - it is already the right shape here because the MCP adapter of this component needs it
  * today: {@link AttachAnchor} and {@link RenameProject} both take a {@link
  * de.hauschel.arknet.kernel.ProjectId}, and an agent driving those tools addresses its own
