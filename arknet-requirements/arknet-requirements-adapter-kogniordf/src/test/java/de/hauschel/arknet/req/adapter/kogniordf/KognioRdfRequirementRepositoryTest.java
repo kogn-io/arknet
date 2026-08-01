@@ -50,6 +50,7 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
 /**
  * Integration test for {@link KognioRdfRequirementRepository} against an in-memory
@@ -732,6 +733,90 @@ class KognioRdfRequirementRepositoryTest {
                 + "<http://purl.org/dc/terms/title> \"Login\" ; "
                 + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
                 + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    // ---- status: SHACL-legal but MVP-unsupported (issue #160) ----------------------------
+
+    /**
+     * Store-first regression test for issue #160: {@code requirements-shapes.ttl}'s
+     * {@code Requirement-status} shape SHACL-legally allows six status individuals via
+     * {@code sh:in}, but {@link RequirementStatus} implements only two
+     * ({@code PROPOSED}/{@code ACCEPTED}) - {@code arkreq:Rejected} is unreachable via
+     * {@code req_add}/{@code req_set_status}, but a store-first (ADR-005) edit can legally write
+     * it. Before the fix, {@code statusFromIri} threw a raw, uncaught {@link IllegalStateException}
+     * that named neither the requirement nor which method it broke; the dedicated exception must
+     * name both.
+     */
+    @Test
+    void findByCodeThrowsUnsupportedStatusExceptionNamingTheRequirementForAShaclLegalStatus() {
+        RequirementId id = freshId();
+        givenRequirementWithStatus(PROJECT_A, id, "FR-1", "https://w3id.org/arknet/requirements#Rejected");
+
+        UnsupportedRequirementStatusException thrown = assertThrows(
+                UnsupportedRequirementStatusException.class,
+                () -> repository.findByCode(PROJECT_A, new RequirementCode("FR-1")));
+
+        assertEquals(PROJECT_A, thrown.projectId());
+        assertEquals(new RequirementCode("FR-1"), thrown.requirementCode());
+        assertEquals("https://w3id.org/arknet/requirements#Rejected", thrown.statusIri());
+        assertTrue(thrown.getMessage().contains("FR-1"),
+                "message must name the affected requirement, not just the raw status IRI");
+    }
+
+    /** {@link RequirementRepository#findCurrentByCode} must fail the same way, not just findByCode. */
+    @Test
+    void findCurrentByCodeThrowsUnsupportedStatusExceptionForAShaclLegalStatus() {
+        RequirementId id = freshId();
+        givenRequirementWithStatus(PROJECT_A, id, "FR-1", "https://w3id.org/arknet/requirements#Deprecated");
+
+        assertThrows(UnsupportedRequirementStatusException.class,
+                () -> repository.findCurrentByCode(PROJECT_A, new RequirementCode("FR-1")));
+    }
+
+    /**
+     * Before the fix this was the crash the issue described as project-wide: {@link #findAll}
+     * called {@code statusFromIri} once per row inside a {@code computeIfAbsent} lambda, so one
+     * requirement with an unsupported status aborted the whole listing with an uninformative
+     * {@link IllegalStateException} - unreadable requirements alongside perfectly good ones. The
+     * fix keeps the abort (a SHACL-legal value must fail visibly, not vanish - see the class-level
+     * Javadoc), but with a dedicated, named exception instead of a raw one.
+     */
+    @Test
+    void findAllThrowsUnsupportedStatusExceptionEvenWithOtherValidRequirementsPresent() {
+        repository.create(PROJECT_A, new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, List.of(),
+                List.of("Login succeeds with valid credentials")));
+        givenRequirementWithStatus(PROJECT_A, freshId(), "FR-2", "https://w3id.org/arknet/requirements#Verified");
+
+        UnsupportedRequirementStatusException thrown = assertThrows(
+                UnsupportedRequirementStatusException.class, () -> repository.findAll(PROJECT_A));
+
+        assertEquals(new RequirementCode("FR-2"), thrown.requirementCode());
+    }
+
+    /**
+     * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with an
+     * arbitrary {@code arkreq:status} object - used to reach the four SHACL-legal status
+     * individuals ({@code Rejected}/{@code Implemented}/{@code Verified}/{@code Deprecated})
+     * {@link RequirementStatus} does not implement, unreachable via {@code req_add}/
+     * {@code req_set_status}.
+     */
+    private void givenRequirementWithStatus(ProjectId projectId, RequirementId id, String code, String statusIri) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <" + statusIri + "> ; "
                 + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
                 + "\"Login succeeds with valid credentials\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
