@@ -84,6 +84,8 @@ class UseCaseTest {
                 ACTOR_A, List.of(), null, null, steps, List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
                 null, List.of(), null, null, steps, List.of()));
+        assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
+                ACTOR_A, List.of(), null, null, null, List.of()));
     }
 
     @Test
