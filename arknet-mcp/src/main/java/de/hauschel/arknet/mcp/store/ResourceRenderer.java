@@ -66,10 +66,13 @@ public final class ResourceRenderer {
     }
 
     private String renderObject(RdfNode object) {
-        if (object instanceof RdfNode.Resource resource) {
-            return prefixes.toCurie(resource.iri());
-        }
-        RdfNode.Literal literal = (RdfNode.Literal) object;
+        return switch (object) {
+            case RdfNode.Resource resource -> prefixes.toCurie(resource.iri());
+            case RdfNode.Literal literal -> renderLiteral(literal);
+        };
+    }
+
+    private String renderLiteral(RdfNode.Literal literal) {
         StringBuilder rendered = new StringBuilder("\"").append(literal.lexicalForm()).append('"');
         if (literal.languageTag() != null) {
             rendered.append('@').append(literal.languageTag());
