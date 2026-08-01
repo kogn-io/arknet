@@ -57,6 +57,7 @@ import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 
 /**
  * Regression tests for {@link KognioRdfProjectRegistry#register} against a real RDF4J-backed store
@@ -208,30 +209,38 @@ class ProjectRegistryRealStoreConcurrencyTest {
     }
 
     /**
-     * The residual case, and the reason {@link KognioRdfProjectRegistry} may return the store's own
-     * exception unchanged: a lost commit that none of this context's uniqueness rules explains.
-     * The test above shows the real store does not produce one today for two unrelated
-     * registrations, so the conflict is injected here rather than raced - which is the honest way
-     * to pin a fallback whose trigger is, by definition, something the adapter does not know about
-     * (a future guard, a different sail, a store that detects conflicts more coarsely - ADR-001
-     * keeps it swappable).
+     * The residual case, and the reason {@link KognioRdfProjectRegistry} wraps the store's own
+     * exception instead of inventing a rule violation: a lost commit that none of this context's
+     * uniqueness rules explains. The test above shows the real store does not produce one today
+     * for two unrelated registrations, so the conflict is injected here rather than raced - which
+     * is the honest way to pin a fallback whose trigger is, by definition, something the adapter
+     * does not know about (a future guard, a different sail, a store that detects conflicts more
+     * coarsely - ADR-001 keeps it swappable).
      *
      * <p>What must not happen is the adapter inventing an explanation: reporting
      * {@link DuplicateProjectLabelException} for a label that is demonstrably free - a defect
      * uncovered before the {@code commitConflict} translator existed - would send the caller
-     * after a collision that never existed.</p>
+     * after a collision that never existed. Wrapping the raw conflict in
+     * {@link UnattributedRegistrationConflictException} is not that: it invents no collision, it
+     * only makes the residual signal catchable by {@code ProjectService#register}'s retry loop -
+     * {@code arknet-project-core} must stay free of the store's own exception type (see
+     * {@code arknet-architecture-tests}' dependency rules), so this out-port cannot surface it
+     * directly (issue #67).</p>
      */
     @Test
-    void aLostCommitNoRuleExplainsSurfacesAsTheStoresOwnConflict() {
+    void aLostCommitNoRuleExplainsSurfacesAsAnUnattributedRegistrationConflict() {
         ConcurrencyConflictException storeConflict = new ConcurrencyConflictException("lost the commit", null);
         ProjectRegistry failingCommits =
                 KognioRdfProjectRepositoryFactory.registryOver(new GuardedLifecycle(realLifecycle,
                         tx -> tx, storeConflict), DisplayLocale.DEFAULT);
         Project project = new Project(freshId(), "free-label", List.of(pathAnchor("/home/dev/free")));
 
-        RuntimeException thrown = assertThrows(RuntimeException.class, () -> failingCommits.register(project));
+        UnattributedRegistrationConflictException thrown = assertThrows(
+                UnattributedRegistrationConflictException.class, () -> failingCommits.register(project));
 
-        assertSame(storeConflict, thrown, "with no rule broken there is nothing truthful to translate into");
+        assertSame(storeConflict, thrown.getCause(),
+                "with no rule broken there is nothing truthful to translate into - the raw conflict "
+                        + "must still be reachable, not swallowed");
         assertTrue(straightThrough.findAll().isEmpty(), "the rejected write must have left nothing behind");
     }
 
