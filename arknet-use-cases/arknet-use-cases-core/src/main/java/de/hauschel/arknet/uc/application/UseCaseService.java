@@ -81,7 +81,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      * of concurrent writers against the very same use case fails loudly instead of looping
      * forever, rather than guarding against a race expected to resolve within a single retry.
      */
-    private static final int MAX_RETRY_ATTEMPTS = 20;
+    static final int MAX_RETRY_ATTEMPTS = 20;
 
     private final UseCaseRepository repository;
     private final ResourceIdFactory resourceIdFactory;

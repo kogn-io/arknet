@@ -117,11 +117,14 @@ class UseCaseServiceConcurrencyTest {
     @Test
     void updateGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
         UseCaseCode code = otherCaller.add(WS, newUseCase()).code();
-        UseCaseService underTest = new UseCaseService(
-                new AlwaysConflictingRepository(store), resourceIdFactory, requirementLookup, actorLookup);
+        AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
+        UseCaseService underTest =
+                new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
                 () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null));
+
+        assertEquals(UseCaseService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }
 
     private static NewUseCase newUseCase() {
@@ -242,9 +245,14 @@ class UseCaseServiceConcurrencyTest {
     private static final class AlwaysConflictingRepository implements UseCaseRepository {
 
         private final UseCaseRepository delegate;
+        private int compareAndUpdateAttempts;
 
         AlwaysConflictingRepository(UseCaseRepository delegate) {
             this.delegate = delegate;
+        }
+
+        int compareAndUpdateAttempts() {
+            return compareAndUpdateAttempts;
         }
 
         @Override
@@ -254,6 +262,7 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
+            compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code())
                     .orElseThrow(() -> new UseCaseNotFoundException(projectId, updated.code()));
