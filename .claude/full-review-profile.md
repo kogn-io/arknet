@@ -17,6 +17,19 @@ the skill's generic methodology.
   mechanically enforced (with a note that each rule was confirmed to fail when the invariant was
   broken on purpose) and which are "reviewer attention only". Treat the enforced ones as verified
   ground truth, not something to re-derive from scratch.
+- `arknet-mcp` is the composition root and additionally carries three cross-cutting,
+  BC-spanning read paths (`mcp/store`, `mcp/report`, `mcp/trace`) — a contract hole there
+  distorts all six hexagons at once. Weight it above the individual BC modules.
+- Within `arknet-mcp`, `StoreReader` (`mcp/store/StoreReader.java`) is the single highest
+  priority file: all five generic tools (`store_overview`, `resource_get`, `trace_matrix`,
+  `orphan_check`, `impact_analysis`) and the HTML report read through the same
+  `readSnapshot`/`outgoing`/`incoming` snapshot. A filtering bug there (see #136, blank-node
+  subjects) distorts five tools simultaneously, not just one.
+- `ArknetMcpConfiguration.java` (~660 lines, the central wiring) doesn't deserve a craftsmanship
+  deduction in this skill — that's `/clean-code-review`'s job. For Full Review the only thing
+  that matters: is every one of the six BC bean families actually wired per-call rather than as
+  a singleton with `ProjectId` (ADR-009), and is there no fallback path without an anchor
+  (ADR-016 point 3)? Both held up cleanly on the 2026-08-01 audit.
 
 ## Known project-specific traps
 
@@ -32,11 +45,24 @@ the skill's generic methodology.
   kernel must not depend on that module (RDF-free core rule). Verify the two character sets still
   match rather than filing the duplication itself as a finding — the module's `CLAUDE.md` already
   documents why it exists and won't be resolved.
+  **Counter-example found in `arknet-mcp` (2026-08-01, issue #148):** the same-looking pattern is
+  NOT always intentional — `arkddd:ubiquitousLanguageTerm`/`arkddd:BoundedContext` are duplicated
+  between the bc-adapter and `TraceabilityGraph` with a comment claiming `ArkdddVocabulary`'s
+  scope is "deliberately limited" to predicates *not* duplicated elsewhere — the comment is
+  simply wrong, and no architecture test guards it (the existing `arknet-architecture-tests`
+  vocabulary abgleich covers `arkprov`/`arkprj`/`arkarch`, not `arkddd`/`arkproc`). Always verify
+  the "intentional" claim against `arknet-architecture-tests` before accepting it — don't take a
+  comment's word for it.
 - **Anchor/Project routing (ADR-016) is the one recurring hot spot.** `ProjectId`,
   `ProjectResolver`, `UnresolvedProjectAnchorException` (kernel) plus `RegisteredAnchorProjectResolver`
   (`arknet-mcp`) together implement "no default, no fallback, registry lookup only". Any future
   change touching project routing should be re-checked against ADR-016 decisions 3 (no default)
   and 5 (no migration of legacy opaque ids) specifically.
+  **Extension found (2026-08-01, issue #149):** the "no call without an anchor" wording is
+  absolute in ADR-016/CLAUDE.md but does NOT hold for `project_export`/`project_list`, which are
+  deliberately anchor-less (they enumerate across all registered projects). Correct as built, but
+  undocumented as an exception — check any future absolute-sounding ADR-016 claim against these
+  two tools specifically.
 - **`CodeAssignment`'s retry loop is duplicated logic made generic, not a shared implementation
   detail.** It exists in the kernel (not `arknet-persistence-support`) because the calling
   `*-core` services must stay free of `io.kogn.rdf` (ArchUnit rule 3), while
@@ -44,6 +70,29 @@ the skill's generic methodology.
   sites (`req`/`ul`/`uc`/`bc`/`adr` application services), confirm the caller's
   `Duplicate<Type>CodeException` is the actual collision signal passed to
   `createRetryingOnCodeCollision`, not a coincidentally-matching supertype.
+  **Related recurring bug (2026-08-01, issue #143):** lexicographic (`String` natural order)
+  sorting of unpadded business codes (`ADR-1, ADR-10, ADR-11, ADR-2, ...`) is a bug this repo has
+  already fixed once (`KognioRdfAdrRepository`'s numeric comparator) and re-introduced once
+  (arknet-mcp's report card builders). Grep for `Comparator.comparing(... code().value())` and
+  verify the backing field isn't unpadded numeric text.
+- **A read path and a write/export path over the same store can silently diverge on edge cases.**
+  Found in `arknet-mcp` (2026-08-01, issue #136): `StoreExporter` handles blank-node subjects
+  correctly (has its own test for it), `StoreReader` drops them silently. Whenever two paths
+  read/write the same store, check them explicitly against each other, not just against the docs.
+- **The MCP tool-callback layer discards the outer exception message in favor of the deepest
+  `cause`.** Found in `arknet-mcp` (2026-08-01, issue #137): two independent places compose a
+  helpful remedy message and attach the original exception as `cause` — Spring AI's
+  `AbstractSyncMcpToolMethodCallback` renders `rootCause.getMessage()`, so the composed message
+  never reaches the caller. A unit test asserting on `exception.getMessage()` will not catch
+  this; the test has to go through the actual callback down to `CallToolResult`. Ask explicitly:
+  "does this message really reach the caller, or only the exception object?"
+- **`DisplayLocale` is easy to bypass in a new generic/cross-BC read path.** Found in
+  `arknet-mcp` (2026-08-01, issues #141, #145): `StoreResource#label()` and
+  `TraceabilityGraph#termLabels()` pick the first literal in triple order, ignoring
+  `DisplayLocale`, while the BC-specific report path (`ListTerms`) applies the full fallback
+  chain. Causes divergence between digest/traceability tools and the HTML report on
+  multi-language `prefLabel`s. Whenever a review touches a new generic read path, check whether
+  it bypasses `DisplayLocale` even though a sibling BC out-adapter next to it applies it.
 
 ## Relevant ADRs to keep loaded
 
@@ -55,9 +104,13 @@ the skill's generic methodology.
   technique".
 - ADR-013 / ADR-014 (write funnel, revision as concurrency token) — relevant whenever a review
   touches a write path's transaction/concurrency behavior (Phase 2).
+- ADR-006 (generic store read path) / ADR-008 (in-adapter as BC gateway, the "borrow" pattern) —
+  relevant whenever a review touches `arknet-mcp`'s `mcp/store`/`mcp/report`/`mcp/trace`, since
+  those packages exist entirely because of these two ADRs.
 
 ## Calibration log
 
 | Date | Scope | Findings | What it confirmed |
 |---|---|---|---|
 | 2026-08-01 | `arknet-shared-kernel` (full module, ~1092 LOC incl. tests) | 2 minor (a Javadoc `@throws` omission; an untested exception accessor) — both documentation/test-hygiene, no functional holes | Module lives up to its own "bewusst winzig, sorgfaeltig" framing. A near-zero yield here is a correct result, not a sign the review was too shallow — don't manufacture findings to justify the effort. Issues filed: [#133](https://github.com/kogn-io/arknet/issues/133), [#134](https://github.com/kogn-io/arknet/issues/134). |
+| 2026-08-01 | `arknet-mcp` (full module, 64 files, ~10.3k LOC incl. tests; 4 parallel subagents split by disjoint package: dataset+store, report, trace+mention, composition root) | 16 findings, 2 critical (silent under-reporting of dependents/statements from two independent tools), 8 high, 6 medium/low | Highest-yield full review to date, roughly proportional to module size and to how much prose-documented behavior (`@McpTool` descriptions, a very dense module `CLAUDE.md`) the module carries to audit against. Phase 1 Sweep 4 (adjectives about runtime behavior — "without cache", "case-insensitive", "the first label", "in encounter order", "the longer one wins") was by far the most productive sweep here. Phase 2 (concurrency) was clean — all tool beans are stateless singletons, `ProjectId` is consistently a method parameter, no `ThreadLocal` anywhere in the MCP stack; a 50-request/8-thread throwaway probe against two anchors confirmed zero cross-project mixing. Issues filed: [#135](https://github.com/kogn-io/arknet/issues/135)–[#150](https://github.com/kogn-io/arknet/issues/150). |
