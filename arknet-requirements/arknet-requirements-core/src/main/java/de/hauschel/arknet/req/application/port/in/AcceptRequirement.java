@@ -11,7 +11,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * Driving port: accept a proposed requirement.
  *
  * <p>Backs the MVP tool {@code req_set_status}. The requirements lifecycle permits exactly one
- * transition - {@code PROPOSED -> ACCEPTED} (issue #190) - so this port takes no target status; a
+ * transition - {@code PROPOSED -> ACCEPTED} - so this port takes no target status; a
  * generic {@code RequirementStatus status} parameter would only ever legally resolve to {@code
  * ACCEPTED} and was itself the misleading surface this port replaces (formerly {@code
  * SetRequirementStatus}). The transition rule itself lives on {@link Requirement#accept()}, not

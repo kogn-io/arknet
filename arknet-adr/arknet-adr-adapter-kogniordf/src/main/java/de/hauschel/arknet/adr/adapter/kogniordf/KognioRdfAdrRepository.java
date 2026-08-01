@@ -84,7 +84,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * subject's triples wholesale (see {@link #replaceTriples}). There is no unconditional update: every
  * correction to an already-recorded decision goes through the compare-and-set guard, so two
  * concurrent {@code adr_supersede} calls cannot silently lose one another's edge - the retrofit
- * issue #176 had to perform on {@code bc_link_term}, here from the first commit.</p>
+ * other bounded contexts had to perform later on their own write paths, here from the first commit.</p>
  *
  * <p><strong>References arrive pre-resolved.</strong> {@link RequirementRef}/
  * {@link BoundedContextRef} carry the neighbour's opaque subject {@link ResourceId} directly -
@@ -102,9 +102,9 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@link WriteFunnel} (ADR-013). {@code ashapes:ADR-consequences} and
  * {@code ashapes:ADR-alternatives} are {@code sh:Warning}, not {@code sh:Violation}: a decision
  * recorded while it is still being argued has neither yet, and that must not block the write - the
- * same reasoning issue #66 applied to a bounded context's aggregates.</p>
+ * same reasoning applied to a bounded context's aggregates.</p>
  *
- * <p><strong>Row multiplication (the issue #81 pattern).</strong> None of the ADR shape's literal
+ * <p><strong>Row multiplication.</strong> None of the ADR shape's literal
  * property shapes except {@code ADR-identifier} and {@code ADR-status} carries an enforced
  * {@code sh:maxCount}, so a store-first (ADR-005) decision with two {@code arknet:name} or two
  * {@code arkarch:adrContext} triples legally multiplies a subject's SPARQL rows. Every read path
@@ -252,7 +252,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * <li>{@code addressesRequirement}/{@code affectsContext}/{@code supersedes} edges whose target
      * is not an IRI - the read paths can never surface those, since {@link ResourceId} cannot
      * represent a blank node, so a round trip through the domain object would drop them (the same
-     * preservation the requirements adapter does for {@code arkreq:usesTerm}, issue #65).</li>
+     * preservation the requirements adapter does for {@code arkreq:usesTerm}).</li>
      * </ul>
      */
     private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
@@ -425,8 +425,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
     /**
      * Reads exactly one decision by its business code over an already-acquired handle, grouping the
-     * multi-row cross product the unconstrained literal predicates can produce (the issue #81
-     * pattern) and joining its three edge lists. Shared by {@link #findByCode} and
+     * multi-row cross product the unconstrained literal predicates can produce
+     * and joining its three edge lists. Shared by {@link #findByCode} and
      * {@link #findCurrentByCode} so the two single-decision read paths cannot drift apart
      * field-by-field.
      */
@@ -461,7 +461,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * one code (single read). {@code FILTER(isIRI(?s))} guards against a store-first decision on a
      * blank-node subject: {@code ashapes:ADRShape} carries no {@code sh:nodeKind sh:IRI}, and an
      * unguarded cast would take down every other decision in the project with it (the same guard
-     * issue #104 added to the glossary adapter).
+     * added to the glossary adapter).
      */
     private static String adrWhereBody(String identifierPattern) {
         return "?s a <" + ADR_TYPE + "> . "
@@ -518,8 +518,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     /**
-     * Mutable per-subject accumulator collecting a decision's scalar-field candidates across rows
-     * (the issue #81 pattern), then choosing one of each deterministically (first-seen) when the
+     * Mutable per-subject accumulator collecting a decision's scalar-field candidates across rows,
+     * then choosing one of each deterministically (first-seen) when the
      * decision is finally materialised, logging a {@code WARN} if more than one distinct value was
      * collected for a field.
      */

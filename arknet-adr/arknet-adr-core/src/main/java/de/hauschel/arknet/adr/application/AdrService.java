@@ -223,7 +223,7 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
      * derives the next state via {@code mutation}, and writes it back via
      * {@link AdrRepository#compareAndUpdate} - retrying with a fresh read whenever a concurrent
      * writer commits a change in between. This is the guard the bounded-context and requirements
-     * contexts had to retrofit (issues #176 and #108/#167); building it in from the start is what
+     * contexts had to retrofit; building it in from the start is what
      * keeps two parallel {@code adr_supersede} calls on the same decision from silently losing one
      * another's edge.
      *

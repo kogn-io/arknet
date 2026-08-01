@@ -27,7 +27,7 @@ import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
- * Regression test for issue #144: {@link UseCaseService#add} used to compute the next business
+ * Regression test for the code-assignment race: {@link UseCaseService#add} used to compute the next business
  * code ({@code UCn}) client-side via {@code nextCode()} and then {@code create()} it with no
  * retry, so two racing {@code uc_add} calls in the same project both computed the same candidate
  * code and one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard
@@ -38,7 +38,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * decorator runs an "other caller"'s complete add exactly once, right after the first {@code
  * findAll} (which {@code nextCode()} reads) returns - pinning the exact interleaving instead of
  * relying on thread scheduling, which would make the test flaky. Mirrors {@code
- * RequirementServiceConcurrencyTest} (issue #108), the one type that already guarded this.</p>
+ * RequirementServiceConcurrencyTest}, the one type that already guarded this.</p>
  */
 class UseCaseServiceConcurrencyTest {
 
@@ -86,7 +86,7 @@ class UseCaseServiceConcurrencyTest {
     }
 
     /**
-     * Regression test for issue #165's {@code updateWithOptimisticRetry}: a concurrent writer
+     * Regression test for {@code updateWithOptimisticRetry}: a concurrent writer
      * that commits a different field between this caller's read and its own write must cost the
      * caller nothing and lose neither field, mirroring {@code
      * RequirementServiceConcurrencyTest#updateSurvivesAConcurrentLinkTermBetweenReadAndWrite}.

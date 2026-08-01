@@ -12,7 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Domain invariant tests for {@link RequirementSchemaTerm} (issue #31).
+ * Domain invariant tests for {@link RequirementSchemaTerm}.
  */
 class RequirementSchemaTermTest {
 

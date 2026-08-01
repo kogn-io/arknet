@@ -29,7 +29,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * no anchor parameter and takes no {@link org.springframework.ai.mcp.annotation.context.McpSyncRequestContext},
  * because a backup trigger is inherently cross-project: it asks {@link ListProjects} for every
  * registered project rather than routing one call to one dataset. There is deliberately no
- * restore counterpart (issue #154) - restoring a {@code .trig} file back into a dataset is left to
+ * restore counterpart - restoring a {@code .trig} file back into a dataset is left to
  * manual or agent-assisted recovery for now.</p>
  *
  * <p>Each project's file is written to a sibling {@code .tmp} path first and only moved onto its
@@ -60,7 +60,7 @@ public final class StoreExportTools {
      * @param exportHostDir     the host-reachable path {@code fallbackExportDir} is bind-mounted
      *                          from, or {@code null} when the process runs directly on the
      *                          machine it exports to and no translation is needed (analogous to
-     *                          {@link StoreReportTools}'s {@code reportHostDir}, issue #160)
+     *                          {@link StoreReportTools}'s {@code reportHostDir})
      */
     public StoreExportTools(
             final ListProjects listProjects, final StoreExporter exporter,

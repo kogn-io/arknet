@@ -43,7 +43,7 @@ public final class DigestRenderer {
      * Renders the digest for a project snapshot.
      *
      * @param projectId the project the snapshot was read from
-     * @param label       the project's registered label (issue #187), or {@link Optional#empty()}
+     * @param label       the project's registered label, or {@link Optional#empty()}
      *                    if {@code projectId} is not (or no longer) found in the registry - the
      *                    header then falls back to the raw id, exactly as before this label was
      *                    available

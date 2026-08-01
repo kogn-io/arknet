@@ -10,7 +10,7 @@ import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 /**
  * Driving port: self-describes the {@code arkreq:} requirement vocabulary as data - the terms,
  * ontology-sourced definitions and accepted values an MCP client needs before calling
- * {@code req_add}/{@code req_set_status}, instead of having to guess them (issue #31).
+ * {@code req_add}/{@code req_set_status}, instead of having to guess them.
  *
  * <p>Unlike every other requirements in-port, this deliberately takes no
  * {@link de.hauschel.arknet.kernel.ProjectId}: the vocabulary is static tool self-description,

@@ -29,7 +29,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * Insertion order is preserved to make {@link #findAll(ProjectId)} assertions
  * deterministic.</p>
  *
- * <p><strong>Concurrency token (issue #165).</strong> Mirrors the real {@link
+ * <p><strong>Concurrency token.</strong> Mirrors the real {@link
  * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the use case, {@link #compareAndUpdate} rejects a

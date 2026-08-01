@@ -18,12 +18,12 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Renders {@link Requirement}s (and the requirement schema) into the plain-text strings
- * {@link RequirementMcpTools} returns from its tool calls. Split out of that class (issue
- * #190) because the two carry independent reasons to change: {@link RequirementMcpTools}
- * changes when a tool's parameter contract changes, this class changes when the rendered
- * text does - the two were previously mixed into a single class body.
+ * {@link RequirementMcpTools} returns from its tool calls. Split out of that class because the
+ * two carry independent reasons to change: {@link RequirementMcpTools} changes when a tool's
+ * parameter contract changes, this class changes when the rendered text does - the two were
+ * previously mixed into a single class body.
  *
- * <p><strong>Term display resolution (issue #77 nachtrag).</strong> {@link TermRef} carries a
+ * <p><strong>Term display resolution.</strong> {@link TermRef} carries a
  * linked term's opaque subject identity, not its business code - but a human who typed
  * {@code TERM-1} into {@code req_link_term} expects to see {@code TERM-1} again, not a raw IRI
  * they cannot re-type. {@link RequirementMcpTools} is the gate into the requirements hexagon,
@@ -88,7 +88,7 @@ final class RequirementPresenter {
      * one call per requirement and not one call per {@link TermRef}. Missing ids are simply
      * absent from the returned map, which {@link #renderTerm} treats as "fall back to the IRI".
      *
-     * <p><strong>Structurally cannot throw on a duplicate key (issue #77, second nachtrag).</strong>
+     * <p><strong>Structurally cannot throw on a duplicate key.</strong>
      * {@link ResolveTerms} promises at most one {@link ResolvedTerm} per identity, but this method
      * must not rely on every implementation upholding that: a plain {@code Collectors.toMap(t ->
      * t.id(), t -> t)} throws {@code IllegalStateException} the moment two returned

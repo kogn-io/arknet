@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * <p>Pure, framework-free - a fake collision signal plus a counting supplier stand in for the
  * real out-adapter round trip so the loop's bound-enforcement and exception discrimination are
  * covered directly, without going through a {@code *RealStoreConcurrencyTest} three modules
- * away (issue #144, issue #95).</p>
+ * away (issue #95).</p>
  */
 class CodeAssignmentTest {
 

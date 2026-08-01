@@ -28,17 +28,17 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
  * An in-memory directed multigraph over one project's statements, purpose-built for the
- * cross-bounded-context edges the traceability tools traverse (issue #131):
+ * cross-bounded-context edges the traceability tools traverse:
  * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
  * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
- * (BoundedContext -&gt; Term, issue #185), the three ADR edges
+ * (BoundedContext -&gt; Term), the three ADR edges
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
  * (ADR -&gt; BoundedContext) and {@code arkarch:supersedes} (ADR -&gt; ADR, issue #69), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/bounded-context prose
  * ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}/{@code arkddd:domainVision}) that
- * {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to
- * (issue #185). {@code actor_usecase_matrix} needs the {@code primaryActor}/{@code
+ * {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to.
+ * {@code actor_usecase_matrix} needs the {@code primaryActor}/{@code
  * supportingActor} edges in the <em>forward</em> direction too ({@link #actorsOf(String)}/{@link
  * #useCasesOf(String)}), and {@code term_cooccurrence} reuses the same prose-scanning idea for a
  * use case's {@code arkreq:useCaseGoal} ({@link #useCaseProseTexts(String)}, issue #108).
@@ -54,7 +54,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * <p>Unlike {@code StoreReader}/{@code Prefixes}, this class is deliberately <em>not</em>
  * domain-agnostic - it knows the {@code arkreq:}/{@code arkddd:}/{@code arkarch:}/{@code skos:}
  * predicate and type IRIs it traverses. That is a bounded exception in the same spirit as {@code
- * StoreResource#status()}/{@code #priority()} (issue #111): a fully generic "follow every
+ * StoreResource#status()}/{@code #priority()}: a fully generic "follow every
  * object-typed predicate" traversal would report noise indistinguishable from the specific
  * edges traceability cares about.</p>
  */
@@ -69,7 +69,7 @@ public final class TraceabilityGraph {
     // of truth (arknet-persistence-support), the very same constants the requirements/
     // bounded-context/ubiquitous-language/use-cases out-adapters serialize them with - so a
     // predicate or type rename cannot silently desync the write side from this read-side
-    // traversal (issue #134).
+    // traversal.
     private static final String USES_TERM = ArkreqVocabulary.USES_TERM;
     private static final String PRIMARY_ACTOR = ArkreqVocabulary.PRIMARY_ACTOR;
     private static final String SUPPORTING_ACTOR = ArkreqVocabulary.SUPPORTING_ACTOR;
@@ -299,7 +299,7 @@ public final class TraceabilityGraph {
 
     /**
      * @return the {@code dcterms:description} and {@code arkreq:acceptanceCriterion} texts of a
-     *         requirement, for scanning it for unlinked glossary mentions (issue #185)
+     *         requirement, for scanning it for unlinked glossary mentions
      */
     public List<String> requirementProseTexts(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
@@ -310,7 +310,7 @@ public final class TraceabilityGraph {
 
     /**
      * @return the {@code arkddd:domainVision} text of a bounded context, for scanning it for
-     *         unlinked glossary mentions (issue #185)
+     *         unlinked glossary mentions
      */
     public List<String> boundedContextProseTexts(String boundedContextIri) {
         return literals(Objects.requireNonNull(boundedContextIri, "boundedContextIri"), DOMAIN_VISION);
@@ -336,7 +336,7 @@ public final class TraceabilityGraph {
 
     /**
      * Every requirement/bounded-context prose mention of a glossary term the source does not
-     * link to (issue #185): a requirement's {@code dcterms:description}/{@code
+     * link to: a requirement's {@code dcterms:description}/{@code
      * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, and a
      * bounded context's {@code arkddd:domainVision} checked against its {@code
      * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report

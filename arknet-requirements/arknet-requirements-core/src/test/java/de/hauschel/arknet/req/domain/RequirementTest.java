@@ -186,7 +186,7 @@ class RequirementTest {
         assertThrows(IllegalArgumentException.class, () -> new RequirementCode(" "));
     }
 
-    /** Issue #190: the transition rule itself lives on {@link Requirement#accept()}. */
+    /** The transition rule itself lives on {@link Requirement#accept()}. */
     @Test
     void acceptTransitionsProposedToAccepted() {
         Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,

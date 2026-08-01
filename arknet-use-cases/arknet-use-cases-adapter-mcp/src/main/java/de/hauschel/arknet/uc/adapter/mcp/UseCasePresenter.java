@@ -25,7 +25,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * change: {@link UseCaseMcpTools} changes when a tool's parameter contract changes, this class
  * changes when the rendered text does - the two were previously mixed into a single class body.
  *
- * <p><strong>Actor/requirement display resolution (issue #89).</strong> {@link ActorRef} and
+ * <p><strong>Actor/requirement display resolution.</strong> {@link ActorRef} and
  * {@link RequirementRef} carry an opaque subject identity, not a business label - but a human
  * who typed {@code Customer}/{@code FR-1} into {@code uc_add} expects to see those again, not a
  * raw IRI they cannot re-type. {@link UseCaseMcpTools} is the gate into the use-cases hexagon,

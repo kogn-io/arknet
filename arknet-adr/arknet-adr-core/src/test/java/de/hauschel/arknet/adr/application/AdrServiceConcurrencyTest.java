@@ -30,7 +30,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 
 /**
  * Regression tests for the two concurrency races {@link AdrService} has to absorb - the same two the
- * requirements (#108/#167) and bounded-context (#144/#176) hexagons had to be retrofitted for, built
+ * requirements and bounded-context hexagons had to be retrofitted for, built
  * into this one from the start.
  *
  * <p><strong>Code assignment.</strong> {@link AdrService#add} computes the next business code

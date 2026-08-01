@@ -32,7 +32,7 @@ public final class Prefixes {
 
     /**
      * Base of arknet's opaque resource identities as minted by {@code UuidResourceIdFactory}
-     * (arknet-shared-kernel) since the opaque-{@code ResourceId} refactor (#68/#71/#72): a
+     * (arknet-shared-kernel) since the opaque-{@code ResourceId} refactor: a
      * flat {@code https://w3id.org/arknet/id/<uuid>}, no bounded-context or type segment - the
      * type lives in {@code rdf:type}. This is the only base <em>model resources</em> are minted
      * under since that refactor; {@link #MODEL_INSTANCE_BASE} predates it and is no longer

@@ -173,7 +173,7 @@ class StoreExportToolsTest {
     }
 
     /**
-     * #158's resilience lesson applied to the export path: the daemon's own export directory can
+     * The resilience lesson applied to the export path: the daemon's own export directory can
      * be a container-internal mount the calling agent cannot reach, so the digest must report the
      * host-reachable equivalent while the write itself is unaffected.
      */

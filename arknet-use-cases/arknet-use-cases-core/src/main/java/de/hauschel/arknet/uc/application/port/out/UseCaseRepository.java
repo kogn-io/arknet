@@ -31,8 +31,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * not (a create), and conflating the two would hide a caller bug (writing to an id nobody
  * minted, or an id that was already used). {@link #create} and {@link #compareAndUpdate}
  * therefore make that distinction explicit at the port - there is no unconditional update: every
- * correction to an already-created use case goes through the compare-and-set guard (issue #165,
- * mirroring the requirements/bounded-context bounded contexts), so a guarded write path can never
+ * correction to an already-created use case goes through the compare-and-set guard, mirroring
+ * the requirements/bounded-context bounded contexts, so a guarded write path can never
  * be bypassed by accident.</p>
  */
 public interface UseCaseRepository {

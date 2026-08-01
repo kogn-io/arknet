@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * shared by every project on the machine over <strong>Streamable HTTP, bound to loopback
  * only</strong> (see
  * {@code application.properties}) - a daemon an admin starts once and leaves running,
- * rather than a process Claude Code spawns per session (issue #137: the latter had every
+ * rather than a process Claude Code spawns per session (the latter had every
  * session open its own {@code NativeStore}, colliding on the directory lock as soon as two
  * processes shared a project). The Spring AI MCP server auto-configuration discovers every
  * Spring bean that carries {@link org.springframework.ai.mcp.annotation.McpTool}-annotated

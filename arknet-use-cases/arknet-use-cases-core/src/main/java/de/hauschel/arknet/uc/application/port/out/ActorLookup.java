@@ -11,8 +11,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * project store.
  *
  * <p>This is the strict cross-BC reference resolution the use-cases component needs for
- * {@code arkreq:primaryActor}/{@code arkreq:supportingActor} (issue #89, the use-cases analogue
- * of requirements' #77): the use-cases component must not depend on
+ * {@code arkreq:primaryActor}/{@code arkreq:supportingActor}, the use-cases analogue
+ * of requirements' own equivalent: the use-cases component must not depend on
  * {@code arknet-ubiquitous-language-core}, so it cannot look an actor up as a domain object - it
  * can only ask the shared store, through this port, which resource a name currently denotes.
  * Resolution goes via the actor term's {@code skos:prefLabel}, constrained to concepts carrying

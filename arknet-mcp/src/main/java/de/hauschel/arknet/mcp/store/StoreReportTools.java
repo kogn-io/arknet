@@ -67,15 +67,15 @@ public final class StoreReportTools {
      *                          the HTML and its resources fall back to the generic raw view
      * @param projects          resolves each call's target project from its anchor
      * @param findProject       looks up the resolved project's registered label for the digest and
-     *                          HTML headers (issue #187); an {@link Optional#empty()} result falls
+     *                          HTML headers; an {@link Optional#empty()} result falls
      *                          back to the raw id, unchanged from before this lookup existed
      * @param fallbackReportDir the directory a project-scoped subdirectory is created under for the
      *                          HTML report; the subdirectory keeps projects that share this
-     *                          directory from overwriting each other's report (issue #172)
+     *                          directory from overwriting each other's report
      * @param reportHostDir     the host-reachable path that {@code fallbackReportDir} is bind-mounted
      *                          from, or {@code null} when the process runs directly on the machine it
      *                          reports to and no translation is needed. Set on a containerized daemon
-     *                          (issue #160) whose {@code fallbackReportDir} is a container-internal
+     *                          whose {@code fallbackReportDir} is a container-internal
      *                          mount point the calling agent cannot reach.
      */
     public StoreReportTools(
@@ -152,7 +152,7 @@ public final class StoreReportTools {
      * {@link #fallbackReportDir}. The subdirectory matters because every project served by a
      * shared daemon uses the very same {@link #fallbackReportDir} - without it, the last project
      * to call {@code store_overview} would silently overwrite every other project's report under
-     * the identical file name (issue #172).
+     * the identical file name.
      *
      * <p><strong>The client's own directory is no longer a candidate</strong>, and that follows
      * from ADR-016 rather than from a preference. The report used to be written into whatever the
@@ -161,7 +161,7 @@ public final class StoreReportTools {
      * that is the whole of decision 2. Passing it to {@code Path.of} would be exactly the
      * interpretation ADR-016 removes, and it would fail outright for any client whose anchor is
      * not a path. The written path is returned in the digest either way, and on a containerized
-     * daemon this was already the only reachable target (issue #158/#160): there, the client's
+     * daemon this was already the only reachable target: there, the client's
      * directory does not exist inside the container at all.</p>
      */
     private Path fallbackDirFor(final ProjectId projectId) {
@@ -172,9 +172,9 @@ public final class StoreReportTools {
      * Writes the HTML report and renders the digest's trailing "# HTML report: ..." line - never
      * by throwing. An unwritable target still returns the digest with a failure line rather than
      * losing the whole tool response to an opaque {@link java.nio.file.AccessDeniedException}
-     * whose {@code getMessage()} is only a bare path fragment (issue #158). When
+     * whose {@code getMessage()} is only a bare path fragment. When
      * {@link #reportHostDir} is set, the reported path is translated to the host-reachable
-     * equivalent (issue #160) - the write itself is unaffected, only the path shown to the caller
+     * equivalent - the write itself is unaffected, only the path shown to the caller
      * changes.
      *
      * <p>There used to be a second attempt here, falling back from the client's own directory to

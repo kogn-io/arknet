@@ -55,7 +55,7 @@ class DigestRendererTest {
 
     /**
      * Since requirement identity became an opaque {@code https://w3id.org/arknet/id/<uuid>}
-     * IRI (#68, unbound to any {@link Prefixes} namespace), the digest handle falls back to
+     * IRI (unbound to any {@link Prefixes} namespace), the digest handle falls back to
      * the resource's {@code dcterms:identifier} (its business code, e.g. {@code FR-1}) instead
      * of rendering the raw, human-unreadable IRI.
      */
@@ -76,9 +76,8 @@ class DigestRendererTest {
     @Test
     void reportsDanglingReference() {
         // Subjects and dangling targets are minted flat under the opaque /id/ base since the
-        // opaque-ResourceId refactor (#68/#71/#72) - the dead /model/ base used above is no
-        // longer produced by any write path and must not be what dangling detection keys on
-        // (#107).
+        // opaque-ResourceId refactor - the dead /model/ base used above is no
+        // longer produced by any write path and must not be what dangling detection keys on.
         String subject = OPAQUE + "11111111-1111-1111-1111-111111111111";
         String danglingTarget = OPAQUE + "22222222-2222-2222-2222-222222222222";
         StoreSnapshot snapshot = StoreSnapshot.of(List.of(
@@ -93,7 +92,7 @@ class DigestRendererTest {
     }
 
     /**
-     * Issue #187: a project registered with a human-readable label must show that label in the
+     * A project registered with a human-readable label must show that label in the
      * header, with the raw id kept alongside - not the id alone, and not the label instead of the
      * id (the id stays the write target and must remain visible for the report path etc.).
      */

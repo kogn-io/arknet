@@ -24,7 +24,7 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
  * requirement's human-typed {@code dcterms:identifier} (e.g. {@code FR-1}) to its opaque subject
  * {@link ResourceId} within the shared project store.
  *
- * <p><strong>Strict cross-BC requirement resolution (issue #89).</strong> Use-cases and
+ * <p><strong>Strict cross-BC requirement resolution.</strong> Use-cases and
  * requirements share one per-project store. This adapter looks up a code by
  * {@code dcterms:identifier} among the requirements graph's subjects; an unknown or ambiguous
  * code aborts with a didactic {@link UnresolvedReferenceException}. This is called once, from

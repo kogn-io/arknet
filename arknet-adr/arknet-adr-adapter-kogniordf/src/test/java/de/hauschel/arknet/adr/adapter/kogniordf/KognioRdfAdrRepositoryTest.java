@@ -553,7 +553,7 @@ class KognioRdfAdrRepositoryTest {
      * {@code findCurrentByCode} now joins {@code ?head} into the very same {@code SELECT} as the
      * scalar fields (the fix for the lost-update race a separate, later head query allowed - a
      * concurrent {@code compareAndUpdate} landing between the two reads let the caller's stale state
-     * pair with a fresher head and win a CAS it should have lost). That join must survive the #81
+     * pair with a fresher head and win a CAS it should have lost). That join must survive the
      * row-multiplication pattern this adapter otherwise tolerates: a store-first second
      * {@code arkarch:adrContext} triple multiplies the query's rows, and the head - one triple,
      * repeated identically on every row of the cross product - must still collapse to the single

@@ -25,7 +25,7 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  * The switch-over itself (ADR-016), unit-tested: routing is a registry lookup on the whole anchor,
  * and everything it cannot answer is an error rather than a default.
  *
- * <p>The first test is the regression for issue #175 stated at its smallest. Two projects live in
+ * <p>The first test is the regression stated at its smallest. Two projects live in
  * identically named directories at different places. The old resolver reduced each anchor to
  * {@code slug(basename(git-common-dir))} - both became {@code arknet}, both addressed one dataset,
  * and the two projects' requirements ended up interleaved with nothing at either call site to

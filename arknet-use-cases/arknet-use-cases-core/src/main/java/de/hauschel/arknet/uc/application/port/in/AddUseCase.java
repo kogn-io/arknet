@@ -30,7 +30,7 @@ public interface AddUseCase {
      * Input data for {@link #add(ProjectId, NewUseCase)}. Mirrors {@link UseCase} minus the
      * identity, which the service assigns.
      *
-     * <p><strong>Raw human-typed references (issue #89).</strong> {@code primaryActor},
+     * <p><strong>Raw human-typed references.</strong> {@code primaryActor},
      * {@code supportingActors} and each step's {@code realises} are plain business
      * labels/codes here, not {@link de.hauschel.arknet.uc.domain.ActorRef}/
      * {@link de.hauschel.arknet.uc.domain.RequirementRef}: resolving them to the referenced

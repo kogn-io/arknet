@@ -59,11 +59,11 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * would write them), so the write path can be exercised without a cross-bounded-context test
  * dependency.
  *
- * <p>Identity is opaque (issue #72): the use-case subject IRI is minted above the store and
+ * <p>Identity is opaque: the use-case subject IRI is minted above the store and
  * carried on the {@link UseCase}; the human-readable {@link UseCaseCode} ({@code UC1}) is a
  * separate {@code dcterms:identifier} triple and is what a caller looks up by.</p>
  *
- * <p><strong>References arrive pre-resolved (issue #89).</strong> {@link ActorRef}/
+ * <p><strong>References arrive pre-resolved.</strong> {@link ActorRef}/
  * {@link RequirementRef} now carry the referenced resource's opaque {@link ResourceId} directly
  * - resolving a human-typed label against the shared store is no longer this repository's job
  * (it moved to {@code KognioRdfActorLookup}/{@code KognioRdfRequirementLookup}, exercised in
@@ -71,7 +71,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * longer pins unknown/ambiguous-label rejection at the repository level - that behaviour now
  * lives exclusively in the two lookup adapter tests, mirroring how
  * {@code KognioRdfRequirementRepositoryTest} dropped its own resolution-rejection tests once
- * issue #77 moved {@code usesTerm} resolution out of the requirement repository's write path.</p>
+ * {@code usesTerm} resolution moved out of the requirement repository's write path.</p>
  */
 class KognioRdfUseCaseRepositoryTest {
 
@@ -120,7 +120,7 @@ class KognioRdfUseCaseRepositoryTest {
 
     /**
      * Test convenience for call sites that only need "replace this by identity" and do not
-     * exercise the compare-and-set guard itself (issue #165): reads {@code updated}'s current
+     * exercise the compare-and-set guard itself: reads {@code updated}'s current
      * head via {@link UseCaseRepository#findCurrentByCode} and immediately applies {@code updated}
      * through it - there is no unconditional {@code update} left on the port. Mirrors
      * {@code KognioRdfRequirementRepositoryTest#replaceViaCompareAndUpdate}.
@@ -293,7 +293,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
 
-    // ---- compareAndUpdate: CAS guard against lost updates (issue #165) ----
+    // ---- compareAndUpdate: CAS guard against lost updates ----
 
     @Test
     void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
@@ -359,7 +359,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test (issue #89) for the bug this issue fixes: a use case whose primary
+     * Regression test: a use case whose primary
      * actor's {@code skos:prefLabel} is deleted after creation must still be readable in full -
      * the reference no longer depends on the label at all, unlike the old read path, which
      * mandatorily joined into the terms graph on {@code skos:prefLabel} and silently dropped the
@@ -423,7 +423,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test for the {@code primaryActor} blank-node bug found in the #95 review:
+     * Regression test for the {@code primaryActor} blank-node bug:
      * {@code arkreq:primaryActor} carries no {@code sh:nodeKind} constraint, so a store-first
      * (ADR-005) use case may legally target a blank node with it. Reading such a use case back
      * must not throw a {@link ClassCastException} out of {@code readBySubject} - and, because
@@ -453,7 +453,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test (issue #102, Befund 1): {@code arkreq:mainStep} is only
+     * Regression test: {@code arkreq:mainStep} is only
      * {@code sh:Warning} severity at {@code sh:minCount 1} in the SHACL shapes, so
      * {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case with zero main-step
      * triples through. Reading such a use case back must not let {@link UseCase}'s "at least one
@@ -484,7 +484,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test (issue #102, Befund 2): nothing in SHACL prevents two distinct
+     * Regression test: nothing in SHACL prevents two distinct
      * {@code arkreq:Step} nodes under the same use case's {@code arkreq:mainStep} from sharing
      * the same {@code arkreq:position} - uniqueness is only enforced in-process by
      * {@code UseCase.requireConsecutiveStepPositions}, and store-first data (ADR-005) never runs
@@ -492,7 +492,7 @@ class KognioRdfUseCaseRepositoryTest {
      * position integer instead of the step's own IRI would silently merge the two steps'
      * requirement references under one key, then throw a duplicate-position
      * {@link IllegalArgumentException} out of {@link UseCase}'s constructor - crashing the rest
-     * of {@link UseCaseRepository#findAll}'s result list, the same class of bug issue #89 already
+     * of {@link UseCaseRepository#findAll}'s result list, the same class of bug already
      * fixed for {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.
      */
     @Test
@@ -549,7 +549,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Regression test for issue #82: {@code rshapes:UseCase-primaryActor} now carries
+     * Regression test: {@code rshapes:UseCase-primaryActor} carries
      * {@code sh:maxCount 1}. A second {@code primaryActor} is unreachable through
      * {@link UseCaseRepository#create} - {@link UseCase#primaryActor()} is a single-valued
      * field - so this exercises the wired gate directly against a synthetic candidate graph, the
@@ -580,7 +580,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Issue #99: {@code rshapes:UseCase-title} is a new shape ({@code dcterms:title} had none
+     * {@code rshapes:UseCase-title} is a shape ({@code dcterms:title} had none
      * before). {@link UseCase#title()} is single-valued, so a second title is unreachable through
      * {@link UseCaseRepository#create}, same rationale as
      * {@link #gateRejectsUseCaseWithTwoPrimaryActors}.
@@ -610,7 +610,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Issue #75 durchstich test: {@code rshapes:UseCase-title} carries an {@code sh:message} with
+     * Durchstich test (issue #75): {@code rshapes:UseCase-title} carries an {@code sh:message} with
      * both an {@code @en} and a {@code @de} literal since the bilingual translation pass. This
      * proves the fallback chain in {@link DisplayLocale#select} actually discriminates between the
      * two against the REAL {@code ShaclValidationRdf4j} engine (not the recording fake used in
@@ -650,7 +650,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Issue #99: {@code rshapes:UseCase-goal-count} is a new, {@code sh:Violation} shape carrying
+     * {@code rshapes:UseCase-goal-count} is a {@code sh:Violation} shape carrying
      * only the {@code sh:maxCount 1} - split out from the pre-existing {@code rshapes:UseCase-goal}
      * (which stays a {@code sh:Warning} best-practice check on presence, unchanged), for the same
      * reason as {@code rshapes:Requirement-motivatedBy-count} in
@@ -685,7 +685,7 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Issue #99: {@code rshapes:Step-text} now carries {@code sh:maxCount 1}. {@link Step#text()}
+     * {@code rshapes:Step-text} carries {@code sh:maxCount 1}. {@link Step#text()}
      * is single-valued, so a second {@code stepText} is unreachable through
      * {@link UseCaseRepository#create} - exercised directly against a synthetic {@code arkreq:Step}
      * candidate graph, since a step has no standalone read/write entry point of its own (it is
@@ -719,7 +719,7 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code compareAndUpdate} each record exactly one immutable revision of the use case, and
      * the head is queryable per resource. The step resources the body writes alongside get no
      * revisions of their own - the revision hangs off the funnel's subject, the use case. Since
-     * issue #165 wired {@code uc_update} through {@code compareAndUpdate}, this is no longer a
+     * {@code uc_update} was wired through {@code compareAndUpdate}, this is no longer a
      * path exercised only directly on the out-port - every {@code UseCaseService#update} call
      * moves the head too, mirroring {@code
      * KognioRdfRequirementRepositoryTest#createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead}.

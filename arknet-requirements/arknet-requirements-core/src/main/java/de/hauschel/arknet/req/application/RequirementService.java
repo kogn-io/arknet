@@ -49,12 +49,12 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@code N} is one above the highest running number currently used by that type in the target
  * project (numbering is independent per type and per project). New requirements start
  * {@link RequirementStatus#PROPOSED}. The only advancing status transition is
- * {@code PROPOSED -> ACCEPTED} - see {@link Requirement#accept()}, which owns that rule (issue
- * #190); this service only threads it through the read-modify-write round trip. Linking a
+ * {@code PROPOSED -> ACCEPTED} - see {@link Requirement#accept()}, which owns that rule;
+ * this service only threads it through the read-modify-write round trip. Linking a
  * glossary term is idempotent and independent of the status lifecycle - terms may be linked to a
  * requirement in any status.</p>
  *
- * <p><strong>Concurrency (issue #108).</strong> {@link #add} retries its next-code computation
+ * <p><strong>Concurrency.</strong> {@link #add} retries its next-code computation
  * against a fresh read whenever a concurrent caller claims the same code first, and {@link
  * #accept}/{@link #linkTerm}/{@link #update} retry their whole read-modify-write round trip
  * via {@link RequirementRepository#compareAndUpdate} whenever a concurrent writer commits in
@@ -62,7 +62,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  * caller; only sustained, pathological contention on the very same requirement surfaces as
  * {@link RequirementConcurrentlyModifiedException}.</p>
  *
- * <p><strong>Correction (issues #162, #170).</strong> {@link #update} lets a caller correct a
+ * <p><strong>Correction.</strong> {@link #update} lets a caller correct a
  * requirement's title, description, acceptance criteria and/or MoSCoW priority after the fact -
  * e.g. once an interview sharpens a domain fact the original wording missed, or once a
  * prioritisation review finds a whole register sitting on {@code MUST_HAVE}. Every argument is
@@ -72,14 +72,14 @@ import de.hauschel.arknet.req.domain.TermRef;
  * list), so a caller cannot use {@code update} to put the requirement into a state {@code
  * req_add} itself could never have created. Status and linked terms are untouched - {@link
  * #accept} and {@link #linkTerm} remain the only way to change those. The priority parameter
- * is an interim step that issue #169's generic {@code resource_update} facade is meant to
+ * is an interim step that a generic {@code resource_update} facade is meant to
  * replace; see {@link UpdateRequirement}.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         AcceptRequirement, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
 
     /**
-     * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops (issue #108).
+     * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops.
      * Both races this guards against - two callers computing the same next-free {@link
      * RequirementCode}, or two callers read-modify-writing the same requirement - are resolved by
      * a single retry in the overwhelming majority of cases, since each retry re-reads the
@@ -124,8 +124,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
-        // business code is recomputed when a concurrent add() claims the same candidate first
-        // (issue #108, generalised to all four bounded contexts in issue #144). nextCode() reads
+        // business code is recomputed when a concurrent add() claims the same candidate first,
+        // generalised to all four bounded contexts as a shared helper. nextCode() reads
         // the highest running number client-side, before create()'s own in-transaction uniqueness
         // check, so two concurrent req_add calls for the same type can legitimately compute the
         // same candidate code; CodeAssignment turns that race into an invisible, automatic retry
@@ -203,10 +203,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * current requirement and its concurrency token together via
      * {@link RequirementRepository#findCurrentByCode}, derives the next state via {@code mutation},
      * and writes it back via {@link RequirementRepository#compareAndUpdate} - retrying with a
-     * fresh read whenever a concurrent writer commits a change in between (issue #108, Befund 1:
-     * two parallel read-modify-write round trips on the same requirement used to silently lose
+     * fresh read whenever a concurrent writer commits a change in between: two parallel
+     * read-modify-write round trips on the same requirement used to silently lose
      * whichever one committed last; the compare-and-set guard itself degenerated from a
-     * full-snapshot comparison to a head comparison in issue #167/ADR-014 decision 4).
+     * full-snapshot comparison to a head comparison (ADR-014 decision 4).
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
      * a no-op: the existing idempotency rules ({@link Requirement#accept()} on an already-accepted

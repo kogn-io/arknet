@@ -33,8 +33,8 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * not (a create), and conflating the two would hide a caller bug (writing to an id nobody
  * minted, or an id that was already used). {@link #create} and {@link #compareAndUpdate}
  * therefore make that distinction explicit at the port - there is no unconditional update: every
- * correction to an already-created requirement goes through the compare-and-set guard (issue
- * #167), so a guarded write path can never be bypassed by accident.</p>
+ * correction to an already-created requirement goes through the compare-and-set guard, so a
+ * guarded write path can never be bypassed by accident.</p>
  */
 public interface RequirementRepository {
 
@@ -62,8 +62,8 @@ public interface RequirementRepository {
      *
      * <p><strong>Guards funnel writers, not store-first edits.</strong> {@code expectedHead} is
      * the {@code arkprov:head} revision recorded by the last write through the shared
-     * {@code WriteFunnel} (ADR-014 compare-and-set guard against the lost-update race from issue
-     * #108, degenerated from a full-snapshot comparison to a head comparison by issue #167). A
+     * {@code WriteFunnel} (ADR-014 compare-and-set guard against the lost-update race, degenerated
+     * from a full-snapshot comparison to a head comparison). A
      * direct store-first (ADR-005) edit to this requirement's triples leaves the head untouched,
      * so such an edit passes this method's check undetected and the subsequent
      * replace-by-identity write silently overwrites it: the guard closes the lost-update window
@@ -133,7 +133,7 @@ public interface RequirementRepository {
 
     /**
      * Finds every requirement in a project whose identity is among {@code ids}, in one store
-     * round-trip - backs {@link ResolveRequirements} (issue #88). This is a batch lookup, not a
+     * round-trip - backs {@link ResolveRequirements}. This is a batch lookup, not a
      * per-id existence check: an id absent from the project is simply absent from the result,
      * never an error.
      *

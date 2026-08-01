@@ -21,8 +21,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * provenance and project-identity graphs because it feeds a view of the current model, not of
  * its own machinery; a backup exists precisely to restore both the model and that machinery, so
  * excluding either graph here would silently drop data from the backup rather than declutter a
- * view of it. Serialisation itself is {@link DatasetHandle#datasetExport()} (kognio-rdf 0.2.2,
- * issue #154 follow-up): a spec-compliant, RDF4J-Rio-backed writer, not a hand-rolled one - the
+ * view of it. Serialisation itself is {@link DatasetHandle#datasetExport()} (kognio-rdf 0.2.2):
+ * a spec-compliant, RDF4J-Rio-backed writer, not a hand-rolled one - the
  * previous hand-rolled version fell back to {@code RDFTerm#ntriplesString()} for literal objects,
  * which the RDF4J-backed term implementation resolves to {@code Value#toString()}, and that
  * method does not escape an embedded {@code "}, {@code \} or newline in the lexical form. Any

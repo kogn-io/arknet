@@ -279,7 +279,7 @@ class RequirementServiceTest {
     }
 
     /**
-     * Issue #170: the concrete case - a register audited as uniformly {@code MUST_HAVE} is
+     * The concrete case - a register audited as uniformly {@code MUST_HAVE} is
      * corrected down to {@code SHOULD_HAVE}, keeping the requirement's code and thus every
      * {@code usesTerm}/{@code realises} reference into it intact.
      */
@@ -386,7 +386,7 @@ class RequirementServiceTest {
 
     /**
      * Resolution of the human-typed term code happens here, via {@link InMemoryTermLookup}
-     * (issue #77) - not in the out-adapter's write path any more. A lookup failure must
+     * - not in the out-adapter's write path any more. A lookup failure must
      * propagate unchanged and leave the requirement untouched.
      */
     @Test
@@ -417,7 +417,7 @@ class RequirementServiceTest {
 
     /**
      * Same regression as {@link #acceptPreservesLinkedTerms}, for the mandatory
-     * acceptance criteria (issue #91): accepting a requirement must not drop them either.
+     * acceptance criteria: accepting a requirement must not drop them either.
      */
     @Test
     void acceptPreservesAcceptanceCriteria() {
@@ -442,7 +442,7 @@ class RequirementServiceTest {
     }
 
     /**
-     * Issue #88: a sibling bounded context's driving adapter resolves opaque requirement
+     * A sibling bounded context's driving adapter resolves opaque requirement
      * identities back to their identity and business code (e.g. to render {@code FR-N} for
      * display) - in one batch, not per-id.
      */
@@ -490,7 +490,7 @@ class RequirementServiceTest {
     }
 
     /**
-     * Issue #31: {@code schema()} is pure delegation to the {@link RequirementSchemaSource}
+     * {@code schema()} is pure delegation to the {@link RequirementSchemaSource}
      * driven port - the service adds no policy of its own, only the seam between the driving
      * and driven port.
      */

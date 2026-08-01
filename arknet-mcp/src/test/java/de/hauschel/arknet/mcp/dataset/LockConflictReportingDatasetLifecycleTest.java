@@ -21,7 +21,7 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
 /**
  * Tests {@link LockConflictReportingDatasetLifecycle}'s two responsibilities separately: which
  * {@code acquire} failures it recognises as a lock conflict and translates (a hand-rolled stub
- * predicate, plus the real RDF4J failure the decorator exists to translate, issue #64), and which
+ * predicate, plus the real RDF4J failure the decorator exists to translate), and which
  * failures it must leave alone because they are not a lock conflict at all.
  *
  * <p>{@link #aSecondLifecycleOverTheSameStorageDirectoryFailsWithADidacticMessage()} is the proof

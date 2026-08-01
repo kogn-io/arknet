@@ -10,7 +10,7 @@ import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 
 /**
  * Driven port: supplies the {@code arkreq:} requirement vocabulary as data, backing
- * {@link GetRequirementSchema} (issue #31).
+ * {@link GetRequirementSchema}.
  *
  * <p>Named after the capability ("describe the vocabulary"), not after any technology.
  * Implementations live in adapter modules and read the ontology (a static classpath resource),

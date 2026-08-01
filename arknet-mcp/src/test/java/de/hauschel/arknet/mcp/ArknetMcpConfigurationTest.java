@@ -44,8 +44,7 @@ import de.hauschel.arknet.ul.domain.Term;
  * wired stack must actually persist and read a requirement back.
  *
  * <p>Uses {@link ApplicationContextRunner} to load only this configuration - the full
- * Spring AI MCP server auto-configuration and its HTTP transport are out of scope here
- * (their tool registration was established in #27).</p>
+ * Spring AI MCP server auto-configuration and its HTTP transport are out of scope here.</p>
  */
 class ArknetMcpConfigurationTest {
 
@@ -227,7 +226,7 @@ class ArknetMcpConfigurationTest {
      * store. And no anchor at all fails too, rather than falling back to the daemon's working
      * directory - which is what the deleted property used to configure.</p>
      *
-     * <p>The second assertion is the one that closes issue #175 at this level: the two anchors
+     * <p>The second assertion is the one that closes the anchor-collision problem at this level: the two anchors
      * differ only in their parent directory and share a basename. Under the old resolver both
      * slugged to {@code arknet} and hit the same dataset; here the unregistered one has no answer
      * at all.</p>
@@ -249,7 +248,7 @@ class ArknetMcpConfigurationTest {
                             .isEqualTo(registered.id());
                     assertThatThrownBy(() -> resolver.resolve("/home/b/other/arknet"))
                             .as("an identically named directory elsewhere is unknown, not the same "
-                                    + "project - the collision of issue #175")
+                                    + "project - the same-basename collision this design closes")
                             .isInstanceOf(UnresolvedProjectAnchorException.class)
                             .hasMessageContaining("/home/b/other/arknet");
                     assertThatThrownBy(() -> resolver.resolve(null))

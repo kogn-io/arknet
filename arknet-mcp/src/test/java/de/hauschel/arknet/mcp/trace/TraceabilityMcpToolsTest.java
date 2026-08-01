@@ -32,7 +32,7 @@ import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
- * End-to-end tests of the three traceability tools (issue #131) against a real kognio-rdf store
+ * End-to-end tests of the three traceability tools against a real kognio-rdf store
  * shared by all three bounded contexts - proving {@link TraceabilityMcpTools} is wired into
  * {@link ArknetMcpConfiguration} and actually reads what {@code req_add}/{@code term_add}/{@code
  * uc_add} wrote. Seeds data exclusively through the real application services (the same path

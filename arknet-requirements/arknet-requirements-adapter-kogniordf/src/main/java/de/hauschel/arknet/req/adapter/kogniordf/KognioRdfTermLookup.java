@@ -24,8 +24,8 @@ import de.hauschel.arknet.req.application.port.out.TermLookup;
  * term's human-typed {@code dcterms:identifier} (e.g. {@code TERM-1}) to its opaque subject
  * {@link ResourceId} within the shared project store.
  *
- * <p><strong>Strict cross-BC term resolution (issue #36, extracted into its own port for
- * #77).</strong> Requirements and ubiquitous-language terms share one per-project store. This
+ * <p><strong>Strict cross-BC term resolution, extracted into its own port.</strong>
+ * Requirements and ubiquitous-language terms share one per-project store. This
  * adapter looks up a code by {@code dcterms:identifier} among the {@code skos:Concept}s of the
  * glossary graph; an unknown or ambiguous code aborts with a didactic
  * {@link UnresolvedReferenceException}. Resolution goes via the identifier, never the

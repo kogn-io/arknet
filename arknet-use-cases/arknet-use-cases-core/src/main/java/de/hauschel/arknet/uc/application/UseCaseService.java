@@ -43,23 +43,23 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * the highest running number currently used in the target project (numbering is independent
  * per project, starting at 1).</p>
  *
- * <p><strong>Reference resolution (issue #89).</strong> {@code NewUseCase}'s actor/requirement
+ * <p><strong>Reference resolution.</strong> {@code NewUseCase}'s actor/requirement
  * fields are raw human-typed strings, not domain refs - resolving them to the referenced
  * resources' opaque identities is this service's job, via the driven {@link ActorLookup}/
  * {@link RequirementLookup} ports, once per {@link #add}, before the real {@link UseCase} and its
  * {@link Step}s are constructed. An unknown or ambiguous reference propagates as a didactic
  * runtime exception from the lookup, rejecting the write; nothing is persisted.</p>
  *
- * <p><strong>Concurrency (issue #144).</strong> {@link #add} recomputes its next code against a
+ * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a
  * fresh read whenever a concurrent {@code uc_add} claims the same {@code UCn} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
  * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
  * multi-writer concern (ADR-001). {@link #update} shares that same concern: read-modify-write
  * round trips retry via {@link UseCaseRepository#compareAndUpdate} whenever a concurrent writer
  * commits in between - see {@link #updateWithOptimisticRetry} (mirrors
- * {@code RequirementService}, issue #108/#167).</p>
+ * {@code RequirementService}).</p>
  *
- * <p><strong>Correction (issue #165).</strong> {@link #update} lets a caller correct a use case's
+ * <p><strong>Correction.</strong> {@link #update} lets a caller correct a use case's
  * goal-level fields and/or an individual step's text after the fact, without the
  * delete-and-recreate round trip through {@code uc_add} that would risk a new {@link UseCaseCode}
  * and orphaned {@code realises}/{@code extensions} references. Every scalar argument is optional
@@ -74,7 +74,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
 
     /**
      * Bound on {@link #updateWithOptimisticRetry}'s retry loop, mirroring
-     * {@code RequirementService#MAX_RETRY_ATTEMPTS} (issue #108): a pathological, sustained storm
+     * {@code RequirementService#MAX_RETRY_ATTEMPTS}: a pathological, sustained storm
      * of concurrent writers against the very same use case fails loudly instead of looping
      * forever, rather than guarding against a race expected to resolve within a single retry.
      */
@@ -111,8 +111,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
         // Identity is opaque and stable, so it is minted once, outside the retry. Reference
         // resolution likewise happens once, before the retry: an unknown/ambiguous actor or
         // requirement must fail immediately and is not a code collision to retry on. Only the
-        // business code is recomputed when a concurrent uc_add claims the same candidate first
-        // (issue #144) - see CodeAssignment for why that race exists.
+        // business code is recomputed when a concurrent uc_add claims the same candidate first -
+        // see CodeAssignment for why that race exists.
         UseCaseId id = new UseCaseId(resourceIdFactory.newId());
         ActorRef primaryActor = new ActorRef(actorLookup.resolveByName(projectId, command.primaryActor()));
         List<ActorRef> supportingActors = command.supportingActors() == null
@@ -186,7 +186,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      * next state via {@code mutation}, and writes it back via
      * {@link UseCaseRepository#compareAndUpdate} - retrying with a fresh read whenever a
      * concurrent writer commits a change in between. Mirrors
-     * {@code RequirementService#updateWithOptimisticRetry} (issue #108/#167).
+     * {@code RequirementService#updateWithOptimisticRetry}.
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
      * a no-op and skips the write entirely.</p>

@@ -43,7 +43,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * Unit tests for {@link StoreReader#outgoing(ProjectId, String)} and
  * {@link StoreReader#incoming(ProjectId, String)}: they must reject a resource handle that
  * cannot appear unescaped inside a SPARQL {@code IRIREF} instead of splicing it into the query
- * text (issue #105 - SPARQL injection via {@code resource_get}'s {@code id} parameter).
+ * text (SPARQL injection via {@code resource_get}'s {@code id} parameter).
  */
 class StoreReaderTest {
 
@@ -54,7 +54,7 @@ class StoreReaderTest {
     /**
      * A handle carrying a payload that, if concatenated unescaped into {@code "<" + iri + ">"},
      * breaks out of the IRIREF and splices live SPARQL syntax into the query (the exact shape
-     * reported in issue #105).
+     * originally reported).
      */
     private static final String INJECTION_PAYLOAD =
             "https://x/a> } UNION { ?s ?p ?o . FILTER(1=1) #";
@@ -136,8 +136,8 @@ class StoreReaderTest {
      * graph (ADR-014), and that trail grows with every write, forever. None of the three read
      * paths surfaces it: the snapshot feeds the store report, a view of the model rather than of
      * its change history, and the head pointer stays hidden even though every user-reachable
-     * write now moves it through the funnel (issue #167 resolved {@code req_update}, {@code
-     * req_set_status}, {@code req_link_term} and {@code term_update} into it, ADR-014 decision 4)
+     * write now moves it through the funnel ({@code req_update}, {@code
+     * req_set_status}, {@code req_link_term} and {@code term_update} were resolved into it, ADR-014 decision 4)
      * - whether and how to expose it through this generic read path is a separate, still open
      * decision, not gated on the head being a usable token any more.
      */

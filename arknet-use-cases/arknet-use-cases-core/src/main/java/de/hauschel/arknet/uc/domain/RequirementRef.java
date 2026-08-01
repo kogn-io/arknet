@@ -21,8 +21,8 @@ import de.hauschel.arknet.kernel.ResourceId;
  * code - is the job of a driven lookup port against the shared store, not of this pure domain
  * type.</p>
  *
- * <p><strong>Identity, not a re-derived value (issue #89, the use-cases analogue of
- * requirements' #77).</strong> The reference used to carry the requirement's
+ * <p><strong>Identity, not a re-derived value, the use-cases analogue of
+ * requirements' own equivalent.</strong> The reference used to carry the requirement's
  * {@code dcterms:identifier} as a bare string, resolved to the requirement's IRI on write and
  * re-derived from the IRI on read via an inner join back into the requirements graph - a join
  * that silently dropped the edge whenever its target carried no identifier. Carrying the subject

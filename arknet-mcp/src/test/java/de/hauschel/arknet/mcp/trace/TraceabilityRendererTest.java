@@ -97,7 +97,7 @@ class TraceabilityRendererTest {
     /**
      * FR-3's description names "Kunde" (TERM-9) without a {@code usesTerm} edge, and BC-2's
      * domain vision names "Bestellung" (TERM-8) without a {@code ubiquitousLanguageTerm} edge -
-     * exactly the misleading gap issue #185 closes: today's two lists would call TERM-8/TERM-9
+     * exactly the misleading gap this behaviour closes: today's two lists would call TERM-8/TERM-9
      * orphaned even though the text is using them.
      */
     @Test
@@ -114,7 +114,7 @@ class TraceabilityRendererTest {
     /**
      * A term linked only through a bounded context's ubiquitous language must not show up as
      * "never referenced" - {@code arkddd:ubiquitousLanguageTerm} is as much a reference as
-     * {@code arkreq:usesTerm} (issue #185).
+     * {@code arkreq:usesTerm}.
      */
     @Test
     void orphanCheckDoesNotCountATermLinkedOnlyViaTheBoundedContextAsOrphaned() {

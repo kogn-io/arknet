@@ -34,7 +34,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * create), and conflating the two would hide a caller bug. {@link #create} and
  * {@link #compareAndUpdate} therefore make that distinction explicit at the port - and there is no
  * unconditional update: every correction to an already-recorded decision goes through the
- * compare-and-set guard, which is what issue #176 had to retrofit onto the bounded-context context
+ * compare-and-set guard, which is what the bounded-context context had to retrofit later
  * and what this one is built with from the start.</p>
  */
 public interface AdrRepository {

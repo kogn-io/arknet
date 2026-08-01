@@ -11,7 +11,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * identity in the shared project store.
  *
  * <p>This is the strict cross-BC reference resolution the requirements component needs for
- * {@code arkreq:usesTerm} (issue #36, identity-carrying since #77): the requirements component
+ * {@code arkreq:usesTerm}: the requirements component
  * must not depend on {@code arknet-ubiquitous-language-core}, so it cannot look a term up as a
  * domain object - it can only ask the shared store, through this port, which resource a code
  * currently names. Resolution goes via the term's {@code dcterms:identifier}, never its

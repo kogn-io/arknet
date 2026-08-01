@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for the display-language fallback chain of {@link DisplayLocale}.
  *
- * <p>Pure, framework-free - the chain is the isolable unit issue #80 asks for, tested here
- * without going through the whole out-adapter.</p>
+ * <p>Pure, framework-free - the chain is the isolable unit worth testing directly, without
+ * going through the whole out-adapter.</p>
  */
 class DisplayLocaleTest {
 

@@ -94,7 +94,7 @@ public record Requirement(
 
     /**
      * Advances this requirement to {@link RequirementStatus#ACCEPTED} - the only status
-     * transition the requirements lifecycle permits (issue #190). Calling this on a requirement
+     * transition the requirements lifecycle permits. Calling this on a requirement
      * that is already {@link RequirementStatus#ACCEPTED} is a no-op, returning {@code this}
      * unchanged, so a caller never has to check the current status first; any other status -
      * today only {@link RequirementStatus#PROPOSED} - transitions cleanly. This is the rule

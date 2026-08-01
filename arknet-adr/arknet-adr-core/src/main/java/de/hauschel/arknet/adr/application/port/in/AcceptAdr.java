@@ -14,8 +14,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * so this port takes no target status - a generic {@code AdrStatus status} parameter would only
  * ever legally resolve to {@code ACCEPTED} here, since {@link RejectAdr}/{@link DeprecateAdr} cover
  * this lifecycle's other transitions as their own, equally narrow ports. That is the shape the
- * requirements context settled on for the identical situation (issue #190, where the former
- * {@code SetRequirementStatus} became {@code AcceptRequirement}); the tool keeps its
+ * requirements context settled on for the identical situation, where the former
+ * {@code SetRequirementStatus} became {@code AcceptRequirement}; the tool keeps its
  * {@code adr_set_status} name and dispatches to whichever of the three ports the caller's target
  * status legally maps to. The transition rule itself lives on {@link Adr#accept()}, not here and not
  * in the implementing application service.</p>

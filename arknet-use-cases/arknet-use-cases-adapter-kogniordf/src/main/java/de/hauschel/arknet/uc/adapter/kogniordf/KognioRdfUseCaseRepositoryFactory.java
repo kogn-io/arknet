@@ -115,7 +115,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
      * <p>Package-private (not {@code private}) so {@code KognioRdfUseCaseRepositoryTest} can
      * exercise the wired gate directly against synthetic candidate graphs, without a
      * {@link UseCaseRepository} round-trip the single-valued {@code primaryActor} domain field
-     * cannot produce (issue #82).</p>
+     * cannot produce.</p>
      *
      * <p>The {@code displayLocale} handed in is the same one the composition root configures
      * process-wide: a caller gets told why a write was refused in the same language regardless of

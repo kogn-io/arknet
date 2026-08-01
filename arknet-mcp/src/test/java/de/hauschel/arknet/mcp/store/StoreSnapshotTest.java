@@ -73,9 +73,9 @@ class StoreSnapshotTest {
     }
 
     /**
-     * Regression for #107: {@code UuidResourceIdFactory} (arknet-shared-kernel) has minted
+     * Regression: {@code UuidResourceIdFactory} (arknet-shared-kernel) has minted
      * every instance identity flat under {@code https://w3id.org/arknet/id/<uuid>} - no
-     * {@code /model/...} segment - since the opaque-{@code ResourceId} refactor (#68/#71/#72).
+     * {@code /model/...} segment - since the opaque-{@code ResourceId} refactor.
      * {@code detectDangling()} must recognize that current base, or a real dangling edge (e.g.
      * a {@code arkreq:realises} pointing at a deleted use case) silently goes unreported.
      */

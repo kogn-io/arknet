@@ -11,7 +11,7 @@ import java.util.function.Supplier;
  * {@code TERM-N}, {@code UCn}, ...) to a brand-new resource, retrying whenever a concurrent
  * caller claims the same candidate code first.
  *
- * <p><strong>The race this closes (issue #144).</strong> Every bounded context computes its next
+ * <p><strong>The race this closes.</strong> Every bounded context computes its next
  * free code client-side - "read the highest running number in the project, add one" - and only
  * then asks its out-adapter to {@code create()} the resource. That read and that write are two
  * separate store round trips, so two callers adding a resource of the same type at the same time

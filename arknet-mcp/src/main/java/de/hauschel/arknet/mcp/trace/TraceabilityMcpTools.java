@@ -18,7 +18,7 @@ import de.hauschel.arknet.mcp.store.StoreReader;
 
 /**
  * Read-only traceability reporting tools exposed over MCP: {@code trace_matrix}, {@code
- * orphan_check}, {@code impact_analysis} (issue #131), {@code actor_usecase_matrix} and {@code
+ * orphan_check}, {@code impact_analysis}, {@code actor_usecase_matrix} and {@code
  * term_cooccurrence} (issue #108, raw strategic-design read tools - no bounded-context
  * clustering or verdict, just the data for a human or agent to draw that boundary).
  *

@@ -20,7 +20,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * code (e.g. {@code TERM-1}) to this identity - and rejecting an unknown or ambiguous code - is
  * the job of a driven lookup port against the shared store, not of this pure domain type.</p>
  *
- * <p><strong>Identity, not a re-derived value (issue #77).</strong> The reference used to carry
+ * <p><strong>Identity, not a re-derived value.</strong> The reference used to carry
  * the term's {@code dcterms:identifier} as a bare string, resolved to the term's IRI on write
  * and re-derived from the IRI on read via an inner join back into the terms graph - a join that
  * silently dropped the edge whenever its target carried no identifier. Carrying the subject

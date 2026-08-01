@@ -208,7 +208,7 @@ class HtmlReportRendererTest {
     }
 
     /**
-     * Issue #187: a project registered with a human-readable label must show that label in the
+     * A project registered with a human-readable label must show that label in the
      * header, with the raw id kept alongside rather than replaced.
      */
     @Test

@@ -43,7 +43,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 /**
  * Scaffold-level check that the adapter declares exactly the seven requirement
  * tools and guards its in-port dependencies, plus the term-display-resolution
- * contract added in the #77 nachtrag ({@link ResolveTerms}): renders the resolved
+ * contract ({@link ResolveTerms}): renders the resolved
  * business code, falls back to the bare IRI for an id it cannot resolve, and never
  * issues more than one batch call per rendering.
  */
@@ -113,7 +113,7 @@ class RequirementMcpToolsTest {
 
     /**
      * The per-call {@link org.springframework.ai.mcp.annotation.context.McpSyncRequestContext}
-     * parameter (issue #137) is a framework type, not a caller-facing tool argument: Spring AI
+     * parameter is a framework type, not a caller-facing tool argument: Spring AI
      * must exclude it from the generated tool input schema. Proven against the real annotation
      * scanner ({@link SyncMcpToolProvider}), not just asserted - {@code req_add}'s schema carries
      * its documented business inputs and no {@code context} property.
@@ -132,7 +132,7 @@ class RequirementMcpToolsTest {
         assertFalse(properties.containsKey("context"), properties::toString);
     }
 
-    /** Issue #31: {@code req_schema} delegates to {@link GetRequirementSchema} and renders every term. */
+    /** {@code req_schema} delegates to {@link GetRequirementSchema} and renders every term. */
     @Test
     void schemaRendersEveryTermFromTheInPort() {
         String rendered = adapter.schema();
@@ -141,7 +141,7 @@ class RequirementMcpToolsTest {
                 + "(values: MUST_HAVE, SHOULD_HAVE, COULD_HAVE, WONT_HAVE)"), rendered);
     }
 
-    /** Issue #91: the mandatory acceptance criteria reach {@link AddRequirement} and are rendered. */
+    /** The mandatory acceptance criteria reach {@link AddRequirement} and are rendered. */
     @Test
     void addPassesAcceptanceCriteriaThroughAndRendersThem() {
         List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
@@ -167,7 +167,7 @@ class RequirementMcpToolsTest {
     @Test
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
         // Round trip: the port hands back a TermRef whose IRI resolves to TERM-1 again, proving
-        // the code the human typed is what they see rendered back (issue #77 nachtrag).
+        // the code the human typed is what they see rendered back.
         resolveTerms.register(ResourceId.of("https://w3id.org/arknet/id/TERM-1"), new TermCode("TERM-1"));
 
         String rendered = adapter.linkTerm(null, "FR-1", "TERM-1", null);
@@ -177,7 +177,7 @@ class RequirementMcpToolsTest {
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
     }
 
-    /** Issue #162: {@code req_update} passes every given field through to the in-port. */
+    /** {@code req_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
@@ -210,7 +210,7 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * Issue #170: the concrete case behind the priority parameter - correcting a requirement
+     * The concrete case behind the priority parameter - correcting a requirement
      * mis-prioritised as {@code MUST_HAVE} down to {@code SHOULD_HAVE} without restating any
      * other field, and without the round trip through {@code req_add} that would mint a new code
      * and orphan every reference into the old one.
@@ -245,7 +245,7 @@ class RequirementMcpToolsTest {
                 () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE", null));
     }
 
-    /** The resolvable case: a linked term shows its business code, not the raw IRI (issue #77). */
+    /** The resolvable case: a linked term shows its business code, not the raw IRI. */
     @Test
     void formatRendersTheResolvedTermCodeInsteadOfTheBareIri() {
         ResourceId termResourceId = ResourceId.of("https://w3id.org/arknet/id/some-term");
@@ -273,7 +273,7 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * Issue #77, second nachtrag: a store-first term with several {@code dcterms:identifier}
+     * A store-first term with several {@code dcterms:identifier}
      * triples is shape-legal (no {@code sh:maxCount}) and makes
      * {@code KognioRdfTermRepository#findByIds} return more than one {@link ResolvedTerm} for the
      * same identity - see that class for the source-level fix. This pins the structural,
