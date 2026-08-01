@@ -39,7 +39,7 @@ public final class ResourceRenderer {
         Objects.requireNonNull(incoming, "incoming");
 
         if (outgoing.isEmpty() && incoming.isEmpty()) {
-            return "Resource not found (no statements): " + prefixes.toCurie(iri) + "\n<" + iri + ">";
+            return notFoundMessage(prefixes, iri);
         }
 
         StringBuilder out = new StringBuilder();
@@ -63,6 +63,21 @@ public final class ResourceRenderer {
                     .append(prefixes.toCurie(triple.predicate())).append("  -> (this)\n");
         }
         return out.toString();
+    }
+
+    /**
+     * The "no such resource" notice, shared with {@code impact_analysis} (issue #135) so a
+     * syntactically valid but unknown handle is reported identically regardless of which
+     * read-path tool resolved it.
+     *
+     * @param prefixes the CURIE resolver used to shorten {@code iri} for display
+     * @param iri      the unknown subject IRI
+     * @return the not-found notice text
+     */
+    public static String notFoundMessage(Prefixes prefixes, String iri) {
+        Objects.requireNonNull(prefixes, "prefixes");
+        Objects.requireNonNull(iri, "iri");
+        return "Resource not found (no statements): " + prefixes.toCurie(iri) + "\n<" + iri + ">";
     }
 
     private String renderObject(RdfNode object) {

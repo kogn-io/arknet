@@ -180,6 +180,24 @@ class TraceabilityRendererTest {
         assertThat(impact).contains("- none");
     }
 
+    /**
+     * FR_2 carries no statements of its own kind here - it exists in the graph, just with no
+     * incoming edge, which is what {@link #impactAnalysisOfAnUnreferencedResourceReportsNone}
+     * covers. This is the different, previously unguarded case: a target IRI the graph has never
+     * seen at all must render the same not-found notice {@code resource_get} uses instead of a
+     * misleadingly complete "Transitively affected (0)" (issue #135).
+     */
+    @Test
+    void impactAnalysisOfAnUnknownIriReportsNotFoundInsteadOfZeroAffected() {
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        String unknownIri = ID + "fr-999";
+
+        String impact = renderer.impactAnalysis(PROJECT, graph, unknownIri);
+
+        assertThat(impact).isEqualTo("Resource not found (no statements): " + unknownIri + "\n<" + unknownIri + ">");
+        assertThat(impact).doesNotContain("Transitively affected");
+    }
+
     @Test
     void actorUseCaseMatrixReportsBothDirectionsOfActorInvolvement() {
         TraceabilityGraph graph = TraceabilityGraph.of(actorUseCaseFixtureSnapshot());

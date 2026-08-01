@@ -268,4 +268,16 @@ class TraceabilityGraphTest {
     void useCaseProseTextsOfUc1ContainsItsGoal() {
         assertThat(graph.useCaseProseTexts(UC_1_IRI)).containsExactly("Customer authenticates");
     }
+
+    @Test
+    void knowsIsTrueForEveryResourceWithAtLeastOneStatement() {
+        assertThat(graph.knows(FR_1_IRI)).isTrue();
+        assertThat(graph.knows(TERM_2_IRI)).isTrue();
+        assertThat(graph.knows(BC_1_IRI)).isTrue();
+    }
+
+    @Test
+    void knowsIsFalseForAnIriTheStoreNeverWrote() {
+        assertThat(graph.knows("https://w3id.org/arknet/id/never-written")).isFalse();
+    }
 }
