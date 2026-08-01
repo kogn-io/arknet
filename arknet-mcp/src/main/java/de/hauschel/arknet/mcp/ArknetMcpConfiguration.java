@@ -32,10 +32,12 @@ import de.hauschel.arknet.adr.application.AdrService;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.mcp.BoundedContextMcpTools;
 import de.hauschel.arknet.bc.application.BoundedContextService;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfDatasetInventory;
 import de.hauschel.arknet.prj.adapter.kogniordf.KognioRdfProjectRepositoryFactory;
 import de.hauschel.arknet.prj.adapter.mcp.ProjectMcpTools;
@@ -109,13 +111,18 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link ResolveTerms} in-ports, wired straight into {@link UseCaseMcpTools}.</li>
  *   <li><strong>bounded-context</strong> ({@link BoundedContextMcpTools} over
  *       {@link BoundedContextService} over an RDF-persisted bounded-context repository) - the
- *       four bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
- *       {@code bc_link_term}), assembled through {@link KognioRdfBoundedContextRepositoryFactory}.
- *       {@code bc_link_term}'s cross-BC code-to-identity resolution is a separate
- *       {@code KognioRdfTermLookup} bean over the same shared dataset lifecycle; {@code bc_get}/
- *       {@code bc_list}'s reverse direction (identity back to a displayable term code) is the
- *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
- *       {@link BoundedContextMcpTools} (ADR-008).</li>
+ *       five bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
+ *       {@code bc_link_term}/{@code bc_link_context}), assembled through
+ *       {@link KognioRdfBoundedContextRepositoryFactory}. {@code bc_link_term}'s cross-BC
+ *       code-to-identity resolution is a separate {@code KognioRdfTermLookup} bean over the same
+ *       shared dataset lifecycle; {@code bc_get}/{@code bc_list}'s reverse direction (identity
+ *       back to a displayable term code) is the ubiquitous-language hexagon's own
+ *       {@link ResolveTerms} in-port, wired straight into {@link BoundedContextMcpTools}
+ *       (ADR-008). {@code bc_link_context} records an {@code arkddd:ContextRelationship} between
+ *       two existing bounded contexts, persisted through a second, separately assembled
+ *       {@link ContextRelationshipRepository} bean
+ *       ({@link KognioRdfContextRelationshipRepositoryFactory}) over the same shared dataset
+ *       lifecycle - its own resource, not a field on either {@code BoundedContext}.</li>
  *   <li><strong>adr</strong> ({@link AdrMcpTools} over {@link AdrService} over an RDF-persisted
  *       ADR repository) - the five ADR tools ({@code adr_add}/{@code adr_list}/{@code adr_get}/
  *       {@code adr_set_status}/{@code adr_supersede}), assembled through
@@ -385,6 +392,20 @@ public class ArknetMcpConfiguration {
     }
 
     /**
+     * Persists {@code bc_link_context}'s {@code arkddd:ContextRelationship} resources - its own
+     * bean, not folded into {@link #boundedContextRepository}, since a relationship is its own
+     * resource rather than a field on either {@code BoundedContext} it references (see
+     * {@link de.hauschel.arknet.bc.domain.ContextRelationship}'s javadoc). Acquires datasets from
+     * the same shared {@link DatasetLifecycle} as {@link #boundedContextRepository}, so both write
+     * into the same project.
+     */
+    @Bean
+    ContextRelationshipRepository contextRelationshipRepository(
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfContextRelationshipRepositoryFactory.over(datasetLifecycle, displayLocale);
+    }
+
+    /**
      * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
      * subject identity - the strict cross-BC lookup {@code bc_link_term} needs.
      * Acquires datasets from the same shared {@link DatasetLifecycle} as
@@ -400,8 +421,10 @@ public class ArknetMcpConfiguration {
     @Bean
     BoundedContextService boundedContextService(
             final BoundedContextRepository repository, final ResourceIdFactory resourceIdFactory,
-            final de.hauschel.arknet.bc.application.port.out.TermLookup boundedContextTermLookup) {
-        return new BoundedContextService(repository, resourceIdFactory, boundedContextTermLookup);
+            final de.hauschel.arknet.bc.application.port.out.TermLookup boundedContextTermLookup,
+            final ContextRelationshipRepository contextRelationshipRepository) {
+        return new BoundedContextService(
+                repository, resourceIdFactory, boundedContextTermLookup, contextRelationshipRepository);
     }
 
     /**
@@ -415,7 +438,8 @@ public class ArknetMcpConfiguration {
     BoundedContextMcpTools boundedContextMcpTools(
             final BoundedContextService service, final ResolveTerms resolveTerms,
             final ProjectResolver projectResolver) {
-        return new BoundedContextMcpTools(service, service, service, service, resolveTerms, projectResolver);
+        return new BoundedContextMcpTools(
+                service, service, service, service, service, resolveTerms, projectResolver);
     }
 
     // --- ADR hexagon -----------------------------------------------------------

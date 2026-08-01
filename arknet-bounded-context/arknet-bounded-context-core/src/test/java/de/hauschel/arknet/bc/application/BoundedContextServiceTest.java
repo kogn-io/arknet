@@ -23,6 +23,8 @@ import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -45,6 +47,7 @@ class BoundedContextServiceTest {
     private InMemoryBoundedContextRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
     private InMemoryTermLookup termLookup;
+    private InMemoryContextRelationshipRepository contextRelationshipRepository;
     private BoundedContextService service;
 
     @BeforeEach
@@ -54,7 +57,8 @@ class BoundedContextServiceTest {
         termLookup = new InMemoryTermLookup();
         termLookup.register("TERM-1", TERM_1);
         termLookup.register("TERM-2", TERM_2);
-        service = new BoundedContextService(repository, resourceIdFactory, termLookup);
+        contextRelationshipRepository = new InMemoryContextRelationshipRepository();
+        service = new BoundedContextService(repository, resourceIdFactory, termLookup, contextRelationshipRepository);
     }
 
     @Test
@@ -258,6 +262,57 @@ class BoundedContextServiceTest {
     @Test
     void resolveExistingOfNoIdentitiesQueriesNothing() {
         assertEquals(List.of(), service.resolveExisting(WS));
+    }
+
+    @Test
+    void linkContextCreatesARelationshipBetweenTwoExistingBoundedContexts() {
+        BoundedContext upstream = service.add(WS, newBoundedContext());
+        BoundedContext downstream = service.add(WS, new NewBoundedContext("Shipping",
+                "Coordinates the physical delivery of fulfilled orders to customers.", null, null));
+
+        ContextRelationship created = service.linkContext(
+                WS, upstream.code(), downstream.code(), RelationshipType.CUSTOMER_SUPPLIER);
+
+        assertEquals(upstream.id(), created.upstream());
+        assertEquals(downstream.id(), created.downstream());
+        assertEquals(RelationshipType.CUSTOMER_SUPPLIER, created.relationshipType());
+        assertEquals(List.of(created), contextRelationshipRepository.all(WS));
+    }
+
+    @Test
+    void linkContextThrowsWhenUpstreamCodeUnknown() {
+        BoundedContext downstream = service.add(WS, newBoundedContext());
+
+        BoundedContextNotFoundException ex = assertThrows(BoundedContextNotFoundException.class,
+                () -> service.linkContext(WS, new BoundedContextCode("BC-99"), downstream.code(),
+                        RelationshipType.CUSTOMER_SUPPLIER));
+
+        assertEquals(new BoundedContextCode("BC-99"), ex.boundedContextCode());
+        assertEquals(List.of(), contextRelationshipRepository.all(WS));
+    }
+
+    @Test
+    void linkContextThrowsWhenDownstreamCodeUnknown() {
+        BoundedContext upstream = service.add(WS, newBoundedContext());
+
+        BoundedContextNotFoundException ex = assertThrows(BoundedContextNotFoundException.class,
+                () -> service.linkContext(WS, upstream.code(), new BoundedContextCode("BC-99"),
+                        RelationshipType.CUSTOMER_SUPPLIER));
+
+        assertEquals(new BoundedContextCode("BC-99"), ex.boundedContextCode());
+        assertEquals(List.of(), contextRelationshipRepository.all(WS));
+    }
+
+    /**
+     * The domain record's own compact-constructor guard (a bounded context cannot be upstream and
+     * downstream of itself) surfaces through the service unchanged.
+     */
+    @Test
+    void linkContextRejectsASelfRelationship() {
+        BoundedContext boundedContext = service.add(WS, newBoundedContext());
+
+        assertThrows(IllegalArgumentException.class, () -> service.linkContext(
+                WS, boundedContext.code(), boundedContext.code(), RelationshipType.PARTNERSHIP));
     }
 
     private static NewBoundedContext newBoundedContext() {

@@ -11,17 +11,22 @@ import java.util.function.UnaryOperator;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextConcurrentlyModifiedException;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.ContextRelationshipId;
 import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
+import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -41,7 +46,11 @@ import de.hauschel.arknet.kernel.ProjectId;
  * one above the highest running number currently used in the target project (numbering is
  * independent per project, starting at 1). Linking a glossary term is idempotent - a term may
  * be linked to a bounded context at any time; the edge lives inside the aggregate and is
- * therefore carried along by every subsequent replace-by-identity write.</p>
+ * therefore carried along by every subsequent replace-by-identity write. {@link #linkContext}, in
+ * contrast, is pure create with no idempotency check: it resolves both bounded-context codes
+ * against {@link #repository}, mints a fresh {@link ContextRelationshipId} and persists the
+ * resulting {@link ContextRelationship} as its own resource - never as a field on either bounded
+ * context.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code
  * against a fresh read whenever a concurrent {@code bc_add} claims the same {@code BC-N} first,
@@ -54,7 +63,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * local store are the normal case, not a remote/multi-writer concern (ADR-001).</p>
  */
 public class BoundedContextService implements AddBoundedContext, ListBoundedContexts,
-        GetBoundedContext, LinkTerm, ResolveBoundedContexts {
+        GetBoundedContext, LinkTerm, ResolveBoundedContexts, LinkContext {
 
     private static final String CODE_PREFIX = "BC";
 
@@ -70,21 +79,28 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     private final BoundedContextRepository repository;
     private final ResourceIdFactory resourceIdFactory;
     private final TermLookup termLookup;
+    private final ContextRelationshipRepository contextRelationshipRepository;
 
     /**
      * Creates the service.
      *
-     * @param repository        the driven persistence port (must not be {@code null})
-     * @param resourceIdFactory mints the opaque identity of a newly added bounded context (must
-     *                          not be {@code null})
-     * @param termLookup        resolves a human-typed glossary term code to its opaque identity
-     *                          (must not be {@code null})
+     * @param repository                    the driven persistence port (must not be {@code null})
+     * @param resourceIdFactory              mints the opaque identity of a newly added bounded
+     *                                       context or context relationship (must not be
+     *                                       {@code null})
+     * @param termLookup                     resolves a human-typed glossary term code to its
+     *                                       opaque identity (must not be {@code null})
+     * @param contextRelationshipRepository  the driven persistence port for
+     *                                       {@link ContextRelationship} (must not be
+     *                                       {@code null})
      */
     public BoundedContextService(BoundedContextRepository repository, ResourceIdFactory resourceIdFactory,
-            TermLookup termLookup) {
+            TermLookup termLookup, ContextRelationshipRepository contextRelationshipRepository) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
+        this.contextRelationshipRepository =
+                Objects.requireNonNull(contextRelationshipRepository, "contextRelationshipRepository");
     }
 
     @Override
@@ -147,6 +163,24 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
             return new BoundedContext(current.id(), current.code(), current.name(),
                     current.domainVision(), current.subdomain(), current.ownedBy(), linked);
         });
+    }
+
+    @Override
+    public ContextRelationship linkContext(ProjectId projectId, BoundedContextCode upstreamCode,
+            BoundedContextCode downstreamCode, RelationshipType relationshipType) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(upstreamCode, "upstreamCode");
+        Objects.requireNonNull(downstreamCode, "downstreamCode");
+        Objects.requireNonNull(relationshipType, "relationshipType");
+        BoundedContextId upstream = repository.findByCode(projectId, upstreamCode)
+                .orElseThrow(() -> new BoundedContextNotFoundException(projectId, upstreamCode))
+                .id();
+        BoundedContextId downstream = repository.findByCode(projectId, downstreamCode)
+                .orElseThrow(() -> new BoundedContextNotFoundException(projectId, downstreamCode))
+                .id();
+        ContextRelationshipId id = new ContextRelationshipId(resourceIdFactory.newId());
+        ContextRelationship relationship = new ContextRelationship(id, upstream, downstream, relationshipType);
+        return contextRelationshipRepository.create(projectId, relationship);
     }
 
     /**

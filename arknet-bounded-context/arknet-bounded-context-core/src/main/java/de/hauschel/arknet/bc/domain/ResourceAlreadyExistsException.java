@@ -9,14 +9,16 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Thrown when
- * {@link de.hauschel.arknet.bc.application.port.out.BoundedContextRepository#create} is called
- * with an identity that already exists in the targeted project.
+ * Thrown when a bounded-context-component {@code create} is called with an identity that already
+ * exists in the targeted project - both
+ * {@link de.hauschel.arknet.bc.application.port.out.BoundedContextRepository#create} and
+ * {@link de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository#create} reuse
+ * this one signal rather than each minting their own.
  *
  * <p>A programming-error signal, not an expected domain outcome: identities are minted once by
  * a {@link de.hauschel.arknet.kernel.ResourceIdFactory} and are never reused, so this should
- * only fire if something outside the normal {@code bc_add} path collides with an existing
- * subject.</p>
+ * only fire if something outside the normal {@code bc_add}/{@code bc_link_context} path collides
+ * with an existing subject.</p>
  */
 public class ResourceAlreadyExistsException extends RuntimeException {
 
