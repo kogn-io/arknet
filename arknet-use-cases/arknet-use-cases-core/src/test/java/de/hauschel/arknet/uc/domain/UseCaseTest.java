@@ -4,6 +4,7 @@
 package de.hauschel.arknet.uc.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -11,6 +12,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 
 /**
@@ -21,6 +23,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  */
 class UseCaseTest {
 
+    private static final ProjectId PROJECT = new ProjectId("test-project");
     private static final UseCaseId ID = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
     private static final UseCaseCode CODE = new UseCaseCode("UC1");
 
@@ -147,6 +150,38 @@ class UseCaseTest {
     @Test
     void rejectsBlankUseCaseCode() {
         assertThrows(IllegalArgumentException.class, () -> new UseCaseCode("  "));
+    }
+
+    /**
+     * {@link UseCase#withStepTextPatches} corrects only the matched step's {@code text}, leaving
+     * its {@code realises} references, every unmatched step and every other field of the use case
+     * untouched (issue #96 - relocated from {@code UseCaseService#applyStepTextPatches}).
+     */
+    @Test
+    void withStepTextPatchesCorrectsOnlyTheMatchedStepsTextLeavingRealisesAndOtherStepsUntouched() {
+        UseCase uc = useCaseWithSteps(List.of(
+                new Step(1, "select items", List.of(FR5)),
+                new Step(2, "confirm", List.of())));
+
+        UseCase patched = uc.withStepTextPatches(PROJECT, List.of(new StepTextPatch(1, "select the desired items")));
+
+        assertEquals("select the desired items", patched.steps().get(0).text());
+        assertEquals(List.of(FR5), patched.steps().get(0).realises());
+        assertEquals("confirm", patched.steps().get(1).text());
+        assertEquals(uc.id(), patched.id());
+        assertEquals(uc.code(), patched.code());
+    }
+
+    @Test
+    void withStepTextPatchesRejectsAPatchForAnUnknownPosition() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        StepPositionNotFoundException ex = assertThrows(StepPositionNotFoundException.class,
+                () -> uc.withStepTextPatches(PROJECT, List.of(new StepTextPatch(99, "does not exist"))));
+
+        assertSame(PROJECT, ex.projectId());
+        assertEquals(CODE, ex.useCaseCode());
+        assertEquals(99, ex.position());
     }
 
     @Test

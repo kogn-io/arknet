@@ -3,8 +3,12 @@
 
 package de.hauschel.arknet.uc.domain;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * A flow-oriented (Cockburn-style) use case: a goal an actor pursues against
@@ -82,6 +86,43 @@ public record UseCase(
             throw new IllegalArgumentException("a use case must have at least one step");
         }
         requireConsecutiveStepPositions(steps);
+    }
+
+    /**
+     * Returns a new use case with {@code patches} applied to {@link #steps()} by position -
+     * correcting only each matched step's {@code text} and leaving its {@code realises}
+     * references, every unmatched step and every other field of this use case untouched.
+     *
+     * <p>{@code projectId} is a pure pass-through for {@link StepPositionNotFoundException}'s
+     * message - it is never stored on this aggregate (issue #96): a hexagonal/DDD rule already
+     * respected everywhere else in this codebase, {@link UseCase} carries no {@link ProjectId}
+     * field.</p>
+     *
+     * @param projectId the project the correction is issued against, for the exception message
+     *                  only
+     * @param patches   text corrections for individual existing main-flow steps, addressed by
+     *                  their {@code position}
+     * @return a new use case with the patched steps
+     * @throws StepPositionNotFoundException if a patch names a position no step in {@link #steps()}
+     *                                        carries
+     */
+    public UseCase withStepTextPatches(ProjectId projectId, List<StepTextPatch> patches) {
+        Map<Integer, String> textByPosition = new LinkedHashMap<>();
+        for (StepTextPatch patch : patches) {
+            textByPosition.put(patch.position(), patch.text());
+        }
+        List<Step> patched = steps.stream()
+                .map(step -> {
+                    String newText = textByPosition.remove(step.position());
+                    return newText != null ? new Step(step.position(), newText, step.realises()) : step;
+                })
+                .toList();
+        if (!textByPosition.isEmpty()) {
+            int unmatchedPosition = textByPosition.keySet().iterator().next();
+            throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
+        }
+        return new UseCase(id, code, title, goal, scope, trigger, primaryActor, supportingActors,
+                precondition, postcondition, patched, extensions);
     }
 
     /**

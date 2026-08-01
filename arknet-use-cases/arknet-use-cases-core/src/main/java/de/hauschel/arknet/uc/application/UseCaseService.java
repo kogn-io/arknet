@@ -3,9 +3,7 @@
 
 package de.hauschel.arknet.uc.application;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -18,7 +16,6 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
-import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
@@ -26,7 +23,7 @@ import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
-import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
+import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
@@ -167,45 +164,20 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             List<StepTextPatch> stepTextPatches) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, current -> new UseCase(
-                current.id(), current.code(),
-                title != null ? title : current.title(),
-                goal != null ? goal : current.goal(),
-                scope != null ? scope : current.scope(),
-                trigger != null ? trigger : current.trigger(),
-                current.primaryActor(), current.supportingActors(),
-                precondition != null ? precondition : current.precondition(),
-                postcondition != null ? postcondition : current.postcondition(),
-                stepTextPatches != null
-                        ? applyStepTextPatches(projectId, code, current.steps(), stepTextPatches)
-                        : current.steps(),
-                extensions != null ? List.copyOf(extensions) : current.extensions()));
-    }
-
-    /**
-     * Applies {@code patches} to {@code steps} by position, correcting only each matched step's
-     * {@code text} and leaving its {@code realises} references and every unmatched step untouched.
-     *
-     * @throws StepPositionNotFoundException if a patch names a position no step in {@code steps}
-     *                                        carries
-     */
-    private List<Step> applyStepTextPatches(
-            ProjectId projectId, UseCaseCode code, List<Step> steps, List<StepTextPatch> patches) {
-        Map<Integer, String> textByPosition = new LinkedHashMap<>();
-        for (StepTextPatch patch : patches) {
-            textByPosition.put(patch.position(), patch.text());
-        }
-        List<Step> patched = steps.stream()
-                .map(step -> {
-                    String newText = textByPosition.remove(step.position());
-                    return newText != null ? new Step(step.position(), newText, step.realises()) : step;
-                })
-                .toList();
-        if (!textByPosition.isEmpty()) {
-            int unmatchedPosition = textByPosition.keySet().iterator().next();
-            throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
-        }
-        return patched;
+        return updateWithOptimisticRetry(projectId, code, current -> {
+            UseCase base = new UseCase(
+                    current.id(), current.code(),
+                    title != null ? title : current.title(),
+                    goal != null ? goal : current.goal(),
+                    scope != null ? scope : current.scope(),
+                    trigger != null ? trigger : current.trigger(),
+                    current.primaryActor(), current.supportingActors(),
+                    precondition != null ? precondition : current.precondition(),
+                    postcondition != null ? postcondition : current.postcondition(),
+                    current.steps(),
+                    extensions != null ? List.copyOf(extensions) : current.extensions());
+            return stepTextPatches != null ? base.withStepTextPatches(projectId, stepTextPatches) : base;
+        });
     }
 
     /**

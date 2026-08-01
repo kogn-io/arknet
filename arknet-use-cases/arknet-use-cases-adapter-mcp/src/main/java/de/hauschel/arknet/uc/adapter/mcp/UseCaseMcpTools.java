@@ -21,7 +21,7 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
-import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
+import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
