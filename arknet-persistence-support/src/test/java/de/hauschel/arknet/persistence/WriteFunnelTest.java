@@ -64,7 +64,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
  * lifecycle/transactor/tx) and a recording {@link ShaclValidation} behind a real
  * {@link ShaclWriteGate} - what is under test is the funnel's own contract: gate before
  * transaction, both {@code contains} existence checks inside the transaction, the caller-supplied
- * signals for each rejection, and the create-only commit-conflict translation (issue #144).
+ * signals for each rejection, and the create-only commit-conflict translation.
  * Whether a real store honours that contract is the business of each adapter's own tests.</p>
  */
 class WriteFunnelTest {
@@ -120,7 +120,7 @@ class WriteFunnelTest {
     }
 
     /**
-     * Issue #144: two genuinely overlapping {@code SERIALIZABLE} transactions both pass the
+     * Two genuinely overlapping {@code SERIALIZABLE} transactions both pass the
      * existence checks, and the loser fails at commit with the store's own exception - the
      * funnel must translate exactly the recognised conflict into the {@code duplicateCode}
      * signal.
@@ -140,7 +140,7 @@ class WriteFunnelTest {
     }
 
     /**
-     * Issue #181: a caller guarding a second uniqueness rule of its own inside the body (the
+     * A caller guarding a second uniqueness rule of its own inside the body (the
      * project registry's anchor uniqueness) may name the signal a lost commit surfaces as, instead
      * of having {@code duplicateCode} imposed on it - and it sees the store's own exception, so it
      * can decide by more than the mere fact of having lost.
@@ -263,10 +263,10 @@ class WriteFunnelTest {
     }
 
     /**
-     * The predicate the four out-adapters actually inject carries the #144 invariant: point it at
+     * The predicate the four out-adapters actually inject carries an invariant: point it at
      * the wrong type (a superclass, a {@code RuntimeException} wrapper) and a lost race would stop
      * being translated - visible only in a real race, which is exactly what the
-     * {@code *RealStoreConcurrencyTest}s cover flakily (issue #171). Pinned here directly instead.
+     * {@code *RealStoreConcurrencyTest}s cover flakily. Pinned here directly instead.
      */
     @Test
     void defaultWriteConflictRecognisesOnlyTheStoresConcurrencyConflict() {
@@ -335,7 +335,7 @@ class WriteFunnelTest {
     }
 
     /**
-     * The pre-funnel adapters translated a commit conflict only on create (issue #144's
+     * The pre-funnel adapters translated a commit conflict only on create (the create
      * signal is a code collision, which an update cannot cause) and rethrew it raw on update -
      * preserved deliberately, not repaired in passing.
      */
@@ -369,7 +369,7 @@ class WriteFunnelTest {
         assertFalse(fixture.lifecycle.acquired, "gate must reject before the dataset is acquired");
     }
 
-    /** Issue #63: the validation-only context must reach the gate; {@code null} means none. */
+    /** The validation-only context must reach the gate; {@code null} means none. */
     @Test
     void assertedContextReachesGate() {
         Fixture fixture = new Fixture(List.of(true));
@@ -387,7 +387,7 @@ class WriteFunnelTest {
         assertTrue(containsSubject(fixture.validation.data, SUBJECT_IRI));
     }
 
-    // ---- compareAndUpdate (ADR-014 decisions 3+4, issue #167) ---------------------------
+    // ---- compareAndUpdate (ADR-014 decisions 3+4) -----------------------------------------
 
     @Test
     void compareAndUpdateWritesWhenSubjectExistsAndHeadMatches() {
@@ -447,7 +447,7 @@ class WriteFunnelTest {
     }
 
     /**
-     * Issue #144's "second interleaving", now also relevant to an update path: two callers can
+     * The "second interleaving" from create, now also relevant to an update path: two callers can
      * both observe the same expected head and both pass the synchronous comparison before either
      * commits, under {@code SERIALIZABLE} isolation - the loser's commit itself is then rejected,
      * and must translate into the identical {@code headMismatch} signal.
@@ -647,7 +647,7 @@ class WriteFunnelTest {
         return graph;
     }
 
-    /** Asserts a {@code contains} call checking whether {@code subject} exists at all (issue #173). */
+    /** Asserts a {@code contains} call checking whether {@code subject} exists at all. */
     private static void assertSubjectExistenceCheck(FakeTx.ContainsCall call, String graph, String subject) {
         assertEquals(graph, call.namedGraph().getIRIString());
         assertEquals(subject, ((IRI) call.subject()).getIRIString());
@@ -657,7 +657,7 @@ class WriteFunnelTest {
 
     /**
      * Asserts a {@code contains} call checking whether any subject already carries {@code code}
-     * on {@code dcterms:identifier} (issue #173).
+     * on {@code dcterms:identifier}.
      */
     private static void assertCodeExistenceCheck(FakeTx.ContainsCall call, String graph, String code) {
         assertEquals(graph, call.namedGraph().getIRIString());

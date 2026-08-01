@@ -53,7 +53,7 @@ import de.hauschel.arknet.kernel.LocalizedLiteral;
  * they did not ask for; rendering {@code messages().get(0)} would be worse still, since that
  * order is an artifact of the parse order of the shapes file and carries no meaning.</p>
  *
- * <p><strong>Validation-only asserted context (issue #63).</strong>
+ * <p><strong>Validation-only asserted context.</strong>
  * {@link #enforce(ReadableGraph, ReadableGraph)} accepts a second graph of triples that are
  * merged into the validated data alongside {@code candidate} and {@code axioms}, but are never
  * persisted - the gate persists nothing to begin with; persistence remains the calling

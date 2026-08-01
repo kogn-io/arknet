@@ -122,7 +122,7 @@ class ShaclWriteGateTest {
     }
 
     /**
-     * The other half of issue #63's validationGraph workaround: an {@code assertedContext}
+     * The other half of the validationGraph workaround: an {@code assertedContext}
      * graph passed to {@link ShaclWriteGate#enforce(ReadableGraph, ReadableGraph)} must be
      * merged into the validated data exactly like {@code axioms} - it is validation-only, never
      * persisted (the gate persists nothing to begin with).

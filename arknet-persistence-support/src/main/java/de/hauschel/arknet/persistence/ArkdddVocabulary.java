@@ -10,7 +10,7 @@ package de.hauschel.arknet.persistence;
  * {@code de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository}) and the code
  * that <em>reads</em> it ({@code arknet-mcp}'s traceability read path,
  * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, which scans it for unlinked glossary
- * mentions, issue #185).
+ * mentions).
  *
  * <p>Same rationale as {@link ArkreqVocabulary}: before this class both places declared their own
  * private copy of the same IRI literal, which could drift silently. Scope is just as narrow -
