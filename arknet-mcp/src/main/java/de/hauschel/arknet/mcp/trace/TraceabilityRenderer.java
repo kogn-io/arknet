@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.mcp.store.ResourceRenderer;
 import de.hauschel.arknet.mcp.store.StoreResource;
 
 /**
@@ -109,6 +110,14 @@ public final class TraceabilityRenderer {
      * Renders {@code impact_analysis}: every resource transitively affected if {@code
      * targetIri} changes (see {@link TraceabilityGraph#dependents(String)}).
      *
+     * <p>{@link HandleResolver} only expands a CURIE/bare-id syntactically or via a store lookup
+     * that can itself go stale between resolution and read - it never guarantees {@code
+     * targetIri} actually carries a statement. Reporting "Transitively affected (0)" for such a
+     * handle would read as "nothing depends on this" when the truth is "no such resource exists"
+     * (issue #135) - the same distinction {@code resource_get} already draws via {@link
+     * ResourceRenderer#notFoundMessage}, reused here so both tools describe an unknown handle
+     * identically.</p>
+     *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
      * @param targetIri   the already-resolved target resource IRI
@@ -118,6 +127,10 @@ public final class TraceabilityRenderer {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         Objects.requireNonNull(targetIri, "targetIri");
+
+        if (!graph.knows(targetIri)) {
+            return ResourceRenderer.notFoundMessage(prefixes, targetIri);
+        }
 
         List<String> affected = graph.dependents(targetIri);
         StringBuilder out = new StringBuilder();

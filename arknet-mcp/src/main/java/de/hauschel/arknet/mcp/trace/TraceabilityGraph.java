@@ -432,6 +432,18 @@ public final class TraceabilityGraph {
         return List.copyOf(reported);
     }
 
+    /**
+     * @return {@code true} if {@code iri} carries at least one statement, as either subject or
+     *         object - the same "has this resource ever been written" check
+     *         {@code resource_get}'s not-found notice is keyed on (issue #135), so
+     *         {@code impact_analysis} can give that same notice for a syntactically valid but
+     *         unknown handle instead of silently reporting zero affected resources.
+     */
+    public boolean knows(String iri) {
+        Objects.requireNonNull(iri, "iri");
+        return outgoingBySubject.containsKey(iri) || incomingByObject.containsKey(iri);
+    }
+
     /** @return {@code true} if {@code iri} carries {@code typeIri} as one of its {@code rdf:type}s. */
     public boolean isType(String iri, String typeIri) {
         Objects.requireNonNull(iri, "iri");

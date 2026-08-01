@@ -205,6 +205,28 @@ class TraceabilityMcpToolsTest {
         });
     }
 
+    /**
+     * Unlike a bare id, a CURIE with a known prefix ({@code req:FR-999}) resolves syntactically
+     * via {@link de.hauschel.arknet.mcp.store.Prefixes#toIri} without ever checking the store, so
+     * {@link de.hauschel.arknet.mcp.store.HandleResolver} happily hands {@code impact_analysis} an
+     * IRI for a requirement that was never written. Before issue #135 this rendered a fully formed
+     * "Transitively affected (0)" report instead of surfacing the unknown handle - the false
+     * "nothing depends on this" this test guards against.
+     */
+    @Test
+    void impactAnalysisReportsNotFoundForAResolvableButUnknownCurie() {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            ProjectId project = registerProject(context);
+            TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
+
+            String impact = tools.impactAnalysis(null, "req:FR-999", ANCHOR);
+
+            assertThat(impact).startsWith("Resource not found (no statements): req:FR-999");
+            assertThat(impact).doesNotContain("Transitively affected");
+        });
+    }
+
     @Test
     void actorUseCaseMatrixReportsTheActorAndItsUseCaseInBothDirections() {
         runner().run(context -> {
