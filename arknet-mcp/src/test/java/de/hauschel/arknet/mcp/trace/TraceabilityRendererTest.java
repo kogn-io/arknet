@@ -38,6 +38,7 @@ class TraceabilityRendererTest {
     private static final String PRIMARY_ACTOR = ARKREQ + "primaryActor";
     private static final String SUPPORTING_ACTOR = ARKREQ + "supportingActor";
     private static final String USE_CASE_GOAL = ARKREQ + "useCaseGoal";
+    private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
 
@@ -226,6 +227,29 @@ class TraceabilityRendererTest {
 
         assertThat(report).contains("## Term pairs named together in the same text (0)");
         assertThat(report).contains("- none");
+    }
+
+    @Test
+    void termCooccurrenceFindsTermsAcrossDifferentProseFieldsOfTheSameRequirement() {
+        TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
+                iri(TERM_A, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_A, PREF_LABEL, "Kunde"),
+                lit(TERM_A, IDENTIFIER, "TERM-A"),
+
+                iri(TERM_B, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_B, PREF_LABEL, "Bestellung"),
+                lit(TERM_B, IDENTIFIER, "TERM-B"),
+
+                iri(FR_10, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_10, TITLE, "Bestandsdaten"),
+                lit(FR_10, IDENTIFIER, "FR-10"),
+                lit(FR_10, DESCRIPTION, "Der Kunde meldet sich an."),
+                lit(FR_10, ACCEPTANCE_CRITERION, "Die Bestellung wird angezeigt."))));
+
+        String report = renderer.termCooccurrence(WORKSPACE, graph);
+
+        assertThat(report).contains("## Term pairs named together in the same text (1)");
+        assertThat(report).contains("TERM-A").contains("TERM-B").contains("1 text(s)");
     }
 
     private static StoreSnapshot actorUseCaseFixtureSnapshot() {

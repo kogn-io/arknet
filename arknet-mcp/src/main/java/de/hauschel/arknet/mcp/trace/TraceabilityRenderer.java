@@ -210,8 +210,10 @@ public final class TraceabilityRenderer {
      * Scans every requirement's prose ({@link TraceabilityGraph#requirementProseTexts(String)})
      * and every use case's goal ({@link TraceabilityGraph#useCaseProseTexts(String)}) for term
      * mentions via the same {@link LabelMentions} engine {@code orphan_check} uses, and pairs up
-     * every two terms found together in one text string - the literal unit of "co-occurrence"
-     * (issue #108).
+     * every two terms found anywhere across one resource's prose fields - the resource is the
+     * unit of "co-occurrence" (issue #108), not the individual field: a requirement's description
+     * naming one term and its acceptance criterion naming another still counts as that
+     * requirement mentioning both.
      */
     private List<Cooccurrence> termCooccurrences(TraceabilityGraph graph) {
         Map<String, String> termLabels = graph.termLabels();
@@ -223,14 +225,10 @@ public final class TraceabilityRenderer {
 
         Map<TermPair, Set<String>> sourcesByPair = new LinkedHashMap<>();
         for (String requirementIri : graph.requirementIris()) {
-            for (String text : graph.requirementProseTexts(requirementIri)) {
-                recordCooccurrences(matcher, text, requirementIri, sourcesByPair);
-            }
+            recordCooccurrences(matcher, graph.requirementProseTexts(requirementIri), requirementIri, sourcesByPair);
         }
         for (String useCaseIri : graph.useCaseIris()) {
-            for (String text : graph.useCaseProseTexts(useCaseIri)) {
-                recordCooccurrences(matcher, text, useCaseIri, sourcesByPair);
-            }
+            recordCooccurrences(matcher, graph.useCaseProseTexts(useCaseIri), useCaseIri, sourcesByPair);
         }
 
         return sourcesByPair.entrySet().stream()
@@ -241,11 +239,8 @@ public final class TraceabilityRenderer {
     }
 
     private void recordCooccurrences(
-            LabelMentions<String> matcher, String text, String sourceIri, Map<TermPair, Set<String>> sourcesByPair) {
-        if (text == null) {
-            return;
-        }
-        List<String> mentioned = matcher.mentionedIn(List.of(text)).stream().sorted().toList();
+            LabelMentions<String> matcher, List<String> texts, String sourceIri, Map<TermPair, Set<String>> sourcesByPair) {
+        List<String> mentioned = matcher.mentionedIn(texts).stream().sorted().toList();
         for (int i = 0; i < mentioned.size(); i++) {
             for (int j = i + 1; j < mentioned.size(); j++) {
                 TermPair pair = new TermPair(mentioned.get(i), mentioned.get(j));
