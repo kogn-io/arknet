@@ -26,6 +26,9 @@ import de.hauschel.arknet.ul.domain.Term;
  */
 public final class TermCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Glossary";
+
     private TermCards() {
     }
 
@@ -39,7 +42,7 @@ public final class TermCards {
                 .sorted(Comparator.comparing(Term::prefLabel, String.CASE_INSENSITIVE_ORDER))
                 .map(TermCards::card)
                 .toList();
-        return new ModelSection("Glossary", "glossary",
+        return new ModelSection(SECTION_TITLE, "glossary",
                 "the ubiquitous language - one agreed meaning per term", cards);
     }
 

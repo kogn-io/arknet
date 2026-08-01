@@ -36,6 +36,9 @@ import de.hauschel.arknet.req.domain.TermRef;
  */
 public final class RequirementCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Requirements";
+
     private final ListRequirements requirements;
 
     /**
@@ -56,7 +59,7 @@ public final class RequirementCards {
                 .sorted(Comparator.comparing(requirement -> requirement.code().value()))
                 .map(requirement -> card(requirement, glossary))
                 .toList();
-        return new ModelSection("Requirements", "requirements",
+        return new ModelSection(SECTION_TITLE, "requirements",
                 "what the system shall do, and what counts as done", cards);
     }
 

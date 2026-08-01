@@ -80,10 +80,12 @@ public final class ModelViews {
         final List<ModelSection> sections = new ArrayList<>();
         final List<String> failures = new ArrayList<>();
         final Glossary glossary = glossary(projectId, failures);
-        collect(sections, failures, "Bounded Contexts", () -> boundedContexts.section(projectId, glossary));
-        collect(sections, failures, "Requirements", () -> requirements.section(projectId, glossary));
-        collect(sections, failures, "Use Cases", () -> useCases.section(projectId, glossary));
-        collect(sections, failures, "Glossary", () -> TermCards.section(glossary));
+        collect(sections, failures, BoundedContextCards.SECTION_TITLE,
+                () -> boundedContexts.section(projectId, glossary));
+        collect(sections, failures, RequirementCards.SECTION_TITLE,
+                () -> requirements.section(projectId, glossary));
+        collect(sections, failures, UseCaseCards.SECTION_TITLE, () -> useCases.section(projectId, glossary));
+        collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
         return new Views(sections, failures);
     }
 

@@ -29,6 +29,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  */
 public final class BoundedContextCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Bounded Contexts";
+
     private final ListBoundedContexts contexts;
 
     /**
@@ -49,7 +52,7 @@ public final class BoundedContextCards {
                 .sorted(Comparator.comparing(context -> context.code().value()))
                 .map(context -> card(context, glossary))
                 .toList();
-        return new ModelSection("Bounded Contexts", "bounded-contexts",
+        return new ModelSection(SECTION_TITLE, "bounded-contexts",
                 "the strategic model boundaries and the language inside each", cards);
     }
 

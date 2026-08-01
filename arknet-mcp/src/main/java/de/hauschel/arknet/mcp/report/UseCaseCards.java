@@ -47,6 +47,9 @@ import de.hauschel.arknet.uc.domain.UseCase;
  */
 public final class UseCaseCards {
 
+    /** The section title, shared with {@link ModelViews}' failure message for this section. */
+    public static final String SECTION_TITLE = "Use Cases";
+
     private final ListUseCases useCases;
     private final ResolveRequirements requirements;
 
@@ -72,7 +75,7 @@ public final class UseCaseCards {
                 .sorted(Comparator.comparing(uc -> uc.code().value()))
                 .map(uc -> card(uc, glossary, reqs))
                 .toList();
-        return new ModelSection("Use Cases", "use-cases",
+        return new ModelSection(SECTION_TITLE, "use-cases",
                 "goal, actors and the ordered main flow - as authored, not as triples", cards);
     }
 
