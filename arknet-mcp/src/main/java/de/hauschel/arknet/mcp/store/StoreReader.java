@@ -91,7 +91,7 @@ public final class StoreReader {
     public StoreSnapshot readSnapshot(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
         String query = "SELECT DISTINCT ?s ?p ?o WHERE { " + excludingInfrastructure("?s ?p ?o") + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+        try (DatasetHandle handle = acquire(projectId)) {
             List<Triple> triples = handle.sparqlQuery().select(query)
                     .map(StoreReader::toTriple)
                     .filter(Optional::isPresent)
@@ -114,7 +114,7 @@ public final class StoreReader {
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?p ?o WHERE { "
                 + excludingInfrastructure(iriRef + " ?p ?o") + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+        try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> outgoingTriple(iri, row))
                     .filter(Optional::isPresent)
@@ -136,7 +136,7 @@ public final class StoreReader {
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?s ?p WHERE { "
                 + excludingInfrastructure("?s ?p " + iriRef) + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+        try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> incomingTriple(iri, row))
                     .filter(Optional::isPresent)
@@ -159,7 +159,7 @@ public final class StoreReader {
         Objects.requireNonNull(identifier, "identifier");
         String literal = "\"" + identifier.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
         String query = "SELECT DISTINCT ?s WHERE { ?s <" + DCTERMS_IDENTIFIER + "> " + literal + " }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+        try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> row.getValue("s").orElse(null))
                     .filter(IRI.class::isInstance)
@@ -167,6 +167,11 @@ public final class StoreReader {
                     .distinct()
                     .toList();
         }
+    }
+
+    /** Acquires the project's dataset - the one line every read method here shares. */
+    private DatasetHandle acquire(ProjectId projectId) {
+        return lifecycle.acquire(new DatasetId(projectId.value()));
     }
 
     /**
