@@ -72,8 +72,8 @@
              0.2.2-SNAPSHOT bringt DatasetHandle#datasetExport() (RdfFormat-basierter, Rio-gestuetzter
              Serialisierungs-Port) fuer #154 - Uebergangspin bis das gleichnamige 0.3.0-Release auf
              Central synct, dann Wechsel auf das Release. -->
-        <kognio-rdf.version>0.2.2-SNAPSHOT</kognio-rdf.version>
-        <spotless-maven-plugin.version>3.8.0</spotless-maven-plugin.version>
+        <kognio-rdf.version>0.3.0</kognio-rdf.version>
+        <spotless-maven-plugin.version>3.9.0</spotless-maven-plugin.version>
     </properties>
 
     <modules>
@@ -248,7 +248,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
-                <version>1.7.3</version>
+                <version>1.8.0</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>resolveCiFriendliesOnly</flattenMode>
