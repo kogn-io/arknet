@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
@@ -52,12 +54,12 @@ class UseCaseCardsTest {
                     .isEqualTo(new Block.Prose("Goal", RichText.plain("Der Kunde bestellt Artikel.")));
             assertThat(card.blocks()).filteredOn(Block.Flow.class::isInstance)
                     .singleElement()
-                    .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(Block.Flow.class))
+                    .asInstanceOf(InstanceOfAssertFactories.type(Block.Flow.class))
                     .satisfies(flow -> assertThat(flow.steps())
                             .extracting(FlowStep::position, FlowStep::text)
                             .containsExactly(
-                                    org.assertj.core.groups.Tuple.tuple(1, "Artikel in den Warenkorb legen"),
-                                    org.assertj.core.groups.Tuple.tuple(2, "Bestellung bestaetigen")));
+                                    Tuple.tuple(1, "Artikel in den Warenkorb legen"),
+                                    Tuple.tuple(2, "Bestellung bestaetigen")));
         });
     }
 

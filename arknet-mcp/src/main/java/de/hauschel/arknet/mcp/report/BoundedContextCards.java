@@ -68,18 +68,8 @@ public final class BoundedContextCards {
         if (context.ownedBy() != null) {
             blocks.add(Block.Prose.plain("Owned by", context.ownedBy()));
         }
-        if (!linked.isEmpty()) {
-            final Set<ResourceId> mentioned = glossary.mentionedIn(List.of(context.domainVision()));
-            final List<Ref> rest = linked.stream()
-                    .filter(id -> !mentioned.contains(id))
-                    .map(glossary::ref)
-                    .toList();
-            if (!rest.isEmpty()) {
-                blocks.add(new Block.Refs(
-                        mentioned.isEmpty() ? "Ubiquitous language"
-                                : "Ubiquitous language (not named in the vision)", rest));
-            }
-        }
+        UnmentionedTerms.addTo(blocks, linked, glossary, List.of(context.domainVision()),
+                "Ubiquitous language", "not named in the vision");
         return new ModelCard(context.code().value(), context.name(), context.id().value().value(), badges, blocks);
     }
 }

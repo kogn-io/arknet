@@ -4,6 +4,7 @@
 package de.hauschel.arknet.mcp.report;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -68,7 +69,7 @@ public final class UseCaseCards {
         final List<UseCase> all = useCases.list(projectId);
         final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(projectId, all);
         final List<ModelCard> cards = all.stream()
-                .sorted(java.util.Comparator.comparing(uc -> uc.code().value()))
+                .sorted(Comparator.comparing(uc -> uc.code().value()))
                 .map(uc -> card(uc, glossary, reqs))
                 .toList();
         return new ModelSection("Use Cases", "use-cases",
