@@ -8,7 +8,7 @@ import java.util.Objects;
 
 /**
  * A single term of the {@code arkreq:} requirement vocabulary, self-described as data for an
- * MCP client (issue #31): what the term means and the exact values it accepts.
+ * MCP client: what the term means and the exact values it accepts.
  *
  * <p><strong>{@code values} is sourced from the Java domain enum, not from the ontology's
  * {@code sh:in} SHACL enumeration.</strong> {@link RequirementStatus}, for instance,

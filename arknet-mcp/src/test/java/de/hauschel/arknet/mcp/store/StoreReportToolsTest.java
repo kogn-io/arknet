@@ -157,7 +157,7 @@ class StoreReportToolsTest {
         String result = tools.storeOverview(null, ANCHOR);
 
         // Digest is generic and contains resources from both BCs. Both identities are opaque
-        // IRIs (requirement since #68, term since #71), unbound to any CURIE prefix, so the
+        // IRIs, unbound to any CURIE prefix, so the
         // digest handle falls back to their dcterms:identifier ("FR-1" / "TERM-1") instead of
         // the raw IRI.
         assertThat(result).contains("# Project sample-project");
@@ -169,7 +169,7 @@ class StoreReportToolsTest {
         assertThat(result).contains("no dangling references");
 
         // HTML side effect: a self-contained file with no external dependencies, under a
-        // project-scoped subdirectory of the fallback dir (issue #172).
+        // project-scoped subdirectory of the fallback dir.
         Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
         assertThat(html).exists();
         String content = Files.readString(html);
@@ -182,7 +182,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * What #158 became under ADR-016: the report is written to the server's own report directory
+     * Under ADR-016 the report is written to the server's own report directory
      * and never to anything the client sent, so a daemon that shares no filesystem with its caller
      * (containerized, only {@code /data/rdf} mounted) cannot fail the tool call over it.
      *
@@ -235,7 +235,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * The other half of #158: when even the fallback report dir is unwritable, {@code
+     * The other half: when even the fallback report dir is unwritable, {@code
      * store_overview} must still return the digest - the whole point of the fallback is
      * resilience, so a client that gets neither writable dir must not lose the digest too.
      */
@@ -261,7 +261,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * #160: a containerized daemon's {@code fallbackReportDir} is a mount point
+     * A containerized daemon's {@code fallbackReportDir} is a mount point
      * (e.g. {@code /data/report}) the calling agent, running outside the container, cannot
      * reach. When {@code reportHostDir} names that mount's host-side path, the digest must
      * report the host path instead of the path the file was actually written to.
@@ -286,7 +286,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * Issue #187: a project registered with a human-readable label must show it in both the
+     * A project registered with a human-readable label must show it in both the
      * digest and the HTML report header, with the raw id kept alongside rather than replaced.
      */
     @Test
@@ -311,7 +311,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * #172: every project served by a shared daemon writes into the very same
+     * Every project served by a shared daemon writes into the very same
      * {@code fallbackReportDir}. Without a project-scoped subdirectory, the second project's
      * report would silently overwrite the first's under the identical file name - and since
      * ADR-016 that directory is the <em>only</em> target, which makes the subdirectory the sole
@@ -335,7 +335,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * Since requirement identity became an opaque IRI (#68), the {@code req:} CURIE prefix
+     * Since requirement identity became an opaque IRI, the {@code req:} CURIE prefix
      * (bound to the old {@code .../model/requirement/} namespace) no longer aliases a freshly
      * added requirement's subject - only the full IRI and the {@code dcterms:identifier}-based
      * bare-id lookup do.
@@ -366,7 +366,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * Reproduces #106: {@code resource_get} used to ignore its project parameter entirely and
+     * {@code resource_get} used to ignore its project parameter entirely and
      * always read the default project, unlike {@code store_overview} which already honored one.
      * Two projects each carry a requirement with the SAME business code ("FR-1") but different
      * identities/titles - a caller passing the other project's anchor must get that project's

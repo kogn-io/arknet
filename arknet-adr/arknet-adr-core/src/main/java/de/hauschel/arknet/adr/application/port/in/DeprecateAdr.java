@@ -14,8 +14,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Backs the tool {@code adr_set_status}. The legal transition is
  * {@code ACCEPTED -> DEPRECATED}, so this port takes no target status - the same shape
  * {@link AcceptAdr} takes for its own single transition, itself the shape the requirements context
- * settled on for the identical situation (issue #190, where the former
- * {@code SetRequirementStatus} became {@code AcceptRequirement}). The transition rule itself lives
+ * settled on for the identical situation, where the former
+ * {@code SetRequirementStatus} became {@code AcceptRequirement}. The transition rule itself lives
  * on {@link Adr#deprecate()}, not here and not in the implementing application service.</p>
  */
 public interface DeprecateAdr {

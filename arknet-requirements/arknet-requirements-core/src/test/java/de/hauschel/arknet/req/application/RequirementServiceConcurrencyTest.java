@@ -30,7 +30,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.TermRef;
 
 /**
- * Regression tests for issue #108: {@link RequirementService} used to read-then-write without any
+ * Regression tests for the concurrency guard: {@link RequirementService} used to read-then-write without any
  * concurrency guard, so two racing callers could silently lose one another's change (lost update)
  * or spuriously fail a legitimate {@code req_add} (a client-side {@code nextCode()} race, not a
  * real conflict).
@@ -115,7 +115,7 @@ class RequirementServiceConcurrencyTest {
     }
 
     /**
-     * Same race, exercised via {@code req_update} (issue #162) racing against a concurrent
+     * Same race, exercised via {@code req_update} racing against a concurrent
      * {@code req_link_term}: correcting a requirement's description must not silently drop a
      * concurrently linked term.
      */

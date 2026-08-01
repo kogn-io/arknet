@@ -69,14 +69,14 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * adapter, whereas the use-case root's identity is minted store-neutrally above the store.</p>
  *
  * <p>The remaining properties are exactly those of the already-merged requirements/use-case
- * ontology (PR #42): {@code arkreq:useCaseGoal}, {@code arkreq:designScope}, {@code arkreq:trigger},
+ * ontology: {@code arkreq:useCaseGoal}, {@code arkreq:designScope}, {@code arkreq:trigger},
  * {@code arkreq:useCasePrecondition}, {@code arkreq:useCasePostcondition}, {@code arkreq:primaryActor},
  * {@code arkreq:supportingActor}, {@code arkreq:mainStep}, {@code arkreq:extensionStep},
  * {@code arkreq:position}, {@code arkreq:stepText}, {@code arkreq:stepRealises} and
  * {@code oslc_rm:satisfies}.</p>
  *
- * <p><strong>Requirement/actor references arrive pre-resolved (issue #41, identity-carrying
- * since #89).</strong> {@link RequirementRef} and {@link ActorRef} carry the referenced
+ * <p><strong>Requirement/actor references arrive pre-resolved, identity-carrying.</strong>
+ * {@link RequirementRef} and {@link ActorRef} carry the referenced
  * resource's opaque subject {@link ResourceId} directly - resolving a human-typed requirement
  * code (e.g. {@code FR-5}) or actor name (e.g. {@code Customer}) against the shared project
  * store, and rejecting an unknown or ambiguous one, is done once by
@@ -104,7 +104,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * than failing the whole result. This is unreachable via the MCP tools, which always resolve to
  * a subject IRI before writing.</p>
  *
- * <p><strong>A use case with zero main steps is handled the same way (issue #102).</strong>
+ * <p><strong>A use case with zero main steps is handled the same way.</strong>
  * {@code arkreq:mainStep} is only {@code sh:Warning} severity at {@code sh:minCount 1} (not
  * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case
  * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
@@ -124,13 +124,13 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
  * transactional mechanics of that distinction - the in-transaction {@code contains}/head checks,
- * the SHACL gate, the commit-conflict translation (issue #144) - live in the shared
+ * the SHACL gate, the commit-conflict translation - live in the shared
  * {@link WriteFunnel} (ADR-013), not here: {@link #create} only builds the candidate graph and
  * rejects an existing subject with {@link ResourceAlreadyExistsException} or a colliding business
  * code with {@link DuplicateUseCaseCodeException}; {@link #compareAndUpdate} rejects a missing
  * subject with {@link UseCaseNotFoundException} and a stale {@code expectedHead} with
- * {@link UseCaseConcurrentlyModifiedException} (issue #165, mirroring
- * {@code KognioRdfRequirementRepository}). There is no unconditional update: every correction to
+ * {@link UseCaseConcurrentlyModifiedException}, mirroring
+ * {@code KognioRdfRequirementRepository}. There is no unconditional update: every correction to
  * an already-created use case goes through the compare-and-set guard. Either write otherwise
  * replaces the subject and all its derived step resources wholesale - the {@code deleteExisting}
  * query below stays this adapter's own business, since the funnel's write methods only know a
@@ -208,14 +208,14 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
-        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so useCase.id()'s
+        // ResourceId#of validates IRIREF-safety at construction, so useCase.id()'s
         // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
         String subjectIriString = useCase.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
         String subject = SparqlTerms.iriRef(subjectIriString);
 
         // 1. Every actor/requirement reference already carries its resolved identity (see
-        //    class-level note), guaranteed IRIREF-safe by ResourceId#of (issue #83) same as
+        //    class-level note), guaranteed IRIREF-safe by ResourceId#of same as
         //    the subject above.
         IRI primaryActorIri = actorIriFor(useCase.primaryActor());
         List<IRI> supportingActorIris = useCase.supportingActors().stream()
@@ -384,7 +384,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Builds the mandatory/optional scalar triple patterns (inside {@code GRAPH <USE_CASES_GRAPH>})
      * shared by {@link #readBySubject} and {@link #readCurrentBySubject}, so both single-use-case
      * read paths query the core fields identically - drift between two near-identical read paths
-     * was a real bug more than once in the sibling requirements adapter (issues #80/#81).
+     * was a real bug more than once in the sibling requirements adapter.
      *
      * <p>{@code FILTER(isIRI(?primaryActor))} mirrors {@link #readSupportingActors}/
      * {@link #readMainStepRealises}: {@code arkreq:primaryActor} carries no {@code sh:nodeKind}
@@ -475,8 +475,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // ShaclWriteGate#enforce lets a store-first (ADR-005) use case through with zero main
             // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
             // mirror the primaryActor blank-node guard above: skip this one use case instead of
-            // letting the constructor throw out of findByCode/findAll for the whole project
-            // (issue #102).
+            // letting the constructor throw out of findByCode/findAll for the whole project.
             return Optional.empty();
         }
         if (!hasConsecutiveStepPositions(steps)) {
@@ -485,7 +484,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // UseCase.requireConsecutiveStepPositions, and store-first data (ADR-005) never runs
             // through that. Mirror the empty-steps guard above rather than letting the
             // constructor's IllegalArgumentException propagate out of findByCode/findAll for the
-            // whole project (issue #102).
+            // whole project.
             return Optional.empty();
         }
         List<String> extensions = readExtensions(handle, subject);
@@ -508,7 +507,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     /**
      * Reads the {@code arkreq:supportingActor} edges back as actor references.
      *
-     * <p><strong>No longer a join (issue #89).</strong> The edge's target IRI <em>is</em> the
+     * <p><strong>No longer a join.</strong> The edge's target IRI <em>is</em> the
      * {@link ActorRef} - no join into the sibling terms graph is needed, and none is performed
      * here. {@code FILTER(isIRI(?a))} mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
@@ -544,7 +543,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Reads each main-flow step's {@code arkreq:stepRealises} edges back as requirement
      * references.
      *
-     * <p><strong>No longer a join (issue #89).</strong> The edge's target IRI <em>is</em> the
+     * <p><strong>No longer a join.</strong> The edge's target IRI <em>is</em> the
      * {@link RequirementRef} - no join into the sibling requirements graph is needed, and none is
      * performed here. {@code FILTER(isIRI(?req))} mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
@@ -552,13 +551,13 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
      * tools.</p>
      *
-     * <p><strong>Keyed by the step's own IRI, not its derived {@code arkreq:position} (issue
-     * #102).</strong> Nothing in SHACL forbids two distinct {@code arkreq:Step} nodes under the
+     * <p><strong>Keyed by the step's own IRI, not its derived {@code arkreq:position}.</strong>
+     * Nothing in SHACL forbids two distinct {@code arkreq:Step} nodes under the
      * same use case's {@code arkreq:mainStep} from sharing the same {@code arkreq:position} -
      * uniqueness is only enforced in-process by {@code UseCase.requireConsecutiveStepPositions},
      * and store-first data (ADR-005) never runs through that. Grouping by the derived position
      * integer instead of step identity would silently merge two such steps' {@code stepRealises}
-     * targets under one key, the same class of bug issue #89 already fixed for
+     * targets under one key, the same class of bug already fixed for
      * {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.</p>
      */
     private Map<String, List<RequirementRef>> readMainStepRealises(DatasetHandle handle, String subject) {
@@ -580,7 +579,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * step at list index {@code i} must carry position {@code i + 1}. {@code steps} is read
      * ordered by {@code arkreq:position} (see {@link #readMainSteps}), so a store-first (ADR-005)
      * gap, duplicate or descending position is detected here before it ever reaches
-     * {@link UseCase}'s constructor (issue #102).
+     * {@link UseCase}'s constructor.
      */
     private static boolean hasConsecutiveStepPositions(List<Step> steps) {
         for (int i = 0; i < steps.size(); i++) {
@@ -605,7 +604,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Converts an already-resolved {@link RequirementRef} to an {@link IRI} for writing.
-     * {@link ResourceId#of(String)} validates IRIREF-safety at construction (issue #83), so the
+     * {@link ResourceId#of(String)} validates IRIREF-safety at construction, so the
      * wrapped IRI is already guaranteed safe here. Mirrors
      * {@code KognioRdfRequirementRepository#termIriFor}.
      */

@@ -35,7 +35,7 @@ import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
  * Schema-drift regression guard (mirrors the bounded-context adapter's
- * {@code KognioRdfTermLookupUbiquitousLanguageSchemaTest}, issue #109):
+ * {@code KognioRdfTermLookupUbiquitousLanguageSchemaTest}):
  * {@link KognioRdfRequirementLookup} hardcodes the exact storage schema (graph IRI,
  * {@code dcterms:identifier} predicate) that {@code arknet-requirements-adapter-kogniordf}'s
  * {@code KognioRdfRequirementRepository} writes - with no Java import between the two adapter

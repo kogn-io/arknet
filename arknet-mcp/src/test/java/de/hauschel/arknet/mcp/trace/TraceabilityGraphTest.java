@@ -98,7 +98,7 @@ class TraceabilityGraphTest {
                 new TermId(ResourceId.of(ACTOR_IRI)), new TermCode("TERM-3"), "Customer",
                 "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")));
         // TERM-4: never usesTerm'd, referenced only through BC-1's ubiquitousLanguageTerm edge -
-        // must NOT count as an orphan term either (issue #185).
+        // must NOT count as an orphan term either.
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_4_IRI)), new TermCode("TERM-4"), "Vertrag",
                 "A binding agreement.", null));
@@ -184,7 +184,7 @@ class TraceabilityGraphTest {
         assertThat(graph.isReferencedTerm(TERM_2_IRI)).isFalse();
     }
 
-    /** A term linked only through a bounded context's ubiquitous language is not orphaned either (issue #185). */
+    /** A term linked only through a bounded context's ubiquitous language is not orphaned either. */
     @Test
     void isReferencedTermIsTrueForATermLinkedOnlyThroughABoundedContext() {
         assertThat(graph.isReferencedTerm(TERM_4_IRI)).isTrue();
@@ -228,7 +228,7 @@ class TraceabilityGraphTest {
         assertThat(graph.dependents(ACTOR_IRI)).containsExactly(UC_1_IRI);
     }
 
-    /** {@code arkddd:ubiquitousLanguageTerm} must be a traversable dependent edge too (issue #185). */
+    /** {@code arkddd:ubiquitousLanguageTerm} must be a traversable dependent edge too. */
     @Test
     void dependentsOfTerm4ReachesBc1ViaTheUbiquitousLanguageTermEdge() {
         assertThat(graph.dependents(TERM_4_IRI)).containsExactly(BC_1_IRI);

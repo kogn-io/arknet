@@ -84,11 +84,11 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link KognioRdfRequirementRepositoryFactory} so this composition root stays
  *       free of any direct RDF4J dependency; it only supplies the storage directory
  *       ({@code arknet.rdf.storage}). {@code req_link_term}'s cross-BC code-to-identity
- *       resolution (issue #77) is a separate {@link KognioRdfTermLookup} bean over the same
+ *       resolution is a separate {@link KognioRdfTermLookup} bean over the same
  *       shared dataset lifecycle. {@code req_get}/{@code req_list}'s reverse direction (identity
  *       back to a displayable business code) is not a second store adapter - it is the
  *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
- *       {@link RequirementMcpTools} (#77 nachtrag). {@code req_schema} (issue #31) is backed by
+ *       {@link RequirementMcpTools}. {@code req_schema} is backed by
  *       a third {@link KognioRdfRequirementRepositoryFactory} product,
  *       {@link RequirementSchemaSource} - it reads only the classpath ontology, not the
  *       project store, so it needs no {@link DatasetLifecycle}.</li>
@@ -99,18 +99,18 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
  *       an RDF-persisted use-case repository) - the four use-case tools, assembled through
  *       {@link KognioRdfUseCaseRepositoryFactory}. {@code uc_add}'s cross-BC label-to-identity
- *       resolution (issue #89, the use-cases analogue of requirements' #77) is two separate
+ *       resolution, the use-cases analogue of requirements' own equivalent, is two separate
  *       {@link KognioRdfRequirementLookup}/{@link KognioRdfActorLookup} beans over the same
  *       shared dataset lifecycle, called once by {@link UseCaseService#add}. {@code uc_get}/
  *       {@code uc_list}'s reverse direction (identity back to a displayable business
  *       code/name) is not a second store adapter - it is the requirements hexagon's own
  *       {@link ResolveRequirements} and the ubiquitous-language hexagon's own
- *       {@link ResolveTerms} in-ports, wired straight into {@link UseCaseMcpTools} (#89).</li>
+ *       {@link ResolveTerms} in-ports, wired straight into {@link UseCaseMcpTools}.</li>
  *   <li><strong>bounded-context</strong> ({@link BoundedContextMcpTools} over
  *       {@link BoundedContextService} over an RDF-persisted bounded-context repository) - the
  *       four bounded-context tools ({@code bc_add}/{@code bc_list}/{@code bc_get}/
  *       {@code bc_link_term}), assembled through {@link KognioRdfBoundedContextRepositoryFactory}.
- *       {@code bc_link_term}'s cross-BC code-to-identity resolution (issue #62/#66) is a separate
+ *       {@code bc_link_term}'s cross-BC code-to-identity resolution is a separate
  *       {@code KognioRdfTermLookup} bean over the same shared dataset lifecycle; {@code bc_get}/
  *       {@code bc_list}'s reverse direction (identity back to a displayable term code) is the
  *       ubiquitous-language hexagon's own {@link ResolveTerms} in-port, wired straight into
@@ -152,7 +152,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * ({@code arknet.workspace.id}, a git top-level lookup, slugging, a fallback to the daemon's own
  * working directory). It is gone in full rather than kept as a fallback: a second resolution path
  * that quietly takes over when the first finds nothing is precisely how two different projects came
- * to share one dataset (issue #175), and a fallback would have reinstated that failure while
+ * to share one dataset, and a fallback would have reinstated that failure while
  * looking like a safety net.</p>
  */
 @Configuration(proxyBeanMethods = false)
@@ -171,7 +171,7 @@ public class ArknetMcpConfiguration {
      * which returns the technology-neutral {@link DatasetLifecycle} - so this composition root
      * stays free of any direct RDF4J dependency.</p>
      *
-     * <p>Wrapped in {@link LockConflictReportingDatasetLifecycle} (issue #64): if this shared
+     * <p>Wrapped in {@link LockConflictReportingDatasetLifecycle}: if this shared
      * instance is not actually the only one holding {@code storageDir} open - a second daemon
      * instance, or a client/subagent MCP config that spawns arknet as a local {@code stdio}
      * subprocess instead of pointing at the one running daemon - the first {@code acquire} call
@@ -201,7 +201,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
-     * subject identity - the strict cross-BC lookup {@code req_link_term} needs (issue #77).
+     * subject identity - the strict cross-BC lookup {@code req_link_term} needs.
      * Acquires datasets from the same shared {@link DatasetLifecycle} as
      * {@link #requirementRepository}, so it reads the same project the ubiquitous-language
      * hexagon writes into.
@@ -212,8 +212,8 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Supplies the {@code arkreq:} requirement vocabulary as data, backing {@code req_schema}
-     * (issue #31). Reads only the classpath ontology ({@code arknet-requirements.ttl}), not the
+     * Supplies the {@code arkreq:} requirement vocabulary as data, backing {@code req_schema}.
+     * Reads only the classpath ontology ({@code arknet-requirements.ttl}), not the
      * project store, so unlike every other bean in this hexagon it takes no
      * {@link DatasetLifecycle}.
      */
@@ -261,7 +261,7 @@ public class ArknetMcpConfiguration {
      * {@code resolveTerms} is the ubiquitous-language hexagon's {@link ResolveTerms} in-port
      * (implemented by its {@code TermService} bean below) - borrowed here purely so
      * {@code req_get}/{@code req_list} can render a linked term's business code instead of its
-     * bare IRI (issue #77 nachtrag). This wires an In-Adapter to a <em>different</em> hexagon's
+     * bare IRI. This wires an In-Adapter to a <em>different</em> hexagon's
      * In-Port, not to that hexagon's core - see the "kein *-core* haengt an einem anderen BC"
      * precision in CLAUDE.md.
      */
@@ -278,7 +278,7 @@ public class ArknetMcpConfiguration {
     /**
      * The display language this server instance reads labels in - a consumer-supplied context,
      * exactly like {@link ProjectId}: one value per process, injected into the bounded context
-     * (issue #80). A glossary concept may carry {@code skos:prefLabel} in several languages;
+     * A glossary concept may carry {@code skos:prefLabel} in several languages;
      * {@link DisplayLocale#select} then chooses which one the read paths surface, degrading
      * through a fixed fallback chain (requested language, {@code arknet.locale.requested} -> system
      * default, {@code arknet.locale.default} -> untagged literal -> a deterministic last resort) so
@@ -313,7 +313,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * The use-case out-adapter, assembled over the <em>shared</em> {@link DatasetLifecycle}
-     * bean. Since issue #89, this adapter no longer performs any cross-BC lookup itself - it
+     * bean. This adapter no longer performs any cross-BC lookup itself - it
      * persists the already-resolved {@link de.hauschel.arknet.uc.domain.ActorRef}/
      * {@link de.hauschel.arknet.uc.domain.RequirementRef} identities {@link UseCaseService}
      * hands it (resolved via {@link #useCaseRequirementLookup}/{@link #useCaseActorLookup}
@@ -329,7 +329,7 @@ public class ArknetMcpConfiguration {
     /**
      * Resolves a requirement's human-typed business code (e.g. {@code FR-1}) to its opaque
      * subject identity - the strict cross-BC lookup {@code uc_add}'s step-level
-     * {@code realises} references need (issue #89). Acquires datasets from the same shared
+     * {@code realises} references need. Acquires datasets from the same shared
      * {@link DatasetLifecycle} as {@link #requirementRepository}, so it reads the same
      * project the requirements hexagon writes into.
      */
@@ -341,7 +341,7 @@ public class ArknetMcpConfiguration {
     /**
      * Resolves an actor's human-typed name (e.g. {@code Customer}) to its opaque subject
      * identity - the strict cross-BC lookup {@code uc_add}'s {@code primaryActor}/
-     * {@code supportingActors} references need (issue #89). Acquires datasets from the same
+     * {@code supportingActors} references need. Acquires datasets from the same
      * shared {@link DatasetLifecycle} as {@link #termRepository}, so it reads the same
      * project the ubiquitous-language hexagon writes into.
      */
@@ -362,7 +362,7 @@ public class ArknetMcpConfiguration {
      * requirements hexagons' own driving ports (implemented by their {@code TermService}/
      * {@code RequirementService} beans) - borrowed here purely so {@code uc_get}/
      * {@code uc_list} can render a referenced actor's name / requirement's business code
-     * instead of a bare IRI (issue #89). This wires an In-Adapter to two <em>different</em>
+     * instead of a bare IRI. This wires an In-Adapter to two <em>different</em>
      * hexagons' In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem
      * anderen BC" precision in CLAUDE.md.
      */
@@ -385,7 +385,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
-     * subject identity - the strict cross-BC lookup {@code bc_link_term} needs (issue #62/#66).
+     * subject identity - the strict cross-BC lookup {@code bc_link_term} needs.
      * Acquires datasets from the same shared {@link DatasetLifecycle} as
      * {@link #termRepository}, so it reads the same project the ubiquitous-language hexagon
      * writes into.
@@ -541,7 +541,7 @@ public class ArknetMcpConfiguration {
      * resolver is not an omission but intentional - this component answers the routing question
      * and therefore cannot itself sit behind a routing answer.</p>
      *
-     * <p>This bean implements the anchor registry resolver (issue #179, ADR-016): every
+     * <p>This bean implements the anchor registry resolver (ADR-016): every
      * tool call routes through anchor lookup instead of directory derivation. The old
      * workspace-based path has been removed; registry lookup is now the sole routing
      * mechanism for all project-scoped tool calls.</p>
@@ -599,12 +599,12 @@ public class ArknetMcpConfiguration {
      * safety net. The HTML report is written into {@code arknet.report.dir} (default: the
      * launched project root / working directory). {@code arknet.report.host-dir} is the
      * host-reachable equivalent of that directory when it is a container-internal mount point
-     * the calling agent cannot reach directly (issue #160); unset on the non-containerized path,
+     * the calling agent cannot reach directly; unset on the non-containerized path,
      * where {@code fallbackReportDir} is already host-reachable.
      *
      * <p>{@code projectService} is passed as {@link de.hauschel.arknet.prj.application.port.in.FindProject},
      * not {@link ProjectRegistry} directly: the digest and HTML headers name the resolved
-     * project's registered label instead of its raw id (issue #187) by borrowing the project
+     * project's registered label instead of its raw id by borrowing the project
      * hexagon's driving port, the same gateway role ADR-008 grants any other in-adapter of a
      * neighbour bounded context.</p>
      */
@@ -622,7 +622,7 @@ public class ArknetMcpConfiguration {
     /**
      * The backup read path: a complete {@code SELECT ?g ?s ?p ?o} spanning every named graph of a
      * project's dataset, unlike {@link #storeReader} it hides neither the provenance nor the
-     * project-identity graph, because a backup exists to restore both (issue #154).
+     * project-identity graph, because a backup exists to restore both.
      */
     @Bean
     StoreExporter storeExporter(final DatasetLifecycle datasetLifecycle) {
@@ -630,11 +630,11 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The one backup tool ({@code project_export}, issue #154). Not project-scoped like every
+     * The one backup tool ({@code project_export}). Not project-scoped like every
      * other {@code *McpTools} bean here - it exports every project {@link ProjectService} (as its
      * {@code ListProjects} in-port) reports as registered, in one call. {@code arknet.export.dir}/
      * {@code arknet.export.host-dir} mirror {@code arknet.report.dir}/{@code arknet.report.host-dir}
-     * for the same reason (issue #160): on a containerized daemon the export directory is a
+     * for the same reason: on a containerized daemon the export directory is a
      * container-internal mount point the calling agent cannot reach directly.
      */
     @Bean
@@ -647,7 +647,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * The three traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
-     * {@code impact_analysis}; issue #131). Reuses the very same {@link #storeReader}/
+     * {@code impact_analysis}). Reuses the very same {@link #storeReader}/
      * {@link #storeReportPrefixes} beans as {@link #storeReportTools} instead of building a
      * second {@link StoreReader} - one generic read path, two presentations over it (a
      * full-snapshot digest vs. a graph traversal), per ADR-006.

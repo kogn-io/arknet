@@ -14,7 +14,7 @@ import java.util.Optional;
  * rdfs:label) and never depends on a specific one. {@link #status()}/{@link #priority()} are
  * a deliberate, bounded exception: they hardcode the requirements-BC's
  * {@code arkreq:status}/{@code arkreq:priority} predicates rather than a structural (e.g.
- * SHACL-driven) mechanism (issue #111) - a resource without them, or a future BC's analogous
+ * SHACL-driven) mechanism - a resource without them, or a future BC's analogous
  * field under a different namespace, still renders, just without that hint/pill.
  *
  * @param iri      the subject IRI

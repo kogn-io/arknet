@@ -91,7 +91,7 @@ class KognioRdfRequirementRepositoryTest {
 
     /**
      * Test convenience for call sites that only need "replace this by identity" and do not
-     * exercise the compare-and-set guard itself (issue #167): reads {@code updated}'s current
+     * exercise the compare-and-set guard itself: reads {@code updated}'s current
      * head via {@link RequirementRepository#findCurrentByCode} and immediately applies
      * {@code updated} through it - there is no unconditional {@code update} left on the port.
      */
@@ -208,7 +208,7 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(id, repository.findByCode(WORKSPACE_A, code).orElseThrow().id());
     }
 
-    // ---- compareAndUpdate: CAS guard against lost updates (issue #108, head-based since #167) ----
+    // ---- compareAndUpdate: CAS guard against lost updates, head-based ----
 
     @Test
     void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
@@ -229,8 +229,8 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * The core of issue #108's fix, degenerated from a full-snapshot comparison to a head
-     * comparison by issue #167: a stale {@code expectedHead} (no longer matching the head another
+     * The core of this fix, degenerated from a full-snapshot comparison to a head
+     * comparison: a stale {@code expectedHead} (no longer matching the head another
      * writer already advanced) must be rejected without mutating the store - the caller re-reads
      * and retries instead of silently overwriting the concurrent change.
      */
@@ -379,7 +379,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Issue #91: {@code arkreq:acceptanceCriterion} is mandatory ({@code sh:minCount 1}). The
+     * {@code arkreq:acceptanceCriterion} is mandatory ({@code sh:minCount 1}). The
      * {@link Requirement} constructor already rejects an empty list, so this candidate graph -
      * unlike the domain object - can omit the triple entirely to prove the gate itself, not just
      * the domain invariant, is the thing rejecting a store-first requirement without a testable
@@ -405,7 +405,7 @@ class KognioRdfRequirementRepositoryTest {
         assertTrue(ex.getMessage().contains("acceptanceCriterion"), ex.getMessage());
     }
 
-    // ---- acceptanceCriterion: testable "Done when ..." criteria (issue #91) -------------
+    // ---- acceptanceCriterion: testable "Done when ..." criteria -------------------------
 
     @Test
     void createsAndFindsSeveralAcceptanceCriteria() {
@@ -447,7 +447,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Regression guard: a requirement written by a pre-#91 {@code req_add} has no
+     * Regression guard: a requirement written by an older {@code req_add} has no
      * {@code arkreq:acceptanceCriterion} triple at all - SHACL only gates writes, so this state
      * is reachable simply by not having re-saved the requirement since the field became
      * mandatory, not just via an exotic store-first bypass. Before the fix, {@code findByCode}
@@ -482,7 +482,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
      * graph without an {@code arkreq:acceptanceCriterion} triple - exactly what a {@code req_add}
-     * call made before issue #91 would have produced, since the shape only gates writes made
+     * call made before the field became mandatory would have produced, since the shape only gates writes made
      * after the SHACL property was added.
      */
     private void givenLegacyRequirementWithoutAcceptanceCriterion(ProjectId projectId, RequirementId id,
@@ -503,12 +503,12 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Store-first regression test (issue #103): two {@code arkreq:acceptanceCriterion} literals
+     * Store-first regression test: two {@code arkreq:acceptanceCriterion} literals
      * with the same lexical form but different language tags read back as duplicate strings,
      * because {@link #readAcceptanceCriteria} reads them via {@code literalOf(...).getLexicalForm()}
      * - which discards the language tag. {@link Requirement}'s constructor rejects duplicate
      * acceptance criteria unconditionally, so before the fix this crashed {@code findByCode}
-     * instead of returning the requirement, exactly the way #91's all-empty case used to.
+     * instead of returning the requirement, exactly the way the all-empty case used to.
      */
     @Test
     void findByCodeDeduplicatesAcceptanceCriteriaDifferingOnlyByLanguageTag() {
@@ -589,7 +589,7 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
-    // ---- row multiplication on priority/qualityCategory (issue #81) ---------------------
+    // ---- row multiplication on priority/qualityCategory ----------------------------------
 
     /**
      * Store-first regression test: {@code rshapes:Requirement-priority}'s {@code sh:maxCount 1} is
@@ -609,7 +609,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertEquals(1, all.size());
         assertEquals(new RequirementCode("FR-1"), all.get(0).code());
-        // First-seen wins (issue #81): MUST_HAVE is the first arkreq:priority triple
+        // First-seen wins: MUST_HAVE is the first arkreq:priority triple
         // givenRequirementWithTwoPriorities inserts, and RDF4J's MemoryStore preserves insertion
         // order for equal-subject/-predicate statements, so this is deterministic, not incidental.
         assertEquals(Priority.MUST_HAVE, all.get(0).priority());
@@ -628,7 +628,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * {@code findByCode} deliberately stays untouched by the #81 fix (its single-row
+     * {@code findByCode} deliberately stays untouched by this fix (its single-row
      * {@code findFirst()} is already internally consistent): this regression guard proves it still
      * works for a requirement carrying an additional, unrelated {@code rdf:type} triple - the
      * (store-first-only) case {@link #findByCode}'s now-explicit type {@code FILTER} was hardened
@@ -698,7 +698,7 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
-    // ---- findByIds: batch resolution for ResolveRequirements (issue #88) ----------------
+    // ---- findByIds: batch resolution for ResolveRequirements -----------------------------
 
     @Test
     void findByIdsResolvesKnownIdentitiesInOneQuery() {
@@ -791,7 +791,7 @@ class KognioRdfRequirementRepositoryTest {
         }
     }
 
-    // ---- usesTerm: the cross-BC requirement -> glossary-term edge (#36) -----------------
+    // ---- usesTerm: the cross-BC requirement -> glossary-term edge ------------------------
 
     @Test
     void createsAndFindsUsesTermEdge() {
@@ -820,7 +820,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Issue #77: term references arrive pre-resolved. This adapter no longer looks the term up
+     * Term references arrive pre-resolved. This adapter no longer looks the term up
      * (that strict, identifier-based resolution now lives in {@code KognioRdfTermLookup}, called
      * once by the application service when a term is linked) - it trusts the identity it is
      * handed, the same way it trusts {@code motivatedBy} without re-resolving it. A target that
@@ -908,7 +908,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Issue #99: {@code rshapes:Requirement-title} is a new shape ({@code dcterms:title} had none
+     * {@code rshapes:Requirement-title} is a shape ({@code dcterms:title} had none
      * before). {@link Requirement#title()} is single-valued, so a second title is unreachable via
      * {@link RequirementRepository#create} - this exercises the gate directly against a synthetic
      * candidate graph, the way a store-first (ADR-005) write could still produce two triples.
@@ -937,7 +937,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Issue #99: {@code rshapes:Requirement-description} now carries {@code sh:maxCount 1},
+     * {@code rshapes:Requirement-description} carries {@code sh:maxCount 1},
      * mirroring {@link #gateRejectsRequirementWithTwoTitles}. {@link Requirement#description()}
      * is single-valued, so a second description is unreachable via
      * {@link RequirementRepository#create}.
@@ -967,7 +967,7 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
-     * Issue #99: {@code rshapes:Requirement-motivatedBy-count} is a new, {@code sh:Violation}
+     * {@code rshapes:Requirement-motivatedBy-count} is a {@code sh:Violation}
      * shape carrying only the {@code sh:maxCount 1} - split out from the pre-existing
      * {@code rshapes:Requirement-motivatedBy} (which stays a {@code sh:Warning} best-practice
      * check on {@code sh:class arkreq:Goal}, unchanged). A {@code sh:Warning}-severity
@@ -1003,10 +1003,10 @@ class KognioRdfRequirementRepositoryTest {
         assertTrue(ex.getMessage().contains("motivatedBy"), ex.getMessage());
     }
 
-    // ---- usesTerm: reading is identity-based, not join-based, since #77 -----------------
+    // ---- usesTerm: reading is identity-based, not join-based ----------------------------
 
     /**
-     * Issue #77 fixes the actual defect behind #65: {@link #readUsesTerms} no longer joins into
+     * {@link #readUsesTerms} no longer joins into
      * the terms graph at all, so a target's missing {@code dcterms:identifier} can no longer
      * hide the edge. What used to require the {@code write()} preservation mechanism (below) is
      * now handled by the ordinary read-and-replace path, without any special-casing.
@@ -1032,7 +1032,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertEquals(List.of(expected), repository.findByCode(WORKSPACE_A, code).orElseThrow().usesTerms(),
                 "the edge is now part of the ordinary record, carried forward by the replacing "
-                        + "update without needing the #65 preservation mechanism at all");
+                        + "update without needing the preservation mechanism at all");
     }
 
     // ---- usesTerm: store-first edges to a non-IRI target the strict read cannot represent ----
@@ -1044,9 +1044,9 @@ class KognioRdfRequirementRepositoryTest {
      * blank node - {@code [ a skos:Concept ]} written directly into the requirements graph.
      * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent a blank node, so it is
      * exactly the kind of edge the preservation query in {@code write()} must still capture
-     * (issue #65, narrowed to this one case by #77). Casting the captured binding to {@link IRI}
+     * narrowed to this one case. Casting the captured binding to {@link IRI}
      * would throw a {@link ClassCastException} on a blank node, turning the previously silent
-     * data loss of issue #65 into a crash on every {@link #update} of the affected requirement -
+     * data loss into a crash on every {@link #update} of the affected requirement -
      * a regression, not a fix.
      */
     @Test
@@ -1197,8 +1197,8 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Checks - via a single raw SPARQL {@code ASK} joining both patterns on the same variable -
      * that the subject's {@code arkreq:usesTerm} edge still targets a node that itself carries
-     * {@code a skos:Concept} in the requirements graph. This is the identity check for #65's
-     * blank-node case: {@code DELETE WHERE { <subject> ?p ?o }} only ever removes triples whose
+     * {@code a skos:Concept} in the requirements graph. This is the identity check for the
+     * blank-node preservation case: {@code DELETE WHERE { <subject> ?p ?o }} only ever removes triples whose
      * subject is the requirement, never the target node's own type triple, so this passing is
      * proof the edge was re-attached to the very same blank node rather than to a dangling or
      * freshly-generated one.
@@ -1217,7 +1217,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
      * {@code compareAndUpdate} each record exactly one immutable revision, and the head is
-     * queryable per resource. Since issue #167 resolved {@code compareAndUpdate} into the funnel
+     * queryable per resource. Since {@code compareAndUpdate} was resolved into the funnel
      * (ADR-014 decision 4), this is no longer a special path any more than {@code create} is -
      * {@code RequirementService} routes every state change ({@code req_update}, {@code
      * req_set_status}, {@code req_link_term}) through it, so the head now moves on every

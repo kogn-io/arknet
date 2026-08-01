@@ -16,7 +16,7 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
  * Decorates a {@link DatasetLifecycle}, translating an {@link #acquire(DatasetId)} failure that
  * the injected {@code isLockConflict} predicate recognises as a file-lock conflict into a
  * {@link DatasetLockConflictException} carrying a clear, actionable message instead of letting the
- * wrapped lifecycle's raw failure surface (issue #64). Every other {@code acquire} failure - a
+ * wrapped lifecycle's raw failure surface. Every other {@code acquire} failure - a
  * permissions problem, a full disk, a corrupted store - is rethrown unchanged.
  *
  * <p><strong>Why this exists.</strong> arknet's shared {@link DatasetLifecycle} bean is meant to

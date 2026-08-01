@@ -26,7 +26,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
- * Issue #109 regression guard: {@link KognioRdfTermLookup} hardcodes the exact storage schema
+ * Regression guard: {@link KognioRdfTermLookup} hardcodes the exact storage schema
  * (graph IRI, {@code skos:Concept} type, {@code dcterms:identifier} predicate) that
  * {@code arknet-ubiquitous-language-adapter-kogniordf}'s {@code KognioRdfTermRepository} writes -
  * with no Java import between the two adapter modules that the compiler or ArchUnit could ever
@@ -41,7 +41,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  *
  * <p>Deliberately narrower than {@code CrossBoundedContextStoreWiringTest} in {@code arknet-mcp}:
  * that test proves the two contexts share a single {@code DatasetLifecycle} bean through Spring
- * wiring end to end (issue #41), going through the application/service layer.
+ * wiring end to end, going through the application/service layer.
  * This test isolates the two out-adapters directly - no Spring context, no service layer, no
  * dependency on arknet-mcp - so it is the more precise place to catch a lookup/repository schema
  * mismatch between exactly the two classes the issue names.</p>

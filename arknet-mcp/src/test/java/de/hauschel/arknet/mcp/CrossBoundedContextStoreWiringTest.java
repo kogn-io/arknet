@@ -36,7 +36,7 @@ import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
- * The regression proof for issue #41: three bounded contexts (requirements,
+ * The regression proof: three bounded contexts (requirements,
  * ubiquitous-language, use-cases) wired by {@link ArknetMcpConfiguration} must share the
  * <em>single</em> {@link DatasetLifecycle} bean, so a use case can strictly resolve its
  * requirement/actor label references against the very resources the other two contexts wrote.
@@ -89,7 +89,7 @@ class CrossBoundedContextStoreWiringTest {
 
                     // uc_add referencing that FR (by its code) and that actor (by name); the
                     // service resolves both raw strings to opaque identities via ActorLookup/
-                    // RequirementLookup before the real UseCase is constructed (issue #89).
+                    // RequirementLookup before the real UseCase is constructed.
                     UseCase created = useCases.add(PROJECT, new NewUseCase("Place order",
                             "Customer places an order", null, null, "Customer",
                             List.of(), null, null,
@@ -141,7 +141,7 @@ class CrossBoundedContextStoreWiringTest {
     }
 
     /**
-     * The same proof for the requirement -&gt; glossary-term edge of issue #36: {@code term_add}
+     * The same proof for the requirement -&gt; glossary-term edge: {@code term_add}
      * writes a concept, {@code req_link_term} resolves it over the shared store and
      * {@code req_get} reads the edge back.
      */

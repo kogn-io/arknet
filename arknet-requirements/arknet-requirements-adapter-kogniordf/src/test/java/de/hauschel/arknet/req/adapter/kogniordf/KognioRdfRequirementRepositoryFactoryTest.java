@@ -14,7 +14,7 @@ import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 
 /**
- * Unit test for {@link KognioRdfRequirementRepositoryFactory#buildSchemaSource()} (issue #31):
+ * Unit test for {@link KognioRdfRequirementRepositoryFactory#buildSchemaSource()}:
  * pure classpath Turtle parsing, no {@code DatasetLifecycle} / store involved, so this runs
  * fast and without any RDF4J store setup.
  */

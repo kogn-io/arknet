@@ -12,7 +12,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Resolves a resource handle - CURIE, full IRI, or bare business id - to an absolute IRI.
  *
- * <p>Extracted out of {@link StoreReportTools} (issue #131) so the traceability tools
+ * <p>Extracted out of {@link StoreReportTools} so the traceability tools
  * ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}, package
  * {@code de.hauschel.arknet.mcp.trace}) share the exact same handle contract
  * {@code resource_get} uses, instead of a second, drifting implementation growing next to

@@ -16,7 +16,7 @@ import de.hauschel.arknet.mcp.mention.LabelMentions.Mention;
  * {@code de.hauschel.arknet.mcp.report.GlossaryTest} already pins the German-inflection and
  * overlap behaviour this class implements, for the {@code Term} payload. These tests instead pin
  * the same behaviour for a bare {@code String} payload - the shape the traceability read path
- * needs (issue #185) - so both callers are covered without either depending on the other's
+ * needs - so both callers are covered without either depending on the other's
  * domain type.
  */
 class LabelMentionsTest {

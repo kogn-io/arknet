@@ -44,7 +44,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 /**
  * Behaviour of the use-case MCP tools against an in-port fake: tool declaration, mapping of
  * the nested {@code uc_add} payload onto the {@link AddUseCase.NewUseCase} command (now raw
- * human-typed strings, issue #89), the {@code uc_get}/{@code uc_list} response shape - including
+ * human-typed strings), the {@code uc_get}/{@code uc_list} response shape - including
  * the actor/requirement display-resolution contract borrowed from {@link ResolveTerms}/
  * {@link ResolveRequirements} - and verbatim propagation of a didactic in-port error (which
  * Spring AI turns into a tool error result).
@@ -243,7 +243,7 @@ class UseCaseMcpToolsTest {
         assertTrue(thrown.getMessage().contains("req_add"));
     }
 
-    /** Issue #165: {@code uc_update} passes every given field through to the in-port. */
+    /** {@code uc_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger",

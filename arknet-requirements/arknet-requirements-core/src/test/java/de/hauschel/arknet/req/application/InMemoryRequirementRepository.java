@@ -32,7 +32,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * Insertion order is preserved to make {@link #findAll(ProjectId)} assertions
  * deterministic.</p>
  *
- * <p><strong>Concurrency token (issue #167).</strong> Mirrors the real {@link
+ * <p><strong>Concurrency token.</strong> Mirrors the real {@link
  * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the requirement, {@link #compareAndUpdate} rejects a
@@ -50,7 +50,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         if (requirements.containsKey(requirement.id())) {
             throw new ResourceAlreadyExistsException(projectId, requirement.id().value());
         }
-        // Mirrors the real out-adapter's in-transaction askCodeExists guard (issue #108): a
+        // Mirrors the real out-adapter's in-transaction askCodeExists guard: a
         // business-code collision is rejected here too, so a fake exercising RequirementService's
         // next-code retry loop actually needs that retry to succeed, the same way the real store
         // would.

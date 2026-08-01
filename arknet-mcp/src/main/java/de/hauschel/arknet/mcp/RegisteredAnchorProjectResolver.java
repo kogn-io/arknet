@@ -20,7 +20,7 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  * <p><strong>This class is the switch-over.</strong> Its predecessor derived a {@link ProjectId}
  * from the calling client's directory - {@code slug(basename(git-common-dir))} - and so mapped two
  * identically named directories in different places onto one dataset, mixing their data with
- * nothing to see at either call site (issue #175). Nothing is computed here any more: the anchor
+ * nothing to see at either call site. Nothing is computed here any more: the anchor
  * arrives opaque, is matched whole against what was registered, and either hits exactly one
  * project or fails. The collision is gone structurally, not by being made less likely.</p>
  *

@@ -34,7 +34,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
  *
  * <p><strong>An anchor, not a directory.</strong> The header used to carry the client's working
  * directory, from which the server derived an id by slugging its git top-level's basename - the
- * derivation ADR-016 removes and issue #175 records the damage of. What travels here now is opaque:
+ * derivation ADR-016 removes. What travels here now is opaque:
  * whatever string the client registered. A path is still the natural thing for a filesystem client
  * to send ({@code ${PWD}}), but the server no longer treats it as a path - it does not parse it,
  * shorten it, or fall back to anything when it does not recognise it.</p>

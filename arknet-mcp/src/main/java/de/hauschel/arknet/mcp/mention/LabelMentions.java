@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  * de.hauschel.arknet.ul.domain.Term}, {@code de.hauschel.arknet.mcp.trace.TraceabilityRenderer}
  * labels a bare term IRI read off the traceability graph. This class is generic over the payload
  * {@code T} and knows nothing about either caller's domain - that is what lets the traceability
- * read path reuse the report's matching rules (issue #185) without depending on the report
+ * read path reuse the report's matching rules without depending on the report
  * package or a bounded context's domain model.
  *
  * <p><strong>Matching is deliberately literal.</strong> Comparison is case-insensitive and only

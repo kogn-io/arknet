@@ -30,9 +30,8 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
  * kognio-rdf store.
  *
  * <p>This carries the strict, identifier-based cross-BC resolution behaviour that used to be
- * pinned inside {@code KognioRdfUseCaseRepositoryTest} (issue #41) - extracted here because
- * issue #89 moved the resolution itself out of the use-case repository's write path into this
- * dedicated port/adapter.</p>
+ * pinned inside {@code KognioRdfUseCaseRepositoryTest} - extracted here because the resolution
+ * moved out of the use-case repository's write path into this dedicated port/adapter.</p>
  */
 class KognioRdfRequirementLookupTest {
 

@@ -17,7 +17,7 @@ package de.hauschel.arknet.kernel;
  * interpret it. It used to be the client's working directory, from which the server
  * <em>computed</em> an id by slugging its git top-level's basename; two identically named
  * directories in different places therefore collapsed onto one store, silently mixing two
- * projects' data (issue #175). The slug was not invertible, so no amount of care at the call site
+ * projects' data. The slug was not invertible, so no amount of care at the call site
  * could have caught that. Resolution is now a registry lookup on a value nothing shortens, which
  * makes the collision structurally impossible rather than unlikely.</p>
  *

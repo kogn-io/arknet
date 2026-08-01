@@ -60,7 +60,7 @@ public final class KognioRdfRequirementRepositoryFactory {
 
     /**
      * Recognises a {@link DatasetLifecycle#acquire} failure caused by a second instance
-     * already holding the storage directory's file lock (issue #64), as the kognio-rdf
+     * already holding the storage directory's file lock, as the kognio-rdf
      * RDF4J-backed hosting adapter reports it: {@link DatasetLifecycleRdf4j#acquire} lets
      * RDF4J's {@code SailRepository#initializeInternal} translate its own
      * {@code SailLockedException} into {@link RepositoryLockedException} before it ever
@@ -156,7 +156,7 @@ public final class KognioRdfRequirementRepositoryFactory {
     }
 
     /**
-     * Builds the {@code arkreq:} requirement vocabulary as data (issue #31): one
+     * Builds the {@code arkreq:} requirement vocabulary as data: one
      * {@link RequirementSchemaTerm} each for {@code RequirementType}, {@code RequirementStatus}
      * and {@code Priority}, carrying its ontology-sourced ({@code arknet-requirements.ttl})
      * class-level {@code rdfs:comment}{@code @de} as definition and the exact values the

@@ -20,8 +20,8 @@ import de.hauschel.arknet.kernel.ResourceId;
  * and rejecting an unknown or ambiguous name - is the job of a driven lookup port against the
  * shared store, not of this pure domain type.</p>
  *
- * <p><strong>Identity, not a re-derived value (issue #89, the use-cases analogue of
- * requirements' #77).</strong> The reference used to carry the actor's {@code skos:prefLabel} as
+ * <p><strong>Identity, not a re-derived value, the use-cases analogue of
+ * requirements' own equivalent.</strong> The reference used to carry the actor's {@code skos:prefLabel} as
  * a bare string, resolved to the actor's IRI on write and re-derived from the IRI on read via an
  * inner join back into the terms graph - a join that silently dropped the whole use case whenever
  * its primary actor's label was missing or renamed. Carrying the subject identity itself instead

@@ -15,7 +15,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  *
  * <p>The requirements bounded context owns the requirement lifecycle, so it - not a caller
  * reading the store directly - is who answers "what does this identity currently name?" This
- * exists for a <em>sibling</em> bounded context's driving (In-) adapter to consume (issue #88),
+ * exists for a <em>sibling</em> bounded context's driving (In-) adapter to consume,
  * the same pattern {@code ResolveTerms} already establishes for the ubiquitous-language bounded
  * context: an In-Adapter is the gate into its own hexagon, not part of its core, so it may call
  * another hexagon's driving port without breaking the "no {@code *-core} depends on another

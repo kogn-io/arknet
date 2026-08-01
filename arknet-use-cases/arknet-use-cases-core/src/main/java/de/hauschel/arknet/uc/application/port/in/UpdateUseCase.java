@@ -14,7 +14,7 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
  * Driving port: correct the goal-level fields and/or individual step wordings of an
  * already-created use case.
  *
- * <p>Backs the tool {@code uc_update} (issue #165), mirroring {@code UpdateRequirement}'s shape
+ * <p>Backs the tool {@code uc_update}, mirroring {@code UpdateRequirement}'s shape
  * in the sibling requirements bounded context. Until this port existed, fixing a typo or an
  * outdated label in a use case's {@code goal}/{@code trigger}/{@code precondition}/
  * {@code postcondition} or in a single step's text meant deleting and recreating the whole use

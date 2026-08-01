@@ -42,10 +42,10 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  *
  * <p><strong>Coarse-grained write.</strong> {@code uc_add} takes the complete use case -
  * including its ordered step list and its label references to requirements and actors - in a
- * single call (issue #41). The nested {@link StepInput} shape mirrors the domain
+ * single call. The nested {@link StepInput} shape mirrors the domain
  * {@link de.hauschel.arknet.uc.domain.Step}; requirement/actor references are passed as bare
  * labels (e.g. {@code FR-1}, {@code Customer}) straight into {@link NewUseCase}/{@link NewStep} -
- * resolving them to opaque identities is the application service's job (issue #89), not this
+ * resolving them to opaque identities is the application service's job, not this
  * adapter's.</p>
  *
  * <p><strong>Error hand-off.</strong> This adapter deliberately does not catch domain or
@@ -57,7 +57,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
- * project on the machine (issue #137), so there is no single injected project any
+ * project on the machine, so there is no single injected project any
  * more: each tool call resolves its own project from the request's anchor,
  * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
@@ -69,7 +69,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * <p><strong>Rendering.</strong> This class only dispatches tool calls to their in-port and
  * turns the result into the returned string via {@link UseCasePresenter} - it holds no
  * rendering logic of its own (issue #96). See {@link UseCasePresenter} for the actor/requirement
- * display resolution (issue #89) that borrows {@link ResolveTerms}/{@link ResolveRequirements}
+ * display resolution that borrows {@link ResolveTerms}/{@link ResolveRequirements}
  * purely for display.</p>
  */
 public final class UseCaseMcpTools {

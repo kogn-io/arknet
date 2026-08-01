@@ -50,7 +50,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * scanner discovers the {@code @McpTool} methods and registers them automatically. No
  * manual tool-specification bridge is needed - the earlier {@code tools()} adapter (which
  * pre-built {@code SyncToolSpecification}s for a raw-SDK composition root) was removed
- * with the arknet-mcp migration (#27).</p>
+ * with the arknet-mcp migration.</p>
  *
  * <p><strong>Identity vs. code.</strong> Every tool takes a requirement identity as a plain
  * {@code String} - what a human types, e.g. {@code FR-1} - and maps it to a
@@ -60,7 +60,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
- * project on the machine (issue #137), so there is no single injected project any
+ * project on the machine, so there is no single injected project any
  * more: each tool call resolves its own project from the request's anchor,
  * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
@@ -71,8 +71,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  *
  * <p><strong>Rendering.</strong> This class only dispatches tool calls to their in-port and
  * turns the result into the returned string via {@link RequirementPresenter} - it holds no
- * rendering logic of its own (issue #190). See {@link RequirementPresenter} for the term
- * display resolution (issue #77 nachtrag) that borrows {@link ResolveTerms} purely for
+ * rendering logic of its own. See {@link RequirementPresenter} for the term
+ * display resolution that borrows {@link ResolveTerms} purely for
  * display.</p>
  */
 public final class RequirementMcpTools {
@@ -244,7 +244,7 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final RequirementCode code = new RequirementCode(id);
-        // The requirements lifecycle permits exactly one transition (issue #190): the tool's
+        // The requirements lifecycle permits exactly one transition: the tool's
         // external "status" parameter is kept for API stability, but AcceptRequirement itself no
         // longer takes a target status - only ACCEPTED can ever legally result from this call.
         final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
