@@ -6,6 +6,22 @@ structured data instead of prose, and exposes it as tools that an AI coding
 agent (or any [MCP](https://modelcontextprotocol.io/) client) can query,
 validate and write to.
 
+## Contents
+
+- [Why](#why)
+- [Repository](#repository)
+- [Requirements](#requirements)
+- [MCP Server](#mcp-server)
+  - [Prerequisite: start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
+  - [Register your project](#register-your-project)
+  - [MCP tools](#mcp-tools)
+  - [Storage model (store-first)](#storage-model-store-first)
+- [Modules](#modules)
+- [Ontology](#ontology)
+- [Architecture](#architecture)
+- [Origin](#origin)
+- [License](#license)
+
 ## Why
 
 Architecture documentation written as prose -- wikis, Word docs, code
@@ -40,21 +56,6 @@ rendered by `store_overview`'s self-contained HTML report, not hand-written:
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/use-case-card-dark.png">
   <img src="docs/img/use-case-card.png" alt="Rendered use case card: numbered flow, realizes-links to FRs, raw triples on demand">
 </picture>
-
-## Contents
-
-- [Repository](#repository)
-- [Requirements](#requirements)
-- [MCP Server](#mcp-server)
-  - [Prerequisite: start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
-  - [Register your project](#register-your-project)
-  - [MCP tools](#mcp-tools)
-  - [Storage model (store-first)](#storage-model-store-first)
-- [Modules](#modules)
-- [Ontology](#ontology)
-- [Architecture](#architecture)
-- [Origin](#origin)
-- [License](#license)
 
 ## Repository
 
