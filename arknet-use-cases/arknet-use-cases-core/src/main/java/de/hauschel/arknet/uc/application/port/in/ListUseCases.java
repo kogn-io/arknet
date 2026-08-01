@@ -14,7 +14,7 @@ import de.hauschel.arknet.uc.domain.UseCase;
 public interface ListUseCases {
 
     /**
-     * Returns all use cases currently under management in the given workspace.
+     * Returns all use cases currently under management in the given project.
      *
      * @param projectId the project (architecture model) to list use cases from
      * @return all use cases, never {@code null}

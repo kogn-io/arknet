@@ -8,7 +8,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Driven port: resolves an actor's human-typed name to its opaque subject identity in the shared
- * workspace store.
+ * project store.
  *
  * <p>This is the strict cross-BC reference resolution the use-cases component needs for
  * {@code arkreq:primaryActor}/{@code arkreq:supportingActor} (issue #89, the use-cases analogue

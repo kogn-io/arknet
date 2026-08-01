@@ -21,7 +21,7 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 /**
  * Out-adapter: {@link ActorLookup} backed by the kognio-rdf substrate, resolving an actor's
  * human-typed {@code skos:prefLabel} (e.g. {@code Customer}) to its opaque subject
- * {@link ResourceId} within the shared workspace store.
+ * {@link ResourceId} within the shared project store.
  *
  * <p><strong>Strict cross-BC actor resolution (issue #89).</strong> Use-cases and
  * ubiquitous-language actors share one per-project store. This adapter looks up a name by

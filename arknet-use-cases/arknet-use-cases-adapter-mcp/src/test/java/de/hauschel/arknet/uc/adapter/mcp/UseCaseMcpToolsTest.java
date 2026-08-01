@@ -29,11 +29,11 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
-import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
+import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
@@ -58,7 +58,7 @@ class UseCaseMcpToolsTest {
         return new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/" + slug));
     }
 
-    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    /** Fake resolver: every call routes to the same fixed project, ignoring the origin. */
     private static final ProjectId PROJECT = new ProjectId("test-project");
 
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
@@ -258,7 +258,7 @@ class UseCaseMcpToolsTest {
         assertEquals("New precondition", stub.lastUpdatePrecondition);
         assertEquals("New postcondition", stub.lastUpdatePostcondition);
         assertEquals(List.of("2a. abort"), stub.lastUpdateExtensions);
-        assertEquals(List.of(new UpdateUseCase.StepTextPatch(1, "corrected text")), stub.lastUpdateStepTextPatches);
+        assertEquals(List.of(new StepTextPatch(1, "corrected text")), stub.lastUpdateStepTextPatches);
         assertTrue(rendered.contains("New title"), rendered);
     }
 

@@ -36,8 +36,8 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  */
 class KognioRdfActorLookupTest {
 
-    private static final ProjectId WORKSPACE_A = new ProjectId("a");
-    private static final ProjectId WORKSPACE_B = new ProjectId("b");
+    private static final ProjectId PROJECT_A = new ProjectId("a");
+    private static final ProjectId PROJECT_B = new ProjectId("b");
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     /**
@@ -67,18 +67,18 @@ class KognioRdfActorLookupTest {
 
     @Test
     void resolvesAKnownHumanActorNameToItsSubjectIdentity() {
-        String actorIri = givenHumanActor(WORKSPACE_A, "customer", "Customer");
+        String actorIri = givenHumanActor(PROJECT_A, "customer", "Customer");
 
-        ResourceId resolved = actorLookup.resolveByName(WORKSPACE_A, "Customer");
+        ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Customer");
 
         assertEquals(ResourceId.of(actorIri), resolved);
     }
 
     @Test
     void resolvesAKnownSystemActorNameToItsSubjectIdentity() {
-        String actorIri = givenSystemActor(WORKSPACE_A, "payment-provider", "PaymentProvider");
+        String actorIri = givenSystemActor(PROJECT_A, "payment-provider", "PaymentProvider");
 
-        ResourceId resolved = actorLookup.resolveByName(WORKSPACE_A, "PaymentProvider");
+        ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "PaymentProvider");
 
         assertEquals(ResourceId.of(actorIri), resolved);
     }
@@ -90,18 +90,18 @@ class KognioRdfActorLookupTest {
      */
     @Test
     void aNonActorConceptWithTheSameLabelDoesNotSatisfyTheReference() {
-        givenNonActorConcept(WORKSPACE_A, "order", "Order");
+        givenNonActorConcept(PROJECT_A, "order", "Order");
 
         assertThrows(UnresolvedReferenceException.class,
-                () -> actorLookup.resolveByName(WORKSPACE_A, "Order"));
+                () -> actorLookup.resolveByName(PROJECT_A, "Order"));
     }
 
     @Test
     void rejectsAnUnknownActorName() {
-        givenHumanActor(WORKSPACE_A, "customer", "Customer");
+        givenHumanActor(PROJECT_A, "customer", "Customer");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> actorLookup.resolveByName(WORKSPACE_A, "Unknown"));
+                () -> actorLookup.resolveByName(PROJECT_A, "Unknown"));
 
         assertTrue(ex.getMessage().contains("Unknown"), ex.getMessage());
         assertTrue(ex.getMessage().contains("term_add"), ex.getMessage());
@@ -109,22 +109,22 @@ class KognioRdfActorLookupTest {
 
     @Test
     void rejectsAnAmbiguousActorName() {
-        givenHumanActor(WORKSPACE_A, "customer-1", "Customer");
-        givenHumanActor(WORKSPACE_A, "customer-2", "Customer");
+        givenHumanActor(PROJECT_A, "customer-1", "Customer");
+        givenHumanActor(PROJECT_A, "customer-2", "Customer");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> actorLookup.resolveByName(WORKSPACE_A, "Customer"));
+                () -> actorLookup.resolveByName(PROJECT_A, "Customer"));
 
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** An actor of another workspace must not satisfy this project's reference. */
+    /** An actor of another project must not satisfy this project's reference. */
     @Test
-    void anActorOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
-        givenHumanActor(WORKSPACE_B, "customer", "Customer");
+    void anActorOfAnotherProjectDoesNotSatisfyThisProjectsReference() {
+        givenHumanActor(PROJECT_B, "customer", "Customer");
 
         assertThrows(UnresolvedReferenceException.class,
-                () -> actorLookup.resolveByName(WORKSPACE_A, "Customer"));
+                () -> actorLookup.resolveByName(PROJECT_A, "Customer"));
     }
 
     private String givenHumanActor(ProjectId projectId, String slug, String prefLabel) {

@@ -52,7 +52,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * <p>Maps a {@link UseCase} to an {@code arkreq:UseCase} whose subject IRI is the opaque
  * {@link UseCaseId} (minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never
  * derived from the business code), stored in one named graph shared by all use cases of a
- * workspace. The {@code dcterms:identifier} triple carries the human-readable
+ * project. The {@code dcterms:identifier} triple carries the human-readable
  * {@link UseCaseCode} ({@code UC1}) - identity and label are deliberately different triples on
  * the same subject.</p>
  *
@@ -78,7 +78,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * <p><strong>Requirement/actor references arrive pre-resolved (issue #41, identity-carrying
  * since #89).</strong> {@link RequirementRef} and {@link ActorRef} carry the referenced
  * resource's opaque subject {@link ResourceId} directly - resolving a human-typed requirement
- * code (e.g. {@code FR-5}) or actor name (e.g. {@code Customer}) against the shared workspace
+ * code (e.g. {@code FR-5}) or actor name (e.g. {@code Customer}) against the shared project
  * store, and rejecting an unknown or ambiguous one, is done once by
  * {@code KognioRdfRequirementLookup}/{@code KognioRdfActorLookup} at the moment a use case is
  * written (in the application service), not here on every write. This adapter therefore neither

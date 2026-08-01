@@ -22,10 +22,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
-import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepTextPatch;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
+import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
@@ -127,14 +127,14 @@ class UseCaseServiceTest {
     }
 
     @Test
-    void addNumbersRunningPerWorkspace() {
+    void addNumbersRunningPerProject() {
         assertEquals(new UseCaseCode("UC1"), service.add(WS, newUseCase("a")).code());
         assertEquals(new UseCaseCode("UC2"), service.add(WS, newUseCase("b")).code());
         assertEquals(new UseCaseCode("UC3"), service.add(WS, newUseCase("c")).code());
     }
 
     @Test
-    void addIsScopedPerWorkspace() {
+    void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
         service.add(WS, newUseCase("a"));
 

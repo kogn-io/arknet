@@ -36,8 +36,8 @@ import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
  */
 class KognioRdfRequirementLookupTest {
 
-    private static final ProjectId WORKSPACE_A = new ProjectId("a");
-    private static final ProjectId WORKSPACE_B = new ProjectId("b");
+    private static final ProjectId PROJECT_A = new ProjectId("a");
+    private static final ProjectId PROJECT_B = new ProjectId("b");
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
 
     /**
@@ -67,19 +67,19 @@ class KognioRdfRequirementLookupTest {
 
     @Test
     void resolvesAKnownRequirementCodeToItsSubjectIdentity() {
-        String requirementIri = givenRequirement(WORKSPACE_A, "FR-1");
+        String requirementIri = givenRequirement(PROJECT_A, "FR-1");
 
-        ResourceId resolved = requirementLookup.resolveByCode(WORKSPACE_A, "FR-1");
+        ResourceId resolved = requirementLookup.resolveByCode(PROJECT_A, "FR-1");
 
         assertEquals(ResourceId.of(requirementIri), resolved);
     }
 
     @Test
     void rejectsAnUnknownRequirementCode() {
-        givenRequirement(WORKSPACE_A, "FR-1");
+        givenRequirement(PROJECT_A, "FR-1");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> requirementLookup.resolveByCode(WORKSPACE_A, "FR-99"));
+                () -> requirementLookup.resolveByCode(PROJECT_A, "FR-99"));
 
         assertTrue(ex.getMessage().contains("FR-99"), ex.getMessage());
         assertTrue(ex.getMessage().contains("req_add"), ex.getMessage());
@@ -87,26 +87,26 @@ class KognioRdfRequirementLookupTest {
 
     @Test
     void rejectsAnAmbiguousRequirementCode() {
-        givenRequirementAtIri(WORKSPACE_A, "https://w3id.org/arknet/model/requirement/dup-1", "FR-1");
-        givenRequirementAtIri(WORKSPACE_A, "https://w3id.org/arknet/model/requirement/dup-2", "FR-1");
+        givenRequirementAtIri(PROJECT_A, "https://w3id.org/arknet/model/requirement/dup-1", "FR-1");
+        givenRequirementAtIri(PROJECT_A, "https://w3id.org/arknet/model/requirement/dup-2", "FR-1");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> requirementLookup.resolveByCode(WORKSPACE_A, "FR-1"));
+                () -> requirementLookup.resolveByCode(PROJECT_A, "FR-1"));
 
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** A requirement of another workspace must not satisfy this project's reference. */
+    /** A requirement of another project must not satisfy this project's reference. */
     @Test
-    void aRequirementOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
-        givenRequirement(WORKSPACE_B, "FR-1");
+    void aRequirementOfAnotherProjectDoesNotSatisfyThisProjectsReference() {
+        givenRequirement(PROJECT_B, "FR-1");
 
         assertThrows(UnresolvedReferenceException.class,
-                () -> requirementLookup.resolveByCode(WORKSPACE_A, "FR-1"));
+                () -> requirementLookup.resolveByCode(PROJECT_A, "FR-1"));
     }
 
     /**
-     * Writes a requirement straight into the sibling requirements graph of the shared workspace
+     * Writes a requirement straight into the sibling requirements graph of the shared project
      * dataset - deliberately via raw SPARQL rather than the requirements adapter, so this test
      * does not couple the two bounded contexts. Returns the requirement's IRI.
      */
