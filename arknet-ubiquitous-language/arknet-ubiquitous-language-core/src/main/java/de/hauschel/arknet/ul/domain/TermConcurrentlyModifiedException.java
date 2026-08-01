@@ -50,7 +50,7 @@ public class TermConcurrentlyModifiedException extends RuntimeException {
     }
 
     /** @return the term code whose update kept losing the race */
-    public TermCode termCode() {
+    public TermCode code() {
         return code;
     }
 }

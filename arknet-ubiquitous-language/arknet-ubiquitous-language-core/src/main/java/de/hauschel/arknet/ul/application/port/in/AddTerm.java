@@ -30,7 +30,7 @@ public interface AddTerm {
      *
      * @param prefLabel  the preferred label, i.e. the term itself
      * @param definition the meaning of the term
-     * @param actorFacet optional Actor facette (Weg A aus #45): if set, the same
+     * @param actorFacet optional Actor facette: if set, the same
      *                   skos:Concept is additionally an {@code arkproc:Actor}.
      *                   Optional (may be {@code null})
      */

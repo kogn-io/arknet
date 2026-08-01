@@ -10,13 +10,13 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Thrown when {@link de.hauschel.arknet.ul.application.port.out.TermRepository#create}
  * is called with a {@link TermCode} that already labels a different term in the targeted
- * workspace.
+ * project.
  *
  * <p>Distinct from {@link ResourceAlreadyExistsException}: that one flags an opaque-identity
  * collision (a programming error - identities are minted once and never reused), while this one
  * flags a business-label collision, e.g. two terms both claiming {@code TERM-1}. Since
  * {@code dcterms:identifier} is how a human addresses a term - and how a sibling bounded context
- * resolves an {@code arkreq:usesTerm} edge (#36) - this is an expected, rejectable outcome, not
+ * resolves an {@code arkreq:usesTerm} edge - this is an expected, rejectable outcome, not
  * a stack trace.</p>
  */
 public class DuplicateTermCodeException extends RuntimeException {

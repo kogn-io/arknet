@@ -13,10 +13,10 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * already-created term, keeping its identity (and thus every existing
  * {@code arkreq:usesTerm}/{@code primaryActor}/{@code supportingActors} link into it) intact.
  *
- * <p>Backs the MVP tool {@code term_update} (issue #163). Before this port existed, correcting a
+ * <p>Backs the MVP tool {@code term_update}. Before this port existed, correcting a
  * term's wording meant registering a fresh one via {@link AddTerm} - which mints a new identity
  * and orphans every existing link to the old one. As with the requirements bounded context's
- * sibling {@code UpdateRequirement} port (#162), every field here is optional: {@code null}
+ * sibling {@code UpdateRequirement} port, every field here is optional: {@code null}
  * leaves that field unchanged, so a caller can correct only the definition without having to
  * restate the label.</p>
  *
@@ -25,7 +25,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * implementation must not pre-read the current term and fold an omitted field's old value into a
  * fresh {@link Term} before writing it, which would round-trip that field through {@link Term}'s
  * single-{@code String} projection and silently collapse a multi-valued {@code skos:prefLabel}/
- * {@code skos:definition} (issues #80/#81) down to one value even though the caller never asked
+ * {@code skos:definition} down to one value even though the caller never asked
  * to change it. "Not provided" and "provided" must stay distinguishable all the way to the
  * out-adapter, which is the only place that knows how to leave an untouched predicate's triples
  * alone.</p>

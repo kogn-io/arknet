@@ -78,7 +78,7 @@ public final class KognioRdfTermRepositoryFactory {
      * ubiquitous-language SHACL write-gate and an explicit display language.
      *
      * <p>The {@link DisplayLocale} selects which {@code skos:prefLabel} the read paths surface
-     * when a concept carries labels in several languages (issue #80). It is a read-time display
+     * when a concept carries labels in several languages. It is a read-time display
      * concern, so it is constructor-injected here rather than threaded through the
      * {@link TermRepository} port signature - the composition root supplies the process-wide
      * value (see {@code ArknetMcpConfiguration}).</p>

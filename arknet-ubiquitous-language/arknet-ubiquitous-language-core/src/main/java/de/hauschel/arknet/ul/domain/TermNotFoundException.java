@@ -9,7 +9,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when an operation refers to a term that does not exist in the targeted
- * workspace.
+ * project.
  *
  * <p>An expected domain outcome (not a programming error): driving adapters - e.g. the MCP
  * tools - translate it into a user-facing "unknown term" message rather than a stack trace.</p>
@@ -43,7 +43,7 @@ public class TermNotFoundException extends RuntimeException {
     }
 
     /** @return the term code that was not found */
-    public TermCode termCode() {
+    public TermCode code() {
         return code;
     }
 }

@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,10 +21,12 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 
 /**
@@ -74,7 +77,7 @@ class TermServiceTest {
     }
 
     @Test
-    void addIsScopedPerWorkspace() {
+    void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
         service.add(WS, new NewTerm("Gutschrift", "def a", null));
 
@@ -128,16 +131,16 @@ class TermServiceTest {
     }
 
     /**
-     * Issue #77 nachtrag (slimmed by #84): a sibling bounded context's driving adapter resolves
-     * opaque term identities back to their identity and business code (e.g. to render
-     * {@code TERM-N} for display) - in one batch, not per-id.
+     * A sibling bounded context's driving adapter resolves opaque term identities back to their
+     * identity and business code (e.g. to render {@code TERM-N} for display) - in one batch, not
+     * per-id.
      */
     @Test
-    void getByIdResolvesKnownIdentitiesInOneBatch() {
+    void resolveReturnsKnownIdentitiesInOneBatch() {
         Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null));
         Term second = service.add(WS, new NewTerm("Bestellung", "def b", null));
 
-        List<ResolveTerms.ResolvedTerm> resolved = service.getById(WS, first.id().value(), second.id().value());
+        List<ResolveTerms.ResolvedTerm> resolved = service.resolve(WS, first.id().value(), second.id().value());
 
         assertEquals(2, resolved.size());
         assertTrue(resolved.contains(new ResolveTerms.ResolvedTerm(first.id().value(), first.code())));
@@ -149,26 +152,26 @@ class TermServiceTest {
      * caller (not this port) decides what "missing" means for its own display.
      */
     @Test
-    void getByIdSilentlyOmitsUnknownIdentities() {
+    void resolveSilentlyOmitsUnknownIdentities() {
         Term known = service.add(WS, new NewTerm("Gutschrift", "def a", null));
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
-        List<ResolveTerms.ResolvedTerm> resolved = service.getById(WS, known.id().value(), unknown);
+        List<ResolveTerms.ResolvedTerm> resolved = service.resolve(WS, known.id().value(), unknown);
 
         assertEquals(List.of(new ResolveTerms.ResolvedTerm(known.id().value(), known.code())), resolved);
     }
 
     @Test
-    void getByIdWithNoIdsReturnsAnEmptyList() {
-        assertEquals(List.of(), service.getById(WS));
+    void resolveWithNoIdsReturnsAnEmptyList() {
+        assertEquals(List.of(), service.resolve(WS));
     }
 
     @Test
-    void getByIdIsScopedPerWorkspace() {
+    void resolveIsScopedPerProject() {
         Term inWs = service.add(WS, new NewTerm("Gutschrift", "def a", null));
         ProjectId other = new ProjectId("other");
 
-        assertEquals(List.of(), service.getById(other, inWs.id().value()));
+        assertEquals(List.of(), service.resolve(other, inWs.id().value()));
     }
 
     @Test
@@ -248,5 +251,70 @@ class TermServiceTest {
     void updateThrowsWhenCodeIsUnknown() {
         assertThrows(TermNotFoundException.class,
                 () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null));
+    }
+
+    /**
+     * Guards against a regression back to a read-then-merge {@link TermService#update}: because
+     * {@link InMemoryTermRepository#update} itself merges via null-coalescing, a plain state
+     * assertion against it cannot tell a pass-through {@code update()} apart from one that first
+     * reads via {@code findByCode}/{@code findAll} and folds the result into a merged {@link Term}.
+     * This test instead spies on the repository interactions: it seeds the delegate directly
+     * (bypassing the spy) and asserts that {@code update()} calls {@code repository.update(...)}
+     * without ever calling {@code findByCode} or {@code findAll} first.
+     */
+    @Test
+    void updateNeverReadsBeforeDelegatingToTheRepository() {
+        InMemoryTermRepository delegate = new InMemoryTermRepository();
+        Term seeded = new Term(new TermId(new UuidResourceIdFactory().newId()),
+                new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        delegate.create(WS, seeded);
+        SpyTermRepository spy = new SpyTermRepository(delegate);
+        TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
+
+        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null);
+
+        assertEquals(0, spy.findByCodeCalls);
+        assertEquals(0, spy.findAllCalls);
+        assertEquals("Erstattung", delegate.findByCode(WS, seeded.code()).orElseThrow().prefLabel());
+    }
+
+    /** Spy decorator counting {@code findByCode}/{@code findAll} calls, delegating everything else. */
+    private static final class SpyTermRepository implements TermRepository {
+
+        private final TermRepository delegate;
+        private int findByCodeCalls;
+        private int findAllCalls;
+
+        SpyTermRepository(TermRepository delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void create(ProjectId projectId, Term term) {
+            delegate.create(projectId, term);
+        }
+
+        @Override
+        public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
+                ActorFacet actorFacet) {
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet);
+        }
+
+        @Override
+        public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+            findByCodeCalls++;
+            return delegate.findByCode(projectId, code);
+        }
+
+        @Override
+        public List<Term> findAll(ProjectId projectId) {
+            findAllCalls++;
+            return delegate.findAll(projectId);
+        }
+
+        @Override
+        public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, ids);
+        }
     }
 }

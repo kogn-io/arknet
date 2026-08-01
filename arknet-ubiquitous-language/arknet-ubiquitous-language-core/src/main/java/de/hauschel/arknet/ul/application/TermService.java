@@ -35,27 +35,27 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@link ResourceIdFactory}; it never changes. The human-readable business code
  * ({@link TermCode}, {@code TERM-N}) is assigned independently, where {@code N} is one above the
  * highest running number currently used in the target project (numbering is independent per
- * workspace). Keeping identity separate from both the code and the {@code skos:prefLabel} means
+ * project). Keeping identity separate from both the code and the {@code skos:prefLabel} means
  * relabeling never changes identity (a core SKOS principle).</p>
  *
- * <p><strong>Concurrency (issue #144).</strong> {@link #add} recomputes its next code against a
+ * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a
  * fresh read whenever a concurrent {@code term_add} claims the same {@code TERM-N} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
  * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
  * multi-writer concern (ADR-001).</p>
  *
- * <p><strong>Correction (issue #163).</strong> {@link #update} lets a caller correct a term's
+ * <p><strong>Correction.</strong> {@link #update} lets a caller correct a term's
  * preferred label, definition and/or Actor facette after the fact, keeping its identity (and thus
  * every existing link into it) unchanged. Unlike {@link #add}, {@link #update} does not need
  * {@link #add}'s {@code CodeAssignment} retry apparatus - that only guards the code's
  * <em>assignment</em>, and a correction never changes the code.</p>
  *
- * <p><strong>{@link #update} is a pure pass-through (issue #163 follow-up).</strong> An earlier
+ * <p><strong>{@link #update} is a pure pass-through.</strong> An earlier
  * version of this method first read the current term via {@link TermRepository#findByCode} and
  * folded every omitted ({@code null}) argument's current value into a freshly-built {@link Term}
  * before handing that merged object to the repository - which, because {@code findByCode} itself
- * has to collapse a possibly multi-valued {@code skos:prefLabel}/{@code skos:definition} (issues
- * #80/#81) down to a single value for the {@link Term} projection, meant an update that only
+ * has to collapse a possibly multi-valued {@code skos:prefLabel}/{@code skos:definition}
+ * down to a single value for the {@link Term} projection, meant an update that only
  * touched {@code actorKind} silently rewrote {@code prefLabel}/{@code definition} down to
  * whichever one value the read happened to pick - destroying every other language-tagged label or
  * duplicate definition a store-first term legally carried, even though the caller never asked to
@@ -88,8 +88,8 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
-        // business code is recomputed when a concurrent term_add claims the same candidate first
-        // (issue #144). See CodeAssignment for why that race exists and why it must retry rather
+        // business code is recomputed when a concurrent term_add claims the same candidate first.
+        // See CodeAssignment for why that race exists and why it must retry rather
         // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         TermId id = new TermId(resourceIdFactory.newId());
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
@@ -122,7 +122,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     }
 
     @Override
-    public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
+    public List<ResolvedTerm> resolve(ProjectId projectId, ResourceId... ids) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(ids, "ids");
         if (ids.length == 0) {

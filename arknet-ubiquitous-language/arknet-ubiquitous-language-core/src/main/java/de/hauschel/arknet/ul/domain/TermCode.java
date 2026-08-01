@@ -12,7 +12,7 @@ import java.util.Objects;
  * policy concern of the application layer, not of this type. This is deliberately separate
  * from {@link TermId}: the code is what a human types (into {@code term_get}) and what
  * {@code dcterms:identifier} carries in the store - it is also how sibling bounded contexts
- * reference a term ({@code arkreq:usesTerm} resolves by {@code dcterms:identifier}, #36). It
+ * reference a term ({@code arkreq:usesTerm} resolves by {@code dcterms:identifier}). It
  * may in principle be relabelled without touching the term's underlying identity.</p>
  *
  * @param value the non-blank code string

@@ -24,7 +24,7 @@ import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Regression test for issue #144: {@link TermService#add} used to compute the next business code
+ * Regression test: {@link TermService#add} used to compute the next business code
  * ({@code TERM-N}) client-side via {@code nextCode()} and then {@code create()} it with no retry,
  * so two racing {@code term_add} calls in the same project both computed the same candidate code
  * and one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard fire as
@@ -35,7 +35,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * decorator runs an "other caller"'s complete add exactly once, right after the first {@code
  * findAll} (which {@code nextCode()} reads) returns - pinning the exact interleaving instead of
  * relying on thread scheduling, which would make the test flaky. Mirrors {@code
- * RequirementServiceConcurrencyTest} (issue #108), the one type that already guarded this.</p>
+ * RequirementServiceConcurrencyTest}, the one type that already guarded this.</p>
  */
 class TermServiceConcurrencyTest {
 
