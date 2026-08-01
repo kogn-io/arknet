@@ -7,10 +7,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.function.ServerRequest;
 
 import io.modelcontextprotocol.common.McpTransportContext;
+import io.modelcontextprotocol.server.McpTransportContextExtractor;
 
 import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerStreamableHttpProperties;
 import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServerTransportProvider;
@@ -66,6 +69,32 @@ class AnchorHttpTransportConfigurationTest {
                         JsonMapper.builder().build(), new McpServerStreamableHttpProperties());
 
         assertThat(provider).isNotNull();
+    }
+
+    /**
+     * The regression this class exists to prevent: a provider built without the anchor
+     * extractor wired in would fall back to {@link McpTransportContextExtractor}'s default
+     * ({@code serverRequest -> McpTransportContext.EMPTY}), so every real request would silently
+     * carry no project - exactly the production failure ADR-016 routing depends on this bean to
+     * avoid. The extractor is package-private state with no accessor, so this pins the built
+     * object's actual field rather than trusting the builder call alone.
+     */
+    @Test
+    void wiresTheAnchorExtractorIntoTheBuiltTransportProvider() throws ReflectiveOperationException {
+        WebMvcStreamableServerTransportProvider provider =
+                new AnchorHttpTransportConfiguration().webMvcStreamableServerTransportProvider(
+                        JsonMapper.builder().build(), new McpServerStreamableHttpProperties());
+
+        Field field = WebMvcStreamableServerTransportProvider.class.getDeclaredField("contextExtractor");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        McpTransportContextExtractor<ServerRequest> wiredExtractor =
+                (McpTransportContextExtractor<ServerRequest>) field.get(provider);
+
+        McpTransportContext extracted =
+                wiredExtractor.extract(requestWithHeader("/home/dev/projects/sample-project"));
+
+        assertThat(extracted.get(ProjectResolver.ANCHOR_KEY)).isEqualTo("/home/dev/projects/sample-project");
     }
 
     private static ServerRequest requestWithHeader(final String value) {
