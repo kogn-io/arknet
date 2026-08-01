@@ -7,6 +7,7 @@ import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
+import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 
 /**
  * Driving port: register a brand-new project with exactly one anchor.
@@ -28,6 +29,11 @@ public interface RegisterProject {
      * @throws AnchorAlreadyRegisteredException if {@code anchor} already belongs to a project
      * @throws DuplicateProjectLabelException   if {@code label} already labels a different
      *                                          project
+     * @throws UnattributedRegistrationConflictException if the write keeps losing a real store
+     *                                          commit conflict that neither guard above explains,
+     *                                          across every retry attempt (see that exception's
+     *                                          javadoc - an expected-but-rare outcome, not a
+     *                                          programming error)
      */
     Project register(String label, Anchor anchor);
 }

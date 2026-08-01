@@ -14,6 +14,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
+import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 
 /**
  * Driven port: persistence capability for the anchor-to-project registry itself (ADR-016
@@ -53,6 +54,10 @@ public interface ProjectRegistry {
      *                                         label
      * @throws AnchorAlreadyRegisteredException if one of this project's anchors already belongs
      *                                         to a different project
+     * @throws UnattributedRegistrationConflictException if the write lost a real store commit
+     *                                         conflict that neither guard above explains - safe
+     *                                         to retry against the same, unmodified {@code project}
+     *                                         (see that exception's javadoc)
      */
     void register(Project project);
 

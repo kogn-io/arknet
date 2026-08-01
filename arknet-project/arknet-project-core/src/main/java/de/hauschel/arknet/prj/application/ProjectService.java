@@ -31,6 +31,7 @@ import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
+import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
@@ -67,19 +68,25 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * whole round trip against a fresh read whenever a concurrent writer commits in between - see
  * {@link #updateWithOptimisticRetry}, the same pattern {@code RequirementService} established.
  * Neither race is visible to a well-formed caller; only sustained, pathological
- * contention on the very same project surfaces as {@link StaleProjectException}.</p>
+ * contention on the very same project surfaces as {@link StaleProjectException}. {@link #register}
+ * is a create, not a read-modify-write, so it needs no fresh read to retry: a real store commit
+ * conflict neither uniqueness guard can explain ({@link UnattributedRegistrationConflictException})
+ * is retried against the very same, already-minted candidate via
+ * {@link #registerRetryingOnUnattributedConflict} - see that exception's javadoc for why repeating
+ * the identical write is honest here. Only sustained, pathological contention surfaces that
+ * exception to the caller.</p>
  */
 public class ProjectService
         implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
         ListAdoptableDatasets, ResolveProject, FindProject {
 
     /**
-     * Bound on {@link #updateWithOptimisticRetry}'s retry loop, mirroring {@code
-     * RequirementService#MAX_RETRY_ATTEMPTS}: the race this guards against - two callers
-     * read-modify-writing the same project - is resolved by a single retry in the overwhelming
-     * majority of cases, since each retry re-reads the now-current state before trying again;
-     * this bound only exists so a pathological, sustained storm of concurrent writers against the
-     * very same project fails loudly instead of looping forever.
+     * Bound shared by {@link #updateWithOptimisticRetry} and {@link #register}'s retry loop,
+     * mirroring {@code RequirementService#MAX_RETRY_ATTEMPTS}: the races both guard against - two
+     * callers read-modify-writing the same project, or a fresh registration losing an
+     * unattributable store commit conflict - are resolved by a single retry in the overwhelming
+     * majority of cases; this bound only exists so pathological, sustained contention fails
+     * loudly instead of looping forever.
      */
     private static final int MAX_RETRY_ATTEMPTS = 20;
 
@@ -116,7 +123,7 @@ public class ProjectService
         }
         ProjectId id = new ProjectId(UUID.randomUUID().toString());
         Project project = new Project(id, label, List.of(anchor));
-        registry.register(project);
+        registerRetryingOnUnattributedConflict(project);
         selfDescription.describe(project);
         return project;
     }
@@ -209,6 +216,32 @@ public class ProjectService
     public Optional<Project> findById(ProjectId id) {
         Objects.requireNonNull(id, "id");
         return registry.findById(id);
+    }
+
+    /**
+     * Retries a fresh registration that lost a real store commit conflict neither uniqueness
+     * guard could explain (see {@link UnattributedRegistrationConflictException}'s javadoc for
+     * why this is safe without a fresh read: {@code project} carries a freshly minted,
+     * never-reused identity, and the first attempt was fully rolled back, so repeating the same
+     * write is the same write, not a new one, and runs through both uniqueness guards again -
+     * {@link AnchorAlreadyRegisteredException}/{@link DuplicateProjectLabelException} from a
+     * later attempt are not caught here and propagate immediately, since a real, now-visible
+     * collision must not be retried past).
+     *
+     * @throws UnattributedRegistrationConflictException if the write keeps losing an
+     *                                         unattributable conflict across every retry attempt
+     */
+    private void registerRetryingOnUnattributedConflict(Project project) {
+        UnattributedRegistrationConflictException lastConflict = null;
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            try {
+                registry.register(project);
+                return;
+            } catch (UnattributedRegistrationConflictException e) {
+                lastConflict = e;
+            }
+        }
+        throw lastConflict;
     }
 
     /**

@@ -24,6 +24,7 @@ import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
+import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
@@ -264,6 +265,39 @@ class ProjectServiceTest {
         assertEquals(2, registry.findById(project.id()).orElseThrow().anchors().size());
     }
 
+    /**
+     * Issue #67: {@link ProjectService#register}'s retry loop must stay invisible to a
+     * well-formed caller too - mirroring the test above for the create path. A registry whose
+     * first {@code register} call loses a real store commit conflict that neither uniqueness
+     * guard could explain (see {@link UnattributedRegistrationConflictException}) still lets the
+     * call succeed once the service retries the very same, already-minted candidate.
+     */
+    @Test
+    void anUnattributedRegistrationConflictOnTheFirstAttemptIsRetriedTransparently() {
+        ProjectService retryingService =
+                new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets);
+
+        Project project = retryingService.register("arknet", pathAnchor("/home/fred/arknet"));
+
+        assertEquals("arknet", project.label());
+        assertEquals(1, registry.writeCount(), "the retry must apply the same candidate exactly once");
+    }
+
+    /**
+     * The retry bound must eventually give up and surface the store's own signal rather than
+     * looping forever - the same contract {@link StaleProjectException} gives
+     * {@link ProjectService#updateWithOptimisticRetry}.
+     */
+    @Test
+    void anUnattributedRegistrationConflictThatNeverClearsIsRethrownAfterTheRetryBudgetIsSpent() {
+        ProjectService retryingService = new ProjectService(
+                new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+
+        assertThrows(UnattributedRegistrationConflictException.class,
+                () -> retryingService.register("arknet", pathAnchor("/home/fred/arknet")));
+        assertEquals(0, registry.writeCount(), "an exhausted retry must not have written anything");
+    }
+
     private static Anchor pathAnchor(String value) {
         return new Anchor(value, AnchorType.PATH);
     }
@@ -314,6 +348,59 @@ class ProjectServiceTest {
                 firstWriteSeen = true;
                 throw new StaleProjectException(project.id());
             }
+            delegate.compareAndUpdate(expectedHead, project);
+        }
+    }
+
+    /**
+     * Decorator that reports an {@link UnattributedRegistrationConflictException} on the first
+     * {@code failuresBeforeSuccess} {@link #register} calls, then delegates every subsequent call
+     * unchanged - deterministically reproducing a lost store commit conflict that neither
+     * uniqueness guard could explain (issue #67), without relying on a real store's
+     * {@code SERIALIZABLE} detection or real threads.
+     */
+    private static final class ConflictsOnRegisterRegistry implements ProjectRegistry {
+
+        private final ProjectRegistry delegate;
+        private final int failuresBeforeSuccess;
+        private int attempts;
+
+        ConflictsOnRegisterRegistry(ProjectRegistry delegate, int failuresBeforeSuccess) {
+            this.delegate = delegate;
+            this.failuresBeforeSuccess = failuresBeforeSuccess;
+        }
+
+        @Override
+        public void register(Project project) {
+            attempts++;
+            if (attempts <= failuresBeforeSuccess) {
+                throw new UnattributedRegistrationConflictException(new RuntimeException("lost the commit"));
+            }
+            delegate.register(project);
+        }
+
+        @Override
+        public Optional<Project> findByAnchor(Anchor anchor) {
+            return delegate.findByAnchor(anchor);
+        }
+
+        @Override
+        public Optional<Project> findById(ProjectId id) {
+            return delegate.findById(id);
+        }
+
+        @Override
+        public List<Project> findAll() {
+            return delegate.findAll();
+        }
+
+        @Override
+        public Optional<CurrentProject> findCurrentById(ProjectId id) {
+            return delegate.findCurrentById(id);
+        }
+
+        @Override
+        public void compareAndUpdate(RevisionToken expectedHead, Project project) {
             delegate.compareAndUpdate(expectedHead, project);
         }
     }
