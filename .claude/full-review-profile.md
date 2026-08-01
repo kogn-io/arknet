@@ -93,6 +93,18 @@ the skill's generic methodology.
   chain. Causes divergence between digest/traceability tools and the HTML report on
   multi-language `prefLabel`s. Whenever a review touches a new generic read path, check whether
   it bypasses `DisplayLocale` even though a sibling BC out-adapter next to it applies it.
+- **kognio-rdf's full source is checked out locally — read it, don't `javap`/guess.**
+  `~/DEV/projects/java/kognio/kognio-rdf` (not just the `-sources.jar` under `~/.m2`) carries
+  the implementation and its javadoc, including measured backend quirks that aren't visible
+  from the port interfaces alone. Example: `DatasetTransactorRdf4j`'s own class javadoc
+  documents an RDF4J `MemoryStore` value-interning race that makes an `ASK`/`SELECT` guard
+  unreliable for a brand-new, not-yet-persisted IRI, while `DatasetTx#contains` is immune
+  (it looks values up instead of interning them). `WriteFunnel`'s two `create` existence
+  checks already use `contains()` for exactly this reason; its `readHead`'s `SELECT` doesn't
+  need to, because it only ever reads already-persisted state (an existing resource's head).
+  Confirm a concurrency/isolation-adjacent suspicion against this checkout before filing it as
+  a finding — two suspicions in the persistence-support review below turned out to be
+  unfounded once checked here.
 
 ## Relevant ADRs to keep loaded
 
@@ -112,5 +124,6 @@ the skill's generic methodology.
 
 | Date | Scope | Findings | What it confirmed |
 |---|---|---|---|
+| 2026-08-01 | `arknet-persistence-support` (full module, ~2719 LOC incl. tests) | 1 minor (`WriteFunnel`'s constructors and `create`/`update`/`compareAndUpdate` have untested `Objects.requireNonNull` guards — `ShaclWriteGateTest` has the analogous test, `WriteFunnelTest` doesn't) — test-hygiene, no functional holes | Two initial suspicions (commit-conflict misclassification via `isWriteConflict`; `readHead`'s `SELECT` being an unreliable CAS guard the way an `ASK` guard would be) were both refuted by reading the actual kognio-rdf source rather than trusting the port's javadoc alone — see the trap above. Issue filed: [#132](https://github.com/kogn-io/arknet/issues/132). |
 | 2026-08-01 | `arknet-shared-kernel` (full module, ~1092 LOC incl. tests) | 2 minor (a Javadoc `@throws` omission; an untested exception accessor) — both documentation/test-hygiene, no functional holes | Module lives up to its own "bewusst winzig, sorgfaeltig" framing. A near-zero yield here is a correct result, not a sign the review was too shallow — don't manufacture findings to justify the effort. Issues filed: [#133](https://github.com/kogn-io/arknet/issues/133), [#134](https://github.com/kogn-io/arknet/issues/134). |
 | 2026-08-01 | `arknet-mcp` (full module, 64 files, ~10.3k LOC incl. tests; 4 parallel subagents split by disjoint package: dataset+store, report, trace+mention, composition root) | 16 findings, 2 critical (silent under-reporting of dependents/statements from two independent tools), 8 high, 6 medium/low | Highest-yield full review to date, roughly proportional to module size and to how much prose-documented behavior (`@McpTool` descriptions, a very dense module `CLAUDE.md`) the module carries to audit against. Phase 1 Sweep 4 (adjectives about runtime behavior — "without cache", "case-insensitive", "the first label", "in encounter order", "the longer one wins") was by far the most productive sweep here. Phase 2 (concurrency) was clean — all tool beans are stateless singletons, `ProjectId` is consistently a method parameter, no `ThreadLocal` anywhere in the MCP stack; a 50-request/8-thread throwaway probe against two anchors confirmed zero cross-project mixing. Issues filed: [#135](https://github.com/kogn-io/arknet/issues/135)–[#150](https://github.com/kogn-io/arknet/issues/150). |
