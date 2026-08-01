@@ -211,7 +211,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
     @Test
     void aBoundedContextWithoutAggregatesPassesTheGate() {
-        // shapes:BoundedContext-hasAggregate was lowered to sh:Warning (issue #66): a store-first
+        // shapes:BoundedContext-hasAggregate was lowered to sh:Warning: a store-first
         // bounded context minted during analysis has no aggregates yet, and that must not block
         // the write.
         BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"),
@@ -297,12 +297,12 @@ class KognioRdfBoundedContextRepositoryTest {
 
     /**
      * Blank-node regression test for {@code arkddd:ubiquitousLanguageTerm} (mirrors the
-     * requirements adapter's blank-node preservation test, issue #65): the predicate is not
+     * requirements adapter's blank-node preservation test): the predicate is not
      * range-constrained to {@code IRI} at the RDF level, so a store-first edge can legally target
      * a blank node - {@code [ a skos:Concept ]} written directly into the bounded-context graph.
      * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent a blank node, so
      * {@code readUsesTerms} never surfaces it as a {@link TermRef} - but
-     * {@code replaceTriples} must still capture and re-attach it across an unrelated
+     * {@code replaceExistingTriples} must still capture and re-attach it across an unrelated
      * {@code update()} - here, one that links an IRI term, exactly as {@code bc_link_term} does -
      * instead of erasing it.
      */
@@ -343,7 +343,7 @@ class KognioRdfBoundedContextRepositoryTest {
      * IRI-typed round-trip through the domain object to fall back on. This pins that a blank-node
      * aggregate survives an unrelated {@code update()} exactly as an IRI-target one already does
      * ({@link #updatePreservesAStoreFirstHasAggregateEdge}) - "regardless of target kind", per the
-     * {@code replaceTriples} javadoc.
+     * {@code replaceExistingTriples} javadoc.
      */
     @Test
     void updatePreservesABlankNodeHasAggregateEdge() {
@@ -398,7 +398,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Pins the on-disk shape of a subdomain classification (issue #189): a bounded context with
+     * Pins the on-disk shape of a subdomain classification: a bounded context with
      * {@link Subdomain#CORE_DOMAIN} does not carry {@code arkddd:subdomainType} directly - it
      * carries {@code arkddd:partOf} to a freshly minted, distinct node typed
      * {@code arkddd:Subdomain}, and that node carries {@code arkddd:subdomainType arkddd:CoreDomain}.
@@ -425,9 +425,9 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * Orphan-cleanup regression (issue #189): an update that changes the subdomain classification
+     * Orphan-cleanup regression: an update that changes the subdomain classification
      * must not leave the superseded {@code arkddd:Subdomain} node's triples behind as disconnected
-     * garbage - {@link KognioRdfBoundedContextRepository#replaceTriples} follows the
+     * garbage - {@link KognioRdfBoundedContextRepository#replaceExistingTriples} follows the
      * {@code arkddd:partOf} edge to delete it, mirroring the use-case adapter's step-following
      * delete.
      */
@@ -509,7 +509,7 @@ class KognioRdfBoundedContextRepositoryTest {
         }
     }
 
-    // ---- compare-and-set (issue #176) ------------------------------------------------------
+    // ---- compare-and-set ------------------------------------------------------------------
 
     /**
      * The read side of the guard: {@code findCurrentByCode} hands out the very {@code arkprov:head}
@@ -535,7 +535,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * The write side of the guard (issue #176): a caller whose observed head is no longer current -
+     * The write side of the guard: a caller whose observed head is no longer current -
      * because another writer committed in between - is rejected instead of overwriting the change
      * it never saw, and its rejected write leaves neither a triple nor a revision behind.
      */

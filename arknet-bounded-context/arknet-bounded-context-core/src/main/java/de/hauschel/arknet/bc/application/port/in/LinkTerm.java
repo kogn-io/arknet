@@ -13,7 +13,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Backs the MVP tool {@code bc_link_term}. The edge
  * ({@code arkddd:ubiquitousLanguageTerm}) is owned by the bounded-context component - that is
  * what keeps the dependency direction bounded-context -&gt; ubiquitous-language rather than the
- * other way round (issue #62), structurally the same choice requirements made for
+ * other way round, structurally the same choice requirements made for
  * {@code arkreq:usesTerm}.</p>
  *
  * <p>{@code termCode} is exactly what a human types (e.g. {@code TERM-1}), never an IRI - the

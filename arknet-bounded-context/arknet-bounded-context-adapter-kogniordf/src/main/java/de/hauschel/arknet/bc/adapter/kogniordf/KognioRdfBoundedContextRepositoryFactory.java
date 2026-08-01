@@ -70,9 +70,9 @@ public final class KognioRdfBoundedContextRepositoryFactory {
      * (e.g. in-memory) lifecycle.
      *
      * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param resourceIdFactory mints the opaque IRI of the derived {@code arkddd:Subdomain} node
-     *                          (issue #189); the same kernel-owned scheme the composition root
-     *                          uses everywhere else
+     * @param resourceIdFactory mints the opaque IRI of the derived {@code arkddd:Subdomain} node;
+     *                          the same kernel-owned scheme the composition root uses everywhere
+     *                          else
      * @param displayLocale     the display-language preference for SHACL violation messages
      * @return a ready-to-use {@link BoundedContextRepository}
      */

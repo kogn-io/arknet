@@ -20,7 +20,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * code (e.g. {@code TERM-1}) to this identity - and rejecting an unknown or ambiguous code - is
  * the job of a driven lookup port against the shared store, not of this pure domain type.</p>
  *
- * <p><strong>Direction is deliberate (issue #62).</strong> The edge
+ * <p><strong>Direction is deliberate.</strong> The edge
  * ({@code arkddd:ubiquitousLanguageTerm}) is owned by the naming bounded context, so the
  * dependency points bounded-context -&gt; ubiquitous-language, never the other way round -
  * structurally the same choice requirements made for {@code arkreq:usesTerm}. It also lives

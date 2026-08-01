@@ -31,14 +31,14 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Regression tests for the two concurrency races {@link BoundedContextService} has to absorb.
  *
- * <p>Issue #144: {@link BoundedContextService#add} used to compute the next business code
+ * <p>{@link BoundedContextService#add} used to compute the next business code
  * ({@code BC-N}) client-side via {@code nextCode()} and then {@code create()} it with no retry, so
  * two racing {@code bc_add} calls in the same project both computed the same candidate code and
  * one of two well-formed callers saw the out-adapter's in-transaction uniqueness guard fire as a
  * caller-visible {@code DuplicateBoundedContextCodeException} - even though nothing about its own
  * request was wrong.</p>
  *
- * <p>Issue #176 (lost update): {@link BoundedContextService#linkTerm} used to read via
+ * <p>Lost update: {@link BoundedContextService#linkTerm} used to read via
  * {@code findByCode} outside any transaction and write back via an unconditional
  * replace-by-identity {@code update}, so two racing {@code bc_link_term} calls on the same bounded
  * context silently lost one of the two {@code arkddd:ubiquitousLanguageTerm} edges - the second
@@ -47,11 +47,10 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Both races are reproduced deterministically, without real threads: a {@link
  * BoundedContextRepository} decorator runs an "other caller"'s complete round trip exactly once,
  * at the precise point where a concurrent writer's commit would land - after the first
- * {@code findAll} (which {@code nextCode()} reads) for #144, after the first
- * {@code findCurrentByCode} for #176. That pins the exact interleaving instead of relying on
- * thread scheduling, which would make these tests flaky. Mirrors
- * {@code RequirementServiceConcurrencyTest} (issues #108/#167), the bounded context that got both
- * guards first.</p>
+ * {@code findAll} (which {@code nextCode()} reads) for the code-assignment race, after the first
+ * {@code findCurrentByCode} for the lost-update race. That pins the exact interleaving instead of
+ * relying on thread scheduling, which would make these tests flaky. Mirrors
+ * {@code RequirementServiceConcurrencyTest}, the bounded context that got both guards first.</p>
  */
 class BoundedContextServiceConcurrencyTest {
 
@@ -82,7 +81,7 @@ class BoundedContextServiceConcurrencyTest {
     }
 
     /**
-     * Issue #176 (lost update): two concurrent {@code bc_link_term} calls for the same bounded
+     * Lost update: two concurrent {@code bc_link_term} calls for the same bounded
      * context, linking different terms, must both survive. Before the fix, the second writer's
      * {@code repository.update} blindly overwrote the first writer's already-committed edge
      * because neither read nor write carried any concurrency guard.

@@ -9,7 +9,7 @@ package de.hauschel.arknet.bc.domain;
  * <p>Maps to the {@code arkddd:SubdomainType} individuals the ontology enumerates
  * ({@code arkddd:CoreDomain}/{@code arkddd:SupportingDomain}/{@code arkddd:GenericDomain}), one of
  * which the out-adapter attaches via a derived {@code arkddd:Subdomain} node's
- * {@code arkddd:subdomainType} (issue #189) - this enum lists exactly those three values, so a
+ * {@code arkddd:subdomainType} - this enum lists exactly those three values, so a
  * caller can never be offered a subdomain the ontology does not enumerate, though nothing in the
  * current SHACL shapes constrains {@code arkddd:subdomainType} itself. Optional on a bounded
  * context: {@code shapes:BoundedContext-partOf} places no {@code sh:minCount} on

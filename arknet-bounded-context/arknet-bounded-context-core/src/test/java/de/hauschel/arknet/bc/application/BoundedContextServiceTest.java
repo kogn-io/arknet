@@ -21,6 +21,7 @@ import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedCon
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.BoundedContextNotFoundException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
@@ -100,6 +101,23 @@ class BoundedContextServiceTest {
         assertEquals(new BoundedContextCode("BC-1"), bc1);
         assertEquals(new BoundedContextCode("BC-2"), bc2);
         assertEquals(new BoundedContextCode("BC-3"), bc3);
+    }
+
+    /**
+     * A bounded context minted store-first (ADR-005) may carry a {@code dcterms:identifier} that
+     * does not follow the {@code BC-N} scheme at all - the next-code computation must skip such a
+     * code as if it contributed no running number, rather than letting the parse failure surface.
+     */
+    @Test
+    void addSkipsNonNumericExistingCodesWhenComputingTheNextCode() {
+        BoundedContext storeFirst = new BoundedContext(new BoundedContextId(resourceIdFactory.newId()),
+                new BoundedContextCode("LEGACY-CTX"), "Legacy",
+                "Imported store-first with a non-numeric business code.", null, null, List.of());
+        repository.create(WS, storeFirst);
+
+        BoundedContextCode next = service.add(WS, newBoundedContext()).code();
+
+        assertEquals(new BoundedContextCode("BC-1"), next);
     }
 
     @Test

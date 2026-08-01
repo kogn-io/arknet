@@ -64,7 +64,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 
 /**
  * Regression tests against a real RDF4J-backed store (on-disk {@code NativeStore}): the
- * second interleaving of issue #144 with real threads, and the lost-update race of issue #176
+ * second interleaving of the code-assignment race with real threads, and the lost-update race
  * through the funnel's own compare-and-set path - unlike {@code
  * BoundedContextServiceConcurrencyTest}, which reproduces the first interleaving ("a concurrent
  * caller commits its whole write before this one's transaction even begins") with a repository
@@ -86,7 +86,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
  * them: {@code rdf4j-sail-memory} and {@code rdf4j-sail-nativerdf} are two separate code paths.
  * The daemon runs on the {@code NativeStore}, so this store is built {@code PERSISTENT} - with the
  * very {@link DatasetStoreConfig#persistentDefault()} configuration the composition root uses -
- * and the proof holds for the sail that actually holds user data (issue #180). Every other test in
+ * and the proof holds for the sail that actually holds user data. Every other test in
  * this module stays {@code IN_MEMORY} on purpose: what they assert sits above the store, where the
  * faster sail is the legitimate choice and no coverage is lost.</p>
  *
@@ -112,10 +112,10 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
  * no {@code junit-platform.properties}/Surefire-level timeout, so this class-level {@link Timeout}
  * is the only backstop; the interleaving itself normally resolves in well under a second.
  * Uncontended, both methods together finish in about 4 s. The budget was originally 10 s, sized
- * while this class ran against {@code sail-memory} - #180 moved it onto the on-disk
+ * while this class ran against {@code sail-memory} - moving it onto the on-disk
  * {@code NativeStore}, whose commit path serialises writers through
  * {@link org.eclipse.rdf4j.common.concurrent.locks.ExclusiveReentrantLockManager}, and under a full
- * parallel reactor build (issue #182) {@code linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}
+ * parallel reactor build {@code linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}
  * measured up to 13.44 s, occasionally tripping the 10 s budget. Reproduced locally by saturating
  * every core with busy-loops during a run: the method finished in 10.6-23 s across repeated runs
  * (bounded, not growing further under repeated saturation) - consistent with CPU-starved I/O, not
@@ -158,7 +158,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         // given - both callers' guards are released together only once both have checked "is this
         // code already taken?" and found it free; the loser is then held back until the winner's
         // transaction has actually committed, so the loser's own commit is the one that conflicts.
-        // Diagnostics for issue #171: two unreproducible sightings of this assertion failing under
+        // Diagnostics: two unreproducible sightings of this assertion failing under
         // full parallel-build load left nothing to go on beyond "both got the same code" - this test
         // now also records a nanoTime-stamped timeline of both racers plus each result's arkprov:head
         // (ADR-014), so that the next sighting is evaluable instead of merely confirming the symptom.
@@ -245,7 +245,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Renders everything issue #171 asked the next random sighting to be evaluable with: both
+     * Renders everything a past random sighting asked the next one to be evaluable with: both
      * racers' results (business code plus resource IRI), each result's current
      * {@code arkprov:head} read fresh from the store after the race (ADR-014's concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
@@ -258,14 +258,14 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * the lifecycle already shut down, a lock held, a timeout interrupt) would replace the
      * assertion's actual message and leave the next sighting with nothing evaluable again - worse
      * than before this class was instrumented, because the failure would then look like a broken
-     * diagnostic instead of carrying #171's signature. Everything already appended to {@code report}
+     * diagnostic instead of carrying the original signature. Everything already appended to {@code report}
      * survives a failure below it; {@link #headOf} additionally never throws on its own.</p>
      */
     private String diagnosticReport(List<String> timeline, BoundedContext winner, BoundedContext loser,
             Throwable failure) {
         StringBuilder report = new StringBuilder();
         try {
-            report.append("issue #171 diagnostics").append(System.lineSeparator());
+            report.append("concurrency race diagnostics").append(System.lineSeparator());
             report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
             report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
             report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
@@ -287,9 +287,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
 
     /**
      * Available processors, {@code systemLoadAverage} and this thread's interrupt status at the
-     * moment the report is built - both real #171 sightings were load-dependent, and without this
-     * line the load has to be reconstructed after the fact from unrelated sources (issue #171
-     * follow-up).
+     * moment the report is built - both real past sightings were load-dependent, and without this
+     * line the load has to be reconstructed after the fact from unrelated sources.
      */
     private static String systemDiagnostics() {
         OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
@@ -314,7 +313,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
-     * <p>Never throws (issue #171 follow-up): a {@code @Timeout} interrupt landing mid-race can
+     * <p>Never throws: a {@code @Timeout} interrupt landing mid-race can
      * leave the sail in a bad state for a follow-up read, so both the dataset acquisition and the
      * query run inside one {@code try}/{@code catch(Throwable)} - a failure here becomes part of
      * the diagnostic text instead of replacing it. The interrupt status is recorded rather than
@@ -345,7 +344,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Issue #176 against the real store: a concurrent {@code bc_link_term} that commits between
+     * Lost-update guard against the real store: a concurrent {@code bc_link_term} that commits between
      * this caller's read (state plus {@code arkprov:head}) and its own write must cost the caller
      * nothing and lose neither edge. Before the fix, {@code linkTerm} read outside any transaction
      * and wrote back unconditionally, so the second writer silently dropped the first writer's
@@ -432,7 +431,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
             }
             return tx;
         }, () -> {
-            // This service pins the #144 interleaving inside the transaction; nothing to do before.
+            // This service pins the code-assignment interleaving inside the transaction; nothing to do before.
         });
         BoundedContextRepository repository =
                 KognioRdfBoundedContextRepositoryFactory.over(guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
@@ -446,8 +445,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
      * Wraps a real {@link DatasetLifecycle}, running {@code beforeTransaction} right before every
      * write transaction opens and decorating every acquired transaction's {@link DatasetTx}. The
      * two hooks pin two different interleavings: {@code beforeTransaction} is where a concurrent
-     * writer's commit turns an already-taken read stale (issue #176), {@code txDecorator} is where
-     * two transactions are held open against each other (issue #144).
+     * writer's commit turns an already-taken read stale (the lost-update race), {@code txDecorator}
+     * is where two transactions are held open against each other (the code-assignment race).
      */
     private static final class GuardedLifecycle implements DatasetLifecycle {
 
