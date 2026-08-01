@@ -74,7 +74,17 @@ final class RegisteredAnchorProjectResolver implements ProjectResolver {
             // Translated at the port boundary rather than propagated: the four model bounded
             // contexts see only the kernel's port, and an exception from arknet-project's domain
             // crossing into them would make them depend on the very component they must not know.
-            throw new UnresolvedProjectAnchorException(anchor, unknownAnchorMessage(anchor), e);
+            //
+            // Deliberately not passed as this exception's cause: Spring AI's MCP tool callback
+            // renders the deepest exception in the getCause() chain, not this one - chaining e here
+            // would let arknet-project's raw "not registered" message win over the composed remedy
+            // that names project_add/project_adopt/project_list (#137). Kept as a suppressed
+            // exception instead, so the original is still on the stack trace without being able to
+            // win the walk.
+            final UnresolvedProjectAnchorException translated =
+                    new UnresolvedProjectAnchorException(anchor, unknownAnchorMessage(anchor));
+            translated.addSuppressed(e);
+            throw translated;
         }
     }
 
