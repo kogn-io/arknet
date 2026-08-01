@@ -10,7 +10,6 @@ validate and write to.
 
 - [Why](#why)
 - [Repository](#repository)
-- [Requirements](#requirements)
 - [MCP Server](#mcp-server)
   - [Prerequisite: start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
   - [Register your project](#register-your-project)
@@ -65,11 +64,6 @@ feature requests go to the
 [issue tracker](https://github.com/kogn-io/arknet/issues); open-ended
 questions go to
 [GitHub Discussions](https://github.com/kogn-io/arknet/discussions).
-
-## Requirements
-
-- Java 25+
-- Maven 3.9+
 
 ## MCP Server
 
