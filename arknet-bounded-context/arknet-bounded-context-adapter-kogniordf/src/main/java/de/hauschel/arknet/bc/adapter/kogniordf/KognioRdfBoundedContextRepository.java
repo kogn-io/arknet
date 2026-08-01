@@ -123,9 +123,17 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>Row multiplication.</strong> {@code arkddd:partOf}'s
  * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arkddd:ownedBy} carries no
  * {@code sh:maxCount} at all, so a store-first (ADR-005) bounded context with two triples on
- * either predicate legally multiplies {@link #findAll}'s SPARQL rows for one subject.
- * {@link #findAll} groups rows per subject and takes the first-seen value deterministically for
- * each, logging a single {@code WARN} when more than one distinct value was collapsed.</p>
+ * either predicate legally multiplies a single-subject query's SPARQL rows too, not only
+ * {@link #findAll}'s. {@link #findByCode} and {@link #findCurrentByCode} share
+ * {@link #boundedContextByCodeWhereClause}, whose two {@code OPTIONAL} joins (subdomain,
+ * ownedBy) bind a cross product of rows for one subject exactly as {@link #findAll}'s do -
+ * {@link #boundedContextOf} therefore consumes every row the query returns, not just the first,
+ * and picks the first-seen value per field deterministically via the same
+ * {@link #firstDistinctValue} helper {@link #findAll} uses, logging a single {@code WARN} when
+ * more than one distinct value was collapsed - a plain {@code .findFirst()} on the joined rows
+ * would otherwise pick one arbitrary, unlogged (subdomain, ownedBy) combination, and
+ * {@link #compareAndUpdate}'s replace-by-identity write would then silently drop every other
+ * value on the very next update (issue #158).</p>
  */
 public class KognioRdfBoundedContextRepository implements BoundedContextRepository {
 
@@ -336,26 +344,28 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
-            if (found.isEmpty()) {
+            List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
+            if (rows.isEmpty()) {
                 return Optional.empty();
             }
-            return Optional.of(boundedContextOf(found.get(), code, handle));
+            return Optional.of(boundedContextOf(rows, code, handle));
         }
     }
 
     /**
-     * Reads a bounded context's current state together with its concurrency token. The row built
-     * from {@link #boundedContextByCodeWhereClause} (the core fields) plus the head itself come
+     * Reads a bounded context's current state together with its concurrency token. The rows built
+     * from {@link #boundedContextByCodeWhereClause} (the core fields, possibly row-multiplied on
+     * subdomain/ownedBy - see the class-level "Row multiplication" note) plus the head itself come
      * from this method's one query call - one snapshot, which is the load-bearing
-     * guarantee, not an ordering of clauses within that query. {@link #boundedContextOf} then
-     * issues one further, independent query, via {@link #readUsesTerms}, to fill in
-     * {@code usesTerms}; that later read is safe precisely because it can only be fresher, never
-     * staler, than the head: a concurrent funnel write landing in between moves the head, so
-     * {@link BoundedContextRepository#compareAndUpdate} then fails its comparison and the caller
-     * re-reads instead of silently overwriting a state it never actually saw. Builds the
-     * {@link BoundedContext} the same way {@link #findByCode} does - both call
-     * {@link #boundedContextOf} on their row, so the two read paths cannot drift apart
+     * guarantee, not an ordering of clauses within that query. {@code head} is single-valued
+     * (ADR-014's queryable-head invariant), so every row carries the same value; only the first
+     * row is consulted for it. {@link #boundedContextOf} then issues one further, independent
+     * query, via {@link #readUsesTerms}, to fill in {@code usesTerms}; that later read is safe
+     * precisely because it can only be fresher, never staler, than the head: a concurrent funnel
+     * write landing in between moves the head, so {@link BoundedContextRepository#compareAndUpdate}
+     * then fails its comparison and the caller re-reads instead of silently overwriting a state it
+     * never actually saw. Builds the {@link BoundedContext} the same way {@link #findByCode} does -
+     * both call {@link #boundedContextOf} on their rows, so the two read paths cannot drift apart
      * field-by-field.
      */
     @Override
@@ -372,13 +382,12 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
-            if (found.isEmpty()) {
+            List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
+            if (rows.isEmpty()) {
                 return Optional.empty();
             }
-            BindingSet row = found.get();
-            BoundedContext boundedContext = boundedContextOf(row, code, handle);
-            RevisionToken head = row.getValue("head")
+            BoundedContext boundedContext = boundedContextOf(rows, code, handle);
+            RevisionToken head = rows.get(0).getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                     .orElse(null);
@@ -412,21 +421,40 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     /**
-     * Builds one {@link BoundedContext} from a row of {@link #boundedContextByCodeWhereClause}'s
-     * projection ({@code ?s ?name ?domainVision ?subdomain ?ownedBy}), including the follow-up
-     * read {@link #readUsesTerms} (via {@code handle}). Shared by {@link #findByCode} and
-     * {@link #findCurrentByCode} so both single-bounded-context read paths build the aggregate the
-     * same way.
+     * Builds one {@link BoundedContext} from every row of {@link #boundedContextByCodeWhereClause}'s
+     * projection ({@code ?s ?name ?domainVision ?subdomain ?ownedBy}) for one subject, including
+     * the follow-up read {@link #readUsesTerms} (via {@code handle}). {@code name}/
+     * {@code domainVision} are read off the first row only (mandatory, {@code sh:maxCount 1}
+     * {@code sh:Violation}-severity fields, so every row repeats the same value); {@code subdomain}
+     * and {@code ownedBy} are collected across <strong>all</strong> rows and reduced with
+     * {@link #firstDistinctValue} - the same row-multiplication guard {@link #findAll} applies -
+     * because {@code rows} can legally hold a cross product of subdomain/ownedBy candidates for
+     * this one subject (see the class-level "Row multiplication" note). Shared by
+     * {@link #findByCode} and {@link #findCurrentByCode} so both single-bounded-context read paths
+     * build the aggregate the same way.
      */
-    private BoundedContext boundedContextOf(BindingSet row, BoundedContextCode code, DatasetHandle handle) {
-        String subjectIriString = iriOf(row, "s").getIRIString();
+    private BoundedContext boundedContextOf(List<BindingSet> rows, BoundedContextCode code, DatasetHandle handle) {
+        BindingSet firstRow = rows.get(0);
+        String subjectIriString = iriOf(firstRow, "s").getIRIString();
+        List<Subdomain> subdomains = new ArrayList<>();
+        List<String> ownedBys = new ArrayList<>();
+        for (BindingSet row : rows) {
+            Subdomain subdomain = subdomainOf(row);
+            if (subdomain != null) {
+                subdomains.add(subdomain);
+            }
+            String ownedBy = ownedByOf(row);
+            if (ownedBy != null) {
+                ownedBys.add(ownedBy);
+            }
+        }
         return new BoundedContext(
                 new BoundedContextId(ResourceId.of(subjectIriString)),
                 code,
-                literalOf(row, "name").getLexicalForm(),
-                literalOf(row, "domainVision").getLexicalForm(),
-                subdomainOf(row),
-                ownedByOf(row),
+                literalOf(firstRow, "name").getLexicalForm(),
+                literalOf(firstRow, "domainVision").getLexicalForm(),
+                firstDistinctValue(subdomains, subjectIriString, "subdomain"),
+                firstDistinctValue(ownedBys, subjectIriString, "ownedBy"),
                 readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)));
     }
 
@@ -523,6 +551,27 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     /**
+     * Picks one value of {@code candidates} deterministically (first-seen), logging a single
+     * {@code WARN} naming {@code subjectIri}/{@code fieldName} when more than one distinct value
+     * was collapsed. The shared row-multiplication guard behind both {@link #findAll} (via
+     * {@link BoundedContextAssembly#toBoundedContext}) and {@link #boundedContextOf} - {@code
+     * arkddd:partOf}/{@code arkddd:ownedBy} carry no enforceable {@code sh:maxCount}, so a
+     * store-first (ADR-005) bounded context can legally bind more than one row for either field
+     * (issue #158).
+     */
+    private static <T> T firstDistinctValue(List<T> candidates, String subjectIri, String fieldName) {
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        long distinctCount = candidates.stream().distinct().count();
+        if (distinctCount > 1) {
+            LOG.warn("BoundedContext {}: field '{}' had {} distinct values, returning the first",
+                    subjectIri, fieldName, distinctCount);
+        }
+        return candidates.get(0);
+    }
+
+    /**
      * Mutable per-subject accumulator collecting a bounded context's {@code subdomain} and
      * {@code ownedBy} candidates across rows, then choosing one of each
      * deterministically (first-seen) when the bounded context is finally materialised, logging a
@@ -559,19 +608,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
         private BoundedContext toBoundedContext(List<TermRef> usesTerms) {
             return new BoundedContext(id, code, name, domainVision,
-                    firstDistinct(subdomains, "subdomain"), firstDistinct(ownedBys, "ownedBy"), usesTerms);
-        }
-
-        private <T> T firstDistinct(List<T> candidates, String fieldName) {
-            if (candidates.isEmpty()) {
-                return null;
-            }
-            long distinctCount = candidates.stream().distinct().count();
-            if (distinctCount > 1) {
-                LOG.warn("BoundedContext {}: field '{}' had {} distinct values, returning the first",
-                        id.value().value(), fieldName, distinctCount);
-            }
-            return candidates.get(0);
+                    firstDistinctValue(subdomains, id.value().value(), "subdomain"),
+                    firstDistinctValue(ownedBys, id.value().value(), "ownedBy"), usesTerms);
         }
     }
 
