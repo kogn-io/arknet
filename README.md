@@ -1,17 +1,60 @@
 # arknet -- Architecture Knowledge Net
 
-DDD architecture models that machines can understand.
+arknet is an **MCP server**: it stores a software project's architecture
+model -- requirements, use cases, glossary terms, bounded contexts, ADRs -- as
+structured data instead of prose, and exposes it as tools that an AI coding
+agent (or any [MCP](https://modelcontextprotocol.io/) client) can query,
+validate and write to.
 
-W3C standards (RDF/OWL) instead of a proprietary DSL -- validatable (SHACL),
-queryable (SPARQL), AI-ready (MCP).
+## Why
 
-This is what a use case looks like once it is in the store -- rendered by
-`store_overview`'s self-contained HTML report, not hand-written:
+Architecture documentation written as prose -- wikis, Word docs, code
+comments -- drifts from the code and from itself: a use case can go on
+referencing a requirement that was deleted months ago, a glossary term can
+mean two different things in two documents, and nothing notices until a human
+happens to re-read both side by side. An AI agent working from that prose
+inherits the same drift -- it can only guess whether "the order" in one
+paragraph is the `Order` concept defined three pages earlier.
+
+arknet keeps the same content, but as structured
+[DDD](https://en.wikipedia.org/wiki/Domain-driven_design)-shaped data in an
+RDF store instead of unstructured text:
+
+| Without arknet | With arknet |
+|---|---|
+| Requirements live in a wiki page; nobody notices when a use case keeps referencing one that was deleted. | Deleting a requirement a use case still realizes is refused at the write gate ([SHACL](https://www.w3.org/TR/shacl/) validation); `orphan_check` surfaces dangling references that already slipped through. |
+| "What breaks if we change the `Order` concept?" means grepping the wiki and hoping you found every mention. | `impact_analysis(handle: "TERM-4")` returns the transitive closure of every requirement, use case and ADR that references it. |
+| An AI agent reads prose and guesses whether two documents mean the same thing by "the customer". | The agent calls `term_get`/`req_get`/`uc_get` over MCP and gets back the same model every other client sees -- one glossary, one term, one meaning. |
+
+No proprietary [DSL](https://en.wikipedia.org/wiki/Domain-specific_language)
+to learn either: the model is plain W3C standards --
+[RDF](https://www.w3.org/RDF/)/[OWL](https://www.w3.org/OWL/) for the data,
+SHACL to validate it on write,
+[SPARQL](https://www.w3.org/TR/sparql11-query/) to query it -- so anything
+that speaks RDF can read an arknet store, not just arknet itself.
+
+This is what a use case (`UC1`) looks like once it is in the store --
+rendered by `store_overview`'s self-contained HTML report, not hand-written:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/use-case-card-dark.png">
   <img src="docs/img/use-case-card.png" alt="Rendered use case card: numbered flow, realizes-links to FRs, raw triples on demand">
 </picture>
+
+## Contents
+
+- [Repository](#repository)
+- [Requirements](#requirements)
+- [MCP Server](#mcp-server)
+  - [Prerequisite: start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
+  - [Register your project](#register-your-project)
+  - [MCP tools](#mcp-tools)
+  - [Storage model (store-first)](#storage-model-store-first)
+- [Modules](#modules)
+- [Ontology](#ontology)
+- [Architecture](#architecture)
+- [Origin](#origin)
+- [License](#license)
 
 ## Repository
 
