@@ -34,7 +34,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class UbiquitousLanguageMcpToolsTest {
 
-    /** Fake resolver: every call routes to the same fixed workspace, ignoring the origin. */
+    /** Fake resolver: every call routes to the same fixed project, ignoring the origin. */
     private static final ProjectId PROJECT = new ProjectId("test-project");
 
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
@@ -72,9 +72,11 @@ class UbiquitousLanguageMcpToolsTest {
 
     @Test
     void addPassesThroughActorFacet() {
-        adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller", null);
+        String rendered =
+                adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller", null);
 
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), stub.lastCommand.actorFacet());
+        assertTrue(rendered.contains("[actor:HUMAN role=Besteller]"), rendered);
     }
 
     @Test
@@ -90,7 +92,7 @@ class UbiquitousLanguageMcpToolsTest {
                 () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null));
     }
 
-    /** Issue #163: {@code term_update} passes every given field through to the in-port. */
+    /** {@code term_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         String rendered = adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde", null);
@@ -100,6 +102,7 @@ class UbiquitousLanguageMcpToolsTest {
         assertEquals("Neue Definition", stub.lastUpdateDefinition);
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Kunde"), stub.lastUpdateActorFacet);
         assertTrue(rendered.contains("Erstattung"), rendered);
+        assertTrue(rendered.contains("[actor:HUMAN role=Kunde]"), rendered);
     }
 
     /**
@@ -123,6 +126,47 @@ class UbiquitousLanguageMcpToolsTest {
                 () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null, null));
     }
 
+    @Test
+    void listRendersNoTermsFallbackWhenEmpty() {
+        stub.termsForList = List.of();
+
+        String rendered = adapter.list(null, null);
+
+        assertEquals("(no terms)", rendered);
+    }
+
+    @Test
+    void listJoinsMultipleTermsWithNewlines() {
+        Term first = new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Gutschrift", "def a", null);
+        Term second = new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/2")),
+                new TermCode("TERM-2"), "Bestellung", "def b", null);
+        stub.termsForList = List.of(first, second);
+
+        String rendered = adapter.list(null, null);
+
+        assertEquals("TERM-1 Gutschrift - def a\nTERM-2 Bestellung - def b", rendered);
+    }
+
+    @Test
+    void getRendersTheTermWhenFound() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Gutschrift", "def a", null));
+
+        String rendered = adapter.get(null, "TERM-1", null);
+
+        assertEquals("TERM-1 Gutschrift - def a", rendered);
+    }
+
+    @Test
+    void getRendersNotFoundMessageWhenAbsent() {
+        stub.termForGet = Optional.empty();
+
+        String rendered = adapter.get(null, "TERM-99", null);
+
+        assertEquals("Term not found: TERM-99", rendered);
+    }
+
     /** Structural stub implementing the four driving in-ports. */
     private static final class Stub implements AddTerm, ListTerms, GetTerm, UpdateTerm {
 
@@ -131,6 +175,8 @@ class UbiquitousLanguageMcpToolsTest {
         private String lastUpdatePrefLabel;
         private String lastUpdateDefinition;
         private ActorFacet lastUpdateActorFacet;
+        private List<Term> termsForList = List.of();
+        private Optional<Term> termForGet = Optional.empty();
 
         @Override
         public Term add(ProjectId projectId, NewTerm command) {
@@ -142,12 +188,12 @@ class UbiquitousLanguageMcpToolsTest {
 
         @Override
         public List<Term> list(ProjectId projectId) {
-            throw new UnsupportedOperationException();
+            return termsForList;
         }
 
         @Override
         public Optional<Term> get(ProjectId projectId, TermCode code) {
-            throw new UnsupportedOperationException();
+            return termForGet;
         }
 
         @Override

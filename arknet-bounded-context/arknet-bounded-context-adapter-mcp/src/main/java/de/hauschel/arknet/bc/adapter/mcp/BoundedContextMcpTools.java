@@ -56,7 +56,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * ubiquitous-language) to answer that purely for display - the bounded-context core itself still
  * never depends on {@code arknet-ubiquitous-language-core}, and {@code bc_link_term}'s own write
  * path still resolves via the decoupled {@code TermLookup} out-port. {@link #format} always calls
- * {@link ResolveTerms#getById} exactly once per rendering, batched across every {@link TermRef}
+ * {@link ResolveTerms#resolve} exactly once per rendering, batched across every {@link TermRef}
  * involved; an id {@link ResolveTerms} could not resolve simply falls back to the bare IRI -
  * {@link #format} never throws and never drops a term.</p>
  *
@@ -259,7 +259,7 @@ public final class BoundedContextMcpTools {
 
     /**
      * Batch-resolves every term referenced by {@code boundedContexts} in exactly one call to
-     * {@link ResolveTerms#getById} - the union of all their {@link TermRef}s, deduplicated, not
+     * {@link ResolveTerms#resolve} - the union of all their {@link TermRef}s, deduplicated, not
      * one call per context and not one call per {@link TermRef}. Missing ids are simply absent
      * from the returned map, which {@link #renderTerm} treats as "fall back to the IRI". The merge
      * function keeps the first entry for a duplicate key rather than throwing, so a
@@ -276,7 +276,7 @@ public final class BoundedContextMcpTools {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveTerms.getById(projectId, ids).stream()
+        return resolveTerms.resolve(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 

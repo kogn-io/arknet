@@ -56,8 +56,8 @@ import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
- * Regression test for the second interleaving of issue #144, reproduced against a real
- * RDF4J-backed store (on-disk {@code NativeStore}) with real threads - unlike {@code
+ * Regression test for the second interleaving of the code-assignment race, reproduced against a
+ * real RDF4J-backed store (on-disk {@code NativeStore}) with real threads - unlike {@code
  * TermServiceConcurrencyTest}, which reproduces the first interleaving ("a concurrent caller
  * commits its whole write before this one's transaction even begins") with a repository decorator
  * and no real transactions at all.
@@ -72,7 +72,7 @@ import de.hauschel.arknet.ul.domain.Term;
  *
  * <p>That includes the sail: the store is built {@code PERSISTENT}, the one the daemon runs on.
  * Commit-time conflict detection belongs to each sail, so an {@code IN_MEMORY} run would prove the
- * invariant for a store that holds no user data in production (issue #180);
+ * invariant for a store that holds no user data in production;
  * {@code BoundedContextServiceRealStoreConcurrencyTest} spells the reasoning out.</p>
  *
  * <p><strong>Timeout.</strong> {@link CyclicBarrier#await()}/{@link CountDownLatch#await()} block
@@ -113,7 +113,7 @@ class TermServiceRealStoreConcurrencyTest {
         // given - both callers' guards are released together only once both have checked "is this
         // code already taken?" and found it free; the loser is then held back until the winner's
         // transaction has actually committed, so the loser's own commit is the one that conflicts.
-        // Diagnostics for issue #171: two unreproducible sightings of this assertion failing under
+        // Diagnostics for two unreproducible sightings of this assertion failing under
         // full parallel-build load left nothing to go on beyond "both got the same code" - this test
         // now also records a nanoTime-stamped timeline of both racers plus each result's arkprov:head
         // (ADR-014), so that the next sighting is evaluable instead of merely confirming the symptom.
@@ -199,7 +199,7 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Renders everything issue #171 asked the next random sighting to be evaluable with: both
+     * Renders everything needed to make the next random sighting of this race evaluable: both
      * racers' results (business code plus resource IRI), each result's current
      * {@code arkprov:head} read fresh from the store after the race (ADR-014's concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
@@ -212,13 +212,13 @@ class TermServiceRealStoreConcurrencyTest {
      * the lifecycle already shut down, a lock held, a timeout interrupt) would replace the
      * assertion's actual message and leave the next sighting with nothing evaluable again - worse
      * than before this class was instrumented, because the failure would then look like a broken
-     * diagnostic instead of carrying #171's signature. Everything already appended to {@code report}
+     * diagnostic instead of carrying its own signature. Everything already appended to {@code report}
      * survives a failure below it; {@link #headOf} additionally never throws on its own.</p>
      */
     private String diagnosticReport(List<String> timeline, Term winner, Term loser, Throwable failure) {
         StringBuilder report = new StringBuilder();
         try {
-            report.append("issue #171 diagnostics").append(System.lineSeparator());
+            report.append("concurrency-race diagnostics").append(System.lineSeparator());
             report.append("  system: ").append(systemDiagnostics()).append(System.lineSeparator());
             report.append("  racer-A (winner) result: ").append(describe(winner)).append(System.lineSeparator());
             report.append("  racer-A (winner) arkprov:head: ").append(headOf(winner)).append(System.lineSeparator());
@@ -240,9 +240,8 @@ class TermServiceRealStoreConcurrencyTest {
 
     /**
      * Available processors, {@code systemLoadAverage} and this thread's interrupt status at the
-     * moment the report is built - both real #171 sightings were load-dependent, and without this
-     * line the load has to be reconstructed after the fact from unrelated sources (issue #171
-     * follow-up).
+     * moment the report is built - both real sightings of this race were load-dependent, and
+     * without this line the load has to be reconstructed after the fact from unrelated sources.
      */
     private static String systemDiagnostics() {
         OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
@@ -267,7 +266,7 @@ class TermServiceRealStoreConcurrencyTest {
      * transaction, but there is no accessor for that private read path, so this queries it directly
      * via {@link io.kogn.rdf.dataset.SparqlQuery}.
      *
-     * <p>Never throws (issue #171 follow-up): a {@code @Timeout} interrupt landing mid-race can
+     * <p>Never throws: a {@code @Timeout} interrupt landing mid-race can
      * leave the sail in a bad state for a follow-up read, so both the dataset acquisition and the
      * query run inside one {@code try}/{@code catch(Throwable)} - a failure here becomes part of
      * the diagnostic text instead of replacing it. The interrupt status is recorded rather than
@@ -419,7 +418,7 @@ class TermServiceRealStoreConcurrencyTest {
 
     /**
      * Runs {@code afterSecondGuard} exactly once its delegate's second {@code contains()} call
-     * returns - {@link KognioRdfTermRepository#write} issues exactly two on the create path: the
+     * returns - {@link KognioRdfTermRepository#create} issues exactly two on the create path: the
      * identity guard, then the code-uniqueness guard.
      */
     private static final class GuardSyncTx implements DatasetTx {

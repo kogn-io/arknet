@@ -24,7 +24,7 @@ import java.util.Objects;
  * @param prefLabel  the preferred label, i.e. the term itself; maps to
  *                   {@code skos:prefLabel}
  * @param definition the meaning of the term; maps to {@code skos:definition}
- * @param actorFacet optional Actor facette (Weg A aus #45): if set, the same
+ * @param actorFacet optional Actor facette: if set, the same
  *                   skos:Concept is additionally an {@code arkproc:Actor}.
  *                   Optional (may be {@code null})
  */

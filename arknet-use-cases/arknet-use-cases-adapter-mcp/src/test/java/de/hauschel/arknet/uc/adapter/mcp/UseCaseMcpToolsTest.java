@@ -403,7 +403,7 @@ class UseCaseMcpToolsTest {
         }
 
         @Override
-        public List<ResolvedTerm> getById(ProjectId projectId, ResourceId... ids) {
+        public List<ResolvedTerm> resolve(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();
         }

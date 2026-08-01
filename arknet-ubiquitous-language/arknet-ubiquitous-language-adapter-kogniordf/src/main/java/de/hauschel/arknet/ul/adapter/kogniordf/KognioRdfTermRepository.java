@@ -83,8 +83,8 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * (ADR-013), not here; {@link #create} only builds the candidate graph and rejects an existing
  * subject with {@link ResourceAlreadyExistsException}.</p>
  *
- * <p><strong>Update is a targeted correction by code, not a replace by identity (issue #163
- * follow-up).</strong> {@link #update} used to take a full {@link Term} and wholesale-replace the
+ * <p><strong>Update is a targeted correction by code, not a replace by identity.</strong>
+ * {@link #update} used to take a full {@link Term} and wholesale-replace the
  * subject's triples the same way {@link #create} inserts them - which meant every field the
  * caller did not intend to touch had to be read back first and merged into that full replacement,
  * destroying any triple the read could not faithfully round-trip (most severely a multi-valued
@@ -101,25 +101,25 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * collision is a programming error (identities are minted once and never reused), while a
  * business-code collision (two terms both claiming {@code TERM-1}) is an expected, rejectable
  * outcome a human can cause - and one a sibling bounded context relies on being unique, since
- * {@code arkreq:usesTerm} resolves a term by its {@code dcterms:identifier} (#36).
- * {@link #update} needs no such check (issue #114's original concern, now moot): it never rewrites
+ * {@code arkreq:usesTerm} resolves a term by its {@code dcterms:identifier}.
+ * {@link #update} needs no such check (now moot): it never rewrites
  * {@code dcterms:identifier} at all, so it cannot itself introduce a code collision - a stronger,
  * structural guarantee rather than a checked one.</p>
  *
- * <p><strong>Compare-and-set through the funnel, with retry (issue #167, ADR-014 decision
+ * <p><strong>Compare-and-set through the funnel, with retry (ADR-014 decision
  * 4).</strong> An earlier version ran its own transaction and translated a genuine {@code
- * SERIALIZABLE} write conflict (issue #144's "second interleaving") on the caller's own patched
+ * SERIALIZABLE} write conflict (the "second interleaving" scenario) on the caller's own patched
  * predicate into {@link TermConcurrentlyModifiedException}. {@link #update} now retries {@link
  * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}
  * (ADR-013): each attempt reads the term's current state and {@code arkprov:head} together, then
  * asks the funnel to apply the patch only if that head still matches - a head conflict, whether
  * from a losing synchronous comparison or a losing commit under {@code SERIALIZABLE} isolation,
  * surfaces identically and is retried transparently, exactly the CAS guard {@code
- * RequirementRepository#compareAndUpdate} degenerated to for the same reason (issue #108).</p>
+ * RequirementRepository#compareAndUpdate} degenerated to for the same reason.</p>
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate before the write transaction
  * opens, {@link WriteConstraintViolationException} on a violation, nothing persisted - live in the
- * shared {@link WriteFunnel} (ADR-013), for {@link #create} and, since issue #167, {@link #update}
+ * shared {@link WriteFunnel} (ADR-013), for {@link #create} and {@link #update}
  * alike: {@link #attemptUpdate} builds the same validation-only {@code assertedContext} an earlier
  * version enforced itself (mirroring how the sibling requirements adapter asserts a referenced
  * term's type) - a predicate {@link #update} is not touching is asserted there for validation
@@ -127,7 +127,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@code prefLabel} shape still sees the resulting state truthfully without this class ever
  * persisting that assertion again.</p>
  *
- * <p><strong>Display language (issue #80).</strong> A concept may carry {@code skos:prefLabel}
+ * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel}
  * in several languages ({@code "Kunde"@de}, {@code "Customer"@en}) - SKOS-legal and store-first
  * reachable (ADR-005). {@link #findByCode}/{@link #findAll} therefore join {@code prefLabel} as a
  * <em>multi-valued</em> (but still mandatory) pattern, group the resulting rows per subject, and
@@ -137,7 +137,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * (the {@link ResolveTerms} batch) is deliberately untouched: it joins only {@code identifier},
  * never {@code prefLabel}.</p>
  *
- * <p><strong>Blank-node subject guard (issue #104).</strong> {@code ulshapes:TermShape} carries no
+ * <p><strong>Blank-node subject guard.</strong> {@code ulshapes:TermShape} carries no
  * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first (ADR-005) concept whose
  * subject is a blank node (e.g. {@code [] a skos:Concept ; skos:prefLabel "X" ; ...}) is
  * SHACL-legal, even though {@link #create} always mints an opaque IRI subject. {@code ?s} is
@@ -150,11 +150,11 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@link #findByIds} needs no such filter: its subjects come from a {@code VALUES} clause bound to
  * caller-supplied {@link ResourceId}s, which can never denote a blank node.</p>
  *
- * <p><strong>Row multiplication on {@code skos:definition} (issue #81).</strong> Like
+ * <p><strong>Row multiplication on {@code skos:definition}.</strong> Like
  * {@code prefLabel}, {@code skos:definition} carries no {@code sh:maxCount} in {@code ulshapes} -
  * a store-first (ADR-005) concept with two definition literals (e.g. one per language) legally
  * multiplies a subject into two SPARQL rows. Unlike {@code prefLabel}, there is no
- * {@link DisplayLocale} guarantee for {@code definition} (deliberately out of #80's scope), so
+ * {@link DisplayLocale} guarantee for {@code definition} (a deliberately narrower scope), so
  * {@link #findByCode}/{@link #findAll} instead take the first-seen value deterministically (stable
  * because the grouping map preserves row insertion order) and log a single {@code WARN} per
  * assembled {@link Term} when more than one distinct value was seen - visible instead of silently
@@ -180,7 +180,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String ACTOR_ROLE_PROPERTY = ARKPROC_NAMESPACE + "actorRole";
 
     /**
-     * Bound on {@link #update}'s CAS retry loop (issue #167, same bound and rationale as {@code
+     * Bound on {@link #update}'s CAS retry loop (same bound and rationale as {@code
      * RequirementService#MAX_RETRY_ATTEMPTS}): a head conflict is resolved by a single retry in
      * the overwhelming majority of cases, since each retry re-reads the now-current state and
      * head before trying again; this bound only exists so a pathological, sustained storm of
@@ -199,7 +199,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from (must not be
      *                      {@code null})
      * @param displayLocale the display-language preference selecting which {@code skos:prefLabel}
-     *                      the read paths surface for a multilingual concept (issue #80; must not
+     *                      the read paths surface for a multilingual concept (must not
      *                      be {@code null})
      * @param funnel        the shared write funnel (ADR-013) every write runs through - both
      *                      {@link #create} and {@link #update} (must not be {@code null})
@@ -215,7 +215,7 @@ public class KognioRdfTermRepository implements TermRepository {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(term, "term");
 
-        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so term.id()'s
+        // ResourceId#of validates IRIREF-safety at construction, so term.id()'s
         // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
         String subjectIriString = term.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
@@ -231,7 +231,7 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
         // Optional actor facet: the same skos:Concept is additionally typed as an
-        // arkproc:Actor (#45). Added before the gate so the facet is validated too. The facet
+        // arkproc:Actor. Added before the gate so the facet is validated too. The facet
         // hangs off the subject, so it moves with the now-opaque identity for free.
         ActorFacet actorFacet = term.actorFacet();
         if (actorFacet != null) {
@@ -252,14 +252,14 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Corrects specific fields of an existing term by business code (issue #163 follow-up),
+     * Corrects specific fields of an existing term by business code,
      * touching only the predicate(s) whose new value the caller actually supplied.
      *
      * <p><strong>No read-then-merge.</strong> An earlier version resolved the term via
      * {@link #findByCode} (a plain read, outside any transaction), folded every omitted argument's
      * value from that read into a freshly-built {@link Term}, and handed the whole thing to a
      * replace-by-identity write - which silently destroyed every triple the read had to collapse
-     * away to fit {@link Term}'s single-{@code String} fields (issues #80/#81: a store-first term
+     * away to fit {@link Term}'s single-{@code String} fields (a store-first term
      * can legally carry several language-tagged {@code skos:prefLabel}s or several
      * {@code skos:definition} literals). This method instead reads exactly what it needs to
      * preserve, builds the candidate/context from that, and only ever deletes-and-reinserts the
@@ -269,11 +269,11 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p><strong>No code collision to guard against.</strong> {@code dcterms:identifier} is never
      * among the fields this method can change - the code is how the subject is found, not
-     * something it rewrites - so unlike an earlier version (issue #114's original concern) there
+     * something it rewrites - so unlike an earlier version there
      * is no {@code askCodeExists} check here at all: it is structurally impossible for this method
      * to introduce a duplicate code, not merely checked and rejected.</p>
      *
-     * <p><strong>Read-modify-write through the funnel, with retry (issue #167, ADR-014 decision
+     * <p><strong>Read-modify-write through the funnel, with retry (ADR-014 decision
      * 4).</strong> The read of whatever is being preserved now happens <em>before</em> the write
      * transaction, exactly like {@link #create} - the SHACL gate therefore runs before the
      * transaction opens again, not inside it. What used to be a single in-adapter-transaction
@@ -283,13 +283,13 @@ public class KognioRdfTermRepository implements TermRepository {
      * time now both succeed only if neither loses the race on the shared head - unlike the
      * predicate-scoped conflict detection this replaces, a head conflict on either field now
      * triggers a retry for both, resolved transparently by the loop in {@link #update} the same
-     * way {@code RequirementService}'s read-modify-write retry already worked (issue #108):
+     * way {@code RequirementService}'s read-modify-write retry already worked:
      * {@link #attemptUpdate} re-reads the now-current state and head on every attempt, so a
      * losing caller's own change is never silently discarded. Only sustained, pathological
      * contention on the very same term exhausts {@link #MAX_RETRY_ATTEMPTS} and surfaces {@link
      * TermConcurrentlyModifiedException} to the caller.</p>
      *
-     * <p><strong>No-op update (issue #167 review finding).</strong> Every field the
+     * <p><strong>No-op update.</strong> Every field the
      * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
      * method with {@code prefLabel}, {@code definition} and {@code actorFacet} all {@code null}.
      * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
@@ -327,7 +327,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@link WriteFunnel#compareAndUpdate} as the write body - the funnel checks the head again
      * inside its own transaction and runs the body only if it still matches.
      *
-     * <p><strong>Why one combined read, not two (issue #167's original bug).</strong> An earlier
+     * <p><strong>Why one combined read, not two.</strong> An earlier
      * version read the assembly via {@link #readAssemblyByCode} and the head via a separate,
      * second {@code SparqlQuery#select} call. That port's contract only guarantees that each
      * individual call is a self-contained read against the store's current committed state -
@@ -357,7 +357,7 @@ public class KognioRdfTermRepository implements TermRepository {
         String currentHead = currentTerm.head();
 
         if (prefLabel == null && definition == null && actorFacet == null) {
-            // No field to patch - a true no-op (issue #167 review finding): the funnel is never
+            // No field to patch - a true no-op: the funnel is never
             // consulted, so no revision is recorded and the head does not move (see class-level
             // "No-op update" note).
             return resultingTerm(current, null, null, null);
@@ -421,7 +421,7 @@ public class KognioRdfTermRepository implements TermRepository {
                         actorGraph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
                         // A null role leaves the existing arkproc:actorRole triple (if any) alone,
                         // instead of deleting it - correcting only the kind must not silently wipe
-                        // an already-set role the caller never mentioned (issue #163 follow-up 2).
+                        // an already-set role the caller never mentioned.
                         if (actorFacet.role() != null) {
                             tx.update(deleteAllTriplesOf(subject, ACTOR_ROLE_PROPERTY));
                             actorGraph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
@@ -476,7 +476,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * Merges the caller's {@code newActorFacet} onto {@code current}: a {@code null} facet leaves
      * {@code current} entirely unchanged; a non-{@code null} facet always replaces the kind, but a
      * {@code null} role within it keeps {@code current}'s own role rather than reporting it as
-     * cleared - matching what {@link #update} actually persists (issue #163 follow-up 2).
+     * cleared - matching what {@link #update} actually persists.
      */
     private static ActorFacet resultingActorFacet(ActorFacet current, ActorFacet newActorFacet) {
         if (newActorFacet == null) {
@@ -505,7 +505,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * identifier, prefLabel, definition) plus the blank-node subject guard and the three optional
      * actor-facet joins that scope a single-term read to one {@code code}. Extracted because both
      * callers build a {@link TermAssembly} from the same row shape - drift between two
-     * near-identical read paths in this class was a real bug twice before (issues #80/#81), so
+     * near-identical read paths in this class was a real bug twice before, so
      * this text now lives in one place. The caller supplies the surrounding
      * {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in {@link #readCurrentByCode}'s
      * case, the additional provenance-graph join - only the WHERE body itself is common.
@@ -544,7 +544,7 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * One term's current state ({@link TermAssembly}) together with its {@code arkprov:head}
-     * concurrency token, read from a single query (issue #167) - see {@link #readCurrentByCode}
+     * concurrency token, read from a single query - see {@link #readCurrentByCode}
      * for why this must be one query, not two.
      */
     private record CurrentTerm(TermAssembly assembly, String head) {
@@ -552,11 +552,11 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * Reads one term's full current state together with its {@code arkprov:head} concurrency
-     * token in a single query (issue #167, mirroring
+     * token in a single query (mirroring
      * {@code KognioRdfRequirementRepository#findCurrentByCode}) - used by {@link #attemptUpdate},
      * whose compare-and-set write must know both the state to patch and the token to check.
      * Shares {@link #termByCodeWhereClause} with {@link #readAssemblyByCode} so the two
-     * single-term read paths cannot drift apart field-by-field (issues #80/#81 already taught
+     * single-term read paths cannot drift apart field-by-field (already taught
      * this lesson once).
      *
      * <p><strong>Why the state and the head must come from the same query.</strong>
@@ -574,8 +574,8 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p>The head is single-valued and therefore identical on every row this query binds for one
      * subject (the mandatory {@code prefLabel}/{@code definition} joins in
-     * {@link #termByCodeWhereClause} can still multiply a subject into several rows, issues
-     * #80/#81) - it is kept <em>per subject</em> and paired with the assembly this method
+     * {@link #termByCodeWhereClause} can still multiply a subject into several rows)
+     * - it is kept <em>per subject</em> and paired with the assembly this method
      * actually returns, exactly as the row grouping into {@link TermAssembly} already does for
      * the other per-subject fields. Keying it by subject rather than taking the first head seen
      * matters because {@code dcterms:identifier} carries no {@code sh:maxCount}: a store-first
@@ -645,7 +645,7 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * Groups the (potentially several) rows of one concept - a mandatory but now
      * <em>multi-valued</em> {@code skos:prefLabel}/{@code skos:definition} join multiplies a
-     * concept into one row per candidate value (issues #80, #81) - into a single
+     * concept into one row per candidate value - into a single
      * {@link TermAssembly}, keyed by subject IRI. The remaining scalar fields (identity, code,
      * actor facet) are read once from the first row of a subject; every row contributes its
      * {@code prefLabel}/{@code definition} literal as a candidate via
@@ -654,7 +654,7 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p>{@code identifier}/{@code actorRole} stay single-valued reads - {@code identifier} is
      * already narrowed by the {@code knownCode}/query filter to the code being looked up, and
-     * {@code actorRole} is out of scope for #81 (no reported store-first multiplicity vector).
+     * {@code actorRole} is out of scope here (no reported store-first multiplicity vector).
      * Keeping {@code prefLabel} a <em>required</em> (non-optional) join means a store-first concept
      * carrying no {@code prefLabel} at all still binds nothing and is omitted exactly as before -
      * it never reaches the {@link Term} constructor, whose non-blank {@code prefLabel} invariant
@@ -675,8 +675,8 @@ public class KognioRdfTermRepository implements TermRepository {
      * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} and
      * {@code skos:definition} candidates across rows, then choosing one of each when the concept
      * is finally materialised into a {@link Term}: {@code prefLabel} via the {@link DisplayLocale}
-     * fallback chain (issue #80), {@code definition} deterministically as the first-seen value
-     * (issue #81 - no display-language guarantee for this field), logging a {@code WARN} if more
+     * fallback chain, {@code definition} deterministically as the first-seen value
+     * (no display-language guarantee for this field), logging a {@code WARN} if more
      * than one distinct definition was collected.
      */
     private static final class TermAssembly {
@@ -712,7 +712,7 @@ public class KognioRdfTermRepository implements TermRepository {
         /**
          * Returns the first-seen {@code skos:definition} candidate (stable across repeated calls,
          * since {@link LinkedHashMap}/row order preserves insertion order), logging a single
-         * {@code WARN} when the subject carried more than one distinct value - issue #81's
+         * {@code WARN} when the subject carried more than one distinct value - a
          * "stille Luege" this makes visible instead of silently swallowing.
          */
         private String firstDistinctDefinition() {
@@ -727,18 +727,18 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * Batch variant of {@link #findByCode}, keyed by opaque identity instead of business code -
-     * backs {@link ResolveTerms} (issue #77 nachtrag). One {@code VALUES}-bound query for the
+     * backs {@link ResolveTerms}. One {@code VALUES}-bound query for the
      * whole batch, not one query per id: the caller (a sibling bounded context's driving adapter,
      * rendering several term references at once) must not pay an N+1 store round-trip.
      *
      * <p>Returns the slim {@link ResolveTerms.ResolvedTerm} projection, not the full {@link Term}
-     * aggregate (issue #84): the query below therefore joins only {@code identifier}, not
+     * aggregate: the query below therefore joins only {@code identifier}, not
      * {@code prefLabel}/{@code definition} - fields {@link ResolveTerms} never reads. A store-first
      * term that carries an identity and a code but happens to miss a {@code prefLabel} (which
      * {@link #findByCode}/{@link #findAll} still require) is thus resolvable here.</p>
      *
-     * <p><strong>Exactly one {@link ResolveTerms.ResolvedTerm} per resolved subject (issue #77
-     * nachtrag 2).</strong> {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but
+     * <p><strong>Exactly one {@link ResolveTerms.ResolvedTerm} per resolved subject.</strong>
+     * {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but
      * deliberately no {@code sh:maxCount}: SKOS allows - and this glossary intends to allow - one
      * {@code skos:prefLabel} per language on the same concept, store-first (ADR-005) legally so.
      * Its own SHACL identifier constraint carries no {@code sh:maxCount} either, so the single
@@ -758,8 +758,8 @@ public class KognioRdfTermRepository implements TermRepository {
             return List.of();
         }
 
-        // ResourceId#of (issue #83) validates IRIREF-safety at construction, so every id here is
-        // already guaranteed safe to embed - restores ResolveTerms#getById's "never rejects"
+        // ResourceId#of validates IRIREF-safety at construction, so every id here is
+        // already guaranteed safe to embed - restores ResolveTerms#resolve's "never rejects"
         // contract, which this used to violate by throwing on an impossible identity.
         String values = ids.stream()
                 .map(id -> SparqlTerms.iriRef(id.value()))

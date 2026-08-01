@@ -36,10 +36,10 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
  * minted, or an id that was already used). {@link #create} makes that distinction explicit for a
  * brand-new term.</p>
  *
- * <p><strong>Update is a targeted correction, not a replace (issue #163 follow-up).</strong>
+ * <p><strong>Update is a targeted correction, not a replace.</strong>
  * {@link #update} used to take a full {@link Term} and replace the subject's triples wholesale -
  * which silently destroyed every triple the caller never meant to touch, most severely a
- * multi-valued {@code skos:prefLabel}/{@code skos:definition} (issues #80/#81: a store-first term
+ * multi-valued {@code skos:prefLabel}/{@code skos:definition} (a store-first term
  * can legally carry several language-tagged {@code prefLabel}s or several {@code definition}
  * literals, which {@link Term}'s single-{@code String} fields can only ever hold one of at a
  * time). {@link #update} instead takes the term's unchanged business {@link TermCode} plus one
@@ -48,7 +48,7 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
  * supplied are ever deleted-and-reinserted at the triple level, so an untouched field's other
  * language variants, duplicate values, or the whole field itself if never touched at all survive
  * unconditionally. The code itself is never among the correctable fields and is therefore never
- * rewritten - a code collision (issue #114's original concern) is now structurally unreachable via
+ * rewritten - a code collision is now structurally unreachable via
  * this method, not merely checked.</p>
  */
 public interface TermRepository {
@@ -68,7 +68,7 @@ public interface TermRepository {
     /**
      * Corrects specific fields of the term identified by {@code code}, leaving every field the
      * caller did not ask to change - including any other language-tagged {@code skos:prefLabel}
-     * variant or duplicate {@code skos:definition} a store-first (issues #80/#81) term may legally
+     * variant or duplicate {@code skos:definition} a store-first term may legally
      * carry - completely untouched at the triple level.
      *
      * <p>Reads the term's current state together with its revision head before the write
@@ -122,12 +122,12 @@ public interface TermRepository {
 
     /**
      * Finds every term in a project whose identity is among {@code ids}, in one store
-     * round-trip - backs {@link ResolveTerms} (issue #77). This is a batch lookup, not a per-id
+     * round-trip - backs {@link ResolveTerms}. This is a batch lookup, not a per-id
      * existence check: an id absent from the project is simply absent from the result, never an
      * error.
      *
      * <p>Returns the slim {@link ResolveTerms.ResolvedTerm} projection, not the full {@link Term}
-     * aggregate (issue #84): the only consumer of this method is {@link ResolveTerms}, which
+     * aggregate: the only consumer of this method is {@link ResolveTerms}, which
      * exists purely to answer "what code names this identity" for display - joining fields such
      * as {@code prefLabel}/{@code definition} the caller never reads would needlessly exclude a
      * store-first term that carries an identity and a code but happens to miss one of them.</p>

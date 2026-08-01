@@ -6,7 +6,7 @@ package de.hauschel.arknet.ul.domain;
 import java.util.Objects;
 
 /**
- * Optionale Actor-Facette eines Glossar-Concepts (Weg A aus #45): derselbe
+ * Optionale Actor-Facette eines Glossar-Concepts: derselbe
  * skos:Concept ist zusaetzlich ein arkproc:Actor. role -&gt; arkproc:actorRole
  * (fachliche Rolle im BC); kein actorName, da der skos:prefLabel bereits der
  * Name ist (keine Drift).

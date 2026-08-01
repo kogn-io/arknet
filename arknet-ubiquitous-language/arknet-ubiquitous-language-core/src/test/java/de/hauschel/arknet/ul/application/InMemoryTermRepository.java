@@ -24,7 +24,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
 /**
  * In-memory test double for {@link TermRepository}.
  *
- * <p>A hand-rolled fake (not a mock): it actually stores terms, keyed by workspace
+ * <p>A hand-rolled fake (not a mock): it actually stores terms, keyed by project
  * then opaque identity, so the service's policy can be exercised end-to-end. Insertion
  * order is preserved to make {@link #findAll(ProjectId)} assertions deterministic. {@link
  * #create} honours the same contract as the real adapter (rejects an existing identity or a

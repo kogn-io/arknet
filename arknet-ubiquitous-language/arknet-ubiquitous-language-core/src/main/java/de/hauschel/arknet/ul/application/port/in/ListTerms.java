@@ -16,7 +16,7 @@ import de.hauschel.arknet.ul.domain.Term;
 public interface ListTerms {
 
     /**
-     * Returns all terms currently under management in the given workspace glossary.
+     * Returns all terms currently under management in the given project glossary.
      *
      * @param projectId the project (architecture model) to list terms from
      * @return all terms, never {@code null}

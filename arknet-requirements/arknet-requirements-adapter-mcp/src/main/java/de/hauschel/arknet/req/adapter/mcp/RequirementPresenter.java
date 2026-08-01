@@ -32,7 +32,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * display - the requirements core itself still never depends on
  * {@code arknet-ubiquitous-language-core}, and {@code req_link_term}'s own write path still
  * resolves via the decoupled {@code TermLookup} out-port. {@link #format(ProjectId, Requirement)}
- * always calls {@link ResolveTerms#getById} exactly once per rendering, batched across every
+ * always calls {@link ResolveTerms#resolve} exactly once per rendering, batched across every
  * {@link TermRef} involved (never once per {@link TermRef}, and for {@code req_list} never once
  * per requirement); an id {@link ResolveTerms} could not resolve simply falls back to the bare
  * IRI - {@code format} never throws and never drops a term.</p>
@@ -84,7 +84,7 @@ final class RequirementPresenter {
 
     /**
      * Batch-resolves every term referenced by {@code requirements} in exactly one call to
-     * {@link ResolveTerms#getById} - the union of all their {@link TermRef}s, deduplicated, not
+     * {@link ResolveTerms#resolve} - the union of all their {@link TermRef}s, deduplicated, not
      * one call per requirement and not one call per {@link TermRef}. Missing ids are simply
      * absent from the returned map, which {@link #renderTerm} treats as "fall back to the IRI".
      *
@@ -108,7 +108,7 @@ final class RequirementPresenter {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveTerms.getById(projectId, ids).stream()
+        return resolveTerms.resolve(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 }

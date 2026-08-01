@@ -35,7 +35,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * never depends on {@code arknet-ubiquitous-language-core}/{@code arknet-requirements-core}, and
  * {@code uc_add}'s own write path still resolves via the decoupled {@code ActorLookup}/
  * {@code RequirementLookup} out-ports (ADR-008). {@link #formatFull} calls
- * {@link ResolveTerms#getById}/{@link ResolveRequirements#resolveExisting} exactly once each per
+ * {@link ResolveTerms#resolve}/{@link ResolveRequirements#resolveExisting} exactly once each per
  * rendering, batched across every {@link ActorRef}/{@link RequirementRef} involved; an id either
  * port could not resolve simply falls back to the bare IRI - rendering never throws and never
  * drops a reference.</p>
@@ -115,7 +115,7 @@ final class UseCasePresenter {
 
     /**
      * Batch-resolves every actor referenced by {@code uc} (its primary actor plus its supporting
-     * actors) in exactly one call to {@link ResolveTerms#getById}.
+     * actors) in exactly one call to {@link ResolveTerms#resolve}.
      *
      * <p><strong>Structurally cannot throw on a duplicate key (mirrors
      * {@code RequirementPresenter#resolveTermsFor}).</strong> {@link ResolveTerms} promises at
@@ -136,7 +136,7 @@ final class UseCasePresenter {
         if (ids.length == 0) {
             return Map.of();
         }
-        return resolveTerms.getById(projectId, ids).stream()
+        return resolveTerms.resolve(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 

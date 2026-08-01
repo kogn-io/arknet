@@ -148,7 +148,7 @@ class KognioRdfTermRepositoryTest {
     /**
      * Identity collision and code collision are distinct failure modes: two different, freshly
      * minted identities both claiming {@code TERM-1} must be rejected by code, not by identity -
-     * the sibling requirements BC relies on {@code dcterms:identifier} being unique (#36).
+     * the sibling requirements BC relies on {@code dcterms:identifier} being unique.
      */
     @Test
     void createRejectsADuplicateCodeUnderADifferentIdentityAndPersistsNothingElse() {
@@ -199,7 +199,7 @@ class KognioRdfTermRepositoryTest {
 
     /**
      * Bug 1 (data loss, found reviewing the {@code term_update} PR): a store-first term can
-     * legally carry {@code skos:prefLabel} in several languages (issues #80/#81). Before the fix,
+     * legally carry {@code skos:prefLabel} in several languages. Before the fix,
      * {@code update()} took a full {@link Term} - already collapsed to a single label by whichever
      * read produced it - and wholesale-replaced the subject's triples with it, silently deleting
      * every other language variant even when the caller only touched {@code definition}. This
@@ -276,14 +276,14 @@ class KognioRdfTermRepositoryTest {
 
     /**
      * Bug 2 (concurrency, found reviewing the same PR): a genuine store-level write conflict
-     * (issue #144, kogn-io/rdf-core#18) during {@code update()} must surface as the dedicated
+     * (kogn-io/rdf-core#18) during {@code update()} must surface as the dedicated
      * {@link TermConcurrentlyModifiedException} - never as {@link DuplicateTermCodeException},
      * which {@code update()} can no longer even provoke since it never rewrites
      * {@code dcterms:identifier}, and never as the raw RDF4J exception. No real overlapping
      * threads are needed - a decorator forces the store's commit-time conflict signal on every
      * write instead.
      *
-     * <p>Since issue #167 this is the <em>exhaustion</em> path, not a single catch block: the
+     * <p>This is the <em>exhaustion</em> path, not a single catch block: the
      * decorator fails every attempt, so {@link KognioRdfTermRepository#update}'s bounded retry
      * loop runs all of its attempts (each one re-reading and re-validating) before the last
      * conflict reaches the caller. The transient, self-healing case - one losing attempt, then a
@@ -390,8 +390,8 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * Simulates the store's commit-time write-conflict signal (a {@link ConcurrencyConflictException},
-     * issue #144, #173) on the write path's {@code add} call - the point at which the funnel has
+     * Simulates the store's commit-time write-conflict signal (a {@link ConcurrencyConflictException})
+     * on the write path's {@code add} call - the point at which the funnel has
      * already resolved the subject and compared the head, and is about to persist the patched
      * predicate(s). Unconditional by design: every one of {@link KognioRdfTermRepository#update}'s
      * retry attempts loses.
@@ -571,7 +571,7 @@ class KognioRdfTermRepositoryTest {
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
     }
 
-    // ---- display-language fallback for multilingual prefLabel (issue #80) ----------------
+    // ---- display-language fallback for multilingual prefLabel ----------------------------
 
     /**
      * A concept with {@code @de} and {@code @en} prefLabels, read with a German display locale,
@@ -591,8 +591,8 @@ class KognioRdfTermRepositoryTest {
 
     /**
      * A concept lacking the requested language ({@code @de}) but present in the system default
-     * ({@code @en}) surfaces the English label - step 2. The term must NOT vanish (the #65 error
-     * class: a hard language filter would bind nothing).
+     * ({@code @en}) surfaces the English label - step 2. The term must NOT vanish (a hard
+     * language filter would bind nothing).
      */
     @Test
     void findByCodeFallsBackToTheSystemDefaultLanguage() {
@@ -688,7 +688,7 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- definition: row multiplication when skos:definition is repeated (issue #81) ----
+    // ---- definition: row multiplication when skos:definition is repeated -----------------
 
     /**
      * Store-first regression test: {@code ulshapes:TermShape} places no {@code sh:maxCount} on
@@ -761,7 +761,7 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- findByIds: batch resolution for ResolveTerms (issue #77 nachtrag) --------------
+    // ---- findByIds: batch resolution for ResolveTerms -------------------------------------
 
     @Test
     void findByIdsResolvesKnownIdentitiesInOneQuery() {
@@ -805,14 +805,14 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * Store-first regression test (issue #77, second nachtrag; narrowed by issue #84):
+     * Store-first regression test:
      * {@code ulshapes:TermShape} places no constraint at all on {@code dcterms:identifier} (no
      * {@code sh:minCount}, no {@code sh:maxCount}), so a subject with two identifier triples is
      * shape-legal even though {@code term_add} never writes more than one. {@code findByIds}'
      * mandatory {@code identifier} join must not multiply such a subject into two
      * {@link ResolveTerms.ResolvedTerm}s carrying the same id - a caller keying its own results
      * by identity (as {@code RequirementMcpTools#resolveTermsFor} does) would otherwise throw on
-     * the duplicate key. (Before #84 this vector ran through {@code skos:prefLabel}, which
+     * the duplicate key. (This vector used to run through {@code skos:prefLabel}, which
      * {@code findByIds} no longer joins at all.)
      */
     @Test
@@ -827,7 +827,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * Issue #84: {@code findByIds} joins only {@code identifier}, not {@code prefLabel}/
+     * {@code findByIds} joins only {@code identifier}, not {@code prefLabel}/
      * {@code definition} - fields the {@link ResolveTerms.ResolvedTerm} projection never carries.
      * A store-first term that has an identity and a code but happens to miss a
      * {@code skos:prefLabel} (shape-invalid for {@link #findByCode}/{@link #findAll}, which still
@@ -876,10 +876,10 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- blank-node subject guard (issue #104) -------------------------------------------
+    // ---- blank-node subject guard ----------------------------------------------------------
 
     /**
-     * Store-first regression test (issue #104): {@code ulshapes:TermShape} carries no
+     * Store-first regression test: {@code ulshapes:TermShape} carries no
      * {@code sh:nodeKind sh:IRI} constraint on the subject, so a blank-node concept is
      * SHACL-legal even though {@code term_add} always mints an IRI subject. Before the fix,
      * the unguarded {@code (IRI) row.getValue("s")} cast in {@code iriOf} threw a
@@ -954,7 +954,7 @@ class KognioRdfTermRepositoryTest {
 
     /**
      * The other half of the same ADR-014 guarantee, for the write path that only joined the
-     * funnel with issue #167 (ADR-014 decision 4): the patch-{@code update} is no longer a
+     * funnel with ADR-014 decision 4: the patch-{@code update} is no longer a
      * special path outside the revision trail - it records exactly one further revision and
      * moves the head, so every user-reachable {@code term_update} is now provenanced and its
      * head usable as the next writer's concurrency token.
@@ -977,7 +977,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * The complement of the previous test (issue #167 review finding): every field {@code update}
+     * The complement of the previous test: every field {@code update}
      * takes is {@code required = false} on the {@code term_update} MCP tool, so a caller can
      * legally invoke it with nothing but the identifying {@code code}. Such a call must be a true
      * no-op - no write, no revision, no head movement - exactly like the symmetric guard in
@@ -1001,11 +1001,11 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * The retry half of ADR-014 decision 4 (issue #167): a concurrent writer that advances the
+     * The retry half of ADR-014 decision 4: a concurrent writer that advances the
      * term's shared head between this caller's read and its write must cost the caller nothing.
      * The losing attempt is retried against a fresh read, so both changes survive - the caller's
      * own patched predicate and the other writer's change to a <em>different</em> predicate,
-     * which the pre-#167 predicate-scoped conflict detection would not even have noticed.
+     * which the earlier predicate-scoped conflict detection would not even have noticed.
      *
      * <p>The interleaving is pinned by a decorator that lets exactly one other write commit right
      * before the funnel's compare-and-set transaction opens, rather than by real threads, which
@@ -1125,7 +1125,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * Regression test for issue #167 review finding P1: {@code attemptUpdate} used to read the
+     * Regression test: {@code attemptUpdate} used to read the
      * term's assembly and its {@code arkprov:head} via two <em>separate</em>
      * {@code SparqlQuery#select} calls. That port's contract only guarantees that each individual
      * call is a self-contained read against the store's current committed state - nothing ties
@@ -1174,8 +1174,8 @@ class KognioRdfTermRepositoryTest {
 
     /**
      * Wraps a real {@link DatasetLifecycle} and runs {@code afterSelect} right after every
-     * {@code SparqlQuery#select} call's rows have been materialised - the exact point at which a
-     * pre-#167 read-then-read implementation is between its two separate reads. Unlike
+     * {@code SparqlQuery#select} call's rows have been materialised - the exact point at which an
+     * earlier read-then-read implementation is between its two separate reads. Unlike
      * {@link HeadAdvancingLifecycle} (which interleaves once the write transaction opens, i.e.
      * after both reads), this fires while a caller's read is potentially still in progress. The
      * one-shot guard lives in the {@link Runnable} the test supplies, exactly like
