@@ -3,24 +3,20 @@
 
 package de.hauschel.arknet.architecture;
 
+import static de.hauschel.arknet.architecture.support.OntologyFixtures.iri;
+import static de.hauschel.arknet.architecture.support.OntologyFixtures.parse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
-import org.eclipse.rdf4j.model.util.Values;
 import org.eclipse.rdf4j.model.vocabulary.OWL;
 import org.eclipse.rdf4j.model.vocabulary.RDF;
 import org.eclipse.rdf4j.model.vocabulary.RDFS;
-import org.eclipse.rdf4j.rio.RDFFormat;
-import org.eclipse.rdf4j.rio.Rio;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
@@ -40,7 +36,7 @@ import de.hauschel.arknet.persistence.ArkarchVocabulary;
  * suite stays green while the store fills with a predicate no ontology defines and every SPARQL
  * query written against the shipped vocabulary returns nothing. The bidirectional check is the same
  * seam {@code ProvenanceVocabularyMatchesOntologyTest}/{@code ProjectVocabularyMatchesOntologyTest}
- * guard for their modules (#60).</p>
+ * guard for their modules.</p>
  *
  * <p><strong>One asymmetry the shapes file rather than this test guards.</strong> The SHACL shape
  * {@code ashapes:ADR-status} admits all five lifecycle individuals while the Java {@code AdrStatus}
@@ -58,7 +54,7 @@ class ArchitectureVocabularyMatchesOntologyTest {
     private static final String ARKARCH_NAMESPACE =
             ArkarchVocabulary.ADR_TYPE.substring(0, ArkarchVocabulary.ADR_TYPE.indexOf('#') + 1);
 
-    private final Model ontology = parseOntology();
+    private final Model ontology = parse(ONTOLOGY_RESOURCE, ArchitectureVocabularyMatchesOntologyTest.class);
 
     /**
      * The set of {@code arkarch:} terms is the same on both sides - this is the assertion that turns
@@ -165,19 +161,5 @@ class ArchitectureVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkarchVocabulary.SUPERSEDED_BY), OWL.INVERSEOF,
                 iri(ArkarchVocabulary.SUPERSEDES)),
                 "arkarch:supersededBy must be owl:inverseOf arkarch:supersedes");
-    }
-
-    private static IRI iri(String value) {
-        return Values.iri(value);
-    }
-
-    private static Model parseOntology() {
-        try (InputStream in = ArchitectureVocabularyMatchesOntologyTest.class
-                .getResourceAsStream(ONTOLOGY_RESOURCE)) {
-            Objects.requireNonNull(in, "missing classpath resource " + ONTOLOGY_RESOURCE);
-            return Rio.parse(in, "", RDFFormat.TURTLE);
-        } catch (IOException e) {
-            throw new IllegalStateException("failed to load " + ONTOLOGY_RESOURCE, e);
-        }
     }
 }

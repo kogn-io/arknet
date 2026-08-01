@@ -3,24 +3,20 @@
 
 package de.hauschel.arknet.architecture;
 
+import static de.hauschel.arknet.architecture.support.OntologyFixtures.iri;
+import static de.hauschel.arknet.architecture.support.OntologyFixtures.parse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
-import org.eclipse.rdf4j.model.util.Values;
 import org.eclipse.rdf4j.model.vocabulary.OWL;
 import org.eclipse.rdf4j.model.vocabulary.RDF;
 import org.eclipse.rdf4j.model.vocabulary.RDFS;
-import org.eclipse.rdf4j.rio.RDFFormat;
-import org.eclipse.rdf4j.rio.Rio;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -41,7 +37,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
  * written against the shipped ontology returns nothing. The ttl is not loaded at runtime by
  * anything (unlike the shapes and the requirements axioms, which the gate factories parse), so
  * it cannot notice the drift either. This module is where such a seam belongs: an invariant
- * across a module cut, held by reviewer attention alone otherwise (#60).</p>
+ * across a module cut, held by reviewer attention alone otherwise.</p>
  *
  * <p>Deliberately bidirectional. A constant without an ontology term ships a statement arknet
  * never explains; an ontology term without a constant means the documented vocabulary has a
@@ -55,7 +51,7 @@ class ProvenanceVocabularyMatchesOntologyTest {
     private static final String ARKPROV_NAMESPACE =
             ArkprovVocabulary.HEAD.substring(0, ArkprovVocabulary.HEAD.indexOf('#') + 1);
 
-    private final Model ontology = parseOntology();
+    private final Model ontology = parse(ONTOLOGY_RESOURCE, ProvenanceVocabularyMatchesOntologyTest.class);
 
     /**
      * The set of {@code arkprov:} terms is the same on both sides - this is the assertion that
@@ -95,19 +91,5 @@ class ProvenanceVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkprovVocabulary.HEAD), RDFS.RANGE,
                 iri(ArkprovVocabulary.REVISION_TYPE)),
                 "the funnel only ever points a head at a revision - the range must say so");
-    }
-
-    private static IRI iri(String value) {
-        return Values.iri(value);
-    }
-
-    private static Model parseOntology() {
-        try (InputStream in = ProvenanceVocabularyMatchesOntologyTest.class
-                .getResourceAsStream(ONTOLOGY_RESOURCE)) {
-            Objects.requireNonNull(in, "missing classpath resource " + ONTOLOGY_RESOURCE);
-            return Rio.parse(in, "", RDFFormat.TURTLE);
-        } catch (IOException e) {
-            throw new IllegalStateException("failed to load " + ONTOLOGY_RESOURCE, e);
-        }
     }
 }
