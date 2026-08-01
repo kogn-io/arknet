@@ -116,7 +116,7 @@ public final class StoreReportTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final Optional<String> label = findProject.findById(projectId).map(Project::label);
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
@@ -140,7 +140,7 @@ public final class StoreReportTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final String iri = handleResolver.resolve(projectId, id);
         final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
         final List<Triple> incoming = storeReader.incoming(projectId, iri);

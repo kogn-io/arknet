@@ -11,6 +11,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.mcp.store.AnchorContext;
 import de.hauschel.arknet.mcp.store.HandleResolver;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.StoreReader;
@@ -65,7 +66,7 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         return renderer.traceMatrix(projectId, readGraph(projectId));
     }
 
@@ -84,7 +85,7 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         return renderer.orphanCheck(projectId, readGraph(projectId));
     }
 
@@ -108,7 +109,7 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = HandleResolver.resolveProject(context, projectAnchor, projects);
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final String targetIri = handleResolver.resolve(projectId, id);
         return renderer.impactAnalysis(projectId, readGraph(projectId), targetIri);
     }
