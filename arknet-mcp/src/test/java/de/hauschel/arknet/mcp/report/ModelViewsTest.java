@@ -9,6 +9,11 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.domain.Adr;
+import de.hauschel.arknet.adr.domain.AdrCode;
+import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
@@ -46,7 +51,8 @@ class ModelViewsTest {
                     throw new IllegalStateException("store closed");
                 }, (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of()),
-                new BoundedContextCards(projectId -> List.of()));
+                new BoundedContextCards(projectId -> List.of()),
+                emptyAdrCards());
 
         final ModelViews.Views result = views.of(PROJECT);
 
@@ -72,7 +78,8 @@ class ModelViewsTest {
                 },
                 new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of(requirement())),
-                new BoundedContextCards(projectId -> List.of(boundedContext())));
+                new BoundedContextCards(projectId -> List.of(boundedContext())),
+                emptyAdrCards());
 
         final ModelViews.Views result = views.of(PROJECT);
 
@@ -91,7 +98,8 @@ class ModelViewsTest {
                 projectId -> List.of(term()),
                 new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of()),
-                new BoundedContextCards(projectId -> List.of()));
+                new BoundedContextCards(projectId -> List.of()),
+                emptyAdrCards());
 
         final ModelViews.Views result = views.of(PROJECT);
 
@@ -101,7 +109,8 @@ class ModelViewsTest {
 
     /**
      * Reading order is strategic to detailed: what the model is about (bounded contexts), what it
-     * must do (requirements), how that plays out (use cases), and the language all of it uses.
+     * must do (requirements), how that plays out (use cases), what was decided about it (ADRs),
+     * and the shared language underneath all of it.
      */
     @Test
     void ordersSectionsFromStrategicToDetailed() {
@@ -109,10 +118,13 @@ class ModelViewsTest {
                 projectId -> List.of(term()),
                 new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of(requirement())),
-                new BoundedContextCards(projectId -> List.of(boundedContext())));
+                new BoundedContextCards(projectId -> List.of(boundedContext())),
+                new AdrCards(projectId -> List.of(adrDetail()),
+                        (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
 
         assertThat(views.of(PROJECT).sections()).extracting(ModelSection::title)
-                .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Glossary");
+                .containsExactly(
+                        "Bounded Contexts", "Requirements", "Use Cases", "Architecture Decisions", "Glossary");
     }
 
     private static UseCase useCase() {
@@ -143,5 +155,17 @@ class ModelViewsTest {
         return new Term(
                 new TermId(ResourceId.of("https://w3id.org/arknet/id/term-1")),
                 new TermCode("TERM-1"), "Anmeldung", "Der Nachweis der eigenen Identitaet.", null);
+    }
+
+    private static AdrDetail adrDetail() {
+        final Adr adr = new Adr(
+                new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-1")),
+                new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.ACCEPTED,
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), List.of());
+        return new AdrDetail(adr, List.of(), List.of());
+    }
+
+    private static AdrCards emptyAdrCards() {
+        return new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
     }
 }

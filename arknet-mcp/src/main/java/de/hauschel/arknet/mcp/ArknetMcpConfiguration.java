@@ -18,6 +18,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
+import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
@@ -564,7 +565,7 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Assembles the HTML report's per-bounded-context sections by borrowing all four hexagons'
+     * Assembles the HTML report's per-bounded-context sections by borrowing all five hexagons'
      * read In-Ports - the same In-Adapter-as-gateway role ADR-008 grants {@code uc_get} when it
      * borrows {@link ResolveTerms}, here for the report rather than for a tool response. A use
      * case reconstructed from raw triples is not readable as a use case (its flow is a set of
@@ -581,13 +582,14 @@ public class ArknetMcpConfiguration {
     @Bean
     ModelViews modelViews(
             final UseCaseService useCases, final RequirementService requirements, final TermService terms,
-            final BoundedContextService boundedContexts,
+            final BoundedContextService boundedContexts, final AdrService adrs,
             final ResolveRequirements resolveRequirements) {
         return new ModelViews(
                 terms,
                 new UseCaseCards(useCases, resolveRequirements),
                 new RequirementCards(requirements),
-                new BoundedContextCards(boundedContexts));
+                new BoundedContextCards(boundedContexts),
+                new AdrCards(adrs, resolveRequirements, boundedContexts));
     }
 
     /**

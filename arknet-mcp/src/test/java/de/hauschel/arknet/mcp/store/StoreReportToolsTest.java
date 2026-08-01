@@ -30,6 +30,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
@@ -144,7 +145,8 @@ class StoreReportToolsTest {
                 new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(
                         projectId -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
-                new BoundedContextCards(projectId -> List.of()));
+                new BoundedContextCards(projectId -> List.of()),
+                new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
     }
 
     @AfterEach
