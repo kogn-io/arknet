@@ -20,6 +20,13 @@ public class DatasetLockConflictException extends RuntimeException {
 
     /**
      * @param message the didactic explanation of the lock conflict and its remedy
+     */
+    public DatasetLockConflictException(String message) {
+        super(message);
+    }
+
+    /**
+     * @param message the didactic explanation of the lock conflict and its remedy
      * @param cause   the original failure thrown by the wrapped {@code DatasetLifecycle}
      */
     public DatasetLockConflictException(String message, Throwable cause) {

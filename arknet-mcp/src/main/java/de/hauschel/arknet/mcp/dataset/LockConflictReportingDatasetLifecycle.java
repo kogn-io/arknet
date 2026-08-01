@@ -73,7 +73,14 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
             return delegate.acquire(id);
         } catch (RuntimeException e) {
             if (isLockConflict.test(e)) {
-                throw new DatasetLockConflictException(lockConflictMessage(id, e), e);
+                // Not chained as this exception's cause: Spring AI's MCP tool callback renders the
+                // deepest exception in the getCause() chain, not this one - chaining e here would
+                // let RDF4J's raw lock exception win over the composed message naming the actual
+                // cause and remedy (#137). Kept as a suppressed exception instead, so the original
+                // is still on the stack trace without being able to win the walk.
+                DatasetLockConflictException translated = new DatasetLockConflictException(lockConflictMessage(id, e));
+                translated.addSuppressed(e);
+                throw translated;
             }
             throw e;
         }

@@ -57,7 +57,8 @@ class RegisteredAnchorProjectResolverTest {
                 .hasMessageContaining("/home/c/arknet")
                 .hasMessageContaining("project_add")
                 .hasMessageContaining("project_adopt")
-                .hasCauseInstanceOf(UnknownAnchorException.class);
+                .hasNoCause()
+                .satisfies(e -> assertThat(e.getSuppressed()).hasAtLeastOneElementOfType(UnknownAnchorException.class));
     }
 
     @Test

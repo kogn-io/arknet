@@ -41,7 +41,8 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
  * {@link #translatesAnAcquireFailureThePredicateRecognises()} and
  * {@link #rethrowsAnAcquireFailureThePredicateDoesNotRecognise()} cover the decorator's own logic
  * in isolation against a hand-rolled stub, as a fallback/addition to the real-lock proof above -
- * they pin down delegation, message/cause composition and the pass-through path without needing a
+ * they pin down delegation, message composition, that the original failure is preserved as a
+ * suppressed exception rather than a cause (#137), and the pass-through path without needing a
  * second RDF4J store per case. The pass-through path is deliberately proven against a stub rather
  * than against a real store made to fail differently (e.g. a non-writable storage directory): such
  * a case does not fail at all for a process that may write regardless of the permission bits, so
@@ -69,7 +70,8 @@ class LockConflictReportingDatasetLifecycleTest {
                     .hasMessageContaining("second arknet daemon instance")
                     .hasMessageContaining("stdio")
                     .hasMessageContaining("shared daemon")
-                    .cause().isNotNull();
+                    .hasNoCause()
+                    .satisfies(e -> assertThat(e.getSuppressed()).isNotEmpty());
         } finally {
             firstHandle.close();
             first.close(id);
@@ -106,7 +108,8 @@ class LockConflictReportingDatasetLifecycleTest {
                 .hasMessageContaining(storageDir.toString())
                 .hasMessageContaining(id.value())
                 .hasMessageContaining("boom")
-                .hasCause(original);
+                .hasNoCause()
+                .satisfies(e -> assertThat(e.getSuppressed()).containsExactly(original));
     }
 
     @Test
