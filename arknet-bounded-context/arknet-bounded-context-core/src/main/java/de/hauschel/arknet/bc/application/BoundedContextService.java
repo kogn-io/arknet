@@ -43,7 +43,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * be linked to a bounded context at any time; the edge lives inside the aggregate and is
  * therefore carried along by every subsequent replace-by-identity write.</p>
  *
- * <p><strong>Concurrency (issues #144 and #176).</strong> {@link #add} recomputes its next code
+ * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code
  * against a fresh read whenever a concurrent {@code bc_add} claims the same {@code BC-N} first,
  * via {@link CodeAssignment#createRetryingOnCodeCollision}, and {@link #linkTerm} retries its
  * whole read-modify-write round trip via
@@ -59,7 +59,7 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     private static final String CODE_PREFIX = "BC";
 
     /**
-     * Bound on {@link #updateWithOptimisticRetry}'s compare-and-set retry loop (issue #176). Two
+     * Bound on {@link #updateWithOptimisticRetry}'s compare-and-set retry loop. Two
      * callers read-modify-writing the same bounded context are resolved by a single retry in the
      * overwhelming majority of cases, since each retry re-reads the now-current state before
      * trying again; this bound only exists so a pathological, sustained storm of concurrent
@@ -92,8 +92,8 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
-        // business code is recomputed when a concurrent bc_add claims the same candidate first
-        // (issue #144). See CodeAssignment for why that race exists and why it must retry rather
+        // business code is recomputed when a concurrent bc_add claims the same candidate first.
+        // See CodeAssignment for why that race exists and why it must retry rather
         // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         BoundedContextId id = new BoundedContextId(resourceIdFactory.newId());
         return CodeAssignment.createRetryingOnCodeCollision(
@@ -154,7 +154,7 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
      * concurrency token together via {@link BoundedContextRepository#findCurrentByCode}, derives
      * the next state via {@code mutation}, and writes it back via
      * {@link BoundedContextRepository#compareAndUpdate} - retrying with a fresh read whenever a
-     * concurrent writer commits a change in between (issue #176: two parallel {@code bc_link_term}
+     * concurrent writer commits a change in between (two parallel {@code bc_link_term}
      * round trips on the same bounded context used to silently lose whichever one committed last,
      * because the read happened outside any transaction and the write carried no guard at all).
      *

@@ -62,7 +62,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a
  * {@link ProjectId} routing key. arknet-mcp runs as one shared server for every
- * project on the machine (issue #137), so there is no single injected project any
+ * project on the machine, so there is no single injected project any
  * more: each tool call resolves its own project from the request's anchor,
  * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}

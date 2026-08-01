@@ -24,7 +24,7 @@ import de.hauschel.arknet.persistence.UnresolvedReferenceException;
  * term's human-typed {@code dcterms:identifier} (e.g. {@code TERM-1}) to its opaque subject
  * {@link ResourceId} within the shared workspace store.
  *
- * <p><strong>Strict cross-BC term resolution (issue #62/#66).</strong> Bounded contexts and
+ * <p><strong>Strict cross-BC term resolution.</strong> Bounded contexts and
  * ubiquitous-language terms share one per-project store. This adapter looks up a code by
  * {@code dcterms:identifier} among the {@code skos:Concept}s of the glossary graph; an unknown or
  * ambiguous code aborts with a didactic {@link UnresolvedReferenceException}. Resolution goes via

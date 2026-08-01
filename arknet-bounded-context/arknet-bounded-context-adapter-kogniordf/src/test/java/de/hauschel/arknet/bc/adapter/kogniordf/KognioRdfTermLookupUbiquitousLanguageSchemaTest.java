@@ -27,7 +27,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
- * Schema-drift regression guard (mirrors the requirements adapter's homonymous test, issue #109):
+ * Schema-drift regression guard (mirrors the requirements adapter's homonymous test):
  * {@link KognioRdfTermLookup} hardcodes the exact storage schema (graph IRI, {@code skos:Concept}
  * type, {@code dcterms:identifier} predicate) that
  * {@code arknet-ubiquitous-language-adapter-kogniordf}'s {@code KognioRdfTermRepository} writes -

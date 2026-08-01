@@ -23,8 +23,8 @@ import java.util.Objects;
  * @param domainVision one sentence stating what this context does and why it exists; maps to
  *                     {@code arkddd:domainVision} and is required by the SHACL shape
  * @param subdomain    strategic subdomain classification; maps to {@code arkddd:partOf} (a
- *                     derived {@code arkddd:Subdomain} node carrying {@code arkddd:subdomainType},
- *                     issue #189) - a {@code sh:Warning}-only property. Optional (may be
+ *                     derived {@code arkddd:Subdomain} node carrying {@code arkddd:subdomainType})
+ *                     - a {@code sh:Warning}-only property. Optional (may be
  *                     {@code null}) and may be decided after the context is minted (store-first,
  *                     ADR-005)
  * @param ownedBy      the owning team name; maps to {@code arkddd:ownedBy}. Optional (may be

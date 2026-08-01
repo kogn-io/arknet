@@ -33,7 +33,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * not (a create), and conflating the two would hide a caller bug. {@link #create} and
  * {@link #compareAndUpdate} therefore make that distinction explicit at the port - and there is
  * no unconditional update: every correction to an already-created bounded context goes through
- * the compare-and-set guard (issue #176), so a guarded write path can never be bypassed by
+ * the compare-and-set guard, so a guarded write path can never be bypassed by
  * accident.</p>
  */
 public interface BoundedContextRepository {
@@ -56,8 +56,8 @@ public interface BoundedContextRepository {
     /**
      * Replaces an existing bounded context by identity, but only if its current concurrency token
      * (the {@code arkprov:head} revision recorded by the last funnel write, ADR-014) still equals
-     * {@code expectedHead} - the compare-and-set guard against the lost-update race (issue #176,
-     * the same guard the requirements context got in issue #108/#167). A read-modify-write round
+     * {@code expectedHead} - the compare-and-set guard against the lost-update race (the same
+     * guard the requirements context got). A read-modify-write round
      * trip ({@code bc_link_term}) reads the current state and head together via
      * {@link #findCurrentByCode}, derives {@code updated}, and calls this method with the head it
      * observed - a mismatch means the read was already stale, and the caller must re-read and

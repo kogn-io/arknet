@@ -67,7 +67,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * backend ({@link DatasetLifecycle} implementation) is supplied by the composition root.</p>
  *
  * <p><strong>Subdomain classification is a derived {@code arkddd:Subdomain} resource, not a flat
- * property (issue #189).</strong> {@link BoundedContext#subdomain()} is only the strategic
+ * property.</strong> {@link BoundedContext#subdomain()} is only the strategic
  * classification enum ({@link Subdomain#CORE_DOMAIN}/{@link Subdomain#SUPPORTING_DOMAIN}/
  * {@link Subdomain#GENERIC_DOMAIN}), but the DDD ontology models it as
  * {@code BoundedContext arkddd:partOf Subdomain ; Subdomain arkddd:subdomainType
@@ -75,13 +75,13 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@code arkddd:Domain}/{@code arkddd:Subdomain}'s class-based modelling. When present, this
  * adapter mints that node's opaque IRI afresh on every write via {@link ResourceIdFactory} - the
  * same "derived value object, minted by the adapter, no stable identity of its own" pattern
- * {@code KognioRdfUseCaseRepository} uses for a use case's steps. {@link #replaceTriples} follows
- * the {@code arkddd:partOf} edge to delete the superseded node's triples on update, exactly as
+ * {@code KognioRdfUseCaseRepository} uses for a use case's steps. {@link #replaceExistingTriples}
+ * follows the {@code arkddd:partOf} edge to delete the superseded node's triples on update, exactly as
  * the use-case adapter follows {@code mainStep}/{@code extensionStep} - a plain subject-only
  * delete would otherwise leave a fresh, disconnected {@code arkddd:Subdomain} node behind on
  * every update that touches the classification.</p>
  *
- * <p><strong>Create vs. compare-and-set update (opaque identity, issue #176).</strong> The
+ * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The
  * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
  * the commit-conflict translation, and the head comparison - live in the shared
  * {@link WriteFunnel} (ADR-013/ADR-014), not here. {@link #create} rejects an existing subject
@@ -90,11 +90,11 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@link #compareAndUpdate} rejects a missing subject with
  * {@link BoundedContextNotFoundException} and a stale {@code expectedHead} with
  * {@link BoundedContextConcurrentlyModifiedException}, and otherwise replaces the subject's
- * triples wholesale (see {@link #replaceTriples}). There is no unconditional update: every
+ * triples wholesale (see {@link #replaceExistingTriples}). There is no unconditional update: every
  * correction to an already-created bounded context goes through the compare-and-set guard, so two
  * concurrent {@code bc_link_term} calls can no longer silently lose one another's edge.</p>
  *
- * <p><strong>The second interleaving (issue #144).</strong> {@link WriteFunnel#create} translates
+ * <p><strong>The second interleaving.</strong> {@link WriteFunnel#create} translates
  * a lost {@code SERIALIZABLE} write conflict on {@link #create} into the same
  * {@link DuplicateBoundedContextCodeException} its synchronous code check throws - so
  * {@code CodeAssignment}'s retry (see {@code arknet-shared-kernel}) catches both interleavings the
@@ -103,7 +103,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * but a stale read, which the application service's retry loop absorbs exactly like a synchronous
  * head mismatch.</p>
  *
- * <p><strong>Term references arrive pre-resolved (issue #62/#66).</strong> {@link TermRef}
+ * <p><strong>Term references arrive pre-resolved.</strong> {@link TermRef}
  * carries the term's opaque subject {@link ResourceId} directly - resolving a human-typed term
  * code (e.g. {@code TERM-1}) against the shared workspace store, and rejecting an unknown or
  * ambiguous code, is done once by {@link KognioRdfTermLookup} at the moment a term is linked (in
@@ -117,10 +117,10 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * against the DDD SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
  * {@link WriteFunnel} (ADR-013). {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning},
- * not {@code sh:Violation} (issue #66): a store-first bounded context minted during analysis,
+ * not {@code sh:Violation}: a store-first bounded context minted during analysis,
  * before tactical design, has no aggregates yet, and that must not block the write.</p>
  *
- * <p><strong>Row multiplication (issue #81).</strong> {@code arkddd:partOf}'s
+ * <p><strong>Row multiplication.</strong> {@code arkddd:partOf}'s
  * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arkddd:ownedBy} carries no
  * {@code sh:maxCount} at all, so a store-first (ADR-005) bounded context with two triples on
  * either predicate legally multiplies {@link #findAll}'s SPARQL rows for one subject.
@@ -194,12 +194,12 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 boundedContext.code().value(), graph, null,
                 () -> new ResourceAlreadyExistsException(projectId, boundedContext.id().value()),
                 () -> new DuplicateBoundedContextCodeException(projectId, boundedContext.code()),
-                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
+                tx -> writeNewTriples(tx, graphIri, graph));
     }
 
     /**
-     * Compare-and-set update (issue #176, the guard requirements got in issues #108/#167):
-     * replaces the bounded context's triples only if its {@code arkprov:head} still equals
+     * Compare-and-set update (the guard requirements got): replaces the bounded context's
+     * triples only if its {@code arkprov:head} still equals
      * {@code expectedHead} at the moment the shared {@link WriteFunnel} checks it inside the write
      * transaction - closing the lost-update window a plain read (via {@link #findCurrentByCode})
      * followed by an unconditional replace would otherwise leave open between the read and the
@@ -220,13 +220,13 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 expectedHead == null ? null : expectedHead.value(), graph, null,
                 () -> new BoundedContextNotFoundException(projectId, updated.code()),
                 () -> new BoundedContextConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
+                tx -> replaceExistingTriples(tx, graphIri, subjectIri, subject, graph));
     }
 
     /**
      * Builds the candidate graph for one bounded context's triples: type, identifier, name,
      * domainVision, an optional derived {@code arkddd:Subdomain} node (see the class-level note
-     * on issue #189) and an optional ownedBy literal, and zero or more
+     * above) and an optional ownedBy literal, and zero or more
      * {@code arkddd:ubiquitousLanguageTerm} edges to the bounded context's already-resolved term
      * references. Shared by {@link #create} and {@link #compareAndUpdate} so both write paths
      * serialise a {@link BoundedContext} identically.
@@ -258,34 +258,46 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     }
 
     /**
+     * Writes {@code graph} for a freshly minted subject inside an already-open write transaction -
+     * the tail of {@link #create}, reached once the funnel's own existence check has decided the
+     * write may proceed. Unlike {@link #replaceExistingTriples}, there is nothing under this
+     * identity yet: no triples to delete, and consequently no {@code arkddd:ubiquitousLanguageTerm}
+     * or {@code arkddd:hasAggregate} edge that could need preserving (that concern is specific to
+     * replacing an already-existing subject's triples - see {@link #replaceExistingTriples}'s
+     * javadoc).
+     */
+    private void writeNewTriples(DatasetTx tx, IRI graphIri, Graph graph) {
+        tx.add(graphIri, graph);
+    }
+
+    /**
      * Replaces {@code subject}'s triples with {@code graph} inside an already-open write
-     * transaction. On an update it first captures two kinds of edges that {@code graph} (built
-     * from the {@link BoundedContext} record) never carries, and re-attaches both after the
-     * rewrite - so a replace-by-identity write of a store-first (ADR-005) bounded context carries
-     * them along instead of erasing them:
+     * transaction - the tail of {@link #compareAndUpdate}, reached once the funnel's own head
+     * comparison has decided the write should proceed. It first captures two kinds of edges that
+     * {@code graph} (built from the {@link BoundedContext} record) never carries, and re-attaches
+     * both after the rewrite - so a replace-by-identity write of a store-first (ADR-005) bounded
+     * context carries them along instead of erasing them:
      *
      * <ul>
      * <li>{@code arkddd:ubiquitousLanguageTerm} edges whose target is not an IRI
      * ({@link #readUsesTerms} can never read those, since {@link ResourceId} cannot represent a
      * blank node) - the same preservation the requirements adapter does for
-     * {@code arkreq:usesTerm}, issue #65.</li>
+     * {@code arkreq:usesTerm}.</li>
      * <li><strong>All</strong> {@code arkddd:hasAggregate} edges, regardless of target kind:
-     * {@link BoundedContext} has no field for its aggregates at all (issue #66 lowered the shape
-     * to {@code sh:Warning} precisely so a bounded context minted before tactical design has none
-     * yet), so unlike {@code ubiquitousLanguageTerm} there is no IRI-typed round-trip through the
-     * domain object to fall back on - every edge, IRI or blank node, would otherwise be lost on
-     * the very next {@code bc_link_term} call.</li>
+     * {@link BoundedContext} has no field for its aggregates at all (the shape is {@code sh:Warning}
+     * precisely so a bounded context minted before tactical design has none yet), so unlike
+     * {@code ubiquitousLanguageTerm} there is no IRI-typed round-trip through the domain object to
+     * fall back on - every edge, IRI or blank node, would otherwise be lost on the very next
+     * {@code bc_link_term} call.</li>
      * </ul>
      *
      * <p>{@code deleteExisting} also follows the {@code arkddd:partOf} edge, mirroring
      * {@code KognioRdfUseCaseRepository}'s step-following delete: the derived
      * {@code arkddd:Subdomain} node {@link #buildCandidateGraph} mints is reachable only from the
      * subject, so a subject-only delete would leave the superseded node's triples behind as
-     * disconnected, ever-accumulating garbage on every update that touches the classification
-     * (issue #189).</p>
+     * disconnected, ever-accumulating garbage on every update that touches the classification.</p>
      */
-    private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
-            boolean exists) {
+    private void replaceExistingTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph) {
         String selectUnjoinableTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { " + subject + " <"
                 + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } FILTER(!isIRI(?term)) }";
@@ -297,15 +309,9 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
                 + "{ " + subject + " <" + PART_OF_PROPERTY + "> ?s . ?s ?p ?o } } }";
 
-        List<RDFTerm> unjoinableTerms = exists
-                ? tx.select(selectUnjoinableTerms).map(row -> termOf(row, "term")).toList()
-                : List.of();
-        List<RDFTerm> aggregates = exists
-                ? tx.select(selectAggregates).map(row -> termOf(row, "aggregate")).toList()
-                : List.of();
-        if (exists) {
-            tx.update(deleteExisting);
-        }
+        List<RDFTerm> unjoinableTerms = tx.select(selectUnjoinableTerms).map(row -> termOf(row, "term")).toList();
+        List<RDFTerm> aggregates = tx.select(selectAggregates).map(row -> termOf(row, "aggregate")).toList();
+        tx.update(deleteExisting);
         tx.add(graphIri, graph);
         if (!unjoinableTerms.isEmpty() || !aggregates.isEmpty()) {
             Graph preservedEdges = rdf.createGraph();
@@ -341,7 +347,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     /**
      * Reads a bounded context's current state together with its concurrency token. The row built
      * from {@link #boundedContextByCodeWhereClause} (the core fields) plus the head itself come
-     * from this method's one query call (issue #176) - one snapshot, which is the load-bearing
+     * from this method's one query call - one snapshot, which is the load-bearing
      * guarantee, not an ordering of clauses within that query. {@link #boundedContextOf} then
      * issues one further, independent query, via {@link #readUsesTerms}, to fill in
      * {@code usesTerms}; that later read is safe precisely because it can only be fresher, never
@@ -385,12 +391,13 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * joins (type, identifier, name, domainVision) plus the two optional joins (subdomain,
      * ownedBy) that scope a single-bounded-context read to one {@code code}. The subdomain join
      * follows the derived {@code arkddd:Subdomain} node's {@code arkddd:partOf}/
-     * {@code arkddd:subdomainType} hop (issue #189) but still projects a single {@code ?subdomain}
+     * {@code arkddd:subdomainType} hop but still projects a single {@code ?subdomain}
      * binding - the {@code arkddd:CoreDomain}/{@code SupportingDomain}/{@code GenericDomain}
      * individual - so {@link #subdomainOf} reads it exactly as it did the old flat property.
      * Extracted because both callers build a {@link BoundedContext} from the same row shape via
-     * {@link #boundedContextOf} - drift between two near-identical read paths is what issues
-     * #80/#81 cost the requirements adapter, so this text lives in one place. The caller supplies
+     * {@link #boundedContextOf} - drift between two near-identical read paths is what row
+     * multiplication cost the requirements adapter, so this text lives in one place. The caller
+     * supplies
      * the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in
      * {@link #findCurrentByCode}'s case, the additional provenance-graph join.
      */
@@ -439,7 +446,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
-            // Grouped by subject (issue #81): subdomain/ownedBy are OPTIONAL joins without an
+            // Grouped by subject: subdomain/ownedBy are OPTIONAL joins without an
             // enforced sh:maxCount, so a store-first bounded context with two triples on either
             // predicate binds a cross-product of rows for the same subject. Mapping each row
             // straight to a BoundedContext would surface that subject more than once.
@@ -463,8 +470,8 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * <p>Joins only {@code dcterms:identifier} - not {@code name}/{@code domainVision} - so a
      * store-first (ADR-005) context that carries an identity and a code but misses one of the
      * otherwise-mandatory fields still resolves, exactly as {@code KognioRdfTermRepository#findByIds}
-     * decided for the glossary. Rows are grouped per subject rather than mapped 1:1 (the #81
-     * pattern): {@code dcterms:identifier} carries no enforceable {@code sh:maxCount}, so a
+     * decided for the glossary. Rows are grouped per subject rather than mapped 1:1 (the row
+     * multiplication pattern): {@code dcterms:identifier} carries no enforceable {@code sh:maxCount}, so a
      * store-first context with two identifier triples would otherwise report the same identity
      * twice - the very contract violation {@code ResolveBoundedContexts} ("the contexts", not "one
      * row per predicate combination") exists to rule out. No {@code FILTER(isIRI(?s))} is needed
@@ -517,7 +524,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
 
     /**
      * Mutable per-subject accumulator collecting a bounded context's {@code subdomain} and
-     * {@code ownedBy} candidates across rows (issue #81), then choosing one of each
+     * {@code ownedBy} candidates across rows, then choosing one of each
      * deterministically (first-seen) when the bounded context is finally materialised, logging a
      * {@code WARN} if more than one distinct value was collected for a field.
      */
@@ -575,7 +582,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * references. Ordered by target IRI (RDF has no intrinsic statement order and
      * {@link BoundedContext} compares its {@code usesTerms} list positionally). A store-first
      * blank-node target is excluded by {@code FILTER(isIRI(?term))} - it is preserved across an
-     * update by {@link #replaceTriples} but cannot be materialised into a {@link TermRef}.
+     * update by {@link #replaceExistingTriples} but cannot be materialised into a {@link TermRef}.
      */
     private List<TermRef> readUsesTerms(Function<String, Stream<BindingSet>> selectFn, String subject) {
         String query = "SELECT ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
@@ -611,7 +618,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * Mints an opaque IRI for the derived {@code arkddd:Subdomain} node from the same kernel
      * scheme as the bounded context root, mirroring
      * {@code KognioRdfUseCaseRepository#mintStepIri}: the node is a value object with no stable
-     * identity of its own (issue #189).
+     * identity of its own.
      */
     private IRI mintSubdomainIri() {
         return rdf.createIRI(resourceIdFactory.newId().value());

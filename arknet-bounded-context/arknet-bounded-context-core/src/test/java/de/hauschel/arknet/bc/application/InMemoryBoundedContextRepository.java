@@ -33,7 +33,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@link ResourceAlreadyExistsException}, a business-code collision with
  * {@link DuplicateBoundedContextCodeException}.</p>
  *
- * <p><strong>Concurrency token (issue #176).</strong> Mirrors the real {@link
+ * <p><strong>Concurrency token.</strong> Mirrors the real {@link
  * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the bounded context, {@link #compareAndUpdate}
