@@ -16,9 +16,9 @@ import com.tngtech.archunit.lang.ArchRule;
  * <p><strong>What is deliberately absent.</strong> A rule like "a core does not depend on its
  * adapters" is not here: Maven already enforces it harder than ArchUnit could, because the
  * adapter module is simply not on the core's compile classpath. Restating it would be
- * ceremony. "No bounded context depends on another" used to be phrased the same blanket way,
- * but issue #77 precised it: the invariant binds the {@code *-core} modules, not every module
- * of a bounded context. A driving (In-) adapter is the gate into its own hexagon, not part of
+ * ceremony. "No bounded context depends on another" used to be phrased the same blanket way;
+ * the invariant was later precised to bind the {@code *-core} modules, not every module of a
+ * bounded context. A driving (In-) adapter is the gate into its own hexagon, not part of
  * its core, and may call a neighbour bounded context's driving port --
  * {@code arknet-requirements-adapter-mcp} depends on {@code arknet-ubiquitous-language-core}
  * for exactly that (rendering a linked term's business code instead of its bare IRI in
@@ -26,7 +26,7 @@ import com.tngtech.archunit.lang.ArchRule;
  * {@code *-core}-scoped claim without any help from this module: none of the {@code *-core}
  * POMs declares a dependency on a sibling bounded context. Every rule below guards a property
  * that lives <em>inside</em> a module or <em>across</em> a seam Maven cannot see, and that
- * would therefore erode silently -- today they hold only by reviewer attention (#60).</p>
+ * would therefore erode silently -- today they hold only by reviewer attention.</p>
  *
  * <p><strong>What these rules do and do not see.</strong> They read bytecode, not source and not
  * POMs. Two things therefore stay green: an RDF4J dependency added to a module's POM but never
@@ -35,7 +35,7 @@ import com.tngtech.archunit.lang.ArchRule;
  * <em>use</em>, and use is exactly what is checked. Anything that touches an RDF4J type for real
  * -- a field, a parameter, a return type, a call -- is caught. Closing the POM-level gap would
  * need {@code maven-enforcer-plugin} ({@code bannedDependencies}); that was consciously left out
- * of scope (#60).</p>
+ * of scope.</p>
  *
  * <p><strong>Verifying a rule still bites.</strong> A rule that can no longer turn red is
  * decoration, and one that silently matches zero classes is worse than none. The latter is
