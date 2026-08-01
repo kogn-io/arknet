@@ -15,7 +15,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Renders the compact, token-cheap text digest an agent gets back from {@code
- * store_overview}: workspace header with counters, a prefix legend, per-{@code rdf:type}
+ * store_overview}: project header with counters, a prefix legend, per-{@code rdf:type}
  * counts, one line per resource with a {@code -> resource_get(...)} drill-down affordance,
  * a next-step block and an integrity hint.
  *

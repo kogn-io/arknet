@@ -214,7 +214,7 @@ public class ArknetMcpConfiguration {
     /**
      * Supplies the {@code arkreq:} requirement vocabulary as data, backing {@code req_schema}
      * (issue #31). Reads only the classpath ontology ({@code arknet-requirements.ttl}), not the
-     * workspace store, so unlike every other bean in this hexagon it takes no
+     * project store, so unlike every other bean in this hexagon it takes no
      * {@link DatasetLifecycle}.
      */
     @Bean
@@ -331,7 +331,7 @@ public class ArknetMcpConfiguration {
      * subject identity - the strict cross-BC lookup {@code uc_add}'s step-level
      * {@code realises} references need (issue #89). Acquires datasets from the same shared
      * {@link DatasetLifecycle} as {@link #requirementRepository}, so it reads the same
-     * workspace the requirements hexagon writes into.
+     * project the requirements hexagon writes into.
      */
     @Bean
     RequirementLookup useCaseRequirementLookup(final DatasetLifecycle datasetLifecycle) {
@@ -343,7 +343,7 @@ public class ArknetMcpConfiguration {
      * identity - the strict cross-BC lookup {@code uc_add}'s {@code primaryActor}/
      * {@code supportingActors} references need (issue #89). Acquires datasets from the same
      * shared {@link DatasetLifecycle} as {@link #termRepository}, so it reads the same
-     * workspace the ubiquitous-language hexagon writes into.
+     * project the ubiquitous-language hexagon writes into.
      */
     @Bean
     ActorLookup useCaseActorLookup(final DatasetLifecycle datasetLifecycle) {

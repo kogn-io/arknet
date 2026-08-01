@@ -29,7 +29,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class UseCaseCardsTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("cards-test");
+    private static final ProjectId PROJECT = new ProjectId("cards-test");
     private static final ResourceId ACTOR = ResourceId.of("https://w3id.org/arknet/id/actor-1");
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
 
@@ -42,7 +42,7 @@ class UseCaseCardsTest {
                 projectId -> List.of(useCase()),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
-        final ModelSection section = cards.section(WORKSPACE, GLOSSARY);
+        final ModelSection section = cards.section(PROJECT, GLOSSARY);
 
         assertThat(section.title()).isEqualTo("Use Cases");
         assertThat(section.cards()).singleElement().satisfies(card -> {
@@ -70,7 +70,7 @@ class UseCaseCardsTest {
         final UseCaseCards cards = new UseCaseCards(
                 projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        assertThat(cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks()).contains(
+        assertThat(cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks()).contains(
                 new Block.Refs("Primary actor", List.of(new Ref("Kunde", "TERM-1", ACTOR.value()))));
     }
 
@@ -84,7 +84,7 @@ class UseCaseCardsTest {
         final UseCaseCards cards = new UseCaseCards(
                 projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        final Block.Prose goal = (Block.Prose) cards.section(WORKSPACE, GLOSSARY)
+        final Block.Prose goal = (Block.Prose) cards.section(PROJECT, GLOSSARY)
                 .cards().getFirst().blocks().getFirst();
 
         assertThat(goal.text().spans()).containsExactly(new Span.Plain("Der Kunde bestellt Artikel."));
@@ -96,7 +96,7 @@ class UseCaseCardsTest {
                 projectId -> List.of(useCase()),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
-        final Block.Flow flow = flowOf(cards.section(WORKSPACE, GLOSSARY));
+        final Block.Flow flow = flowOf(cards.section(PROJECT, GLOSSARY));
 
         assertThat(flow.steps().get(0).realises()).containsExactly(Ref.of("FR-1", FR_1.value()));
     }
@@ -110,7 +110,7 @@ class UseCaseCardsTest {
         final UseCaseCards cards = new UseCaseCards(
                 projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        final ModelSection section = cards.section(WORKSPACE, Glossary.empty());
+        final ModelSection section = cards.section(PROJECT, Glossary.empty());
 
         assertThat(section.cards().getFirst().blocks()).contains(
                 new Block.Refs("Primary actor", List.of(Ref.of(ACTOR.value(), ACTOR.value()))));
@@ -124,7 +124,7 @@ class UseCaseCardsTest {
         final UseCaseCards cards = new UseCaseCards(
                 projectId -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        final List<String> labels = cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks().stream()
+        final List<String> labels = cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
 
         assertThat(labels).containsExactly("Goal", "Trigger", "Primary actor", "Postcondition", "Main flow");
@@ -135,7 +135,7 @@ class UseCaseCardsTest {
         final UseCaseCards cards = new UseCaseCards(
                 projectId -> List.of(), (projectId, ids) -> List.of());
 
-        assertThat(cards.section(WORKSPACE, GLOSSARY).isEmpty()).isTrue();
+        assertThat(cards.section(PROJECT, GLOSSARY).isEmpty()).isTrue();
     }
 
     private static Block.Flow flowOf(final ModelSection section) {

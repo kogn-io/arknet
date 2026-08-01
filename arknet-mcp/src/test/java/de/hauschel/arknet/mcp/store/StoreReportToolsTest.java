@@ -169,7 +169,7 @@ class StoreReportToolsTest {
         assertThat(result).contains("no dangling references");
 
         // HTML side effect: a self-contained file with no external dependencies, under a
-        // workspace-scoped subdirectory of the fallback dir (issue #172).
+        // project-scoped subdirectory of the fallback dir (issue #172).
         Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
         assertThat(html).exists();
         String content = Files.readString(html);

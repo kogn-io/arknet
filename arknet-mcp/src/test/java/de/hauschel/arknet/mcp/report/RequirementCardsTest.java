@@ -30,7 +30,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class RequirementCardsTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("req-cards-test");
+    private static final ProjectId PROJECT = new ProjectId("req-cards-test");
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final ResourceId KUNDE = ResourceId.of(ID + "term-1");
     private static final ResourceId BESTELLUNG = ResourceId.of(ID + "term-2");
@@ -115,13 +115,13 @@ class RequirementCardsTest {
     }
 
     private static Block block(final RequirementCards cards, final String label) {
-        return cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks().stream()
+        return cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
                 .filter(b -> b.label().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("no block " + label + " in " + labels(cards)));
     }
 
     private static List<String> labels(final RequirementCards cards) {
-        return cards.section(WORKSPACE, GLOSSARY).cards().getFirst().blocks().stream()
+        return cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
     }
 

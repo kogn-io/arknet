@@ -19,7 +19,7 @@ import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
- * The workspace's glossary, read once per report and used for two jobs: turning an opaque term
+ * The project's glossary, read once per report and used for two jobs: turning an opaque term
  * identity into the word a human agreed on, and finding those words inside other contexts'
  * prose.
  *
@@ -58,7 +58,7 @@ public final class Glossary {
     }
 
     /**
-     * @param terms every term of the workspace, in any order
+     * @param terms every term of the project, in any order
      * @return the glossary; a duplicate identity keeps its first occurrence, so a malformed
      *         store degrades the report rather than failing it
      */
@@ -68,7 +68,7 @@ public final class Glossary {
     }
 
     /**
-     * The glossary of a workspace whose terms could not be read. Chips then fall back to their
+     * The glossary of a project whose terms could not be read. Chips then fall back to their
      * identity and no text is marked up - the report says less, but nothing false.
      *
      * @return an empty glossary
@@ -78,7 +78,7 @@ public final class Glossary {
     }
 
     /**
-     * @return every term of the workspace, in the order the glossary was read; the glossary
+     * @return every term of the project, in the order the glossary was read; the glossary
      *         section renders from this rather than reading the store a second time
      */
     public List<Term> terms() {
@@ -87,7 +87,7 @@ public final class Glossary {
 
     /**
      * @param id the opaque term identity, e.g. from an {@code arkreq:usesTerm} edge
-     * @return the term it names, or {@code null} if this workspace has no such term - a
+     * @return the term it names, or {@code null} if this project has no such term - a
      *         dangling edge, which the caller renders as a dead reference rather than dropping
      */
     public Term term(final ResourceId id) {
@@ -98,7 +98,7 @@ public final class Glossary {
      * The chip a reader should see for a term identity.
      *
      * @param id the opaque term identity an edge points at
-     * @return the term's label with its code as the tooltip; for an identity this workspace
+     * @return the term's label with its code as the tooltip; for an identity this project
      *         does not know, the bare IRI as its own label - a dangling edge stays visible
      *         instead of being styled away
      */

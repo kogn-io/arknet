@@ -60,7 +60,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class TraceabilityGraphTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("trace-graph-test");
+    private static final ProjectId PROJECT = new ProjectId("trace-graph-test");
 
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/trace-test-term-1";
     private static final String TERM_2_IRI = "https://w3id.org/arknet/id/trace-test-term-2";
@@ -88,35 +88,35 @@ class TraceabilityGraphTest {
 
         // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
         // referenced as UC1's primary actor - must NOT count as an orphan term.
-        terms.create(WORKSPACE, new Term(
+        terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null));
-        terms.create(WORKSPACE, new Term(
+        terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_2_IRI)), new TermCode("TERM-2"), "Passwort",
                 "A secret credential.", null));
-        terms.create(WORKSPACE, new Term(
+        terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(ACTOR_IRI)), new TermCode("TERM-3"), "Customer",
                 "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")));
         // TERM-4: never usesTerm'd, referenced only through BC-1's ubiquitousLanguageTerm edge -
         // must NOT count as an orphan term either (issue #185).
-        terms.create(WORKSPACE, new Term(
+        terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_4_IRI)), new TermCode("TERM-4"), "Vertrag",
                 "A binding agreement.", null));
 
         // FR-1: uses TERM-1, realised by UC1. FR-2: uses nothing, realised by nothing (orphan).
-        requirements.create(WORKSPACE, new Requirement(
+        requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(new TermRef(ResourceId.of(TERM_1_IRI))),
                 List.of("Login succeeds with valid credentials")));
-        requirements.create(WORKSPACE, new Requirement(
+        requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_2_IRI)), new RequirementCode("FR-2"), "Logout",
                 "The system shall let a user log out.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(), List.of("Logout succeeds")));
 
-        useCases.create(WORKSPACE, new UseCase(
+        useCases.create(PROJECT, new UseCase(
                 new UseCaseId(ResourceId.of(UC_1_IRI)), new UseCaseCode("UC1"), "Log in",
                 "Customer authenticates", null, null,
                 new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
@@ -129,18 +129,18 @@ class TraceabilityGraphTest {
         // TraceabilityRenderer concern (see TraceabilityRendererTest).
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
-        boundedContexts.create(WORKSPACE, new BoundedContext(
+        boundedContexts.create(PROJECT, new BoundedContext(
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
                 "Wir verarbeiten Bestellungen.", null, null,
                 List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(TERM_4_IRI)))));
 
-        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(WORKSPACE);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
         graph = TraceabilityGraph.of(snapshot);
     }
 
     @AfterEach
     void tearDown() {
-        lifecycle.close(new DatasetId(WORKSPACE.value()));
+        lifecycle.close(new DatasetId(PROJECT.value()));
     }
 
     @Test
