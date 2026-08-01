@@ -6,11 +6,11 @@ package de.hauschel.arknet.mcp.store;
 import java.util.Objects;
 
 /**
- * One RDF statement read from the store: an IRI {@code subject}, an IRI {@code predicate}
- * and an {@link RdfNode} {@code object}. Backend-neutral value object shared by the reader
- * and the renderers.
+ * One RDF statement read from the store: a {@code subject} (an IRI, or a blank-node reference
+ * as {@code "_:" + reference}), an IRI {@code predicate} and an {@link RdfNode} {@code object}.
+ * Backend-neutral value object shared by the reader and the renderers.
  *
- * @param subject   the subject IRI
+ * @param subject   the subject IRI, or a blank-node reference
  * @param predicate the predicate IRI
  * @param object    the object node
  */

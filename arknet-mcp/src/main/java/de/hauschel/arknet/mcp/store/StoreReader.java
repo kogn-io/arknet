@@ -203,10 +203,11 @@ public final class StoreReader {
         RDFTerm subject = row.getValue("s").orElse(null);
         RDFTerm predicate = row.getValue("p").orElse(null);
         RDFTerm object = row.getValue("o").orElse(null);
-        if (!(subject instanceof IRI subjectIri) || !(predicate instanceof IRI predicateIri) || object == null) {
+        String subjectRef = subjectReference(subject);
+        if (subjectRef == null || !(predicate instanceof IRI predicateIri) || object == null) {
             return Optional.empty();
         }
-        return Optional.of(new Triple(subjectIri.getIRIString(), predicateIri.getIRIString(), toNode(object)));
+        return Optional.of(new Triple(subjectRef, predicateIri.getIRIString(), toNode(object)));
     }
 
     private static Optional<Triple> outgoingTriple(String subject, BindingSet row) {
@@ -221,11 +222,29 @@ public final class StoreReader {
     private static Optional<Triple> incomingTriple(String object, BindingSet row) {
         RDFTerm subject = row.getValue("s").orElse(null);
         RDFTerm predicate = row.getValue("p").orElse(null);
-        if (!(subject instanceof IRI subjectIri) || !(predicate instanceof IRI predicateIri)) {
+        String subjectRef = subjectReference(subject);
+        if (subjectRef == null || !(predicate instanceof IRI predicateIri)) {
             return Optional.empty();
         }
-        return Optional.of(new Triple(subjectIri.getIRIString(), predicateIri.getIRIString(),
-                new RdfNode.Resource(object)));
+        return Optional.of(new Triple(subjectRef, predicateIri.getIRIString(), new RdfNode.Resource(object)));
+    }
+
+    /**
+     * Resolves a subject term to the same reference {@link #toNode} would render for it - an
+     * IRI string, or {@code "_:" + reference} for a blank node, which is RDF-legal in subject
+     * position (e.g. a store-first SKOS concept with no minted IRI) and must surface here exactly
+     * like it does in object position, instead of being silently dropped.
+     *
+     * @param term the subject term, or {@code null} if the row bound nothing
+     * @return the reference, or {@code null} if the term is neither an IRI nor a blank node
+     *         (a literal cannot appear as an RDF subject, but the row is still skipped rather
+     *         than trusted)
+     */
+    private static String subjectReference(RDFTerm term) {
+        if (term instanceof IRI || term instanceof BlankNode) {
+            return ((RdfNode.Resource) toNode(term)).iri();
+        }
+        return null;
     }
 
     private static RdfNode toNode(RDFTerm term) {
