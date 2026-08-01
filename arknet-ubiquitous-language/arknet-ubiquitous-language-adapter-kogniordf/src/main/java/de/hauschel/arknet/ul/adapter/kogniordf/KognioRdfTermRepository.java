@@ -73,7 +73,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * <p><strong>ProjectId (local, single-user).</strong> Each {@link ProjectId} is
  * mapped 1:1 to a kognio-rdf {@link DatasetId}, so distinct projects are fully
  * isolated datasets - and thus distinct glossaries. For the MVP there is exactly one
- * {@code skos:ConceptScheme} per workspace ({@link #GLOSSARY_SCHEME}); a per-bounded-context
+ * {@code skos:ConceptScheme} per project ({@link #GLOSSARY_SCHEME}); a per-bounded-context
  * scheme is a later refinement (tracked alongside the requirement-to-term linking).</p>
  *
  * <p><strong>Create vs. update (opaque identity).</strong> Because identity is opaque and

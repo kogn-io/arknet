@@ -145,7 +145,7 @@ class RequirementServiceTest {
     }
 
     @Test
-    void addIsScopedPerWorkspace() {
+    void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
         service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works")));
 
@@ -482,7 +482,7 @@ class RequirementServiceTest {
     }
 
     @Test
-    void resolveExistingIsScopedPerWorkspace() {
+    void resolveExistingIsScopedPerProject() {
         Requirement inWs = service.add(WS, newFunctionalRequirement());
         ProjectId other = new ProjectId("other");
 

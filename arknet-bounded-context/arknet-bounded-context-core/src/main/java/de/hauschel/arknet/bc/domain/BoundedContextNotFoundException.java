@@ -9,7 +9,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when an operation refers to a bounded context that does not exist in the targeted
- * workspace.
+ * project.
  *
  * <p>An expected domain outcome (not a programming error): driving adapters - e.g. the MCP
  * tools - translate it into a user-facing "unknown bounded context" message rather than a stack

@@ -105,7 +105,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p><strong>Term references arrive pre-resolved.</strong> {@link TermRef}
  * carries the term's opaque subject {@link ResourceId} directly - resolving a human-typed term
- * code (e.g. {@code TERM-1}) against the shared workspace store, and rejecting an unknown or
+ * code (e.g. {@code TERM-1}) against the shared project store, and rejecting an unknown or
  * ambiguous code, is done once by {@link KognioRdfTermLookup} at the moment a term is linked (in
  * the application service), not here on every write. Unlike the requirements adapter's
  * {@code arkreq:usesTerm}, the {@code shapes:BoundedContextShape} places no {@code sh:class}

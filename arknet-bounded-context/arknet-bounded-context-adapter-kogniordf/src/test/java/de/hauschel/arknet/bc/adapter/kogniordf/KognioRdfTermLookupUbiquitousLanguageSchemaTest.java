@@ -43,7 +43,7 @@ import de.hauschel.arknet.ul.domain.TermId;
  */
 class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
 
-    private static final ProjectId WORKSPACE = new ProjectId("bc-ul-schema");
+    private static final ProjectId PROJECT = new ProjectId("bc-ul-schema");
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -78,9 +78,9 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
         Term term = new Term(id, new TermCode("TERM-1"), "Kunde",
                 "Person, die eine Bestellung aufgibt.", null);
 
-        ulTermRepository.create(WORKSPACE, term);
+        ulTermRepository.create(PROJECT, term);
 
-        ResourceId resolved = bcTermLookup.resolveByCode(WORKSPACE, "TERM-1");
+        ResourceId resolved = bcTermLookup.resolveByCode(PROJECT, "TERM-1");
 
         assertEquals(id.value(), resolved);
     }

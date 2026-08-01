@@ -28,7 +28,7 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * In-memory test double for {@link RequirementRepository}.
  *
  * <p>A hand-rolled fake (not a mock): it actually stores requirements, keyed by
- * workspace then opaque identity, so the service's policy can be exercised end-to-end.
+ * project then opaque identity, so the service's policy can be exercised end-to-end.
  * Insertion order is preserved to make {@link #findAll(ProjectId)} assertions
  * deterministic.</p>
  *

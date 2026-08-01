@@ -30,12 +30,12 @@ import de.hauschel.arknet.persistence.UnresolvedReferenceException;
  * kognio-rdf store.
  *
  * <p>Structurally 1:1 to the requirements adapter's homonymous test - both classes resolve a
- * glossary term's {@code dcterms:identifier} against the very same shared-workspace schema.</p>
+ * glossary term's {@code dcterms:identifier} against the very same shared-project schema.</p>
  */
 class KognioRdfTermLookupTest {
 
-    private static final ProjectId WORKSPACE_A = new ProjectId("a");
-    private static final ProjectId WORKSPACE_B = new ProjectId("b");
+    private static final ProjectId PROJECT_A = new ProjectId("a");
+    private static final ProjectId PROJECT_B = new ProjectId("b");
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     /**
@@ -65,9 +65,9 @@ class KognioRdfTermLookupTest {
 
     @Test
     void resolvesAKnownTermCodeToItsSubjectIdentity() {
-        String termIri = givenTerm(WORKSPACE_A, "TERM-1");
+        String termIri = givenTerm(PROJECT_A, "TERM-1");
 
-        ResourceId resolved = termLookup.resolveByCode(WORKSPACE_A, "TERM-1");
+        ResourceId resolved = termLookup.resolveByCode(PROJECT_A, "TERM-1");
 
         assertEquals(ResourceId.of(termIri), resolved);
     }
@@ -79,10 +79,10 @@ class KognioRdfTermLookupTest {
      */
     @Test
     void rejectsAnUnknownTermCode() {
-        givenTerm(WORKSPACE_A, "TERM-1");
+        givenTerm(PROJECT_A, "TERM-1");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> termLookup.resolveByCode(WORKSPACE_A, "TERM-99"));
+                () -> termLookup.resolveByCode(PROJECT_A, "TERM-99"));
 
         assertTrue(ex.getMessage().contains("TERM-99"), ex.getMessage());
         assertTrue(ex.getMessage().contains("term_add"), ex.getMessage());
@@ -90,26 +90,26 @@ class KognioRdfTermLookupTest {
 
     @Test
     void rejectsAnAmbiguousTermCode() {
-        givenTermAtIri(WORKSPACE_A, "https://w3id.org/arknet/model/term/dup-1", "TERM-1");
-        givenTermAtIri(WORKSPACE_A, "https://w3id.org/arknet/model/term/dup-2", "TERM-1");
+        givenTermAtIri(PROJECT_A, "https://w3id.org/arknet/model/term/dup-1", "TERM-1");
+        givenTermAtIri(PROJECT_A, "https://w3id.org/arknet/model/term/dup-2", "TERM-1");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
-                () -> termLookup.resolveByCode(WORKSPACE_A, "TERM-1"));
+                () -> termLookup.resolveByCode(PROJECT_A, "TERM-1"));
 
         assertTrue(ex.getMessage().contains("ambiguous"), ex.getMessage());
     }
 
-    /** A term of another workspace must not satisfy this project's reference. */
+    /** A term of another project must not satisfy this project's reference. */
     @Test
-    void aTermOfAnotherWorkspaceDoesNotSatisfyThisWorkspacesReference() {
-        givenTerm(WORKSPACE_B, "TERM-1");
+    void aTermOfAnotherProjectDoesNotSatisfyThisProjectsReference() {
+        givenTerm(PROJECT_B, "TERM-1");
 
         assertThrows(UnresolvedReferenceException.class,
-                () -> termLookup.resolveByCode(WORKSPACE_A, "TERM-1"));
+                () -> termLookup.resolveByCode(PROJECT_A, "TERM-1"));
     }
 
     /**
-     * Writes a glossary term straight into the sibling terms graph of the shared workspace
+     * Writes a glossary term straight into the sibling terms graph of the shared project
      * dataset - deliberately via raw SPARQL rather than the ubiquitous-language adapter, so
      * this test does not couple the two bounded contexts. Returns the term's IRI.
      */

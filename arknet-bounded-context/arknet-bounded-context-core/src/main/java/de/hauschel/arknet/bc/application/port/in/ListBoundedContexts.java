@@ -16,7 +16,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 public interface ListBoundedContexts {
 
     /**
-     * Returns all bounded contexts currently under management in the given workspace.
+     * Returns all bounded contexts currently under management in the given project.
      *
      * @param projectId the project (architecture model) to list bounded contexts from
      * @return all bounded contexts, never {@code null}

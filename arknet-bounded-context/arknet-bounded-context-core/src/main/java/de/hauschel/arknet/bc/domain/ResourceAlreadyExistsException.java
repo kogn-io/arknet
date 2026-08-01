@@ -11,7 +11,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Thrown when
  * {@link de.hauschel.arknet.bc.application.port.out.BoundedContextRepository#create} is called
- * with an identity that already exists in the targeted workspace.
+ * with an identity that already exists in the targeted project.
  *
  * <p>A programming-error signal, not an expected domain outcome: identities are minted once by
  * a {@link de.hauschel.arknet.kernel.ResourceIdFactory} and are never reused, so this should
