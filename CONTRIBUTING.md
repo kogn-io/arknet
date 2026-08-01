@@ -56,7 +56,7 @@ Things to raise in an issue first:
   mvn verify
   ```
 
-See the [README](README.md) for the required toolchain (Java 25+, Maven 3.9+).
+Toolchain: Java 25+, Maven 3.9+.
 
 ## Commit messages
 
