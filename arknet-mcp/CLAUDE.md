@@ -5,7 +5,12 @@ MCP-Server (Streamable HTTP, Spring AI 2.0 `spring-ai-starter-mcp-server-webmvc`
 Betriebsmodell: EIN geteilter, langlebiger Daemon fuer alle Projekte der Maschine auf
 `127.0.0.1:47331` (Loopback-only, daher ohne Authentifizierung) statt eines stdio-Subprozesses pro
 Claude-Code-Session -- Grund: mehrere Sessions/Worktrees desselben Projekts teilen einen Store und
-kollidierten als eigene Subprozesse am NativeStore-Verzeichnis-Lock.
+kollidierten als eigene Subprozesse am NativeStore-Verzeichnis-Lock. Die Loopback-Grenze ist
+durchgesetzt, nicht nur behauptet: `AnchorHttpTransportConfiguration` setzt auf dem
+`WebMvcStreamableServerTransportProvider`-Bean einen `DefaultServerTransportSecurityValidator`
+mit einer Host-Allowlist aus `127.0.0.1:47331`/`localhost:47331` -- Spring AI MCPs Default waere
+sonst `ServerTransportSecurityValidator.NOOP`, der den Origin-/Host-Check aufruft, aber nichts
+prueft, und liesse einen per DNS-Rebinding same-origin gemachten Request durch (ADR-009 Punkt 4).
 
 Welches Projekt ein Aufruf trifft, entscheidet der **Anker**: eine opake Zeichenkette, die der
 Client mitschickt und die der Server ausschliesslich nachschlaegt (ADR-016). Sie kommt pro Aufruf
