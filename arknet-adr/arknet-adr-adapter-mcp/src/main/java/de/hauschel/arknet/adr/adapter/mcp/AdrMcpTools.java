@@ -439,8 +439,15 @@ public final class AdrMcpTools {
         try {
             return LocalDate.parse(trimmed.trim());
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException(
-                    "decisionDate must be an ISO-8601 date (yyyy-MM-dd), was: " + trimmed, e);
+            // Deliberately not passed as this exception's cause: Spring AI's MCP tool callback
+            // renders the deepest exception in the getCause() chain, not this one - chaining e here
+            // would let the JDK's raw parse message win over this composed, actionable one (#186,
+            // same trap as #137). Kept as a suppressed exception instead, so the original is still
+            // on the stack trace without being able to win the walk.
+            final IllegalArgumentException translated = new IllegalArgumentException(
+                    "decisionDate must be an ISO-8601 date (yyyy-MM-dd), was: " + trimmed);
+            translated.addSuppressed(e);
+            throw translated;
         }
     }
 
