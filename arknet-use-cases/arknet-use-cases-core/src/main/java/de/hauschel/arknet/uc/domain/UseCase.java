@@ -101,12 +101,13 @@ public record UseCase(
      * @param projectId the project the correction is issued against, for the exception message
      *                  only
      * @param patches   text corrections for individual existing main-flow steps, addressed by
-     *                  their {@code position}
+     *                  their {@code position}; never {@code null}
      * @return a new use case with the patched steps
      * @throws StepPositionNotFoundException if a patch names a position no step in {@link #steps()}
      *                                        carries
      */
     public UseCase withStepTextPatches(ProjectId projectId, List<StepTextPatch> patches) {
+        Objects.requireNonNull(patches, "patches");
         Map<Integer, String> textByPosition = new LinkedHashMap<>();
         for (StepTextPatch patch : patches) {
             textByPosition.put(patch.position(), patch.text());

@@ -173,6 +173,13 @@ class UseCaseTest {
     }
 
     @Test
+    void withStepTextPatchesRejectsNullPatches() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        assertThrows(NullPointerException.class, () -> uc.withStepTextPatches(PROJECT, null));
+    }
+
+    @Test
     void withStepTextPatchesRejectsAPatchForAnUnknownPosition() {
         UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
 
