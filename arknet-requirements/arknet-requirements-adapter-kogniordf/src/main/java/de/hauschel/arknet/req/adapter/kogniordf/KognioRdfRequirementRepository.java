@@ -51,6 +51,7 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.req.domain.TermRef;
+import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
 /**
  * Out-adapter: {@link RequirementRepository} backed by the kognio-rdf substrate
@@ -136,6 +137,16 @@ import de.hauschel.arknet.req.domain.TermRef;
  * its single-row {@code findFirst()} is already internally consistent (one row = one coherent
  * value combination), it just returns a value combination the store cannot guarantee is "the"
  * one.</p>
+ *
+ * <p><strong>SHACL-legal but MVP-unsupported status.</strong> {@code requirements-shapes.ttl}'s
+ * {@code Requirement-status} shape allows six status individuals via {@code sh:in}, but
+ * {@link de.hauschel.arknet.req.domain.RequirementStatus} implements only two ({@code
+ * PROPOSED}/{@code ACCEPTED}). A store-first (ADR-005) requirement carrying one of the other four
+ * is therefore SHACL-legal but cannot be decoded: {@link #findByCode}, {@link #findCurrentByCode}
+ * and {@link #findAll} all throw {@link
+ * de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException} for it, naming the
+ * requirement and the unsupported status, rather than silently filtering it out of the result (see
+ * {@link #statusFromIri}).</p>
  */
 public class KognioRdfRequirementRepository implements RequirementRepository {
 
@@ -383,7 +394,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * one would otherwise bind an extra, unpredictable row, and {@link #typeFromIri} throws
      * {@link IllegalStateException} for any type that is neither FunctionalRequirement nor
      * NonFunctionalRequirement), the mandatory title/description/status joins, and the three
-     * optional joins (priority, motivatedBy, qualityCategory). {@code identifierClause} supplies
+     * optional joins (priority, motivatedBy, qualityCategory). {@code status} is deliberately
+     * <strong>not</strong> filtered the same way {@code type} is - see {@link #statusFromIri} for
+     * why a SHACL-legal but MVP-unsupported status fails loudly ({@link
+     * UnsupportedRequirementStatusException}) instead of being filtered into invisibility.
+     * {@code identifierClause} supplies
      * the one join that differs per caller - a specific {@link RequirementCode} literal for
      * {@link #findByCode}/{@link #findCurrentByCode} (via {@link #requirementByCodeWhereClause}),
      * an unbound {@code ?identifier} variable for {@link #findAll}. Extracted because all three
@@ -425,23 +440,28 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@link #findByCode} and {@link #findCurrentByCode} so both single-requirement read paths
      * build a {@link Requirement} the same way - drift between near-identical read paths in this
      * class was a real bug twice before (the {@link #findAll} row-grouping fix).
+     *
+     * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
-    private Requirement requirementOf(BindingSet row, RequirementCode code, DatasetHandle handle) {
+    private Requirement requirementOf(
+            ProjectId projectId, BindingSet row, RequirementCode code, DatasetHandle handle) {
         String subjectIriString = iriOf(row, "s").getIRIString();
-        return requirementOf(row, code, handle, acceptanceCriteriaOrLegacyPlaceholder(
+        return requirementOf(projectId, row, code, handle, acceptanceCriteriaOrLegacyPlaceholder(
                 readAcceptanceCriteria(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString))));
     }
 
     /**
-     * {@link #requirementOf(BindingSet, RequirementCode, DatasetHandle)} with the caller already
-     * holding the resolved {@code acceptanceCriteria} list - the seam {@link #findCurrentByCode}
-     * uses so it can read {@link #readAcceptanceCriteria} exactly once and still learn, before
-     * building the {@link Requirement}, whether the result it is about to embed is a real store
-     * value or the legacy placeholder (see {@link
+     * {@link #requirementOf(ProjectId, BindingSet, RequirementCode, DatasetHandle)} with the
+     * caller already holding the resolved {@code acceptanceCriteria} list - the seam
+     * {@link #findCurrentByCode} uses so it can read {@link #readAcceptanceCriteria} exactly once
+     * and still learn, before building the {@link Requirement}, whether the result it is about to
+     * embed is a real store value or the legacy placeholder (see {@link
      * RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}).
+     *
+     * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
-    private Requirement requirementOf(
-            BindingSet row, RequirementCode code, DatasetHandle handle, List<String> acceptanceCriteria) {
+    private Requirement requirementOf(ProjectId projectId, BindingSet row, RequirementCode code,
+            DatasetHandle handle, List<String> acceptanceCriteria) {
         String subjectIriString = iriOf(row, "s").getIRIString();
         return new Requirement(
                 new RequirementId(ResourceId.of(subjectIriString)),
@@ -449,7 +469,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 literalOf(row, "title").getLexicalForm(),
                 literalOf(row, "description").getLexicalForm(),
                 typeFromIri(iriOf(row, "type").getIRIString()),
-                statusFromIri(iriOf(row, "status").getIRIString()),
+                statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                 priorityOf(row),
                 motivatedByOf(row),
                 qualityCategoryOf(row),
@@ -472,7 +492,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             if (head.isEmpty()) {
                 return Optional.empty();
             }
-            return Optional.of(requirementOf(head.get(), code, handle));
+            return Optional.of(requirementOf(projectId, head.get(), code, handle));
         }
     }
 
@@ -493,7 +513,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head, and the {@code
      * acceptanceCriteriaIsSynthesized} flag {@link #findByCode} has no need for: this method reads
      * {@link #readAcceptanceCriteria} itself (rather than delegating to {@link
-     * #requirementOf(BindingSet, RequirementCode, DatasetHandle)}) so it can tell, before the
+     * #requirementOf(ProjectId, BindingSet, RequirementCode, DatasetHandle)}) so it can tell, before the
      * {@link Requirement} is built, whether {@link #sanitizeAcceptanceCriteria} left anything at
      * all - i.e. whether the subject carries a real {@code arkreq:acceptanceCriterion} triple or
      * none, the fact {@link RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}
@@ -528,7 +548,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             List<String> acceptanceCriteria = acceptanceCriteriaIsSynthesized
                     ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER
                     : sanitizedCriteria;
-            Requirement requirement = requirementOf(row, code, handle, acceptanceCriteria);
+            Requirement requirement = requirementOf(projectId, row, code, handle, acceptanceCriteria);
             RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
@@ -558,7 +578,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             // would have surfaced that subject twice in the result list instead of once.
             Map<String, RequirementAssembly> bySubject = new LinkedHashMap<>();
             handle.sparqlQuery().select(query).forEach(row -> {
-                RequirementAssembly assembly = assemblyFor(bySubject, row);
+                RequirementAssembly assembly = assemblyFor(projectId, bySubject, row);
                 assembly.addPriorityCandidate(priorityOf(row));
                 assembly.addQualityCategoryCandidate(qualityCategoryOf(row));
             });
@@ -582,16 +602,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code qualityCategory} binding (if present) as a candidate via
      * {@link RequirementAssembly#addPriorityCandidate}/{@link RequirementAssembly#addQualityCategoryCandidate},
      * called by {@link #findAll} once per row.
+     *
+     * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
-    private static RequirementAssembly assemblyFor(Map<String, RequirementAssembly> bySubject, BindingSet row) {
+    private static RequirementAssembly assemblyFor(
+            ProjectId projectId, Map<String, RequirementAssembly> bySubject, BindingSet row) {
         String subjectIri = iriOf(row, "s").getIRIString();
+        RequirementCode code = new RequirementCode(literalOf(row, "identifier").getLexicalForm());
         return bySubject.computeIfAbsent(subjectIri, iri -> new RequirementAssembly(
                 new RequirementId(ResourceId.of(iri)),
-                new RequirementCode(literalOf(row, "identifier").getLexicalForm()),
+                code,
                 literalOf(row, "title").getLexicalForm(),
                 literalOf(row, "description").getLexicalForm(),
                 typeFromIri(iriOf(row, "type").getIRIString()),
-                statusFromIri(iriOf(row, "status").getIRIString()),
+                statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                 motivatedByOf(row)));
     }
 
@@ -856,14 +880,32 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         };
     }
 
-    private static RequirementStatus statusFromIri(String iri) {
+    /**
+     * Decodes a status IRI into the MVP subset {@link RequirementStatus} implements.
+     *
+     * <p>Unlike {@link #typeFromIri}, whose only two legal inputs are guaranteed by
+     * {@link #requirementWhereClause}'s {@code FILTER} on {@code ?type}, {@code ?status} is
+     * <strong>not</strong> filtered the same way: {@code requirements-shapes.ttl}'s
+     * {@code Requirement-status} shape SHACL-legally allows six status individuals, but
+     * {@link RequirementStatus} only implements two. Filtering the other four out here would
+     * silently make a SHACL-legal, store-first (ADR-005) requirement invisible to
+     * {@code req_list}/{@code req_get} instead of failing loudly -
+     * {@link UnsupportedRequirementStatusException} is thrown directly (never as a wrapped
+     * {@link IllegalStateException}) so the caller sees which requirement and which unsupported
+     * status, instead of every other requirement in the project becoming unreachable too.</p>
+     *
+     * @throws UnsupportedRequirementStatusException if {@code iri} is SHACL-legal but not one of
+     *                                                 the two individuals {@link RequirementStatus}
+     *                                                 implements
+     */
+    private static RequirementStatus statusFromIri(ProjectId projectId, RequirementCode code, String iri) {
         if (PROPOSED_STATUS.equals(iri)) {
             return RequirementStatus.PROPOSED;
         }
         if (ACCEPTED_STATUS.equals(iri)) {
             return RequirementStatus.ACCEPTED;
         }
-        throw new IllegalStateException("unexpected status " + iri);
+        throw new UnsupportedRequirementStatusException(projectId, code, iri);
     }
 
     private static String priorityIriFor(Priority priority) {

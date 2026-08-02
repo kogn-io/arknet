@@ -15,6 +15,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
 /**
  * Driven port: persistence capability the component needs from the outside.
@@ -90,6 +91,11 @@ public interface RequirementRepository {
      * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
      * @return the requirement if present, otherwise {@link Optional#empty()}
+     * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
+     *                                                 SHACL-legal but not one of the MVP subset
+     *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
+     *                                                 implements (only reachable via a store-first,
+     *                                                 ADR-005 edit)
      */
     Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code);
 
@@ -112,6 +118,11 @@ public interface RequirementRepository {
      * @param code        the requirement code (e.g. {@code FR-1})
      * @return the requirement and its current head, or {@link Optional#empty()} if no requirement
      *         with this code exists
+     * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
+     *                                                 SHACL-legal but not one of the MVP subset
+     *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
+     *                                                 implements (only reachable via a store-first,
+     *                                                 ADR-005 edit)
      */
     Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code);
 
@@ -146,6 +157,13 @@ public interface RequirementRepository {
      *
      * @param projectId the project (architecture model) to list requirements from
      * @return all requirements, never {@code null}
+     * @throws UnsupportedRequirementStatusException if any requirement's stored status is
+     *                                                 SHACL-legal but not one of the MVP subset
+     *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
+     *                                                 implements (only reachable via a store-first,
+     *                                                 ADR-005 edit) - one such requirement aborts
+     *                                                 the whole listing rather than being silently
+     *                                                 dropped
      */
     List<Requirement> findAll(ProjectId projectId);
 
