@@ -15,14 +15,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.prj.application.port.in.RenameProject;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
+import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
 import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
@@ -69,6 +72,22 @@ class ProjectServiceTest {
 
         assertEquals(owner.id(), ex.owner());
         assertEquals(anchor, ex.anchor());
+    }
+
+    /**
+     * The label counterpart of the anchor collision above: {@link ProjectService#register} runs no
+     * client-side label pre-check (unlike the anchor, whose {@code findByAnchor} guard runs before
+     * an identity is minted), so this exercises the registry's own {@link DuplicateProjectLabelException}
+     * surfacing through unchanged.
+     */
+    @Test
+    void registerWithADuplicateLabelThrowsAndPropagatesTheDuplicateProjectLabelException() {
+        service.register("arknet", pathAnchor("/home/fred/arknet"));
+
+        DuplicateProjectLabelException ex = assertThrows(DuplicateProjectLabelException.class,
+                () -> service.register("arknet", pathAnchor("/home/fred/arknet-copy")));
+
+        assertEquals("arknet", ex.label());
     }
 
     @Test
@@ -145,6 +164,12 @@ class ProjectServiceTest {
     }
 
     @Test
+    void attachOnAnUnregisteredProjectThrows() {
+        assertThrows(ProjectNotFoundException.class,
+                () -> service.attach(new ProjectId(UUID.randomUUID().toString()), pathAnchor("/home/fred/ghost")));
+    }
+
+    @Test
     void renameChangesTheLabelKeepsTheAnchorsAndKeepsTheIdentityStable() {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
 
@@ -153,6 +178,39 @@ class ProjectServiceTest {
         assertEquals("arknet-renamed", renamed.label());
         assertEquals(project.id(), renamed.id());
         assertEquals(project.anchors(), renamed.anchors());
+    }
+
+    @Test
+    void renameOnAnUnregisteredProjectThrows() {
+        assertThrows(ProjectNotFoundException.class,
+                () -> service.rename(new ProjectId(UUID.randomUUID().toString()), "ghost"));
+    }
+
+    @Test
+    void renameToADuplicateLabelThrows() {
+        Project a = service.register("project-a", pathAnchor("/home/fred/a"));
+        service.register("project-b", pathAnchor("/home/fred/b"));
+
+        DuplicateProjectLabelException ex = assertThrows(DuplicateProjectLabelException.class,
+                () -> service.rename(a.id(), "project-b"));
+
+        assertEquals("project-b", ex.label());
+    }
+
+    /**
+     * Mirrors {@link #attachingTheSameAnchorTwiceIsIdempotentAndPerformsNoSecondWrite}: renaming to
+     * the label the project already carries is documented as a no-op on {@link RenameProject}
+     * itself, but nothing exercised it.
+     */
+    @Test
+    void renamingToTheCurrentLabelIsIdempotentAndPerformsNoSecondWrite() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        int writesAfterRegister = registry.writeCount();
+
+        Project renamed = service.rename(project.id(), "arknet");
+
+        assertEquals(project, renamed);
+        assertEquals(writesAfterRegister, registry.writeCount());
     }
 
     @Test
@@ -258,12 +316,44 @@ class ProjectServiceTest {
     void aStaleCompareAndUpdateOnTheFirstAttemptIsRetriedTransparently() {
         Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
         ProjectService retryingService =
-                new ProjectService(new ConflictsOnFirstWriteRegistry(registry), selfDescription, datasets);
+                new ProjectService(new ConflictsOnCompareAndUpdateRegistry(registry, 1), selfDescription, datasets);
 
         Project attached = retryingService.attach(project.id(), pathAnchor("/home/fred/arknet-worktree"));
 
         assertEquals(2, attached.anchors().size());
         assertEquals(2, registry.findById(project.id()).orElseThrow().anchors().size());
+    }
+
+    /**
+     * The {@code attach} counterpart of {@link #anUnattributedRegistrationConflictThatNeverClearsIsRethrownAfterTheRetryBudgetIsSpent}:
+     * {@link ProjectService#updateWithOptimisticRetry}'s bound must eventually give up and surface
+     * {@link StaleProjectException} rather than looping forever - {@code register}'s exhaustion
+     * path was tested, this read-modify-write path was not.
+     */
+    @Test
+    void aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        int writesAfterRegister = registry.writeCount();
+        ProjectService retryingService = new ProjectService(
+                new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+
+        assertThrows(StaleProjectException.class,
+                () -> retryingService.attach(project.id(), pathAnchor("/home/fred/arknet-worktree")));
+        assertEquals(writesAfterRegister, registry.writeCount(), "an exhausted retry must not have written anything");
+    }
+
+    /** The {@code rename} counterpart of {@link #aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent}. */
+    @Test
+    void aStaleCompareAndUpdateThatNeverClearsOnRenameIsRethrownAfterTheRetryBudgetIsSpent() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        int writesAfterRegister = registry.writeCount();
+        ProjectService retryingService = new ProjectService(
+                new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+
+        assertThrows(StaleProjectException.class, () -> retryingService.rename(project.id(), "arknet-renamed"));
+        assertEquals(writesAfterRegister, registry.writeCount(), "an exhausted retry must not have written anything");
+        assertEquals("arknet", registry.findById(project.id()).orElseThrow().label(),
+                "the loser's label must not have applied");
     }
 
     /**
@@ -355,18 +445,23 @@ class ProjectServiceTest {
     }
 
     /**
-     * Decorator that reports a stale concurrency token on the very first
-     * {@link #compareAndUpdate} call, then delegates every subsequent call unchanged -
+     * Decorator that reports a stale concurrency token on the first {@code failuresBeforeSuccess}
+     * {@link #compareAndUpdate} calls, then delegates every subsequent call unchanged -
      * deterministically reproducing a concurrent writer's commit landing between a caller's read
-     * and its own write, without relying on real threads or timing.
+     * and its own write, without relying on real threads or timing. Mirrors
+     * {@link ConflictsOnRegisterRegistry}'s parameterisation: {@code 1} reproduces a single
+     * transient conflict that {@link ProjectService#updateWithOptimisticRetry} absorbs,
+     * {@link Integer#MAX_VALUE} reproduces sustained contention that exhausts the retry budget.
      */
-    private static final class ConflictsOnFirstWriteRegistry implements ProjectRegistry {
+    private static final class ConflictsOnCompareAndUpdateRegistry implements ProjectRegistry {
 
         private final ProjectRegistry delegate;
-        private boolean firstWriteSeen;
+        private final int failuresBeforeSuccess;
+        private int attempts;
 
-        ConflictsOnFirstWriteRegistry(ProjectRegistry delegate) {
+        ConflictsOnCompareAndUpdateRegistry(ProjectRegistry delegate, int failuresBeforeSuccess) {
             this.delegate = delegate;
+            this.failuresBeforeSuccess = failuresBeforeSuccess;
         }
 
         @Override
@@ -396,8 +491,8 @@ class ProjectServiceTest {
 
         @Override
         public void compareAndUpdate(RevisionToken expectedHead, Project project) {
-            if (!firstWriteSeen) {
-                firstWriteSeen = true;
+            attempts++;
+            if (attempts <= failuresBeforeSuccess) {
                 throw new StaleProjectException(project.id());
             }
             delegate.compareAndUpdate(expectedHead, project);
