@@ -127,7 +127,10 @@ public final class UbiquitousLanguageMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = "The term itself (its preferred label), e.g. 'Gutschrift'")
             final String label,
-            @McpToolParam(description = "The meaning of the term (its definition)") final String definition,
+            @McpToolParam(description = "The meaning of the term (its definition). Domain meaning only - no "
+                    + "architecture, technology, or implementation decisions (source-of-record, persistence, "
+                    + "tenancy, who-triggers-what, ...). Those belong in an ADR (adr_add)")
+            final String definition,
             @McpToolParam(description = "Optional: mark this term as an actor (a skos:Concept that is "
                     + "additionally an arkproc:Actor). Actor kind: HUMAN or SYSTEM", required = false)
             final String actorKind,
@@ -177,7 +180,9 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
             @McpToolParam(description = "New preferred label (optional, unchanged if omitted)", required = false)
             final String label,
-            @McpToolParam(description = "New definition (optional, unchanged if omitted)", required = false)
+            @McpToolParam(description = "New definition (optional, unchanged if omitted). Domain meaning only - "
+                    + "no architecture, technology, or implementation decisions (source-of-record, persistence, "
+                    + "tenancy, who-triggers-what, ...). Those belong in an ADR (adr_add)", required = false)
             final String definition,
             @McpToolParam(description = "Optional: (re-)mark this term as an actor. Actor kind: HUMAN or SYSTEM. "
                     + "Leaves an already-set actor facette unchanged if omitted", required = false)
