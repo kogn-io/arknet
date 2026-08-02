@@ -149,6 +149,15 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Regel 5: die Composition Root (arknet-mcp), die laut eigenem Javadoc frei von
+             direktem RDF4J bleibt, ohne dass ein Test das je geprueft haette (#185). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-mcp</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>

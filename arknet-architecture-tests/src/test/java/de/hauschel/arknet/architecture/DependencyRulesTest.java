@@ -43,8 +43,9 @@ import com.tngtech.archunit.lang.ArchRule;
  * classpath surfaces as a failure rather than a vacuous pass. For the former, break the
  * invariant on purpose -- add a {@code private org.eclipse.rdf4j.model.Model x;} field to
  * {@code ShaclWriteGate} (rule 1), to a {@code KognioRdf*Repository} (rule 2), to a
- * {@code *-core} class (rule 3), or to a {@code *-adapter-mcp} class (rule 4) -- and confirm
- * the rule fails before trusting it. All four were confirmed to fail this way when
+ * {@code *-core} class (rule 3), to a {@code *-adapter-mcp} class (rule 4), or to a
+ * {@code de.hauschel.arknet.mcp} class such as {@code StoreReader} (rule 5) -- and confirm
+ * the rule fails before trusting it. All five were confirmed to fail this way when
  * introduced.</p>
  *
  * <p><strong>Why tests are excluded.</strong> The rules describe production code. Test code
@@ -160,4 +161,24 @@ class DependencyRulesTest {
                     .because("a driving MCP adapter talks to its own bounded context through "
                             + "its in-port (or, per ADR-008, a neighbour's in-port); RDF is an "
                             + "out-adapter concern");
+
+    /**
+     * Rule 5 -- the composition root stays free of direct RDF4J, mirroring the claim its own
+     * Javadoc already makes ({@code ArknetMcpConfiguration}, {@code StoreReader},
+     * {@code TraceabilityGraph}; #185).
+     *
+     * <p>Unlike rules 3 and 4, this does not ban {@code io.kogn} wholesale: the composition
+     * root's generic store-read path ({@code mcp/store}, {@code mcp/trace}) deliberately reads
+     * the technology-neutral kognio-rdf ports directly (ADR-006), so only {@link
+     * #RDF4J_PACKAGES} -- RDF4J itself and kognio-rdf's RDF4J-backed implementations -- is
+     * checked here.</p>
+     */
+    @ArchTest
+    static final ArchRule composition_root_stays_free_of_rdf4j =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.mcp..")
+                    .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
+                    .because("arknet-mcp wires the out-adapters but does not itself reach for "
+                            + "RDF4J-backed types; its generic read path uses only the "
+                            + "technology-neutral kognio-rdf ports (ADR-006)");
 }
