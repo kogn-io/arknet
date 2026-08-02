@@ -44,9 +44,23 @@ pro Session und nicht als ein Daemon pro Workspace.
    Server leitet daraus per git-common-dir (#136) die WorkspaceId ab. Ein Aufruf ohne Herkunft
    faellt auf den Default-Workspace des Servers zurueck.
 4. Loopback-only, ohne Authentifizierung -- dieselbe Vertrauensgrenze wie der vorherige
-   stdio-Subprozess (nur lokale Prozesse derselben Maschine haben Zugriff). Der Herkunfts-Header
-   ist ausdruecklich KEINE Authentifizierung: ein lokaler Client koennte ein fremdes
-   Workspace-Verzeichnis behaupten -- an dieser Single-User-/Loopback-Grenze eine bewusst
+   stdio-Subprozess (nur lokale Prozesse derselben Maschine haben Zugriff), aber das gilt erst,
+   wenn der Transport auch tatsaechlich prueft, dass ein Request von derselben Maschine kommt.
+   Spring AI MCPs auto-konfigurierter `WebMvcStreamableServerTransportProvider` ruft dafuer
+   zwar einen `ServerTransportSecurityValidator` auf, verdrahtet aber standardmaessig
+   `ServerTransportSecurityValidator.NOOP` -- der Origin-/Host-Check wird zwar aufgerufen, tut
+   aber nichts. Ohne einen echten Check waere ein per DNS-Rebinding umgebogener Hostname
+   same-origin mit dem Daemon und koennte jedes Tool fahren, obwohl der Request von einer
+   Webseite und nicht von einem lokalen Prozess stammt -- die Loopback-Grenze waere dann nur
+   behauptet, nicht durchgesetzt. `AnchorHttpTransportConfiguration` ersetzt den Default darum
+   durch einen `DefaultServerTransportSecurityValidator` mit einer Allowlist aus genau den
+   beiden Host-Header-Schreibweisen, unter denen der Daemon lauscht (`127.0.0.1:47331`,
+   `localhost:47331`); ein Request mit einem anderen Host-Header wird abgelehnt, bevor er den
+   Anker-Header ueberhaupt sieht. Damit ist die Vertrauensgrenze wieder das, was Punkt 4
+   behauptet: nur ein Prozess, der den Daemon unter einem seiner beiden lokalen Namen
+   anspricht, kommt ueberhaupt durch. Der Herkunfts-Header (Punkt 3) bleibt trotzdem ausdruecklich
+   KEINE Authentifizierung: ein lokaler Client, der den Host-Check besteht, koennte immer noch ein
+   fremdes Workspace-Verzeichnis behaupten -- an dieser Single-User-/Loopback-Grenze eine bewusst
    akzeptierte Annahme. Diese Annahme deckt nicht nur Workspace-*Routing*, sondern auch eine
    konkrete Dateisystem-Capability: `store_overview` schreibt `store-report.html` unvalidiert in
    den vom Header behaupteten Pfad (`Path.of(originDir)`, `Files.createDirectories`) -- vor #137
