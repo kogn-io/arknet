@@ -192,6 +192,35 @@ class ProjectRegistryRealStoreConcurrencyTest {
     }
 
     /**
+     * The precedence itself (issue #179): a genuine <em>double</em> collision, where the losing
+     * write breaks <em>both</em> uniqueness rules at once - same anchor <em>and</em> same label -
+     * so the two tests above cannot tell the precedence apart from a coincidence. Only this test
+     * pins {@link KognioRdfProjectRegistry#attributeLostRegistration}'s documented "anchor before
+     * label" ordering: were the check ever swapped, this is the only test in the class that would
+     * notice, because the two single-rule tests above would keep passing regardless of which rule
+     * is checked first.
+     */
+    @Test
+    void concurrentRegistrationsOfTheSameAnchorAndTheSameLabel_leaveOneOwnerAndTellTheLoserAboutTheAnchor()
+            throws InterruptedException {
+        Anchor contested = pathAnchor("/home/dev/arknet");
+        Project winner = new Project(freshId(), "arknet", List.of(contested));
+        Project loser = new Project(freshId(), "arknet", List.of(contested));
+
+        Race race = raceRegistrations(winner, loser);
+
+        assertNull(race.winnerFailure(), "the winner commits first and must not fail");
+        AnchorAlreadyRegisteredException rejected = assertInstanceOf(AnchorAlreadyRegisteredException.class,
+                race.loserFailure(),
+                "both rules are genuinely broken, and the documented precedence names the anchor");
+        assertEquals(contested, rejected.anchor());
+        assertEquals(winner.id(), rejected.owner());
+
+        assertEquals(List.of(winner), straightThrough.findAll(),
+                "the loser's whole transaction must have rolled back - one anchor, one project");
+    }
+
+    /**
      * The label rule under the same overlapping race: both callers pass the funnel's synchronous
      * {@code dcterms:identifier} check because neither sees the other's uncommitted write, and the
      * loser must still be told its label is taken - here it genuinely is.
