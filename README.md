@@ -251,10 +251,10 @@ Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 
 | Tool | Description |
 |------|-------------|
-| `term_add` | Create a new glossary term (mints a SKOS Concept; optionally markable as an actor via `actorKind`/`actorRole`) |
-| `term_update` | Correct a term's preferred label, definition and/or actor facette, keeping its identity (and all links into it) unchanged (each argument optional, unchanged if omitted) |
+| `term_add` | Create a new glossary term (mints a SKOS Concept; optionally markable as an actor via `actorKind`/`actorRole`). Preferred label and definition are natively multilingual -- an optional `language` argument tags the literal being written (BCP-47, e.g. `"en"`); omitted, it stays untagged as before |
+| `term_update` | Correct a term's preferred label, definition and/or actor facette, keeping its identity (and all links into it) unchanged (each argument optional, unchanged if omitted). `language` scopes the write to that one language's literal, leaving other language variants untouched |
 | `term_list` | List all glossary terms |
-| `term_get` | Fetch a single term by identity (e.g. TERM-1) |
+| `term_get` | Fetch a single term by identity (e.g. TERM-1). An optional `displayLocale` argument picks which language variant of a multilingual label/definition to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
 
 Use Cases BC (`arknet-use-cases`) -- flow-oriented Cockburn use cases (bind FRs via an interaction flow):
 
@@ -289,10 +289,11 @@ Project BC (`arknet-project`) -- the project registry: which anchor a call arriv
 
 | Tool | Description |
 |------|-------------|
-| `project_add` | Register a project; the calling client's origin directory becomes its first anchor (or pass `anchor`/`anchorType` explicitly for clients that cannot supply one) |
+| `project_add` | Register a project; the calling client's origin directory becomes its first anchor (or pass `anchor`/`anchorType` explicitly for clients that cannot supply one). Optional `description` (multilingual, tagged via `language`) and `defaultLanguage` (a single BCP-47 tag) can be set at creation |
 | `project_adopt` | Claim an existing dataset as the project the call comes from -- for data written before projects were registered, or a dataset restored from a backup; the dataset keeps its identity and all its data |
 | `project_attach_anchor` | Attach a further anchor to the project the call comes from -- for the same project worked on from a second directory (`callerAnchor` names the calling project explicitly when the transport carries no origin directory) |
 | `project_rename` | Rename the project the call comes from; identity and anchors are unaffected (same optional `callerAnchor`) |
+| `project_update` | Change a project's description and/or default display language (each optional, unchanged if omitted); `language` scopes a description write to that one language's literal, other language variants untouched -- same pattern as `term_update` |
 | `project_list` | List all registered projects with their anchors and identities, plus any datasets no project claims yet (adoptable with `project_adopt`) |
 
 Store report -- generic, cross-BC read path (readOnly; works for any BC without type mapping):
