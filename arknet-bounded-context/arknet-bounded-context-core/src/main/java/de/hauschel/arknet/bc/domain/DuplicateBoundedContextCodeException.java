@@ -11,7 +11,10 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Thrown when
  * {@link de.hauschel.arknet.bc.application.port.out.BoundedContextRepository#create} is called
  * with a {@link BoundedContextCode} that already labels a different bounded context in the
- * targeted project.
+ * targeted project - or when
+ * {@link de.hauschel.arknet.bc.application.port.out.BoundedContextRepository#compareAndUpdate}
+ * changes an existing bounded context's code to one that already labels a different bounded
+ * context.
  *
  * <p>Distinct from {@link ResourceAlreadyExistsException}: that one flags an opaque-identity
  * collision (a programming error - identities are minted once and never reused), while this one

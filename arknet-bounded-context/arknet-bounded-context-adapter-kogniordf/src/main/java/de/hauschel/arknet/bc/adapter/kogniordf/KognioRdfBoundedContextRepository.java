@@ -88,11 +88,14 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * with {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
  * {@link #compareAndUpdate} rejects a missing subject with
- * {@link BoundedContextNotFoundException} and a stale {@code expectedHead} with
- * {@link BoundedContextConcurrentlyModifiedException}, and otherwise replaces the subject's
- * triples wholesale (see {@link #replaceExistingTriples}). There is no unconditional update: every
- * correction to an already-created bounded context goes through the compare-and-set guard, so two
- * concurrent {@code bc_link_term} calls can no longer silently lose one another's edge.</p>
+ * {@link BoundedContextNotFoundException}, a stale {@code expectedHead} with
+ * {@link BoundedContextConcurrentlyModifiedException}, and - via its own
+ * {@link #rejectCodeCollision} check, since {@link WriteFunnel#compareAndUpdate} runs no such
+ * check itself - a business-code collision with {@link DuplicateBoundedContextCodeException} too
+ * (issue #164), and otherwise replaces the subject's triples wholesale (see
+ * {@link #replaceExistingTriples}). There is no unconditional update: every correction to an
+ * already-created bounded context goes through the compare-and-set guard, so two concurrent
+ * {@code bc_link_term} calls can no longer silently lose one another's edge.</p>
  *
  * <p><strong>The second interleaving.</strong> {@link WriteFunnel#create} translates
  * a lost {@code SERIALIZABLE} write conflict on {@link #create} into the same
@@ -212,6 +215,18 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * transaction - closing the lost-update window a plain read (via {@link #findCurrentByCode})
      * followed by an unconditional replace would otherwise leave open between the read and the
      * write.
+     *
+     * <p><strong>Business-code uniqueness (issue #164).</strong> Unlike {@link #create},
+     * {@link WriteFunnel#compareAndUpdate} runs no {@code dcterms:identifier} collision check of
+     * its own - a create's subject is brand-new, but a compare-and-set update's subject already
+     * exists and, ordinarily, already carries this very code. So the check this method runs
+     * itself, via {@link #rejectCodeCollision}, must exclude the subject being updated rather than
+     * simply asking whether {@code updated.code()} exists anywhere - the same synchronous
+     * {@code dcterms:identifier} check {@link #create} performs, just scoped to "some
+     * <em>other</em> subject" instead of "any subject". Rejects with
+     * {@link DuplicateBoundedContextCodeException} before {@code replaceExistingTriples} touches
+     * any triple, so a rejected code change writes nothing and records no revision - the same
+     * atomicity a stale {@code expectedHead} already gets.</p>
      */
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated) {
@@ -228,7 +243,37 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 expectedHead == null ? null : expectedHead.value(), graph, null,
                 () -> new BoundedContextNotFoundException(projectId, updated.code()),
                 () -> new BoundedContextConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceExistingTriples(tx, graphIri, subjectIri, subject, graph));
+                tx -> {
+                    rejectCodeCollision(tx, graphIri, subjectIri, updated.code(), projectId);
+                    replaceExistingTriples(tx, graphIri, subjectIri, subject, graph);
+                });
+    }
+
+    /**
+     * Rejects the write if {@code code} already labels a bounded context other than
+     * {@code subjectIri} - {@link #create}'s business-code uniqueness rule, ported to
+     * {@link #compareAndUpdate} (issue #164). Two {@link DatasetTx#contains} checks rather than a
+     * {@code SELECT}/{@code ASK}, following the same reasoning {@link #create}'s own code check
+     * already relies on ({@code DatasetTx#contains}'s javadoc: a pattern-matched {@code contains}
+     * is answered from the backend's own pattern lookup and stays conflict-guarded under
+     * {@code SERIALIZABLE}, where a query's rewritten terms are not guaranteed to be). Plain
+     * {@code contains(graph, null, identifierProperty, code)} alone cannot exclude
+     * {@code subjectIri}: at this point in the transaction {@code subjectIri}'s own,
+     * not-yet-deleted {@code dcterms:identifier} triple still carries whatever code it had before
+     * the update, so an unscoped check would misreport a no-op code change - the only case every
+     * caller in this codebase, {@code linkTerm}, currently exercises - as a collision with itself.
+     * A collision is exactly "some subject other than {@code subjectIri} has {@code code}": true
+     * when any subject has it but {@code subjectIri} does not (yet).
+     */
+    private void rejectCodeCollision(DatasetTx tx, IRI graphIri, IRI subjectIri, BoundedContextCode code,
+            ProjectId projectId) {
+        IRI identifierProperty = rdf.createIRI(IDENTIFIER_PROPERTY);
+        Literal codeLiteral = rdf.createLiteral(code.value());
+        boolean anySubjectHasCode = tx.contains(graphIri, null, identifierProperty, codeLiteral);
+        boolean thisSubjectHasCode = tx.contains(graphIri, subjectIri, identifierProperty, codeLiteral);
+        if (anySubjectHasCode && !thisSubjectHasCode) {
+            throw new DuplicateBoundedContextCodeException(projectId, code);
+        }
     }
 
     /**
