@@ -147,6 +147,16 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException} for it, naming the
  * requirement and the unsupported status, rather than silently filtering it out of the result (see
  * {@link #statusFromIri}).</p>
+ *
+ * <p><strong>Type-mismatched {@code priority}/{@code motivatedBy}/{@code qualityCategory}.</strong>
+ * All three shapes are {@code sh:Warning}-severity (never blocks a write), and none declares
+ * {@code sh:nodeKind}: a store-first (ADR-005) edit can therefore legally write, say,
+ * {@code arkreq:motivatedBy "text"} as a literal instead of an IRI. Unlike {@code status} (a
+ * mandatory field, so failing loudly is the right call), these three are already optional domain
+ * fields - {@link #priorityOf}/{@link #motivatedByOf}/{@link #qualityCategoryOf} guard their cast
+ * with an {@code instanceof} check and log a single {@code WARN} plus read the value as "not set"
+ * on a mismatch, rather than letting an uncaught {@link ClassCastException} abort the whole
+ * {@link #findAll} batch the same way an unguarded {@link #statusFromIri} once did.</p>
  */
 public class KognioRdfRequirementRepository implements RequirementRepository {
 
@@ -933,22 +943,60 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         throw new IllegalStateException("unexpected priority " + iri);
     }
 
+    /**
+     * Decodes the optional {@code arkreq:priority} binding, guarding the {@link IRI} cast against
+     * a store-first (ADR-005) value of the wrong RDF term kind - {@code requirements-shapes.ttl}'s
+     * {@code Requirement-priority} shape has no {@code sh:nodeKind}, so a literal there is
+     * SHACL-legal at {@code sh:Warning} severity and never rejected by the write gate. Unlike
+     * {@link #statusFromIri} (a mandatory field, so a SHACL-legal but undecodable value fails
+     * loudly via {@link UnsupportedRequirementStatusException}), {@code priority} is already an
+     * optional domain field: a type-mismatched value is logged at {@code WARN} and read as
+     * "not set" instead of aborting the whole row, the same "stille Luege, sichtbar gemacht"
+     * idiom {@link RequirementAssembly#firstDistinct} uses for colliding candidates.
+     */
     private static Priority priorityOf(BindingSet row) {
-        return row.getValue("priority")
-                .map(value -> priorityFromIri(((IRI) value).getIRIString()))
-                .orElse(null);
+        Optional<RDFTerm> value = row.getValue("priority");
+        if (value.isEmpty()) {
+            return null;
+        }
+        if (value.get() instanceof IRI iri) {
+            return priorityFromIri(iri.getIRIString());
+        }
+        LOG.warn("Requirement {}: field 'priority' expected an IRI but found a {}, ignoring the value",
+                iriOf(row, "s").getIRIString(), value.get().getClass().getSimpleName());
+        return null;
     }
 
+    /** {@link #priorityOf} with {@code arkreq:motivatedBy} in place of {@code arkreq:priority}. */
     private static String motivatedByOf(BindingSet row) {
-        return row.getValue("motivatedBy")
-                .map(value -> ((IRI) value).getIRIString())
-                .orElse(null);
+        Optional<RDFTerm> value = row.getValue("motivatedBy");
+        if (value.isEmpty()) {
+            return null;
+        }
+        if (value.get() instanceof IRI iri) {
+            return iri.getIRIString();
+        }
+        LOG.warn("Requirement {}: field 'motivatedBy' expected an IRI but found a {}, ignoring the value",
+                iriOf(row, "s").getIRIString(), value.get().getClass().getSimpleName());
+        return null;
     }
 
+    /**
+     * {@link #priorityOf} with {@code arkreq:qualityCategory} in place of {@code arkreq:priority},
+     * except the expected RDF term kind is a {@link Literal} (the field's SHACL shape declares
+     * {@code sh:datatype xsd:string}), not an {@link IRI}.
+     */
     private static String qualityCategoryOf(BindingSet row) {
-        return row.getValue("qualityCategory")
-                .map(value -> ((Literal) value).getLexicalForm())
-                .orElse(null);
+        Optional<RDFTerm> value = row.getValue("qualityCategory");
+        if (value.isEmpty()) {
+            return null;
+        }
+        if (value.get() instanceof Literal literal) {
+            return literal.getLexicalForm();
+        }
+        LOG.warn("Requirement {}: field 'qualityCategory' expected a Literal but found a {}, ignoring the value",
+                iriOf(row, "s").getIRIString(), value.get().getClass().getSimpleName());
+        return null;
     }
 
     private static IRI iriOf(BindingSet row, String name) {
