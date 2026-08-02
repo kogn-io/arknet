@@ -8,6 +8,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -42,8 +45,24 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
  * recognise is rethrown as-is. That matters beyond keeping the dependency out: a permissions,
  * disk-space or store-corruption failure must never be misdiagnosed as a lock conflict just
  * because it, too, is a {@link RuntimeException} out of {@code acquire}.</p>
+ *
+ * <p><strong>Why {@link AutoCloseable} (issue #140).</strong> Neither {@link DatasetLifecycle} nor
+ * the RDF4J-backed implementation it wraps expose a no-arg shutdown - only {@code close(DatasetId)}
+ * per dataset. Without one, stopping the daemon (a {@code systemctl stop}, a container stop) tears
+ * down the Spring context without ever telling the underlying store to release its datasets in an
+ * orderly way, leaving it to crash recovery on the next start instead. {@link #close()} closes
+ * every dataset {@link #list()} reports through the same neutral {@code close(DatasetId)} the
+ * interface already declares - no RDF4J-specific bulk-shutdown method is called, so this stays free
+ * of the dependency {@link #acquire} already avoids. {@code ArknetMcpConfiguration#datasetLifecycle}
+ * registers this as the bean's destroy method, so it runs once, automatically, when the context
+ * closes. This is best-effort, not a guarantee: {@code close(DatasetId)} is a silent no-op while a
+ * concurrently in-flight {@link #acquire} still holds an open {@link DatasetHandle} lease on that
+ * dataset, and {@link #close()} does not wait for such a lease to be released - a dataset caught
+ * that way still falls back to crash recovery, merely logged rather than left unnoticed.</p>
  */
-public final class LockConflictReportingDatasetLifecycle implements DatasetLifecycle {
+public final class LockConflictReportingDatasetLifecycle implements DatasetLifecycle, AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(LockConflictReportingDatasetLifecycle.class);
 
     private final DatasetLifecycle delegate;
     private final Path storageDir;
@@ -99,6 +118,32 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
     @Override
     public Set<DatasetId> list() {
         return delegate.list();
+    }
+
+    /**
+     * Closes every dataset {@link #list()} currently reports, so a daemon shutdown releases them
+     * in an orderly way instead of relying on crash recovery. Safe to call for a dataset this
+     * instance never {@link #acquire}d - {@code close(DatasetId)} is a no-op for one the delegate
+     * does not have open.
+     *
+     * <p>Best-effort: does not wait for an in-flight {@link #acquire} call elsewhere to release its
+     * lease. A dataset still open after the loop below - most likely because such a lease was still
+     * held at shutdown time - is only logged, not retried, since retrying/waiting here risks
+     * hanging the daemon's shutdown.</p>
+     */
+    @Override
+    public void close() {
+        for (DatasetId id : delegate.list()) {
+            delegate.close(id);
+        }
+        final Set<DatasetId> stillOpen = delegate.list();
+        if (!stillOpen.isEmpty()) {
+            LOG.warn(
+                    "close(): {} dataset(s) still open after the shutdown attempt, most likely because "
+                            + "an in-flight request held an open lease at shutdown time: {}. These will fall "
+                            + "back to crash recovery on the next start instead of an orderly close.",
+                    stillOpen.size(), stillOpen);
+        }
     }
 
     private String lockConflictMessage(DatasetId id, RuntimeException cause) {
