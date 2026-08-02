@@ -358,6 +358,28 @@ class KognioRdfAdrRepositoryTest {
                 repository.findSupersedingCodes(PROJECT_A, superseded.id()));
     }
 
+    /**
+     * Regression for #187: two distinct, non-standard store-first (ADR-005) codes that both parse to
+     * the same running number (unparseable, hence 0 - see
+     * {@code KognioRdfAdrRepository#runningNumber}) must not collide in the internal
+     * {@link java.util.TreeSet}. A comparator ordering only by parsed running number is inconsistent
+     * with {@link AdrCode#equals}, and a {@link java.util.TreeSet} dedupes by comparator, not by
+     * {@code equals} - so without a tie-breaker one of the two codes would be silently dropped.
+     */
+    @Test
+    void findSupersedingCodesKeepsBothEntriesWhenTheirRunningNumbersCollide() {
+        Adr superseded = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, superseded);
+
+        for (String code : List.of("ADR-1x", "ADR-2y")) {
+            repository.create(PROJECT_A, adr(freshId(), new AdrCode(code), AdrStatus.PROPOSED, null, null, null,
+                    List.of(), List.of(), List.of(superseded.id())));
+        }
+
+        assertEquals(List.of(new AdrCode("ADR-1x"), new AdrCode("ADR-2y")),
+                repository.findSupersedingCodes(PROJECT_A, superseded.id()));
+    }
+
     @Test
     void findCodesByIdsResolvesOnlyWhatExists() {
         Adr first = adr(new AdrCode("ADR-1"));

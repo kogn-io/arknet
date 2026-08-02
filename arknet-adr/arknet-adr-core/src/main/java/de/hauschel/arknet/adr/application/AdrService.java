@@ -88,10 +88,16 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
     /**
      * Orders {@code ADR-N} code strings by their parsed running number, not by {@link String}'s
      * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
-     * order once a project passes ten decisions.
+     * order once a project passes ten decisions. Falls back to natural string order when the running
+     * number ties, which every well-formed {@code ADR-N} code only ever does with itself - the
+     * fallback exists for two distinct, non-conforming store-first (ADR-005) codes that both parse to
+     * 0 (see {@link #runningNumber}): without it this comparator returns 0 for two different codes,
+     * which is inconsistent with {@link Object#equals} and silently collapses both into one entry in
+     * a {@link TreeSet} (see {@link #list}).
      */
     private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
-            Comparator.comparingInt(code -> runningNumber(new AdrCode(code)));
+            Comparator.<String>comparingInt(code -> runningNumber(new AdrCode(code)))
+                    .thenComparing(Comparator.naturalOrder());
 
     private final AdrRepository repository;
     private final ResourceIdFactory resourceIdFactory;

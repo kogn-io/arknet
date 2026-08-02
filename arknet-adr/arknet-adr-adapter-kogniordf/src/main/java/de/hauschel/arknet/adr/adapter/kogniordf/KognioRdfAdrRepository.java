@@ -136,12 +136,18 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /**
      * Orders {@code ADR-N} code strings by their parsed running number, not by {@link String}'s
      * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
-     * order once a project passes ten decisions. Mirrors {@code AdrService}'s identically-named,
-     * identically-behaved helper (arknet-adr-core has no dependency this adapter could reuse it
-     * through).
+     * order once a project passes ten decisions. Falls back to natural string order when the running
+     * number ties, which every well-formed {@code ADR-N} code only ever does with itself - the
+     * fallback exists for two distinct, non-conforming store-first (ADR-005) codes that both parse to
+     * 0 (see {@link #runningNumber}): without it this comparator returns 0 for two different codes,
+     * which is inconsistent with {@link Object#equals} and silently collapses both into one entry in
+     * a {@link TreeSet} (see {@link #findSupersedingCodes}). Mirrors {@code AdrService}'s
+     * identically-named, identically-behaved helper (arknet-adr-core has no dependency this adapter
+     * could reuse it through).
      */
     private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
-            Comparator.comparingInt(KognioRdfAdrRepository::runningNumber);
+            Comparator.<String>comparingInt(KognioRdfAdrRepository::runningNumber)
+                    .thenComparing(Comparator.naturalOrder());
 
     private final DatasetLifecycle lifecycle;
     private final WriteFunnel funnel;

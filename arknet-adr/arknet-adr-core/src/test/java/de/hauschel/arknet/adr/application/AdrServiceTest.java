@@ -23,6 +23,7 @@ import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
+import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
@@ -389,6 +390,35 @@ class AdrServiceTest {
                         new AdrCode("ADR-8"), new AdrCode("ADR-9"), new AdrCode("ADR-10"),
                         new AdrCode("ADR-11")),
                 targetDetail.supersededBy());
+    }
+
+    /**
+     * Regression for #187: two distinct, non-standard store-first (ADR-005) codes that both parse to
+     * the same running number (unparseable, hence 0 - see {@code AdrService#runningNumber}) must not
+     * collide in the {@code supersededBy} {@link java.util.TreeSet}. A comparator ordering only by
+     * parsed running number is inconsistent with {@link AdrCode#equals}, and a {@link java.util.TreeSet}
+     * dedupes by comparator, not by {@code equals} - so without a tie-breaker one of the two entries
+     * would be silently dropped.
+     */
+    @Test
+    void listKeepsBothSupersededByEntriesWhenTheirRunningNumbersCollide() {
+        AdrId targetId = new AdrId(resourceIdFactory.newId());
+        Adr target = new Adr(targetId, new AdrCode("ADR-1"), "Target", AdrStatus.ACCEPTED,
+                "Some context here", "Some decision here", null, null, null, List.of(), List.of(), List.of());
+        repository.create(PROJECT, target);
+        Adr supersedingA = new Adr(new AdrId(resourceIdFactory.newId()), new AdrCode("ADR-1x"), "A",
+                AdrStatus.PROPOSED, "Context of A here", "Decision A", null, null, null, List.of(), List.of(),
+                List.of(targetId));
+        repository.create(PROJECT, supersedingA);
+        Adr supersedingB = new Adr(new AdrId(resourceIdFactory.newId()), new AdrCode("ADR-2y"), "B",
+                AdrStatus.PROPOSED, "Context of B here", "Decision B", null, null, null, List.of(), List.of(),
+                List.of(targetId));
+        repository.create(PROJECT, supersedingB);
+
+        AdrDetail targetDetail = service.list(PROJECT).stream()
+                .filter(d -> d.adr().code().equals(target.code())).findFirst().orElseThrow();
+
+        assertEquals(List.of(new AdrCode("ADR-1x"), new AdrCode("ADR-2y")), targetDetail.supersededBy());
     }
 
     private static NewAdr newAdr() {
