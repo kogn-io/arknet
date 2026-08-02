@@ -102,15 +102,25 @@ public final class StoreReader {
     }
 
     /**
-     * Reads the outgoing statements of a resource ({@code <iri> ?p ?o}).
+     * Reads the outgoing statements of a resource ({@code <iri> ?p ?o}, or, for a blank-node
+     * handle, every statement {@link #readSnapshot} grouped under that exact reference - see
+     * {@link #isBlankNodeReference(String)} for why a blank node cannot use the targeted query
+     * the IRI case below does).
      *
      * @param projectId the project to read
-     * @param iri         the subject IRI
+     * @param iri         the subject IRI, or a blank-node reference as rendered by {@link #toNode}
      * @return the outgoing statements
      */
     public List<Triple> outgoing(ProjectId projectId, String iri) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return readSnapshot(projectId).resources().stream()
+                    .filter(resource -> resource.iri().equals(iri))
+                    .findFirst()
+                    .map(StoreResource::outgoing)
+                    .orElse(List.of());
+        }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?p ?o WHERE { "
                 + excludingInfrastructure(iriRef + " ?p ?o") + " }";
@@ -124,15 +134,24 @@ public final class StoreReader {
     }
 
     /**
-     * Reads the incoming statements of a resource ({@code ?s ?p <iri>}) - its neighbours.
+     * Reads the incoming statements of a resource ({@code ?s ?p <iri>}) - its neighbours. For a
+     * blank-node handle this instead filters {@link #readSnapshot}'s outgoing statements for the
+     * ones whose object is that exact reference - see {@link #isBlankNodeReference(String)}.
      *
      * @param projectId the project to read
-     * @param iri         the object IRI
+     * @param iri         the object IRI, or a blank-node reference as rendered by {@link #toNode}
      * @return the incoming statements (their object is always {@code iri})
      */
     public List<Triple> incoming(ProjectId projectId, String iri) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return readSnapshot(projectId).resources().stream()
+                    .flatMap(resource -> resource.outgoing().stream())
+                    .filter(triple -> triple.object() instanceof RdfNode.Resource resourceObject
+                            && resourceObject.iri().equals(iri))
+                    .toList();
+        }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?s ?p WHERE { "
                 + excludingInfrastructure("?s ?p " + iriRef) + " }";
@@ -143,6 +162,24 @@ public final class StoreReader {
                     .map(Optional::get)
                     .toList();
         }
+    }
+
+    /**
+     * {@code true} if {@code handle} is a blank-node reference ({@code "_:" + label}) rather than
+     * an absolute IRI - see {@link Triple#subject()}.
+     *
+     * <p>{@link #outgoing}/{@link #incoming} cannot address such a handle with a targeted
+     * {@code <iri> ?p ?o}-style query the way they do for an absolute IRI: per the SPARQL
+     * grammar, a blank-node label written into a query's graph pattern is a fresh, query-scoped
+     * variable, not a reference to the store's blank node carrying that same label - the query
+     * text simply cannot select "the blank node this label was rendered for". Filtering
+     * {@link #readSnapshot}'s already-correct result for the exact reference string instead
+     * relies on nothing more than the identity {@link #toNode} already renders consistently
+     * (regression-tested by {@code StoreReaderTest}), never on the query engine resolving a
+     * blank-node label back to a specific node.</p>
+     */
+    private static boolean isBlankNodeReference(String handle) {
+        return handle.startsWith("_:");
     }
 
     /**

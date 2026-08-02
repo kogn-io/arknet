@@ -132,7 +132,8 @@ public final class StoreReportTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String resourceGet(
             final McpSyncRequestContext context,
-            @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, or bare id (FR-1)")
+            @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, bare id (FR-1), or a"
+                    + " blank-node reference (_:...) exactly as shown by store_overview")
             final String id,
             @McpToolParam(description = "Optional anchor identifying the project to read from, used "
                     + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "

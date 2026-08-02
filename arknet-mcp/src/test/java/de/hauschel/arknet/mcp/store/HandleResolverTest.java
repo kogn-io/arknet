@@ -101,4 +101,17 @@ class HandleResolverTest {
                 .withMessageContaining(FR_1_IRI)
                 .withMessageContaining(DUPLICATE_TERM_IRI);
     }
+
+    /**
+     * Regression test for issue #136's remaining gap: {@code store_overview} advertises a
+     * store-first, blank-node-subject resource's drill-down as {@code resource_get("_:...")}
+     * (see {@code StoreReaderTest}). Before this fix, that exact handle - it contains a colon but
+     * no {@code "://"} - fell into the "unknown prefix" branch and was rejected, even though it
+     * is not a CURIE at all. A blank-node reference is already the handle {@link StoreReader}
+     * expects, so it must resolve to itself rather than through prefix expansion.
+     */
+    @Test
+    void resolvesABlankNodeReferenceToItself() {
+        assertThat(handleResolver.resolve(PROJECT, "_:b1")).isEqualTo("_:b1");
+    }
 }
