@@ -287,7 +287,7 @@ Store report -- generic, cross-BC read path (readOnly; works for any BC without 
 | Tool | Description |
 |------|-------------|
 | `store_overview` | Compact text digest of the project store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML report and returns its path. The report reads as the model rather than as triples -- use cases with their numbered flow, requirements with their acceptance criteria, glossary, bounded contexts -- and keeps a raw section for everything no bounded context claims, so nothing in the store can hide from it. References show the term itself rather than its running number, and requirement and bounded-context prose is marked up against the glossary: a mention the model links to becomes a link, a mention of a glossary term with no such link is flagged as a gap -- the link is only ever created by an explicit `req_link_term`/`bc_link_term` call, so text and model drift apart by default |
-| `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, or bare business id (`FR-1`). The revision trail is left out -- it is change history, not model ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
+| `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, bare business id (`FR-1`), or a blank-node reference (`_:...`) as shown by `store_overview` for a store-first resource with no minted IRI. The revision trail is left out -- it is change history, not model ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 
 Traceability -- readOnly graph traversal over the same store snapshot (no second SPARQL path):
 
@@ -296,6 +296,8 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 | `trace_matrix` | Per requirement (FR/NFR): the glossary terms used (`arkreq:usesTerm`) and the realizing use case(s) (via the step flow) |
 | `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms never referenced (usage or bounded-context language), and text mentions of a term missing its `usesTerm`/`ubiquitousLanguageTerm` edge |
 | `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes, following the requirement/use-case/glossary/bounded-context edges plus an ADR's `addressesRequirement`/`affectsContext`/`supersedes` (see sample below) |
+| `actor_usecase_matrix` | Raw bipartite view of actor/use-case involvement (`arkreq:primaryActor`/`supportingActor`), in both directions -- no clustering, no bounded-context judgement |
+| `term_cooccurrence` | Which glossary terms are named together in the same requirement or use-case text -- literal text co-occurrence only, not a model-edge comparison; raw data for spotting a shared term vs. a homonym with two meanings |
 
 ```
 > impact_analysis(handle: "TERM-4")
@@ -339,7 +341,7 @@ addendum.
 | Module | Description |
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
-| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project / adr) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`) |
+| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project / adr) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`/`actor_usecase_matrix`/`term_cooccurrence`) |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`ProjectId`, the `ProjectResolver` port, opaque `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-requirements` | First hexagonal BC: requirement lifecycle (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
