@@ -107,9 +107,14 @@ zuerst (`rdfs:label "Actor Role"@en , "Akteursrolle"@de`) -- der Bestand ist so
 gewachsen, und Konsistenz innerhalb einer Datei wiegt hier schwerer als die
 Englisch-Regel. Neue Beschriftungen also immer `@en` **und** `@de` anlegen;
 vorhandene einsprachige nicht nachtraeglich vereinheitlichen. Was **in den Store**
-geschrieben wird
-(Requirement-/Use-Case-/Term-Text) bleibt **Deutsch** -- arknets eigene
-Ubiquitous Language, unberuehrt von dieser Regel. Die ADRs unter `docs/adr/`
+geschrieben wird, folgt keiner einheitlichen Sprachregel: Requirement- und
+Use-Case-Text bleibt **einsprachig Deutsch** -- arknets eigene Ubiquitous
+Language, unberuehrt von dieser Regel --, waehrend Glossarbegriffe
+(`term_add`/`term_update`) und die optionale Projektbeschreibung
+(`project_add`/`project_update`) nativ **mehrsprachig** sind: mehrere
+sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
+`language`-Argument beim Schreiben gesetzt und beim Lesen ueber die
+`DisplayLocale`-Fallback-Kette aufgeloest. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
 Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.
 

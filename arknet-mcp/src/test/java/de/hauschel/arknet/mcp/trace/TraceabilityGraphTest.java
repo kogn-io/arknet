@@ -99,18 +99,18 @@ class TraceabilityGraphTest {
         // referenced as UC1's primary actor - must NOT count as an orphan term.
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
-                "The act of proving one's identity.", null));
+                "The act of proving one's identity.", null), null);
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_2_IRI)), new TermCode("TERM-2"), "Passwort",
-                "A secret credential.", null));
+                "A secret credential.", null), null);
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(ACTOR_IRI)), new TermCode("TERM-3"), "Customer",
-                "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")));
+                "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")), null);
         // TERM-4: never usesTerm'd, referenced only through BC-1's ubiquitousLanguageTerm edge -
         // must NOT count as an orphan term either.
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_4_IRI)), new TermCode("TERM-4"), "Vertrag",
-                "A binding agreement.", null));
+                "A binding agreement.", null), null);
 
         // FR-1: uses TERM-1, realised by UC1. FR-2: uses nothing, realised by nothing (orphan).
         requirements.create(PROJECT, new Requirement(

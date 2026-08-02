@@ -5,12 +5,13 @@ package de.hauschel.arknet.mcp;
 
 import java.util.Objects;
 
-import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.prj.application.port.in.ResolveProject;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
+import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
 /**
@@ -64,12 +65,13 @@ final class RegisteredAnchorProjectResolver implements ProjectResolver {
     }
 
     @Override
-    public ProjectId resolve(final String anchor) {
+    public ResolvedProject resolve(final String anchor) {
         if (anchor == null || anchor.isBlank()) {
             throw new UnresolvedProjectAnchorException(null, NO_ANCHOR_MESSAGE);
         }
         try {
-            return projects.resolve(new Anchor(anchor, AnchorType.PATH)).id();
+            final Project project = projects.resolve(new Anchor(anchor, AnchorType.PATH));
+            return new ResolvedProject(project.id(), project.defaultLanguage());
         } catch (final UnknownAnchorException e) {
             // Translated at the port boundary rather than propagated: the four model bounded
             // contexts see only the kernel's port, and an exception from arknet-project's domain

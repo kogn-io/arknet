@@ -23,8 +23,15 @@ public interface RegisterProject {
     /**
      * Registers a new project.
      *
-     * @param label  the project's human-readable, cross-project-unique name
-     * @param anchor the project's first anchor
+     * @param label              the project's human-readable, cross-project-unique name
+     * @param anchor             the project's first anchor
+     * @param description        the project's optional free-text description (issue #110), or
+     *                           {@code null} for none
+     * @param descriptionLanguage the BCP-47 language tag {@code description} is written in (e.g.
+     *                           {@code "de"}), or {@code null} for a plain, untagged literal.
+     *                           Ignored if {@code description} is {@code null}
+     * @param defaultLanguage    the project's optional default display/write language, as a
+     *                           BCP-47 tag, or {@code null} for none
      * @return the newly registered project, including its minted identity
      * @throws AnchorAlreadyRegisteredException if {@code anchor} already belongs to a project
      * @throws DuplicateProjectLabelException   if {@code label} already labels a different
@@ -35,5 +42,6 @@ public interface RegisterProject {
      *                                          javadoc - an expected-but-rare outcome, not a
      *                                          programming error)
      */
-    Project register(String label, Anchor anchor);
+    Project register(String label, Anchor anchor, String description, String descriptionLanguage,
+            String defaultLanguage);
 }

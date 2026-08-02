@@ -75,7 +75,7 @@ class TraceabilityMcpToolsTest {
      */
     private static ProjectId registerProject(final org.springframework.context.ApplicationContext context) {
         return context.getBean(ProjectService.class)
-                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH))
+                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH), null, null, null)
                 .id();
     }
 
@@ -89,9 +89,9 @@ class TraceabilityMcpToolsTest {
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null));
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null, null));
             terms.add(project, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer")));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
@@ -128,9 +128,9 @@ class TraceabilityMcpToolsTest {
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            terms.add(project, new NewTerm("Passwort", "A secret credential.", null));
+            terms.add(project, new NewTerm("Passwort", "A secret credential.", null, null));
             terms.add(project, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer")));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
@@ -169,9 +169,9 @@ class TraceabilityMcpToolsTest {
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null));
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null, null));
             terms.add(project, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer")));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
@@ -237,7 +237,7 @@ class TraceabilityMcpToolsTest {
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             Term actor = terms.add(ws, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer")));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
             useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of())),
@@ -264,9 +264,9 @@ class TraceabilityMcpToolsTest {
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             Term kunde = terms.add(ws, new NewTerm("Kunde", "A customer.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer")));
-            Term bestellung = terms.add(ws, new NewTerm("Bestellung", "An order.", null));
-            terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+            Term bestellung = terms.add(ws, new NewTerm("Bestellung", "An order.", null, null));
+            terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null, null));
 
             requirements.add(ws, new NewRequirement("Bestandsdaten",
                     "Der Kunde sieht seine Bestellung ein.", RequirementType.FUNCTIONAL, null, null, null,

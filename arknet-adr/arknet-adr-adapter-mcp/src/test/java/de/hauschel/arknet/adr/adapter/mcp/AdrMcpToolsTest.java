@@ -45,6 +45,7 @@ import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
@@ -72,7 +73,7 @@ class AdrMcpToolsTest {
      */
     private static final ProjectResolver PROJECTS = anchor -> {
         if (ANCHOR.equals(anchor)) {
-            return PROJECT;
+            return new ResolvedProject(PROJECT, null);
         }
         throw new UnresolvedProjectAnchorException(anchor, "no project registered for '" + anchor + "'");
     };

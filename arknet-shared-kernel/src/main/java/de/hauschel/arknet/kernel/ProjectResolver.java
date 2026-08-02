@@ -50,10 +50,11 @@ public interface ProjectResolver {
      *
      * @param anchor the opaque, registered anchor identifying the calling client's project, or
      *               {@code null}/blank if the call carried none
-     * @return the resolved project identity, never {@code null}
+     * @return the resolved project identity, together with its configured default display
+     *         language if it has one (see {@link ResolvedProject}); never {@code null}
      * @throws UnresolvedProjectAnchorException if {@code anchor} is {@code null}, blank, or not
      *                                          registered with any project - both are caller
      *                                          errors, never a route to a default
      */
-    ProjectId resolve(String anchor);
+    ResolvedProject resolve(String anchor);
 }

@@ -48,7 +48,17 @@ public interface ProjectRegistry {
     /**
      * Registers a brand-new project whose identity does not yet exist in the registry.
      *
-     * @param project the project to register
+     * @param project             the project to register (its own {@code description()}/
+     *                            {@code defaultLanguage()} fields are ignored - see the
+     *                            {@code description}/{@code descriptionLanguage}/
+     *                            {@code defaultLanguage} parameters below)
+     * @param description         the project's optional free-text description (issue #110), or
+     *                            {@code null} for none
+     * @param descriptionLanguage the BCP-47 language tag {@code description} is written in, or
+     *                            {@code null} for a plain, untagged literal. Ignored if
+     *                            {@code description} is {@code null}
+     * @param defaultLanguage     the project's optional default display/write language, or
+     *                            {@code null} for none
      * @throws ResourceAlreadyExistsException  if a project with this identity already exists
      * @throws DuplicateProjectLabelException  if another project already carries this project's
      *                                         label
@@ -64,7 +74,7 @@ public interface ProjectRegistry {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-project-core} must not depend on.
      */
-    void register(Project project);
+    void register(Project project, String description, String descriptionLanguage, String defaultLanguage);
 
     /**
      * Finds the project a given anchor currently resolves to.
@@ -143,4 +153,39 @@ public interface ProjectRegistry {
      *                          {@code arknet-project-core} must not depend on.
      */
     void compareAndUpdate(RevisionToken expectedHead, Project project);
+
+    /**
+     * Corrects a project's optional {@code dcterms:description} and/or {@code
+     * arkprj:defaultLanguage}, but only if its current concurrency token still equals {@code
+     * expectedHead} - the same compare-and-set guard {@link #compareAndUpdate} runs, sharing its
+     * token: {@code arkprov:head} is per-<em>resource</em>, not per-predicate, exactly like {@code
+     * TermRepository#update}'s CAS shares one head across {@code prefLabel}/{@code definition}/
+     * the Actor facette.
+     *
+     * <p><strong>A targeted patch, not a replace-by-identity.</strong> Unlike {@link
+     * #compareAndUpdate}, this method never touches {@code dcterms:identifier}/{@code
+     * arkprj:anchor} at all, and deletes only the existing {@code dcterms:description} literal
+     * carrying the same language tag as {@code description} - every other language variant of the
+     * description, and the project's label and anchors, survive completely untouched. See {@link
+     * de.hauschel.arknet.prj.application.port.in.UpdateProject}'s javadoc for why this could not
+     * simply be a third field folded into {@link #compareAndUpdate}'s {@link Project} argument.</p>
+     *
+     * @param projectId           the project to correct
+     * @param expectedHead        the {@link RevisionToken} the caller last observed for this
+     *                            project, or {@code null} if the caller expects no token to exist
+     *                            yet
+     * @param description         the new description, or {@code null} to leave every existing
+     *                            {@code dcterms:description} triple untouched
+     * @param descriptionLanguage the BCP-47 language tag the new {@code description} is written
+     *                            in, or {@code null} for a plain, untagged literal. Ignored if
+     *                            {@code description} is {@code null}
+     * @param defaultLanguage     the new default language, or {@code null} to leave the existing
+     *                            {@code arkprj:defaultLanguage} untouched
+     * @return the project's up-to-date state after the correction
+     * @throws ProjectNotFoundException if no project with {@code projectId} is registered at all
+     * @throws StaleProjectException    if {@code expectedHead} no longer matches the registered
+     *                                  project's current token - a concurrent write raced ahead
+     */
+    Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
+            String descriptionLanguage, String defaultLanguage);
 }

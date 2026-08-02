@@ -99,10 +99,10 @@ class ArknetMcpConfigurationTest {
 
                     TermService service = context.getBean(TermService.class);
                     Term created = service.add(PROJECT,
-                            new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null));
+                            new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null, null));
 
                     assertThat(created.code().value()).isEqualTo("TERM-1");
-                    assertThat(service.get(PROJECT, created.code()))
+                    assertThat(service.get(PROJECT, created.code(), null))
                             .isEqualTo(Optional.of(created));
                 });
     }
@@ -130,7 +130,7 @@ class ArknetMcpConfigurationTest {
 
                     ProjectService service = context.getBean(ProjectService.class);
                     Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
-                    Project registered = service.register("arknet", anchor);
+                    Project registered = service.register("arknet", anchor, null, null, null);
 
                     assertThat(service.resolve(anchor))
                             .as("the very anchor that was registered must resolve back to its project")
@@ -200,7 +200,7 @@ class ArknetMcpConfigurationTest {
                     assertThat(adopted.id()).as("the dataset keeps its identity").isEqualTo(legacy);
                     assertThat(projects.adoptable()).doesNotContain(legacy);
 
-                    ProjectId routed = resolver.resolve("/home/a/DEV/arknet");
+                    ProjectId routed = resolver.resolve("/home/a/DEV/arknet").id();
                     assertThat(requirements.get(routed, before.code()))
                             .as("the data written before adoption reads back through the routing path")
                             .isEqualTo(Optional.of(before));
@@ -239,11 +239,11 @@ class ArknetMcpConfigurationTest {
                     assertThat(context).hasNotFailed();
                     ProjectService projects = context.getBean(ProjectService.class);
                     Project registered = projects.register(
-                            "arknet", new Anchor("/home/a/DEV/arknet", AnchorType.PATH));
+                            "arknet", new Anchor("/home/a/DEV/arknet", AnchorType.PATH), null, null, null);
 
                     ProjectResolver resolver = context.getBean(ProjectResolver.class);
 
-                    assertThat(resolver.resolve("/home/a/DEV/arknet"))
+                    assertThat(resolver.resolve("/home/a/DEV/arknet").id())
                             .as("a registered anchor resolves to its own project")
                             .isEqualTo(registered.id());
                     assertThatThrownBy(() -> resolver.resolve("/home/b/other/arknet"))

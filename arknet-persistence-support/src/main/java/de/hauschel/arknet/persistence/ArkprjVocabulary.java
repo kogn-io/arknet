@@ -61,6 +61,29 @@ public final class ArkprjVocabulary {
     /** {@code arkprj:anchor} - project to anchor, {@code 1..n}. */
     public static final String ANCHOR = NAMESPACE + "anchor";
 
+    /**
+     * {@code dcterms:description} - a project's optional, multilingual free-text description
+     * (issue #110). Reuses the shared {@code dcterms:description} term rather than minting a
+     * project-specific predicate, the same choice {@code dcterms:identifier} already makes for
+     * the label; several language-tagged values on the same project are legal (SKOS S14-style: at
+     * most one per language tag), mirroring how {@code skos:prefLabel}/{@code skos:definition}
+     * are multilingual in the ubiquitous-language vocabulary. Written only through the project
+     * component's targeted description/default-language patch (never through the
+     * replace-by-identity registry write {@code label}/{@code anchor} share), so an unrelated
+     * rename or attached anchor never touches it.
+     */
+    public static final String DESCRIPTION = "http://purl.org/dc/terms/description";
+
+    /**
+     * {@code arkprj:defaultLanguage} - a project's single, optional default display/write
+     * language, as a BCP-47 tag (e.g. {@code "de"}). Used by other bounded contexts (via
+     * {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}) as the second-priority
+     * tier of a display-language fallback chain, after an explicit per-call override - never as a
+     * write-time default (a write that omits a language always writes untagged, regardless of
+     * this value; see {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale}).
+     */
+    public static final String DEFAULT_LANGUAGE = NAMESPACE + "defaultLanguage";
+
     /** {@code arkprj:anchorValue} - the anchor's opaque string, never interpreted by the server. */
     public static final String ANCHOR_VALUE = NAMESPACE + "anchorValue";
 

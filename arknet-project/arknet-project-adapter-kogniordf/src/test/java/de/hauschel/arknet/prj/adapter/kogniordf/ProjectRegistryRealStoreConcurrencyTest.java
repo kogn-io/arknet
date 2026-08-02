@@ -291,7 +291,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
         Project project = new Project(freshId(), "free-label", List.of(pathAnchor("/home/dev/free")));
 
         UnattributedRegistrationConflictException thrown = assertThrows(
-                UnattributedRegistrationConflictException.class, () -> failingCommits.register(project));
+                UnattributedRegistrationConflictException.class, () -> failingCommits.register(project, null, null, null));
 
         assertSame(storeConflict, thrown.getCause(),
                 "with no rule broken there is nothing truthful to translate into - the raw conflict "
@@ -314,7 +314,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
             throws InterruptedException {
         Anchor original = pathAnchor("/home/dev/arknet");
         Project initial = new Project(freshId(), "arknet", List.of(original));
-        straightThrough.register(initial);
+        straightThrough.register(initial, null, null, null);
         RevisionToken headBeforeRace = straightThrough.findCurrentById(initial.id()).orElseThrow().head();
 
         Anchor winnerAnchor = pathAnchor("/home/dev/arknet-winner");
@@ -347,7 +347,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
     void concurrentRenamesOfTheSameProject_leaveOneWinnerAndTellTheLoserItsHeadIsStale()
             throws InterruptedException {
         Project initial = new Project(freshId(), "arknet", List.of(pathAnchor("/home/dev/arknet")));
-        straightThrough.register(initial);
+        straightThrough.register(initial, null, null, null);
         RevisionToken headBeforeRace = straightThrough.findCurrentById(initial.id()).orElseThrow().head();
 
         Project winnerUpdate = new Project(initial.id(), "arknet-winner", initial.anchors());
@@ -402,7 +402,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
 
         Thread winnerThread = new Thread(() -> {
             try {
-                winnerRegistry.register(winner);
+                winnerRegistry.register(winner, null, null, null);
             } catch (Throwable t) {
                 // Throwable, not RuntimeException: a broken harness (a missing method, an
                 // assertion inside the decorator) must surface as a failed assertion below
@@ -414,7 +414,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
         });
         Thread loserThread = new Thread(() -> {
             try {
-                loserRegistry.register(loser);
+                loserRegistry.register(loser, null, null, null);
             } catch (Throwable t) {
                 loserFailure.set(t);
             }

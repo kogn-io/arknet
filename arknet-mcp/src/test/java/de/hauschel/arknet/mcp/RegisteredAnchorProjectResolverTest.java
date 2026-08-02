@@ -45,8 +45,8 @@ class RegisteredAnchorProjectResolverTest {
 
     @Test
     void identicallyNamedDirectoriesInDifferentPlacesResolveToDifferentProjects() {
-        assertThat(resolver.resolve("/home/a/DEV/arknet")).isEqualTo(ARKNET);
-        assertThat(resolver.resolve("/home/b/work/arknet")).isEqualTo(OTHER_ARKNET);
+        assertThat(resolver.resolve("/home/a/DEV/arknet").id()).isEqualTo(ARKNET);
+        assertThat(resolver.resolve("/home/b/work/arknet").id()).isEqualTo(OTHER_ARKNET);
         assertThat(ARKNET).isNotEqualTo(OTHER_ARKNET);
     }
 
@@ -97,8 +97,25 @@ class RegisteredAnchorProjectResolverTest {
         final ResolveProject urlRegistry = new FakeRegistry(
                 Map.of("https://example.invalid/team/arknet", ARKNET), AnchorType.URL);
 
-        assertThat(new RegisteredAnchorProjectResolver(urlRegistry).resolve("https://example.invalid/team/arknet"))
+        assertThat(new RegisteredAnchorProjectResolver(urlRegistry)
+                .resolve("https://example.invalid/team/arknet").id())
                 .isEqualTo(ARKNET);
+    }
+
+    /**
+     * The resolved project's configured default language (issue #228) travels through {@link
+     * RegisteredAnchorProjectResolver} unchanged - the bounded contexts that need it (e.g.
+     * ubiquitous-language) get it "for free" from the very same anchor resolution every tool call
+     * already performs, without a second lookup.
+     */
+    @Test
+    void resolvedProjectCarriesTheDefaultLanguageOfTheUnderlyingProject() {
+        final ResolveProject registryWithDefaultLanguage = anchor -> new Project(ARKNET, "arknet",
+                List.of(new Anchor(anchor.value(), AnchorType.PATH)), null, "de");
+
+        assertThat(new RegisteredAnchorProjectResolver(registryWithDefaultLanguage)
+                .resolve("/home/a/DEV/arknet").defaultLanguage())
+                .isEqualTo("de");
     }
 
     private static String failureMessage(final Runnable call) {

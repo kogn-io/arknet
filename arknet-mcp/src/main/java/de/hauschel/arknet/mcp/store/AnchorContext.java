@@ -54,7 +54,7 @@ public final class AnchorContext {
             McpSyncRequestContext context, String projectAnchor, ProjectResolver projects) {
         Objects.requireNonNull(projects, "projects");
         final String explicit = (projectAnchor == null || projectAnchor.isBlank()) ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
     }
 
     /**

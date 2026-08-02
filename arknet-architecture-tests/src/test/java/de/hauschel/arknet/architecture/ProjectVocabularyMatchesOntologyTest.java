@@ -89,7 +89,8 @@ class ProjectVocabularyMatchesOntologyTest {
                 ArkprjVocabulary.ANCHOR_TYPE,
                 ArkprjVocabulary.PATH_ANCHOR,
                 ArkprjVocabulary.URL_ANCHOR,
-                ArkprjVocabulary.UUID_ANCHOR), declared,
+                ArkprjVocabulary.UUID_ANCHOR,
+                ArkprjVocabulary.DEFAULT_LANGUAGE), declared,
                 "arknet-project.ttl and ArkprjVocabulary must describe the same vocabulary");
     }
 
@@ -132,6 +133,20 @@ class ProjectVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkprjVocabulary.ANCHOR_VALUE), RDF.TYPE, OWL.DATATYPEPROPERTY),
                 "arkprj:anchorValue must be declared an owl:DatatypeProperty - "
                         + "the server never interprets it as a resource reference");
+    }
+
+    /**
+     * A project's optional default display/write language (issue #228) is a plain BCP-47 tag, not
+     * a resource - the same reasoning {@link #theOntologyDeclaresAnchorValueAsADatatypeProperty}
+     * already applies to {@code arkprj:anchorValue}.
+     */
+    @Test
+    void theOntologyDeclaresDefaultLanguageAsADatatypeProperty() {
+        assertTrue(ontology.contains(iri(ArkprjVocabulary.DEFAULT_LANGUAGE), RDF.TYPE, OWL.DATATYPEPROPERTY),
+                "arkprj:defaultLanguage must be declared an owl:DatatypeProperty");
+        assertTrue(ontology.contains(iri(ArkprjVocabulary.DEFAULT_LANGUAGE), RDFS.DOMAIN,
+                iri(ArkprjVocabulary.PROJECT_TYPE)),
+                "arkprj:defaultLanguage must be scoped to arkprj:Project");
     }
 
     /**

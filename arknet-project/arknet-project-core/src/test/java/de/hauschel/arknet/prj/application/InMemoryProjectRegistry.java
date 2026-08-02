@@ -56,7 +56,8 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
     private final AtomicInteger writeCount = new AtomicInteger();
 
     @Override
-    public synchronized void register(Project project) {
+    public synchronized void register(Project project, String description, String descriptionLanguage,
+            String defaultLanguage) {
         if (byId.containsKey(project.id())) {
             throw new ResourceAlreadyExistsException(project.id());
         }
@@ -69,7 +70,11 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
                 throw new AnchorAlreadyRegisteredException(anchor, owner.id());
             });
         }
-        byId.put(project.id(), project);
+        // This fake has nothing multi-valued/language-tagged to preserve for description (unlike
+        // the real adapter's scoped delete, see KognioRdfProjectRegistry) - a plain overwrite
+        // suffices to exercise ProjectService's policy.
+        byId.put(project.id(), new Project(project.id(), project.label(), project.anchors(), description,
+                defaultLanguage));
         headById.put(project.id(), new RevisionToken(UUID.randomUUID().toString()));
         writeCount.incrementAndGet();
     }
@@ -120,6 +125,25 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
         byId.put(project.id(), project);
         headById.put(project.id(), new RevisionToken(UUID.randomUUID().toString()));
         writeCount.incrementAndGet();
+    }
+
+    @Override
+    public synchronized Project updateAttributes(ProjectId projectId, RevisionToken expectedHead,
+            String description, String descriptionLanguage, String defaultLanguage) {
+        Project current = byId.get(projectId);
+        if (current == null) {
+            throw new ProjectNotFoundException(projectId);
+        }
+        if (!Objects.equals(headById.get(projectId), expectedHead)) {
+            throw new StaleProjectException(projectId);
+        }
+        Project updated = new Project(current.id(), current.label(), current.anchors(),
+                description != null ? description : current.description(),
+                defaultLanguage != null ? defaultLanguage : current.defaultLanguage());
+        byId.put(projectId, updated);
+        headById.put(projectId, new RevisionToken(UUID.randomUUID().toString()));
+        writeCount.incrementAndGet();
+        return updated;
     }
 
     /** @return how many mutating calls ({@link #register}/{@link #compareAndUpdate}) applied */

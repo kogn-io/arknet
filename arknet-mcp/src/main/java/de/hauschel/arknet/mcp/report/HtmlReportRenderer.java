@@ -66,11 +66,15 @@ public final class HtmlReportRenderer {
     /**
      * Renders the complete HTML document.
      *
-     * @param projectId the project the snapshot was read from
+     * @param projectId   the project the snapshot was read from
      * @param label       the project's registered label, or {@link Optional#empty()}
      *                    if {@code projectId} is not (or no longer) found in the registry - the
      *                    header then falls back to the raw id, exactly as before this label was
      *                    available
+     * @param description the project's optional free-text description (issue #110), already
+     *                    selected for {@link #displayLocale} if the project carries it in several
+     *                    languages, or {@link Optional#empty()} if it has none - shown in the
+     *                    header when present
      * @param snapshot    the flat statement snapshot, used for raw triples and the leftovers
      * @param digest      the agent digest text shown in the top panel
      * @param views       the per-bounded-context sections that make up the report's body
@@ -79,11 +83,13 @@ public final class HtmlReportRenderer {
     public String render(
             final ProjectId projectId,
             final Optional<String> label,
+            final Optional<String> description,
             final StoreSnapshot snapshot,
             final String digest,
             final ModelViews.Views views) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(label, "label");
+        Objects.requireNonNull(description, "description");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(digest, "digest");
         Objects.requireNonNull(views, "views");
@@ -106,7 +112,7 @@ public final class HtmlReportRenderer {
                 .append(CSS)
                 .append("\n</style>\n</head>\n<body>\n<div class=\"wrap\">\n");
 
-        appendHeader(html, projectId, label, snapshot, carded.size());
+        appendHeader(html, projectId, label, description, snapshot, carded.size());
         appendFailures(html, views.failures());
         appendAgentPanel(html, digest);
         appendToolbar(html);
@@ -157,6 +163,7 @@ public final class HtmlReportRenderer {
             final StringBuilder html,
             final ProjectId projectId,
             final Optional<String> label,
+            final Optional<String> description,
             final StoreSnapshot snapshot,
             final int elements) {
         html.append("  <header class=\"top\">\n")
@@ -168,6 +175,8 @@ public final class HtmlReportRenderer {
                 .append("</b> resources &middot; <b>").append(snapshot.tripleCount())
                 .append("</b> triples</span>\n")
                 .append("  </header>\n");
+        description.ifPresent(value -> html.append("  <p class=\"project-desc\">")
+                .append(escape(value)).append("</p>\n"));
     }
 
     /**
@@ -557,6 +566,7 @@ public final class HtmlReportRenderer {
             header.top .ws{font-family:var(--mono);font-size:12.5px;color:var(--iri);}
             header.top .meta{margin-left:auto;color:var(--ink-faint);font-size:12.5px;font-family:var(--mono);}
             header.top .meta b{color:var(--ink-soft);font-weight:600;}
+            .project-desc{margin:0 0 8px;color:var(--ink-soft);font-size:13.5px;}
             .failures{background:var(--bad-bg);border:1px solid var(--bad);border-radius:8px;
               padding:12px 16px;margin:18px 0 0;color:var(--ink);}
             .failures .lbl{margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.06em;
