@@ -26,6 +26,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
@@ -819,6 +820,128 @@ class KognioRdfRequirementRepositoryTest {
                 + "<https://w3id.org/arknet/requirements#status> <" + statusIri + "> ; "
                 + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
                 + "\"Login succeeds with valid credentials\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    // ---- priority/motivatedBy/qualityCategory: SHACL-legal but type-mismatched (issue #163) ----
+
+    /**
+     * Store-first regression test for issue #163: {@code requirements-shapes.ttl}'s
+     * {@code Requirement-priority} shape declares no {@code sh:nodeKind}, so a store-first
+     * (ADR-005) edit can legally write {@code arkreq:priority} as a literal instead of an IRI.
+     * Before the fix {@code priorityOf}'s unguarded {@code (IRI) value} cast threw an uncaught
+     * {@link ClassCastException}; the fix reads the mismatched value as "not set" instead.
+     */
+    @Test
+    void findByCodeReadsATypeMismatchedPriorityAsNotSetInsteadOfThrowing() {
+        RequirementId id = freshId();
+        givenRequirementWithLiteralInsteadOfIri(PROJECT_A, id, "FR-1", "priority", "not-an-iri");
+
+        Requirement found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertNull(found.priority());
+    }
+
+    /** {@code motivatedBy}'s equivalent of {@link #findByCodeReadsATypeMismatchedPriorityAsNotSetInsteadOfThrowing}. */
+    @Test
+    void findByCodeReadsATypeMismatchedMotivatedByAsNotSetInsteadOfThrowing() {
+        RequirementId id = freshId();
+        givenRequirementWithLiteralInsteadOfIri(PROJECT_A, id, "FR-1", "motivatedBy", "not-an-iri");
+
+        Requirement found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertNull(found.motivatedBy());
+    }
+
+    /**
+     * {@code qualityCategory}'s expected RDF term kind is the opposite of {@code priority}/
+     * {@code motivatedBy}'s (a {@link Literal}, not an {@link IRI}) - this test writes an IRI
+     * where a literal is expected, exercising {@code qualityCategoryOf}'s guard instead.
+     */
+    @Test
+    void findByCodeReadsATypeMismatchedQualityCategoryAsNotSetInsteadOfThrowing() {
+        RequirementId id = freshId();
+        givenRequirementWithIriInsteadOfLiteral(
+                PROJECT_A, id, "FR-1", "qualityCategory", "https://w3id.org/arknet/id/not-a-literal");
+
+        Requirement found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1")).orElseThrow();
+
+        assertNull(found.qualityCategory());
+    }
+
+    /**
+     * Before the fix this was the crash the issue described as project-wide: a single
+     * type-mismatched {@code priority} aborted {@link #findAll}'s whole stream with an uncaught
+     * {@link ClassCastException}, taking every other, perfectly good requirement in the project
+     * down with it. The fix keeps the batch intact - the offending requirement is still returned,
+     * just with {@code priority() == null}.
+     */
+    @Test
+    void findAllDoesNotAbortTheWholeBatchForATypeMismatchedPriority() {
+        repository.create(PROJECT_A, new Requirement(freshId(), new RequirementCode("FR-1"), "Login",
+                "The system shall authenticate a user.", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, List.of(),
+                List.of("Login succeeds with valid credentials")));
+        givenRequirementWithLiteralInsteadOfIri(PROJECT_A, freshId(), "FR-2", "priority", "not-an-iri");
+
+        List<Requirement> all = repository.findAll(PROJECT_A);
+
+        assertEquals(2, all.size());
+        Requirement brokenPriority = all.stream()
+                .filter(requirement -> requirement.code().equals(new RequirementCode("FR-2")))
+                .findFirst()
+                .orElseThrow();
+        assertNull(brokenPriority.priority());
+    }
+
+    /**
+     * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with
+     * {@code property} bound to a literal instead of the IRI its {@code priorityOf}/
+     * {@code motivatedByOf} decoder expects - shape-legal ({@code requirements-shapes.ttl}
+     * declares no {@code sh:nodeKind} for either property, so the write-gate never rejects it),
+     * but unreachable via {@code req_add}/{@code req_update}, which only ever write an IRI.
+     */
+    private void givenRequirementWithLiteralInsteadOfIri(
+            ProjectId projectId, RequirementId id, String code, String property, String literalValue) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" ; "
+                + "<https://w3id.org/arknet/requirements#" + property + "> \"" + literalValue + "\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * {@link #givenRequirementWithLiteralInsteadOfIri} with the mismatch inverted: {@code property}
+     * bound to an IRI instead of the literal {@code qualityCategoryOf} expects.
+     */
+    private void givenRequirementWithIriInsteadOfLiteral(
+            ProjectId projectId, RequirementId id, String code, String property, String iriValue) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" ; "
+                + "<https://w3id.org/arknet/requirements#" + property + "> <" + iriValue + "> "
+                + "} }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);
