@@ -51,23 +51,25 @@ import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
+import de.hauschel.arknet.prj.application.port.out.RevisionToken;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 
 /**
- * Regression tests for {@link KognioRdfProjectRegistry#register} against a real RDF4J-backed store
- * (on-disk {@code NativeStore}) with real threads: two registrations whose transactions genuinely
- * <em>overlap</em>, so that both pass their in-transaction uniqueness guards before either commits
- * and only the second commit is rejected - by the store, not by a guard, the
- * {@code arknet-project} counterpart of the four model contexts' {@code
- * *RealStoreConcurrencyTest}s.
+ * Regression tests for {@link KognioRdfProjectRegistry#register} and
+ * {@link KognioRdfProjectRegistry#compareAndUpdate} against a real RDF4J-backed store (on-disk
+ * {@code NativeStore}) with real threads: transactions whose writers genuinely <em>overlap</em>,
+ * so that both pass their in-transaction guards before either commits and only the second commit
+ * is rejected - by the store, not by a guard, the {@code arknet-project} counterpart of the four
+ * model contexts' {@code *RealStoreConcurrencyTest}s.
  *
- * <p><strong>What this proves.</strong> Two things the four model contexts' tests cannot cover,
+ * <p><strong>What the {@code register} races prove.</strong> Two things the four model contexts' tests cannot cover,
  * because this context differs from them in two ways. First: it guards <em>two</em> uniqueness
  * rules, the label (through {@link de.hauschel.arknet.persistence.WriteFunnel}'s {@code code}
  * parameter) and the anchor ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}, ADR-016
@@ -77,6 +79,22 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * is therefore not only that the invariant holds - one anchor, one project, even under a genuinely
  * overlapping race - but that the losing caller is told <em>which</em> collision cost it the
  * write.</p>
+ *
+ * <p><strong>What the {@code compareAndUpdate} races prove (issue #178).</strong> The register
+ * race above is the create-path counterpart of {@code CodeAssignment}-style contests; the
+ * read-modify-write path behind {@code project_attach_anchor}/{@code project_rename} had no real
+ * -store, real-thread proof of its own before this class. Two {@code compareAndUpdate} calls
+ * against the very same, already-registered project, both reading the same
+ * {@code arkprov:head}: both pass the funnel's synchronous head check because neither sees the
+ * other's uncommitted write, and only the second commit is rejected by the store - the funnel
+ * translates that lost {@code SERIALIZABLE} conflict into the identical {@link StaleProjectException}
+ * a synchronously stale caller would already get from the head comparison itself (see
+ * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}'s "two ways to observe a
+ * conflict, one signal" javadoc). The proof is that this second, harder-to-reach interleaving
+ * collapses onto the same signal rather than surfacing a raw store exception or, worse, silently
+ * losing one writer's change - and that the loser's whole transaction, including its
+ * {@link KognioRdfProjectRegistry#deleteProjectAndItsAnchors} deletes, rolls back rather than
+ * leaving an orphaned or half-written anchor behind.</p>
  *
  * <p><strong>Why the on-disk sail.</strong> Every race here is decided by the store's commit-time
  * conflict detection, and that lives in each sail rather than in a shared layer above them:
@@ -88,8 +106,12 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  *
  * <p><strong>Driven at the out-port, not through {@code ProjectService}.</strong> The service's
  * {@code register} runs a {@code findByAnchor} pre-check outside any transaction, which catches the
- * <em>non</em>-parallel case and would only dilute what these tests pin down. The race lives below
- * that check, in the adapter, so that is where these tests drive it.</p>
+ * <em>non</em>-parallel case and would only dilute what these tests pin down. For {@code attach}/
+ * {@code rename} there is a second, stronger reason: {@code ProjectService#withProjectLock}
+ * serialises every writer of the <em>same</em> {@link ProjectId} through one JVM-local monitor
+ * (issue #173), so two overlapping {@code compareAndUpdate} calls against one project could never
+ * be provoked through the service at all in a single JVM. The race lives below the service, in the
+ * adapter, so that is where every test in this class drives it.</p>
  *
  * <p><strong>How the overlap is forced deterministically.</strong> A {@link DatasetLifecycle}
  * decorator wraps each caller's {@link DatasetTx} so that it blocks on a two-party
@@ -99,7 +121,11 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * BoundedContextServiceRealStoreConcurrencyTest} does: this write path issues four such guards
  * (the funnel's identity and label checks, then the body's own label and per-anchor checks), and
  * a count would silently stop pinning the intended moment the day one of them is added or dropped.
- * "The last guard has passed" is what matters, and "about to write" says exactly that. A
+ * "The last guard has passed" is what matters, and "about to write" says exactly that. The same
+ * decorator serves the {@code compareAndUpdate} races unchanged: that path's own last guard
+ * ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}, reached after the funnel's subject and
+ * head checks and after {@link KognioRdfProjectRegistry#deleteProjectAndItsAnchors}'s deletes)
+ * also sits immediately before that transaction's first {@code add}. A
  * {@link CountDownLatch} then holds the loser until the winner's transaction has fully committed,
  * so which of the two loses is deterministic instead of flaky. The decorator disarms itself after
  * firing once, so nothing that follows the race is synchronised.</p>
@@ -244,6 +270,73 @@ class ProjectRegistryRealStoreConcurrencyTest {
         assertTrue(straightThrough.findAll().isEmpty(), "the rejected write must have left nothing behind");
     }
 
+    /**
+     * The {@code compareAndUpdate} counterpart of the {@code register} races above (issue #178):
+     * two {@code project_attach_anchor}-shaped writes against the very same, already-registered
+     * project, both reading the same {@code arkprov:head}, held open until both have passed the
+     * funnel's synchronous head check. Only the second commit is rejected by the store, and the
+     * funnel must translate that genuine {@code SERIALIZABLE} conflict into the same
+     * {@link StaleProjectException} a synchronously stale caller already gets - not a raw store
+     * exception, and not a silent merge that would keep the loser's anchor around as an orphan
+     * with no owner.
+     */
+    @Test
+    void concurrentAttachesOfDifferentAnchorsToTheSameProject_leaveOneWinnerAndTellTheLoserItsHeadIsStale()
+            throws InterruptedException {
+        Anchor original = pathAnchor("/home/dev/arknet");
+        Project initial = new Project(freshId(), "arknet", List.of(original));
+        straightThrough.register(initial);
+        RevisionToken headBeforeRace = straightThrough.findCurrentById(initial.id()).orElseThrow().head();
+
+        Anchor winnerAnchor = pathAnchor("/home/dev/arknet-winner");
+        Anchor loserAnchor = pathAnchor("/home/dev/arknet-loser");
+        Project winnerUpdate = new Project(initial.id(), initial.label(), List.of(original, winnerAnchor));
+        Project loserUpdate = new Project(initial.id(), initial.label(), List.of(original, loserAnchor));
+
+        Race race = raceCompareAndUpdates(headBeforeRace, winnerUpdate, loserUpdate);
+
+        assertNull(race.winnerFailure(), "the winner commits first and must not fail");
+        assertInstanceOf(StaleProjectException.class, race.loserFailure(),
+                "the loser lost a genuine SERIALIZABLE conflict at commit, which compareAndUpdate must "
+                        + "translate into the same signal a synchronously stale caller would get");
+
+        Project stored = straightThrough.findById(initial.id()).orElseThrow();
+        assertEquals(Set.of(original, winnerAnchor), Set.copyOf(stored.anchors()),
+                "only the winner's attach may be visible");
+        assertTrue(straightThrough.findByAnchor(loserAnchor).isEmpty(),
+                "the loser's whole transaction must have rolled back - its anchor must not exist as an "
+                        + "orphan with no owning project");
+    }
+
+    /**
+     * The {@code project_rename} shape of the same {@code compareAndUpdate} race: both renames
+     * read the same head, only the winner's commit succeeds, and the loser's label must not
+     * survive anywhere in the registry - not as this project's label, and not dangling on some
+     * other subject.
+     */
+    @Test
+    void concurrentRenamesOfTheSameProject_leaveOneWinnerAndTellTheLoserItsHeadIsStale()
+            throws InterruptedException {
+        Project initial = new Project(freshId(), "arknet", List.of(pathAnchor("/home/dev/arknet")));
+        straightThrough.register(initial);
+        RevisionToken headBeforeRace = straightThrough.findCurrentById(initial.id()).orElseThrow().head();
+
+        Project winnerUpdate = new Project(initial.id(), "arknet-winner", initial.anchors());
+        Project loserUpdate = new Project(initial.id(), "arknet-loser", initial.anchors());
+
+        Race race = raceCompareAndUpdates(headBeforeRace, winnerUpdate, loserUpdate);
+
+        assertNull(race.winnerFailure(), "the winner commits first and must not fail");
+        assertInstanceOf(StaleProjectException.class, race.loserFailure(),
+                "the loser lost a genuine SERIALIZABLE conflict at commit, which compareAndUpdate must "
+                        + "translate into the same signal a synchronously stale caller would get");
+
+        Project stored = straightThrough.findById(initial.id()).orElseThrow();
+        assertEquals("arknet-winner", stored.label(), "only the winner's rename may be visible");
+        assertTrue(straightThrough.findAll().stream().noneMatch(p -> p.label().equals("arknet-loser")),
+                "the loser's whole transaction must have rolled back - its label must not exist anywhere");
+    }
+
     // ---- the race itself -----------------------------------------------------------------
 
     /** What both callers came out of a race with: the winner's outcome and the loser's. */
@@ -307,6 +400,52 @@ class ProjectRegistryRealStoreConcurrencyTest {
             assertNotNull(loserFailure.get(),
                     "the loser must not have committed - the race was not raced otherwise");
         }
+        return new Race(winnerFailure.get(), loserFailure.get());
+    }
+
+    /**
+     * Runs two {@code compareAndUpdate} calls against the same {@code expectedHead} concurrently
+     * through two separate registries, holding each caller at its first write until both have
+     * passed every guard, and the loser additionally until the winner has committed - the
+     * {@code compareAndUpdate} counterpart of {@link #raceRegistrations}.
+     */
+    private Race raceCompareAndUpdates(RevisionToken expectedHead, Project winner, Project loser)
+            throws InterruptedException {
+        CyclicBarrier bothGuardsPassed = new CyclicBarrier(2);
+        CountDownLatch winnerCommitted = new CountDownLatch(1);
+
+        ProjectRegistry winnerRegistry = guardedRegistry(() -> awaitBarrier(bothGuardsPassed));
+        ProjectRegistry loserRegistry = guardedRegistry(() -> {
+            awaitBarrier(bothGuardsPassed);
+            awaitLatch(winnerCommitted);
+        });
+
+        AtomicReference<Throwable> winnerFailure = new AtomicReference<>();
+        AtomicReference<Throwable> loserFailure = new AtomicReference<>();
+
+        Thread winnerThread = new Thread(() -> {
+            try {
+                winnerRegistry.compareAndUpdate(expectedHead, winner);
+            } catch (Throwable t) {
+                winnerFailure.set(t);
+            } finally {
+                winnerCommitted.countDown();
+            }
+        });
+        Thread loserThread = new Thread(() -> {
+            try {
+                loserRegistry.compareAndUpdate(expectedHead, loser);
+            } catch (Throwable t) {
+                loserFailure.set(t);
+            }
+        });
+
+        winnerThread.start();
+        loserThread.start();
+        winnerThread.join();
+        loserThread.join();
+
+        assertNotNull(loserFailure.get(), "the loser must not have committed - the race was not raced otherwise");
         return new Race(winnerFailure.get(), loserFailure.get());
     }
 
