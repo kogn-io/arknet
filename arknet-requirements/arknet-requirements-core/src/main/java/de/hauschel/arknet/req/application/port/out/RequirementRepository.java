@@ -14,6 +14,7 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementReadConflictException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
@@ -103,6 +104,10 @@ public interface RequirementRepository {
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
      *                                                 implements (only reachable via a store-first,
      *                                                 ADR-005 edit)
+     * @throws RequirementReadConflictException if a bounded, adapter-internal retry loop keeps
+     *                                            losing the {@code SERIALIZABLE} race against
+     *                                            concurrent writers of this project's requirements
+     *                                            (a pathological, sustained contention case)
      */
     Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code);
 
@@ -178,6 +183,10 @@ public interface RequirementRepository {
      *                                                 ADR-005 edit) - one such requirement aborts
      *                                                 the whole listing rather than being silently
      *                                                 dropped
+     * @throws RequirementReadConflictException if a bounded, adapter-internal retry loop keeps
+     *                                            losing the {@code SERIALIZABLE} race against
+     *                                            concurrent writers of this project's requirements
+     *                                            (a pathological, sustained contention case)
      */
     List<Requirement> findAll(ProjectId projectId);
 

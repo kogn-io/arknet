@@ -32,6 +32,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -49,6 +50,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementReadConflictException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
@@ -210,9 +212,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * lost this race is resolved by a single retry in the overwhelming majority of cases, since
      * the retry simply re-runs the identical read against the store's now-current state; this
      * bound exists only so a pathological, sustained storm of concurrent writers against the same
-     * requirement(s) fails loudly instead of retrying forever.
+     * requirement(s) fails loudly instead of retrying forever - the exact same "bounded, then loud"
+     * shape (and, as it turns out, the exact same number) as {@link CodeAssignment}'s own retry
+     * bound, so this reuses that constant instead of duplicating it under a private name.
      */
-    private static final int MAX_READ_RETRY_ATTEMPTS = 20;
+    private static final int MAX_READ_RETRY_ATTEMPTS = CodeAssignment.DEFAULT_MAX_ATTEMPTS;
 
     private final DatasetLifecycle lifecycle;
     private final WriteFunnel funnel;
@@ -518,8 +522,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * only ever observed a pattern a concurrent writer changed and committed before this
      * transaction's own commit, so re-running the identical read against the store's now-current
      * state is always the correct response, not merely a convenient one.
+     *
+     * <p><strong>Exhausted retries never leak the raw store exception.</strong> The shared {@link
+     * de.hauschel.arknet.persistence.WriteFunnel} (ADR-013) translates every write path's lost
+     * {@code ConcurrencyConflictException} into a bounded-context-owned signal before it reaches a
+     * caller - this read path is the adapter's own, funnel-external retry loop, but the same
+     * convention applies: a pathological, sustained storm of concurrent writers that outlasts
+     * {@link #MAX_READ_RETRY_ATTEMPTS} surfaces as {@link RequirementReadConflictException}, never
+     * as the raw {@code io.kogn.rdf} type, with the last observed conflict preserved as {@linkplain
+     * Throwable#getCause() cause}.
      */
-    private <T> T readInTransaction(DatasetHandle handle, Function<DatasetTx, T> work) {
+    private <T> T readInTransaction(ProjectId projectId, DatasetHandle handle, Function<DatasetTx, T> work) {
         ConcurrencyConflictException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_READ_RETRY_ATTEMPTS; attempt++) {
             try {
@@ -528,7 +541,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 lastConflict = e;
             }
         }
-        throw lastConflict;
+        throw new RequirementReadConflictException(projectId, MAX_READ_RETRY_ATTEMPTS, lastConflict);
     }
 
     /**
@@ -555,7 +568,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            return readInTransaction(handle, tx -> {
+            return readInTransaction(projectId, handle, tx -> {
                 Optional<BindingSet> head = tx.select(query).findFirst();
                 if (head.isEmpty()) {
                     return Optional.empty();
@@ -650,7 +663,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            return readInTransaction(handle, tx -> {
+            return readInTransaction(projectId, handle, tx -> {
                 Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(tx);
                 Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(tx);
                 // Grouped by subject (see the class-level note above): priority/
