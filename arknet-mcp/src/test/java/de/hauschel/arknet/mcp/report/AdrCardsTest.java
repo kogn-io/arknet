@@ -36,6 +36,7 @@ class AdrCardsTest {
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final ResourceId ADR_1_ID = ResourceId.of(ID + "adr-1");
     private static final ResourceId ADR_2_ID = ResourceId.of(ID + "adr-2");
+    private static final ResourceId ADR_10_ID = ResourceId.of(ID + "adr-10");
     private static final ResourceId FR_1 = ResourceId.of(ID + "fr-1");
     private static final ResourceId BC_1 = ResourceId.of(ID + "bc-1");
 
@@ -189,6 +190,24 @@ class AdrCardsTest {
 
         assertThat(cards.section(PROJECT, Glossary.empty()).cards())
                 .extracting(ModelCard::code).containsExactly("ADR-1", "ADR-2");
+    }
+
+    /**
+     * Regression test for issue #143: {@code Comparator.comparing(... code().value())} sorted
+     * {@code String}s naturally, so {@code ADR-10} landed before {@code ADR-2} once a project
+     * passed ten decisions.
+     */
+    @Test
+    void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
+        final AdrCards cards = new AdrCards(
+                projectId -> List.of(
+                        new AdrDetail(adr(ADR_2_ID, "ADR-2", AdrStatus.PROPOSED), List.of(), List.of()),
+                        new AdrDetail(adr(ADR_10_ID, "ADR-10", AdrStatus.PROPOSED), List.of(), List.of()),
+                        new AdrDetail(adr(ADR_1_ID, "ADR-1", AdrStatus.PROPOSED), List.of(), List.of())),
+                (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
+
+        assertThat(cards.section(PROJECT, Glossary.empty()).cards())
+                .extracting(ModelCard::code).containsExactly("ADR-1", "ADR-2", "ADR-10");
     }
 
     @Test

@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
@@ -27,7 +28,7 @@ class DigestRendererTest {
     private static final String TITLE = "http://purl.org/dc/terms/title";
     private static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
-    private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults());
+    private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults(), DisplayLocale.DEFAULT);
 
     @Test
     void rendersHeaderCountersPrefixLegendAndResourceLines() {

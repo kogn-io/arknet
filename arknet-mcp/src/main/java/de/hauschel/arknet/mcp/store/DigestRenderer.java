@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
@@ -31,12 +32,15 @@ import de.hauschel.arknet.kernel.ProjectId;
 public final class DigestRenderer {
 
     private final Prefixes prefixes;
+    private final DisplayLocale displayLocale;
 
     /**
-     * @param prefixes the CURIE resolver used to shorten IRIs for display
+     * @param prefixes      the CURIE resolver used to shorten IRIs for display
+     * @param displayLocale the display language to select among a resource's language-tagged labels
      */
-    public DigestRenderer(Prefixes prefixes) {
+    public DigestRenderer(Prefixes prefixes, DisplayLocale displayLocale) {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     /**
@@ -143,7 +147,7 @@ public final class DigestRenderer {
         if (!types.isEmpty()) {
             line.append(" [").append(types).append(']');
         }
-        resource.label().ifPresent(label -> line.append(" \"").append(label).append('"'));
+        resource.label(displayLocale).ifPresent(label -> line.append(" \"").append(label).append('"'));
         resource.status().ifPresent(status -> line.append(' ').append(status));
         resource.priority().ifPresent(priority -> line.append(' ').append(priority));
         line.append("  -> resource_get(\"").append(handle).append("\")");

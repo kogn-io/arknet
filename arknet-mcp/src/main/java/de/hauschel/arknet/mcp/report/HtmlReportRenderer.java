@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
@@ -51,12 +52,15 @@ public final class HtmlReportRenderer {
             "https://w3id.org/arknet/requirements#extensionStep");
 
     private final Prefixes prefixes;
+    private final DisplayLocale displayLocale;
 
     /**
-     * @param prefixes the CURIE resolver used to shorten IRIs for display
+     * @param prefixes      the CURIE resolver used to shorten IRIs for display
+     * @param displayLocale the display language to select among a resource's language-tagged labels
      */
-    public HtmlReportRenderer(final Prefixes prefixes) {
+    public HtmlReportRenderer(final Prefixes prefixes, final DisplayLocale displayLocale) {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     /**
@@ -128,9 +132,15 @@ public final class HtmlReportRenderer {
      * Every resource no card was built for, minus the use-case steps already shown inside their
      * flow. Order stays the snapshot's own (primary type, then IRI), so the fallback keeps the
      * shape the whole report used to have.
+     *
+     * <p>Only a <em>carded</em> use case's {@code mainStep}/{@code extensionStep} edges count as
+     * "already shown" - if the Use Cases section itself failed to build, no use case is carded,
+     * so its steps stay uninlined and fall through to this same leftovers list instead of
+     * disappearing from the whole document (issue #142).</p>
      */
     private static List<StoreResource> leftovers(final StoreSnapshot snapshot, final Set<String> carded) {
         final Set<String> inlinedSteps = snapshot.resources().stream()
+                .filter(resource -> carded.contains(resource.iri()))
                 .flatMap(resource -> resource.outgoing().stream())
                 .filter(triple -> STEP_EDGES.contains(triple.predicate()))
                 .map(Triple::object)
@@ -406,7 +416,7 @@ public final class HtmlReportRenderer {
                 .append("                <summary class=\"head\">\n")
                 .append("                  <span class=\"code mono\">")
                 .append(escape(displayHandle(resource))).append("</span>\n");
-        resource.label().ifPresent(label ->
+        resource.label(displayLocale).ifPresent(label ->
                 html.append("                  <h3>").append(escape(label)).append("</h3>\n"));
         html.append("                  <span class=\"pill neutral\">")
                 .append(escape(displayType(StoreSnapshot.primaryType(resource)))).append("</span>\n")

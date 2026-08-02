@@ -49,7 +49,7 @@ public final class BoundedContextCards {
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
         final List<ModelCard> cards = contexts.list(projectId).stream()
-                .sorted(Comparator.comparing(context -> context.code().value()))
+                .sorted(Comparator.comparing(context -> context.code().value(), BusinessCodes.ORDER))
                 .map(context -> card(context, glossary))
                 .toList();
         return new ModelSection(SECTION_TITLE, "bounded-contexts",

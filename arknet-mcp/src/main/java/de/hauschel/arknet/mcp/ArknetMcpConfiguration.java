@@ -665,13 +665,13 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     StoreReportTools storeReportTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ModelViews modelViews,
-            final ProjectResolver projectResolver, final ProjectService projectService,
+            final StoreReader storeReader, final Prefixes prefixes, final DisplayLocale displayLocale,
+            final ModelViews modelViews, final ProjectResolver projectResolver, final ProjectService projectService,
             @Value("${arknet.report.dir:${user.dir}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
-                storeReader, prefixes, new HtmlReportRenderer(prefixes), modelViews, projectResolver,
-                projectService, fallbackReportDir, reportHostDir);
+                storeReader, prefixes, displayLocale, new HtmlReportRenderer(prefixes, displayLocale), modelViews,
+                projectResolver, projectService, fallbackReportDir, reportHostDir);
     }
 
     /**
@@ -709,7 +709,8 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     TraceabilityMcpTools traceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver) {
-        return new TraceabilityMcpTools(storeReader, prefixes, projectResolver);
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projectResolver,
+            final DisplayLocale displayLocale) {
+        return new TraceabilityMcpTools(storeReader, prefixes, projectResolver, displayLocale);
     }
 }

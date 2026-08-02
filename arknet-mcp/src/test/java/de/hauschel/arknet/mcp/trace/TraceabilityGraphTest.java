@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -14,8 +15,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
@@ -70,6 +76,9 @@ class TraceabilityGraphTest {
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/trace-test-fr-2";
     private static final String UC_1_IRI = "https://w3id.org/arknet/id/trace-test-uc-1";
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-test-bc-1";
+
+    private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
 
     @TempDir
     Path storageDir;
@@ -135,7 +144,7 @@ class TraceabilityGraphTest {
                 List.of(new de.hauschel.arknet.bc.domain.TermRef(ResourceId.of(TERM_4_IRI)))));
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
-        graph = TraceabilityGraph.of(snapshot);
+        graph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
     }
 
     @AfterEach
@@ -215,6 +224,87 @@ class TraceabilityGraphTest {
     void termLabelsMapsEveryTermIriToItsPrefLabel() {
         assertThat(graph.termLabels()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 TERM_1_IRI, "Anmeldung", TERM_2_IRI, "Passwort", ACTOR_IRI, "Customer", TERM_4_IRI, "Vertrag"));
+    }
+
+    /**
+     * Regression test for issue #141: a term with several language-tagged {@code skos:prefLabel}s
+     * (SKOS textbook, ADR-005) used to resolve to whichever literal {@link
+     * de.hauschel.arknet.mcp.store.StoreResource#label(de.hauschel.arknet.kernel.DisplayLocale)}'s
+     * predecessor happened to read first - independent of the {@code displayLocale} the caller
+     * asked for, and disagreeing with the HTML report, which resolves the very same multi-language
+     * term through {@code report.Glossary}'s {@code DisplayLocale}-selected {@code Term::prefLabel}.
+     * Two graphs built from the same snapshot with different requested languages must now pick the
+     * matching literal each time.
+     */
+    @Test
+    void termLabelsSelectsTheLiteralMatchingEachGraphsRequestedLanguage() {
+        String multilingualTermIri = "https://w3id.org/arknet/id/trace-test-term-multilingual";
+        seedMultilingualPrefLabel(multilingualTermIri, "Customer", "en", "Kunde", "de");
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+
+        TraceabilityGraph germanGraph = TraceabilityGraph.of(
+                snapshot, new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
+        TraceabilityGraph englishGraph = TraceabilityGraph.of(
+                snapshot, new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
+
+        assertThat(germanGraph.labelOf(multilingualTermIri)).contains("Kunde");
+        assertThat(englishGraph.labelOf(multilingualTermIri)).contains("Customer");
+    }
+
+    /**
+     * Regression test for issue #141's user-visible effect: the exact verified scenario from the
+     * issue report. A requirement's text names a term only under its German label; with a German
+     * {@code displayLocale}, {@code orphan_check}'s {@link TraceabilityGraph#unlinkedMentions()}
+     * must find that mention - matching against {@code label()}'s English literal (as the
+     * pre-fix, locale-blind code could pick) would silently miss it.
+     */
+    @Test
+    void unlinkedMentionsFindsAGermanMentionOfATermWhoseOtherLabelIsEnglish() {
+        String multilingualTermIri = "https://w3id.org/arknet/id/trace-test-term-multilingual";
+        seedMultilingualPrefLabel(multilingualTermIri, "Customer", "en", "Kunde", "de");
+        seedRequirementDescription(FR_2_IRI, "Der Kunde meldet sich ab.");
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+
+        TraceabilityGraph germanGraph = TraceabilityGraph.of(
+                snapshot, new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
+
+        assertThat(germanGraph.unlinkedMentions())
+                .extracting(TraceabilityGraph.UnlinkedMention::termIri)
+                .contains(multilingualTermIri);
+    }
+
+    /** Writes a fresh {@code skos:Concept} with two language-tagged {@code skos:prefLabel}s directly. */
+    private void seedMultilingualPrefLabel(
+            String termIri, String labelA, String languageA, String labelB, String languageB) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        IRI term = rdf.createIRI(termIri);
+        graph.add(term, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+        graph.add(term, rdf.createIRI("http://purl.org/dc/terms/identifier"), rdf.createLiteral("TERM-ML"));
+        graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"),
+                rdf.createLiteral(labelA, languageA));
+        graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"),
+                rdf.createLiteral(labelB, languageB));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-multilingual-graph"), graph);
+                return null;
+            });
+        }
+    }
+
+    /** Overwrites a requirement's {@code dcterms:description} with raw prose, for prose-matching tests. */
+    private void seedRequirementDescription(String requirementIri, String description) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        graph.add(rdf.createIRI(requirementIri), rdf.createIRI(DCTERMS_DESCRIPTION),
+                rdf.createLiteral(description));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-description-graph"), graph);
+                return null;
+            });
+        }
     }
 
     @Test

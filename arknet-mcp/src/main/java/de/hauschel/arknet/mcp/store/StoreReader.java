@@ -194,7 +194,7 @@ public final class StoreReader {
     public List<String> findByIdentifier(ProjectId projectId, String identifier) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(identifier, "identifier");
-        String literal = "\"" + identifier.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        String literal = "\"" + SparqlTerms.escape(identifier) + "\"";
         String query = "SELECT DISTINCT ?s WHERE { ?s <" + DCTERMS_IDENTIFIER + "> " + literal + " }";
         try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)

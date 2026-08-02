@@ -102,7 +102,7 @@ class TraceabilityGraphAdrEdgesTest {
                 List.of(), List.of(), List.of(new AdrId(ResourceId.of(ADR_1_IRI)))));
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
-        graph = TraceabilityGraph.of(snapshot);
+        graph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
     }
 
     @AfterEach
