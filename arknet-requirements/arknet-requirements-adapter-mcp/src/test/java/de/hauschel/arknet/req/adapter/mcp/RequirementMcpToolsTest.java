@@ -164,6 +164,41 @@ class RequirementMcpToolsTest {
                 () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null, null));
     }
 
+    /** The one legal transition: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
+    @Test
+    void setStatusAcceptsARequirementWhenTargetStatusIsAccepted() {
+        String rendered = adapter.accept(null, "FR-1", "ACCEPTED", null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastAcceptedRequirement);
+        assertTrue(rendered.contains("FR-1"), rendered);
+    }
+
+    /**
+     * An unknown/unsupported status string must reject with this method's own didactic
+     * message, not the JDK's raw {@code IllegalArgumentException("No enum constant ...")}
+     * from {@link RequirementStatus#valueOf} - the same guard {@code AdrMcpTools.setStatus}
+     * already applies.
+     */
+    @Test
+    void setStatusRejectsAnUnknownStatusWithADidacticMessageInsteadOfARawEnumFailure() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> adapter.accept(null, "FR-1", "DOES_NOT_EXIST", null));
+
+        assertTrue(exception.getMessage().contains("req_set_status"), exception.getMessage());
+        assertTrue(exception.getMessage().contains("DOES_NOT_EXIST"), exception.getMessage());
+    }
+
+    /**
+     * {@code PROPOSED} is a real {@link RequirementStatus} value but not a legal target of this
+     * tool (a requirement starts there, it is never transitioned back into it) - it must be
+     * rejected the same way as a value the enum does not know at all.
+     */
+    @Test
+    void setStatusRejectsProposedAsANotLegalTransitionTarget() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.accept(null, "FR-1", "PROPOSED", null));
+    }
+
     @Test
     void linkTermPassesTheRawTermCodeThroughToTheInPort() {
         // Round trip: the port hands back a TermRef whose IRI resolves to TERM-1 again, proving
@@ -350,6 +385,7 @@ class RequirementMcpToolsTest {
             implements AddRequirement, ListRequirements, GetRequirement, AcceptRequirement, LinkTerm,
             UpdateRequirement, GetRequirementSchema {
 
+        private RequirementCode lastAcceptedRequirement;
         private RequirementCode lastLinkedRequirement;
         private String lastLinkedTermCode;
         private ResourceId nextLinkedTermResourceId;
@@ -382,7 +418,9 @@ class RequirementMcpToolsTest {
 
         @Override
         public Requirement accept(ProjectId projectId, RequirementCode code) {
-            throw new UnsupportedOperationException();
+            lastAcceptedRequirement = code;
+            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
+                    Priority.MUST_HAVE, null, null, List.of(), List.of("Login succeeds with valid credentials"));
         }
 
         @Override

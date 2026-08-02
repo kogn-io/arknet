@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.adapter.mcp;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -247,11 +248,18 @@ public final class RequirementMcpTools {
         // The requirements lifecycle permits exactly one transition: the tool's
         // external "status" parameter is kept for API stability, but AcceptRequirement itself no
         // longer takes a target status - only ACCEPTED can ever legally result from this call.
-        final RequirementStatus requirementStatus = RequirementStatus.valueOf(status);
+        // RequirementStatus.valueOf is parsed defensively rather than let directly: PROPOSED is a
+        // real enum value that is simply not a legal target of this tool, and anything unparseable
+        // must reject with this method's own message, not the JDK's raw "No enum constant ...".
+        RequirementStatus requirementStatus;
+        try {
+            requirementStatus = RequirementStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            requirementStatus = null;
+        }
         if (requirementStatus != RequirementStatus.ACCEPTED) {
             throw new IllegalArgumentException(
-                    "req_set_status only supports transitioning a requirement to ACCEPTED, not "
-                            + requirementStatus);
+                    "req_set_status only supports transitioning a requirement to ACCEPTED, not " + status);
         }
         final Requirement updated = acceptRequirement.accept(projectId, code);
         return presenter.format(projectId, updated);
