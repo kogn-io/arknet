@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.req.application;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,11 +38,22 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
  * every {@link #create}/{@link #compareAndUpdate}, tracked per identity - {@link
  * #findCurrentByCode} hands it out alongside the requirement, {@link #compareAndUpdate} rejects a
  * stale one, exactly the CAS contract the real adapter enforces via {@code arkprov:head}.</p>
+ *
+ * <p><strong>Legacy acceptance criteria.</strong> {@link Requirement}'s constructor rejects an
+ * empty {@code acceptanceCriteria} list unconditionally, so this fake - unlike the real
+ * {@code KognioRdfRequirementRepository} - can never hold a requirement without one; a legacy
+ * requirement predating the mandatory-criterion invariant is instead created via {@link
+ * #createLegacy}, which stores whatever criteria it is given (typically placeholder-like text)
+ * but marks the identity so {@link #findCurrentByCode} reports {@code
+ * acceptanceCriteriaIsSynthesized() == true} for it - mirroring the real adapter's structural
+ * signal (no {@code arkreq:acceptanceCriterion} triple at all) without depending on the
+ * placeholder's exact text.</p>
  */
 final class InMemoryRequirementRepository implements RequirementRepository {
 
     private final Map<ProjectId, Map<RequirementId, Requirement>> byProject = new LinkedHashMap<>();
     private final Map<RequirementId, RevisionToken> headByIdentity = new LinkedHashMap<>();
+    private final Set<RequirementId> legacyAcceptanceCriteria = new HashSet<>();
 
     @Override
     public void create(ProjectId projectId, Requirement requirement) {
@@ -74,6 +86,12 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         }
         requirements.put(updated.id(), updated);
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
+        // Mirrors the real adapter's replace-by-identity write: whatever acceptanceCriteria
+        // `updated` carries is written as real triples, so the identity is never legacy again
+        // afterwards - the only way to reach this line for a previously-legacy identity is a
+        // write RequirementService's guard actually let through (i.e. one that replaced the
+        // placeholder with a real, explicit list).
+        legacyAcceptanceCriteria.remove(updated.id());
     }
 
     @Override
@@ -86,7 +104,22 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     @Override
     public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
         return findByCode(projectId, code)
-                .map(requirement -> new CurrentRequirement(requirement, headByIdentity.get(requirement.id())));
+                .map(requirement -> new CurrentRequirement(requirement, headByIdentity.get(requirement.id()),
+                        legacyAcceptanceCriteria.contains(requirement.id())));
+    }
+
+    /**
+     * Test-only backdoor for a requirement that predates the mandatory acceptance-criterion
+     * invariant: stores {@code requirement} exactly like {@link #create} does, but additionally
+     * marks its identity so {@link #findCurrentByCode} reports {@code
+     * acceptanceCriteriaIsSynthesized() == true} - the fake's stand-in for the real adapter's
+     * "no {@code arkreq:acceptanceCriterion} triple at all" signal, since {@link Requirement}'s
+     * own constructor cannot represent an empty criteria list to trigger that signal
+     * structurally.
+     */
+    void createLegacy(ProjectId projectId, Requirement requirement) {
+        create(projectId, requirement);
+        legacyAcceptanceCriteria.add(requirement.id());
     }
 
     @Override
