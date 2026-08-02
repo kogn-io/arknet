@@ -18,10 +18,13 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code resource_get} uses, instead of a second, drifting implementation growing next to
  * it.</p>
  *
- * <p>Resolution order: (1) a full IRI, or a CURIE against a known {@link Prefixes} binding, is
- * authoritative; (2) anything else is a bare business id, resolved via
- * {@link StoreReader#findByIdentifier} ({@code dcterms:identifier}), rejecting ambiguity across
- * bounded contexts with a didactic message instead of guessing. Domain-agnostic, like
+ * <p>Resolution order: (1) a blank-node reference ({@code "_:" + label}, as {@link StoreReader}
+ * renders a store-first resource with no minted IRI - ADR-005 - into {@code store_overview}'s
+ * digest) resolves to itself, it already <em>is</em> the handle {@link StoreReader#outgoing}/
+ * {@link StoreReader#incoming} expect; (2) a full IRI, or a CURIE against a known
+ * {@link Prefixes} binding, is authoritative; (3) anything else is a bare business id, resolved
+ * via {@link StoreReader#findByIdentifier} ({@code dcterms:identifier}), rejecting ambiguity
+ * across bounded contexts with a didactic message instead of guessing. Domain-agnostic, like
  * {@link StoreReader}/{@link Prefixes}: it knows nothing about requirements, terms or use
  * cases.</p>
  */
@@ -44,9 +47,10 @@ public final class HandleResolver {
      * Javadoc.
      *
      * @param projectId the project to resolve a bare business id against
-     * @param id          the handle: a CURIE (e.g. {@code req:FR-1}), a full IRI, or a bare
-     *                    business id (e.g. {@code FR-1})
-     * @return the resolved absolute IRI
+     * @param id          the handle: a CURIE (e.g. {@code req:FR-1}), a full IRI, a blank-node
+     *                    reference (e.g. {@code _:b1}, as shown by {@code store_overview} for a
+     *                    resource with no minted IRI), or a bare business id (e.g. {@code FR-1})
+     * @return the resolved absolute IRI, or the blank-node reference unchanged
      * @throws IllegalArgumentException if the handle is empty, uses an unknown prefix, or a
      *                                  bare id resolves to zero or more than one resource
      */
@@ -56,6 +60,9 @@ public final class HandleResolver {
         if (handle.isEmpty()) {
             throw new IllegalArgumentException("Empty resource handle. Pass a CURIE (req:FR-1),"
                     + " a full IRI, or a bare business id (FR-1).");
+        }
+        if (handle.startsWith("_:")) {
+            return handle;
         }
 
         final Optional<String> resolved = prefixes.toIri(handle);

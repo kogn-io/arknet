@@ -102,15 +102,25 @@ public final class StoreReader {
     }
 
     /**
-     * Reads the outgoing statements of a resource ({@code <iri> ?p ?o}).
+     * Reads the outgoing statements of a resource ({@code <iri> ?p ?o}, or, for a blank-node
+     * handle, every statement {@link #readSnapshot} grouped under that exact reference - see
+     * {@link #isBlankNodeReference(String)} for why a blank node cannot use the targeted query
+     * the IRI case below does).
      *
      * @param projectId the project to read
-     * @param iri         the subject IRI
+     * @param iri         the subject IRI, or a blank-node reference as rendered by {@link #toNode}
      * @return the outgoing statements
      */
     public List<Triple> outgoing(ProjectId projectId, String iri) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return readSnapshot(projectId).resources().stream()
+                    .filter(resource -> resource.iri().equals(iri))
+                    .findFirst()
+                    .map(StoreResource::outgoing)
+                    .orElse(List.of());
+        }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?p ?o WHERE { "
                 + excludingInfrastructure(iriRef + " ?p ?o") + " }";
@@ -124,15 +134,24 @@ public final class StoreReader {
     }
 
     /**
-     * Reads the incoming statements of a resource ({@code ?s ?p <iri>}) - its neighbours.
+     * Reads the incoming statements of a resource ({@code ?s ?p <iri>}) - its neighbours. For a
+     * blank-node handle this instead filters {@link #readSnapshot}'s outgoing statements for the
+     * ones whose object is that exact reference - see {@link #isBlankNodeReference(String)}.
      *
      * @param projectId the project to read
-     * @param iri         the object IRI
+     * @param iri         the object IRI, or a blank-node reference as rendered by {@link #toNode}
      * @return the incoming statements (their object is always {@code iri})
      */
     public List<Triple> incoming(ProjectId projectId, String iri) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return readSnapshot(projectId).resources().stream()
+                    .flatMap(resource -> resource.outgoing().stream())
+                    .filter(triple -> triple.object() instanceof RdfNode.Resource resourceObject
+                            && resourceObject.iri().equals(iri))
+                    .toList();
+        }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT DISTINCT ?s ?p WHERE { "
                 + excludingInfrastructure("?s ?p " + iriRef) + " }";
@@ -143,6 +162,24 @@ public final class StoreReader {
                     .map(Optional::get)
                     .toList();
         }
+    }
+
+    /**
+     * {@code true} if {@code handle} is a blank-node reference ({@code "_:" + label}) rather than
+     * an absolute IRI - see {@link Triple#subject()}.
+     *
+     * <p>{@link #outgoing}/{@link #incoming} cannot address such a handle with a targeted
+     * {@code <iri> ?p ?o}-style query the way they do for an absolute IRI: per the SPARQL
+     * grammar, a blank-node label written into a query's graph pattern is a fresh, query-scoped
+     * variable, not a reference to the store's blank node carrying that same label - the query
+     * text simply cannot select "the blank node this label was rendered for". Filtering
+     * {@link #readSnapshot}'s already-correct result for the exact reference string instead
+     * relies on nothing more than the identity {@link #toNode} already renders consistently
+     * (regression-tested by {@code StoreReaderTest}), never on the query engine resolving a
+     * blank-node label back to a specific node.</p>
+     */
+    private static boolean isBlankNodeReference(String handle) {
+        return handle.startsWith("_:");
     }
 
     /**
@@ -203,10 +240,11 @@ public final class StoreReader {
         RDFTerm subject = row.getValue("s").orElse(null);
         RDFTerm predicate = row.getValue("p").orElse(null);
         RDFTerm object = row.getValue("o").orElse(null);
-        if (!(subject instanceof IRI subjectIri) || !(predicate instanceof IRI predicateIri) || object == null) {
+        String subjectRef = subjectReference(subject);
+        if (subjectRef == null || !(predicate instanceof IRI predicateIri) || object == null) {
             return Optional.empty();
         }
-        return Optional.of(new Triple(subjectIri.getIRIString(), predicateIri.getIRIString(), toNode(object)));
+        return Optional.of(new Triple(subjectRef, predicateIri.getIRIString(), toNode(object)));
     }
 
     private static Optional<Triple> outgoingTriple(String subject, BindingSet row) {
@@ -221,11 +259,29 @@ public final class StoreReader {
     private static Optional<Triple> incomingTriple(String object, BindingSet row) {
         RDFTerm subject = row.getValue("s").orElse(null);
         RDFTerm predicate = row.getValue("p").orElse(null);
-        if (!(subject instanceof IRI subjectIri) || !(predicate instanceof IRI predicateIri)) {
+        String subjectRef = subjectReference(subject);
+        if (subjectRef == null || !(predicate instanceof IRI predicateIri)) {
             return Optional.empty();
         }
-        return Optional.of(new Triple(subjectIri.getIRIString(), predicateIri.getIRIString(),
-                new RdfNode.Resource(object)));
+        return Optional.of(new Triple(subjectRef, predicateIri.getIRIString(), new RdfNode.Resource(object)));
+    }
+
+    /**
+     * Resolves a subject term to the same reference {@link #toNode} would render for it - an
+     * IRI string, or {@code "_:" + reference} for a blank node, which is RDF-legal in subject
+     * position (e.g. a store-first SKOS concept with no minted IRI) and must surface here exactly
+     * like it does in object position, instead of being silently dropped.
+     *
+     * @param term the subject term, or {@code null} if the row bound nothing
+     * @return the reference, or {@code null} if the term is neither an IRI nor a blank node
+     *         (a literal cannot appear as an RDF subject, but the row is still skipped rather
+     *         than trusted)
+     */
+    private static String subjectReference(RDFTerm term) {
+        if (term instanceof IRI || term instanceof BlankNode) {
+            return ((RdfNode.Resource) toNode(term)).iri();
+        }
+        return null;
     }
 
     private static RdfNode toNode(RDFTerm term) {

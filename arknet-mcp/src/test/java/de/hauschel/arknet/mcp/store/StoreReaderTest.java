@@ -19,6 +19,7 @@ import org.junit.jupiter.api.io.TempDir;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.terms.BlankNode;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
@@ -276,5 +277,129 @@ class StoreReaderTest {
                 .toList();
         Set<Triple> distinct = new HashSet<>(triples);
         assertThat(triples).hasSameSizeAs(distinct);
+    }
+
+    /**
+     * Regression test for issue #136: {@code arkreq:usesTerm} carries no {@code sh:nodeKind}
+     * constraint (see {@code StoreExporterTest}), so its subject is RDF-legally allowed to be a
+     * blank node too - a store-first SKOS concept with no minted IRI is a real, SHACL-legal case
+     * (ADR-005), not a hypothetical one. {@code readSnapshot} already handles a blank-node
+     * <em>object</em> via {@code toNode}; before this fix it silently dropped a row whose
+     * <em>subject</em> was a blank node instead, so such a resource neither counted towards
+     * {@code tripleCount()}/{@code resourceCount()} nor appeared among {@link
+     * StoreSnapshot#resources()}.
+     */
+    @Test
+    void readSnapshotIncludesStatementsOnABlankNodeSubject() {
+        String predicate = "https://w3id.org/arknet/requirements#usesTerm";
+        int tripleCountBefore = storeReader.readSnapshot(PROJECT).tripleCount();
+
+        seedBlankNodeSubjectTriple(predicate);
+
+        StoreSnapshot snapshot = storeReader.readSnapshot(PROJECT);
+        assertThat(snapshot.tripleCount())
+                .as("the blank-node-subject triple must be counted, not silently dropped")
+                .isEqualTo(tripleCountBefore + 1);
+        assertThat(snapshotTriples())
+                .anyMatch(triple -> triple.subject().startsWith("_:") && triple.predicate().equals(predicate));
+    }
+
+    /**
+     * Regression test for issue #136, the {@code incoming} counterpart: a blank-node subject
+     * referencing {@code FR_1_IRI} must show up as a neighbour of {@code FR_1_IRI}, exactly like
+     * an IRI subject would - {@code resource_get}/{@code impact_analysis}/{@code orphan_check}
+     * all read this list to decide whether a resource is referenced.
+     */
+    @Test
+    void incomingFindsABlankNodeSubjectThatReferencesTheIri() {
+        String predicate = "https://w3id.org/arknet/requirements#usesTerm";
+
+        seedBlankNodeSubjectTriple(predicate);
+
+        assertThat(storeReader.incoming(PROJECT, FR_1_IRI))
+                .as("a blank-node subject referencing FR_1_IRI must not be silently dropped")
+                .anyMatch(triple -> triple.subject().startsWith("_:") && triple.predicate().equals(predicate));
+    }
+
+    /**
+     * Writes a single blank-node-subject triple pointing at {@link #FR_1_IRI} straight into its
+     * own named graph - the requirement domain path never produces one itself (see {@code
+     * StoreExporterTest}'s identical seeding technique for the export-path counterpart of this
+     * scenario).
+     */
+    private void seedBlankNodeSubjectTriple(String predicate) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        BlankNode subject = rdf.createBlankNode();
+        graph.add(subject, rdf.createIRI(predicate), rdf.createIRI(FR_1_IRI));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-reader-test-blank-node-graph"), graph);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Regression test for issue #136's remaining gap: {@code readSnapshot} now surfaces a
+     * blank-node subject resource, and {@code store_overview}'s digest advertises it right back
+     * as a {@code resource_get(...)} drill-down handle ({@code DigestRenderer#handleFor} falls
+     * back to the raw {@code "_:..."} reference when the resource carries neither a CURIE-able
+     * IRI nor a {@code dcterms:identifier}, exactly the shape {@link #seedBlankNodeSubjectTriple}
+     * seeds). {@link StoreReader#outgoing} must resolve that exact handle back to the resource's
+     * statements instead of only working for absolute IRIs.
+     */
+    @Test
+    void outgoingResolvesABlankNodeHandleToTheStatementsReadSnapshotGroupedUnderIt() {
+        String predicate = "https://w3id.org/arknet/requirements#usesTerm";
+        seedBlankNodeSubjectTriple(predicate);
+        String blankNodeHandle = snapshotTriples().stream()
+                .filter(triple -> triple.subject().startsWith("_:") && triple.predicate().equals(predicate))
+                .map(Triple::subject)
+                .findFirst()
+                .orElseThrow();
+
+        List<Triple> outgoing = storeReader.outgoing(PROJECT, blankNodeHandle);
+
+        assertThat(outgoing).hasSize(1);
+        assertThat(outgoing.get(0).predicate()).isEqualTo(predicate);
+        assertThat(outgoing.get(0).subject()).isEqualTo(blankNodeHandle);
+    }
+
+    /**
+     * Regression test for issue #136's remaining gap, the {@code incoming} counterpart: a blank
+     * node can legally sit in <em>object</em> position too (nothing in the {@code usesTerm}
+     * shape rules it out, same as the subject case above), and {@code resource_get} must be able
+     * to look up what points at such an object exactly as it does for an IRI object.
+     */
+    @Test
+    void incomingResolvesABlankNodeHandleToWhatPointsAtIt() {
+        String predicate = "https://w3id.org/arknet/requirements#usesTerm";
+        seedBlankNodeObjectTriple(predicate);
+        String blankNodeHandle = snapshotTriples().stream()
+                .filter(triple -> triple.subject().equals(FR_1_IRI) && triple.predicate().equals(predicate))
+                .map(triple -> ((RdfNode.Resource) triple.object()).iri())
+                .findFirst()
+                .orElseThrow();
+
+        List<Triple> incoming = storeReader.incoming(PROJECT, blankNodeHandle);
+
+        assertThat(incoming).hasSize(1);
+        assertThat(incoming.get(0).subject()).isEqualTo(FR_1_IRI);
+        assertThat(incoming.get(0).predicate()).isEqualTo(predicate);
+    }
+
+    /** Writes a single triple with {@link #FR_1_IRI} as subject and a fresh blank node as object. */
+    private void seedBlankNodeObjectTriple(String predicate) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        BlankNode object = rdf.createBlankNode();
+        graph.add(rdf.createIRI(FR_1_IRI), rdf.createIRI(predicate), object);
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-reader-test-blank-node-object-graph"), graph);
+                return null;
+            });
+        }
     }
 }
