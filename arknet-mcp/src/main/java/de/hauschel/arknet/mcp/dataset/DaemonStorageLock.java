@@ -58,22 +58,37 @@ public final class DaemonStorageLock implements AutoCloseable {
     public static DaemonStorageLock acquire(Path storageDir) {
         try {
             Files.createDirectories(storageDir);
-            final FileChannel channel = FileChannel.open(
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to acquire the arknet daemon lock at " + storageDir, e);
+        }
+
+        final FileChannel channel;
+        try {
+            channel = FileChannel.open(
                     storageDir.resolve(LOCK_FILE_NAME), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to acquire the arknet daemon lock at " + storageDir, e);
+        }
+
+        boolean acquired = false;
+        try {
             final FileLock lock;
             try {
                 lock = channel.tryLock();
             } catch (OverlappingFileLockException e) {
-                channel.close();
                 throw new DaemonAlreadyRunningException(storageDir);
             }
             if (lock == null) {
-                channel.close();
                 throw new DaemonAlreadyRunningException(storageDir);
             }
+            acquired = true;
             return new DaemonStorageLock(channel, lock);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to acquire the arknet daemon lock at " + storageDir, e);
+        } finally {
+            if (!acquired) {
+                closeQuietly(channel);
+            }
         }
     }
 
@@ -86,9 +101,24 @@ public final class DaemonStorageLock implements AutoCloseable {
     public void close() {
         try {
             lock.release();
-            channel.close();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } finally {
+            closeQuietly(channel);
+        }
+    }
+
+    /**
+     * Closes {@code channel}, swallowing any {@link IOException} - used on already-failing paths
+     * (a failed {@link #acquire} attempt, a {@link #close()} whose {@code lock.release()} itself
+     * threw) where the channel is being abandoned and a secondary close failure must not mask the
+     * original diagnosis.
+     */
+    private static void closeQuietly(FileChannel channel) {
+        try {
+            channel.close();
+        } catch (IOException ignored) {
+            // best effort: the lock/channel is being abandoned on an already-failing path
         }
     }
 }

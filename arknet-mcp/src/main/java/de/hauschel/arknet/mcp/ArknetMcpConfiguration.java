@@ -216,7 +216,8 @@ public class ArknetMcpConfiguration {
      * <p>{@code destroyMethod = "close"} (issue #140): {@link LockConflictReportingDatasetLifecycle}
      * is {@link AutoCloseable}, closing every dataset {@code list()} reports through the neutral
      * port so a daemon shutdown releases them in an orderly way instead of relying on crash
-     * recovery.</p>
+     * recovery. Best-effort only - it does not wait for an in-flight request's open lease to be
+     * released, see that class's own Javadoc.</p>
      */
     @Bean(destroyMethod = "close")
     @DependsOn("daemonStorageLock")
