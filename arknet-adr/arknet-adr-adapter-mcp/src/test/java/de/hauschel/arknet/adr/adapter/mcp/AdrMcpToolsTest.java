@@ -8,14 +8,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+import org.springframework.ai.mcp.annotation.method.tool.ReturnMode;
+import org.springframework.ai.mcp.annotation.method.tool.SyncMcpToolMethodCallback;
+
+import io.modelcontextprotocol.server.McpSyncServerExchange;
+import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
+import io.modelcontextprotocol.spec.McpSchema.TextContent;
 
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
@@ -179,6 +189,45 @@ class AdrMcpToolsTest {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
                         null, null, "31.07.2026", null, null, ANCHOR));
+    }
+
+    /**
+     * Reproduces #186 at the layer the bug actually lived in: Spring AI's
+     * {@link SyncMcpToolMethodCallback} renders the deepest exception in a thrown exception's
+     * {@code getCause()} chain, not the exception actually thrown. {@link #addRejectsAMalformedDecisionDate}
+     * cannot catch this - it asserts on {@code getMessage()} of the exception actually thrown, not on
+     * what a caller behind the real callback receives. This test drives that real callback instead,
+     * over the exact production {@code parseDate} translation in {@link AdrMcpTools#add}.
+     */
+    @Test
+    void malformedDecisionDateRemedyReachesTheMcpCaller() throws NoSuchMethodException {
+        final Method method = AdrMcpTools.class.getMethod("add", McpSyncRequestContext.class, String.class,
+                String.class, String.class, String.class, String.class, String.class, List.class,
+                List.class, String.class);
+        final SyncMcpToolMethodCallback callback = new SyncMcpToolMethodCallback(ReturnMode.TEXT, method, adapter);
+        // Never actually invoked: the explicit projectAnchor parameter below short-circuits
+        // resolveProject before it would read anything off the context/exchange. Only its
+        // non-nullness matters - DefaultMcpSyncRequestContext asserts that eagerly on construction.
+        final McpSyncServerExchange exchange = new McpSyncServerExchange(null);
+
+        final CallToolResult result = callback.apply(exchange, new CallToolRequest("adr_add", Map.of(
+                "name", "A title",
+                "adrContext", "Why this was needed",
+                "decision", "What was decided",
+                "decisionDate", "31.07.2026",
+                "projectAnchor", ANCHOR)));
+
+        final String text = result.content().stream()
+                .filter(TextContent.class::isInstance)
+                .map(TextContent.class::cast)
+                .map(TextContent::text)
+                .reduce((a, b) -> a + b)
+                .orElseThrow();
+        assertTrue(text.contains("decisionDate must be an ISO-8601 date"), text);
+        // Distinguishes the composed remedy from the raw JDK DateTimeParseException message, which
+        // names the index it choked on instead of the expected format - the exact text that used to
+        // win when the parse failure was chained as this exception's cause.
+        assertFalse(text.contains("could not be parsed"), text);
     }
 
     @Test
