@@ -9,6 +9,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.store.AnchorContext;
@@ -39,18 +40,24 @@ public final class TraceabilityMcpTools {
     private final TraceabilityRenderer renderer;
     private final HandleResolver handleResolver;
     private final ProjectResolver projects;
+    private final DisplayLocale displayLocale;
 
     /**
-     * @param storeReader the generic store read path
-     * @param prefixes    the CURIE / IRI resolver
-     * @param projects    resolves each call's target project from its anchor
+     * @param storeReader   the generic store read path
+     * @param prefixes      the CURIE / IRI resolver
+     * @param projects      resolves each call's target project from its anchor
+     * @param displayLocale the display language to select among a resource's language-tagged
+     *                      labels - shared with {@code store_overview}'s read path so the two
+     *                      never disagree about a term's label (issue #141)
      */
     public TraceabilityMcpTools(
-            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projects) {
+            final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projects,
+            final DisplayLocale displayLocale) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         this.renderer = new TraceabilityRenderer(Objects.requireNonNull(prefixes, "prefixes"));
         this.handleResolver = new HandleResolver(storeReader, prefixes);
         this.projects = Objects.requireNonNull(projects, "projects");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     @McpTool(name = "trace_matrix",
@@ -151,7 +158,7 @@ public final class TraceabilityMcpTools {
     }
 
     private TraceabilityGraph readGraph(final ProjectId projectId) {
-        return TraceabilityGraph.of(storeReader.readSnapshot(projectId));
+        return TraceabilityGraph.of(storeReader.readSnapshot(projectId), displayLocale);
     }
 
 }

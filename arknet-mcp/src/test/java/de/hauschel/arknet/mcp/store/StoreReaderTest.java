@@ -60,6 +60,14 @@ class StoreReaderTest {
     private static final String INJECTION_PAYLOAD =
             "https://x/a> } UNION { ?s ?p ?o . FILTER(1=1) #";
 
+    /**
+     * A raw newline is legal in a Java string but SPARQL forbids it unescaped inside a
+     * {@code STRING_LITERAL2} - {@link #findByIdentifier} used to hand-roll its escaping and
+     * missed exactly this case, so a payload like this broke the query and leaked a raw
+     * kognio-rdf/RDF4J exception instead of the handle contract's documented rejection.
+     */
+    private static final String MULTILINE_IDENTIFIER = "FR-1\nX";
+
     @TempDir
     Path storageDir;
 
@@ -106,6 +114,16 @@ class StoreReaderTest {
     void incomingRejectsAnIriThatCannotAppearUnescapedInASparqlIrirefInsteadOfExecutingIt() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> storeReader.incoming(PROJECT, INJECTION_PAYLOAD));
+    }
+
+    @Test
+    void findByIdentifierDoesNotLeakARawBackendExceptionForAnIdentifierContainingARawNewline() {
+        assertThat(storeReader.findByIdentifier(PROJECT, MULTILINE_IDENTIFIER)).isEmpty();
+    }
+
+    @Test
+    void findByIdentifierStillFindsAWellFormedIdentifier() {
+        assertThat(storeReader.findByIdentifier(PROJECT, "FR-1")).containsExactly(FR_1_IRI);
     }
 
     @Test

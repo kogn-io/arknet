@@ -105,8 +105,8 @@ class StoreReportToolsTest {
         // anchors, so these tests address two projects the way a real client does.
         ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         tools = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, NO_LABELS,
-                reportDir, null);
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                modelViews(), projects, NO_LABELS, reportDir, null);
     }
 
     /**
@@ -251,8 +251,8 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, NO_LABELS,
-                blockedFallbackDir, null);
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                modelViews(), projects, NO_LABELS, blockedFallbackDir, null);
 
         final String result = toolsWithBrokenFallback.storeOverview(null, ANCHOR);
 
@@ -275,8 +275,8 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, NO_LABELS,
-                reportDir, hostDir);
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                modelViews(), projects, NO_LABELS, reportDir, hostDir);
 
         final String result = toolsWithHostDir.storeOverview(null, ANCHOR);
 
@@ -300,8 +300,8 @@ class StoreReportToolsTest {
                 ? Optional.of(new Project(PROJECT, "arknet-demo", List.of(new Anchor(ANCHOR, AnchorType.PATH))))
                 : Optional.empty();
         final StoreReportTools toolsWithLabel = new StoreReportTools(
-                reader, prefixes, new HtmlReportRenderer(prefixes), modelViews(), projects, withLabel,
-                reportDir, null);
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                modelViews(), projects, withLabel, reportDir, null);
 
         final String result = toolsWithLabel.storeOverview(null, ANCHOR);
 

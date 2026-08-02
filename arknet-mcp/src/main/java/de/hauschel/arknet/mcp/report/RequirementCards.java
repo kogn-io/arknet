@@ -56,7 +56,7 @@ public final class RequirementCards {
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
         final List<ModelCard> cards = requirements.list(projectId).stream()
-                .sorted(Comparator.comparing(requirement -> requirement.code().value()))
+                .sorted(Comparator.comparing(requirement -> requirement.code().value(), BusinessCodes.ORDER))
                 .map(requirement -> card(requirement, glossary))
                 .toList();
         return new ModelSection(SECTION_TITLE, "requirements",

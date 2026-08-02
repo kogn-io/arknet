@@ -101,6 +101,21 @@ class RequirementCardsTest {
         assertThat(block(cards, "Uses terms")).isNotNull();
     }
 
+    /**
+     * Regression test for issue #143: sorting {@code String} codes naturally puts {@code FR-10}
+     * before {@code FR-2} once a project passes ten requirements.
+     */
+    @Test
+    void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
+        final RequirementCards cards = new RequirementCards(projectId -> List.of(
+                requirement("FR-2", ID + "fr-2", "Zweite"),
+                requirement("FR-10", ID + "fr-10", "Zehnte"),
+                requirement("FR-1", ID + "fr-1", "Erste")));
+
+        assertThat(cards.section(PROJECT, GLOSSARY).cards())
+                .extracting(ModelCard::code).containsExactly("FR-1", "FR-2", "FR-10");
+    }
+
     /** Every linked term appears in the prose, so the chip list would be pure repetition. */
     @Test
     void dropsTheChipListEntirelyWhenTheTextNamesEveryLinkedTerm() {
@@ -137,6 +152,13 @@ class RequirementCardsTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 linked.stream().map(TermRef::new).toList(),
                 criteria.isEmpty() ? List.of("Es funktioniert.") : criteria);
+    }
+
+    private static Requirement requirement(final String code, final String iri, final String title) {
+        return new Requirement(
+                new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
+                "Beschreibung.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
+                null, null, List.of(), List.of("Es funktioniert."));
     }
 
     private static Term term(final ResourceId id, final String code, final String label) {

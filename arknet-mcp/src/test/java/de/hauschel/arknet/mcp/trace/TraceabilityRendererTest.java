@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
@@ -67,7 +68,7 @@ class TraceabilityRendererTest {
 
     @Test
     void traceMatrixReportsUsedTermsAndRealisingUseCasePerRequirement() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String matrix = renderer.traceMatrix(PROJECT, graph);
 
@@ -82,7 +83,7 @@ class TraceabilityRendererTest {
 
     @Test
     void orphanCheckListsFr2AsUnrealisedRequirement() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String report = renderer.orphanCheck(PROJECT, graph);
 
@@ -102,7 +103,7 @@ class TraceabilityRendererTest {
      */
     @Test
     void orphanCheckListsMentionsThatNameATermWithoutTheEdgeToBackItUp() {
-        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String report = renderer.orphanCheck(PROJECT, graph);
 
@@ -118,7 +119,7 @@ class TraceabilityRendererTest {
      */
     @Test
     void orphanCheckDoesNotCountATermLinkedOnlyViaTheBoundedContextAsOrphaned() {
-        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(unlinkedMentionFixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String report = renderer.orphanCheck(PROJECT, graph);
 
@@ -160,7 +161,7 @@ class TraceabilityRendererTest {
      */
     @Test
     void impactAnalysisCollapsesTheStepHopAndNeverReportsTheStepItself() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String impact = renderer.impactAnalysis(PROJECT, graph, TERM_1);
 
@@ -172,7 +173,7 @@ class TraceabilityRendererTest {
 
     @Test
     void impactAnalysisOfAnUnreferencedResourceReportsNone() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String impact = renderer.impactAnalysis(PROJECT, graph, FR_2);
 
@@ -189,7 +190,7 @@ class TraceabilityRendererTest {
      */
     @Test
     void impactAnalysisOfAnUnknownIriReportsNotFoundInsteadOfZeroAffected() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
         String unknownIri = ID + "fr-999";
 
         String impact = renderer.impactAnalysis(PROJECT, graph, unknownIri);
@@ -200,7 +201,7 @@ class TraceabilityRendererTest {
 
     @Test
     void actorUseCaseMatrixReportsBothDirectionsOfActorInvolvement() {
-        TraceabilityGraph graph = TraceabilityGraph.of(actorUseCaseFixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(actorUseCaseFixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
 
@@ -217,7 +218,7 @@ class TraceabilityRendererTest {
 
     @Test
     void actorUseCaseMatrixReportsNoneForAProjectWithoutUseCases() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
 
@@ -226,7 +227,7 @@ class TraceabilityRendererTest {
 
     @Test
     void termCooccurrenceFindsTermsNamedTogetherInRequirementAndUseCaseText() {
-        TraceabilityGraph graph = TraceabilityGraph.of(termCooccurrenceFixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(termCooccurrenceFixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String report = renderer.termCooccurrence(PROJECT, graph);
 
@@ -239,7 +240,7 @@ class TraceabilityRendererTest {
 
     @Test
     void termCooccurrenceReportsNoneWhenNoTwoTermsShareAText() {
-        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot());
+        TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
 
         String report = renderer.termCooccurrence(PROJECT, graph);
 
@@ -262,7 +263,7 @@ class TraceabilityRendererTest {
                 lit(FR_10, TITLE, "Bestandsdaten"),
                 lit(FR_10, IDENTIFIER, "FR-10"),
                 lit(FR_10, DESCRIPTION, "Der Kunde meldet sich an."),
-                lit(FR_10, ACCEPTANCE_CRITERION, "Die Bestellung wird angezeigt."))));
+                lit(FR_10, ACCEPTANCE_CRITERION, "Die Bestellung wird angezeigt."))), DisplayLocale.DEFAULT);
 
         String report = renderer.termCooccurrence(PROJECT, graph);
 

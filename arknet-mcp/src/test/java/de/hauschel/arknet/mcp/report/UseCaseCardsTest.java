@@ -132,6 +132,23 @@ class UseCaseCardsTest {
         assertThat(labels).containsExactly("Goal", "Trigger", "Primary actor", "Postcondition", "Main flow");
     }
 
+    /**
+     * Regression test for issue #143: sorting {@code String} codes naturally puts {@code UC10}
+     * before {@code UC2} once a project passes ten use cases.
+     */
+    @Test
+    void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
+        final UseCaseCards cards = new UseCaseCards(
+                projectId -> List.of(
+                        useCase("UC2", "https://w3id.org/arknet/id/uc-2"),
+                        useCase("UC10", "https://w3id.org/arknet/id/uc-10"),
+                        useCase("UC1", "https://w3id.org/arknet/id/uc-1")),
+                (projectId, ids) -> List.of());
+
+        assertThat(cards.section(PROJECT, GLOSSARY).cards())
+                .extracting(ModelCard::code).containsExactly("UC1", "UC2", "UC10");
+    }
+
     @Test
     void sectionIsEmptyWhenThereAreNoUseCases() {
         final UseCaseCards cards = new UseCaseCards(
@@ -162,5 +179,12 @@ class UseCaseCardsTest {
                         new Step(1, "Artikel in den Warenkorb legen", List.of(new RequirementRef(FR_1))),
                         new Step(2, "Bestellung bestaetigen", List.of())),
                 List.of());
+    }
+
+    private static UseCase useCase(final String code, final String iri) {
+        return new UseCase(
+                new UseCaseId(ResourceId.of(iri)), new UseCaseCode(code), "Titel", "Ziel.", null, "Trigger",
+                new ActorRef(ACTOR), List.of(), null, "Postcondition.",
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of());
     }
 }

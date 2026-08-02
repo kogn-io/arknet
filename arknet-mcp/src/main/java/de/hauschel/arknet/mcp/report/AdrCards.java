@@ -85,7 +85,7 @@ public final class AdrCards {
                 .collect(Collectors.toMap(detail -> detail.adr().code(),
                         detail -> detail.adr().id().value().value(), (first, second) -> first));
         final List<ModelCard> cards = all.stream()
-                .sorted(Comparator.comparing(detail -> detail.adr().code().value()))
+                .sorted(Comparator.comparing(detail -> detail.adr().code().value(), BusinessCodes.ORDER))
                 .map(detail -> card(detail, requirements, contexts, idsByCode))
                 .toList();
         return new ModelSection(SECTION_TITLE, "architecture-decisions",

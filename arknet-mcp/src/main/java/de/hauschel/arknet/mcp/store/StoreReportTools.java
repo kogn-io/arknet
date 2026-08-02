@@ -15,6 +15,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
@@ -61,6 +62,8 @@ public final class StoreReportTools {
     /**
      * @param storeReader       the generic store read path
      * @param prefixes          the CURIE / IRI resolver
+     * @param displayLocale     the display language to select among a resource's language-tagged
+     *                          labels, shared with the traceability tools' read path (issue #141)
      * @param htmlRenderer      the self-contained HTML report renderer
      * @param modelViews        assembles the report's per-bounded-context sections; never fails the
      *                          tool - a context whose read path throws is reported as a warning in
@@ -81,6 +84,7 @@ public final class StoreReportTools {
     public StoreReportTools(
             final StoreReader storeReader,
             final Prefixes prefixes,
+            final DisplayLocale displayLocale,
             final HtmlReportRenderer htmlRenderer,
             final ModelViews modelViews,
             final ProjectResolver projects,
@@ -89,9 +93,10 @@ public final class StoreReportTools {
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         Objects.requireNonNull(prefixes, "prefixes");
+        Objects.requireNonNull(displayLocale, "displayLocale");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
         this.modelViews = Objects.requireNonNull(modelViews, "modelViews");
-        this.digestRenderer = new DigestRenderer(prefixes);
+        this.digestRenderer = new DigestRenderer(prefixes, displayLocale);
         this.resourceRenderer = new ResourceRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
         this.projects = Objects.requireNonNull(projects, "projects");

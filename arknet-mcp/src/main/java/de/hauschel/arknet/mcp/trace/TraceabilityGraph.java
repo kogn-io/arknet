@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp.trace;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.mcp.mention.LabelMentions;
 import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreResource;
@@ -127,7 +129,7 @@ public final class TraceabilityGraph {
     private final Map<String, String> identifierBySubject;
     private final Map<String, String> labelBySubject;
 
-    private TraceabilityGraph(List<StoreResource> resources) {
+    private TraceabilityGraph(List<StoreResource> resources, DisplayLocale displayLocale) {
         Map<String, List<Triple>> outgoing = new LinkedHashMap<>();
         Map<String, List<Triple>> incoming = new LinkedHashMap<>();
         Map<String, Set<String>> types = new LinkedHashMap<>();
@@ -136,7 +138,7 @@ public final class TraceabilityGraph {
         for (StoreResource resource : resources) {
             outgoing.put(resource.iri(), resource.outgoing());
             resource.identifier().ifPresent(value -> identifiers.putIfAbsent(resource.iri(), value));
-            resource.label().ifPresent(value -> labels.putIfAbsent(resource.iri(), value));
+            resource.label(displayLocale).ifPresent(value -> labels.putIfAbsent(resource.iri(), value));
             for (Triple triple : resource.outgoing()) {
                 if (triple.object() instanceof RdfNode.Resource resourceObject) {
                     incoming.computeIfAbsent(resourceObject.iri(), s -> new ArrayList<>()).add(triple);
@@ -159,17 +161,21 @@ public final class TraceabilityGraph {
      * Builds a graph from every statement of a project snapshot.
      *
      * <p>Label/identifier lookups ({@link #labelOf(String)}/{@link #identifierOf(String)}) defer
-     * to each subject's already-built {@link StoreResource#label()}/{@link
+     * to each subject's already-built {@link StoreResource#label(DisplayLocale)}/{@link
      * StoreResource#identifier()} rather than re-scanning the raw triples, so this graph can never
      * disagree with {@code store_overview}/{@code resource_get} about what a resource's label is
-     * (issue #103).</p>
+     * (issue #103) - both read paths are handed the very same {@code displayLocale}, so a
+     * multi-language {@code skos:prefLabel} resolves to the same word in {@code orphan_check} as
+     * in the HTML report (issue #141).</p>
      *
-     * @param snapshot the snapshot to traverse (as read by {@code StoreReader#readSnapshot})
+     * @param snapshot      the snapshot to traverse (as read by {@code StoreReader#readSnapshot})
+     * @param displayLocale the display language to select among a resource's language-tagged labels
      * @return the assembled graph
      */
-    public static TraceabilityGraph of(StoreSnapshot snapshot) {
+    public static TraceabilityGraph of(StoreSnapshot snapshot, DisplayLocale displayLocale) {
         Objects.requireNonNull(snapshot, "snapshot");
-        return new TraceabilityGraph(snapshot.resources());
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        return new TraceabilityGraph(snapshot.resources(), displayLocale);
     }
 
     /** @return the IRIs of every {@code arkreq:FunctionalRequirement}/{@code NonFunctionalRequirement}, sorted. */
@@ -343,6 +349,11 @@ public final class TraceabilityGraph {
      * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
      * {@link LabelMentions} engine, so a text mention means the same thing in both places.
      *
+     * <p>Two same-length competing labels break their matching tie by business code ({@link
+     * #identifierOf(String)}), the same key {@code Glossary} sorts its terms by before handing
+     * them to the identical engine - not by term IRI, which would let the two matching passes
+     * pick different terms for the same ambiguous mention (issue #141).</p>
+     *
      * @return the unlinked mentions found across every requirement and bounded context
      */
     public List<UnlinkedMention> unlinkedMentions() {
@@ -350,8 +361,10 @@ public final class TraceabilityGraph {
         if (termLabels.isEmpty()) {
             return List.of();
         }
-        LabelMentions<String> matcher = LabelMentions.of(
-                termLabels.keySet().stream().sorted().toList(), termLabels::get);
+        List<String> termIris = termLabels.keySet().stream()
+                .sorted(Comparator.comparing(iri -> identifierOf(iri).orElse(iri)))
+                .toList();
+        LabelMentions<String> matcher = LabelMentions.of(termIris, termLabels::get);
 
         List<UnlinkedMention> found = new ArrayList<>();
         for (String requirementIri : requirementIris()) {

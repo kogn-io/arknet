@@ -72,7 +72,7 @@ public final class UseCaseCards {
         final List<UseCase> all = useCases.list(projectId);
         final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(projectId, all);
         final List<ModelCard> cards = all.stream()
-                .sorted(Comparator.comparing(uc -> uc.code().value()))
+                .sorted(Comparator.comparing(uc -> uc.code().value(), BusinessCodes.ORDER))
                 .map(uc -> card(uc, glossary, reqs))
                 .toList();
         return new ModelSection(SECTION_TITLE, "use-cases",

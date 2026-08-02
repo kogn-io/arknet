@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.Prefixes;
 import de.hauschel.arknet.mcp.store.RdfNode;
@@ -33,7 +34,8 @@ class HtmlReportRendererTest {
     private static final String FR_1 = ID + "fr-1";
     private static final String REVISION = ID + "revision-1";
 
-    private final HtmlReportRenderer renderer = new HtmlReportRenderer(Prefixes.defaults());
+    private final HtmlReportRenderer renderer =
+            new HtmlReportRenderer(Prefixes.defaults(), DisplayLocale.DEFAULT);
 
     /**
      * The whole point of the exercise: a use case reads as a use case - goal, actor, numbered
@@ -122,6 +124,24 @@ class HtmlReportRendererTest {
         final String html = renderer.render(PROJECT, Optional.empty(), snapshot(), "digest", views);
 
         assertThat(html).contains("Incomplete report").contains("store closed");
+    }
+
+    /**
+     * Regression test for issue #142: when the Use Cases section itself failed to build, no use
+     * case is carded, so its steps must not be suppressed as if a use-case flow had already shown
+     * them - they fall through to "Other resources" like any other uncarded resource instead of
+     * disappearing from the document entirely.
+     */
+    @Test
+    void keepsUseCaseStepsInOtherResourcesWhenTheUseCasesSectionItselfFailed() {
+        final ModelViews.Views views = new ModelViews.Views(
+                List.of(), List.of("Use Cases: could not be read (IllegalStateException: store closed)"));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), snapshot(), "digest", views);
+
+        assertThat(html).contains("id=\"r-" + anchorOf(STEP_1) + "\"");
+        assertThat(html).contains("id=\"r-" + anchorOf(STEP_2) + "\"");
+        assertThat(html).contains("Kunde legt Artikel in den Warenkorb");
     }
 
     /** A reference whose target is not in this project stays visible as a dead chip. */

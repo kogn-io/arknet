@@ -77,6 +77,19 @@ class BoundedContextCardsTest {
                 .doesNotContain("Ubiquitous language", "Ubiquitous language (not named in the vision)");
     }
 
+    /**
+     * Regression test for issue #143: sorting {@code String} codes naturally puts {@code BC-10}
+     * before {@code BC-2} once a project passes ten bounded contexts.
+     */
+    @Test
+    void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
+        final BoundedContextCards cards = new BoundedContextCards(projectId -> List.of(
+                context("BC-2", ID + "bc-2"), context("BC-10", ID + "bc-10"), context("BC-1", ID + "bc-1")));
+
+        assertThat(cards.section(PROJECT, GLOSSARY).cards())
+                .extracting(ModelCard::code).containsExactly("BC-1", "BC-2", "BC-10");
+    }
+
     private static RichText vision(final BoundedContextCards cards) {
         return ((Block.Prose) block(cards, "Domain vision")).text();
     }
@@ -97,6 +110,12 @@ class BoundedContextCardsTest {
                 new BoundedContextCode("BC-1"), "Ordering", vision,
                 Subdomain.CORE_DOMAIN, null,
                 linked.stream().map(TermRef::new).toList());
+    }
+
+    private static BoundedContext context(final String code, final String iri) {
+        return new BoundedContext(
+                new BoundedContextId(ResourceId.of(iri)), new BoundedContextCode(code), "Name",
+                "Vision.", Subdomain.CORE_DOMAIN, null, List.of());
     }
 
     private static Term term(final ResourceId id, final String code, final String label) {
