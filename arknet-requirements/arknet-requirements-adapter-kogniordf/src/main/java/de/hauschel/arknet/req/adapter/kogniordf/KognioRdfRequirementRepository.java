@@ -20,7 +20,9 @@ import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.dataset.ConcurrencyConflictException;
 import io.kogn.rdf.dataset.DatasetTx;
+import io.kogn.rdf.dataset.SparqlQuery;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
@@ -202,6 +204,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String SHOULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "ShouldHave";
     private static final String COULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "CouldHave";
     private static final String WONT_HAVE_PRIORITY = ARKREQ_NAMESPACE + "WontHave";
+
+    /**
+     * Bound on {@link #readInTransaction}'s retry loop (issue #171). A read-only transaction that
+     * lost this race is resolved by a single retry in the overwhelming majority of cases, since
+     * the retry simply re-runs the identical read against the store's now-current state; this
+     * bound exists only so a pathological, sustained storm of concurrent writers against the same
+     * requirement(s) fails loudly instead of retrying forever.
+     */
+    private static final int MAX_READ_RETRY_ATTEMPTS = 20;
 
     private final DatasetLifecycle lifecycle;
     private final WriteFunnel funnel;
@@ -445,23 +456,30 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Builds one {@link Requirement} from a row of {@link #requirementByCodeWhereClause}'s
      * projection ({@code ?s ?type ?title ?description ?status ?priority ?motivatedBy
      * ?qualityCategory}), including the follow-up read {@link #readUsesTerms} (via {@code
-     * handle}) and the legacy-placeholder substitution ({@link
+     * query}) and the legacy-placeholder substitution ({@link
      * #acceptanceCriteriaOrLegacyPlaceholder}) for {@code acceptanceCriteria}. Shared by
      * {@link #findByCode} and {@link #findCurrentByCode} so both single-requirement read paths
      * build a {@link Requirement} the same way - drift between near-identical read paths in this
      * class was a real bug twice before (the {@link #findAll} row-grouping fix).
      *
+     * <p>{@code query} is deliberately typed as the neutral {@link SparqlQuery} port, not
+     * {@link DatasetHandle}: {@link #findByCode} passes the live {@link DatasetTx} of a single
+     * transaction it opened around both this call and its own main query (see that method's
+     * javadoc for why), while {@link #findCurrentByCode} keeps passing
+     * {@link DatasetHandle#sparqlQuery()} - its own snapshot guarantee is documented on
+     * {@link RequirementRepository#findCurrentByCode} and does not need this seam to change.</p>
+     *
      * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
     private Requirement requirementOf(
-            ProjectId projectId, BindingSet row, RequirementCode code, DatasetHandle handle) {
+            ProjectId projectId, BindingSet row, RequirementCode code, SparqlQuery query) {
         String subjectIriString = iriOf(row, "s").getIRIString();
-        return requirementOf(projectId, row, code, handle, acceptanceCriteriaOrLegacyPlaceholder(
-                readAcceptanceCriteria(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString))));
+        return requirementOf(projectId, row, code, query, acceptanceCriteriaOrLegacyPlaceholder(
+                readAcceptanceCriteria(query::select, SparqlTerms.iriRef(subjectIriString))));
     }
 
     /**
-     * {@link #requirementOf(ProjectId, BindingSet, RequirementCode, DatasetHandle)} with the
+     * {@link #requirementOf(ProjectId, BindingSet, RequirementCode, SparqlQuery)} with the
      * caller already holding the resolved {@code acceptanceCriteria} list - the seam
      * {@link #findCurrentByCode} uses so it can read {@link #readAcceptanceCriteria} exactly once
      * and still learn, before building the {@link Requirement}, whether the result it is about to
@@ -471,7 +489,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
     private Requirement requirementOf(ProjectId projectId, BindingSet row, RequirementCode code,
-            DatasetHandle handle, List<String> acceptanceCriteria) {
+            SparqlQuery query, List<String> acceptanceCriteria) {
         String subjectIriString = iriOf(row, "s").getIRIString();
         return new Requirement(
                 new RequirementId(ResourceId.of(subjectIriString)),
@@ -483,10 +501,49 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 priorityOf(row),
                 motivatedByOf(row),
                 qualityCategoryOf(row),
-                readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)),
+                readUsesTerms(query::select, SparqlTerms.iriRef(subjectIriString)),
                 acceptanceCriteria);
     }
 
+    /**
+     * Runs a read-only {@code work} function inside one transaction (see {@link #findByCode}'s and
+     * {@link #findAll}'s javadoc for why a shared transaction, not merely a shared connection, is
+     * required), retrying up to {@link #MAX_READ_RETRY_ATTEMPTS} times if the store rejects the
+     * transaction's own commit as a lost {@code SERIALIZABLE} race against a concurrent write
+     * (issue #171). {@code SERIALIZABLE} isolation (see {@code DatasetTransactorRdf4j}'s javadoc)
+     * tracks every statement pattern a transaction observed, including a pure reader's - a
+     * read-only transaction can therefore lose exactly the race a write can, even though it never
+     * writes anything itself. Unlike a write's retry (which must recompute its candidate against
+     * fresh state before trying again), a lost read-only transaction has nothing to recompute: it
+     * only ever observed a pattern a concurrent writer changed and committed before this
+     * transaction's own commit, so re-running the identical read against the store's now-current
+     * state is always the correct response, not merely a convenient one.
+     */
+    private <T> T readInTransaction(DatasetHandle handle, Function<DatasetTx, T> work) {
+        ConcurrencyConflictException lastConflict = null;
+        for (int attempt = 1; attempt <= MAX_READ_RETRY_ATTEMPTS; attempt++) {
+            try {
+                return handle.transactor().inTransaction(work);
+            } catch (ConcurrencyConflictException e) {
+                lastConflict = e;
+            }
+        }
+        throw lastConflict;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>One-transaction snapshot (issue #171).</strong> The main row, {@link
+     * #readUsesTerms} and {@link #readAcceptanceCriteria} all run against the same live
+     * {@link DatasetTx}, inside one {@link #readInTransaction} call - unlike
+     * {@link #findCurrentByCode}, this method has no concurrency token a caller compares before
+     * acting on the result, so a concurrent funnel write landing between two of these three reads
+     * would otherwise be silently invisible to the caller and produce a {@link Requirement}
+     * combining field values that never coexisted in the store at any single point in time (a torn
+     * read). Running all three against one transaction gives them the same consistent snapshot the
+     * main query alone already had.</p>
+     */
     @Override
     public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
         Objects.requireNonNull(projectId, "projectId");
@@ -498,11 +555,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
-            if (head.isEmpty()) {
-                return Optional.empty();
-            }
-            return Optional.of(requirementOf(projectId, head.get(), code, handle));
+            return readInTransaction(handle, tx -> {
+                Optional<BindingSet> head = tx.select(query).findFirst();
+                if (head.isEmpty()) {
+                    return Optional.empty();
+                }
+                return Optional.of(requirementOf(projectId, head.get(), code, tx));
+            });
         }
     }
 
@@ -558,7 +617,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             List<String> acceptanceCriteria = acceptanceCriteriaIsSynthesized
                     ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER
                     : sanitizedCriteria;
-            Requirement requirement = requirementOf(projectId, row, code, handle, acceptanceCriteria);
+            Requirement requirement = requirementOf(projectId, row, code, handle.sparqlQuery(), acceptanceCriteria);
             RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
@@ -568,6 +627,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>One-transaction snapshot (issue #171).</strong> The main query, {@link
+     * #readUsesTermsBySubject} and {@link #readAcceptanceCriteriaBySubject} all run against the
+     * same live {@link DatasetTx}, inside one {@link #readInTransaction} call - see
+     * {@link #findByCode}'s javadoc for why a read-only path with no concurrency token needs this.
+     * Without it the exposure would be wider here than on {@link #findByCode}: every requirement
+     * in the project shares the same narrow window between the three reads, so one funnel write
+     * landing inside it could produce a torn combination for any of them, not just the one
+     * requirement a caller happened to ask for.</p>
+     */
     @Override
     public List<Requirement> findAll(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
@@ -579,25 +650,28 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "} }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(handle);
-            Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(handle);
-            // Grouped by subject (see the class-level note above): priority/
-            // qualityCategory are OPTIONAL joins without an enforced sh:maxCount, so a store-first
-            // requirement with two triples on either predicate binds a cross-product of rows for
-            // the same subject. Mapping each row straight to a Requirement (the earlier code)
-            // would have surfaced that subject twice in the result list instead of once.
-            Map<String, RequirementAssembly> bySubject = new LinkedHashMap<>();
-            handle.sparqlQuery().select(query).forEach(row -> {
-                RequirementAssembly assembly = assemblyFor(projectId, bySubject, row);
-                assembly.addPriorityCandidate(priorityOf(row));
-                assembly.addQualityCategoryCandidate(qualityCategoryOf(row));
+            return readInTransaction(handle, tx -> {
+                Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(tx);
+                Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(tx);
+                // Grouped by subject (see the class-level note above): priority/
+                // qualityCategory are OPTIONAL joins without an enforced sh:maxCount, so a
+                // store-first requirement with two triples on either predicate binds a
+                // cross-product of rows for the same subject. Mapping each row straight to a
+                // Requirement (the earlier code) would have surfaced that subject twice in the
+                // result list instead of once.
+                Map<String, RequirementAssembly> bySubject = new LinkedHashMap<>();
+                tx.select(query).forEach(row -> {
+                    RequirementAssembly assembly = assemblyFor(projectId, bySubject, row);
+                    assembly.addPriorityCandidate(priorityOf(row));
+                    assembly.addQualityCategoryCandidate(qualityCategoryOf(row));
+                });
+                return bySubject.entrySet().stream()
+                        .map(entry -> entry.getValue().toRequirement(
+                                termsBySubject.getOrDefault(entry.getKey(), List.of()),
+                                acceptanceCriteriaOrLegacyPlaceholder(
+                                        criteriaBySubject.getOrDefault(entry.getKey(), List.of()))))
+                        .toList();
             });
-            return bySubject.entrySet().stream()
-                    .map(entry -> entry.getValue().toRequirement(
-                            termsBySubject.getOrDefault(entry.getKey(), List.of()),
-                            acceptanceCriteriaOrLegacyPlaceholder(
-                                    criteriaBySubject.getOrDefault(entry.getKey(), List.of()))))
-                    .toList();
         }
     }
 
@@ -782,12 +856,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /** Bulk variant of {@link #readUsesTerms}: all requirements' term references in one query. */
-    private Map<String, List<TermRef>> readUsesTermsBySubject(DatasetHandle handle) {
-        String query = "SELECT ?s ?term WHERE { "
+    private Map<String, List<TermRef>> readUsesTermsBySubject(SparqlQuery query) {
+        String sparql = "SELECT ?s ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(isIRI(?term)) } ORDER BY ?s ?term";
         Map<String, List<TermRef>> bySubject = new LinkedHashMap<>();
-        handle.sparqlQuery().select(query).forEach(row -> bySubject
+        query.select(sparql).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
                 .add(new TermRef(ResourceId.of(iriOf(row, "term").getIRIString()))));
         return bySubject;
@@ -806,12 +880,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     }
 
     /** Bulk variant of {@link #readAcceptanceCriteria}: all requirements' criteria in one query. */
-    private Map<String, List<String>> readAcceptanceCriteriaBySubject(DatasetHandle handle) {
-        String query = "SELECT ?s ?criterion WHERE { "
+    private Map<String, List<String>> readAcceptanceCriteriaBySubject(SparqlQuery query) {
+        String sparql = "SELECT ?s ?criterion WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion } "
                 + "} ORDER BY ?s ?criterion";
         Map<String, List<String>> bySubject = new LinkedHashMap<>();
-        handle.sparqlQuery().select(query).forEach(row -> bySubject
+        query.select(sparql).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
                 .add(literalOf(row, "criterion").getLexicalForm()));
         return bySubject;
