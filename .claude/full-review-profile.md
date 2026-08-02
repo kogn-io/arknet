@@ -37,6 +37,26 @@ the skill's generic methodology.
   a singleton with `ProjectId` (ADR-009), and is there no fallback path without an anchor
   (ADR-016 point 3)? Both held up cleanly on the 2026-08-01 audit.
 
+## Review cadence
+
+Feeds the skill's `next` mode (pick the module due for review without anyone having to decide).
+Priority: 1 = port/contract-carrying and cross-cutting (weighted above the rest per the module
+weighting above), 2 = the six hexagonal BCs, 3 = self-check/meta module. `arknet-ontology` carries
+no Java ports (`.ttl` resources only) and is out of scope for this skill entirely — not listed.
+
+| Module | Path | Priority | Last reviewed commit | Date |
+|---|---|---|---|---|
+| `arknet-mcp` | `arknet-mcp` | 1 | `7832594` | 2026-08-01 |
+| `arknet-shared-kernel` | `arknet-shared-kernel` | 1 | `e157bc5` | 2026-08-01 |
+| `arknet-persistence-support` | `arknet-persistence-support` | 1 | `8a579e5` | 2026-08-01 |
+| `arknet-requirements` | `arknet-requirements` | 2 | `266e7ea` | 2026-08-01 |
+| `arknet-ubiquitous-language` | `arknet-ubiquitous-language` | 2 | `18bc394` | 2026-08-01 |
+| `arknet-use-cases` | `arknet-use-cases` | 2 | `941b4aa` | 2026-08-01 |
+| `arknet-bounded-context` | `arknet-bounded-context` | 2 | `c6113c7` | 2026-08-01 |
+| `arknet-project` | `arknet-project` | 2 | `ae218d2` | 2026-08-01 |
+| `arknet-adr` | `arknet-adr` | 2 | `3187cdc` | 2026-08-01 |
+| `arknet-architecture-tests` | `arknet-architecture-tests` | 3 | `e228741` | 2026-08-01 |
+
 ## Known project-specific traps
 
 - **A port's implementation often lives in a different module than the port itself.** Several
