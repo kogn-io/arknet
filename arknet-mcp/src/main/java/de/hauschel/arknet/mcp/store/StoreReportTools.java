@@ -171,27 +171,37 @@ public final class StoreReportTools {
      * directory does not exist inside the container at all.</p>
      *
      * <p>{@link ProjectId} is, by its own javadoc, "deliberately unconstrained beyond
-     * non-blankness" - {@link FileNameSanitizer#sanitize} keeps a value carrying {@code /},
+     * non-blankness" - {@link FileNameSanitizer#uniqueSegment} keeps a value carrying {@code /},
      * {@code ..} or another filesystem-unsafe character from resolving outside this method's
-     * subdirectory or reaching {@link Path#resolve} unfiltered (issue #146); the {@code
-     * normalize()}/containment check below is defense in depth for the one input a sanitized
-     * segment cannot rule out by itself - a value that sanitizes to exactly {@code ".."} - the
-     * same combination {@code io.kogn.rdf}'s own {@code DatasetLifecycleRdf4j.resolveDir} applies
-     * to the very same kind of value.</p>
+     * subdirectory or reaching {@link Path#resolve} unfiltered (issue #146), AND keeps two
+     * <em>different</em> project ids from sanitizing onto the identical segment and sharing one
+     * directory - {@link FileNameSanitizer#sanitize} alone is not injective (e.g. {@code
+     * "team/main"} and {@code "team_main"} both sanitize to {@code "team_main"}), which would
+     * silently break exactly the per-project isolation this subdirectory exists for (issue
+     * #147 review follow-up). The {@code normalize()}/containment check below is defense in depth
+     * for a value that would otherwise resolve outside {@link #fallbackReportDir} - unreachable in
+     * practice once every segment carries a hash suffix, but kept as the same belt-and-suspenders
+     * combination {@code io.kogn.rdf}'s own {@code DatasetLifecycleRdf4j.resolveDir} applies to
+     * the very same kind of value.</p>
      */
     private Path fallbackDirFor(final ProjectId projectId) {
         final Path dir = fallbackReportDir.resolve(reportSegment(projectId)).normalize();
         if (!dir.startsWith(fallbackReportDir)) {
-            // unreachable for a sanitized segment other than "." or ".." alone; defends the
-            // project-scoped-subdirectory invariant regardless of what a ProjectId's deliberately
-            // unconstrained form allows.
+            // unreachable once every segment carries a hash suffix (see uniqueSegment); defends
+            // the project-scoped-subdirectory invariant regardless of what a ProjectId's
+            // deliberately unconstrained form allows.
             throw new IllegalArgumentException("projectId maps outside the report directory: " + projectId.value());
         }
         return dir;
     }
 
-    private static String reportSegment(final ProjectId projectId) {
-        return FileNameSanitizer.sanitize(projectId.value());
+    /**
+     * Package-private (rather than fully private) only so the test can predict a project's report
+     * subdirectory without duplicating {@link FileNameSanitizer#uniqueSegment}'s format, the same
+     * reason {@code StoreExportTools#timestampFolderName} is package-private.
+     */
+    static String reportSegment(final ProjectId projectId) {
+        return FileNameSanitizer.uniqueSegment(projectId.value());
     }
 
     /**

@@ -28,4 +28,41 @@ class FileNameSanitizerTest {
         assertThat(FileNameSanitizer.sanitize("../../etc")).isEqualTo(".._.._etc");
         assertThat(FileNameSanitizer.sanitize("..")).isEqualTo("..");
     }
+
+    @Test
+    void uniqueSegmentAppendsAHexDigestOfTheRawValueAfterTheSanitizedPrefix() {
+        assertThat(FileNameSanitizer.uniqueSegment("sample-project"))
+                .matches("sample-project-\\p{XDigit}{16}");
+    }
+
+    @Test
+    void uniqueSegmentIsDeterministicForTheSameRawValue() {
+        assertThat(FileNameSanitizer.uniqueSegment("team/main"))
+                .isEqualTo(FileNameSanitizer.uniqueSegment("team/main"));
+    }
+
+    /**
+     * Regression test for the #147 review follow-up (P1): {@link FileNameSanitizer#sanitize}
+     * alone is not injective - two different raw values sanitizing to the identical prefix (here
+     * {@code "team/main"} and {@code "team_main"}, both {@code "team_main"}) let two different
+     * projects collide on one on-disk segment. {@link FileNameSanitizer#uniqueSegment} closes that
+     * gap with a hash of the raw value, so the two remain distinguishable.
+     */
+    @Test
+    void uniqueSegmentStaysDistinctForRawValuesThatCollideUnderPlainSanitizing() {
+        assertThat(FileNameSanitizer.sanitize("team/main")).isEqualTo(FileNameSanitizer.sanitize("team_main"));
+
+        assertThat(FileNameSanitizer.uniqueSegment("team/main"))
+                .isNotEqualTo(FileNameSanitizer.uniqueSegment("team_main"));
+    }
+
+    /**
+     * The hash suffix means a value that used to sanitize to exactly {@code ".."} (a path
+     * traversal component) can no longer do so - {@code uniqueSegment} always appends extra
+     * characters after the sanitized prefix.
+     */
+    @Test
+    void uniqueSegmentNeverEqualsExactlyDotDot() {
+        assertThat(FileNameSanitizer.uniqueSegment("..")).isNotEqualTo("..");
+    }
 }

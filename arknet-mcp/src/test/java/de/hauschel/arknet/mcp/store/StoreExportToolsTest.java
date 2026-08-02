@@ -5,8 +5,10 @@ package de.hauschel.arknet.mcp.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.AbstractList;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -214,35 +216,100 @@ class StoreExportToolsTest {
     }
 
     /**
-     * A project whose export cannot be written must not prevent the others from being attempted -
+     * A project whose export cannot be written must not prevent the others from being exported -
      * the whole point of exporting every project in one call is that one broken project cannot
-     * take the others down with it. Blocking the whole {@code fallbackExportDir} with a plain file
-     * (the same technique {@code StoreReportToolsTest} uses) fails every project's {@code
-     * Files.createDirectories} identically, independent of the timestamp subdirectory's now
-     * call-sequence-disambiguated name (issue #146) - both lines still appear in the result rather
-     * than the loop aborting after the first failure.
+     * take the others down with it.
+     *
+     * <p>Regression test for the #147 review follow-up (P1): the previous version of this test
+     * blocked the whole {@code fallbackExportDir} with a plain file, which fails every project's
+     * {@code Files.createDirectories} identically - it only proved "every failure is reported",
+     * not the original property "a broken project does not take a working one down with it". This
+     * version blocks only the SECOND project's own {@code .tmp} target file, leaving the FIRST
+     * project's export to complete normally in the same call - proving the second project's
+     * failure has no effect on the first's already-written result.</p>
+     *
+     * <p>Both projects share one timestamp subdirectory per call ({@link
+     * StoreExportTools#timestampFolderName()}), and that name is unpredictable before the call
+     * (current time plus a process-wide call sequence). {@link SecondElementTriggersSideEffect}
+     * works around that: it defers creating the blocking directory until the stream that {@link
+     * StoreExportTools#export()} iterates actually reaches the second project - by then the first
+     * project's {@code exportOne} has already run to completion (streams are pulled one element at
+     * a time), so the now-created timestamp subdirectory can be discovered on disk and the block
+     * placed exactly at the second project's own {@code .tmp} path.</p>
      */
     @Test
-    void exportContinuesWithOtherProjectsWhenTheExportDirIsUnwritable(@TempDir Path root) throws Exception {
+    void exportOfOneProjectsWriteFailureDoesNotPreventTheOtherFromBeingExported(@TempDir Path root)
+            throws Exception {
         RequirementRepository requirements =
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         requirements.create(PROJECT_2, requirementTitled("Second"));
         try {
-            Path blockedExportDir = root.resolve("not-a-directory");
-            Files.writeString(blockedExportDir, "a plain file blocking directory creation");
+            Project working = new Project(PROJECT_1, "working", List.of(pathAnchor("/x")));
+            Project broken = new Project(PROJECT_2, "broken", List.of(pathAnchor("/y")));
+            String brokenTmpFileName = "broken__" + PROJECT_2.value() + ".trig.tmp";
 
-            StoreExportTools tools = new StoreExportTools(
-                    listProjectsOf(
-                            new Project(PROJECT_1, "broken", List.of(pathAnchor("/x"))),
-                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), blockedExportDir, null);
+            List<Project> workingThenBroken = new SecondElementTriggersSideEffect<>(
+                    List.of(working, broken),
+                    () -> blockTmpFileOfTheOnlyTimestampSubdirectory(root, brokenTmpFileName));
+            StoreExportTools tools =
+                    new StoreExportTools(() -> workingThenBroken, new StoreExporter(lifecycle), root, null);
 
             String result = tools.export();
 
+            assertThat(result).contains("# Exported working: ").doesNotContain("# Exported working: FAILED");
             assertThat(result).contains("# Exported broken: FAILED to write to");
-            assertThat(result).contains("# Exported second: FAILED to write to");
+            List<Path> written = findTrigFiles(root);
+            assertThat(written).hasSize(1);
+            assertThat(written.get(0).getFileName().toString())
+                    .isEqualTo("working__store-export-tools-test-1.trig");
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
+    }
+
+    private static void blockTmpFileOfTheOnlyTimestampSubdirectory(Path root, String tmpFileName) {
+        try {
+            Path timestampSubdirectory = onlySubdirectoryOf(root);
+            Files.createDirectory(timestampSubdirectory.resolve(tmpFileName));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Path onlySubdirectoryOf(Path root) throws IOException {
+        try (var stream = Files.list(root)) {
+            return stream.filter(Files::isDirectory).findFirst()
+                    .orElseThrow(() -> new IllegalStateException("expected one timestamp subdirectory under " + root));
+        }
+    }
+
+    /**
+     * A {@link List} that runs {@code sideEffect} the moment its second element is read, before
+     * returning it - used to inject filesystem state between two sequential {@code
+     * Stream#map} invocations that would otherwise be impossible to place, because the second
+     * element's target path only becomes known once the first has already been processed (see
+     * {@link #exportOfOneProjectsWriteFailureDoesNotPreventTheOtherFromBeingExported}).
+     */
+    private static final class SecondElementTriggersSideEffect<T> extends AbstractList<T> {
+        private final List<T> delegate;
+        private final Runnable sideEffect;
+
+        SecondElementTriggersSideEffect(List<T> delegate, Runnable sideEffect) {
+            this.delegate = delegate;
+            this.sideEffect = sideEffect;
+        }
+
+        @Override
+        public T get(int index) {
+            if (index == 1) {
+                sideEffect.run();
+            }
+            return delegate.get(index);
+        }
+
+        @Override
+        public int size() {
+            return delegate.size();
         }
     }
 
