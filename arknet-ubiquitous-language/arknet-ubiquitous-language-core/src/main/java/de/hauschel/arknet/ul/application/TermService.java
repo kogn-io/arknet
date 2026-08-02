@@ -95,7 +95,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
             TermCode code = nextCode(projectId);
             Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
-            repository.create(projectId, term);
+            repository.create(projectId, term, command.language());
             return term;
         });
     }
@@ -107,18 +107,18 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     }
 
     @Override
-    public Optional<Term> get(ProjectId projectId, TermCode code) {
+    public Optional<Term> get(ProjectId projectId, TermCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code);
+        return repository.findByCode(projectId, code, displayLocale);
     }
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet) {
+            ActorFacet actorFacet, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.update(projectId, code, prefLabel, definition, actorFacet);
+        return repository.update(projectId, code, prefLabel, definition, actorFacet, language);
     }
 
     @Override

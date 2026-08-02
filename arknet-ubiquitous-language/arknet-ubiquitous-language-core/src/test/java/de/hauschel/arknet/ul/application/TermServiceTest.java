@@ -49,18 +49,18 @@ class TermServiceTest {
     @Test
     void addAssignsFirstCode() {
         Term added = service.add(WS, new NewTerm("Gutschrift",
-                "Rueckerstattung eines bereits gezahlten Betrags.", null));
+                "Rueckerstattung eines bereits gezahlten Betrags.", null, null));
 
         assertEquals(new TermCode("TERM-1"), added.code());
         assertEquals("Gutschrift", added.prefLabel());
         assertEquals("Rueckerstattung eines bereits gezahlten Betrags.", added.definition());
-        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
 
     @Test
     void addMintsAFreshOpaqueIdentityPerTerm() {
-        Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null));
-        Term second = service.add(WS, new NewTerm("Bestellung", "def b", null));
+        Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
+        Term second = service.add(WS, new NewTerm("Bestellung", "def b", null, null));
 
         // Identity is opaque and minted once - never derived from the (sequential) code.
         assertNotEquals(first.id(), second.id());
@@ -69,8 +69,8 @@ class TermServiceTest {
 
     @Test
     void addNumbersRunSequentially() {
-        TermCode first = service.add(WS, new NewTerm("Gutschrift", "def a", null)).code();
-        TermCode second = service.add(WS, new NewTerm("Bestellung", "def b", null)).code();
+        TermCode first = service.add(WS, new NewTerm("Gutschrift", "def a", null, null)).code();
+        TermCode second = service.add(WS, new NewTerm("Bestellung", "def b", null, null)).code();
 
         assertEquals(new TermCode("TERM-1"), first);
         assertEquals(new TermCode("TERM-2"), second);
@@ -79,9 +79,9 @@ class TermServiceTest {
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
-        service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
 
-        Term inOther = service.add(other, new NewTerm("Bestellung", "def b", null));
+        Term inOther = service.add(other, new NewTerm("Bestellung", "def b", null, null));
 
         assertEquals(new TermCode("TERM-1"), inOther.code());
         assertTrue(service.list(other).stream().allMatch(t -> t.prefLabel().equals("Bestellung")));
@@ -90,8 +90,8 @@ class TermServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, new NewTerm("Gutschrift", "def a", null));
-        service.add(WS, new NewTerm("Bestellung", "def b", null));
+        service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
+        service.add(WS, new NewTerm("Bestellung", "def b", null, null));
 
         List<Term> all = service.list(WS);
 
@@ -102,30 +102,30 @@ class TermServiceTest {
 
     @Test
     void getReturnsPersistedTerm() {
-        TermCode code = service.add(WS, new NewTerm("Gutschrift", "def a", null)).code();
+        TermCode code = service.add(WS, new NewTerm("Gutschrift", "def a", null, null)).code();
 
-        assertTrue(service.get(WS, code).isPresent());
-        assertEquals("Gutschrift", service.get(WS, code).orElseThrow().prefLabel());
+        assertTrue(service.get(WS, code, null).isPresent());
+        assertEquals("Gutschrift", service.get(WS, code, null).orElseThrow().prefLabel());
     }
 
     @Test
     void getIsEmptyForUnknownCode() {
-        assertFalse(service.get(WS, new TermCode("TERM-99")).isPresent());
+        assertFalse(service.get(WS, new TermCode("TERM-99"), null).isPresent());
     }
 
     @Test
     void addPassesThroughActorFacet() {
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
 
-        Term added = service.add(WS, new NewTerm("Kunde", "Person, die eine Bestellung aufgibt.", facet));
+        Term added = service.add(WS, new NewTerm("Kunde", "Person, die eine Bestellung aufgibt.", facet, null));
 
         assertEquals(facet, added.actorFacet());
-        assertEquals(facet, repository.findByCode(WS, added.code()).orElseThrow().actorFacet());
+        assertEquals(facet, repository.findByCode(WS, added.code(), null).orElseThrow().actorFacet());
     }
 
     @Test
     void addWithoutActorFacetLeavesItNull() {
-        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
 
         assertNull(added.actorFacet());
     }
@@ -137,8 +137,8 @@ class TermServiceTest {
      */
     @Test
     void resolveReturnsKnownIdentitiesInOneBatch() {
-        Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null));
-        Term second = service.add(WS, new NewTerm("Bestellung", "def b", null));
+        Term first = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
+        Term second = service.add(WS, new NewTerm("Bestellung", "def b", null, null));
 
         List<ResolveTerms.ResolvedTerm> resolved = service.resolve(WS, first.id().value(), second.id().value());
 
@@ -153,7 +153,7 @@ class TermServiceTest {
      */
     @Test
     void resolveSilentlyOmitsUnknownIdentities() {
-        Term known = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term known = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
         ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/does-not-exist");
 
         List<ResolveTerms.ResolvedTerm> resolved = service.resolve(WS, known.id().value(), unknown);
@@ -168,7 +168,7 @@ class TermServiceTest {
 
     @Test
     void resolveIsScopedPerProject() {
-        Term inWs = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term inWs = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
         ProjectId other = new ProjectId("other");
 
         assertEquals(List.of(), service.resolve(other, inWs.id().value()));
@@ -176,9 +176,9 @@ class TermServiceTest {
 
     @Test
     void updateChangesOnlyPrefLabel() {
-        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
 
-        Term updated = service.update(WS, added.code(), "Erstattung", null, null);
+        Term updated = service.update(WS, added.code(), "Erstattung", null, null, null);
 
         assertEquals("Erstattung", updated.prefLabel());
         assertEquals("def a", updated.definition());
@@ -186,9 +186,9 @@ class TermServiceTest {
 
     @Test
     void updateChangesOnlyDefinition() {
-        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
 
-        Term updated = service.update(WS, added.code(), null, "def b", null);
+        Term updated = service.update(WS, added.code(), null, "def b", null, null);
 
         assertEquals("Gutschrift", updated.prefLabel());
         assertEquals("def b", updated.definition());
@@ -196,10 +196,10 @@ class TermServiceTest {
 
     @Test
     void updateChangesOnlyActorFacet() {
-        Term added = service.add(WS, new NewTerm("Kunde", "def a", null));
+        Term added = service.add(WS, new NewTerm("Kunde", "def a", null, null));
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
 
-        Term updated = service.update(WS, added.code(), null, null, facet);
+        Term updated = service.update(WS, added.code(), null, null, facet, null);
 
         assertEquals("Kunde", updated.prefLabel());
         assertEquals("def a", updated.definition());
@@ -209,19 +209,19 @@ class TermServiceTest {
     @Test
     void updateWithNullActorFacetLeavesAnAlreadySetOneUnchanged() {
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
-        Term added = service.add(WS, new NewTerm("Kunde", "def a", facet));
+        Term added = service.add(WS, new NewTerm("Kunde", "def a", facet, null));
 
-        Term updated = service.update(WS, added.code(), "Bestandskunde", null, null);
+        Term updated = service.update(WS, added.code(), "Bestandskunde", null, null, null);
 
         assertEquals(facet, updated.actorFacet());
     }
 
     @Test
     void updateChangesAllFieldsAtOnce() {
-        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
         ActorFacet facet = new ActorFacet(ActorKind.SYSTEM, "Zahlungsdienst");
 
-        Term updated = service.update(WS, added.code(), "Erstattung", "def b", facet);
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", facet, null);
 
         assertEquals("Erstattung", updated.prefLabel());
         assertEquals("def b", updated.definition());
@@ -230,9 +230,9 @@ class TermServiceTest {
 
     @Test
     void updateKeepsIdentityAndCodeUnchanged() {
-        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
 
-        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null);
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, null);
 
         assertEquals(added.id(), updated.id());
         assertEquals(added.code(), updated.code());
@@ -240,17 +240,17 @@ class TermServiceTest {
 
     @Test
     void updatePersistsTheChange() {
-        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null));
+        Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null));
 
-        service.update(WS, added.code(), "Erstattung", null, null);
+        service.update(WS, added.code(), "Erstattung", null, null, null);
 
-        assertEquals("Erstattung", repository.findByCode(WS, added.code()).orElseThrow().prefLabel());
+        assertEquals("Erstattung", repository.findByCode(WS, added.code(), null).orElseThrow().prefLabel());
     }
 
     @Test
     void updateThrowsWhenCodeIsUnknown() {
         assertThrows(TermNotFoundException.class,
-                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null));
+                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null, null));
     }
 
     /**
@@ -267,15 +267,15 @@ class TermServiceTest {
         InMemoryTermRepository delegate = new InMemoryTermRepository();
         Term seeded = new Term(new TermId(new UuidResourceIdFactory().newId()),
                 new TermCode("TERM-1"), "Gutschrift", "def a", null);
-        delegate.create(WS, seeded);
+        delegate.create(WS, seeded, null);
         SpyTermRepository spy = new SpyTermRepository(delegate);
         TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
 
-        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null);
+        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null, null);
 
         assertEquals(0, spy.findByCodeCalls);
         assertEquals(0, spy.findAllCalls);
-        assertEquals("Erstattung", delegate.findByCode(WS, seeded.code()).orElseThrow().prefLabel());
+        assertEquals("Erstattung", delegate.findByCode(WS, seeded.code(), null).orElseThrow().prefLabel());
     }
 
     /** Spy decorator counting {@code findByCode}/{@code findAll} calls, delegating everything else. */
@@ -290,20 +290,20 @@ class TermServiceTest {
         }
 
         @Override
-        public void create(ProjectId projectId, Term term) {
-            delegate.create(projectId, term);
+        public void create(ProjectId projectId, Term term, String language) {
+            delegate.create(projectId, term, language);
         }
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet) {
-            return delegate.update(projectId, code, prefLabel, definition, actorFacet);
+                ActorFacet actorFacet, String language) {
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language);
         }
 
         @Override
-        public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+        public Optional<Term> findByCode(ProjectId projectId, TermCode code, String displayLocale) {
             findByCodeCalls++;
-            return delegate.findByCode(projectId, code);
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override

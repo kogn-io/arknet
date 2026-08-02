@@ -39,7 +39,7 @@ final class InMemoryTermRepository implements TermRepository {
     private final Map<ProjectId, Map<TermId, Term>> byProject = new LinkedHashMap<>();
 
     @Override
-    public void create(ProjectId projectId, Term term) {
+    public void create(ProjectId projectId, Term term, String language) {
         Map<TermId, Term> terms = byProject.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
         if (terms.containsKey(term.id())) {
             throw new ResourceAlreadyExistsException(projectId, term.id().value());
@@ -47,12 +47,15 @@ final class InMemoryTermRepository implements TermRepository {
         if (terms.values().stream().anyMatch(t -> t.code().equals(term.code()))) {
             throw new DuplicateTermCodeException(projectId, term.code());
         }
+        // language is a real store-level concept (which literal a write scopes its delete to) that
+        // this in-memory fake has nothing multi-valued to model - accepted and ignored, same as the
+        // real adapter's language-scoped delete has nothing to do against a fresh identity.
         terms.put(term.id(), term);
     }
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet) {
+            ActorFacet actorFacet, String language) {
         Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
         Term current = terms.values().stream()
                 .filter(t -> t.code().equals(code))
@@ -67,7 +70,7 @@ final class InMemoryTermRepository implements TermRepository {
     }
 
     @Override
-    public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+    public Optional<Term> findByCode(ProjectId projectId, TermCode code, String displayLocale) {
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(t -> t.code().equals(code))
                 .findFirst();

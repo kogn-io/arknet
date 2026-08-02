@@ -56,7 +56,10 @@ public interface TermRepository {
      * Persists a brand-new term whose identity does not yet exist in the project.
      *
      * @param projectId the project (architecture model) to store the term in
-     * @param term        the term to create
+     * @param term      the term to create
+     * @param language  the BCP-47 language tag {@code term.prefLabel()}/{@code term.definition()}
+     *                  is written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
+     *                  literal
      * @throws ResourceAlreadyExistsException if a term with this identity already exists
      * @throws DuplicateTermCodeException     if another term already carries this term's
      *                                        {@link TermCode} - identity collision and
@@ -67,7 +70,7 @@ public interface TermRepository {
      *                          in {@code arknet-persistence-support}, a module
      *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
-    void create(ProjectId projectId, Term term);
+    void create(ProjectId projectId, Term term, String language);
 
     /**
      * Corrects specific fields of the term identified by {@code code}, leaving every field the
@@ -99,6 +102,11 @@ public interface TermRepository {
      *                    (its type and role) untouched. Within a non-{@code null} facette,
      *                    a {@code null} {@link ActorFacet#role()} likewise leaves an already-set
      *                    role untouched - only the type is always replaced
+     * @param language    the BCP-47 language tag the new {@code prefLabel}/{@code definition} is
+     *                    written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
+     *                    literal. Deletion is scoped to this same tag: only the existing literal
+     *                    carrying it is removed, so every other language-tagged variant of a field
+     *                    being corrected survives untouched
      * @return the term's up-to-date state after the correction
      * @throws TermNotFoundException             if no term with this code exists
      * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's
@@ -109,16 +117,21 @@ public interface TermRepository {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
-    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
+    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
+            String language);
 
     /**
      * Finds a term by its human-readable business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the term in
-     * @param code        the term code (e.g. {@code TERM-1})
+     * @param projectId     the project (architecture model) to look up the term in
+     * @param code          the term code (e.g. {@code TERM-1})
+     * @param displayLocale the BCP-47 language tag the caller wants {@code prefLabel}/
+     *                      {@code definition} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return the term if present, otherwise {@link Optional#empty()}
      */
-    Optional<Term> findByCode(ProjectId projectId, TermCode code);
+    Optional<Term> findByCode(ProjectId projectId, TermCode code, String displayLocale);
 
     /**
      * Returns all terms stored in a project glossary.

@@ -18,6 +18,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
@@ -38,7 +39,7 @@ class UbiquitousLanguageMcpToolsTest {
     private static final ProjectId PROJECT = new ProjectId("test-project");
 
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
-    private static final ProjectResolver PROJECTS = anchor -> PROJECT;
+    private static final ProjectResolver PROJECTS = anchor -> new ResolvedProject(PROJECT, null);
 
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
@@ -72,8 +73,8 @@ class UbiquitousLanguageMcpToolsTest {
 
     @Test
     void addPassesThroughActorFacet() {
-        String rendered =
-                adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller", null);
+        String rendered = adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller",
+                null, null);
 
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), stub.lastCommand.actorFacet());
         assertTrue(rendered.contains("[actor:HUMAN role=Besteller]"), rendered);
@@ -81,7 +82,7 @@ class UbiquitousLanguageMcpToolsTest {
 
     @Test
     void addWithoutActorKindLeavesFacetNull() {
-        adapter.add(null, "Gutschrift", "def a", null, null, null);
+        adapter.add(null, "Gutschrift", "def a", null, null, null, null);
 
         assertNull(stub.lastCommand.actorFacet());
     }
@@ -89,18 +90,28 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void addRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null));
+                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null, null));
+    }
+
+    /** {@code term_add}'s {@code language} argument passes straight through, never defaulted from the project. */
+    @Test
+    void addPassesTheLanguageArgumentThroughUnchanged() {
+        adapter.add(null, "Kunde", "def a", null, null, "de", null);
+
+        assertEquals("de", stub.lastCommand.language());
     }
 
     /** {@code term_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
-        String rendered = adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde", null);
+        String rendered =
+                adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde", "de", null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertEquals("Erstattung", stub.lastUpdatePrefLabel);
         assertEquals("Neue Definition", stub.lastUpdateDefinition);
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Kunde"), stub.lastUpdateActorFacet);
+        assertEquals("de", stub.lastUpdateLanguage);
         assertTrue(rendered.contains("Erstattung"), rendered);
         assertTrue(rendered.contains("[actor:HUMAN role=Kunde]"), rendered);
     }
@@ -112,18 +123,19 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "TERM-1", null, null, null, null, null);
+        adapter.update(null, "TERM-1", null, null, null, null, null, null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertNull(stub.lastUpdatePrefLabel);
         assertNull(stub.lastUpdateDefinition);
         assertNull(stub.lastUpdateActorFacet);
+        assertNull(stub.lastUpdateLanguage);
     }
 
     @Test
     void updateRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null, null));
+                () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null, null, null));
     }
 
     @Test
@@ -153,7 +165,7 @@ class UbiquitousLanguageMcpToolsTest {
         stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
                 new TermCode("TERM-1"), "Gutschrift", "def a", null));
 
-        String rendered = adapter.get(null, "TERM-1", null);
+        String rendered = adapter.get(null, "TERM-1", null, null);
 
         assertEquals("TERM-1 Gutschrift - def a", rendered);
     }
@@ -162,9 +174,20 @@ class UbiquitousLanguageMcpToolsTest {
     void getRendersNotFoundMessageWhenAbsent() {
         stub.termForGet = Optional.empty();
 
-        String rendered = adapter.get(null, "TERM-99", null);
+        String rendered = adapter.get(null, "TERM-99", null, null);
 
         assertEquals("Term not found: TERM-99", rendered);
+    }
+
+    /** {@code term_get}'s {@code displayLocale} argument reaches the in-port unchanged. */
+    @Test
+    void getPassesTheDisplayLocaleArgumentThrough() {
+        stub.termForGet = Optional.of(new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/1")),
+                new TermCode("TERM-1"), "Kunde", "def a", null));
+
+        adapter.get(null, "TERM-1", "de", null);
+
+        assertEquals("de", stub.lastGetDisplayLocale);
     }
 
     /** Structural stub implementing the four driving in-ports. */
@@ -175,6 +198,8 @@ class UbiquitousLanguageMcpToolsTest {
         private String lastUpdatePrefLabel;
         private String lastUpdateDefinition;
         private ActorFacet lastUpdateActorFacet;
+        private String lastUpdateLanguage;
+        private String lastGetDisplayLocale;
         private List<Term> termsForList = List.of();
         private Optional<Term> termForGet = Optional.empty();
 
@@ -192,17 +217,19 @@ class UbiquitousLanguageMcpToolsTest {
         }
 
         @Override
-        public Optional<Term> get(ProjectId projectId, TermCode code) {
+        public Optional<Term> get(ProjectId projectId, TermCode code, String displayLocale) {
+            lastGetDisplayLocale = displayLocale;
             return termForGet;
         }
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet) {
+                ActorFacet actorFacet, String language) {
             lastUpdatedTerm = code;
             lastUpdatePrefLabel = prefLabel;
             lastUpdateDefinition = definition;
             lastUpdateActorFacet = actorFacet;
+            lastUpdateLanguage = language;
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code,
                     prefLabel != null ? prefLabel : "p", definition != null ? definition : "d", actorFacet);
         }

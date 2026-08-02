@@ -46,13 +46,19 @@ public interface UpdateTerm {
      * Updates the term identified by {@code code} within a project, leaving any {@code null}
      * argument unchanged.
      *
-     * @param projectId the project (architecture model) the term lives in
-     * @param code        the term code, e.g. {@code TERM-1}
-     * @param prefLabel   the new preferred label, or {@code null} to leave it unchanged
-     * @param definition  the new definition, or {@code null} to leave it unchanged
-     * @param actorFacet  the new Actor facette, or {@code null} to leave an already-set one
-     *                    unchanged
+     * @param projectId  the project (architecture model) the term lives in
+     * @param code       the term code, e.g. {@code TERM-1}
+     * @param prefLabel  the new preferred label, or {@code null} to leave it unchanged
+     * @param definition the new definition, or {@code null} to leave it unchanged
+     * @param actorFacet the new Actor facette, or {@code null} to leave an already-set one
+     *                   unchanged
+     * @param language   the BCP-47 language tag the new {@code prefLabel}/{@code definition} is
+     *                   written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
+     *                   literal. Only the existing literal carrying this same tag is replaced -
+     *                   every other language-tagged variant of a field being corrected survives
+     *                   untouched, exactly like every field this method does not touch at all
      * @return the updated term
      */
-    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
+    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
+            String language);
 }

@@ -297,7 +297,7 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     private static NewTerm newTerm() {
-        return new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null);
+        return new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null, null);
     }
 
     // ---- synchronisation helpers ---------------------------------------------------------

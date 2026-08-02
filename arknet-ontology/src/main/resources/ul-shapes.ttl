@@ -23,6 +23,7 @@ ulshapes:TermShape
     a sh:NodeShape ;
     sh:targetClass skos:Concept ;
     sh:property ulshapes:Term-prefLabel ;
+    sh:property ulshapes:Term-definition ;
     sh:property ulshapes:Term-inScheme .
 
 ulshapes:Term-prefLabel
@@ -30,7 +31,15 @@ ulshapes:Term-prefLabel
     sh:path     skos:prefLabel ;
     sh:minCount 1 ;
     sh:minLength 1 ;
-    sh:message  "A glossary term (skos:Concept) needs at least one skos:prefLabel (the term)."@en , "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A glossary term (skos:Concept) needs at least one skos:prefLabel (the term). At most one skos:prefLabel per language tag (SKOS S14) - several untagged or same-language-tagged prefLabels on one term are not allowed, but several DIFFERENT language tags are (a term may be labelled in several languages)."@en , "Ein Glossar-Begriff (skos:Concept) braucht mindestens ein skos:prefLabel (der Fachbegriff). Hoechstens ein skos:prefLabel je Sprach-Tag (SKOS S14) - mehrere untagged oder gleichsprachige prefLabels an einem Begriff sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (ein Begriff darf mehrsprachig benannt sein)."@de ;
+    sh:severity sh:Violation .
+
+ulshapes:Term-definition
+    a sh:PropertyShape ;
+    sh:path     skos:definition ;
+    sh:uniqueLang true ;
+    sh:message  "At most one skos:definition per language tag (SKOS S14) - several untagged or same-language-tagged definitions on one term are not allowed, but several DIFFERENT language tags are (a term's meaning may be explained in several languages)."@en , "Hoechstens ein skos:definition je Sprach-Tag (SKOS S14) - mehrere untagged oder gleichsprachige Definitionen an einem Begriff sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (die Bedeutung eines Begriffs darf mehrsprachig erklaert sein)."@de ;
     sh:severity sh:Violation .
 
 ulshapes:Term-inScheme

@@ -14,6 +14,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
@@ -113,10 +114,43 @@ public final class UbiquitousLanguageMcpTools {
      * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
      * delivery paths are open to every MCP client). Neither present is a caller error; there is no
      * default project and no fallback to a server-side working directory (decision 3).
+     *
+     * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
+     * needs the resolved project's configured default display language too, for the read tool
+     * ({@code term_get}'s {@code displayLocale} default) - see {@link #effectiveDisplayLocale}.
+     * The write tools ({@code term_add}/{@code term_update}) deliberately do <strong>not</strong>
+     * use it (see that method's javadoc for why), but still resolve the full project so both
+     * {@code term_add}/{@code term_update} and {@code term_get} share one resolution path.</p>
      */
-    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+    private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
         return projects.resolve(explicit != null ? explicit : contextAnchor(context));
+    }
+
+    /**
+     * Merges an explicit, caller-supplied {@code displayLocale} argument with {@code project}'s
+     * own configured default language for {@code term_get}: the explicit value wins if the
+     * caller gave a non-blank one, otherwise the project's default is used (or {@code null} if it
+     * has none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s
+     * own remaining fallback chain).
+     *
+     * <p><strong>Read-only, deliberately.</strong> The project default language is a display
+     * preference, not a write instruction: {@code term_add}/{@code term_update} never call this
+     * method and pass their own {@code language} argument straight through, untouched, even when
+     * it is {@code null}. Folding the project default into an omitted write-time {@code language}
+     * would silently retag what is written - a caller who omits {@code language} on an update
+     * would then write a project-default-tagged literal while the field's existing value is very
+     * likely still untagged (the language-scoped delete only ever removes the literal carrying
+     * the <em>same</em> tag as what is being written), leaving the untagged original standing
+     * next to a newly retagged duplicate on the very next correction. Untouched write-time
+     * {@code null} therefore always means "write untagged", exactly as before this project
+     * default existed.</p>
+     */
+    private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit;
+        }
+        return project.defaultLanguage();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -137,11 +171,16 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
             final String actorRole,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the label and definition "
+                    + "are written in, or omitted for a plain, untagged literal. NOT defaulted from the "
+                    + "project's configured default language - that default only affects how a term is "
+                    + "displayed (term_get), never what gets written.", required = false)
+            final String language,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorFacet facet = parseActorFacet(actorKind, actorRole);
-        final Term created = addTerm.add(projectId, new NewTerm(label, definition, facet));
+        final Term created = addTerm.add(project.id(), new NewTerm(label, definition, facet, blankToNull(language)));
         return format(created);
     }
 
@@ -151,8 +190,8 @@ public final class UbiquitousLanguageMcpTools {
             final McpSyncRequestContext context,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
-        final List<Term> all = listTerms.list(projectId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final List<Term> all = listTerms.list(project.id());
         return all.stream().map(UbiquitousLanguageMcpTools::format)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no terms)");
     }
@@ -162,11 +201,18 @@ public final class UbiquitousLanguageMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the label and "
+                    + "definition in, overriding the project's own configured default language for this one "
+                    + "call. Falls back to the project default, then to the server's own default, then to an "
+                    + "untagged literal, then deterministically to any literal the term carries.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
-        return getTerm.get(projectId, code)
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        return getTerm.get(project.id(), code, effective)
                 .map(UbiquitousLanguageMcpTools::format)
                 .orElse("Term not found: " + code.value());
     }
@@ -192,13 +238,19 @@ public final class UbiquitousLanguageMcpTools {
                     + "giving actorKind leaves an already-set role unchanged (it does not clear it)",
                     required = false)
             final String actorRole,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the new label/definition "
+                    + "is written in, or omitted for a plain, untagged literal. NOT defaulted from the "
+                    + "project's configured default language (see term_add's same parameter); only the "
+                    + "existing literal carrying this same tag is replaced - every other language variant "
+                    + "of a field being corrected survives untouched.", required = false)
+            final String language,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final ActorFacet facet = parseActorFacet(actorKind, actorRole);
         final Term updated = updateTerm.update(
-                projectId, code, blankToNull(label), blankToNull(definition), facet);
+                project.id(), code, blankToNull(label), blankToNull(definition), facet, blankToNull(language));
         return format(updated);
     }
 

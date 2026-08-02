@@ -76,7 +76,7 @@ class TermServiceConcurrencyTest {
     }
 
     private static NewTerm newTerm() {
-        return new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null);
+        return new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null, null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -108,19 +108,19 @@ class TermServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, Term term) {
-            delegate.create(projectId, term);
+        public void create(ProjectId projectId, Term term, String language) {
+            delegate.create(projectId, term, language);
         }
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet) {
-            return delegate.update(projectId, code, prefLabel, definition, actorFacet);
+                ActorFacet actorFacet, String language) {
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language);
         }
 
         @Override
-        public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<Term> findByCode(ProjectId projectId, TermCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
