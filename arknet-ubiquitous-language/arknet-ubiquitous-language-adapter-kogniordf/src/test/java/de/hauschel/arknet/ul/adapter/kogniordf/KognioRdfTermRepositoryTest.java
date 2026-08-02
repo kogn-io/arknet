@@ -761,6 +761,83 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
+    // ---- actorRole: row multiplication when arkproc:actorRole is repeated -----------------
+
+    /**
+     * Store-first regression test (issue #154): neither {@code ulshapes:TermShape} nor
+     * {@code arknet-actor.ttl} place a {@code sh:maxCount} on {@code arkproc:actorRole}, so an
+     * actor-facetted subject with two role literals is shape-legal even though
+     * {@code term_add}/{@code term_update} never write more than one. Before the fix,
+     * {@code assemblyFor} read the actor facet (kind + role together) only from the first SPARQL
+     * row bound for a subject via {@code computeIfAbsent} - correct by accident whenever the two
+     * role rows happened to bind in insertion order, but silently dropping the second value
+     * regardless, unlike the sibling {@code definition} case which already logged a {@code WARN}.
+     * This pins the outward-visible contract: neither read throws, and each returns one of the
+     * two role values without crashing.
+     */
+    @Test
+    void findByCodeDoesNotThrowForATermWithTwoActorRoles() {
+        TermId id = freshId();
+        givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
+
+        Term found = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow();
+
+        assertTrue(List.of("Kaeufer", "Verkaeufer").contains(found.actorFacet().role()));
+    }
+
+    /** Same regression as above, exercised via the batch {@link TermRepository#findAll}. */
+    @Test
+    void findAllDoesNotThrowForATermWithTwoActorRoles() {
+        TermId id = freshId();
+        givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
+
+        List<Term> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertTrue(List.of("Kaeufer", "Verkaeufer").contains(all.get(0).actorFacet().role()));
+    }
+
+    /**
+     * The chosen role is deterministic across repeated reads against the same, unchanged store
+     * state - not merely "does not throw" - mirroring
+     * {@link #findByCodePicksTheSameDefinitionOnRepeatedReads}'s determinism check for the
+     * sibling {@code definition} case.
+     */
+    @Test
+    void findByCodePicksTheSameActorRoleOnRepeatedReads() {
+        TermId id = freshId();
+        givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
+
+        String first = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().actorFacet().role();
+        String second = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().actorFacet().role();
+
+        assertEquals(first, second);
+    }
+
+    /**
+     * Writes an actor-facetted {@code skos:Concept} with two {@code arkproc:actorRole} literals
+     * straight into the terms graph - shape-legal ({@code ulshapes:TermShape}/
+     * {@code arknet-actor.ttl} place no constraint on the property's cardinality), but
+     * unreachable via {@code term_add}/{@code term_update}, which only ever write one.
+     */
+    private void givenActorTermWithTwoRoles(
+            ProjectId projectId, TermId id, String code, String firstRole, String secondRole) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
+                + "<https://w3id.org/arknet/process#HumanActor> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> \"Definition.\" ; "
+                + "<https://w3id.org/arknet/process#actorRole> \"" + firstRole + "\" ; "
+                + "<https://w3id.org/arknet/process#actorRole> \"" + secondRole + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     // ---- findByIds: batch resolution for ResolveTerms -------------------------------------
 
     @Test

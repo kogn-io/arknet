@@ -159,6 +159,15 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * because the grouping map preserves row insertion order) and log a single {@code WARN} per
  * assembled {@link Term} when more than one distinct value was seen - visible instead of silently
  * dropped, without inventing a second display-selection mechanism next to {@link DisplayLocale}.</p>
+ *
+ * <p><strong>Row multiplication on {@code arkproc:actorRole}.</strong> Neither {@code ulshapes}
+ * nor {@code arknet-actor.ttl} constrain {@code arkproc:actorRole} with {@code sh:maxCount}
+ * either, so a store-first (ADR-005) actor-facetted concept with two role literals is just as
+ * SHACL-legal as a two-valued {@code definition} and multiplies a subject into two rows the same
+ * way. {@link #findByCode}/{@link #findAll} therefore collect {@code actorRole} candidates across
+ * a subject's rows exactly like {@code definition} and resolve them with the same first-seen
+ * value plus single {@code WARN}-on-collision policy, not a silent {@code computeIfAbsent} pick
+ * of whatever the first row happened to bind.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
 
@@ -390,11 +399,11 @@ public class KognioRdfTermRepository implements TermRepository {
             if (actorFacet.role() != null) {
                 writeCandidate.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
                         rdf.createLiteral(actorFacet.role()));
-            } else if (current.actorFacet != null && current.actorFacet.role() != null) {
+            } else if (current.actorFacet() != null && current.actorFacet().role() != null) {
                 // A null role is "unchanged", not "cleared" (same contract as every other field
                 // here) - assert the untouched existing role for the gate only.
                 assertedContext.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
-                        rdf.createLiteral(current.actorFacet.role()));
+                        rdf.createLiteral(current.actorFacet().role()));
             }
         }
         // skos:definition carries no ulshapes PropertyShape at all (see class-level note) -
@@ -468,7 +477,7 @@ public class KognioRdfTermRepository implements TermRepository {
         Term currentProjection = current.toTerm(displayLocale);
         String prefLabel = newPrefLabel != null ? newPrefLabel : currentProjection.prefLabel();
         String definition = newDefinition != null ? newDefinition : currentProjection.definition();
-        ActorFacet actorFacet = resultingActorFacet(current.actorFacet, newActorFacet);
+        ActorFacet actorFacet = resultingActorFacet(current.actorFacet(), newActorFacet);
         return new Term(current.id, current.code, prefLabel, definition, actorFacet);
     }
 
@@ -538,6 +547,7 @@ public class KognioRdfTermRepository implements TermRepository {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
             assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
         });
         return bySubject.values().stream().findFirst();
     }
@@ -599,6 +609,7 @@ public class KognioRdfTermRepository implements TermRepository {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
             assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             String head = headOf(row);
             if (head != null) {
                 headBySubject.putIfAbsent(assembly.id.value().value(), head);
@@ -637,6 +648,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 TermAssembly assembly = assemblyFor(bySubject, row, null);
                 assembly.addPrefLabel(literalOf(row, "prefLabel"));
                 assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+                assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             });
             return bySubject.values().stream().map(assembly -> assembly.toTerm(displayLocale)).toList();
         }
@@ -652,13 +664,18 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@link TermAssembly#addPrefLabel}/{@link TermAssembly#addDefinition}, called by the two
      * callers ({@link #findByCode}/{@link #findAll}) once per row.
      *
-     * <p>{@code identifier}/{@code actorRole} stay single-valued reads - {@code identifier} is
-     * already narrowed by the {@code knownCode}/query filter to the code being looked up, and
-     * {@code actorRole} is out of scope here (no reported store-first multiplicity vector).
-     * Keeping {@code prefLabel} a <em>required</em> (non-optional) join means a store-first concept
-     * carrying no {@code prefLabel} at all still binds nothing and is omitted exactly as before -
-     * it never reaches the {@link Term} constructor, whose non-blank {@code prefLabel} invariant
-     * stays strict.</p>
+     * <p>{@code identifier} stays a single-valued read - it is already narrowed by the
+     * {@code knownCode}/query filter to the code being looked up. {@code actorRole} is
+     * <em>not</em> single-valued (see the class-level "Row multiplication on
+     * {@code arkproc:actorRole}" note): only the actor <em>kind</em> ({@code isHuman}/
+     * {@code isSystem}, single-valued in practice) is read once here, at construction; every row's
+     * {@code actorRole} candidate is instead collected separately via
+     * {@link TermAssembly#addActorRole}, called by the same three callers that call
+     * {@link TermAssembly#addPrefLabel}/{@link TermAssembly#addDefinition}. Keeping {@code prefLabel}
+     * a <em>required</em> (non-optional) join means a store-first concept carrying no
+     * {@code prefLabel} at all still binds nothing and is omitted exactly as before - it never
+     * reaches the {@link Term} constructor, whose non-blank {@code prefLabel} invariant stays
+     * strict.</p>
      *
      * @param knownCode the code when the caller already knows it ({@code findByCode}), else
      *                  {@code null} to read it from the row's {@code identifier} ({@code findAll})
@@ -668,29 +685,30 @@ public class KognioRdfTermRepository implements TermRepository {
         return bySubject.computeIfAbsent(subjectIri, iri -> new TermAssembly(
                 new TermId(ResourceId.of(iri)),
                 knownCode != null ? knownCode : new TermCode(literalOf(row, "identifier").getLexicalForm()),
-                actorFacetOf(row)));
+                actorKindOf(row)));
     }
 
     /**
-     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} and
-     * {@code skos:definition} candidates across rows, then choosing one of each when the concept
-     * is finally materialised into a {@link Term}: {@code prefLabel} via the {@link DisplayLocale}
-     * fallback chain, {@code definition} deterministically as the first-seen value
-     * (no display-language guarantee for this field), logging a {@code WARN} if more
-     * than one distinct definition was collected.
+     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel},
+     * {@code skos:definition} and {@code arkproc:actorRole} candidates across rows, then choosing
+     * one of each when the concept is finally materialised into a {@link Term}: {@code prefLabel}
+     * via the {@link DisplayLocale} fallback chain, {@code definition}/{@code actorRole}
+     * deterministically as the first-seen value (no display-language guarantee for either field),
+     * logging a {@code WARN} if more than one distinct value was collected.
      */
     private static final class TermAssembly {
 
         private final TermId id;
         private final TermCode code;
-        private final ActorFacet actorFacet;
+        private final ActorKind actorKind;
         private final List<LocalizedLiteral> prefLabels = new ArrayList<>();
         private final List<String> definitions = new ArrayList<>();
+        private final List<String> actorRoles = new ArrayList<>();
 
-        private TermAssembly(TermId id, TermCode code, ActorFacet actorFacet) {
+        private TermAssembly(TermId id, TermCode code, ActorKind actorKind) {
             this.id = id;
             this.code = code;
-            this.actorFacet = actorFacet;
+            this.actorKind = actorKind;
         }
 
         private void addPrefLabel(Literal literal) {
@@ -701,12 +719,31 @@ public class KognioRdfTermRepository implements TermRepository {
             definitions.add(definition);
         }
 
+        /** Collects one row's {@code arkproc:actorRole} candidate, or does nothing if the row bound none. */
+        private void addActorRole(String actorRole) {
+            if (actorRole != null) {
+                actorRoles.add(actorRole);
+            }
+        }
+
         private Term toTerm(DisplayLocale displayLocale) {
             String prefLabel = displayLocale.select(prefLabels)
                     .map(LocalizedLiteral::value)
                     .orElseThrow(() -> new IllegalStateException(
                             "prefLabel is a required join, so at least one candidate must exist"));
-            return new Term(id, code, prefLabel, firstDistinctDefinition(), actorFacet);
+            return new Term(id, code, prefLabel, firstDistinctDefinition(), actorFacet());
+        }
+
+        /**
+         * Rebuilds the {@link ActorFacet} from {@link #actorKind} (single-valued, read once at
+         * construction) and {@link #firstDistinctActorRole()} - {@code null} if the subject
+         * carries neither {@code arkproc:HumanActor} nor {@code arkproc:SystemActor}.
+         */
+        private ActorFacet actorFacet() {
+            if (actorKind == null) {
+                return null;
+            }
+            return new ActorFacet(actorKind, firstDistinctActorRole());
         }
 
         /**
@@ -722,6 +759,25 @@ public class KognioRdfTermRepository implements TermRepository {
                         id.value().value(), distinctCount);
             }
             return definitions.get(0);
+        }
+
+        /**
+         * Returns the first-seen {@code arkproc:actorRole} candidate, or {@code null} if the
+         * subject carried none at all (the join is {@code OPTIONAL} - unlike {@code definition} an
+         * empty candidate list is legal), logging a single {@code WARN} when more than one
+         * distinct value was collected - the same row-multiplication policy as
+         * {@link #firstDistinctDefinition()}.
+         */
+        private String firstDistinctActorRole() {
+            if (actorRoles.isEmpty()) {
+                return null;
+            }
+            long distinctCount = actorRoles.stream().distinct().count();
+            if (distinctCount > 1) {
+                LOG.warn("Term {}: field 'actorRole' had {} distinct values, returning the first",
+                        id.value().value(), distinctCount);
+            }
+            return actorRoles.get(0);
         }
     }
 
@@ -794,15 +850,17 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Reconstructs the {@link ActorFacet} of a term row, or {@code null} if the
-     * subject carries no {@code arkproc:HumanActor}/{@code arkproc:SystemActor} type.
+     * Reconstructs the {@link ActorKind} of a term row, or {@code null} if the subject carries no
+     * {@code arkproc:HumanActor}/{@code arkproc:SystemActor} type. The role itself is deliberately
+     * not read here - see {@link TermAssembly#addActorRole} for why it is collected per row
+     * instead of once at construction.
      */
-    private static ActorFacet actorFacetOf(BindingSet row) {
+    private static ActorKind actorKindOf(BindingSet row) {
         if (row.hasBinding("isHuman")) {
-            return new ActorFacet(ActorKind.HUMAN, optionalLiteralOf(row, "actorRole"));
+            return ActorKind.HUMAN;
         }
         if (row.hasBinding("isSystem")) {
-            return new ActorFacet(ActorKind.SYSTEM, optionalLiteralOf(row, "actorRole"));
+            return ActorKind.SYSTEM;
         }
         return null;
     }
