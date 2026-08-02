@@ -14,6 +14,7 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementConcurrentlyModifiedException;
 import de.hauschel.arknet.req.domain.RequirementNotFoundException;
+import de.hauschel.arknet.req.domain.RequirementReadConflictException;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
@@ -88,6 +89,13 @@ public interface RequirementRepository {
     /**
      * Finds a requirement by its human-readable business code within a project.
      *
+     * <p><strong>One consistent snapshot.</strong> Unlike {@link #findCurrentByCode}, this
+     * method pairs no concurrency token with its result that a caller compares before acting on
+     * it - the returned {@link Requirement} is the caller's whole view of the store's state, so
+     * every field on it, including {@code usesTerms} and {@code acceptanceCriteria}, is
+     * guaranteed to come from one consistent snapshot of the store, never a combination of field
+     * values that never coexisted at any single point in time.
+     *
      * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
      * @return the requirement if present, otherwise {@link Optional#empty()}
@@ -96,6 +104,10 @@ public interface RequirementRepository {
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
      *                                                 implements (only reachable via a store-first,
      *                                                 ADR-005 edit)
+     * @throws RequirementReadConflictException if a bounded, adapter-internal retry loop keeps
+     *                                            losing the {@code SERIALIZABLE} race against
+     *                                            concurrent writers of this project's requirements
+     *                                            (a pathological, sustained contention case)
      */
     Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code);
 
@@ -155,6 +167,13 @@ public interface RequirementRepository {
     /**
      * Returns all requirements stored in a project.
      *
+     * <p><strong>One consistent snapshot for the whole list.</strong> Same guarantee as
+     * {@link #findByCode} - see that method's javadoc - but for every requirement in the project
+     * at once: the whole result comes from one consistent snapshot of the store, so no returned
+     * {@link Requirement} can combine field values that never coexisted at any single point in
+     * time, and a funnel write landing while this call is in flight cannot tear one requirement
+     * against another either.
+     *
      * @param projectId the project (architecture model) to list requirements from
      * @return all requirements, never {@code null}
      * @throws UnsupportedRequirementStatusException if any requirement's stored status is
@@ -164,6 +183,10 @@ public interface RequirementRepository {
      *                                                 ADR-005 edit) - one such requirement aborts
      *                                                 the whole listing rather than being silently
      *                                                 dropped
+     * @throws RequirementReadConflictException if a bounded, adapter-internal retry loop keeps
+     *                                            losing the {@code SERIALIZABLE} race against
+     *                                            concurrent writers of this project's requirements
+     *                                            (a pathological, sustained contention case)
      */
     List<Requirement> findAll(ProjectId projectId);
 
