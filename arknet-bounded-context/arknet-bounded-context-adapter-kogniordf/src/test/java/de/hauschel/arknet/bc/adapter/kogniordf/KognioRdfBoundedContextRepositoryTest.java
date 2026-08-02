@@ -18,6 +18,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.core.read.ListAppender;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
@@ -458,6 +463,137 @@ class KognioRdfBoundedContextRepositoryTest {
             assertFalse(handle.sparqlQuery().ask(ask),
                     "the superseded subdomain node must not survive the update as orphaned garbage");
         }
+    }
+
+    // ---- row multiplication (issue #158): ownedBy/subdomain carry no enforceable sh:maxCount ----
+
+    /**
+     * {@code arkddd:ownedBy} carries no {@code sh:maxCount} at all (only {@code sh:Warning}), so a
+     * store-first (ADR-005) bounded context can legally carry two of them for the same subject.
+     * {@link KognioRdfBoundedContextRepository#findByCode} used to run a single query joining
+     * {@code subdomain} and {@code ownedBy} as two independent {@code OPTIONAL}s and take whatever
+     * row {@code .findFirst()} happened to return - an unlogged, non-deterministic pick. This pins
+     * the fix: every row is now consumed and reduced the same way {@code findAll} already did,
+     * logging a {@code WARN} naming the field when more than one distinct value was collapsed.
+     */
+    @Test
+    void findByCodeGroupsARowMultipliedOwnedByAndLogsAWarning() {
+        BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), null, "team-a", List.of());
+        repository.create(PROJECT_A, bc);
+        insertTriple(bc.id().value().value(), "https://w3id.org/arknet/ddd#ownedBy", "\"team-b\"");
+
+        ListAppender<ILoggingEvent> logs = attachLogAppender();
+        try {
+            BoundedContext found = repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+
+            assertTrue(List.of("team-a", "team-b").contains(found.ownedBy()),
+                    "must return one of the two legally co-existing values, not throw or return null");
+            assertTrue(logs.list.stream().anyMatch(event -> event.getLevel() == Level.WARN
+                            && event.getFormattedMessage().contains("ownedBy")
+                            && event.getFormattedMessage().contains("2 distinct values")),
+                    "the collapsed second ownedBy value must be logged, exactly as findAll already does");
+        } finally {
+            detachLogAppender(logs);
+        }
+    }
+
+    /**
+     * Same defect, the other affected predicate: {@code arkddd:partOf}'s {@code sh:maxCount 1} is
+     * {@code sh:Warning}-severity only, so a store-first bounded context can carry two subdomain
+     * classifications. Exercised through {@code findCurrentByCode} (the path {@code bc_link_term}'s
+     * read-modify-write actually uses, see {@link #compareAndUpdateWritesBackTheOwnedByValueThatWasActuallyRead}).
+     */
+    @Test
+    void findCurrentByCodeGroupsARowMultipliedSubdomainAndLogsAWarning() {
+        BoundedContext bc = boundedContext(new BoundedContextCode("BC-1"), Subdomain.CORE_DOMAIN, null, List.of());
+        repository.create(PROJECT_A, bc);
+        String secondSubdomainNode = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        insertTriple(secondSubdomainNode, "https://w3id.org/1999/02/22-rdf-syntax-ns#type",
+                "<https://w3id.org/arknet/ddd#Subdomain>");
+        insertTriple(secondSubdomainNode, "https://w3id.org/arknet/ddd#subdomainType",
+                "<https://w3id.org/arknet/ddd#SupportingDomain>");
+        insertTriple(bc.id().value().value(), "https://w3id.org/arknet/ddd#partOf", "<" + secondSubdomainNode + ">");
+
+        ListAppender<ILoggingEvent> logs = attachLogAppender();
+        try {
+            BoundedContextRepository.CurrentBoundedContext found =
+                    repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+
+            assertTrue(List.of(Subdomain.CORE_DOMAIN, Subdomain.SUPPORTING_DOMAIN)
+                            .contains(found.value().subdomain()),
+                    "must return one of the two legally co-existing values, not throw or return null");
+            assertTrue(logs.list.stream().anyMatch(event -> event.getLevel() == Level.WARN
+                            && event.getFormattedMessage().contains("subdomain")
+                            && event.getFormattedMessage().contains("2 distinct values")),
+                    "the collapsed second subdomain value must be logged, exactly as findAll already does");
+        } finally {
+            detachLogAppender(logs);
+        }
+    }
+
+    /**
+     * The write-side consequence the issue is actually about: {@code bc_link_term}'s
+     * read-modify-write reads via {@code findCurrentByCode}, then {@code compareAndUpdate} replaces
+     * every triple of the subject with a graph built from exactly that read state (see
+     * {@code replaceExistingTriples}). Whichever {@code ownedBy} value the read happened to surface
+     * must be the one written back - not a different row re-picked at write time - since the domain
+     * object cannot carry both values.
+     */
+    @Test
+    void compareAndUpdateWritesBackTheOwnedByValueThatWasActuallyRead() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, "team-a", List.of());
+        repository.create(PROJECT_A, original);
+        insertTriple(id.value().value(), "https://w3id.org/arknet/ddd#ownedBy", "\"team-b\"");
+
+        BoundedContextRepository.CurrentBoundedContext current =
+                repository.findCurrentByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow();
+        String observedOwnedBy = current.value().ownedBy();
+
+        BoundedContext renamed = new BoundedContext(id, new BoundedContextCode("BC-1"), "Renamed",
+                current.value().domainVision(), current.value().subdomain(), observedOwnedBy,
+                current.value().usesTerms());
+        repository.compareAndUpdate(PROJECT_A, current.head(), renamed);
+
+        assertEquals(observedOwnedBy,
+                repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).orElseThrow().ownedBy(),
+                "the value actually read must be the one surviving the write, not a different row picked "
+                        + "independently at write time");
+    }
+
+    /** Inserts one raw triple directly into the bounded-context named graph, bypassing the domain. */
+    private void insertTriple(String subjectIri, String predicateIri, String objectTerm) {
+        String insert = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { <" + subjectIri + "> <"
+                + predicateIri + "> " + objectTerm + " } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Attaches a fresh {@link ListAppender} to {@code KognioRdfBoundedContextRepository}'s logger so
+     * a test can assert a specific {@code WARN} was actually logged, not merely that the picked
+     * value happens to be valid - the module carries no SLF4J binding otherwise, so without this the
+     * production {@code LOG.warn} calls are silent NOP-logger no-ops even when reached.
+     */
+    private static ListAppender<ILoggingEvent> attachLogAppender() {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(KognioRdfBoundedContextRepository.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachLogAppender(ListAppender<ILoggingEvent> appender) {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(KognioRdfBoundedContextRepository.class);
+        logger.detachAppender(appender);
+        appender.stop();
     }
 
     // ---- revision trail (ADR-014): one revision per write, head queryable ----------------

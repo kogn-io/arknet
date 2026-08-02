@@ -89,5 +89,16 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Test-only: no SLF4J binding is otherwise on this module's classpath (WARN calls are
+             silent NOP-logger no-ops without it), so the row-multiplication regression test (#158)
+             needs a real backend to attach a ListAppender to and assert the WARN was actually
+             logged, not merely that the picked value happens to be valid. Version matches
+             arknet-mcp's (the only other module pulling logback-classic in). -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.38</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
