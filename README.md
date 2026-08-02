@@ -9,6 +9,7 @@ validate and write to.
 ## Contents
 
 - [Why](#why)
+- [Getting started](#getting-started)
 - [Repository](#repository)
 - [MCP Server](#mcp-server)
   - [Prerequisite: start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
@@ -56,6 +57,23 @@ rendered by `store_overview`'s self-contained HTML report, not hand-written:
   <img src="docs/img/use-case-card.png" alt="Rendered use case card: numbered flow, realizes-links to FRs, raw triples on demand">
 </picture>
 
+## Getting started
+
+This repository builds and ships only the MCP server -- it has no UI or CLI of
+its own. To actually use it:
+
+1. Install the [`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin)
+   Claude Code plugin -- it ships the skills (`/arknet:req-interview`,
+   `/arknet:adr`, `/arknet:bc-audit`, ...) that are the real entry point for
+   working with a model day to day, on top of the raw MCP tools this repo
+   provides.
+2. [Start the MCP server daemon](#prerequisite-start-the-mcp-server-daemon)
+   once and [register your project](#register-your-project).
+3. Follow the plugin's own
+   ["Getting started" walkthrough](https://github.com/kogn-io/arknet-plugin#getting-started)
+   for the actual workflow -- running `/arknet:req-interview`, then reading
+   the result back with `store_overview`.
+
 ## Repository
 
 Code and pull requests live on GitHub
@@ -68,12 +86,8 @@ questions go to
 ## MCP Server
 
 The arknet MCP server exposes the model as tools over the Model Context
-Protocol. To use it from Claude Code together with the maintained skills
-(`/arknet:adr`, `/arknet:req-interview`), install the
-[`kogn-io/arknet-plugin`](https://github.com/kogn-io/arknet-plugin) plugin --
-this repository builds and ships only the server itself. Its
-[README](https://github.com/kogn-io/arknet-plugin#getting-started) has a
-"Getting started" walkthrough for actually using the skills once installed.
+Protocol. See [Getting started](#getting-started) above for how to actually
+put it to use.
 
 ### Prerequisite: start the MCP server daemon
 
