@@ -35,6 +35,18 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  * it never imports RDF4J or any other backend-specific type. The backend
  * ({@link DatasetLifecycle} implementation) is supplied by the composition root, the same shared
  * lifecycle {@code KognioRdfUseCaseRepository} acquires datasets from.</p>
+ *
+ * <p><strong>Language-tag-blind match.</strong> {@code ulshapes:Term-prefLabel} carries no
+ * {@code sh:maxCount}, so a store-first (ADR-005) actor concept can legally carry
+ * {@code skos:prefLabel} only as a language-tagged literal (e.g. {@code "Kundin"@de}, no untagged
+ * form at all) - {@code KognioRdfTermRepository} documents and handles the identical multiplicity
+ * for its own display path via {@link de.hauschel.arknet.kernel.DisplayLocale}. This lookup is not
+ * a display selection, though: {@code actorName} is what a human typed at the MCP boundary
+ * ({@code uc_add}), which never carries a language tag of its own. The query therefore matches on
+ * the lexical form ({@code STR(?prefLabel)}) rather than the full RDF term, so the language tag (if
+ * any) never blocks the match - {@code distinct()} on the bound {@code ?actor} still collapses an
+ * actor whose several language-tagged labels happen to share the same lexical form into one
+ * match.</p>
  */
 public final class KognioRdfActorLookup implements ActorLookup {
 
@@ -65,7 +77,8 @@ public final class KognioRdfActorLookup implements ActorLookup {
         Objects.requireNonNull(actorName, "actorName");
 
         String query = "SELECT ?actor WHERE { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?actor <" + PREF_LABEL_PROPERTY + "> \"" + SparqlTerms.escape(actorName) + "\" . "
+                + "?actor <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
+                + "FILTER(STR(?prefLabel) = \"" + SparqlTerms.escape(actorName) + "\") "
                 + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {

@@ -126,6 +126,22 @@ class KognioRdfActorLookupTest {
                 () -> actorLookup.resolveByName(PROJECT_A, "Customer"));
     }
 
+    /**
+     * A store-first (ADR-005) actor concept can legally carry {@code skos:prefLabel} only as a
+     * language-tagged literal (e.g. {@code "Kundin"@de}, no untagged form at all) - the
+     * {@code uc_add} caller types the name without a language tag regardless. Regression for
+     * issue #156: an exact RDF-term match rejected this as unresolved even though the actor
+     * exists and its label is otherwise a lexical match.
+     */
+    @Test
+    void resolvesAKnownActorWhoseOnlyPrefLabelIsLanguageTagged() {
+        String actorIri = givenHumanActorWithLanguageTaggedLabel(PROJECT_A, "customer", "Kundin", "de");
+
+        ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Kundin");
+
+        assertEquals(ResourceId.of(actorIri), resolved);
+    }
+
     private String givenHumanActor(ProjectId projectId, String slug, String prefLabel) {
         String actorIri = "https://w3id.org/arknet/model/term/" + slug;
         String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
@@ -142,6 +158,17 @@ class KognioRdfActorLookupTest {
                 + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
                 + "<https://w3id.org/arknet/process#SystemActor> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+        write(projectId, insert);
+        return actorIri;
+    }
+
+    private String givenHumanActorWithLanguageTaggedLabel(ProjectId projectId, String slug, String prefLabel,
+            String languageTag) {
+        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
+                + "<https://w3id.org/arknet/process#HumanActor> ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\"@" + languageTag + " } }";
         write(projectId, insert);
         return actorIri;
     }
