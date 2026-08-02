@@ -23,6 +23,7 @@ import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
@@ -298,6 +299,57 @@ class ProjectServiceTest {
         assertEquals(0, registry.writeCount(), "an exhausted retry must not have written anything");
     }
 
+    /**
+     * Issue #174: {@link ProjectService#adopt} must retry an unattributed registration conflict
+     * the same way {@link ProjectService#register} does (see
+     * {@link #anUnattributedRegistrationConflictOnTheFirstAttemptIsRetriedTransparently} for the
+     * register-path counterpart) - two concurrent adopters of the same dataset can genuinely
+     * overlap under a real store, and the loser's first attempt may surface this residual signal
+     * before either uniqueness guard runs.
+     */
+    @Test
+    void anUnattributedRegistrationConflictOnTheFirstAdoptAttemptIsRetriedTransparently() {
+        ProjectId existing = new ProjectId("arknet");
+        datasets.with(existing);
+        ProjectService retryingService =
+                new ProjectService(new ConflictsOnRegisterRegistry(registry, 1), selfDescription, datasets);
+
+        Project adopted = retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet"));
+
+        assertEquals(existing, adopted.id());
+        assertEquals(1, registry.writeCount(), "the retry must apply the same candidate exactly once");
+    }
+
+    /** The adopt-path counterpart of {@link #anUnattributedRegistrationConflictThatNeverClearsIsRethrownAfterTheRetryBudgetIsSpent}. */
+    @Test
+    void anUnattributedRegistrationConflictThatNeverClearsOnAdoptIsRethrownAfterTheRetryBudgetIsSpent() {
+        ProjectId existing = new ProjectId("arknet");
+        datasets.with(existing);
+        ProjectService retryingService = new ProjectService(
+                new ConflictsOnRegisterRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+
+        assertThrows(UnattributedRegistrationConflictException.class,
+                () -> retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet")));
+        assertEquals(0, registry.writeCount(), "an exhausted retry must not have written anything");
+    }
+
+    /**
+     * Unlike {@code register}'s freshly minted identity, an adopt candidate's {@code datasetId}
+     * is caller-chosen and can genuinely already be claimed by a concurrent adopter of the same
+     * dataset by the time a retried write observes it - the retry above must not swallow that
+     * real, well-attributed collision as if it were the residual, unattributed case.
+     */
+    @Test
+    void aGenuineIdentityCollisionOnAdoptIsNotRetriedAndPropagatesTheAttributedException() {
+        ProjectId existing = new ProjectId("arknet");
+        datasets.with(existing);
+        ProjectService retryingService = new ProjectService(
+                new ClaimedByAConcurrentAdopterRegistry(registry), selfDescription, datasets);
+
+        assertThrows(ResourceAlreadyExistsException.class,
+                () -> retryingService.adopt(existing, "arknet", pathAnchor("/home/fred/DEV/arknet")));
+    }
+
     private static Anchor pathAnchor(String value) {
         return new Anchor(value, AnchorType.PATH);
     }
@@ -377,6 +429,52 @@ class ProjectServiceTest {
                 throw new UnattributedRegistrationConflictException(new RuntimeException("lost the commit"));
             }
             delegate.register(project);
+        }
+
+        @Override
+        public Optional<Project> findByAnchor(Anchor anchor) {
+            return delegate.findByAnchor(anchor);
+        }
+
+        @Override
+        public Optional<Project> findById(ProjectId id) {
+            return delegate.findById(id);
+        }
+
+        @Override
+        public List<Project> findAll() {
+            return delegate.findAll();
+        }
+
+        @Override
+        public Optional<CurrentProject> findCurrentById(ProjectId id) {
+            return delegate.findCurrentById(id);
+        }
+
+        @Override
+        public void compareAndUpdate(RevisionToken expectedHead, Project project) {
+            delegate.compareAndUpdate(expectedHead, project);
+        }
+    }
+
+    /**
+     * Decorator that reports {@link ResourceAlreadyExistsException} on every {@link #register}
+     * call, as the funnel's own synchronous identity guard would once a concurrent adopter of the
+     * same dataset has already committed - unlike {@link ConflictsOnRegisterRegistry}, this is a
+     * genuine, well-attributed collision that {@link ProjectService#registerRetryingOnUnattributedConflict}
+     * must not catch and retry past.
+     */
+    private static final class ClaimedByAConcurrentAdopterRegistry implements ProjectRegistry {
+
+        private final ProjectRegistry delegate;
+
+        ClaimedByAConcurrentAdopterRegistry(ProjectRegistry delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void register(Project project) {
+            throw new ResourceAlreadyExistsException(project.id());
         }
 
         @Override

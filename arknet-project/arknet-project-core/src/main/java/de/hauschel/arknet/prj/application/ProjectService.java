@@ -32,6 +32,7 @@ import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
+import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
@@ -71,12 +72,19 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * {@link #updateWithOptimisticRetry}, the same pattern {@code RequirementService} established.
  * Neither race is visible to a well-formed caller; only sustained, pathological
  * contention on the very same project surfaces as {@link StaleProjectException}. {@link #register}
- * is a create, not a read-modify-write, so it needs no fresh read to retry: a real store commit
- * conflict neither uniqueness guard can explain ({@link UnattributedRegistrationConflictException})
- * is retried against the very same, already-minted candidate via
- * {@link #registerRetryingOnUnattributedConflict} - see that exception's javadoc for why repeating
- * the identical write is honest here. Only sustained, pathological contention surfaces that
- * exception to the caller.</p>
+ * and {@link #adopt} are both creates, not a read-modify-write, so neither needs a fresh read to
+ * retry: a real store commit conflict neither uniqueness guard can explain
+ * ({@link UnattributedRegistrationConflictException}) is retried against the very same,
+ * already-built candidate via {@link #registerRetryingOnUnattributedConflict} - see that
+ * exception's javadoc for why repeating the identical write is honest here. Unlike
+ * {@link #register}'s freshly minted identity, {@link #adopt}'s {@code datasetId} is caller-chosen
+ * and can genuinely already be claimed by a concurrent adopter of the very same dataset; a retry
+ * does not paper over that, it only converts an ambiguous, unattributed conflict into a
+ * definitive answer - either the retry succeeds because nothing really collided, or the registry's
+ * own synchronous identity guard now sees the winner's committed write and rejects the retry with a
+ * well-attributed {@link ResourceAlreadyExistsException} instead of leaving the caller with a raw
+ * commit-conflict signal it cannot act on (issue #174). Only sustained, pathological contention
+ * surfaces {@link UnattributedRegistrationConflictException} itself to the caller.</p>
  *
  * <p><strong>Registry write and self-description commit as one unit per project.</strong> A
  * {@link ProjectRegistry} write (a fresh registration, an attached anchor, a rename) and the
@@ -165,6 +173,16 @@ public class ProjectService
      * one is adoptable, because the alternative is worse - a project whose data was legitimately
      * deleted, or a dataset created moments ago by a failed call, would otherwise be unreachable
      * with no way to say so.</p>
+     *
+     * <p><strong>The three guards above run outside any transaction and cannot themselves close
+     * the TOCTOU window between two concurrent adopters of the same dataset (issue #174).</strong>
+     * Both can pass their {@code findById} check before either has committed; the registry write
+     * that follows goes through {@link #registerRetryingOnUnattributedConflict} for exactly that
+     * reason - see its javadoc for why a retry is still correct here even though this method,
+     * unlike {@link #register}, hands it a caller-chosen rather than freshly minted identity.</p>
+     *
+     * @throws de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException if a concurrent adopter
+     *                                        won the race for the very same {@code datasetId}
      */
     @Override
     public Project adopt(ProjectId datasetId, String label, Anchor anchor) {
@@ -184,7 +202,7 @@ public class ProjectService
         }
         Project project = new Project(datasetId, label, List.of(anchor));
         return withProjectLock(datasetId, () -> {
-            registry.register(project);
+            registerRetryingOnUnattributedConflict(project);
             selfDescription.describe(project);
             return project;
         });
@@ -245,14 +263,26 @@ public class ProjectService
     }
 
     /**
-     * Retries a fresh registration that lost a real store commit conflict neither uniqueness
-     * guard could explain (see {@link UnattributedRegistrationConflictException}'s javadoc for
-     * why this is safe without a fresh read: {@code project} carries a freshly minted,
-     * never-reused identity, and the first attempt was fully rolled back, so repeating the same
-     * write is the same write, not a new one, and runs through both uniqueness guards again -
-     * {@link AnchorAlreadyRegisteredException}/{@link DuplicateProjectLabelException} from a
-     * later attempt are not caught here and propagate immediately, since a real, now-visible
-     * collision must not be retried past).
+     * Retries a {@link ProjectRegistry#register} that lost a real store commit conflict neither
+     * uniqueness guard could explain (see {@link UnattributedRegistrationConflictException}'s
+     * javadoc), shared by {@link #register} and {@link #adopt} (issue #174) - the first attempt
+     * was fully rolled back, so repeating the same write is the same write, not a new one, and
+     * runs through every guard again: {@link AnchorAlreadyRegisteredException}/
+     * {@link DuplicateProjectLabelException}/{@link ResourceAlreadyExistsException} from a later
+     * attempt are not caught here and propagate immediately, since a real, now-visible collision
+     * must not be retried past.
+     *
+     * <p>The two callers reach that guarantee for different reasons. For {@link #register},
+     * {@code project} carries a freshly minted, never-reused identity, so an identity collision
+     * can never be genuine and any conflict must be a spurious commit-time artifact safe to
+     * retry to success. For {@link #adopt}, {@code project}'s identity is the caller-chosen,
+     * pre-existing {@code datasetId}, which a concurrent adopter of the very same dataset
+     * genuinely can be racing for - a retry there is still correct, just for a different reason:
+     * it does not manufacture success where none is possible, it only re-runs the synchronous
+     * guards against the now-committed state, turning an ambiguous, unattributed conflict into
+     * either a real success (nothing actually collided) or the well-attributed
+     * {@link ResourceAlreadyExistsException} the loser of a genuine identity race must see instead
+     * of a raw, unactionable signal.</p>
      *
      * @throws UnattributedRegistrationConflictException if the write keeps losing an
      *                                         unattributable conflict across every retry attempt

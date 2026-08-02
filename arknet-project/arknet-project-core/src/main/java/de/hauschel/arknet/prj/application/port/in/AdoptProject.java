@@ -9,6 +9,8 @@ import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.DatasetAlreadyAdoptedException;
 import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
+import de.hauschel.arknet.prj.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
 /**
@@ -48,6 +50,15 @@ public interface AdoptProject {
      * @throws DatasetAlreadyAdoptedException   if a project is already registered for it
      * @throws AnchorAlreadyRegisteredException if {@code anchor} already belongs to a project
      * @throws DuplicateProjectLabelException   if {@code label} is already taken
+     * @throws ResourceAlreadyExistsException   if a concurrent {@link #adopt} call won the race
+     *                                        for the very same {@code datasetId} - unlike
+     *                                        {@link RegisterProject#register}'s freshly minted
+     *                                        identity, {@code datasetId} is caller-chosen and can
+     *                                        genuinely already be claimed by the time a retried
+     *                                        write observes it (issue #174)
+     * @throws UnattributedRegistrationConflictException if the write keeps losing a real store
+     *                                        commit conflict that none of the guards above can
+     *                                        explain, across every retry attempt
      */
     Project adopt(ProjectId datasetId, String label, Anchor anchor);
 }
