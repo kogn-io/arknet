@@ -4,6 +4,7 @@
 package de.hauschel.arknet.bc.adapter.mcp;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -17,10 +18,13 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.GetBoundedContext;
+import de.hauschel.arknet.bc.application.port.in.LinkContext;
 import de.hauschel.arknet.bc.application.port.in.LinkTerm;
 import de.hauschel.arknet.bc.application.port.in.ListBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -31,8 +35,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the bounded-context component: exposes the bounded-context use-cases as
- * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_link_term}) and delegates
- * each tool call to the corresponding in-port.
+ * MCP tools ({@code bc_add}, {@code bc_list}, {@code bc_get}, {@code bc_link_term},
+ * {@code bc_link_context}) and delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the bounded-context hexagon (symmetric to the out-adapter
  * {@code arknet-bounded-context-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -77,17 +81,19 @@ public final class BoundedContextMcpTools {
     private final ListBoundedContexts listBoundedContexts;
     private final GetBoundedContext getBoundedContext;
     private final LinkTerm linkTerm;
+    private final LinkContext linkContext;
     private final ResolveTerms resolveTerms;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its four driving in-ports, the borrowed ubiquitous-language display
+     * Creates the adapter with its five driving in-ports, the borrowed ubiquitous-language display
      * port and the resolver that maps each call's origin directory to a project.
      *
      * @param addBoundedContext   in-port backing {@code bc_add}
      * @param listBoundedContexts in-port backing {@code bc_list}
      * @param getBoundedContext   in-port backing {@code bc_get}
      * @param linkTerm            in-port backing {@code bc_link_term}
+     * @param linkContext         in-port backing {@code bc_link_context}
      * @param resolveTerms        ubiquitous-language driving port used only to render a linked
      *                            term's business code instead of its bare IRI
      * @param projects          resolves each call's target project from its origin directory
@@ -97,12 +103,14 @@ public final class BoundedContextMcpTools {
             final ListBoundedContexts listBoundedContexts,
             final GetBoundedContext getBoundedContext,
             final LinkTerm linkTerm,
+            final LinkContext linkContext,
             final ResolveTerms resolveTerms,
             final ProjectResolver projects) {
         this.addBoundedContext = Objects.requireNonNull(addBoundedContext, "addBoundedContext");
         this.listBoundedContexts = Objects.requireNonNull(listBoundedContexts, "listBoundedContexts");
         this.getBoundedContext = Objects.requireNonNull(getBoundedContext, "getBoundedContext");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.linkContext = Objects.requireNonNull(linkContext, "linkContext");
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
     }
@@ -227,6 +235,62 @@ public final class BoundedContextMcpTools {
         final BoundedContext updated =
                 linkTerm.linkTerm(projectId, new BoundedContextCode(bcId), termId);
         return format(projectId, updated);
+    }
+
+    @McpTool(name = "bc_link_context",
+            description = "Record a directed DDD context-mapping relationship between two existing "
+                    + "bounded contexts (both must already exist - create them with bc_add first). "
+                    + "Valid relationship types: PARTNERSHIP, SHARED_KERNEL, CUSTOMER_SUPPLIER, "
+                    + "CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, PUBLISHED_LANGUAGE, "
+                    + "SEPARATE_WAYS. Pure CRUD: this tool never judges or suggests which relationship "
+                    + "type applies - that call is yours. Not idempotent: every call creates a new "
+                    + "relationship, even a duplicate of one already recorded.")
+    public String linkContext(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Upstream bounded-context identity, e.g. BC-1 (the context "
+                    + "whose model/protocol prevails)")
+            final String upstreamBcId,
+            @McpToolParam(description = "Downstream bounded-context identity, e.g. BC-2 (the context "
+                    + "that consumes the upstream model/protocol); must differ from upstreamBcId")
+            final String downstreamBcId,
+            @McpToolParam(description = "Relationship type: PARTNERSHIP, SHARED_KERNEL, "
+                    + "CUSTOMER_SUPPLIER, CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, "
+                    + "PUBLISHED_LANGUAGE or SEPARATE_WAYS")
+            final String relationshipType,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final RelationshipType type = parseRelationshipType(relationshipType);
+        final ContextRelationship created = linkContext.linkContext(
+                projectId, new BoundedContextCode(upstreamBcId), new BoundedContextCode(downstreamBcId), type);
+        return "%s -[%s]-> %s".formatted(upstreamBcId, created.relationshipType(), downstreamBcId);
+    }
+
+    /**
+     * Parses {@code value} against {@link RelationshipType}, rejecting anything else - including
+     * an unparseable or blank value - with this tool's own didactic message rather than the JDK's
+     * raw {@code No enum constant ...}, mirroring {@code adr_set_status}'s {@code AdrStatus}
+     * parsing idiom.
+     */
+    private static RelationshipType parseRelationshipType(final String value) {
+        RelationshipType parsed;
+        try {
+            parsed = RelationshipType.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (NullPointerException | IllegalArgumentException e) {
+            parsed = null;
+        }
+        if (parsed == null) {
+            throw new IllegalArgumentException(
+                    "bc_link_context only supports PARTNERSHIP, SHARED_KERNEL, CUSTOMER_SUPPLIER, "
+                            + "CONFORMIST, ANTICORRUPTION_LAYER, OPEN_HOST_SERVICE, PUBLISHED_LANGUAGE or "
+                            + "SEPARATE_WAYS as a relationship type, not " + value);
+        }
+        return parsed;
     }
 
     /** Renders a single bounded context, resolving its own linked terms in one batch call. */

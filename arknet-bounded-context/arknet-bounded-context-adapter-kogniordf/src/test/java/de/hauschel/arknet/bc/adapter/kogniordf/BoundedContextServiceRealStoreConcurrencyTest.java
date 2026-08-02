@@ -51,6 +51,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.bc.application.BoundedContextService;
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.application.port.out.TermLookup;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -395,7 +396,14 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         };
         return new BoundedContextService(
                 KognioRdfBoundedContextRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT),
-                new UuidResourceIdFactory(), termLookup);
+                new UuidResourceIdFactory(), termLookup, unusedContextRelationshipRepository());
+    }
+
+    /** Neither concurrency race this class exercises reaches {@code bc_link_context}. */
+    private static ContextRelationshipRepository unusedContextRelationshipRepository() {
+        return (projectId, relationship) -> {
+            throw new UnsupportedOperationException("not exercised by this test");
+        };
     }
 
     // ---- synchronisation helpers ---------------------------------------------------------
@@ -438,7 +446,8 @@ class BoundedContextServiceRealStoreConcurrencyTest {
         TermLookup unusedTermLookup = (projectId, termCode) -> {
             throw new UnsupportedOperationException("not exercised by this test");
         };
-        return new BoundedContextService(repository, new UuidResourceIdFactory(), unusedTermLookup);
+        return new BoundedContextService(
+                repository, new UuidResourceIdFactory(), unusedTermLookup, unusedContextRelationshipRepository());
     }
 
     /**

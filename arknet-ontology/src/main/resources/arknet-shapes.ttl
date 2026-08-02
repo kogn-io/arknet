@@ -1,12 +1,13 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  SHACL Validation Shapes  ·  Version 0.2.0
+#  SHACL Validation Shapes  ·  Version 0.3.0
 #
 #  Prinzip: Closed-World-Assumption.
 #  Fehlende Pflichtfelder = Fehler in CI/CD, nicht "vielleicht woanders".
 #
-#  Validates arkddd:BoundedContext only. Aggregate and ContextRelationship
-#  shapes live in parked/arknet-ddd-shapes.ttl (no active consumer yet).
+#  Validates arkddd:BoundedContext and arkddd:ContextRelationship. The
+#  Aggregate shape lives in parked/arknet-ddd-shapes.ttl (no active
+#  consumer yet).
 #
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
 ##############################################################################
@@ -72,5 +73,42 @@ shapes:BoundedContext-ownedBy
     sh:path     arkddd:ownedBy ;
     sh:message  "A BoundedContext should have 'arkddd:ownedBy' (team name)."@en , "BoundedContext sollte 'arkddd:ownedBy' (Team-Name) haben."@de ;
     sh:severity sh:Warning .
+
+
+##############################################################################
+#  CONTEXT RELATIONSHIP SHAPES
+##############################################################################
+
+shapes:ContextRelationshipShape
+    a sh:NodeShape ;
+    sh:targetClass arkddd:ContextRelationship ;
+    sh:property shapes:ContextRelationship-upstream ;
+    sh:property shapes:ContextRelationship-downstream ;
+    sh:property shapes:ContextRelationship-relationshipType .
+
+shapes:ContextRelationship-upstream
+    a sh:PropertyShape ;
+    sh:path     arkddd:upstream ;
+    sh:minCount 1 ; sh:maxCount 1 ; sh:class arkddd:BoundedContext ;
+    sh:message  "ContextRelationship must have exactly one 'arkddd:upstream' BoundedContext."@en , "ContextRelationship muss genau einen 'arkddd:upstream' BoundedContext haben."@de ;
+    sh:severity sh:Violation .
+
+shapes:ContextRelationship-downstream
+    a sh:PropertyShape ;
+    sh:path     arkddd:downstream ;
+    sh:minCount 1 ; sh:maxCount 1 ; sh:class arkddd:BoundedContext ;
+    sh:message  "ContextRelationship must have exactly one 'arkddd:downstream' BoundedContext."@en , "ContextRelationship muss genau einen 'arkddd:downstream' BoundedContext haben."@de ;
+    sh:severity sh:Violation .
+
+shapes:ContextRelationship-relationshipType
+    a sh:PropertyShape ;
+    sh:path     arkddd:relationshipType ;
+    sh:minCount 1 ; sh:maxCount 1 ;
+    sh:in       ( arkddd:Partnership arkddd:SharedKernel arkddd:CustomerSupplier
+                  arkddd:Conformist arkddd:AnticorruptionLayer
+                  arkddd:OpenHostService arkddd:PublishedLanguage
+                  arkddd:SeparateWays ) ;
+    sh:message  "ContextRelationship must have a valid 'arkddd:relationshipType'."@en , "ContextRelationship muss einen gueltigen 'arkddd:relationshipType' haben."@de ;
+    sh:severity sh:Violation .
 
 # END OF SHAPES

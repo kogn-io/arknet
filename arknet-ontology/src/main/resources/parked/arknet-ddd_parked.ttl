@@ -5,12 +5,14 @@
 #  Namespace  : https://w3id.org/arknet/ddd#
 #  License    : CC-BY-4.0
 #
-#  Scope: Context Mapping (ContextMap, ContextRelationship, RelationshipType)
-#  and the full tactical-DDD block (Aggregate, Entity, ValueObject,
-#  DomainEvent, Command, Query, DomainService, Repository, Factory, Policy,
-#  Saga, Invariant). Not currently in active use, and not published under
-#  w3id.org/arknet/. BoundedContext, Domain and Subdomain share this
-#  namespace but have an active consumer - see arknet-ddd.ttl.
+#  Scope: ContextMap, the outer Context Mapping wrapper (its relationship
+#  layer, ContextRelationship/RelationshipType, has an active consumer and
+#  moved to arknet-ddd.ttl), and the full tactical-DDD block (Aggregate,
+#  Entity, ValueObject, DomainEvent, Command, Query, DomainService,
+#  Repository, Factory, Policy, Saga, Invariant). Not currently in active
+#  use, and not published under w3id.org/arknet/. BoundedContext, Domain,
+#  Subdomain, ContextRelationship and RelationshipType share this namespace
+#  but have an active consumer - see arknet-ddd.ttl.
 ##############################################################################
 
 @prefix arkddd: <https://w3id.org/arknet/ddd#> .
@@ -30,7 +32,7 @@
 <https://w3id.org/arknet/ddd>
     a owl:Ontology ;
     dcterms:title       "arknet DDD Ontology (parked)"@en ;
-    dcterms:description "Context Mapping (ContextMap, ContextRelationship) and the full tactical-DDD layer (Aggregate, Entity, DomainEvent, Command, ...)."@en ;
+    dcterms:description "ContextMap and the full tactical-DDD layer (Aggregate, Entity, DomainEvent, Command, ...)."@en ;
     dcterms:version     "0.1.0" ;
     dcterms:created     "2026-07-29"^^xsd:date ;
     dcterms:rights      "CC-BY-4.0" ;
@@ -48,57 +50,6 @@ arkddd:ContextMap
     rdfs:label   "Context Map"@en , "Kontextkarte"@de ;
     rdfs:comment "Zeigt die Beziehungen zwischen Bounded Contexts (strategische Uebersicht)."@de .
 
-arkddd:ContextRelationship
-    a owl:Class ;
-    rdfs:label   "Context Relationship"@en , "Kontextbeziehung"@de ;
-    rdfs:comment "Eine gerichtete Beziehung zwischen zwei Bounded Contexts mit explizitem Integrationstyp."@de .
-
-arkddd:RelationshipType
-    a owl:Class ;
-    rdfs:label "Relationship Type"@en ;
-    rdfs:comment "The kind of integration relationship between two bounded contexts, following DDD context mapping patterns."@en ,
-                 "Die Art der Integrationsbeziehung zwischen zwei Bounded Contexts nach den DDD-Context-Mapping-Mustern."@de .
-
-arkddd:Partnership
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Partnership"@en ;
-    rdfs:comment "Beide Teams koordinieren sich gemeinsam. Geteilter Erfolg."@de .
-
-arkddd:SharedKernel
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Shared Kernel"@en ;
-    rdfs:comment "Geteilter Kern-Code/Modell. Erfordert enge Koordination."@de .
-
-arkddd:CustomerSupplier
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Customer/Supplier"@en ;
-    rdfs:comment "Downstream ist Kunde, Upstream ist Lieferant."@de .
-
-arkddd:Conformist
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Conformist"@en ;
-    rdfs:comment "Downstream uebernimmt Upstream-Modell ohne Uebersetzungsschicht."@de .
-
-arkddd:AnticorruptionLayer
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Anticorruption Layer"@en ;
-    rdfs:comment "Downstream schuetzt sein Modell durch eine Uebersetzungsschicht."@de .
-
-arkddd:OpenHostService
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Open Host Service"@en ;
-    rdfs:comment "Upstream bietet ein definiertes, stabiles Protokoll fuer mehrere Downstream-Consumer."@de .
-
-arkddd:PublishedLanguage
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Published Language"@en ;
-    rdfs:comment "Upstream veroeffentlicht ein formales Austauschformat (oft kombiniert mit OHS)."@de .
-
-arkddd:SeparateWays
-    a owl:NamedIndividual , arkddd:RelationshipType ;
-    rdfs:label   "Separate Ways"@en ;
-    rdfs:comment "Keine Integration – bewusste Entkopplung."@de .
-
 arkddd:hasRelationship
     a owl:ObjectProperty ;
     rdfs:domain  arkddd:ContextMap ;
@@ -106,28 +57,6 @@ arkddd:hasRelationship
     rdfs:label   "has relationship"@en ;
     rdfs:comment "A context relationship that is part of this context map."@en ,
                  "Eine Kontextbeziehung, die Teil dieser Kontextkarte ist."@de .
-
-arkddd:upstream
-    a owl:ObjectProperty ;
-    rdfs:domain  arkddd:ContextRelationship ;
-    rdfs:range   arkddd:BoundedContext ;
-    rdfs:label   "upstream"@en ;
-    rdfs:comment "Der Bounded Context, der das Modell/Protokoll vorgibt."@de .
-
-arkddd:downstream
-    a owl:ObjectProperty ;
-    rdfs:domain  arkddd:ContextRelationship ;
-    rdfs:range   arkddd:BoundedContext ;
-    rdfs:label   "downstream"@en ;
-    rdfs:comment "Der Bounded Context, der das Modell/Protokoll konsumiert."@de .
-
-arkddd:relationshipType
-    a owl:ObjectProperty ;
-    rdfs:domain  arkddd:ContextRelationship ;
-    rdfs:range   arkddd:RelationshipType ;
-    rdfs:label   "relationship type"@en ;
-    rdfs:comment "The relationship type that classifies this context relationship."@en ,
-                 "Der Beziehungstyp, der diese Kontextbeziehung klassifiziert."@de .
 
 
 ##############################################################################

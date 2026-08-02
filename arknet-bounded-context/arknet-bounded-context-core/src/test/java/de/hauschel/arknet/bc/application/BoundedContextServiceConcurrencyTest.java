@@ -67,6 +67,7 @@ class BoundedContextServiceConcurrencyTest {
      */
     private SequentialResourceIdFactory resourceIdFactory;
     private InMemoryTermLookup termLookup;
+    private InMemoryContextRelationshipRepository contextRelationshipRepository;
     /** Represents the concurrent "other" caller; always writes straight through to {@code store}. */
     private BoundedContextService otherCaller;
 
@@ -77,7 +78,8 @@ class BoundedContextServiceConcurrencyTest {
         termLookup = new InMemoryTermLookup();
         termLookup.register("TERM-1", TERM_1);
         termLookup.register("TERM-2", TERM_2);
-        otherCaller = new BoundedContextService(store, resourceIdFactory, termLookup);
+        contextRelationshipRepository = new InMemoryContextRelationshipRepository();
+        otherCaller = new BoundedContextService(store, resourceIdFactory, termLookup, contextRelationshipRepository);
     }
 
     /**
@@ -91,7 +93,8 @@ class BoundedContextServiceConcurrencyTest {
         BoundedContextCode code = otherCaller.add(WS, newBoundedContext()).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-2"));
-        BoundedContextService underTest = new BoundedContextService(racing, resourceIdFactory, termLookup);
+        BoundedContextService underTest =
+                new BoundedContextService(racing, resourceIdFactory, termLookup, contextRelationshipRepository);
 
         BoundedContext result = underTest.linkTerm(WS, code, "TERM-1");
 
@@ -110,7 +113,7 @@ class BoundedContextServiceConcurrencyTest {
     void linkTermGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
         BoundedContextCode code = otherCaller.add(WS, newBoundedContext()).code();
         BoundedContextService underTest = new BoundedContextService(
-                new AlwaysConflictingRepository(store), resourceIdFactory, termLookup);
+                new AlwaysConflictingRepository(store), resourceIdFactory, termLookup, contextRelationshipRepository);
 
         assertThrows(BoundedContextConcurrentlyModifiedException.class,
                 () -> underTest.linkTerm(WS, code, "TERM-1"));
@@ -125,7 +128,7 @@ class BoundedContextServiceConcurrencyTest {
         BoundedContextCode code = otherCaller.add(WS, newBoundedContext()).code();
         otherCaller.linkTerm(WS, code, "TERM-1");
         BoundedContextService underTest = new BoundedContextService(
-                new AlwaysConflictingRepository(store), resourceIdFactory, termLookup);
+                new AlwaysConflictingRepository(store), resourceIdFactory, termLookup, contextRelationshipRepository);
 
         BoundedContext result = underTest.linkTerm(WS, code, "TERM-1");
 
@@ -136,8 +139,8 @@ class BoundedContextServiceConcurrencyTest {
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllRepository racing =
                 new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newBoundedContext()));
-        BoundedContextService underTest =
-                new BoundedContextService(racing, resourceIdFactory, new InMemoryTermLookup());
+        BoundedContextService underTest = new BoundedContextService(
+                racing, resourceIdFactory, new InMemoryTermLookup(), contextRelationshipRepository);
 
         BoundedContext result = underTest.add(WS, newBoundedContext());
 
