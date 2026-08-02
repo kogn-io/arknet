@@ -127,7 +127,7 @@ public final class StoreReportTools {
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
         final String digest = digestRenderer.render(projectId, label, snapshot);
         final String html = htmlRenderer.render(projectId, label, snapshot, digest, modelViews.of(projectId));
-        return digest + "\n" + writeReportLine(html, fallbackDirFor(projectId), projectId) + "\n";
+        return digest + "\n" + writeReportLine(html, projectId) + "\n";
     }
 
     @McpTool(name = "resource_get",
@@ -169,9 +169,29 @@ public final class StoreReportTools {
      * not a path. The written path is returned in the digest either way, and on a containerized
      * daemon this was already the only reachable target: there, the client's
      * directory does not exist inside the container at all.</p>
+     *
+     * <p>{@link ProjectId} is, by its own javadoc, "deliberately unconstrained beyond
+     * non-blankness" - {@link FileNameSanitizer#sanitize} keeps a value carrying {@code /},
+     * {@code ..} or another filesystem-unsafe character from resolving outside this method's
+     * subdirectory or reaching {@link Path#resolve} unfiltered (issue #146); the {@code
+     * normalize()}/containment check below is defense in depth for the one input a sanitized
+     * segment cannot rule out by itself - a value that sanitizes to exactly {@code ".."} - the
+     * same combination {@code io.kogn.rdf}'s own {@code DatasetLifecycleRdf4j.resolveDir} applies
+     * to the very same kind of value.</p>
      */
     private Path fallbackDirFor(final ProjectId projectId) {
-        return fallbackReportDir.resolve(projectId.value());
+        final Path dir = fallbackReportDir.resolve(reportSegment(projectId)).normalize();
+        if (!dir.startsWith(fallbackReportDir)) {
+            // unreachable for a sanitized segment other than "." or ".." alone; defends the
+            // project-scoped-subdirectory invariant regardless of what a ProjectId's deliberately
+            // unconstrained form allows.
+            throw new IllegalArgumentException("projectId maps outside the report directory: " + projectId.value());
+        }
+        return dir;
+    }
+
+    private static String reportSegment(final ProjectId projectId) {
+        return FileNameSanitizer.sanitize(projectId.value());
     }
 
     /**
@@ -187,24 +207,36 @@ public final class StoreReportTools {
      * {@link #fallbackReportDir}. It went with the client directory itself: since ADR-016 there is
      * only ever one target (see {@link #fallbackDirFor}), so a retry would just repeat the write
      * that has already failed.</p>
+     *
+     * <p>Catches {@link RuntimeException} alongside {@link IOException}: {@link #fallbackDirFor}
+     * resolves the target directory from an unconstrained {@link ProjectId} and can itself throw
+     * an unchecked exception (issue #146) - a {@code catch (IOException)} alone would have let
+     * that escape and lose the whole tool response, the exact failure mode this method exists to
+     * prevent.</p>
      */
-    private String writeReportLine(final String html, final Path targetDir, final ProjectId projectId) {
+    private String writeReportLine(final String html, final ProjectId projectId) {
+        final Path targetDir;
+        try {
+            targetDir = fallbackDirFor(projectId);
+        } catch (final RuntimeException failure) {
+            return reportFailureLine(fallbackReportDir, failure);
+        }
         try {
             return "# HTML report: " + displayPath(writeReport(html, targetDir), projectId);
-        } catch (final IOException failure) {
+        } catch (final RuntimeException | IOException failure) {
             return reportFailureLine(targetDir, failure);
         }
     }
 
     private String displayPath(final Path written, final ProjectId projectId) {
         return reportHostDir != null
-                ? reportHostDir.resolve(projectId.value()).resolve(REPORT_FILE_NAME).toString()
+                ? reportHostDir.resolve(reportSegment(projectId)).resolve(REPORT_FILE_NAME).toString()
                 : written.toString();
     }
 
-    private static String reportFailureLine(final Path targetDir, final IOException e) {
-        return "# HTML report: FAILED to write to " + targetDir + " (" + e.getClass().getSimpleName()
-                + ": " + e.getMessage() + ") - digest above is unaffected.";
+    private static String reportFailureLine(final Path targetDir, final Exception failure) {
+        return "# HTML report: FAILED to write to " + targetDir + " (" + failure.getClass().getSimpleName()
+                + ": " + failure.getMessage() + ") - digest above is unaffected.";
     }
 
     private Path writeReport(final String html, final Path targetDir) throws IOException {

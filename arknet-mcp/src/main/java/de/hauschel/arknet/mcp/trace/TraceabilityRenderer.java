@@ -146,7 +146,11 @@ public final class TraceabilityRenderer {
      * (primary or supporting) in which use case, in both directions - no clustering, no verdict
      * about bounded-context boundaries, just the {@code arkreq:primaryActor}/{@code
      * supportingActor} edges as data for a human or agent to draw that boundary themselves
-     * (issue #108).
+     * (issue #108). The "Actors" section lists <em>every</em> actor in the project ({@link
+     * TraceabilityGraph#actorIris()}), not only the ones a use case happens to reference - an
+     * actor no use case references yet is exactly the strongest signal for "a use case is
+     * missing here" or "this actor belongs in a different bounded context", so it must not go
+     * missing from an inventory whose own description promises "for every actor" (issue #147).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
@@ -156,7 +160,7 @@ public final class TraceabilityRenderer {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(graph, "graph");
         List<String> useCaseIris = graph.useCaseIris();
-        Set<String> actorIris = new TreeSet<>();
+        Set<String> actorIris = new TreeSet<>(graph.actorIris());
         for (String useCaseIri : useCaseIris) {
             actorIris.addAll(graph.actorsOf(useCaseIri));
         }

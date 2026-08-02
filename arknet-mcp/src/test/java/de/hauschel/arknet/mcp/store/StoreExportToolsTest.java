@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
@@ -90,9 +91,31 @@ class StoreExportToolsTest {
         List<Path> written = findTrigFiles(exportDir);
         assertThat(written).hasSize(1);
         Path file = written.get(0);
-        assertThat(file.getParent().getFileName().toString()).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}");
+        assertThat(file.getParent().getFileName().toString())
+                .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d+");
         assertThat(file.getFileName().toString()).isEqualTo("arknet__store-export-tools-test-1.trig");
         assertThat(contentOf(file)).contains(FR_1_IRI).contains("\"Login\"");
+    }
+
+    /**
+     * Regression test for issue #146: two {@code project_export} calls landing in the same
+     * wall-clock second used to share one timestamp subdirectory, so the second call's {@link
+     * java.nio.file.Files#move} silently overwrote the first call's file for the same project.
+     * {@link StoreExportTools#timestampFolderName()} now disambiguates with an appended call
+     * sequence number, so even two calls issued back to back land in distinct subdirectories.
+     */
+    @Test
+    void exportOfTwoRapidCallsWritesToDistinctSubdirectories() {
+        StoreExportTools tools = new StoreExportTools(
+                listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
+                new StoreExporter(lifecycle), exportDir, null);
+
+        tools.export();
+        tools.export();
+
+        List<Path> written = findTrigFiles(exportDir);
+        assertThat(written).hasSize(2);
+        assertThat(written.get(0).getParent()).isNotEqualTo(written.get(1).getParent());
     }
 
     /**
@@ -191,40 +214,61 @@ class StoreExportToolsTest {
     }
 
     /**
-     * A project whose export cannot be written must not prevent the others from being written -
+     * A project whose export cannot be written must not prevent the others from being attempted -
      * the whole point of exporting every project in one call is that one broken project cannot
-     * take the others down with it. {@link StoreExportTools} now writes to a sibling
-     * {@code .trig.tmp} path first and only moves it onto the final {@code .trig} name once the
-     * export succeeds, so the write is blocked by pre-creating a directory at the {@code .tmp}
-     * path rather than at the final one.
+     * take the others down with it. Blocking the whole {@code fallbackExportDir} with a plain file
+     * (the same technique {@code StoreReportToolsTest} uses) fails every project's {@code
+     * Files.createDirectories} identically, independent of the timestamp subdirectory's now
+     * call-sequence-disambiguated name (issue #146) - both lines still appear in the result rather
+     * than the loop aborting after the first failure.
      */
     @Test
-    void exportContinuesWithOtherProjectsWhenOneProjectsFileCannotBeWritten() {
+    void exportContinuesWithOtherProjectsWhenTheExportDirIsUnwritable(@TempDir Path root) throws Exception {
+        RequirementRepository requirements =
+                KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        requirements.create(PROJECT_2, requirementTitled("Second"));
         try {
-            RequirementRepository requirements =
-                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"));
-
-            String timestamp = StoreExportTools.timestampFolderName();
-            Path timestampDir = exportDir.resolve(timestamp);
-            blockFileWithADirectory(timestampDir.resolve("broken__store-export-tools-test-1.trig.tmp"));
+            Path blockedExportDir = root.resolve("not-a-directory");
+            Files.writeString(blockedExportDir, "a plain file blocking directory creation");
 
             StoreExportTools tools = new StoreExportTools(
                     listProjectsOf(
                             new Project(PROJECT_1, "broken", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
-                    new StoreExporter(lifecycle), exportDir, null);
+                    new StoreExporter(lifecycle), blockedExportDir, null);
 
             String result = tools.export();
 
-            assertThat(result).contains("# Exported second: ");
-            assertThat(result).contains("broken").contains("FAILED");
-            assertThat(exportDir.resolve(timestamp).resolve("second__store-export-tools-test-2.trig")).exists();
-            assertThat(exportDir.resolve(timestamp).resolve("broken__store-export-tools-test-1.trig")).doesNotExist();
-            assertThat(exportDir.resolve(timestamp).resolve("broken__store-export-tools-test-1.trig.tmp"))
-                    .doesNotExist();
+            assertThat(result).contains("# Exported broken: FAILED to write to");
+            assertThat(result).contains("# Exported second: FAILED to write to");
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
+    }
+
+    /**
+     * Regression test for issue #146: a failure that happens while {@link StoreExporter#exportTrig}
+     * <em>reads</em> from the store (acquiring an already-open dataset) must not be reported under
+     * the "FAILED to write" prefix that used to cover every failure regardless of where it
+     * originated. A second, independently constructed {@link DatasetLifecycle} over the same
+     * {@code storageDir} holding {@link #PROJECT_1}'s dataset open reproduces a genuine RDF4J lock
+     * conflict - the exact scenario the issue names.
+     */
+    @Test
+    void exportOfADatasetLockedByAnotherLifecycleDoesNotClaimAWriteFailure() {
+        DatasetHandle heldOpen = lifecycle.acquire(new DatasetId(PROJECT_1.value()));
+        try {
+            DatasetLifecycle competingLifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
+            StoreExportTools tools = new StoreExportTools(
+                    listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
+                    new StoreExporter(competingLifecycle), exportDir, null);
+
+            String result = tools.export();
+
+            assertThat(result).contains("# Exported arknet: FAILED to export");
+            assertThat(result).doesNotContain("FAILED to write");
+        } finally {
+            heldOpen.close();
         }
     }
 
@@ -233,14 +277,6 @@ class StoreExportToolsTest {
         StoreExportTools tools = new StoreExportTools(listProjectsOf(), new StoreExporter(lifecycle), exportDir, null);
 
         assertThat(tools.export()).contains("no projects");
-    }
-
-    private static void blockFileWithADirectory(Path path) {
-        try {
-            Files.createDirectories(path);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private static Anchor pathAnchor(String value) {

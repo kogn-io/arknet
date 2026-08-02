@@ -263,6 +263,68 @@ class StoreReportToolsTest {
     }
 
     /**
+     * Regression test for issue #146: {@code ProjectId} is, by its own javadoc, "deliberately
+     * unconstrained beyond non-blankness" - a value carrying a filesystem-unsafe character (as a
+     * client's {@code project_adopt} datasetId string could produce) must not reach {@link
+     * java.nio.file.Path#resolve} unfiltered. The report still lands under a project-scoped
+     * subdirectory of {@link #reportDir}, just a sanitized one, and the call must not throw.
+     */
+    @Test
+    void storeOverviewSanitizesAProjectIdWithFilesystemUnsafeCharactersIntoTheReportSubdirectory()
+            throws Exception {
+        final ProjectId unsafeProject = new ProjectId("team/main");
+        final String unsafeAnchor = "/wherever/team-main";
+        try {
+            final Prefixes prefixes = Prefixes.defaults();
+            final StoreReader reader = new StoreReader(lifecycle);
+            final ProjectResolver projects = anchor ->
+                    unsafeAnchor.equals(anchor) ? unsafeProject : resolveTestAnchor(anchor);
+            final StoreReportTools toolsWithUnsafeId = new StoreReportTools(
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    modelViews(), projects, NO_LABELS, reportDir, null);
+
+            final String result = toolsWithUnsafeId.storeOverview(null, unsafeAnchor);
+
+            assertThat(result).doesNotContain("FAILED");
+            final Path html = reportDir.resolve("team_main").resolve("store-report.html");
+            assertThat(html).exists();
+            assertThat(result).contains("# HTML report: " + html.toAbsolutePath());
+        } finally {
+            lifecycle.close(new DatasetId(unsafeProject.value()));
+        }
+    }
+
+    /**
+     * Regression test for issue #146: a project id that sanitizes to exactly {@code ".."} - the
+     * one input {@link FileNameSanitizer#sanitize} alone cannot rule out, since {@code .} and
+     * {@code -} are themselves filesystem-safe characters - must never resolve outside {@link
+     * #reportDir}. The digest still comes back with a failure line instead of the tool call
+     * throwing or the write escaping the report directory (the {@code normalize()}/containment
+     * check {@code fallbackDirFor} applies as defense in depth).
+     */
+    @Test
+    void storeOverviewNeverEscapesTheReportDirectoryForAProjectIdThatSanitizesToDotDot() {
+        final ProjectId escapingProject = new ProjectId("..");
+        final String escapingAnchor = "/wherever/escaping";
+        try {
+            final Prefixes prefixes = Prefixes.defaults();
+            final StoreReader reader = new StoreReader(lifecycle);
+            final ProjectResolver projects = anchor ->
+                    escapingAnchor.equals(anchor) ? escapingProject : resolveTestAnchor(anchor);
+            final StoreReportTools toolsWithEscapingId = new StoreReportTools(
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    modelViews(), projects, NO_LABELS, reportDir, null);
+
+            final String result = toolsWithEscapingId.storeOverview(null, escapingAnchor);
+
+            assertThat(result).contains("# HTML report: FAILED to write to " + reportDir);
+            assertThat(result).contains("IllegalArgumentException");
+        } finally {
+            lifecycle.close(new DatasetId(escapingProject.value()));
+        }
+    }
+
+    /**
      * A containerized daemon's {@code fallbackReportDir} is a mount point
      * (e.g. {@code /data/report}) the calling agent, running outside the container, cannot
      * reach. When {@code reportHostDir} names that mount's host-side path, the digest must
