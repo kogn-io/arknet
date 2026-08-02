@@ -47,6 +47,11 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
  * than against a real store made to fail differently (e.g. a non-writable storage directory): such
  * a case does not fail at all for a process that may write regardless of the permission bits, so
  * it would report a defect on any machine that runs its build as root.</p>
+ *
+ * <p>{@link #closesEveryDatasetTheDelegateListsOnShutdown()} covers the decorator's third
+ * responsibility (issue #140): as {@link AutoCloseable}, {@code close()} must close every dataset
+ * the delegate currently {@code list()}s, not just one, so a daemon shutdown releases the whole
+ * store in an orderly way.</p>
  */
 class LockConflictReportingDatasetLifecycleTest {
 
@@ -110,6 +115,17 @@ class LockConflictReportingDatasetLifecycleTest {
                 .hasMessageContaining("boom")
                 .hasNoCause()
                 .satisfies(e -> assertThat(e.getSuppressed()).containsExactly(original));
+    }
+
+    @Test
+    void closesEveryDatasetTheDelegateListsOnShutdown() {
+        final FakeLifecycle delegate = new FakeLifecycle(new StubHandle());
+        final LockConflictReportingDatasetLifecycle guarded =
+                new LockConflictReportingDatasetLifecycle(delegate, storageDir, e -> true);
+
+        guarded.close();
+
+        assertThat(delegate.closed).containsExactlyElementsOf(delegate.list());
     }
 
     @Test

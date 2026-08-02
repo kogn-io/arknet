@@ -9,6 +9,7 @@ import java.util.Locale;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
@@ -17,6 +18,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.mcp.dataset.DaemonStorageLock;
 import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
@@ -169,6 +171,24 @@ public class ArknetMcpConfiguration {
     // --- Shared store ----------------------------------------------------------
 
     /**
+     * The daemon-wide guard against a second arknet process starting against the same storage
+     * root (issue #139): an exclusive OS file lock over {@code storageDir}, acquired once here,
+     * before {@link #datasetLifecycle} - and therefore anything able to open a project dataset -
+     * is even constructed. {@link DependsOn} on {@link #datasetLifecycle} makes Spring build this
+     * bean first, so a losing second daemon fails the whole application context at startup with
+     * {@code DaemonAlreadyRunningException} instead of racing the winner to open a freshly
+     * registered project's dataset - see {@link DaemonStorageLock} for why only a lock scoped to
+     * the whole root, not to one dataset, closes that race. Released via
+     * {@code destroyMethod = "close"} when the context shuts down, so a subsequent daemon start
+     * against the same root succeeds again.
+     */
+    @Bean(destroyMethod = "close")
+    DaemonStorageLock daemonStorageLock(
+            @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
+        return DaemonStorageLock.acquire(storageDir);
+    }
+
+    /**
      * The single kognio-rdf dataset lifecycle shared by every store consumer: the
      * requirements and ubiquitous-language repositories and the generic store report.
      *
@@ -180,18 +200,26 @@ public class ArknetMcpConfiguration {
      * stays free of any direct RDF4J dependency.</p>
      *
      * <p>Wrapped in {@link LockConflictReportingDatasetLifecycle}: if this shared
-     * instance is not actually the only one holding {@code storageDir} open - a second daemon
-     * instance, or a client/subagent MCP config that spawns arknet as a local {@code stdio}
-     * subprocess instead of pointing at the one running daemon - the first {@code acquire} call
-     * fails with a raw RDF4J lock exception. The wrapper recognises that failure via the injected
-     * {@code isLockConflict} predicate ({@link KognioRdfRequirementRepositoryFactory#DEFAULT_LOCK_CONFLICT},
-     * the one place RDF4J is allowed to be named) and translates it into a message naming the
-     * actual cause and its remedy instead of leaving a caller to decode an RDF4J internal; a
-     * failure the predicate does not recognise - a permissions problem, a full disk, a corrupted
-     * store - passes through unchanged rather than being misdiagnosed as a lock conflict. arknet-mcp
-     * itself stays free of any direct RDF4J dependency either way.</p>
+     * instance is not actually the only one holding {@code storageDir} open - a client/subagent
+     * MCP config that spawns arknet as a local {@code stdio} subprocess instead of pointing at the
+     * one running daemon, say - the first {@code acquire} call fails with a raw RDF4J lock
+     * exception. The wrapper recognises that failure via the injected {@code isLockConflict}
+     * predicate ({@link KognioRdfRequirementRepositoryFactory#DEFAULT_LOCK_CONFLICT}, the one
+     * place RDF4J is allowed to be named) and translates it into a message naming the actual cause
+     * and its remedy instead of leaving a caller to decode an RDF4J internal; a failure the
+     * predicate does not recognise - a permissions problem, a full disk, a corrupted store -
+     * passes through unchanged rather than being misdiagnosed as a lock conflict. A second full
+     * daemon instance no longer reaches this path at all - {@link #daemonStorageLock} above fails
+     * it first, at startup. arknet-mcp itself stays free of any direct RDF4J dependency either
+     * way.</p>
+     *
+     * <p>{@code destroyMethod = "close"} (issue #140): {@link LockConflictReportingDatasetLifecycle}
+     * is {@link AutoCloseable}, closing every dataset {@code list()} reports through the neutral
+     * port so a daemon shutdown releases them in an orderly way instead of relying on crash
+     * recovery.</p>
      */
-    @Bean
+    @Bean(destroyMethod = "close")
+    @DependsOn("daemonStorageLock")
     DatasetLifecycle datasetLifecycle(
             @Value("${arknet.rdf.storage:${user.home}/.arknet/rdf}") final Path storageDir) {
         return new LockConflictReportingDatasetLifecycle(

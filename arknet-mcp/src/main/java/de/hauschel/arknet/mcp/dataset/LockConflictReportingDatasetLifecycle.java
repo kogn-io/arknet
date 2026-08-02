@@ -42,8 +42,19 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
  * recognise is rethrown as-is. That matters beyond keeping the dependency out: a permissions,
  * disk-space or store-corruption failure must never be misdiagnosed as a lock conflict just
  * because it, too, is a {@link RuntimeException} out of {@code acquire}.</p>
+ *
+ * <p><strong>Why {@link AutoCloseable} (issue #140).</strong> Neither {@link DatasetLifecycle} nor
+ * the RDF4J-backed implementation it wraps expose a no-arg shutdown - only {@code close(DatasetId)}
+ * per dataset. Without one, stopping the daemon (a {@code systemctl stop}, a container stop) tears
+ * down the Spring context without ever telling the underlying store to release its datasets in an
+ * orderly way, leaving it to crash recovery on the next start instead. {@link #close()} closes
+ * every dataset {@link #list()} reports through the same neutral {@code close(DatasetId)} the
+ * interface already declares - no RDF4J-specific bulk-shutdown method is called, so this stays free
+ * of the dependency {@link #acquire} already avoids. {@code ArknetMcpConfiguration#datasetLifecycle}
+ * registers this as the bean's destroy method, so it runs once, automatically, when the context
+ * closes.</p>
  */
-public final class LockConflictReportingDatasetLifecycle implements DatasetLifecycle {
+public final class LockConflictReportingDatasetLifecycle implements DatasetLifecycle, AutoCloseable {
 
     private final DatasetLifecycle delegate;
     private final Path storageDir;
@@ -99,6 +110,19 @@ public final class LockConflictReportingDatasetLifecycle implements DatasetLifec
     @Override
     public Set<DatasetId> list() {
         return delegate.list();
+    }
+
+    /**
+     * Closes every dataset {@link #list()} currently reports, so a daemon shutdown releases them
+     * in an orderly way instead of relying on crash recovery. Safe to call for a dataset this
+     * instance never {@link #acquire}d - {@code close(DatasetId)} is a no-op for one the delegate
+     * does not have open.
+     */
+    @Override
+    public void close() {
+        for (DatasetId id : delegate.list()) {
+            delegate.close(id);
+        }
     }
 
     private String lockConflictMessage(DatasetId id, RuntimeException cause) {
