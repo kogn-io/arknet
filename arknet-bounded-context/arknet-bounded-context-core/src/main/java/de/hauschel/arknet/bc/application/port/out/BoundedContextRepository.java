@@ -73,6 +73,12 @@ public interface BoundedContextRepository {
      * overwrites it. The guard closes the lost-update window between two funnel writers, not
      * between a funnel writer and a write that bypassed the funnel entirely.</p>
      *
+     * <p><strong>Business-code uniqueness.</strong> If {@code updated.code()} differs from the
+     * code currently stored under this identity, it is checked against every other bounded
+     * context's {@code dcterms:identifier} in the project - the same collision {@link #create}
+     * rejects for a brand-new identity, enforced here too rather than left to the fact that no
+     * caller in this codebase currently changes the code on an update.</p>
+     *
      * @param projectId  the project (architecture model) the bounded context lives in
      * @param expectedHead the {@link RevisionToken} the caller last observed for this bounded
      *                     context (from {@link #findCurrentByCode}), or {@code null} if the caller
@@ -85,6 +91,9 @@ public interface BoundedContextRepository {
      *                                                     matches the stored bounded context's
      *                                                     current head - a concurrent write raced
      *                                                     ahead
+     * @throws DuplicateBoundedContextCodeException         if {@code updated.code()} already
+     *                                                     labels a different bounded context in
+     *                                                     the project
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated);
 

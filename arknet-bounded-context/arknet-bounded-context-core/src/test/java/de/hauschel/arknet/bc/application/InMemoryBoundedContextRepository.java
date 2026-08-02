@@ -31,7 +31,10 @@ import de.hauschel.arknet.kernel.ResourceId;
  * preserved to make {@link #findAll(ProjectId)} assertions deterministic. {@link #create}
  * mirrors the real out-adapter's in-transaction guards: an identity collision rejects with
  * {@link ResourceAlreadyExistsException}, a business-code collision with
- * {@link DuplicateBoundedContextCodeException}.</p>
+ * {@link DuplicateBoundedContextCodeException}. {@link #compareAndUpdate} mirrors the same
+ * business-code guard (issue #164): a code change that collides with a <em>different</em>
+ * identity's code rejects the same way, while updating to the identity's own already-held code
+ * (the only case any caller today, {@code linkTerm}, exercises) does not.</p>
  *
  * <p><strong>Concurrency token.</strong> Mirrors the real {@link
  * de.hauschel.arknet.persistence.WriteFunnel}'s head, minimally: a fresh opaque marker minted on
@@ -68,6 +71,11 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
         }
         if (!Objects.equals(headByIdentity.get(updated.id()), expectedHead)) {
             throw new BoundedContextConcurrentlyModifiedException(projectId, updated.code());
+        }
+        boolean codeTakenByAnotherIdentity = contexts.values().stream()
+                .anyMatch(bc -> !bc.id().equals(updated.id()) && bc.code().equals(updated.code()));
+        if (codeTakenByAnotherIdentity) {
+            throw new DuplicateBoundedContextCodeException(projectId, updated.code());
         }
         contexts.put(updated.id(), updated);
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));

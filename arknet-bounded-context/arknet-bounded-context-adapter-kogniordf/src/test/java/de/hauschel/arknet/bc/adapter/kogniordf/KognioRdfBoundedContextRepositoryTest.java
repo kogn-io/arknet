@@ -197,6 +197,70 @@ class KognioRdfBoundedContextRepositoryTest {
                 () -> repository.compareAndUpdate(PROJECT_A, null, missing));
     }
 
+    /**
+     * Issue #164: {@code compareAndUpdate} must enforce the same business-code uniqueness
+     * {@code create} already does. Changing a bounded context's code to one already held by a
+     * <em>different</em> identity must be rejected, not silently committed.
+     */
+    @Test
+    void compareAndUpdateRejectsACodeChangedToCollideWithAnotherBoundedContext() {
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        BoundedContextId id = freshId();
+        BoundedContext second = new BoundedContext(id, new BoundedContextCode("BC-2"), "Inventory",
+                "Tracks the stock levels of every sellable product across warehouses.", null, null, List.of());
+        repository.create(PROJECT_A, second);
+        RevisionToken head = currentHeadOf(second.code());
+
+        BoundedContext recodedToCollide = new BoundedContext(id, new BoundedContextCode("BC-1"), second.name(),
+                second.domainVision(), second.subdomain(), second.ownedBy(), second.usesTerms());
+
+        assertThrows(DuplicateBoundedContextCodeException.class,
+                () -> repository.compareAndUpdate(PROJECT_A, head, recodedToCollide));
+        assertEquals("Inventory", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2"))
+                .orElseThrow().name(), "the rejected write must not have changed anything");
+        assertEquals(1, revisionsOf(id.value().value()).size(),
+                "the rejected write must not have recorded a revision");
+    }
+
+    /**
+     * The unchanged-code path every real caller today ({@code linkTerm}) exercises must keep
+     * working: a {@code compareAndUpdate} that resubmits the identity's own current code is not a
+     * collision with itself.
+     */
+    @Test
+    void compareAndUpdateAcceptsAnUnchangedCode() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(PROJECT_A, original);
+
+        BoundedContext renamedOnly = new BoundedContext(id, new BoundedContextCode("BC-1"), "Renamed",
+                original.domainVision(), original.subdomain(), original.ownedBy(), original.usesTerms());
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), renamedOnly);
+
+        assertEquals("Renamed", repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1"))
+                .orElseThrow().name());
+    }
+
+    /**
+     * A code change to a code nobody else holds must go through, distinguishing "collides with
+     * another identity" from "differs from what it used to be".
+     */
+    @Test
+    void compareAndUpdateAcceptsACodeChangedToAFreeCode() {
+        BoundedContextId id = freshId();
+        BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
+                "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
+        repository.create(PROJECT_A, original);
+
+        BoundedContext recoded = new BoundedContext(id, new BoundedContextCode("BC-9"), original.name(),
+                original.domainVision(), original.subdomain(), original.ownedBy(), original.usesTerms());
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), recoded);
+
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-9")).isPresent());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-1")).isEmpty());
+    }
+
     @Test
     void writeRejectsABlankNameViaTheShaclGate() {
         // A blank name violates shapes:BoundedContext-name (sh:minLength 2, sh:Violation). The
