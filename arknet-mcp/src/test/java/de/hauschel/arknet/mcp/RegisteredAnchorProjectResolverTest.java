@@ -58,7 +58,8 @@ class RegisteredAnchorProjectResolverTest {
                 .hasMessageContaining("project_add")
                 .hasMessageContaining("project_adopt")
                 .hasNoCause()
-                .satisfies(e -> assertThat(e.getSuppressed()).hasAtLeastOneElementOfType(UnknownAnchorException.class));
+                .satisfies(e -> assertThat(e.getSuppressed()).hasAtLeastOneElementOfType(UnknownAnchorException.class))
+                .satisfies(e -> assertThat(((UnresolvedProjectAnchorException) e).anchor()).isEqualTo("/home/c/arknet"));
     }
 
     @Test
@@ -66,7 +67,8 @@ class RegisteredAnchorProjectResolverTest {
         assertThatThrownBy(() -> resolver.resolve(null))
                 .isInstanceOf(UnresolvedProjectAnchorException.class)
                 .hasMessageContaining(AnchorHttpTransportConfiguration.ANCHOR_HEADER)
-                .hasMessageContaining("projectAnchor");
+                .hasMessageContaining("projectAnchor")
+                .satisfies(e -> assertThat(((UnresolvedProjectAnchorException) e).anchor()).isNull());
         assertThatThrownBy(() -> resolver.resolve("   "))
                 .isInstanceOf(UnresolvedProjectAnchorException.class);
     }
