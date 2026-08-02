@@ -172,7 +172,7 @@ class StoreReportToolsTest {
 
         // HTML side effect: a self-contained file with no external dependencies, under a
         // project-scoped subdirectory of the fallback dir.
-        Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+        Path html = reportDir.resolve(StoreReportTools.reportSegment(PROJECT)).resolve("store-report.html");
         assertThat(html).exists();
         String content = Files.readString(html);
         assertThat(content).contains("<!doctype html>").contains("arknet Store Report");
@@ -208,7 +208,7 @@ class StoreReportToolsTest {
         final String result = tools.storeOverview(context, null);
 
         assertThat(result).contains("# Project sample-project").doesNotContain("FAILED");
-        final Path serverHtml = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+        final Path serverHtml = reportDir.resolve(StoreReportTools.reportSegment(PROJECT)).resolve("store-report.html");
         assertThat(serverHtml).exists();
         assertThat(result).contains("# HTML report: " + serverHtml.toAbsolutePath());
         assertThat(anchorThatIsAFile).isRegularFile();
@@ -258,8 +258,133 @@ class StoreReportToolsTest {
 
         assertThat(result).contains("# Project sample-project").contains("FR-1");
         assertThat(result)
-                .contains("# HTML report: FAILED to write to " + blockedFallbackDir.resolve(PROJECT.value()));
+                .contains("# HTML report: FAILED to write to "
+                        + blockedFallbackDir.resolve(StoreReportTools.reportSegment(PROJECT)));
         assertThat(result).contains("FileSystemException");
+    }
+
+    /**
+     * Regression test for issue #146: {@code ProjectId} is, by its own javadoc, "deliberately
+     * unconstrained beyond non-blankness" - a value carrying a filesystem-unsafe character (as a
+     * client's {@code project_adopt} datasetId string could produce) must not reach {@link
+     * java.nio.file.Path#resolve} unfiltered. The report still lands under a project-scoped
+     * subdirectory of {@link #reportDir}, just a sanitized one, and the call must not throw.
+     */
+    @Test
+    void storeOverviewSanitizesAProjectIdWithFilesystemUnsafeCharactersIntoTheReportSubdirectory()
+            throws Exception {
+        final ProjectId unsafeProject = new ProjectId("team/main");
+        final String unsafeAnchor = "/wherever/team-main";
+        try {
+            final Prefixes prefixes = Prefixes.defaults();
+            final StoreReader reader = new StoreReader(lifecycle);
+            final ProjectResolver projects = anchor ->
+                    unsafeAnchor.equals(anchor) ? unsafeProject : resolveTestAnchor(anchor);
+            final StoreReportTools toolsWithUnsafeId = new StoreReportTools(
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    modelViews(), projects, NO_LABELS, reportDir, null);
+
+            final String result = toolsWithUnsafeId.storeOverview(null, unsafeAnchor);
+
+            assertThat(result).doesNotContain("FAILED");
+            final Path html = reportDir.resolve(StoreReportTools.reportSegment(unsafeProject))
+                    .resolve("store-report.html");
+            assertThat(html).exists();
+            assertThat(result).contains("# HTML report: " + html.toAbsolutePath());
+        } finally {
+            lifecycle.close(new DatasetId(unsafeProject.value()));
+        }
+    }
+
+    /**
+     * Regression test for issue #146, updated for the #147 review follow-up: a project id that
+     * would have sanitized to exactly {@code ".."} under {@link FileNameSanitizer#sanitize} alone
+     * - the one input that function cannot rule out, since {@code .} and {@code -} are themselves
+     * filesystem-safe characters - can no longer do so now that {@link StoreReportTools#reportSegment}
+     * appends {@link FileNameSanitizer#uniqueSegment}'s hash suffix: the segment always carries
+     * extra characters after the sanitized prefix, so it can never literally equal {@code ".."}
+     * again. The call succeeds like any other project id, rather than needing the {@code
+     * normalize()}/containment check in {@code fallbackDirFor} to catch an escape attempt - that
+     * check remains in place as defense in depth, but this scenario no longer reaches it.
+     */
+    @Test
+    void storeOverviewNeverEscapesTheReportDirectoryForAProjectIdThatWouldSanitizeToDotDot() {
+        final ProjectId escapingProject = new ProjectId("..");
+        final String escapingAnchor = "/wherever/escaping";
+        try {
+            final Prefixes prefixes = Prefixes.defaults();
+            final StoreReader reader = new StoreReader(lifecycle);
+            final ProjectResolver projects = anchor ->
+                    escapingAnchor.equals(anchor) ? escapingProject : resolveTestAnchor(anchor);
+            final StoreReportTools toolsWithEscapingId = new StoreReportTools(
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    modelViews(), projects, NO_LABELS, reportDir, null);
+
+            final String result = toolsWithEscapingId.storeOverview(null, escapingAnchor);
+
+            assertThat(result).doesNotContain("FAILED");
+            final Path html = reportDir.resolve(StoreReportTools.reportSegment(escapingProject))
+                    .resolve("store-report.html");
+            assertThat(html).exists();
+            assertThat(html.startsWith(reportDir)).isTrue();
+        } finally {
+            lifecycle.close(new DatasetId(escapingProject.value()));
+        }
+    }
+
+    /**
+     * Regression test for the #147 review follow-up (P1): {@link FileNameSanitizer#sanitize}
+     * alone is not injective - {@code "team/main"} and {@code "team_main"} both collapse onto the
+     * identical {@code "team_main"} segment. Two projects registered under exactly these ids must
+     * still land under two DIFFERENT report subdirectories rather than silently sharing (and
+     * overwriting) one - the isolation {@link StoreReportTools#reportSegment}'s hash suffix
+     * ({@link FileNameSanitizer#uniqueSegment}) exists to guarantee.
+     */
+    @Test
+    void storeOverviewWritesDistinctReportsForProjectIdsThatCollideAfterPlainSanitizing() throws Exception {
+        final ProjectId slashProject = new ProjectId("team/main");
+        final ProjectId underscoreProject = new ProjectId("team_main");
+        final String slashAnchor = "/wherever/team-slash-main";
+        final String underscoreAnchor = "/wherever/team-underscore-main";
+        try {
+            final RequirementRepository requirements =
+                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            requirements.create(underscoreProject, new Requirement(
+                    new RequirementId(ResourceId.of("https://w3id.org/arknet/id/store-report-test-fr-collide")),
+                    new RequirementCode("FR-1"), "Zweitprojekt",
+                    "The system shall authenticate a second user.",
+                    RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
+                    List.of("Zweitprojekt succeeds")));
+
+            final Prefixes prefixes = Prefixes.defaults();
+            final StoreReader reader = new StoreReader(lifecycle);
+            final ProjectResolver projects = anchor -> {
+                if (slashAnchor.equals(anchor)) {
+                    return slashProject;
+                }
+                if (underscoreAnchor.equals(anchor)) {
+                    return underscoreProject;
+                }
+                return resolveTestAnchor(anchor);
+            };
+            final StoreReportTools toolsWithCollidingIds = new StoreReportTools(
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    modelViews(), projects, NO_LABELS, reportDir, null);
+
+            toolsWithCollidingIds.storeOverview(null, slashAnchor);
+            toolsWithCollidingIds.storeOverview(null, underscoreAnchor);
+
+            final String slashSegment = StoreReportTools.reportSegment(slashProject);
+            final String underscoreSegment = StoreReportTools.reportSegment(underscoreProject);
+            assertThat(slashSegment).isNotEqualTo(underscoreSegment);
+            final Path slashReport = reportDir.resolve(slashSegment).resolve("store-report.html");
+            final Path underscoreReport = reportDir.resolve(underscoreSegment).resolve("store-report.html");
+            assertThat(slashReport).exists();
+            assertThat(underscoreReport).exists();
+            assertThat(Files.readString(slashReport)).doesNotContain("Zweitprojekt");
+        } finally {
+            lifecycle.close(new DatasetId(underscoreProject.value()));
+        }
     }
 
     /**
@@ -280,10 +405,11 @@ class StoreReportToolsTest {
 
         final String result = toolsWithHostDir.storeOverview(null, ANCHOR);
 
-        final Path writtenHtml = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+        final String segment = StoreReportTools.reportSegment(PROJECT);
+        final Path writtenHtml = reportDir.resolve(segment).resolve("store-report.html");
         assertThat(writtenHtml).exists();
         assertThat(result)
-                .contains("# HTML report: " + hostDir.resolve(PROJECT.value()).resolve("store-report.html"))
+                .contains("# HTML report: " + hostDir.resolve(segment).resolve("store-report.html"))
                 .doesNotContain(reportDir.toString());
     }
 
@@ -307,7 +433,7 @@ class StoreReportToolsTest {
 
         assertThat(result).contains("# Project arknet-demo (id: sample-project) --");
 
-        final Path html = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
+        final Path html = reportDir.resolve(StoreReportTools.reportSegment(PROJECT)).resolve("store-report.html");
         assertThat(Files.readString(html)).contains(
                 "<span class=\"ws\">project: arknet-demo (id: sample-project)</span>");
     }
@@ -325,8 +451,10 @@ class StoreReportToolsTest {
             tools.storeOverview(null, ANCHOR);
             tools.storeOverview(null, OTHER_ANCHOR);
 
-            final Path ownReport = reportDir.resolve(PROJECT.value()).resolve("store-report.html");
-            final Path otherReport = reportDir.resolve(OTHER_PROJECT.value()).resolve("store-report.html");
+            final Path ownReport = reportDir.resolve(StoreReportTools.reportSegment(PROJECT))
+                    .resolve("store-report.html");
+            final Path otherReport = reportDir.resolve(StoreReportTools.reportSegment(OTHER_PROJECT))
+                    .resolve("store-report.html");
             assertThat(ownReport).exists();
             assertThat(otherReport).exists();
             assertThat(Files.readString(ownReport)).contains("FR-1");

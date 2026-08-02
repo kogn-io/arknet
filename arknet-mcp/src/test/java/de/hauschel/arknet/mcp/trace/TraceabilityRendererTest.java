@@ -27,6 +27,7 @@ class TraceabilityRendererTest {
     private static final String ID = "https://w3id.org/arknet/id/";
     private static final String ARKREQ = "https://w3id.org/arknet/requirements#";
     private static final String ARKDDD = "https://w3id.org/arknet/ddd#";
+    private static final String ARKPROC = "https://w3id.org/arknet/process#";
     private static final String SKOS = "http://www.w3.org/2004/02/skos/core#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String TITLE = "http://purl.org/dc/terms/title";
@@ -42,6 +43,7 @@ class TraceabilityRendererTest {
     private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
+    private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
 
     private static final String FR_1 = ID + "fr-1";
     private static final String FR_2 = ID + "fr-2";
@@ -61,6 +63,7 @@ class TraceabilityRendererTest {
     private static final String UC_10 = ID + "uc-10";
     private static final String ACTOR_A = ID + "actor-a";
     private static final String ACTOR_B = ID + "actor-b";
+    private static final String ACTOR_C = ID + "actor-c";
     private static final String BC_2 = ID + "bc-2";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
@@ -216,6 +219,27 @@ class TraceabilityRendererTest {
         assertThat(useCasesSection).contains("UCB").contains("actors    : ACTOR-A");
     }
 
+    /**
+     * ACTOR_C carries no {@code primaryActor}/{@code supportingActor} edge from any use case -
+     * the exact gap issue #147 reports: the tool's own description promises "for every actor",
+     * but the "Actors" section used to be built exclusively from
+     * {@link TraceabilityGraph#actorsOf(String)}, so an actor no use case references yet never
+     * appeared and the section's count silently under-reported. It must now show up, with
+     * "(none)" for its use cases - the strongest signal that a use case is missing or that this
+     * actor belongs to a different bounded context.
+     */
+    @Test
+    void actorUseCaseMatrixIncludesAnActorNoUseCaseReferencesYet() {
+        TraceabilityGraph graph = TraceabilityGraph.of(actorWithoutUseCaseFixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        String matrix = renderer.actorUseCaseMatrix(PROJECT, graph);
+
+        assertThat(matrix).contains("## Actors (2)");
+        String actorsSection = matrix.substring(matrix.indexOf("## Actors"), matrix.indexOf("## Use cases"));
+        assertThat(actorsSection).contains("ACTOR-A").contains("use cases : UCA");
+        assertThat(actorsSection).contains("ACTOR-C").contains("use cases : (none)");
+    }
+
     @Test
     void actorUseCaseMatrixReportsNoneForAProjectWithoutUseCases() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);
@@ -274,10 +298,12 @@ class TraceabilityRendererTest {
     private static StoreSnapshot actorUseCaseFixtureSnapshot() {
         return StoreSnapshot.of(List.of(
                 iri(ACTOR_A, RDF_TYPE, SKOS + "Concept"),
+                iri(ACTOR_A, RDF_TYPE, HUMAN_ACTOR_TYPE),
                 lit(ACTOR_A, PREF_LABEL, "Customer"),
                 lit(ACTOR_A, IDENTIFIER, "ACTOR-A"),
 
                 iri(ACTOR_B, RDF_TYPE, SKOS + "Concept"),
+                iri(ACTOR_B, RDF_TYPE, HUMAN_ACTOR_TYPE),
                 lit(ACTOR_B, PREF_LABEL, "Support agent"),
                 lit(ACTOR_B, IDENTIFIER, "ACTOR-B"),
 
@@ -291,6 +317,25 @@ class TraceabilityRendererTest {
                 lit(UC_B, TITLE, "Cancel order"),
                 lit(UC_B, IDENTIFIER, "UCB"),
                 iri(UC_B, PRIMARY_ACTOR, ACTOR_A)));
+    }
+
+    private static StoreSnapshot actorWithoutUseCaseFixtureSnapshot() {
+        return StoreSnapshot.of(List.of(
+                iri(ACTOR_A, RDF_TYPE, SKOS + "Concept"),
+                iri(ACTOR_A, RDF_TYPE, HUMAN_ACTOR_TYPE),
+                lit(ACTOR_A, PREF_LABEL, "Customer"),
+                lit(ACTOR_A, IDENTIFIER, "ACTOR-A"),
+
+                // Never referenced by any use case's primaryActor/supportingActor edge.
+                iri(ACTOR_C, RDF_TYPE, SKOS + "Concept"),
+                iri(ACTOR_C, RDF_TYPE, HUMAN_ACTOR_TYPE),
+                lit(ACTOR_C, PREF_LABEL, "Auditor"),
+                lit(ACTOR_C, IDENTIFIER, "ACTOR-C"),
+
+                iri(UC_A, RDF_TYPE, ARKREQ + "UseCase"),
+                lit(UC_A, TITLE, "Place order"),
+                lit(UC_A, IDENTIFIER, "UCA"),
+                iri(UC_A, PRIMARY_ACTOR, ACTOR_A)));
     }
 
     private static StoreSnapshot termCooccurrenceFixtureSnapshot() {

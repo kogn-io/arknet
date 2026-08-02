@@ -293,6 +293,26 @@ class TraceabilityGraphTest {
         }
     }
 
+    /**
+     * Writes a fresh {@code skos:Concept}, additionally typed {@code arkproc:HumanActor}, with no
+     * {@code primaryActor}/{@code supportingActor} edge from any use case - for {@link
+     * #actorIrisIncludesAnActorNoUseCaseReferencesYet()}.
+     */
+    private void seedActorConcept(String actorIri, String label) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        IRI actor = rdf.createIRI(actorIri);
+        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("https://w3id.org/arknet/process#HumanActor"));
+        graph.add(actor, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"), rdf.createLiteral(label));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unreferenced-actor-graph"), graph);
+                return null;
+            });
+        }
+    }
+
     /** Overwrites a requirement's {@code dcterms:description} with raw prose, for prose-matching tests. */
     private void seedRequirementDescription(String requirementIri, String description) {
         RDF rdf = new SimpleRdf();
@@ -337,6 +357,28 @@ class TraceabilityGraphTest {
     @Test
     void useCaseIrisContainsUc1() {
         assertThat(graph.useCaseIris()).containsExactly(UC_1_IRI);
+    }
+
+    @Test
+    void actorIrisContainsTheActorFacettedTerm() {
+        assertThat(graph.actorIris()).containsExactly(ACTOR_IRI);
+    }
+
+    /**
+     * Regression test for issue #147: {@link TraceabilityGraph#actorIris()} must find an actor
+     * from its {@code arkproc:HumanActor}/{@code SystemActor} type alone, independent of whether
+     * any use case's {@code primaryActor}/{@code supportingActor} edge references it yet.
+     */
+    @Test
+    void actorIrisIncludesAnActorNoUseCaseReferencesYet() {
+        String unreferencedActorIri = "https://w3id.org/arknet/id/trace-test-actor-unreferenced";
+        seedActorConcept(unreferencedActorIri, "Auditor");
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.actorIris()).containsExactlyInAnyOrder(ACTOR_IRI, unreferencedActorIri);
+        assertThat(freshGraph.useCasesOf(unreferencedActorIri)).isEmpty();
     }
 
     @Test

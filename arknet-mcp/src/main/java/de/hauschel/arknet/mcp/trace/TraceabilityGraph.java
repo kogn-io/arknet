@@ -63,6 +63,7 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 public final class TraceabilityGraph {
 
     private static final String ARKDDD_NAMESPACE = "https://w3id.org/arknet/ddd#";
+    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
 
@@ -102,6 +103,13 @@ public final class TraceabilityGraph {
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
+
+    // arkproc:HumanActor/SystemActor below are, like UBIQUITOUS_LANGUAGE_TERM above, used only
+    // within this class and duplicated rather than shared - the same two type IRIs are already
+    // duplicated as adapter-private constants in the ul/uc kogniordf out-adapters, and this class
+    // stays free of any dependency on either adapter (see the class javadoc).
+    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
+    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
 
     /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").
@@ -233,6 +241,18 @@ public final class TraceabilityGraph {
     /** @return the IRIs of every {@code arkreq:UseCase}, sorted. */
     public List<String> useCaseIris() {
         return subjectsOfType(USE_CASE_TYPE);
+    }
+
+    /**
+     * @return the IRIs of every {@code arkproc:HumanActor}/{@code SystemActor} in the project,
+     *         sorted - independent of whether any use case references it via {@code
+     *         arkreq:primaryActor}/{@code supportingActor}. {@code actor_usecase_matrix}'s
+     *         "Actors" section unions this with {@link #actorsOf(String)}'s results so an actor
+     *         nobody's use case references yet still appears, instead of silently disappearing
+     *         from a matrix whose own tool description promises "for every actor" (issue #147).
+     */
+    public List<String> actorIris() {
+        return subjectsOfType(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE);
     }
 
     /**

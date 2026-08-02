@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Pattern;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -44,8 +44,17 @@ import de.hauschel.arknet.prj.domain.Project;
  */
 public final class StoreExportTools {
 
-    private static final Pattern UNSAFE_FILENAME_CHARS = Pattern.compile("[^A-Za-z0-9._-]");
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
+
+    /**
+     * Disambiguates {@link #timestampFolderName()} across calls that land in the same
+     * wall-clock second - the timestamp alone used to be the whole subdirectory name, so two
+     * {@code project_export} calls within one second silently shared it, and {@link
+     * Files#move} then overwrote whichever project the first call had already exported
+     * (issue #146). One shared, process-wide counter is enough: the disambiguator only has to
+     * be unique within this daemon's lifetime, not across restarts.
+     */
+    private static final AtomicLong CALL_SEQUENCE = new AtomicLong();
 
     private final ListProjects listProjects;
     private final StoreExporter exporter;
@@ -93,21 +102,52 @@ public final class StoreExportTools {
         // The label alone can collide after sanitizing (e.g. "team/main" and "team main" both
         // become "team_main"); the id is guaranteed unique, so appending it rules out silently
         // overwriting one project's export with another's.
-        final String fileName = sanitize(project.label()) + "__" + sanitize(project.id().value()) + ".trig";
+        final String fileName = FileNameSanitizer.sanitize(project.label()) + "__"
+                + FileNameSanitizer.sanitize(project.id().value()) + ".trig";
         final Path target = targetDir.resolve(fileName);
         final Path tmp = targetDir.resolve(fileName + ".tmp");
+
         try {
             Files.createDirectories(targetDir);
-            try (OutputStream out = Files.newOutputStream(tmp)) {
-                exporter.exportTrig(project.id(), out);
-            }
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-            return "# Exported " + project.label() + ": " + displayPath(timestamp, fileName);
+        } catch (final IOException failure) {
+            return writeFailureLine(project, targetDir, failure);
+        }
+
+        final OutputStream tmpStream;
+        try {
+            tmpStream = Files.newOutputStream(tmp);
+        } catch (final IOException failure) {
+            return writeFailureLine(project, targetDir, failure);
+        }
+        // Deliberately its own try/catch, not folded into the createDirectories/move steps above:
+        // exportTrig both reads (acquires the dataset) and writes (streams into tmpStream), so a
+        // failure here may have nothing to do with the filesystem at all - e.g. a
+        // DatasetLockConflictException from a concurrently open lease. "FAILED to write" would
+        // misname exactly that case (issue #146).
+        try (tmpStream) {
+            exporter.exportTrig(project.id(), tmpStream);
         } catch (final IOException | RuntimeException failure) {
             deleteQuietly(tmp);
-            return "# Exported " + project.label() + ": FAILED to write to " + targetDir + " ("
-                    + failure.getClass().getSimpleName() + ": " + failure.getMessage() + ")";
+            return exportFailureLine(project, failure);
         }
+
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (final IOException failure) {
+            deleteQuietly(tmp);
+            return writeFailureLine(project, targetDir, failure);
+        }
+        return "# Exported " + project.label() + ": " + displayPath(timestamp, fileName);
+    }
+
+    private static String writeFailureLine(final Project project, final Path targetDir, final Exception failure) {
+        return "# Exported " + project.label() + ": FAILED to write to " + targetDir + " ("
+                + failure.getClass().getSimpleName() + ": " + failure.getMessage() + ")";
+    }
+
+    private static String exportFailureLine(final Project project, final Exception failure) {
+        return "# Exported " + project.label() + ": FAILED to export (" + failure.getClass().getSimpleName()
+                + ": " + failure.getMessage() + ")";
     }
 
     private static void deleteQuietly(final Path path) {
@@ -126,15 +166,13 @@ public final class StoreExportTools {
 
     /**
      * One shared point in time per {@link #export()} call - every registered project's file lands
-     * under the very same subdirectory, not one per project. Package-private (rather than fully
-     * private) only so the test can predict it; not a general clock seam (no {@code Clock}
-     * injection - YAGNI, no other tool in this codebase needs one either).
+     * under the very same subdirectory, not one per project - disambiguated by an appended
+     * process-wide call sequence number so two calls landing in the same wall-clock second still
+     * get distinct subdirectories (issue #146). Package-private (rather than fully private) only
+     * so the test can predict it; not a general clock seam (no {@code Clock} injection - YAGNI, no
+     * other tool in this codebase needs one either).
      */
     static String timestampFolderName() {
-        return TIMESTAMP_FORMAT.format(LocalDateTime.now());
-    }
-
-    private static String sanitize(final String label) {
-        return UNSAFE_FILENAME_CHARS.matcher(label).replaceAll("_");
+        return TIMESTAMP_FORMAT.format(LocalDateTime.now()) + "-" + CALL_SEQUENCE.incrementAndGet();
     }
 }
