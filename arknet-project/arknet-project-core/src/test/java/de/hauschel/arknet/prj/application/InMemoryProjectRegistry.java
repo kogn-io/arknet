@@ -35,6 +35,15 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  * #compareAndUpdate} rejects a stale one, exactly the CAS contract the real adapter would
  * enforce.</p>
  *
+ * <p><strong>Why {@code synchronized}.</strong> The real adapter's {@code compareAndUpdate} is an
+ * atomic compare-and-swap backed by an actual store transaction (issue #173 is explicitly not
+ * about that guarantee - {@code ProjectRegistryRealStoreConcurrencyTest} covers it separately).
+ * This hand-rolled fake's {@code LinkedHashMap}s are not thread-safe on their own, so a
+ * read-then-write check like {@link #compareAndUpdate}'s would itself be racy under concurrent
+ * callers without a lock, which would corrupt a concurrency test's assumption that only
+ * {@link ProjectService}'s own describe-ordering is under test. {@code synchronized} on every
+ * method restores the same atomicity the real store already guarantees.</p>
+ *
  * <p>{@link #writeCount()} counts every mutating call ({@link #register} and a
  * {@link #compareAndUpdate} that actually applies), so a test can assert that an idempotent
  * no-op ({@code attach} of an already-present anchor, {@code rename} to the current label)
@@ -47,7 +56,7 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
     private final AtomicInteger writeCount = new AtomicInteger();
 
     @Override
-    public void register(Project project) {
+    public synchronized void register(Project project) {
         if (byId.containsKey(project.id())) {
             throw new ResourceAlreadyExistsException(project.id());
         }
@@ -66,29 +75,29 @@ final class InMemoryProjectRegistry implements ProjectRegistry {
     }
 
     @Override
-    public Optional<Project> findByAnchor(Anchor anchor) {
+    public synchronized Optional<Project> findByAnchor(Anchor anchor) {
         return byId.values().stream()
                 .filter(p -> p.anchors().contains(anchor))
                 .findFirst();
     }
 
     @Override
-    public Optional<Project> findById(ProjectId id) {
+    public synchronized Optional<Project> findById(ProjectId id) {
         return Optional.ofNullable(byId.get(id));
     }
 
     @Override
-    public List<Project> findAll() {
+    public synchronized List<Project> findAll() {
         return List.copyOf(byId.values());
     }
 
     @Override
-    public Optional<CurrentProject> findCurrentById(ProjectId id) {
+    public synchronized Optional<CurrentProject> findCurrentById(ProjectId id) {
         return findById(id).map(project -> new CurrentProject(project, headById.get(id)));
     }
 
     @Override
-    public void compareAndUpdate(RevisionToken expectedHead, Project project) {
+    public synchronized void compareAndUpdate(RevisionToken expectedHead, Project project) {
         Project current = byId.get(project.id());
         if (current == null) {
             throw new ProjectNotFoundException(project.id());

@@ -10,6 +10,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -75,6 +77,18 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * {@link #registerRetryingOnUnattributedConflict} - see that exception's javadoc for why repeating
  * the identical write is honest here. Only sustained, pathological contention surfaces that
  * exception to the caller.</p>
+ *
+ * <p><strong>Registry write and self-description commit as one unit per project.</strong> A
+ * {@link ProjectRegistry} write (a fresh registration, an attached anchor, a rename) and the
+ * {@link ProjectSelfDescription#describe} call that follows it are not one transaction - the
+ * registry lives in the system dataset, the self-description in the project's own dataset (issue
+ * #173). Left unguarded, two overlapping calls against the <em>same</em> {@link ProjectId} could
+ * commit their registry writes in one order but their {@code describe} calls in the other, letting
+ * a stale {@code describe} land after a fresher one and overwrite it - not mere staleness the next
+ * write would heal, but an active regression the next write could just as easily hide again.
+ * {@link #withProjectLock} closes that window by serialising "read/compare-and-update plus
+ * describe" into one atomic unit per {@link ProjectId}; different projects still run fully in
+ * parallel.</p>
  */
 public class ProjectService
         implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
@@ -93,6 +107,14 @@ public class ProjectService
     private final ProjectRegistry registry;
     private final ProjectSelfDescription selfDescription;
     private final DatasetInventory datasets;
+
+    /**
+     * One monitor per {@link ProjectId} that has ever been the target of a registry write in this
+     * JVM, backing {@link #withProjectLock}. Grows with the number of distinct projects a caller
+     * has touched, not with the number of writes - bounded by how many projects genuinely exist,
+     * so it is not pruned.
+     */
+    private final ConcurrentHashMap<ProjectId, Object> projectLocks = new ConcurrentHashMap<>();
 
     /**
      * Creates the service.
@@ -123,9 +145,11 @@ public class ProjectService
         }
         ProjectId id = new ProjectId(UUID.randomUUID().toString());
         Project project = new Project(id, label, List.of(anchor));
-        registerRetryingOnUnattributedConflict(project);
-        selfDescription.describe(project);
-        return project;
+        return withProjectLock(id, () -> {
+            registerRetryingOnUnattributedConflict(project);
+            selfDescription.describe(project);
+            return project;
+        });
     }
 
     /**
@@ -159,9 +183,11 @@ public class ProjectService
             throw new AnchorAlreadyRegisteredException(anchor, anchorOwner.get().id());
         }
         Project project = new Project(datasetId, label, List.of(anchor));
-        registry.register(project);
-        selfDescription.describe(project);
-        return project;
+        return withProjectLock(datasetId, () -> {
+            registry.register(project);
+            selfDescription.describe(project);
+            return project;
+        });
     }
 
     @Override
@@ -261,24 +287,46 @@ public class ProjectService
      *                                  attempt
      */
     private Project updateWithOptimisticRetry(ProjectId id, UnaryOperator<Project> mutation) {
-        StaleProjectException lastConflict = null;
-        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-            ProjectRegistry.CurrentProject current = registry.findCurrentById(id)
-                    .orElseThrow(() -> new ProjectNotFoundException(id));
-            Project updated = mutation.apply(current.project());
-            if (updated.equals(current.project())) {
-                return current.project();
+        return withProjectLock(id, () -> {
+            StaleProjectException lastConflict = null;
+            for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+                ProjectRegistry.CurrentProject current = registry.findCurrentById(id)
+                        .orElseThrow(() -> new ProjectNotFoundException(id));
+                Project updated = mutation.apply(current.project());
+                if (updated.equals(current.project())) {
+                    return current.project();
+                }
+                try {
+                    registry.compareAndUpdate(current.head(), updated);
+                    selfDescription.describe(updated);
+                    return updated;
+                } catch (StaleProjectException e) {
+                    // A concurrent writer replaced the project between our read and our write -
+                    // retry against the now-current state instead of silently discarding that
+                    // change. In normal operation this can no longer be another ProjectService
+                    // caller once withProjectLock serialises every writer of this project id; kept
+                    // for a write that reaches ProjectRegistry from outside this service.
+                    lastConflict = e;
+                }
             }
-            try {
-                registry.compareAndUpdate(current.head(), updated);
-                selfDescription.describe(updated);
-                return updated;
-            } catch (StaleProjectException e) {
-                // A concurrent writer replaced the project between our read and our write - retry
-                // against the now-current state instead of silently discarding that change.
-                lastConflict = e;
-            }
+            throw lastConflict;
+        });
+    }
+
+    /**
+     * Runs {@code action} - a registry write immediately followed by
+     * {@link ProjectSelfDescription#describe} - as one atomic unit against every other caller
+     * writing the <em>same</em> {@code projectId} (issue #173): the two calls target different
+     * datasets (the system registry vs. the project's own) and cannot commit as one transaction,
+     * so without this lock two overlapping writers could commit their registry writes in one
+     * order and their {@code describe} calls in the other, leaving the project's self-description
+     * actively wrong rather than merely stale. Callers writing <em>different</em> projects never
+     * contend with each other.
+     */
+    private <T> T withProjectLock(ProjectId projectId, Supplier<T> action) {
+        Object lock = projectLocks.computeIfAbsent(projectId, id -> new Object());
+        synchronized (lock) {
+            return action.get();
         }
-        throw lastConflict;
     }
 }
