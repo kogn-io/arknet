@@ -393,6 +393,31 @@ class AdrServiceTest {
     }
 
     /**
+     * Regression for #189: {@code get} (unlike {@code list}) derives {@code supersededBy} through
+     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#findSupersedingCodes} rather
+     * than {@code AdrService}'s own comparator, so it exercises the repository's own sort order. The
+     * in-memory test fake must sort by parsed running number, not by {@link String}'s natural
+     * (lexicographic) order, the same contract {@code KognioRdfAdrRepository} honours.
+     */
+    @Test
+    void getSortsSupersededByRunningNumberNotLexicographically() {
+        AdrCode target = service.add(PROJECT, newAdr()).adr().code();
+        for (int i = 0; i < 10; i++) {
+            AdrCode superseding = service.add(PROJECT, newAdr()).adr().code();
+            service.supersede(PROJECT, superseding, target);
+        }
+
+        AdrDetail targetDetail = service.get(PROJECT, target).orElseThrow();
+
+        assertEquals(
+                List.of(new AdrCode("ADR-2"), new AdrCode("ADR-3"), new AdrCode("ADR-4"),
+                        new AdrCode("ADR-5"), new AdrCode("ADR-6"), new AdrCode("ADR-7"),
+                        new AdrCode("ADR-8"), new AdrCode("ADR-9"), new AdrCode("ADR-10"),
+                        new AdrCode("ADR-11")),
+                targetDetail.supersededBy());
+    }
+
+    /**
      * Regression for #187: two distinct, non-standard store-first (ADR-005) codes that both parse to
      * the same running number (unparseable, hence 0 - see {@code AdrService#runningNumber}) must not
      * collide in the {@code supersededBy} {@link java.util.TreeSet}. A comparator ordering only by

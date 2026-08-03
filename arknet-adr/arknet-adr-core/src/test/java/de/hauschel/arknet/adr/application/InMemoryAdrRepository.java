@@ -4,6 +4,7 @@
 package de.hauschel.arknet.adr.application;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,18 @@ import de.hauschel.arknet.kernel.ProjectId;
  * CAS contract the real adapter enforces via {@code arkprov:head}.</p>
  */
 class InMemoryAdrRepository implements AdrRepository {
+
+    /**
+     * Orders {@code ADR-N} code strings by their parsed running number, not by {@link String}'s
+     * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
+     * order once a project passes ten decisions. Falls back to natural string order when the running
+     * number ties, which every well-formed {@code ADR-N} code only ever does with itself. Mirrors
+     * {@code AdrService}'s and {@code KognioRdfAdrRepository}'s identically-named, identically-behaved
+     * helper (this fake has no dependency it could reuse it through).
+     */
+    private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
+            Comparator.<String>comparingInt(InMemoryAdrRepository::runningNumber)
+                    .thenComparing(Comparator.naturalOrder());
 
     private final Map<ProjectId, Map<AdrId, Adr>> byProject = new LinkedHashMap<>();
     private final Map<AdrId, String> headByIdentity = new LinkedHashMap<>();
@@ -101,9 +114,22 @@ class InMemoryAdrRepository implements AdrRepository {
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(adr -> adr.supersedes().contains(supersededId))
                 .map(adr -> adr.code().value())
-                .collect(java.util.stream.Collectors.toCollection(TreeSet::new))
+                .collect(java.util.stream.Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
                 .stream()
                 .map(AdrCode::new)
                 .toList();
+    }
+
+    /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */
+    private static int runningNumber(String code) {
+        int dash = code.lastIndexOf('-');
+        if (dash < 0 || dash == code.length() - 1) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(code.substring(dash + 1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 }
