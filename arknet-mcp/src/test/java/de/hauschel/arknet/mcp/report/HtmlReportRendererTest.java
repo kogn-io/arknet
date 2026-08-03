@@ -121,7 +121,7 @@ class HtmlReportRendererTest {
                 iri(dashed, RDF_TYPE, ARKREQ + "Step"),
                 literal(dashed, ARKREQ + "stepText", "Zweiter")));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), snapshot, "digest", views());
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views());
 
         assertThat(anchorOf(dotted)).isNotEqualTo(anchorOf(dashed));
         assertThat(html).contains("id=\"r-" + anchorOf(dotted) + "\"");

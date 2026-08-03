@@ -94,7 +94,7 @@ class DigestRendererTest {
                 lit(second, TITLE, "Logout"),
                 lit(second, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
 
         assertThat(digest).contains("resource_get(\"" + first + "\")");
         assertThat(digest).contains("resource_get(\"" + second + "\")");
