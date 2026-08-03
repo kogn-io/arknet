@@ -7,16 +7,17 @@ import de.hauschel.arknet.bc.domain.BoundedContext;
 
 /**
  * The concurrency token {@link BoundedContextRepository#compareAndUpdate} guards a write with and
- * {@link BoundedContextRepository#findCurrentByCode} hands out: the {@code arkprov:head} revision
- * IRI a {@link de.hauschel.arknet.persistence.WriteFunnel} write last recorded for a bounded
- * context (ADR-014), or {@code null} if none has been recorded yet.
+ * {@link BoundedContextRepository#findCurrentByCode} hands out: an opaque string representing a
+ * bounded context's last observed write, minted and interpreted only by the out-adapter, or
+ * {@code null} if none has been recorded yet. The caller never inspects or constructs the value
+ * itself - it only round-trips whatever this port last handed out.
  *
  * <p>Lives at the out-port, not in {@code domain}: it carries no bounded-context business meaning
- * (a {@link BoundedContext} does not know its own head) and exists purely to let a caller
+ * (a {@link BoundedContext} does not know its own token) and exists purely to let a caller
  * round-trip a value it read back to the same port for a compare-and-set check - a port-boundary
- * concept, not an aggregate field. Wrapping the bare revision IRI closes the primitive-obsession
+ * concept, not an aggregate field. Wrapping the bare token closes the primitive-obsession
  * gap a raw {@code String} left open: nothing at the port signature stopped a caller from passing,
- * say, a bounded-context code or another string entirely where a head was expected, and the
+ * say, a bounded-context code or another string entirely where a token was expected, and the
  * compiler could not catch it.</p>
  */
 public record RevisionToken(String value) {

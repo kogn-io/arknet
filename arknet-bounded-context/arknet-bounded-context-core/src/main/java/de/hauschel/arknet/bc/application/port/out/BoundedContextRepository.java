@@ -60,23 +60,21 @@ public interface BoundedContextRepository {
 
     /**
      * Replaces an existing bounded context by identity, but only if its current concurrency token
-     * (the {@code arkprov:head} revision recorded by the last funnel write, ADR-014) still equals
-     * {@code expectedHead} - the compare-and-set guard against the lost-update race (the same
-     * guard the requirements context got). A read-modify-write round
-     * trip ({@code bc_link_term}) reads the current state and head together via
-     * {@link #findCurrentByCode}, derives {@code updated}, and calls this method with the head it
+     * still equals {@code expectedHead} - the compare-and-set guard against the lost-update race
+     * (the same guard the requirements context got). A read-modify-write round trip
+     * ({@code bc_link_term}) reads the current state and token together via
+     * {@link #findCurrentByCode}, derives {@code updated}, and calls this method with the token it
      * observed - a mismatch means the read was already stale, and the caller must re-read and
-     * retry rather than silently discard the concurrent change (an
-     * {@code arkddd:ubiquitousLanguageTerm} edge a concurrent {@code bc_link_term} had just
-     * added).
+     * retry rather than silently discard the concurrent change (a {@code usesTerms} edge a
+     * concurrent {@code bc_link_term} had just added).
      *
-     * <p><strong>The token guards funnel writers, not store-first edits.</strong>
-     * {@code expectedHead} only ever changes when a write goes through the shared
-     * {@code WriteFunnel} (ADR-014); a direct store-first (ADR-005) edit to this bounded
-     * context's triples leaves the head untouched. Such an edit therefore passes this method's
+     * <p><strong>The token guards writes made through this port, not edits that bypass it.</strong>
+     * {@code expectedHead} only ever changes when a write goes through this port's own
+     * {@code create}/{@code compareAndUpdate} (ADR-014); a direct store-first (ADR-005) edit to
+     * this bounded context leaves the token untouched. Such an edit therefore passes this method's
      * compare-and-set check undetected, and the subsequent replace-by-identity write silently
-     * overwrites it. The guard closes the lost-update window between two funnel writers, not
-     * between a funnel writer and a write that bypassed the funnel entirely.</p>
+     * overwrites it. The guard closes the lost-update window between two callers of this port, not
+     * between a caller of this port and a store-first edit that bypassed it entirely.</p>
      *
      * <p><strong>Business-code uniqueness.</strong> If {@code updated.code()} differs from the
      * code currently stored under this identity, it is checked against every other bounded
@@ -117,18 +115,18 @@ public interface BoundedContextRepository {
     Optional<BoundedContext> findByCode(ProjectId projectId, BoundedContextCode code);
 
     /**
-     * Reads a bounded context's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). The core
-     * fields (name, domainVision, subdomain, ownedBy) and the head itself come from one query
-     * call - one snapshot - which is the load-bearing guarantee here, not an ordering of clauses
-     * within that query. {@code usesTerms}, in contrast, is deliberately filled in by a later,
-     * independent follow-up read; that is safe precisely because a later read can only be
-     * fresher, never staler, than the head: a funnel write that commits in between moves the
-     * head, so the subsequent {@link #compareAndUpdate} then fails its comparison and the caller
-     * re-reads instead of overwriting a state it never actually saw. The pairing is therefore
-     * conservative - state is never older than the head it is paired with - never optimistic; it
-     * does not mean the whole bounded context comes from a single read. Backs the read side of
-     * the read-modify-write round trip {@link #compareAndUpdate} guards the write side of.
+     * Reads a bounded context's current state together with its concurrency token (recorded by
+     * the last write through this port, ADR-014). The core fields (name, domainVision, subdomain,
+     * ownedBy) and the token itself come from one query call - one snapshot - which is the
+     * load-bearing guarantee here, not an ordering of clauses within that query. {@code usesTerms},
+     * in contrast, is deliberately filled in by a later, independent follow-up read; that is safe
+     * precisely because a later read can only be fresher, never staler, than the token: a write
+     * through this port that commits in between moves the token, so the subsequent
+     * {@link #compareAndUpdate} then fails its comparison and the caller re-reads instead of
+     * overwriting a state it never actually saw. The pairing is therefore conservative - state is
+     * never older than the token it is paired with - never optimistic; it does not mean the whole
+     * bounded context comes from a single read. Backs the read side of the read-modify-write round
+     * trip {@link #compareAndUpdate} guards the write side of.
      *
      * @param projectId the project (architecture model) to look up the bounded context in
      * @param code        the bounded-context code (e.g. {@code BC-1})
@@ -139,8 +137,8 @@ public interface BoundedContextRepository {
 
     /**
      * A bounded context's state paired with its current concurrency token (the
-     * {@link RevisionToken}, or {@code null} if the bounded context predates the funnel's revision
-     * recording), as read together by {@link #findCurrentByCode}.
+     * {@link RevisionToken}, or {@code null} if no write has ever been recorded for this bounded
+     * context), as read together by {@link #findCurrentByCode}.
      */
     record CurrentBoundedContext(BoundedContext value, RevisionToken head) {
     }

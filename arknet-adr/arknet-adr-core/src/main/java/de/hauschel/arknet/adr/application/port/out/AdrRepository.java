@@ -57,25 +57,24 @@ public interface AdrRepository {
     void create(ProjectId projectId, Adr adr);
 
     /**
-     * Replaces an existing decision by identity, but only if its current concurrency token (the
-     * {@code arkprov:head} revision recorded by the last funnel write, ADR-014) still equals
-     * {@code expectedHead} - the compare-and-set guard against the lost-update race. A
+     * Replaces an existing decision by identity, but only if its current concurrency token still
+     * equals {@code expectedHead} - the compare-and-set guard against the lost-update race. A
      * read-modify-write round trip ({@code adr_set_status}, {@code adr_supersede}) reads the current
-     * state and head together via {@link #findCurrentByCode}, derives {@code updated}, and calls
-     * this method with the head it observed; a mismatch means the read was already stale, and the
+     * state and token together via {@link #findCurrentByCode}, derives {@code updated}, and calls
+     * this method with the token it observed; a mismatch means the read was already stale, and the
      * caller must re-read and retry rather than silently discard the concurrent change (a
      * {@code supersedes} edge a concurrent {@code adr_supersede} had just added).
      *
-     * <p><strong>The token guards funnel writers, not store-first edits.</strong>
-     * {@code expectedHead} only ever changes when a write goes through the shared
-     * {@code WriteFunnel} (ADR-014); a direct store-first (ADR-005) edit to this decision's triples
-     * leaves the head untouched. Such an edit therefore passes this method's compare-and-set check
-     * undetected, and the subsequent replace-by-identity write silently overwrites it. The guard
-     * closes the lost-update window between two funnel writers, not between a funnel writer and a
-     * write that bypassed the funnel entirely.</p>
+     * <p><strong>The token guards writes made through this port, not edits that bypass it.</strong>
+     * {@code expectedHead} only ever changes when a write goes through this port's own
+     * {@code create}/{@code compareAndUpdate} (ADR-014); a direct store-first (ADR-005) edit to
+     * this decision leaves the token untouched. Such an edit therefore passes this method's
+     * compare-and-set check undetected, and the subsequent replace-by-identity write silently
+     * overwrites it. The guard closes the lost-update window between two callers of this port, not
+     * between a caller of this port and a store-first edit that bypassed it entirely.</p>
      *
      * @param projectId    the project (architecture model) the decision lives in
-     * @param expectedHead the {@code arkprov:head} revision IRI the caller last observed for this
+     * @param expectedHead the token the caller last observed for this
      *                     decision (from {@link #findCurrentByCode}), or {@code null} if the caller
      *                     expects no revision to exist yet
      * @param updated      the decision to store in place of the current one, if its head still
@@ -102,15 +101,15 @@ public interface AdrRepository {
     Optional<Adr> findByCode(ProjectId projectId, AdrCode code);
 
     /**
-     * Reads a decision's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). The scalar
-     * fields and the head itself come from one query call - one snapshot - which is the load-bearing
-     * guarantee here, not an ordering of clauses within that query. The multi-valued edges are
-     * deliberately filled in by later, independent follow-up reads; that is safe precisely because a
-     * later read can only be fresher, never staler, than the head: a funnel write that commits in
-     * between moves the head, so the subsequent {@link #compareAndUpdate} then fails its comparison
+     * Reads a decision's current state together with its concurrency token (recorded by the last
+     * write through this port, ADR-014). The scalar fields and the token itself come from one
+     * query call - one snapshot - which is the load-bearing guarantee here, not an ordering of
+     * clauses within that query. The multi-valued edges are deliberately filled in by later,
+     * independent follow-up reads; that is safe precisely because a later read can only be
+     * fresher, never staler, than the token: a write through this port that commits in between
+     * moves the token, so the subsequent {@link #compareAndUpdate} then fails its comparison
      * and the caller re-reads instead of overwriting a state it never actually saw. The pairing is
-     * therefore conservative - state is never older than the head it is paired with - never
+     * therefore conservative - state is never older than the token it is paired with - never
      * optimistic. Backs the read side of the read-modify-write round trip
      * {@link #compareAndUpdate} guards the write side of.
      *
@@ -122,9 +121,9 @@ public interface AdrRepository {
     Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code);
 
     /**
-     * A decision's state paired with its current concurrency token (the {@code arkprov:head}
-     * revision IRI, or {@code null} if the decision predates the funnel's revision recording), as
-     * read together by {@link #findCurrentByCode}.
+     * A decision's state paired with its current concurrency token (an opaque string, or
+     * {@code null} if no write has ever been recorded for this decision), as read together by
+     * {@link #findCurrentByCode}.
      */
     record CurrentAdr(Adr value, String head) {
     }

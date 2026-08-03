@@ -37,18 +37,17 @@ import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
  * brand-new term.</p>
  *
  * <p><strong>Update is a targeted correction, not a replace.</strong>
- * {@link #update} used to take a full {@link Term} and replace the subject's triples wholesale -
- * which silently destroyed every triple the caller never meant to touch, most severely a
- * multi-valued {@code skos:prefLabel}/{@code skos:definition} (a store-first term
- * can legally carry several language-tagged {@code prefLabel}s or several {@code definition}
- * literals, which {@link Term}'s single-{@code String} fields can only ever hold one of at a
- * time). {@link #update} instead takes the term's unchanged business {@link TermCode} plus one
- * nullable argument per correctable field, exactly mirroring {@code UpdateTerm}'s own "{@code
- * null} leaves that field unchanged" contract: only the predicate(s) whose new value is actually
- * supplied are ever deleted-and-reinserted at the triple level, so an untouched field's other
- * language variants, duplicate values, or the whole field itself if never touched at all survive
- * unconditionally. The code itself is never among the correctable fields and is therefore never
- * rewritten - a code collision is now structurally unreachable via
+ * {@link #update} used to take a full {@link Term} and overwrite everything stored under this
+ * identity - which silently destroyed every stored value the caller never meant to touch, most
+ * severely a multi-valued preferred label or definition (a store-first term can legally carry
+ * several language-tagged labels or several definition values, which {@link Term}'s single-
+ * {@code String} fields can only ever hold one of at a time). {@link #update} instead takes the
+ * term's unchanged business {@link TermCode} plus one nullable argument per correctable field,
+ * exactly mirroring {@code UpdateTerm}'s own "{@code null} leaves that field unchanged" contract:
+ * only the field(s) whose new value is actually supplied are ever touched, so an untouched
+ * field's other language variants, duplicate values, or the whole field itself if never touched
+ * at all survive unconditionally. The code itself is never among the correctable fields and is
+ * therefore never rewritten - a code collision is now structurally unreachable via
  * this method, not merely checked.</p>
  */
 public interface TermRepository {
@@ -72,15 +71,14 @@ public interface TermRepository {
 
     /**
      * Corrects specific fields of the term identified by {@code code}, leaving every field the
-     * caller did not ask to change - including any other language-tagged {@code skos:prefLabel}
-     * variant or duplicate {@code skos:definition} a store-first term may legally
-     * carry - completely untouched at the triple level.
+     * caller did not ask to change - including any other language-tagged preferred-label variant
+     * or duplicate definition a store-first term may legally carry - completely untouched.
      *
      * <p>Reads the term's current state together with its revision head before the write
      * transaction, then applies the patch as a compare-and-set: the write only takes effect if
      * that head still matches what was read. A concurrent write to this term - even one touching a
      * different field - moves the shared head and is therefore a conflict too, not only a write to
-     * the same predicate; {@code update} retries transparently on a head conflict, re-reading the
+     * the same field; {@code update} retries transparently on a head conflict, re-reading the
      * term's current state on every attempt, so a losing caller's own change is never silently
      * discarded. Only once every retry attempt keeps losing the race does
      * {@link TermConcurrentlyModifiedException} reach the caller.</p>
@@ -91,16 +89,16 @@ public interface TermRepository {
      *
      * @param projectId the project (architecture model) the term lives in
      * @param code        the term's own, unchanged business code - {@code update} never rewrites
-     *                    {@code dcterms:identifier}, so this can never itself introduce a code
+     *                    the term's identifier, so this can never itself introduce a code
      *                    collision
      * @param prefLabel   the new preferred label, or {@code null} to leave every existing
-     *                    {@code skos:prefLabel} triple untouched
+     *                    preferred label untouched
      * @param definition  the new definition, or {@code null} to leave every existing
-     *                    {@code skos:definition} triple untouched
+     *                    definition untouched
      * @param actorFacet  the new Actor facette, or {@code null} to leave an already-set facette
-     *                    (its type and role triples) untouched. Within a non-{@code null} facette,
+     *                    (its type and role) untouched. Within a non-{@code null} facette,
      *                    a {@code null} {@link ActorFacet#role()} likewise leaves an already-set
-     *                    role triple untouched - only the type is always replaced
+     *                    role untouched - only the type is always replaced
      * @return the term's up-to-date state after the correction
      * @throws TermNotFoundException             if no term with this code exists
      * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's

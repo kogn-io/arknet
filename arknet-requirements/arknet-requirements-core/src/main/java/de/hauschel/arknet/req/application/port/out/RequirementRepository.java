@@ -67,15 +67,15 @@ public interface RequirementRepository {
      * the read was already stale, and the caller must re-read and retry rather than silently
      * discard the concurrent change.
      *
-     * <p><strong>Guards funnel writers, not store-first edits.</strong> {@code expectedHead} is
-     * the {@code arkprov:head} revision recorded by the last write through the shared
-     * {@code WriteFunnel} (ADR-014 compare-and-set guard against the lost-update race, degenerated
-     * from a full-snapshot comparison to a head comparison). A
-     * direct store-first (ADR-005) edit to this requirement's triples leaves the head untouched,
-     * so such an edit passes this method's check undetected and the subsequent
-     * replace-by-identity write silently overwrites it: the guard closes the lost-update window
-     * between two funnel writers, not between a funnel writer and a write that bypassed the
-     * funnel entirely.</p>
+     * <p><strong>Guards writes made through this port, not edits that bypass it.</strong>
+     * {@code expectedHead} is the token recorded by the last write through this port's own
+     * {@code create}/{@code compareAndUpdate} (ADR-014 compare-and-set guard against the
+     * lost-update race, degenerated from a full-snapshot comparison to a token comparison). A
+     * direct store-first (ADR-005) edit to this requirement leaves the token untouched, so such
+     * an edit passes this method's check undetected and the subsequent replace-by-identity write
+     * silently overwrites it: the guard closes the lost-update window between two callers of this
+     * port, not between a caller of this port and a store-first edit that bypassed it
+     * entirely.</p>
      *
      * @param projectId  the project (architecture model) the requirement lives in
      * @param expectedHead the {@link RevisionToken} the caller last observed for this requirement
@@ -126,15 +126,15 @@ public interface RequirementRepository {
      * side of the read-modify-write round trip whose write side {@link #compareAndUpdate} guards.
      *
      * <p><strong>What "together" guarantees.</strong> The core fields (type, title, description,
-     * status, priority, motivatedBy, qualityCategory) and the head itself (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014) come from one
-     * query call - one snapshot. {@code usesTerms} and {@code acceptanceCriteria}, in contrast,
-     * are filled in by later, independent follow-up reads; that is safe because a later read can
-     * only be fresher, never staler, than the head - a funnel write committing in between moves
-     * the head, so the subsequent {@link #compareAndUpdate} fails its comparison and the caller
-     * re-reads instead of overwriting state it never saw. The pairing is therefore conservative
-     * (state is never older than its paired head), not a guarantee that the whole requirement
-     * comes from a single read.</p>
+     * status, priority, motivatedBy, qualityCategory) and the token itself (recorded by the last
+     * write through this port, ADR-014) come from one query call - one snapshot.
+     * {@code usesTerms} and {@code acceptanceCriteria}, in contrast, are filled in by later,
+     * independent follow-up reads; that is safe because a later read can only be fresher, never
+     * staler, than the token - a write through this port committing in between moves the token,
+     * so the subsequent {@link #compareAndUpdate} fails its comparison and the caller re-reads
+     * instead of overwriting state it never saw. The pairing is therefore conservative (state is
+     * never older than its paired token), not a guarantee that the whole requirement comes from a
+     * single read.</p>
      *
      * @param projectId the project (architecture model) to look up the requirement in
      * @param code        the requirement code (e.g. {@code FR-1})
@@ -150,7 +150,7 @@ public interface RequirementRepository {
 
     /**
      * A requirement's state paired with its current concurrency token (the {@link RevisionToken},
-     * or {@code null} if the requirement predates the funnel's revision recording), as read
+     * or {@code null} if no write has ever been recorded for this requirement), as read
      * together by {@link #findCurrentByCode}.
      *
      * @param value                          the requirement as currently read, with {@code
@@ -181,8 +181,8 @@ public interface RequirementRepository {
      * {@link #findByCode} - see that method's javadoc - but for every requirement in the project
      * at once: the whole result comes from one consistent snapshot of the store, so no returned
      * {@link Requirement} can combine field values that never coexisted at any single point in
-     * time, and a funnel write landing while this call is in flight cannot tear one requirement
-     * against another either.
+     * time, and a write landing through this port while this call is in flight cannot tear one
+     * requirement against another either.
      *
      * @param projectId the project (architecture model) to list requirements from
      * @return all requirements, never {@code null}
