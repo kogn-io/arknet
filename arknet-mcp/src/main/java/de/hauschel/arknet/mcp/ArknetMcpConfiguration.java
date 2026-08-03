@@ -702,11 +702,12 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The three traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
-     * {@code impact_analysis}). Reuses the very same {@link #storeReader}/
-     * {@link #storeReportPrefixes} beans as {@link #storeReportTools} instead of building a
-     * second {@link StoreReader} - one generic read path, two presentations over it (a
-     * full-snapshot digest vs. a graph traversal), per ADR-006.
+     * The five traceability reporting tools ({@code trace_matrix}, {@code orphan_check},
+     * {@code impact_analysis}, {@code actor_usecase_matrix}, {@code term_cooccurrence}). Reuses
+     * the very same {@link #storeReader}/{@link #storeReportPrefixes} beans as
+     * {@link #storeReportTools} instead of building a second {@link StoreReader} - one generic
+     * read path, two presentations over it (a full-snapshot digest vs. a graph traversal), per
+     * ADR-006.
      */
     @Bean
     TraceabilityMcpTools traceabilityMcpTools(

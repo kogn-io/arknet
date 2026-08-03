@@ -31,10 +31,15 @@ import java.util.regex.Pattern;
  * Kundendienst} mentions {@code Kunde}, and a wrong link in an architecture model costs more than
  * a missed one.</p>
  *
- * <p>Of two labels competing for the same words, the longer one wins: entries are tried
- * longest-label-first, and a shorter match starting inside an already-claimed range is dropped.
- * Ties in length keep the order {@code items} was given in, so a caller that needs a
- * deterministic tie-break sorts its input before calling {@link #of(Collection, Function)}.</p>
+ * <p>Selection is left-to-right greedy over each match's <em>start</em> position, not its
+ * length: of two mentions that begin at the same character, the longer one wins (entries are
+ * tried longest-label-first, so a shorter match starting where a longer one already did never
+ * gets recorded), but of two mentions that only partially overlap - different start, ranges
+ * intersect - the earlier-starting one wins outright, however much shorter it is. A later match
+ * that starts anywhere inside an already-claimed range is dropped in full, not trimmed to what is
+ * left. Ties in both start and length keep the order {@code items} was given in, so a caller
+ * that needs a deterministic tie-break sorts its input before calling
+ * {@link #of(Collection, Function)}.</p>
  *
  * @param <T> what a label identifies
  */

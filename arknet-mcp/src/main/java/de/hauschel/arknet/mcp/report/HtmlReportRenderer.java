@@ -498,12 +498,32 @@ public final class HtmlReportRenderer {
         return typeIri.isEmpty() ? "(untyped)" : prefixes.toCurie(typeIri);
     }
 
+    /**
+     * The DOM id one resource's card - and every link to it - uses.
+     *
+     * <p>{@link #sanitize} collapses any run of non-alphanumeric characters to a single
+     * {@code -}, so two different IRIs can collapse to the same sanitized text (e.g.
+     * {@code .../a.b} and {@code .../a-b} both become {@code a-b}). Model resources are
+     * UUID-minted and never collide this way, but the "Other resources" section renders
+     * arbitrary store IRIs by design (issue #150) - appending a short hash of the untouched,
+     * full IRI is what makes the anchor injective regardless, while the sanitized CURIE in front
+     * keeps it readable in a browser's address bar.</p>
+     */
     private String resourceAnchor(final String iri) {
-        return "r-" + sanitize(prefixes.toCurie(iri));
+        return "r-" + sanitize(prefixes.toCurie(iri)) + "-" + shortHash(iri);
     }
 
     private static String sanitize(final String value) {
         return value.replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-|-$", "");
+    }
+
+    /**
+     * @param iri the full, unsanitized IRI - never the CURIE, so two IRIs that collapse to the
+     *            same sanitized text still hash differently
+     * @return an 8-hex-digit, deterministic digest of {@code iri}
+     */
+    private static String shortHash(final String iri) {
+        return String.format("%08x", iri.hashCode());
     }
 
     static String escape(final String value) {

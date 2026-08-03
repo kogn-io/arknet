@@ -12,11 +12,12 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Resolves a resource handle - CURIE, full IRI, or bare business id - to an absolute IRI.
  *
- * <p>Extracted out of {@link StoreReportTools} so the traceability tools
- * ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}, package
- * {@code de.hauschel.arknet.mcp.trace}) share the exact same handle contract
- * {@code resource_get} uses, instead of a second, drifting implementation growing next to
- * it.</p>
+ * <p>Extracted out of {@link StoreReportTools} so {@code impact_analysis} - one of the five
+ * traceability tools in package {@code de.hauschel.arknet.mcp.trace} ({@code trace_matrix},
+ * {@code orphan_check}, {@code impact_analysis}, {@code actor_usecase_matrix},
+ * {@code term_cooccurrence}), and the only one of them that takes a resource handle - shares
+ * the exact same handle contract {@code resource_get} uses, instead of a second, drifting
+ * implementation growing next to it.</p>
  *
  * <p>Resolution order: (1) a blank-node reference ({@code "_:" + label}, as {@link StoreReader}
  * renders a store-first resource with no minted IRI - ADR-005 - into {@code store_overview}'s

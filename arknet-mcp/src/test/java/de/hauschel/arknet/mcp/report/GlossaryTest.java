@@ -4,6 +4,7 @@
 package de.hauschel.arknet.mcp.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import java.util.List;
 import java.util.Set;
@@ -41,6 +42,19 @@ class GlossaryTest {
         final ResourceId unknown = ResourceId.of(ID + "term-404");
 
         assertThat(GLOSSARY.ref(unknown)).isEqualTo(Ref.of(unknown.value(), unknown.value()));
+    }
+
+    /**
+     * {@code term(null)} is deliberately null-tolerant (issue #150); {@code ref(null)} is not,
+     * since a {@link Ref} always needs an IRI to point at and there is no honest fallback for
+     * "no identity at all". Before this fix {@code ref(null)} threw an undocumented NPE deep
+     * inside {@code Ref.of(id.value(), ...)} instead of failing at the boundary with a clear
+     * message.
+     */
+    @Test
+    void refRejectsANullIdentityInsteadOfDereferencingItInternally() {
+        assertThat(GLOSSARY.term(null)).isNull();
+        assertThatNullPointerException().isThrownBy(() -> GLOSSARY.ref(null)).withMessageContaining("id");
     }
 
     @Test
