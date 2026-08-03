@@ -58,6 +58,11 @@ public interface ProjectRegistry {
      *                                         conflict that neither guard above explains - safe
      *                                         to retry against the same, unmodified {@code project}
      *                                         (see that exception's javadoc)
+     * @throws RuntimeException if {@code project} violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-project-core} must not depend on.
      */
     void register(Project project);
 
@@ -131,6 +136,11 @@ public interface ProjectRegistry {
      *                                        already used by a different project
      * @throws AnchorAlreadyRegisteredException if the write would attach an anchor already
      *                                        belonging to a different project
+     * @throws RuntimeException if {@code project} violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-project-core} must not depend on.
      */
     void compareAndUpdate(RevisionToken expectedHead, Project project);
 }

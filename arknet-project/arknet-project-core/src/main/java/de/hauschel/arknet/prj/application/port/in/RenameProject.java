@@ -7,6 +7,7 @@ import de.hauschel.arknet.prj.domain.DuplicateProjectLabelException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
+import de.hauschel.arknet.prj.domain.StaleProjectException;
 
 /**
  * Driving port: change a project's human-readable label.
@@ -28,6 +29,9 @@ public interface RenameProject {
      * @throws ProjectNotFoundException       if no project is registered under {@code projectId}
      * @throws DuplicateProjectLabelException if {@code newLabel} already labels a different
      *                                        project
+     * @throws StaleProjectException          if the underlying read-modify-write keeps losing
+     *                                        the compare-and-set race against a concurrent writer
+     *                                        across every retry attempt
      */
     Project rename(ProjectId projectId, String newLabel);
 }

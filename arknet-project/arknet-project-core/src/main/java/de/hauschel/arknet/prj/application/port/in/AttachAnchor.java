@@ -8,6 +8,7 @@ import de.hauschel.arknet.prj.domain.AnchorAlreadyRegisteredException;
 import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.prj.domain.ProjectNotFoundException;
+import de.hauschel.arknet.prj.domain.StaleProjectException;
 
 /**
  * Driving port: attach a further anchor to an already-registered project.
@@ -33,6 +34,9 @@ public interface AttachAnchor {
      *                                          projectId}
      * @throws AnchorAlreadyRegisteredException if {@code anchor} already belongs to a
      *                                          <em>different</em> project
+     * @throws StaleProjectException            if the underlying read-modify-write keeps losing
+     *                                          the compare-and-set race against a concurrent
+     *                                          writer across every retry attempt
      */
     Project attach(ProjectId projectId, Anchor anchor);
 }
