@@ -50,12 +50,17 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementType;
 
@@ -96,6 +101,28 @@ class RequirementServiceRealStoreConcurrencyTest {
     };
     /** Unused by this race: {@code req_schema} is orthogonal to code assignment. */
     private static final RequirementSchemaSource UNUSED_SCHEMA_SOURCE = List::of;
+    /** Unused by this race: neither caller links or resolves a constraint. */
+    private static final ConstraintRepository UNUSED_CONSTRAINT_REPOSITORY = new ConstraintRepository() {
+        @Override
+        public void create(ProjectId projectId, Constraint constraint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public Optional<Constraint> findByCode(ProjectId projectId, ConstraintCode code) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public List<Constraint> findAll(ProjectId projectId) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+    };
 
     /**
      * The {@code NativeStore}'s on-disk home, managed by JUnit rather than by
@@ -348,7 +375,7 @@ class RequirementServiceRealStoreConcurrencyTest {
         });
         RequirementRepository repository = KognioRdfRequirementRepositoryFactory.over(guarded, DisplayLocale.DEFAULT);
         return new RequirementService(repository, new UuidResourceIdFactory(), UNUSED_TERM_LOOKUP,
-                UNUSED_SCHEMA_SOURCE);
+                UNUSED_CONSTRAINT_REPOSITORY, UNUSED_SCHEMA_SOURCE);
     }
 
     /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */

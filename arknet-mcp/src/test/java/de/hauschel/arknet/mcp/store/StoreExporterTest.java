@@ -91,7 +91,7 @@ class StoreExporterTest {
                 new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials"));
+                List.of("Login succeeds with valid credentials"), List.of());
     }
 
     private String exportTrig() {

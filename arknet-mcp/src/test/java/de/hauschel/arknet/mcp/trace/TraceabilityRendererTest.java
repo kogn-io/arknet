@@ -44,6 +44,7 @@ class TraceabilityRendererTest {
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
     private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
+    private static final String CONSTRAINED_BY = "http://open-services.net/ns/rm#constrainedBy";
 
     private static final String FR_1 = ID + "fr-1";
     private static final String FR_2 = ID + "fr-2";
@@ -65,6 +66,8 @@ class TraceabilityRendererTest {
     private static final String ACTOR_B = ID + "actor-b";
     private static final String ACTOR_C = ID + "actor-c";
     private static final String BC_2 = ID + "bc-2";
+    private static final String CON_1 = ID + "con-1";
+    private static final String CON_2 = ID + "con-2";
 
     private final TraceabilityRenderer renderer = new TraceabilityRenderer(Prefixes.defaults());
     private static final ProjectId PROJECT = new ProjectId("sample-project");
@@ -96,6 +99,38 @@ class TraceabilityRendererTest {
         assertThat(report).contains("## Terms never referenced (0)");
         assertThat(report).contains("- none");
         assertThat(report).contains("## Mentioned in text but not linked (0)");
+        assertThat(report).contains("## Constraints not attached to any requirement (0)");
+    }
+
+    /**
+     * CON-2 is a constraint (issue #223) no requirement is bound by via
+     * {@code oslc_rm:constrainedBy}; CON-1 is bound by FR-1 and must not appear.
+     */
+    @Test
+    void orphanCheckListsAnUnattachedConstraint() {
+        TraceabilityGraph graph = TraceabilityGraph.of(constraintFixtureSnapshot(), DisplayLocale.DEFAULT);
+
+        String report = renderer.orphanCheck(PROJECT, graph);
+
+        assertThat(report).contains("## Constraints not attached to any requirement (1)");
+        assertThat(report).contains("CON-2");
+        assertThat(report).doesNotContain("CON-1");
+    }
+
+    private static StoreSnapshot constraintFixtureSnapshot() {
+        return StoreSnapshot.of(List.of(
+                iri(FR_1, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_1, TITLE, "Login"),
+                lit(FR_1, IDENTIFIER, "FR-1"),
+                iri(FR_1, CONSTRAINED_BY, CON_1),
+
+                iri(CON_1, RDF_TYPE, ARKREQ + "TechnicalConstraint"),
+                lit(CON_1, TITLE, "JVM only"),
+                lit(CON_1, IDENTIFIER, "CON-1"),
+
+                iri(CON_2, RDF_TYPE, ARKREQ + "TechnicalConstraint"),
+                lit(CON_2, TITLE, "PostgreSQL only"),
+                lit(CON_2, IDENTIFIER, "CON-2")));
     }
 
     /**

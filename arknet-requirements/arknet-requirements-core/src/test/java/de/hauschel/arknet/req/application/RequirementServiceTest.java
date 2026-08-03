@@ -21,9 +21,14 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.application.port.in.AddConstraint.NewConstraint;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintRef;
+import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -51,6 +56,7 @@ class RequirementServiceTest {
     private InMemoryRequirementRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
     private InMemoryTermLookup termLookup;
+    private InMemoryConstraintRepository constraintRepository;
     private FakeRequirementSchemaSource schemaSource;
     private RequirementService service;
 
@@ -61,8 +67,14 @@ class RequirementServiceTest {
         termLookup = new InMemoryTermLookup();
         termLookup.register("TERM-1", TERM_1);
         termLookup.register("TERM-2", TERM_2);
+        constraintRepository = new InMemoryConstraintRepository();
         schemaSource = new FakeRequirementSchemaSource();
-        service = new RequirementService(repository, resourceIdFactory, termLookup, schemaSource);
+        service = new RequirementService(repository, resourceIdFactory, termLookup, constraintRepository, schemaSource);
+    }
+
+    private Constraint givenConstraint(String title, String statement, ConstraintType type) {
+        ConstraintService constraintService = new ConstraintService(constraintRepository, resourceIdFactory);
+        return constraintService.add(WS, new NewConstraint(title, statement, type));
     }
 
     @Test
@@ -399,6 +411,81 @@ class RequirementServiceTest {
         assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
+    @Test
+    void addStartsWithoutLinkedConstraints() {
+        Requirement added = service.add(WS, newFunctionalRequirement());
+
+        assertEquals(List.of(), added.constrainedBy());
+    }
+
+    @Test
+    void linkConstraintAddsTheConstraintToTheRequirement() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+
+        Requirement linked = service.linkConstraint(WS, code, constraint.code().value());
+
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), linked.constrainedBy());
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())),
+                service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    @Test
+    void linkingTheSameConstraintTwiceIsANoOp() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        service.linkConstraint(WS, code, constraint.code().value());
+
+        Requirement linked = service.linkConstraint(WS, code, constraint.code().value());
+
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), linked.constrainedBy());
+    }
+
+    @Test
+    void linkConstraintThrowsWhenRequirementUnknown() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.linkConstraint(WS, new RequirementCode("FR-42"), constraint.code().value()));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Resolution of the human-typed constraint code happens here, via
+     * {@link InMemoryConstraintRepository} - a lookup failure must propagate unchanged and leave
+     * the requirement untouched.
+     */
+    @Test
+    void linkConstraintThrowsWhenConstraintCodeUnknownAndLinksNothing() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+
+        assertThrows(ConstraintNotFoundException.class, () -> service.linkConstraint(WS, code, "TCON-99"));
+
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    /**
+     * Regression guard for the replace-by-identity write path: the out-adapter persists a
+     * requirement by wiping and re-writing its triples, so a status change must carry the
+     * linked constraints along rather than silently dropping them.
+     */
+    @Test
+    void acceptPreservesLinkedConstraints() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
+        service.linkConstraint(WS, code, constraint.code().value());
+
+        Requirement accepted = service.accept(WS, code);
+
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), accepted.constrainedBy());
+    }
+
     /**
      * Regression guard for the replace-by-identity write path: the out-adapter persists a
      * requirement by wiping and re-writing its triples, so a status change must carry the
@@ -539,7 +626,7 @@ class RequirementServiceTest {
                 new RequirementId(resourceIdFactory.newId()), code, "legacy title",
                 "A requirement predating the acceptance-criterion invariant.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, List.of(),
-                List.of("(legacy placeholder - no acceptance criterion on record)"));
+                List.of("(legacy placeholder - no acceptance criterion on record)"), List.of());
         repository.createLegacy(WS, legacy);
         return code;
     }

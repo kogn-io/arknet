@@ -40,6 +40,7 @@ public final class ArkreqVocabulary {
 
     private static final String NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
+    private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
 
     /** {@code arkreq:usesTerm} - Requirement -&gt; glossary Term. */
     public static final String USES_TERM = NAMESPACE + "usesTerm";
@@ -63,6 +64,14 @@ public final class ArkreqVocabulary {
     public static final String ACCEPTANCE_CRITERION = NAMESPACE + "acceptanceCriterion";
 
     /**
+     * {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint. Reused from OSLC RM (not an
+     * {@code arkreq:}-namespaced predicate), same as {@code oslc_rm:satisfies}/
+     * {@code decomposedBy} the requirements ontology reuses without a local declaration - see
+     * {@code arknet-requirements.ttl}'s own comment on that convention.
+     */
+    public static final String CONSTRAINED_BY = OSLC_RM_NAMESPACE + "constrainedBy";
+
+    /**
      * {@code arkreq:useCaseGoal} - the goal a use case's primary actor pursues; the closest thing
      * a use case has to a description, so this is what the term-co-occurrence read path
      * (issue #108) scans as its use-case prose text.
@@ -83,6 +92,18 @@ public final class ArkreqVocabulary {
 
     /** {@code skos:Concept} - the type of a glossary term (including actor-facetted ones). */
     public static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
+
+    /** {@code arkreq:Constraint} - the abstract base type of a constraint (issue #223). */
+    public static final String CONSTRAINT_TYPE = NAMESPACE + "Constraint";
+
+    /** {@code arkreq:TechnicalConstraint} - the type of a technical constraint. */
+    public static final String TECHNICAL_CONSTRAINT_TYPE = NAMESPACE + "TechnicalConstraint";
+
+    /** {@code arkreq:BusinessConstraint} - the type of a business constraint. */
+    public static final String BUSINESS_CONSTRAINT_TYPE = NAMESPACE + "BusinessConstraint";
+
+    /** {@code arkreq:RegulatoryConstraint} - the type of a regulatory constraint. */
+    public static final String REGULATORY_CONSTRAINT_TYPE = NAMESPACE + "RegulatoryConstraint";
 
     private ArkreqVocabulary() {
     }

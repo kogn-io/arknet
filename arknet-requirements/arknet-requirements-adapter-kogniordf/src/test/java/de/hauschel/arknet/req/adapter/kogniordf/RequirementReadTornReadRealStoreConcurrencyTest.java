@@ -45,12 +45,17 @@ import io.kogn.rdf.terms.ReadableGraph;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementType;
@@ -128,6 +133,28 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
     };
     /** Unused by this test: {@code req_schema} is orthogonal to the read path under test. */
     private static final RequirementSchemaSource UNUSED_SCHEMA_SOURCE = List::of;
+    /** Unused by this test: no constraint is ever linked or resolved. */
+    private static final ConstraintRepository UNUSED_CONSTRAINT_REPOSITORY = new ConstraintRepository() {
+        @Override
+        public void create(ProjectId projectId, Constraint constraint) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public Optional<Constraint> findByCode(ProjectId projectId, ConstraintCode code) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public List<Constraint> findAll(ProjectId projectId) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+    };
 
     /**
      * The {@code NativeStore}'s on-disk home, managed by JUnit rather than
@@ -157,7 +184,8 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         RequirementRepository plainRepository =
                 KognioRdfRequirementRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT);
         RequirementService plainService = new RequirementService(
-                plainRepository, new UuidResourceIdFactory(), UNUSED_TERM_LOOKUP, UNUSED_SCHEMA_SOURCE);
+                plainRepository, new UuidResourceIdFactory(), UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_REPOSITORY,
+                UNUSED_SCHEMA_SOURCE);
         RequirementCode code = plainService.add(WS, new NewRequirement(OLD_TITLE,
                 "A requirement whose fields change mid-read.", RequirementType.FUNCTIONAL, null, null, null,
                 List.of(OLD_CRITERION), null)).code();

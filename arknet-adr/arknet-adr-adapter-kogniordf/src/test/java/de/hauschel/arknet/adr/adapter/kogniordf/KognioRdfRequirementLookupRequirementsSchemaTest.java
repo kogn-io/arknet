@@ -79,7 +79,7 @@ class KognioRdfRequirementLookupRequirementsSchemaTest {
         Requirement requirement = new Requirement(id, new RequirementCode("FR-1"),
                 "Store the model", "The system shall persist the architecture model.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
-                List.of(), List.of("Done when the model survives a restart."));
+                List.of(), List.of("Done when the model survives a restart."), List.of());
 
         requirementRepository.create(PROJECT, requirement, null);
 

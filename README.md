@@ -244,8 +244,17 @@ Requirements BC (`arknet-requirements`) -- requirement lifecycle:
 | `req_get` | Fetch a single requirement by identity (e.g. FR-1, NFR-7). An optional `displayLocale` argument picks which language variant of a multilingual title/description to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
 | `req_set_status` | Change lifecycle status (PROPOSED / ACCEPTED) |
 | `req_link_term` | Link a requirement to a glossary term (`arkreq:usesTerm`; the term must exist) |
+| `req_link_constraint` | Link a requirement to a constraint it is bound by (`oslc_rm:constrainedBy`; the constraint must already exist -- create it first with `constraint_add`). Linking the same constraint twice is a no-op |
 | `req_update` | Correct a requirement's title, description, acceptance criteria and/or MoSCoW priority (each optional, unchanged if omitted). `language` scopes a non-omitted title/description write to that one language's literal, leaving other language variants untouched |
 | `req_schema` | The `arkreq:` vocabulary (RequirementType, RequirementStatus, Priority) as data -- definition + allowed values, so a client need not guess |
+
+The same hexagon also carries `arkreq:Constraint` -- a non-negotiable, externally-imposed boundary on the solution space (ISO 29148), not a bounded context of its own. A constraint is immutable once created (no update/status-change tool exists):
+
+| Tool | Description |
+|------|-------------|
+| `constraint_add` | Register a new constraint: `TECHNICAL`, `BUSINESS` or `REGULATORY` (each subtype numbered independently: `TCON-N`/`BCON-N`/`RCON-N`) |
+| `constraint_list` | List all managed constraints |
+| `constraint_get` | Fetch a single constraint by identity (e.g. TCON-1, BCON-1, RCON-1) |
 
 Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 
@@ -308,7 +317,7 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 | Tool | Description |
 |------|-------------|
 | `trace_matrix` | Per requirement (FR/NFR): the glossary terms used (`arkreq:usesTerm`) and the realizing use case(s) (via the step flow) |
-| `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms never referenced (usage or bounded-context language), and text mentions of a term missing its `usesTerm`/`ubiquitousLanguageTerm` edge |
+| `orphan_check` | Orphaned artefacts: requirements without a realizing use case, glossary terms never referenced (usage or bounded-context language), text mentions of a term missing its `usesTerm`/`ubiquitousLanguageTerm` edge, and constraints no requirement is bound by via `constrainedBy` |
 | `impact_analysis` | Transitive "who references this" closure for a resource handle -- what is affected if X changes, following the requirement/use-case/glossary/bounded-context edges plus an ADR's `addressesRequirement`/`affectsContext`/`supersedes` (see sample below) |
 | `actor_usecase_matrix` | Raw bipartite view of actor/use-case involvement (`arkreq:primaryActor`/`supportingActor`), in both directions -- no clustering, no bounded-context judgement |
 | `term_cooccurrence` | Which glossary terms are named together in the same requirement or use-case text -- literal text co-occurrence only, not a model-edge comparison; raw data for spotting a shared term vs. a homonym with two meanings |

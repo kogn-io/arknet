@@ -34,8 +34,16 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
+import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
+import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintId;
+import de.hauschel.arknet.req.domain.ConstraintRef;
+import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -76,6 +84,8 @@ class TraceabilityGraphTest {
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/trace-test-fr-2";
     private static final String UC_1_IRI = "https://w3id.org/arknet/id/trace-test-uc-1";
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-test-bc-1";
+    private static final String CON_1_IRI = "https://w3id.org/arknet/id/trace-test-con-1";
+    private static final String CON_2_IRI = "https://w3id.org/arknet/id/trace-test-con-2";
 
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
@@ -94,6 +104,16 @@ class TraceabilityGraphTest {
         TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
         UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        WriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
+                lifecycle, DisplayLocale.DEFAULT);
+        ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(lifecycle, requirementsFunnel);
+
+        // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
+        constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_1_IRI)),
+                new ConstraintCode("CON-1"), "JVM only", "Must run on the JVM.", ConstraintType.TECHNICAL));
+        constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_2_IRI)),
+                new ConstraintCode("CON-2"), "Budget cap", "Total spend must not exceed the approved budget.",
+                ConstraintType.BUSINESS));
 
         // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
         // referenced as UC1's primary actor - must NOT count as an orphan term.
@@ -118,12 +138,13 @@ class TraceabilityGraphTest {
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(new TermRef(ResourceId.of(TERM_1_IRI))),
-                List.of("Login succeeds with valid credentials")), null);
+                List.of("Login succeeds with valid credentials"),
+                List.of(new ConstraintRef(ResourceId.of(CON_1_IRI)))), null);
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_2_IRI)), new RequirementCode("FR-2"), "Logout",
                 "The system shall let a user log out.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(), List.of("Logout succeeds")), null);
+                List.of(), List.of("Logout succeeds"), List.of()), null);
 
         useCases.create(PROJECT, new UseCase(
                 new UseCaseId(ResourceId.of(UC_1_IRI)), new UseCaseCode("UC1"), "Log in",
@@ -356,6 +377,36 @@ class TraceabilityGraphTest {
     @Test
     void dependentsOfTheOrphanTermIsEmpty() {
         assertThat(graph.dependents(TERM_2_IRI)).isEmpty();
+    }
+
+    @Test
+    void constraintIrisContainsBothConstraints() {
+        assertThat(graph.constraintIris()).containsExactlyInAnyOrder(CON_1_IRI, CON_2_IRI);
+    }
+
+    @Test
+    void isConstraintReferencedIsTrueForTheLinkedConstraint() {
+        assertThat(graph.isConstraintReferenced(CON_1_IRI)).isTrue();
+    }
+
+    @Test
+    void isConstraintReferencedIsFalseForTheOrphanConstraint() {
+        assertThat(graph.isConstraintReferenced(CON_2_IRI)).isFalse();
+    }
+
+    /**
+     * {@code oslc_rm:constrainedBy} must be a traversable dependent edge too (issue #223) - and,
+     * like {@link #dependentsOfTerm1TransitivelyReachesFr1AndUc1ButNotTheStep}, the closure
+     * continues transitively from FR-1 to UC-1 (which realises FR-1 via the step hop).
+     */
+    @Test
+    void dependentsOfTheConstraintTransitivelyReachesFr1AndUc1() {
+        assertThat(graph.dependents(CON_1_IRI)).containsExactlyInAnyOrder(FR_1_IRI, UC_1_IRI);
+    }
+
+    @Test
+    void dependentsOfTheOrphanConstraintIsEmpty() {
+        assertThat(graph.dependents(CON_2_IRI)).isEmpty();
     }
 
     @Test

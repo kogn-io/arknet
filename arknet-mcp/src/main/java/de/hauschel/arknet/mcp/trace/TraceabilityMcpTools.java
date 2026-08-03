@@ -80,9 +80,9 @@ public final class TraceabilityMcpTools {
     @McpTool(name = "orphan_check",
             description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
                     + " referenced (neither used by a requirement, playing an actor role in a use case, nor a"
-                    + " bounded context's ubiquitous language), and terms a requirement's or bounded context's"
-                    + " text names without the usesTerm/ubiquitousLanguageTerm edge to back it up. Reported as"
-                    + " three lists.",
+                    + " bounded context's ubiquitous language), terms a requirement's or bounded context's"
+                    + " text names without the usesTerm/ubiquitousLanguageTerm edge to back it up, and"
+                    + " constraints no requirement is bound by via constrainedBy. Reported as four lists.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
             final McpSyncRequestContext context,

@@ -23,8 +23,10 @@ import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
+import de.hauschel.arknet.req.application.port.in.LinkConstraint;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -84,24 +86,29 @@ public final class RequirementMcpTools {
     private final GetRequirement getRequirement;
     private final AcceptRequirement acceptRequirement;
     private final LinkTerm linkTerm;
+    private final LinkConstraint linkConstraint;
     private final UpdateRequirement updateRequirement;
     private final GetRequirementSchema getRequirementSchema;
     private final ProjectResolver projects;
     private final RequirementPresenter presenter;
 
     /**
-     * Creates the adapter with its seven driving in-ports, the borrowed ubiquitous-language
-     * display port and the resolver that maps each call's origin directory to a project.
+     * Creates the adapter with its eight driving in-ports, the borrowed ubiquitous-language and
+     * (same-module) constraint display ports, and the resolver that maps each call's origin
+     * directory to a project.
      *
      * @param addRequirement        in-port backing {@code req_add}
      * @param listRequirements      in-port backing {@code req_list}
      * @param getRequirement        in-port backing {@code req_get}
      * @param acceptRequirement     in-port backing {@code req_set_status}
      * @param linkTerm              in-port backing {@code req_link_term}
+     * @param linkConstraint        in-port backing {@code req_link_constraint}
      * @param updateRequirement     in-port backing {@code req_update}
      * @param getRequirementSchema  in-port backing {@code req_schema}
      * @param resolveTerms          ubiquitous-language driving port used only to render a linked
      *                              term's business code instead of its bare IRI
+     * @param resolveConstraints    this module's own driving port used only to render a linked
+     *                              constraint's business code instead of its bare IRI
      * @param projects            resolves each call's target project from its origin directory
      */
     public RequirementMcpTools(
@@ -110,19 +117,22 @@ public final class RequirementMcpTools {
             final GetRequirement getRequirement,
             final AcceptRequirement acceptRequirement,
             final LinkTerm linkTerm,
+            final LinkConstraint linkConstraint,
             final UpdateRequirement updateRequirement,
             final GetRequirementSchema getRequirementSchema,
             final ResolveTerms resolveTerms,
+            final ResolveConstraints resolveConstraints,
             final ProjectResolver projects) {
         this.addRequirement = Objects.requireNonNull(addRequirement, "addRequirement");
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.acceptRequirement = Objects.requireNonNull(acceptRequirement, "acceptRequirement");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
         this.getRequirementSchema = Objects.requireNonNull(getRequirementSchema, "getRequirementSchema");
         this.projects = Objects.requireNonNull(projects, "projects");
-        this.presenter = new RequirementPresenter(resolveTerms);
+        this.presenter = new RequirementPresenter(resolveTerms, resolveConstraints);
     }
 
     /**
@@ -236,9 +246,12 @@ public final class RequirementMcpTools {
         if (all.isEmpty()) {
             return "(no requirements)";
         }
-        // One batch resolution across every requirement's linked terms, not one per requirement.
+        // One batch resolution across every requirement's linked terms/constraints, not one per
+        // requirement.
         final Map<ResourceId, ResolvedTerm> termsById = presenter.resolveTermsFor(projectId, all);
-        return all.stream().map(r -> presenter.format(r, termsById))
+        final Map<ResourceId, ResolveConstraints.ResolvedConstraint> constraintsById =
+                presenter.resolveConstraintsFor(projectId, all);
+        return all.stream().map(r -> presenter.format(r, termsById, constraintsById))
                 .reduce((a, b) -> a + "\n" + b).orElse("(no requirements)");
     }
 
@@ -322,6 +335,29 @@ public final class RequirementMcpTools {
         final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final Requirement updated =
                 linkTerm.linkTerm(projectId, new RequirementCode(reqId), termId);
+        return presenter.format(projectId, updated);
+    }
+
+    @McpTool(name = "req_link_constraint",
+            description = "Link a requirement to a constraint it is bound by. The constraint must already "
+                    + "exist (create it first with constraint_add). Linking the same constraint twice is a "
+                    + "no-op.")
+    public String linkConstraint(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String reqId,
+            @McpToolParam(description = "Constraint code, e.g. TCON-1, BCON-1 or RCON-1 (the constraint's "
+                    + "business code, not its store IRI)")
+            final String constraintId,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final Requirement updated =
+                linkConstraint.linkConstraint(projectId, new RequirementCode(reqId), constraintId);
         return presenter.format(projectId, updated);
     }
 

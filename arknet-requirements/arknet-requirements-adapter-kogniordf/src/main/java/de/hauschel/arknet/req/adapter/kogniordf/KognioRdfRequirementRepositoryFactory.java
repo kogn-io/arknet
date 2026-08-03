@@ -124,9 +124,47 @@ public final class KognioRdfRequirementRepositoryFactory {
     public static RequirementRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
         Objects.requireNonNull(displayLocale, "displayLocale");
-        ShaclWriteGate gate = buildGate(displayLocale);
-        WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
+        WriteFunnel funnel = buildFunnel(lifecycle, displayLocale);
+        return over(lifecycle, displayLocale, funnel);
+    }
+
+    /**
+     * Assembles a requirement repository over an already-built {@link WriteFunnel} - the seam
+     * the composition root uses to share one funnel instance between this repository and
+     * {@code KognioRdfConstraintRepositoryFactory#over} (issue #223), rather than each building
+     * its own, functionally identical one (see {@link #buildFunnel} for why sharing is the
+     * point).
+     *
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
+     * @param funnel        the already-built write funnel to run every write through
+     * @return a ready-to-use {@link RequirementRepository}
+     */
+    public static RequirementRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale,
+            WriteFunnel funnel) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        Objects.requireNonNull(funnel, "funnel");
         return new KognioRdfRequirementRepository(lifecycle, displayLocale, funnel);
+    }
+
+    /**
+     * Builds the shared {@link WriteFunnel} every write path of the requirements hexagon runs
+     * through - both {@link KognioRdfRequirementRepository} and, over the same instance,
+     * {@code KognioRdfConstraintRepository} (issue #223): {@code Constraint} shares the
+     * requirements SHACL shapes and ontology axioms (both already live in
+     * {@code requirements-shapes.ttl}/{@code arknet-requirements.ttl}), so sharing one gate and
+     * one funnel instance is the point - not building a second, functionally identical one.
+     *
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference for SHACL violation messages
+     * @return the assembled write funnel
+     */
+    public static WriteFunnel buildFunnel(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
+        Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(displayLocale, "displayLocale");
+        ShaclWriteGate gate = buildGate(displayLocale);
+        return new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
     }
 
     /**

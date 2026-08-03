@@ -59,6 +59,7 @@ import de.hauschel.arknet.req.domain.RequirementReadConflictException;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.TermRef;
 import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
 
@@ -174,6 +175,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
 
+    /**
+     * Same literal as {@code KognioRdfConstraintRepository}'s own {@code CONSTRAINTS_GRAPH} -
+     * duplicated rather than shared via a public constant, matching this codebase's existing
+     * convention of small, adapter-private literals (see e.g. {@code REQUIREMENTS_GRAPH} itself,
+     * never exposed outside this package either). Needed here so {@link
+     * #constraintAssertedContext} can read a linked constraint's own triples for the SHACL gate.
+     */
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
+
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String USES_TERM_PROPERTY = ArkreqVocabulary.USES_TERM;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
@@ -188,6 +198,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
     private static final String ACCEPTANCE_CRITERION_PROPERTY = ArkreqVocabulary.ACCEPTANCE_CRITERION;
+    private static final String CONSTRAINED_BY_PROPERTY = ArkreqVocabulary.CONSTRAINED_BY;
 
     /**
      * Stands in for a requirement that predates the mandatory acceptance-criterion invariant:
@@ -257,26 +268,32 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         String subjectIriString = requirement.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
 
-        // 1. Every term reference already carries its resolved identity (see class-level
-        //    note), guaranteed IRIREF-safe by ResourceId#of same as the subject
+        // 1. Every term/constraint reference already carries its resolved identity (see
+        //    class-level note), guaranteed IRIREF-safe by ResourceId#of same as the subject
         //    above.
         List<IRI> termIris = requirement.usesTerms().stream()
                 .map(this::termIriFor)
                 .toList();
+        List<IRI> constraintIris = requirement.constrainedBy().stream()
+                .map(this::constraintIriFor)
+                .toList();
 
         // 2. Build the candidate graph and, from it, the structural gate check. The usesTerm
         //    shape carries an sh:class skos:Concept constraint, but the type triples of the
-        //    referenced terms live in the sibling terms graph, not in this candidate graph.
-        //    They are handed to the gate as a validation-only asserted context (never
-        //    persisted here). This is safe: the term was already proven to exist and be a
-        //    concept at the moment it was resolved (KognioRdfTermLookup, called once from the
-        //    application service when the term was linked) - the lookup, not the shape, is
-        //    what keeps the edge non-dangling; this adapter no longer re-verifies it.
-        Graph graph = buildCandidateGraph(subjectIri, requirement, termIris, tag, tag);
+        //    referenced terms live in the sibling terms graph, not in this candidate graph. They
+        //    are handed to the gate as a validation-only asserted context (never persisted here).
+        //    This is safe: the term was already proven to exist and be a concept at the moment it
+        //    was resolved (KognioRdfTermLookup, called once from the application service when the
+        //    term was linked) - the lookup, not the shape, is what keeps the edge non-dangling;
+        //    this adapter no longer re-verifies it. constrainedBy is different (see
+        //    #constraintAssertedContext): its target's own ConstraintShape lives in this same
+        //    shapes file, so a bare type assertion is not enough to satisfy it.
+        Graph graph = buildCandidateGraph(subjectIri, requirement, termIris, constraintIris, tag, tag);
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
             assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         }
+        constraintAssertedContext(projectId, constraintIris, assertedContext);
 
         IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
@@ -310,26 +327,32 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<IRI> termIris = updated.usesTerms().stream()
                 .map(this::termIriFor)
                 .toList();
-        Graph graph = buildCandidateGraph(subjectIri, updated, termIris, titleTag, descriptionTag);
+        List<IRI> constraintIris = updated.constrainedBy().stream()
+                .map(this::constraintIriFor)
+                .toList();
+        Graph graph = buildCandidateGraph(subjectIri, updated, termIris, constraintIris, titleTag, descriptionTag);
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
             assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         }
+        constraintAssertedContext(projectId, constraintIris, assertedContext);
         IRI graphIri = rdf.createIRI(REQUIREMENTS_GRAPH);
 
         funnel.compareAndUpdate(new DatasetId(projectId.value()), REQUIREMENTS_GRAPH, subjectIriString,
                 expectedHead == null ? null : expectedHead.value(), graph, assertedContext,
                 () -> new RequirementNotFoundException(projectId, updated.code()),
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag));
+                tx -> replaceTriplesForUpdate(
+                        tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag));
     }
 
     /**
      * Builds the candidate graph for one requirement's triples: five mandatory triples
      * (identifier, type, title, description, status), one or more mandatory
      * {@code arkreq:acceptanceCriterion} literals, up to three optional triples ({@code priority},
-     * {@code motivatedBy}, {@code qualityCategory}), and zero or more {@code arkreq:usesTerm}
-     * edges to {@code termIris}. Shared by {@link #create} and {@link #compareAndUpdate} so both
+     * {@code motivatedBy}, {@code qualityCategory}), zero or more {@code arkreq:usesTerm}
+     * edges to {@code termIris}, and zero or more {@code oslc_rm:constrainedBy} edges to
+     * {@code constraintIris}. Shared by {@link #create} and {@link #compareAndUpdate} so both
      * write paths serialise a {@link Requirement} identically. {@code title}/{@code description}
      * are written as the language-tagged (or, for a {@code null} tag, plain untagged) literal
      * {@code titleTag}/{@code descriptionTag} name - never more than one each, since preserving
@@ -338,7 +361,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * the gate.
      */
     private Graph buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris,
-            String titleTag, String descriptionTag) {
+            List<IRI> constraintIris, String titleTag, String descriptionTag) {
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.code().value()));
@@ -362,6 +385,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
         for (String criterion : requirement.acceptanceCriteria()) {
             graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), rdf.createLiteral(criterion));
+        }
+        for (IRI constraintIri : constraintIris) {
+            graph.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintIri);
         }
         return graph;
     }
@@ -409,6 +435,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(!isIRI(?term)) }";
+        // constrainedBy's shape carries sh:nodeKind sh:IRI - unlike usesTerm, a non-IRI target is
+        // SHACL-illegal at write time - but that gate only guards this adapter's own writes, never
+        // a store-first (ADR-005) edit, so the same non-IRI edge can and does exist here too; the
+        // same preserve-past-the-gate mechanism applies, for the same reason.
+        String selectUnjoinableConstrainedBy = "SELECT ?constraint WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
+                + "> ?constraint } FILTER(!isIRI(?constraint)) }";
         String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
 
         // Capture what a replacing write is about to destroy but could never have read (see
@@ -421,6 +454,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         // would trade the earlier silent data loss for a crash on every update of the affected
         // requirement - a regression, not a fix.
         List<RDFTerm> unjoinableUsesTerms = tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term"))
+                .toList();
+        List<RDFTerm> unjoinableConstrainedBy = tx.select(selectUnjoinableConstrainedBy)
+                .map(row -> termOf(row, "constraint"))
                 .toList();
         List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag);
         List<Literal> preservedDescriptions = otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag);
@@ -443,6 +479,13 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             Graph preservedEdges = rdf.createGraph();
             for (RDFTerm termNode : unjoinableUsesTerms) {
                 preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
+            }
+            tx.add(graphIri, preservedEdges);
+        }
+        if (!unjoinableConstrainedBy.isEmpty()) {
+            Graph preservedEdges = rdf.createGraph();
+            for (RDFTerm constraintNode : unjoinableConstrainedBy) {
+                preservedEdges.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintNode);
             }
             tx.add(graphIri, preservedEdges);
         }
@@ -637,7 +680,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 motivatedByOf(row),
                 qualityCategoryOf(row),
                 readUsesTerms(query::select, subject),
-                acceptanceCriteria));
+                acceptanceCriteria,
+                readConstrainedBy(query::select, subject)));
     }
 
     /**
@@ -862,7 +906,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     motivatedByOf(row),
                     qualityCategoryOf(row),
                     readUsesTerms(handle.sparqlQuery()::select, subject),
-                    acceptanceCriteria);
+                    acceptanceCriteria,
+                    readConstrainedBy(handle.sparqlQuery()::select, subject));
             RevisionToken head = row.getValue("head")
                     .filter(IRI.class::isInstance)
                     .map(value -> new RevisionToken(((IRI) value).getIRIString()))
@@ -898,6 +943,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return readInTransaction(projectId, handle, tx -> {
                 Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(tx);
+                Map<String, List<ConstraintRef>> constraintsBySubject = readConstrainedByBySubject(tx);
                 Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(tx);
                 Map<String, List<LocalizedLiteral>> titlesBySubject = readTitlesBySubject(tx);
                 Map<String, List<LocalizedLiteral>> descriptionsBySubject = readDescriptionsBySubject(tx);
@@ -930,7 +976,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                             return entry.getValue().toRequirement(title.get().value(), description.get().value(),
                                     termsBySubject.getOrDefault(entry.getKey(), List.of()),
                                     acceptanceCriteriaOrLegacyPlaceholder(
-                                            criteriaBySubject.getOrDefault(entry.getKey(), List.of())));
+                                            criteriaBySubject.getOrDefault(entry.getKey(), List.of())),
+                                    constraintsBySubject.getOrDefault(entry.getKey(), List.of()));
                         })
                         .filter(Objects::nonNull)
                         .toList();
@@ -1004,10 +1051,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
 
         private Requirement toRequirement(String title, String description, List<TermRef> usesTerms,
-                List<String> acceptanceCriteria) {
+                List<String> acceptanceCriteria, List<ConstraintRef> constrainedBy) {
             return new Requirement(id, code, title, description, type, status,
                     firstDistinct(priorities, "priority"), motivatedBy,
-                    firstDistinct(qualityCategories, "qualityCategory"), usesTerms, acceptanceCriteria);
+                    firstDistinct(qualityCategories, "qualityCategory"), usesTerms, acceptanceCriteria,
+                    constrainedBy);
         }
 
         /**
@@ -1127,6 +1175,36 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         return bySubject;
     }
 
+    // ---- constrainedBy reading ----------------------------------------------------------
+
+    /**
+     * Reads the {@code oslc_rm:constrainedBy} edges of one requirement back as constraint
+     * references, ordered by target IRI - mirrors {@link #readUsesTerms} exactly, including the
+     * IRI-only filter: {@code constrainedBy}'s shape carries {@code sh:nodeKind sh:IRI}, but that
+     * only guards this adapter's own writes, not a store-first (ADR-005) edge, so the filter still
+     * matters here.
+     */
+    private List<ConstraintRef> readConstrainedBy(Function<String, Stream<BindingSet>> selectFn, String subject) {
+        String query = "SELECT ?constraint WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
+                + "> ?constraint } FILTER(isIRI(?constraint)) } ORDER BY ?constraint";
+        return selectFn.apply(query)
+                .map(row -> new ConstraintRef(ResourceId.of(iriOf(row, "constraint").getIRIString())))
+                .toList();
+    }
+
+    /** Bulk variant of {@link #readConstrainedBy}: all requirements' constraint references in one query. */
+    private Map<String, List<ConstraintRef>> readConstrainedByBySubject(SparqlQuery query) {
+        String sparql = "SELECT ?s ?constraint WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + CONSTRAINED_BY_PROPERTY + "> ?constraint } "
+                + "FILTER(isIRI(?constraint)) } ORDER BY ?s ?constraint";
+        Map<String, List<ConstraintRef>> bySubject = new LinkedHashMap<>();
+        query.select(sparql).forEach(row -> bySubject
+                .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
+                .add(new ConstraintRef(ResourceId.of(iriOf(row, "constraint").getIRIString()))));
+        return bySubject;
+    }
+
     // ---- acceptanceCriterion reading ---------------------------------------------------
 
     /** Reads the {@code arkreq:acceptanceCriterion} literals of one requirement, in lexical order. */
@@ -1196,6 +1274,52 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     private IRI termIriFor(TermRef term) {
         return rdf.createIRI(term.value().value());
+    }
+
+    /** {@link #termIriFor}, for an already-resolved {@link ConstraintRef}. */
+    private IRI constraintIriFor(ConstraintRef constraint) {
+        return rdf.createIRI(constraint.value().value());
+    }
+
+    /**
+     * Adds every constraint referenced by {@code constraintIris} to {@code assertedContext},
+     * copying its triples wholesale straight out of {@link KognioRdfConstraintRepository}'s own
+     * named graph ({@code CONSTRAINTS_GRAPH}).
+     *
+     * <p><strong>Different from {@code usesTerm}'s bare type assertion.</strong> A term's shape
+     * lives in a different {@code .ttl} file the requirements gate never loads, so asserting only
+     * {@code skos:Concept} is enough to satisfy {@code Requirement-usesTerm}'s {@code sh:class}.
+     * {@code Constraint}'s own shape ({@code rshapes:ConstraintShape}, requiring
+     * {@code arkreq:constraintStatement}), by contrast, lives in this <em>same</em> shapes file -
+     * asserting only the abstract {@code arkreq:Constraint} type would make that constraint node a
+     * target of its own shape and fail it (no statement in the merged validation graph). Copying
+     * the constraint's real triples avoids that: {@code ConstraintShape} then validates against
+     * data that is actually there, the same data already proven to conform when
+     * {@code ConstraintService#add} created it.</p>
+     *
+     * <p><strong>Consequence: a constrainedBy edge is re-verified, not merely trusted.</strong>
+     * Unlike a {@code usesTerm} edge to a term that no longer exists (which this adapter still
+     * persists, see {@link #termIriFor}'s callers), a {@code constrainedBy} edge to a constraint
+     * that carries no triples in {@code CONSTRAINTS_GRAPH} contributes nothing here and therefore
+     * fails {@code sh:class} at write time. This is unreachable via the MCP tools -
+     * {@code req_link_constraint} always resolves an existing, immutable {@link Constraint} via
+     * {@code ConstraintRepository#findByCode} first - and only reachable via a store-first
+     * (ADR-005) edge to a dangling identity, which is rejected rather than silently persisted.</p>
+     */
+    private void constraintAssertedContext(ProjectId projectId, List<IRI> constraintIris, Graph assertedContext) {
+        if (constraintIris.isEmpty()) {
+            return;
+        }
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            for (IRI constraintIri : constraintIris) {
+                String query = "SELECT ?p ?o WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
+                        + SparqlTerms.iriRef(constraintIri.getIRIString()) + " ?p ?o } }";
+                handle.sparqlQuery().select(query).forEach(row -> assertedContext.add(
+                        constraintIri,
+                        (IRI) row.getValue("p").orElseThrow(),
+                        row.getValue("o").orElseThrow()));
+            }
+        }
     }
 
     /** Builds a language-tagged literal, or a plain untagged one when {@code tag} is {@code null}. */

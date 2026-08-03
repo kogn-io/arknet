@@ -75,8 +75,8 @@ public final class TraceabilityRenderer {
     /**
      * Renders {@code orphan_check}: requirements no use case realises, glossary terms never
      * used (neither via {@code arkreq:usesTerm}/actor role nor as a bounded context's ubiquitous
-     * language), and terms a requirement's or bounded context's prose names without the edge to
-     * back it up.
+     * language), terms a requirement's or bounded context's prose names without the edge to
+     * back it up, and constraints no requirement is bound by (issue #223).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on
@@ -93,6 +93,9 @@ public final class TraceabilityRenderer {
                 .filter(iri -> !graph.isReferencedTerm(iri))
                 .toList();
         List<TraceabilityGraph.UnlinkedMention> unlinkedMentions = graph.unlinkedMentions();
+        List<String> orphanConstraints = graph.constraintIris().stream()
+                .filter(iri -> !graph.isConstraintReferenced(iri))
+                .toList();
 
         StringBuilder out = new StringBuilder();
         out.append("# Orphan check -- project ").append(projectId.value()).append('\n');
@@ -103,6 +106,9 @@ public final class TraceabilityRenderer {
         appendLines(out, graph, orphanTerms);
         out.append("\n## Mentioned in text but not linked (").append(unlinkedMentions.size()).append(")\n");
         appendUnlinkedMentions(out, graph, unlinkedMentions);
+        out.append("\n## Constraints not attached to any requirement (")
+                .append(orphanConstraints.size()).append(")\n");
+        appendLines(out, graph, orphanConstraints);
         return out.toString();
     }
 

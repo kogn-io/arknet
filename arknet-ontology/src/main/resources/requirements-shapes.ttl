@@ -35,7 +35,8 @@ rshapes:RequirementShape
     sh:property rshapes:Requirement-motivatedBy ;
     sh:property rshapes:Requirement-motivatedBy-count ;
     sh:property rshapes:Requirement-usesTerm ;
-    sh:property rshapes:Requirement-acceptanceCriterion .
+    sh:property rshapes:Requirement-acceptanceCriterion ;
+    sh:property rshapes:Requirement-constrainedBy .
 
 rshapes:Requirement-identifier
     a sh:PropertyShape ;
@@ -112,6 +113,14 @@ rshapes:Requirement-acceptanceCriterion
     sh:datatype xsd:string ;
     sh:minLength 5 ;
     sh:message  "A Requirement needs at least one arkreq:acceptanceCriterion (a testable done-when, min. 5 characters)."@en , "Requirement braucht mindestens ein arkreq:acceptanceCriterion (testbares Done-when, min. 5 Zeichen)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-constrainedBy
+    a sh:PropertyShape ;
+    sh:path     oslc_rm:constrainedBy ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkreq:Constraint ;
+    sh:message  "oslc_rm:constrainedBy must reference a constraint (arkreq:Constraint, IRI) -- create it first with constraint_add."@en , "oslc_rm:constrainedBy muss auf eine Randbedingung (arkreq:Constraint, IRI) verweisen -- lege sie zuerst mit constraint_add an."@de ;
     sh:severity sh:Violation .
 
 

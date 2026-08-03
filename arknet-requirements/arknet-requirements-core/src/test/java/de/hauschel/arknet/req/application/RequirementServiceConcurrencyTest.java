@@ -58,6 +58,8 @@ class RequirementServiceConcurrencyTest {
      * the two concurrently-added requirements, a test artefact this bug does not have.
      */
     private SequentialResourceIdFactory resourceIdFactory;
+    /** Unused by these races: none of them link or resolve a constraint. */
+    private InMemoryConstraintRepository constraintRepository;
     /** Represents the concurrent "other" caller; always writes straight through to {@code store}. */
     private RequirementService otherCaller;
 
@@ -68,7 +70,9 @@ class RequirementServiceConcurrencyTest {
         termLookup.register("TERM-1", TERM_1);
         termLookup.register("TERM-2", TERM_2);
         resourceIdFactory = new SequentialResourceIdFactory();
-        otherCaller = new RequirementService(store, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+        constraintRepository = new InMemoryConstraintRepository();
+        otherCaller = new RequirementService(
+                store, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
     }
 
     /**
@@ -83,7 +87,7 @@ class RequirementServiceConcurrencyTest {
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-2"));
         RequirementService underTest =
-                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+                new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.linkTerm(WS, code, "TERM-1");
 
@@ -103,7 +107,7 @@ class RequirementServiceConcurrencyTest {
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1"));
         RequirementService underTest =
-                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+                new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.accept(WS, code);
 
@@ -125,7 +129,7 @@ class RequirementServiceConcurrencyTest {
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1"));
         RequirementService underTest =
-                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+                new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null);
 
@@ -149,7 +153,7 @@ class RequirementServiceConcurrencyTest {
         RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
         AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
         RequirementService underTest =
-                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+                new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
         assertThrows(RequirementConcurrentlyModifiedException.class,
                 () -> underTest.linkTerm(WS, code, "TERM-1"));
@@ -170,7 +174,7 @@ class RequirementServiceConcurrencyTest {
         RaceOnFirstFindAllRepository racing = new RaceOnFirstFindAllRepository(store,
                 () -> otherCaller.add(WS, newFunctionalRequirement()));
         RequirementService underTest =
-                new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
+                new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
         Requirement result = underTest.add(WS, newFunctionalRequirement());
 

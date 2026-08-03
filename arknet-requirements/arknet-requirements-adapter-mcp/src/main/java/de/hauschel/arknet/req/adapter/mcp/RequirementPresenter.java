@@ -10,6 +10,9 @@ import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
+import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
 import de.hauschel.arknet.req.domain.TermRef;
@@ -36,39 +39,57 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * {@link TermRef} involved (never once per {@link TermRef}, and for {@code req_list} never once
  * per requirement); an id {@link ResolveTerms} could not resolve simply falls back to the bare
  * IRI - {@code format} never throws and never drops a term.</p>
+ *
+ * <p><strong>Constraint display resolution.</strong> Mirrors the term case, one hexagon closer
+ * to home: {@link ConstraintRef} carries a linked constraint's opaque subject identity, and
+ * {@link #format(ProjectId, Requirement)} batches {@link ResolveConstraints#resolveExisting} the
+ * same way it batches {@link ResolveTerms#resolve} - once per rendering, never once per
+ * {@link ConstraintRef}. Unlike {@link ResolveTerms} (a genuinely cross-bounded-context port,
+ * ADR-008), {@link ResolveConstraints} is this same module's own in-port, since
+ * {@code Constraint} lives inside this bounded context.</p>
  */
 final class RequirementPresenter {
 
     private final ResolveTerms resolveTerms;
+    private final ResolveConstraints resolveConstraints;
 
     /**
-     * @param resolveTerms ubiquitous-language driving port used only to render a linked
-     *                     term's business code instead of its bare IRI
+     * @param resolveTerms       ubiquitous-language driving port used only to render a linked
+     *                           term's business code instead of its bare IRI
+     * @param resolveConstraints this module's own driving port used only to render a linked
+     *                           constraint's business code instead of its bare IRI
      */
-    RequirementPresenter(final ResolveTerms resolveTerms) {
+    RequirementPresenter(final ResolveTerms resolveTerms, final ResolveConstraints resolveConstraints) {
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
+        this.resolveConstraints = Objects.requireNonNull(resolveConstraints, "resolveConstraints");
     }
 
-    /** Renders a single requirement, resolving its own linked terms in one batch call. */
+    /** Renders a single requirement, resolving its own linked terms/constraints in one batch call each. */
     String format(final ProjectId projectId, final Requirement r) {
-        return format(r, resolveTermsFor(projectId, List.of(r)));
+        return format(r, resolveTermsFor(projectId, List.of(r)), resolveConstraintsFor(projectId, List.of(r)));
     }
 
     /**
-     * Renders {@code r} using an already-resolved {@code termsById} lookup - never itself calls
-     * {@link ResolveTerms}, so callers control the batching (one call for a single requirement,
-     * one call total for {@code req_list}). Never throws: a {@link TermRef} missing from
-     * {@code termsById} (unresolvable, or simply not looked up) falls back to its bare IRI.
+     * Renders {@code r} using already-resolved {@code termsById}/{@code constraintsById} lookups -
+     * never itself calls {@link ResolveTerms}/{@link ResolveConstraints}, so callers control the
+     * batching (one call each for a single requirement, one call each total for {@code req_list}).
+     * Never throws: a {@link TermRef}/{@link ConstraintRef} missing from its lookup (unresolvable,
+     * or simply not looked up) falls back to its bare IRI.
      */
-    String format(final Requirement r, final Map<ResourceId, ResolvedTerm> termsById) {
+    String format(final Requirement r, final Map<ResourceId, ResolvedTerm> termsById,
+            final Map<ResourceId, ResolvedConstraint> constraintsById) {
         final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
         final String terms = r.usesTerms().isEmpty()
                 ? ""
                 : " [terms: " + r.usesTerms().stream().map(ref -> renderTerm(ref, termsById))
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
+        final String constraints = r.constrainedBy().isEmpty()
+                ? ""
+                : " [constraints: " + r.constrainedBy().stream().map(ref -> renderConstraint(ref, constraintsById))
+                        .reduce((a, b) -> a + ", " + b).orElse("") + "]";
         final String criteria = " [done when: " + String.join("; ", r.acceptanceCriteria()) + "]";
-        return "%s [%s] %s (%s)%s%s%s".formatted(
-                r.code().value(), r.type(), r.title(), r.status(), priority, terms, criteria);
+        return "%s [%s] %s (%s)%s%s%s%s".formatted(
+                r.code().value(), r.type(), r.title(), r.status(), priority, terms, constraints, criteria);
     }
 
     /** Renders one schema term as {@code term: definition (values: A, B, ...)}. */
@@ -80,6 +101,13 @@ final class RequirementPresenter {
     private static String renderTerm(final TermRef ref, final Map<ResourceId, ResolvedTerm> termsById) {
         final ResolvedTerm term = termsById.get(ref.value());
         return term != null ? term.code().value() : ref.value().value();
+    }
+
+    /** {@link #renderTerm}, for an already-resolved {@link ConstraintRef}. */
+    private static String renderConstraint(
+            final ConstraintRef ref, final Map<ResourceId, ResolvedConstraint> constraintsById) {
+        final ResolvedConstraint constraint = constraintsById.get(ref.value());
+        return constraint != null ? constraint.code().value() : ref.value().value();
     }
 
     /**
@@ -110,5 +138,20 @@ final class RequirementPresenter {
         }
         return resolveTerms.resolve(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
+    }
+
+    /** {@link #resolveTermsFor}, for every {@link ConstraintRef} referenced by {@code requirements}. */
+    Map<ResourceId, ResolvedConstraint> resolveConstraintsFor(
+            final ProjectId projectId, final List<Requirement> requirements) {
+        final ResourceId[] ids = requirements.stream()
+                .flatMap(r -> r.constrainedBy().stream())
+                .map(ConstraintRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveConstraints.resolveExisting(projectId, ids).stream()
+                .collect(Collectors.toMap(ResolvedConstraint::id, c -> c, (first, second) -> first));
     }
 }

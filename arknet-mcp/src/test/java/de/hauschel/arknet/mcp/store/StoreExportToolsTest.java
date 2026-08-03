@@ -74,7 +74,7 @@ class StoreExportToolsTest {
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials"));
+                List.of("Login succeeds with valid credentials"), List.of());
     }
 
     private static FakeListProjects listProjectsOf(Project... projects) {
