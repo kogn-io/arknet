@@ -82,7 +82,7 @@ class KognioRdfTermLookupUbiquitousLanguageSchemaTest {
         Term term = new Term(id, new TermCode("TERM-1"), "Kunde",
                 "Person, die eine Bestellung aufgibt.", null);
 
-        ulTermRepository.create(PROJECT, term);
+        ulTermRepository.create(PROJECT, term, null);
 
         ResourceId resolved = reqTermLookup.resolveByCode(PROJECT, "TERM-1");
 

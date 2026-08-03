@@ -40,7 +40,7 @@ class DigestRendererTest {
                 iri(TERM + "login", RDF_TYPE, SKOS + "Concept"),
                 lit(TERM + "login", SKOS + "prefLabel", "Anmeldung")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
 
         assertThat(digest).contains("# Project sample-project -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
@@ -69,7 +69,7 @@ class DigestRendererTest {
                 lit(opaqueIri, TITLE, "Login"),
                 lit(opaqueIri, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
 
         assertThat(digest).doesNotContain(opaqueIri);
         assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
@@ -94,7 +94,7 @@ class DigestRendererTest {
                 lit(second, TITLE, "Logout"),
                 lit(second, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
 
         assertThat(digest).contains("resource_get(\"" + first + "\")");
         assertThat(digest).contains("resource_get(\"" + second + "\")");
@@ -113,7 +113,7 @@ class DigestRendererTest {
                 lit(subject, TITLE, "Export"),
                 iri(subject, ARKREQ + "refinesTerm", danglingTarget)));
 
-        String digest = renderer.render(new ProjectId("ws"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("ws"), Optional.empty(), Optional.empty(), snapshot);
 
         assertThat(digest).contains("dangling reference(s)");
         assertThat(digest).contains(subject).contains(danglingTarget).contains("(missing)");
@@ -129,9 +129,33 @@ class DigestRendererTest {
         StoreSnapshot snapshot = StoreSnapshot.of(List.of());
 
         String digest = renderer.render(
-                new ProjectId("ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8"), Optional.of("arknet-demo"), snapshot);
+                new ProjectId("ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8"), Optional.of("arknet-demo"),
+                Optional.empty(), snapshot);
 
         assertThat(digest).contains("# Project arknet-demo (id: ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8) --");
+    }
+
+    /** issue #110: a project's optional description is shown right below the header line when present. */
+    @Test
+    void headerShowsTheProjectDescriptionWhenPresent() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of());
+
+        String digest = renderer.render(new ProjectId("p-1"), Optional.of("arknet-demo"),
+                Optional.of("A demo project for arknet."), snapshot);
+
+        assertThat(digest).contains("# Project arknet-demo (id: p-1) --")
+                .contains("# A demo project for arknet.");
+    }
+
+    /** No description is simply omitted - unchanged from before issue #110. */
+    @Test
+    void headerOmitsTheDescriptionLineWhenAbsent() {
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of());
+
+        String digest = renderer.render(new ProjectId("p-1"), Optional.of("arknet-demo"), Optional.empty(),
+                snapshot);
+
+        assertThat(digest).doesNotContain("# A demo project");
     }
 
     /**
@@ -142,7 +166,7 @@ class DigestRendererTest {
     void headerFallsBackToTheRawIdWhenNoLabelIsAvailable() {
         StoreSnapshot snapshot = StoreSnapshot.of(List.of());
 
-        String digest = renderer.render(new ProjectId("chat-app-project"), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("chat-app-project"), Optional.empty(), Optional.empty(), snapshot);
 
         assertThat(digest).contains("# Project chat-app-project --");
     }

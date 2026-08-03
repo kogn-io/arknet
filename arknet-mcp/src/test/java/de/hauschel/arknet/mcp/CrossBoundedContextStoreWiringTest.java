@@ -85,7 +85,7 @@ class CrossBoundedContextStoreWiringTest {
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed")));
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
-                            new ActorFacet(ActorKind.HUMAN, "orderer")));
+                            new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
                     // uc_add referencing that FR (by its code) and that actor (by name); the
                     // service resolves both raw strings to opaque identities via ActorLookup/
@@ -124,7 +124,7 @@ class CrossBoundedContextStoreWiringTest {
                     // strict step-realises resolution must abort on the unknown FR (order in the
                     // out-adapter resolves the primary actor first, hence seed it).
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
-                            new ActorFacet(ActorKind.HUMAN, "orderer")));
+                            new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
                             null, null, "Customer", List.of(), null, null,
@@ -159,7 +159,7 @@ class CrossBoundedContextStoreWiringTest {
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed")));
-                    Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null));
+                    Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null));
 
                     requirements.linkTerm(PROJECT, fr.code(), order.code().value());
 

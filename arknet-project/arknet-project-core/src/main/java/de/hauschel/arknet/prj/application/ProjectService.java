@@ -23,6 +23,7 @@ import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
 import de.hauschel.arknet.prj.application.port.in.RenameProject;
 import de.hauschel.arknet.prj.application.port.in.ResolveProject;
+import de.hauschel.arknet.prj.application.port.in.UpdateProject;
 import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
 import de.hauschel.arknet.prj.application.port.out.ProjectRegistry;
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
@@ -100,7 +101,7 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  */
 public class ProjectService
         implements RegisterProject, AdoptProject, AttachAnchor, RenameProject, ListProjects,
-        ListAdoptableDatasets, ResolveProject, FindProject {
+        ListAdoptableDatasets, ResolveProject, FindProject, UpdateProject {
 
     /**
      * Bound shared by {@link #updateWithOptimisticRetry} and {@link #register}'s retry loop,
@@ -140,7 +141,8 @@ public class ProjectService
     }
 
     @Override
-    public Project register(String label, Anchor anchor) {
+    public Project register(String label, Anchor anchor, String description, String descriptionLanguage,
+            String defaultLanguage) {
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(anchor, "anchor");
         // Checked before minting anything: an anchor that already belongs to a project must
@@ -153,10 +155,15 @@ public class ProjectService
         }
         ProjectId id = new ProjectId(UUID.randomUUID().toString());
         Project project = new Project(id, label, List.of(anchor));
+        // The registry write below carries description/descriptionLanguage/defaultLanguage as
+        // their own parameters (see registerRetryingOnUnattributedConflict), not through
+        // `project` itself - but the caller-visible result should reflect what was actually
+        // written, so it is built with them included here.
+        Project resultingProject = new Project(id, label, List.of(anchor), description, defaultLanguage);
         return withProjectLock(id, () -> {
-            registerRetryingOnUnattributedConflict(project);
-            selfDescription.describe(project);
-            return project;
+            registerRetryingOnUnattributedConflict(project, description, descriptionLanguage, defaultLanguage);
+            selfDescription.describe(resultingProject);
+            return resultingProject;
         });
     }
 
@@ -202,7 +209,7 @@ public class ProjectService
         }
         Project project = new Project(datasetId, label, List.of(anchor));
         return withProjectLock(datasetId, () -> {
-            registerRetryingOnUnattributedConflict(project);
+            registerRetryingOnUnattributedConflict(project, null, null, null);
             selfDescription.describe(project);
             return project;
         });
@@ -231,7 +238,12 @@ public class ProjectService
             }
             List<Anchor> extended = new ArrayList<>(current.anchors());
             extended.add(anchor);
-            return new Project(current.id(), current.label(), extended);
+            // description/defaultLanguage carried forward unchanged: attach() never touches them,
+            // and the registry's compareAndUpdate write never re-serialises them either way (see
+            // KognioRdfProjectRegistry) - explicit here so equals()-based no-op detection and the
+            // returned Project both still reflect them faithfully.
+            return new Project(current.id(), current.label(), extended, current.description(),
+                    current.defaultLanguage());
         });
     }
 
@@ -242,7 +254,8 @@ public class ProjectService
         return updateWithOptimisticRetry(projectId,
                 current -> current.label().equals(newLabel)
                         ? current
-                        : new Project(current.id(), newLabel, current.anchors()));
+                        : new Project(current.id(), newLabel, current.anchors(), current.description(),
+                                current.defaultLanguage()));
     }
 
     @Override
@@ -260,6 +273,49 @@ public class ProjectService
     public Optional<Project> findById(ProjectId id) {
         Objects.requireNonNull(id, "id");
         return registry.findById(id);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>A no-op call ({@code description} and {@code defaultLanguage} both {@code null}) returns
+     * the project's current state without consulting the registry's write path at all - no
+     * revision, no moved head, mirroring {@code KognioRdfTermRepository#attemptUpdate}'s
+     * equivalent no-op guard.</p>
+     *
+     * <p>Retries via {@link ProjectRegistry#findCurrentById}/{@link
+     * ProjectRegistry#updateAttributes} on a lost CAS race, the same pattern {@link
+     * #updateWithOptimisticRetry} already establishes for {@link #attach}/{@link #rename} - kept
+     * as its own loop rather than folded into that one, since {@link
+     * ProjectRegistry#updateAttributes} is a targeted patch with its own out-port method, not a
+     * {@link Project}-in/{@link Project}-out mutation {@link #updateWithOptimisticRetry}'s shape
+     * expects.</p>
+     */
+    @Override
+    public Project update(ProjectId projectId, String description, String descriptionLanguage,
+            String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        return withProjectLock(projectId, () -> {
+            if (description == null && defaultLanguage == null) {
+                return registry.findById(projectId).orElseThrow(() -> new ProjectNotFoundException(projectId));
+            }
+            StaleProjectException lastConflict = null;
+            for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+                ProjectRegistry.CurrentProject current = registry.findCurrentById(projectId)
+                        .orElseThrow(() -> new ProjectNotFoundException(projectId));
+                try {
+                    Project updated = registry.updateAttributes(projectId, current.head(), description,
+                            descriptionLanguage, defaultLanguage);
+                    selfDescription.describe(updated);
+                    return updated;
+                } catch (StaleProjectException e) {
+                    // A concurrent writer advanced the head between our read and our write - retry
+                    // against the now-current state instead of surfacing a transient race.
+                    lastConflict = e;
+                }
+            }
+            throw lastConflict;
+        });
     }
 
     /**
@@ -287,11 +343,12 @@ public class ProjectService
      * @throws UnattributedRegistrationConflictException if the write keeps losing an
      *                                         unattributable conflict across every retry attempt
      */
-    private void registerRetryingOnUnattributedConflict(Project project) {
+    private void registerRetryingOnUnattributedConflict(Project project, String description,
+            String descriptionLanguage, String defaultLanguage) {
         UnattributedRegistrationConflictException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                registry.register(project);
+                registry.register(project, description, descriptionLanguage, defaultLanguage);
                 return;
             } catch (UnattributedRegistrationConflictException e) {
                 lastConflict = e;

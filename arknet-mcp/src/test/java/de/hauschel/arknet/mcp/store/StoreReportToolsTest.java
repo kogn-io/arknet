@@ -29,6 +29,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
@@ -96,7 +97,7 @@ class StoreReportToolsTest {
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null);
         requirements.create(PROJECT, fr1);
-        terms.create(PROJECT, term1);
+        terms.create(PROJECT, term1, null);
 
         Prefixes prefixes = Prefixes.defaults();
         StoreReader reader = new StoreReader(lifecycle);
@@ -114,12 +115,12 @@ class StoreReportToolsTest {
      * else. Rejecting the unknown case rather than defaulting is the point - a stub that answered
      * every anchor would let a test pass that a real deployment fails (ADR-016 decision 3).
      */
-    private static ProjectId resolveTestAnchor(final String anchor) {
+    private static ResolvedProject resolveTestAnchor(final String anchor) {
         if (ANCHOR.equals(anchor)) {
-            return PROJECT;
+            return new ResolvedProject(PROJECT, null);
         }
         if (OTHER_ANCHOR.equals(anchor)) {
-            return OTHER_PROJECT;
+            return new ResolvedProject(OTHER_PROJECT, null);
         }
         throw new UnresolvedProjectAnchorException(anchor, "no project registered for '" + anchor + "'");
     }
@@ -279,7 +280,7 @@ class StoreReportToolsTest {
             final Prefixes prefixes = Prefixes.defaults();
             final StoreReader reader = new StoreReader(lifecycle);
             final ProjectResolver projects = anchor ->
-                    unsafeAnchor.equals(anchor) ? unsafeProject : resolveTestAnchor(anchor);
+                    unsafeAnchor.equals(anchor) ? new ResolvedProject(unsafeProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithUnsafeId = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
                     modelViews(), projects, NO_LABELS, reportDir, null);
@@ -315,7 +316,7 @@ class StoreReportToolsTest {
             final Prefixes prefixes = Prefixes.defaults();
             final StoreReader reader = new StoreReader(lifecycle);
             final ProjectResolver projects = anchor ->
-                    escapingAnchor.equals(anchor) ? escapingProject : resolveTestAnchor(anchor);
+                    escapingAnchor.equals(anchor) ? new ResolvedProject(escapingProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithEscapingId = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
                     modelViews(), projects, NO_LABELS, reportDir, null);
@@ -360,10 +361,10 @@ class StoreReportToolsTest {
             final StoreReader reader = new StoreReader(lifecycle);
             final ProjectResolver projects = anchor -> {
                 if (slashAnchor.equals(anchor)) {
-                    return slashProject;
+                    return new ResolvedProject(slashProject, null);
                 }
                 if (underscoreAnchor.equals(anchor)) {
-                    return underscoreProject;
+                    return new ResolvedProject(underscoreProject, null);
                 }
                 return resolveTestAnchor(anchor);
             };

@@ -52,17 +52,22 @@ public final class DigestRenderer {
     /**
      * Renders the digest for a project snapshot.
      *
-     * @param projectId the project the snapshot was read from
+     * @param projectId   the project the snapshot was read from
      * @param label       the project's registered label, or {@link Optional#empty()}
      *                    if {@code projectId} is not (or no longer) found in the registry - the
      *                    header then falls back to the raw id, exactly as before this label was
      *                    available
+     * @param description the project's optional free-text description (issue #110), already
+     *                    selected for {@link #displayLocale} if the project carries it in several
+     *                    languages, or {@link Optional#empty()} if it has none
      * @param snapshot    the snapshot to render
      * @return the digest text
      */
-    public String render(ProjectId projectId, Optional<String> label, StoreSnapshot snapshot) {
+    public String render(ProjectId projectId, Optional<String> label, Optional<String> description,
+            StoreSnapshot snapshot) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(label, "label");
+        Objects.requireNonNull(description, "description");
         Objects.requireNonNull(snapshot, "snapshot");
 
         StringBuilder out = new StringBuilder();
@@ -70,6 +75,7 @@ public final class DigestRenderer {
                 .append(" -- ").append(snapshot.resourceCount()).append(" resources, ")
                 .append(snapshot.tripleCount()).append(" triples, ")
                 .append(snapshot.typeCount()).append(" types\n");
+        description.ifPresent(value -> out.append("# ").append(value).append('\n'));
 
         appendPrefixLegend(out, snapshot);
         out.append("# Handle for resource_get: a CURIE, or a bare business id, or the full IRI"

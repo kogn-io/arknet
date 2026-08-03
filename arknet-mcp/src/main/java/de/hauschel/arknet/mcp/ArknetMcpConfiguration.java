@@ -603,7 +603,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     ProjectMcpTools projectMcpTools(final ProjectService service) {
-        return new ProjectMcpTools(service, service, service, service, service, service, service);
+        return new ProjectMcpTools(service, service, service, service, service, service, service, service);
     }
 
     // --- Store read path: generic query, model-shaped report -------------------

@@ -122,11 +122,14 @@ public final class StoreReportTools {
                     + "what is registered.", required = false)
             final String projectAnchor) {
         final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        final Optional<String> label = findProject.findById(projectId).map(Project::label);
+        final Optional<Project> project = findProject.findById(projectId);
+        final Optional<String> label = project.map(Project::label);
+        final Optional<String> description = project.map(Project::description).filter(Objects::nonNull);
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
-        final String digest = digestRenderer.render(projectId, label, snapshot);
-        final String html = htmlRenderer.render(projectId, label, snapshot, digest, modelViews.of(projectId));
+        final String digest = digestRenderer.render(projectId, label, description, snapshot);
+        final String html = htmlRenderer.render(projectId, label, description, snapshot, digest,
+                modelViews.of(projectId));
         return digest + "\n" + writeReportLine(html, projectId) + "\n";
     }
 

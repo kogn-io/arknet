@@ -147,7 +147,7 @@ public final class RequirementMcpTools {
      */
     private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------

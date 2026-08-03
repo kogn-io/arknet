@@ -6,6 +6,7 @@ package de.hauschel.arknet.prj.adapter.kogniordf;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,9 +22,14 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
+import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
+import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -121,30 +127,50 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     private static final DatasetId SYSTEM_DATASET = new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET);
 
     private final DatasetLifecycle lifecycle;
+    private final DisplayLocale displayLocale;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
     /**
      * Creates the adapter.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire the reserved system dataset
-     *                  from - read paths only, the write path goes through {@code funnel} (must
-     *                  not be {@code null})
-     * @param funnel    the shared write funnel (ADR-013) running the SHACL gate, dataset
-     *                  acquisition and existence/head checks for every {@link #register}/
-     *                  {@link #compareAndUpdate} (must not be {@code null})
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire the reserved system
+     *                      dataset from - read paths only, the write path goes through
+     *                      {@code funnel} (must not be {@code null})
+     * @param displayLocale the display-language preference selecting which {@code
+     *                      dcterms:description} the read paths surface for a multilingual
+     *                      project (must not be {@code null})
+     * @param funnel        the shared write funnel (ADR-013) running the SHACL gate, dataset
+     *                      acquisition and existence/head checks for every {@link #register}/
+     *                      {@link #compareAndUpdate}/{@link #updateAttributes} (must not be
+     *                      {@code null})
      */
-    KognioRdfProjectRegistry(DatasetLifecycle lifecycle, WriteFunnel funnel) {
+    KognioRdfProjectRegistry(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
-    public void register(Project project) {
+    public void register(Project project, String description, String descriptionLanguage,
+            String defaultLanguage) {
         Objects.requireNonNull(project, "project");
         String projectIriString = ProjectGraphs.projectIri(project.id());
+        IRI projectIri = rdf.createIRI(projectIriString);
         IRI graphIri = rdf.createIRI(ArkprjVocabulary.REGISTRY_GRAPH);
         Graph candidate = ProjectGraphs.buildGraph(project);
+        // description/defaultLanguage are never part of ProjectGraphs#buildGraph (see that
+        // class's javadoc and this class's javadoc on updateAttributes): they are written here,
+        // additively, only because this is a brand-new identity with nothing to preserve or
+        // corrupt yet - compareAndUpdate's replace-by-identity write must never do the same.
+        if (description != null) {
+            candidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DESCRIPTION),
+                    literalOf(description, canonicalLanguageTag(descriptionLanguage)));
+        }
+        if (defaultLanguage != null) {
+            candidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DEFAULT_LANGUAGE),
+                    rdf.createLiteral(canonicalLanguageTag(defaultLanguage)));
+        }
 
         funnel.create(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString, project.label(),
                 candidate, null,
@@ -167,6 +193,135 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                 () -> new ProjectNotFoundException(project.id()),
                 () -> new StaleProjectException(project.id()),
                 tx -> replaceExistingProject(tx, graphIri, projectSubject, project, candidate));
+    }
+
+    /**
+     * Targeted patch of {@code dcterms:description}/{@code arkprj:defaultLanguage}, sharing
+     * {@link #compareAndUpdate}'s CAS token but never its replace-by-identity write - see {@link
+     * ProjectRegistry#updateAttributes} and {@link #deleteProjectAndItsAnchors}'s javadoc for why
+     * these two predicates must stay outside that write entirely. Mirrors {@code
+     * KognioRdfTermRepository#attemptUpdate}: reads the project's current label/anchors (needed
+     * only to assert them to the SHACL gate - {@code prjshapes:ProjectShape} requires
+     * {@code dcterms:identifier}/{@code arkprj:anchor} unconditionally, and this write never
+     * touches either) before the write transaction, then deletes-and-reinserts only the
+     * predicate(s) actually being replaced - {@code description}'s delete scoped to the same
+     * language tag as the new value, exactly like {@code TermRepository#update}'s
+     * {@code skos:prefLabel}/{@code skos:definition} patch.
+     */
+    @Override
+    public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
+            String descriptionLanguage, String defaultLanguage) {
+        Objects.requireNonNull(projectId, "projectId");
+        String descriptionTag = canonicalLanguageTag(descriptionLanguage);
+        String defaultLanguageTag = canonicalLanguageTag(defaultLanguage);
+
+        ProjectRegistry.CurrentProject current = findCurrentById(projectId)
+                .orElseThrow(() -> new ProjectNotFoundException(projectId));
+        Project currentProject = current.project();
+
+        String projectIriString = ProjectGraphs.projectIri(projectId);
+        IRI projectIri = rdf.createIRI(projectIriString);
+        String projectSubject = SparqlTerms.iriRef(projectIriString);
+        IRI graphIri = rdf.createIRI(ArkprjVocabulary.REGISTRY_GRAPH);
+
+        // Only the predicate(s) actually being replaced go into the gate's candidate; the
+        // project's own type, identifier and anchors - untouched by this method, but required by
+        // prjshapes:ProjectShape - are asserted instead, validation-only, mirroring
+        // KognioRdfTermRepository#attemptUpdate's assertedContext for an untouched prefLabel.
+        Graph writeCandidate = rdf.createGraph();
+        Graph assertedContext = rdf.createGraph();
+        assertedContext.add(projectIri, VocabRdf.TYPE, rdf.createIRI(ArkprjVocabulary.PROJECT_TYPE));
+        assertedContext.add(projectIri, VocabDct.IDENTIFIER, rdf.createLiteral(currentProject.label()));
+        for (Anchor anchor : currentProject.anchors()) {
+            assertedContext.add(projectIri, rdf.createIRI(ArkprjVocabulary.ANCHOR),
+                    rdf.createIRI(ProjectGraphs.anchorIri(anchor)));
+        }
+        if (description != null) {
+            writeCandidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DESCRIPTION),
+                    literalOf(description, descriptionTag));
+        }
+        if (defaultLanguage != null) {
+            writeCandidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DEFAULT_LANGUAGE),
+                    rdf.createLiteral(defaultLanguageTag));
+        }
+
+        funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
+                expectedHead == null ? null : expectedHead.value(), writeCandidate, assertedContext,
+                () -> new ProjectNotFoundException(projectId),
+                () -> new StaleProjectException(projectId),
+                tx -> {
+                    if (description != null) {
+                        tx.update(deleteDescriptionOfLanguage(projectSubject, descriptionTag));
+                        tx.add(graphIri, singleTriple(projectIri, ArkprjVocabulary.DESCRIPTION,
+                                literalOf(description, descriptionTag)));
+                    }
+                    if (defaultLanguage != null) {
+                        tx.update(deleteAllTriplesOf(projectSubject, ArkprjVocabulary.DEFAULT_LANGUAGE));
+                        tx.add(graphIri, singleTriple(projectIri, ArkprjVocabulary.DEFAULT_LANGUAGE,
+                                rdf.createLiteral(defaultLanguageTag)));
+                    }
+                });
+
+        return new Project(projectId, currentProject.label(), currentProject.anchors(),
+                description != null ? description : currentProject.description(),
+                defaultLanguage != null ? defaultLanguageTag : currentProject.defaultLanguage());
+    }
+
+    /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
+    private static String deleteAllTriplesOf(String subject, String predicateIri) {
+        return "DELETE WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + subject + " <" + predicateIri + "> ?o } }";
+    }
+
+    /**
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged
+     * - and rejects one that is not well-formed at all, via the shared kernel {@link LanguageTag}
+     * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
+     * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
+     *
+     * <p>{@link #deleteDescriptionOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
+     * string RDF4J's {@code lang()} returns against this method's {@code tag} argument, so an
+     * un-normalized case mismatch between two calls (e.g. {@code project_add(...,
+     * language="de")} followed by {@code project_update(..., language="DE")}) leaves the existing
+     * {@code @de} literal undeleted and inserts a second {@code @DE} one instead of correcting it
+     * - the same class of bug fixed for {@code TermRepository#update}
+     * ({@code KognioRdfTermRepository#canonicalLanguageTag}), only triggered by case here.
+     * Canonicalizing every tag through this method before both writing a literal and building the
+     * delete filter keeps stored tags in one consistent case, so a later scoped delete always
+     * matches - the same guarantee {@code DisplayLocale#matching} already gives the read side by
+     * comparing tags case-insensitively.</p>
+     */
+    private static String canonicalLanguageTag(String language) {
+        return LanguageTag.canonicalize(language);
+    }
+
+    /**
+     * Deletes only the existing {@code dcterms:description} triple(s) of {@code subject} whose
+     * literal carries the same language tag as {@code language} - every other language-tagged (or
+     * untagged) variant survives untouched. {@code lang(?o)} is {@code ""} for a plain, untagged
+     * literal, which is exactly what {@code language == null} maps {@code tag} to below.
+     */
+    private static String deleteDescriptionOfLanguage(String subject, String language) {
+        // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
+        // DELETE {...} WHERE {...} form is required to scope the delete by language.
+        String tag = language == null ? "" : SparqlTerms.escape(language);
+        return "DELETE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + subject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?o } } "
+                + "WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + subject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?o . "
+                + "FILTER(lang(?o) = \"" + tag + "\") } }";
+    }
+
+    /** A one-triple graph, for the common "insert exactly one new value" case in {@link #updateAttributes}. */
+    private Graph singleTriple(IRI subject, String predicateIri, RDFTerm object) {
+        Graph graph = rdf.createGraph();
+        graph.add(subject, rdf.createIRI(predicateIri), object);
+        return graph;
+    }
+
+    /** Builds a language-tagged literal, or a plain untagged one when {@code language} is {@code null}. */
+    private Literal literalOf(String value, String language) {
+        return language == null ? rdf.createLiteral(value) : rdf.createLiteral(value, language);
     }
 
     /**
@@ -267,14 +422,29 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * before this write - both read <em>before</em> anything is deleted, inside this same write
      * transaction, so nothing is lost if a later step in {@link #replaceExistingProject} rejects
      * the write.
+     *
+     * <p><strong>{@code dcterms:description}/{@code arkprj:defaultLanguage} are deliberately
+     * excluded from this delete.</strong> Both are written only through {@link
+     * #updateAttributes}'s targeted, language-scoped patch, never through this replace-by-identity
+     * write - if this delete touched them too, every rename or attached anchor would silently
+     * wipe a project's description (and every one of its language variants) the same way an
+     * earlier {@code term_update} used to wipe a term's {@code skos:prefLabel} (issue #228). The
+     * candidate {@link #replaceExistingProject} re-adds after this delete
+     * ({@code ProjectGraphs#buildGraph}) never contains either predicate either, so the two stay
+     * symmetric: neither deleted here nor re-added there.</p>
      */
     private void deleteProjectAndItsAnchors(DatasetTx tx, IRI graphIri, String projectSubject) {
         String selectAnchors = "SELECT ?a WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
                 + projectSubject + " <" + ArkprjVocabulary.ANCHOR + "> ?a } }";
         List<IRI> previousAnchors = tx.select(selectAnchors).map(row -> iriOf(row, "a")).toList();
 
-        tx.update("DELETE WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
-                + projectSubject + " ?p ?o } }");
+        // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
+        // DELETE {...} WHERE {...} form is required to exclude description/defaultLanguage.
+        tx.update("DELETE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { " + projectSubject + " ?p ?o } } "
+                + "WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + projectSubject + " ?p ?o . "
+                + "FILTER(?p != <" + ArkprjVocabulary.DESCRIPTION + "> && ?p != <"
+                + ArkprjVocabulary.DEFAULT_LANGUAGE + ">) } }");
         for (IRI anchor : previousAnchors) {
             tx.update("DELETE WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
                     + SparqlTerms.iriRef(anchor.getIRIString()) + " ?p ?o } }");
@@ -387,12 +557,18 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
         try (DatasetHandle handle = lifecycle.acquire(SYSTEM_DATASET)) {
             Map<String, List<Anchor>> anchorsByProject = readAnchorsByProject(handle);
+            Map<String, List<LocalizedLiteral>> descriptionsByProject = readDescriptionsByProject(handle);
+            Map<String, String> defaultLanguagesByProject = readDefaultLanguagesByProject(handle);
             return handle.sparqlQuery().select(query)
                     .map(row -> {
                         String projectIriString = iriOf(row, "project").getIRIString();
+                        String description = selectDescription(
+                                descriptionsByProject.getOrDefault(projectIriString, List.of()));
                         return new Project(ProjectGraphs.projectIdOf(projectIriString),
                                 literalOf(row, "label").getLexicalForm(),
-                                anchorsByProject.get(projectIriString));
+                                anchorsByProject.get(projectIriString),
+                                description,
+                                defaultLanguagesByProject.get(projectIriString));
                     })
                     .toList();
         }
@@ -412,22 +588,28 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
         String projectIriString = ProjectGraphs.projectIri(id);
         String projectSubject = SparqlTerms.iriRef(projectIriString);
-        String query = "SELECT ?label ?head WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
-                + projectSubject + " <" + VocabDct.IDENTIFIER.getIRIString() + "> ?label } "
+        String query = "SELECT ?label ?description ?defaultLanguage ?head WHERE { GRAPH <"
+                + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + projectSubject + " <" + VocabDct.IDENTIFIER.getIRIString() + "> ?label . "
+                + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?description } "
+                + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DEFAULT_LANGUAGE + "> ?defaultLanguage } } "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + projectSubject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(SYSTEM_DATASET)) {
-            Optional<BindingSet> found = handle.sparqlQuery().select(query).findFirst();
-            if (found.isEmpty()) {
+            List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
+            if (rows.isEmpty()) {
                 return Optional.empty();
             }
-            BindingSet row = found.get();
+            String label = literalOf(rows.get(0), "label").getLexicalForm();
+            String description = selectDescription(descriptionCandidates(rows));
+            String defaultLanguage = defaultLanguageOf(rows);
             List<Anchor> anchors = readAnchors(handle.sparqlQuery()::select, projectSubject);
-            Project project = new Project(id, literalOf(row, "label").getLexicalForm(), anchors);
-            RevisionToken head = row.getValue("head")
-                    .filter(IRI.class::isInstance)
-                    .map(value -> new RevisionToken(((IRI) value).getIRIString()))
+            Project project = new Project(id, label, anchors, description, defaultLanguage);
+            RevisionToken head = rows.stream()
+                    .flatMap(row -> row.getValue("head").filter(IRI.class::isInstance).map(IRI.class::cast).stream())
+                    .findFirst()
+                    .map(iri -> new RevisionToken(iri.getIRIString()))
                     .orElse(null);
             return Optional.of(new ProjectRegistry.CurrentProject(project, head));
         }
@@ -436,17 +618,58 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     /** Shared single-project read for {@link #findByAnchor} and {@link #findById}. */
     private Optional<Project> readProject(DatasetHandle handle, String projectIriString) {
         String projectSubject = SparqlTerms.iriRef(projectIriString);
-        String query = "SELECT ?label WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
-                + projectSubject + " <" + VocabDct.IDENTIFIER.getIRIString() + "> ?label } }";
+        String query = "SELECT ?label ?description ?defaultLanguage WHERE { GRAPH <"
+                + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + projectSubject + " <" + VocabDct.IDENTIFIER.getIRIString() + "> ?label . "
+                + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DESCRIPTION + "> ?description } "
+                + "OPTIONAL { " + projectSubject + " <" + ArkprjVocabulary.DEFAULT_LANGUAGE
+                + "> ?defaultLanguage } } }";
 
-        Optional<String> label = handle.sparqlQuery().select(query)
-                .map(row -> literalOf(row, "label").getLexicalForm())
-                .findFirst();
-        if (label.isEmpty()) {
+        List<BindingSet> rows = handle.sparqlQuery().select(query).toList();
+        if (rows.isEmpty()) {
             return Optional.empty();
         }
+        String label = literalOf(rows.get(0), "label").getLexicalForm();
+        String description = selectDescription(descriptionCandidates(rows));
+        String defaultLanguage = defaultLanguageOf(rows);
         List<Anchor> anchors = readAnchors(handle.sparqlQuery()::select, projectSubject);
-        return Optional.of(new Project(ProjectGraphs.projectIdOf(projectIriString), label.get(), anchors));
+        return Optional.of(new Project(ProjectGraphs.projectIdOf(projectIriString), label, anchors,
+                description, defaultLanguage));
+    }
+
+    /** Extracts every {@code ?description} binding across {@code rows} as {@link LocalizedLiteral} candidates. */
+    private static List<LocalizedLiteral> descriptionCandidates(List<BindingSet> rows) {
+        return rows.stream()
+                .flatMap(row -> row.getValue("description").filter(Literal.class::isInstance)
+                        .map(Literal.class::cast).stream())
+                .map(literal -> new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)))
+                .distinct()
+                .toList();
+    }
+
+    /**
+     * Selects the description to surface from a set of candidates via the injected {@link
+     * #displayLocale}, or {@code null} if {@code candidates} is empty - unlike {@code
+     * skos:prefLabel}, {@code dcterms:description} is optional, so an absent description is a
+     * legal {@code null} value on {@link Project}, never a reason to drop the project itself.
+     */
+    private String selectDescription(List<LocalizedLiteral> candidates) {
+        return displayLocale.select(candidates).map(LocalizedLiteral::value).orElse(null);
+    }
+
+    /**
+     * Extracts {@code ?defaultLanguage} from {@code rows} - functionally single-valued (
+     * {@code prjshapes:Project-defaultLanguage} carries {@code sh:maxCount 1}), so the first
+     * binding seen suffices; a store-first project breaking that constraint deterministically
+     * picks the first row's value rather than throwing.
+     */
+    private static String defaultLanguageOf(List<BindingSet> rows) {
+        return rows.stream()
+                .flatMap(row -> row.getValue("defaultLanguage").filter(Literal.class::isInstance)
+                        .map(Literal.class::cast).stream())
+                .map(Literal::getLexicalForm)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -476,6 +699,28 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                 .computeIfAbsent(iriOf(row, "project").getIRIString(), key -> new ArrayList<>())
                 .add(new Anchor(literalOf(row, "value").getLexicalForm(),
                         ProjectGraphs.anchorTypeFromIri(iriOf(row, "type").getIRIString()))));
+        return byProject;
+    }
+
+    /** Bulk variant of {@link #descriptionCandidates}: every project's description candidates, for {@link #findAll}. */
+    private Map<String, List<LocalizedLiteral>> readDescriptionsByProject(DatasetHandle handle) {
+        String query = "SELECT ?project ?description WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + "?project <" + ArkprjVocabulary.DESCRIPTION + "> ?description } }";
+        Map<String, List<LocalizedLiteral>> byProject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> byProject
+                .computeIfAbsent(iriOf(row, "project").getIRIString(), key -> new ArrayList<>())
+                .add(new LocalizedLiteral(literalOf(row, "description").getLexicalForm(),
+                        literalOf(row, "description").getLanguageTag().orElse(null))));
+        return byProject;
+    }
+
+    /** Bulk variant of {@link #defaultLanguageOf}: every project's default language, for {@link #findAll}. */
+    private Map<String, String> readDefaultLanguagesByProject(DatasetHandle handle) {
+        String query = "SELECT ?project ?defaultLanguage WHERE { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { "
+                + "?project <" + ArkprjVocabulary.DEFAULT_LANGUAGE + "> ?defaultLanguage } }";
+        Map<String, String> byProject = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> byProject
+                .putIfAbsent(iriOf(row, "project").getIRIString(), literalOf(row, "defaultLanguage").getLexicalForm()));
         return byProject;
     }
 

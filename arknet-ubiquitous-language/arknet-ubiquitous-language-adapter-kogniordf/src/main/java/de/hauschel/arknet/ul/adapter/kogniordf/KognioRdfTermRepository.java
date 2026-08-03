@@ -6,6 +6,7 @@ package de.hauschel.arknet.ul.adapter.kogniordf;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -30,6 +31,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -220,7 +222,7 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public void create(ProjectId projectId, Term term) {
+    public void create(ProjectId projectId, Term term, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(term, "term");
 
@@ -234,8 +236,9 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         graph.add(subjectIri, rdf.createIRI(IN_SCHEME_PROPERTY), schemeIri);
         graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.code().value()));
-        graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), rdf.createLiteral(term.prefLabel()));
-        graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), rdf.createLiteral(term.definition()));
+        String tag = canonicalLanguageTag(language);
+        graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(term.prefLabel(), tag));
+        graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), literalOf(term.definition(), tag));
         // The per-project glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
@@ -312,14 +315,15 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet) {
+            ActorFacet actorFacet, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
+        String tag = canonicalLanguageTag(language);
         TermConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet);
+                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet, tag);
             } catch (TermConcurrentlyModifiedException e) {
                 // A concurrent writer advanced the head between our read and our write - retry
                 // against the now-current state instead of surfacing a transient race.
@@ -355,7 +359,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * update" note on {@link #update}.</p>
      */
     private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet) {
+            ActorFacet actorFacet, String language) {
         DatasetId dataset = new DatasetId(projectId.value());
         CurrentTerm currentTerm;
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
@@ -406,8 +410,8 @@ public class KognioRdfTermRepository implements TermRepository {
                         rdf.createLiteral(current.actorFacet().role()));
             }
         }
-        // skos:definition carries no ulshapes PropertyShape at all (see class-level note) -
-        // nothing to assert either way when it is left untouched.
+        // skos:definition's shape carries sh:uniqueLang but no sh:minCount - nothing to assert
+        // for the gate to still pass when it is left untouched.
 
         funnel.compareAndUpdate(dataset, TERMS_GRAPH, subjectIriString, currentHead,
                 writeCandidate, assertedContext,
@@ -415,12 +419,12 @@ public class KognioRdfTermRepository implements TermRepository {
                 () -> new TermConcurrentlyModifiedException(projectId, code),
                 tx -> {
                     if (prefLabel != null) {
-                        tx.update(deleteAllTriplesOf(subject, PREF_LABEL_PROPERTY));
-                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, rdf.createLiteral(prefLabel)));
+                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, language));
+                        tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, language)));
                     }
                     if (definition != null) {
-                        tx.update(deleteAllTriplesOf(subject, DEFINITION_PROPERTY));
-                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, rdf.createLiteral(definition)));
+                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, language));
+                        tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, language)));
                     }
                     if (actorFacet != null) {
                         tx.update(deleteType(subject, HUMAN_ACTOR_TYPE));
@@ -448,6 +452,54 @@ public class KognioRdfTermRepository implements TermRepository {
         return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
     }
 
+    /**
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged
+     * - and rejects one that is not well-formed at all, via the shared kernel {@link LanguageTag}
+     * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
+     * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
+     *
+     * <p>{@link #deleteTriplesOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
+     * string RDF4J's {@code lang()} returns - the exact case a literal was written with - against
+     * this method's {@code tag} argument, so an un-normalized case mismatch between two calls
+     * (e.g. {@code term_add(..., language="de")} followed by {@code term_update(...,
+     * language="DE")}) leaves the existing {@code @de} literal undeleted and inserts a second
+     * {@code @DE} one instead of correcting it - two literals for one language, defeating
+     * {@code sh:uniqueLang} and the exact bug this scoped delete exists to fix, only triggered by
+     * case instead of missing scoping. Canonicalizing every tag through this method before both
+     * writing a literal ({@link #literalOf}) and building the delete filter keeps stored tags in
+     * one consistent case, so a later scoped delete always matches - the same guarantee
+     * {@code DisplayLocale#matching} already gives the read side by comparing tags
+     * case-insensitively.</p>
+     */
+    private static String canonicalLanguageTag(String language) {
+        return LanguageTag.canonicalize(language);
+    }
+
+    /**
+     * Deletes only the existing triple(s) of {@code subject} on {@code predicateIri} whose literal
+     * carries the same language tag as {@code language} - every other language-tagged (or
+     * untagged) variant of a multi-valued predicate such as {@code skos:prefLabel}/
+     * {@code skos:definition} survives untouched. A no-op if no literal with that tag exists.
+     *
+     * <p>This is the fix for the bug {@code term_update} used to have: an earlier version deleted
+     * <strong>every</strong> value of the predicate regardless of language before writing the one
+     * new literal, silently discarding every other language variant a store-first (ADR-005) term
+     * legally carried. {@code lang(?o)} is {@code ""} for a plain, untagged literal, which is
+     * exactly what {@code language == null} maps {@code tag} to below - so an untagged correction
+     * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
+     * tag.</p>
+     *
+     * @param language the BCP-47 tag of the literal being replaced, or {@code null} for untagged
+     */
+    private static String deleteTriplesOfLanguage(String subject, String predicateIri, String language) {
+        // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
+        // DELETE {...} WHERE {...} form is required to scope the delete by language.
+        String tag = language == null ? "" : SparqlTerms.escape(language);
+        return "DELETE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } } "
+                + "WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o . "
+                + "FILTER(lang(?o) = \"" + tag + "\") } }";
+    }
+
     /** Deletes {@code subject a <typeIri>} if present - a no-op if the subject does not carry it. */
     private static String deleteType(String subject, String typeIri) {
         return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " a <" + typeIri + "> } }";
@@ -465,6 +517,11 @@ public class KognioRdfTermRepository implements TermRepository {
         return literal.languageTag() == null
                 ? rdf.createLiteral(literal.value())
                 : rdf.createLiteral(literal.value(), literal.languageTag());
+    }
+
+    /** Builds a language-tagged literal, or a plain untagged one when {@code language} is {@code null}. */
+    private Literal literalOf(String value, String language) {
+        return language == null ? rdf.createLiteral(value) : rdf.createLiteral(value, language);
     }
 
     /**
@@ -499,13 +556,34 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public Optional<Term> findByCode(ProjectId projectId, TermCode code) {
+    public Optional<Term> findByCode(ProjectId projectId, TermCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
+        DisplayLocale effective = withRequestedOverride(displayLocale);
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            return readAssemblyByCode(handle.sparqlQuery()::select, code).map(assembly -> assembly.toTerm(displayLocale));
+            return readAssemblyByCode(handle.sparqlQuery()::select, code).map(assembly -> assembly.toTerm(effective));
         }
+    }
+
+    /**
+     * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
+     * for one call, e.g. an explicit {@code term_get} {@code displayLocale} argument or a
+     * project's own default language merged in by the caller (ADR-016-adjacent: the
+     * ubiquitous-language MCP adapter combines an explicit override with
+     * {@code ResolvedProject#defaultLanguage()} before this method ever sees it). The configured
+     * {@code systemDefault} tier - and the rest of {@link DisplayLocale#select}'s fallback chain -
+     * is unaffected, so an override that matches nothing still degrades exactly the way the
+     * process-wide default already does.
+     *
+     * @param requestedOverride a BCP-47 language tag, or {@code null}/blank to use the configured
+     *                          {@link #displayLocale} unchanged
+     */
+    private DisplayLocale withRequestedOverride(String requestedOverride) {
+        if (requestedOverride == null || requestedOverride.isBlank()) {
+            return displayLocale;
+        }
+        return new DisplayLocale(Locale.forLanguageTag(requestedOverride), displayLocale.systemDefault());
     }
 
     /**

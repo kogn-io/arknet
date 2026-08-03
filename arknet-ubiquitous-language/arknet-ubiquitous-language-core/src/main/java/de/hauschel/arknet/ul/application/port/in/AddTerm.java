@@ -33,7 +33,11 @@ public interface AddTerm {
      * @param actorFacet optional Actor facette: if set, the same
      *                   skos:Concept is additionally an {@code arkproc:Actor}.
      *                   Optional (may be {@code null})
+     * @param language   the BCP-47 language tag {@code prefLabel} and {@code definition} are
+     *                   written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
+     *                   literal - the same tag applies to both fields, since a term is normally
+     *                   registered in one language at a time
      */
-    record NewTerm(String prefLabel, String definition, ActorFacet actorFacet) {
+    record NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language) {
     }
 }

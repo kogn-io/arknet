@@ -10,10 +10,10 @@ waehrend der Kernel das eine Modul ist, an dem jeder Core ohnehin haengt. Die Fo
 sonst unbeschraenkt (nur non-blank) -- neue Projekte minten eine UUID, aus der alten Slug-Ableitung
 gewachsene Ids wie `arknet` bleiben gueltige opake Werte und werden nie migriert (ADR-016 Punkt 5).
 
-Dazu der Port `ProjectResolver` (`String anchor -> ProjectId`, Konstante `ANCHOR_KEY`): `ProjectId`
-ist **kein** Prozess-Singleton, sondern wird von jedem `@McpTool`-Adapter pro Aufruf aus dem Anker
-aufgeloest, den der Client mitschickt. Die Aufloesung ist ein Registry-Nachschlagen auf den ganzen,
-uninterpretierten Wert -- nichts wird abgeleitet, gekuerzt oder geraten (ADR-016). Die
+Dazu der Port `ProjectResolver` (`String anchor -> ResolvedProject`, Konstante `ANCHOR_KEY`):
+`ProjectId` ist **kein** Prozess-Singleton, sondern wird von jedem `@McpTool`-Adapter pro Aufruf aus
+dem Anker aufgeloest, den der Client mitschickt. Die Aufloesung ist ein Registry-Nachschlagen auf
+den ganzen, uninterpretierten Wert -- nichts wird abgeleitet, gekuerzt oder geraten (ADR-016). Die
 Composition-Root-Implementierung `RegisteredAnchorProjectResolver` in `arknet-mcp` adaptiert dafuer
 den `ResolveProject`-In-Port des `arknet-project`-BC; die Modell-BCs sehen nur diesen neutralen
 Port und haengen nie an jenem BC. Fehlender oder unbekannter Anker ist ein Fehler
@@ -24,3 +24,15 @@ keinen Rueckfall auf ein Server-Arbeitsverzeichnis, und bewusst auch keine
 einladen wuerde. Shared-Kernel-Grund derselbe wie bei `ProjectId` selbst: mehrere BCs
 (requirements, ubiquitous-language, ...) adressieren dasselbe Projekt und teilen sich einen Weg,
 es aufzuloesen, statt jeder seinen eigenen zu erfinden.
+
+Das Ergebnis ist `ResolvedProject` (Record `id: ProjectId`/`defaultLanguage: String`, Letzteres
+nullable): der Port liefert seit der Mehrsprachigkeit von Term/Project (arknet-ubiquitous-language,
+arknet-project) nicht mehr nur die `ProjectId`, sondern buendelt das konfigurierte
+Standard-Anzeige-Language-Tag des aufgeloesten Projekts gleich mit -- derselbe Registry-Read, den
+jeder Tool-Aufruf ohnehin fuer das Routing macht, beantwortet die Sprachfrage "for free" mit,
+statt dass ein Bounded Context, der die Standardsprache braucht (heute nur
+ubiquitous-language, fuer `term_get`s Anzeige-Fallback), den Project-BC dafuer ein zweites Mal ueber
+einen eigenen ADR-008-Borrow ansprechen muesste. Ein Aufrufer, der nur die `ProjectId` braucht, liest
+`resolve(anchor).id()`. `defaultLanguage` ist reine Lesepraeferenz: es beeinflusst nie, was ein
+Schreib-Tool ohne eigenes `language`-Argument tatsaechlich schreibt (das bleibt ungetaggt) -- nur,
+welche Sprachvariante ein Lesepfad ohne explizite Anfrage bevorzugt zeigt.

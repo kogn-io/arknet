@@ -70,7 +70,7 @@ class KognioRdfProjectRegistryTest {
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         ShaclWriteGate gate = KognioRdfProjectRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         WriteFunnel funnel = new WriteFunnel(datasetLifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        registry = new KognioRdfProjectRegistry(datasetLifecycle, funnel);
+        registry = new KognioRdfProjectRegistry(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach
@@ -92,7 +92,7 @@ class KognioRdfProjectRegistryTest {
         Anchor anchor = pathAnchor("/home/dev/arknet");
         Project project = new Project(freshId(), "arknet", List.of(anchor));
 
-        registry.register(project);
+        registry.register(project, null, null, null);
 
         assertEquals(Optional.of(project), registry.findById(project.id()));
         assertEquals(Optional.of(project), registry.findByAnchor(anchor));
@@ -104,7 +104,7 @@ class KognioRdfProjectRegistryTest {
         Anchor anchor = new Anchor("https://example.org/repo", AnchorType.URL);
         Project project = new Project(freshId(), "remote-project", List.of(anchor));
 
-        registry.register(project);
+        registry.register(project, null, null, null);
 
         Project found = registry.findById(project.id()).orElseThrow();
         assertEquals(1, found.anchors().size());
@@ -118,7 +118,7 @@ class KognioRdfProjectRegistryTest {
         Anchor worktree = pathAnchor("/home/dev/arknet-worktree");
         Project project = new Project(freshId(), "arknet", List.of(mainCheckout, worktree));
 
-        registry.register(project);
+        registry.register(project, null, null, null);
 
         assertEquals(Optional.of(project), registry.findByAnchor(mainCheckout));
         assertEquals(Optional.of(project), registry.findByAnchor(worktree));
@@ -138,12 +138,12 @@ class KognioRdfProjectRegistryTest {
     void registerRejectsAnAnchorAlreadyOwnedByAnotherProjectAndNamesTheOwner() {
         Anchor sharedAnchor = pathAnchor("/home/dev/arknet");
         Project first = new Project(freshId(), "arknet", List.of(sharedAnchor));
-        registry.register(first);
+        registry.register(first, null, null, null);
 
         Project second = new Project(freshId(), "arknet-copy", List.of(sharedAnchor));
 
         AnchorAlreadyRegisteredException thrown = assertThrows(AnchorAlreadyRegisteredException.class,
-                () -> registry.register(second));
+                () -> registry.register(second, null, null, null));
         assertEquals(first.id(), thrown.owner());
         assertEquals(sharedAnchor, thrown.anchor());
 
@@ -157,11 +157,11 @@ class KognioRdfProjectRegistryTest {
     void compareAndUpdateRejectsAttachingAnAnchorAlreadyOwnedByAnotherProject() {
         Anchor foreignAnchor = pathAnchor("/home/dev/other-project");
         Project owner = new Project(freshId(), "other-project", List.of(foreignAnchor));
-        registry.register(owner);
+        registry.register(owner, null, null, null);
 
         Anchor ownAnchor = pathAnchor("/home/dev/mine");
         Project mine = new Project(freshId(), "mine", List.of(ownAnchor));
-        registry.register(mine);
+        registry.register(mine, null, null, null);
         RevisionToken head = registry.findCurrentById(mine.id()).orElseThrow().head();
 
         Project attemptsToStealAnchor = new Project(mine.id(), "mine", List.of(ownAnchor, foreignAnchor));
@@ -185,30 +185,30 @@ class KognioRdfProjectRegistryTest {
     void registerRejectsTheSameAnchorValueUnderADifferentTypeAsAlreadyOwnedByAnotherProject() {
         Anchor sharedValueAsPath = pathAnchor("/home/dev/arknet");
         Project first = new Project(freshId(), "arknet", List.of(sharedValueAsPath));
-        registry.register(first);
+        registry.register(first, null, null, null);
 
         Anchor sameValueAsUrl = new Anchor("/home/dev/arknet", AnchorType.URL);
         Project second = new Project(freshId(), "arknet-copy", List.of(sameValueAsUrl));
 
         AnchorAlreadyRegisteredException thrown = assertThrows(AnchorAlreadyRegisteredException.class,
-                () -> registry.register(second));
+                () -> registry.register(second, null, null, null));
         assertEquals(first.id(), thrown.owner());
     }
 
     @Test
     void registerRejectsADuplicateLabelOnADifferentIdentity() {
-        registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/a"))));
+        registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/a"))), null, null, null);
 
         assertThrows(DuplicateProjectLabelException.class,
-                () -> registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/b")))));
+                () -> registry.register(new Project(freshId(), "arknet", List.of(pathAnchor("/b"))), null, null, null));
     }
 
     @Test
     void compareAndUpdateRejectsRenamingToALabelAlreadyUsedByAnotherProject() {
-        registry.register(new Project(freshId(), "taken", List.of(pathAnchor("/a"))));
+        registry.register(new Project(freshId(), "taken", List.of(pathAnchor("/a"))), null, null, null);
 
         Project mine = new Project(freshId(), "mine", List.of(pathAnchor("/b")));
-        registry.register(mine);
+        registry.register(mine, null, null, null);
         RevisionToken head = registry.findCurrentById(mine.id()).orElseThrow().head();
 
         Project renamed = new Project(mine.id(), "taken", mine.anchors());
@@ -225,7 +225,7 @@ class KognioRdfProjectRegistryTest {
     void replaceByIdentitySwitchingAnchorsLeavesNoOrphanedAnchorNode() {
         Anchor oldAnchor = pathAnchor("/home/dev/old-checkout");
         Project project = new Project(freshId(), "arknet", List.of(oldAnchor));
-        registry.register(project);
+        registry.register(project, null, null, null);
         RevisionToken head = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Anchor newAnchor = pathAnchor("/home/dev/new-checkout");
@@ -249,7 +249,7 @@ class KognioRdfProjectRegistryTest {
     @Test
     void findCurrentByIdReturnsAHeadAfterRegistration() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
-        registry.register(project);
+        registry.register(project, null, null, null);
 
         ProjectRegistry.CurrentProject current = registry.findCurrentById(project.id()).orElseThrow();
         assertEquals(project, current.project());
@@ -259,7 +259,7 @@ class KognioRdfProjectRegistryTest {
     @Test
     void compareAndUpdateSucceedsWithTheCurrentHead() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
-        registry.register(project);
+        registry.register(project, null, null, null);
         RevisionToken head = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Project renamed = new Project(project.id(), "renamed", project.anchors());
@@ -271,7 +271,7 @@ class KognioRdfProjectRegistryTest {
     @Test
     void compareAndUpdateRejectsAStaleHead() {
         Project project = new Project(freshId(), "arknet", List.of(pathAnchor("/a")));
-        registry.register(project);
+        registry.register(project, null, null, null);
         RevisionToken staleHead = registry.findCurrentById(project.id()).orElseThrow().head();
 
         Project firstRename = new Project(project.id(), "renamed-once", project.anchors());
@@ -321,6 +321,62 @@ class KognioRdfProjectRegistryTest {
 
         ShaclWriteGate gate = KognioRdfProjectRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
+    // ---- description language-scoped delete (PR #230 review) --------------------------------
+
+    /**
+     * P0 regression (PR #230 review comment): {@code deleteDescriptionOfLanguage}'s
+     * {@code FILTER(lang(?o) = "tag")} compared the raw, unnormalized BCP-47 tag
+     * case-sensitively - a later correction spelling the same language with a different case
+     * (e.g. {@code "DE"} where the description was originally written with {@code "de"}) missed
+     * the existing literal and inserted a second, differently-cased one instead of replacing it,
+     * defeating {@code sh:uniqueLang}. Fixed by canonicalizing every tag through
+     * {@code canonicalLanguageTag} before both writing a literal and building the delete filter,
+     * so the two calls always agree on one case - mirrors {@code KognioRdfTermRepositoryTest}'s
+     * equivalent regression test for {@code skos:prefLabel}.
+     */
+    @Test
+    void updateAttributesWithADifferentlyCasedLanguageTagReplacesTheSameStoredVariantInsteadOfDuplicatingIt() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet", List.of(pathAnchor("/home/dev/arknet")));
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null);
+
+        ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
+        Project updated = registry.updateAttributes(id, current.head(),
+                "Architecture models machines understand.", "DE", null);
+
+        assertEquals("Architecture models machines understand.", updated.description());
+        assertTrue(subjectHasDescriptionTaggedAs(id, "Architecture models machines understand.", "de"));
+        assertFalse(subjectHasDescriptionWithRawLanguageTag(id, "DE"),
+                "a case-differing language argument must not leave a duplicate, differently-cased literal behind");
+    }
+
+    /** Whether the registered project {@code id} carries this exact {@code dcterms:description} literal+tag. */
+    private boolean subjectHasDescriptionTaggedAs(ProjectId id, String value, String tag) {
+        String projectSubject = "https://w3id.org/arknet/project/" + id.value();
+        String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { <" + projectSubject
+                + "> <" + ArkprjVocabulary.DESCRIPTION + "> \"" + value + "\"@" + tag + " } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /**
+     * Whether {@code id} carries a {@code dcterms:description} literal whose RAW, unnormalized
+     * language tag is exactly {@code rawTag} - bypasses the {@code "value"@tag} triple-pattern
+     * matching {@link #subjectHasDescriptionTaggedAs} relies on (RDF term equality may treat
+     * differently-cased tags as the same term) and instead mirrors production's own
+     * {@code deleteDescriptionOfLanguage} filter ({@code FILTER(lang(?o) = "tag")}, a
+     * case-sensitive string comparison against the tag exactly as stored).
+     */
+    private boolean subjectHasDescriptionWithRawLanguageTag(ProjectId id, String rawTag) {
+        String projectSubject = "https://w3id.org/arknet/project/" + id.value();
+        String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { <" + projectSubject
+                + "> <" + ArkprjVocabulary.DESCRIPTION + "> ?o . FILTER(lang(?o) = \"" + rawTag + "\") } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            return handle.sparqlQuery().ask(query);
+        }
     }
 
     // ---- self-description -------------------------------------------------------------------

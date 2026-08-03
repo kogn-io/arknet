@@ -21,6 +21,7 @@ import org.springframework.ai.mcp.annotation.provider.tool.SyncMcpToolProvider;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
@@ -56,7 +57,7 @@ class RequirementMcpToolsTest {
     private static final ProjectId PROJECT = new ProjectId("test-project");
 
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
-    private static final ProjectResolver PROJECTS = anchor -> PROJECT;
+    private static final ProjectResolver PROJECTS = anchor -> new ResolvedProject(PROJECT, null);
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();

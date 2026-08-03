@@ -23,6 +23,7 @@ import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
 import de.hauschel.arknet.prj.application.port.in.RenameProject;
 import de.hauschel.arknet.prj.application.port.in.ResolveProject;
+import de.hauschel.arknet.prj.application.port.in.UpdateProject;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
@@ -137,22 +138,24 @@ public final class ProjectMcpTools {
     private final AdoptProject adoptProject;
     private final AttachAnchor attachAnchor;
     private final RenameProject renameProject;
+    private final UpdateProject updateProject;
     private final ListProjects listProjects;
     private final ListAdoptableDatasets listAdoptableDatasets;
     private final ResolveProject resolveProject;
 
     /**
-     * Creates the adapter with its seven driving in-ports.
+     * Creates the adapter with its eight driving in-ports.
      *
      * @param registerProject       in-port backing {@code project_add}
      * @param adoptProject          in-port backing {@code project_adopt}
      * @param attachAnchor          in-port backing {@code project_attach_anchor}
      * @param renameProject         in-port backing {@code project_rename}
+     * @param updateProject         in-port backing {@code project_update}
      * @param listProjects          in-port backing {@code project_list}
      * @param listAdoptableDatasets in-port backing {@code project_list}'s second section
      * @param resolveProject        in-port used to resolve the caller's own project from its context
-     *                              anchor, so {@code project_attach_anchor} and
-     *                              {@code project_rename} never need a project identity as a
+     *                              anchor, so {@code project_attach_anchor}, {@code project_rename}
+     *                              and {@code project_update} never need a project identity as a
      *                              caller-facing parameter
      */
     public ProjectMcpTools(
@@ -160,6 +163,7 @@ public final class ProjectMcpTools {
             final AdoptProject adoptProject,
             final AttachAnchor attachAnchor,
             final RenameProject renameProject,
+            final UpdateProject updateProject,
             final ListProjects listProjects,
             final ListAdoptableDatasets listAdoptableDatasets,
             final ResolveProject resolveProject) {
@@ -167,6 +171,7 @@ public final class ProjectMcpTools {
         this.adoptProject = Objects.requireNonNull(adoptProject, "adoptProject");
         this.attachAnchor = Objects.requireNonNull(attachAnchor, "attachAnchor");
         this.renameProject = Objects.requireNonNull(renameProject, "renameProject");
+        this.updateProject = Objects.requireNonNull(updateProject, "updateProject");
         this.listProjects = Objects.requireNonNull(listProjects, "listProjects");
         this.listAdoptableDatasets = Objects.requireNonNull(listAdoptableDatasets, "listAdoptableDatasets");
         this.resolveProject = Objects.requireNonNull(resolveProject, "resolveProject");
@@ -250,11 +255,25 @@ public final class ProjectMcpTools {
             final String anchor,
             @McpToolParam(description = "Type of the explicit 'anchor' parameter above: 'path', 'url' "
                     + "or 'uuid'. Defaults to 'path'. Ignored when 'anchor' is omitted.", required = false)
-            final String anchorType) {
+            final String anchorType,
+            @McpToolParam(description = "Optional free-text description of the project (issue #110). May be "
+                    + "written in several languages over time via project_update - each call replaces only "
+                    + "the variant carrying the same 'language' tag.", required = false)
+            final String description,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the 'description' is "
+                    + "written in, or omitted for a plain, untagged literal. Ignored if 'description' is "
+                    + "omitted.", required = false)
+            final String language,
+            @McpToolParam(description = "Optional: the project's default display/write language, as a "
+                    + "BCP-47 tag (e.g. 'de'). Used by other tools (e.g. term_get) as a fallback display "
+                    + "language, and never as an implicit write-time default - a write that omits its own "
+                    + "language argument always writes untagged, regardless of this value.", required = false)
+            final String defaultLanguage) {
         final Anchor resolvedAnchor = isBlank(anchor)
                 ? requireContextAnchor(context, NO_CONTEXT_ANCHOR_MESSAGE_ADD)
                 : new Anchor(anchor, parseAnchorType(anchorType));
-        final Project created = registerProject.register(label, resolvedAnchor);
+        final Project created = registerProject.register(label, resolvedAnchor, blankToNull(description),
+                blankToNull(language), blankToNull(defaultLanguage));
         return format(created);
     }
 
@@ -300,6 +319,36 @@ public final class ProjectMcpTools {
             final String callerAnchor) {
         final Project caller = resolveCaller(context, callerAnchor);
         final Project updated = renameProject.rename(caller.id(), label);
+        return format(updated);
+    }
+
+    @McpTool(name = "project_update", description = "Correct the project the call comes from: its "
+            + "optional description and/or default display language. Every argument is optional - an "
+            + "omitted one leaves that field unchanged. Unlike project_rename, this never touches the "
+            + "project's label or anchors.")
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "New description (optional, unchanged if omitted). Replaces only "
+                    + "the variant carrying the same 'language' tag as this call - a description written in "
+                    + "another language survives untouched.", required = false)
+            final String description,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the new 'description' "
+                    + "is written in, or omitted for a plain, untagged literal. Ignored if 'description' is "
+                    + "omitted.", required = false)
+            final String language,
+            @McpToolParam(description = "New default display/write language, as a BCP-47 tag (e.g. 'de') "
+                    + "(optional, unchanged if omitted).", required = false)
+            final String defaultLanguage,
+            @McpToolParam(description = "Optional anchor ALREADY REGISTERED for the caller's own "
+                    + "project, used INSTEAD of the calling client's transport context to find which "
+                    + "project to correct. Only needed for a client that cannot supply an origin directory "
+                    + "via its transport context (ADR-016); most callers should omit this and let their "
+                    + "calling directory identify the project. No type is needed: a caller anchor is only "
+                    + "looked up, and lookup matches on its value alone.", required = false)
+            final String callerAnchor) {
+        final Project caller = resolveCaller(context, callerAnchor);
+        final Project updated = updateProject.update(caller.id(), blankToNull(description), blankToNull(language),
+                blankToNull(defaultLanguage));
         return format(updated);
     }
 
@@ -352,15 +401,24 @@ public final class ProjectMcpTools {
 
     /**
      * Renders a project as its label, every anchor it is reachable by (typed, e.g.
-     * {@code path:/home/f/DEV/arknet}), and its opaque identity - the identity is not a
-     * caller-facing tool parameter anywhere in this adapter, but a later surface without an
-     * anchor of its own needs a stable value to address a project by.
+     * {@code path:/home/f/DEV/arknet}), its opaque identity, and its description/default
+     * language if either is set - the identity is not a caller-facing tool parameter anywhere in
+     * this adapter, but a later surface without an anchor of its own needs a stable value to
+     * address a project by.
      */
     private static String format(final Project project) {
         final String anchors = project.anchors().stream()
                 .map(ProjectMcpTools::formatAnchor)
                 .collect(Collectors.joining(", "));
-        return "%s [%s] (id: %s)".formatted(project.label(), anchors, project.id().value());
+        final StringBuilder rendered = new StringBuilder(
+                "%s [%s] (id: %s)".formatted(project.label(), anchors, project.id().value()));
+        if (project.description() != null) {
+            rendered.append(" - ").append(project.description());
+        }
+        if (project.defaultLanguage() != null) {
+            rendered.append(" [defaultLanguage: ").append(project.defaultLanguage()).append(']');
+        }
+        return rendered.toString();
     }
 
     private static String formatAnchor(final Anchor anchor) {
@@ -381,5 +439,9 @@ public final class ProjectMcpTools {
 
     private static boolean isBlank(final String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String blankToNull(final String value) {
+        return isBlank(value) ? null : value;
     }
 }

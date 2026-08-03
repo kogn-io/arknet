@@ -67,12 +67,12 @@ class HandleResolverTest {
                 List.of(), List.of("Login succeeds with valid credentials")));
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
-                "The act of proving one's identity.", null));
+                "The act of proving one's identity.", null), null);
         // Same dcterms:identifier as FR-1, minted by a different bounded context - the
         // cross-context ambiguity resolve() must reject rather than guess (issue #103/#14).
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(DUPLICATE_TERM_IRI)), new TermCode("FR-1"), "Doppelter Code",
-                "Shares FR-1's business code on purpose.", null));
+                "Shares FR-1's business code on purpose.", null), null);
 
         handleResolver = new HandleResolver(new StoreReader(lifecycle), Prefixes.defaults());
     }

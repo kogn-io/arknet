@@ -28,6 +28,7 @@ import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.application.port.in.RegisterProject;
 import de.hauschel.arknet.prj.application.port.in.RenameProject;
 import de.hauschel.arknet.prj.application.port.in.ResolveProject;
+import de.hauschel.arknet.prj.application.port.in.UpdateProject;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
 import de.hauschel.arknet.prj.domain.Project;
@@ -45,42 +46,53 @@ class ProjectMcpToolsTest {
     private final FakeRegisterProject registerProject = new FakeRegisterProject();
     private final FakeAttachAnchor attachAnchor = new FakeAttachAnchor();
     private final FakeRenameProject renameProject = new FakeRenameProject();
+    private final FakeUpdateProject updateProject = new FakeUpdateProject();
     private final FakeListProjects listProjects = new FakeListProjects();
     private final FakeAdoptProject adoptProject = new FakeAdoptProject();
     private final FakeListAdoptableDatasets listAdoptable = new FakeListAdoptableDatasets();
     private final FakeResolveProject resolveProject = new FakeResolveProject();
     private final ProjectMcpTools adapter = new ProjectMcpTools(registerProject, adoptProject,
-            attachAnchor, renameProject, listProjects, listAdoptable, resolveProject);
+            attachAnchor, renameProject, updateProject, listProjects, listAdoptable, resolveProject);
 
     @Test
-    void declaresTheFiveProjectTools() {
+    void declaresTheSixProjectTools() {
         final List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(5, names.size());
+        assertEquals(6, names.size());
         assertTrue(names.containsAll(List.of("project_add", "project_adopt", "project_attach_anchor",
-                "project_rename", "project_list")));
+                "project_rename", "project_update", "project_list")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                null, adoptProject, attachAnchor, renameProject, listProjects, listAdoptable, resolveProject));
+                null, adoptProject, attachAnchor, renameProject, updateProject, listProjects, listAdoptable,
+                resolveProject));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, null, attachAnchor, renameProject, listProjects, listAdoptable, resolveProject));
+                registerProject, null, attachAnchor, renameProject, updateProject, listProjects, listAdoptable,
+                resolveProject));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, null, renameProject, listProjects, listAdoptable, resolveProject));
+                registerProject, adoptProject, null, renameProject, updateProject, listProjects, listAdoptable,
+                resolveProject));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, null, listProjects, listAdoptable, resolveProject));
+                registerProject, adoptProject, attachAnchor, null, updateProject, listProjects, listAdoptable,
+                resolveProject));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, null, listAdoptable, resolveProject));
+                registerProject, adoptProject, attachAnchor, renameProject, null, listProjects, listAdoptable,
+                resolveProject));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, listProjects, null, resolveProject));
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, null, listAdoptable,
+                resolveProject));
         assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
-                registerProject, adoptProject, attachAnchor, renameProject, listProjects, listAdoptable, null));
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, listProjects, null,
+                resolveProject));
+        assertThrows(NullPointerException.class, () -> new ProjectMcpTools(
+                registerProject, adoptProject, attachAnchor, renameProject, updateProject, listProjects,
+                listAdoptable, null));
     }
 
     @Test
@@ -138,7 +150,8 @@ class ProjectMcpToolsTest {
 
     @Test
     void addPassesLabelAndTheContextAnchorAsPathThrough() {
-        final String rendered = adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null);
+        final String rendered =
+                adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null, null, null, null);
 
         assertEquals("arknet", registerProject.lastLabel);
         assertEquals(new Anchor("/home/f/DEV/arknet", AnchorType.PATH), registerProject.lastAnchor);
@@ -147,7 +160,8 @@ class ProjectMcpToolsTest {
 
     @Test
     void addWithAnExplicitAnchorParameterUsesItInsteadOfTheContextAnchor() {
-        adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", "https://example.org/arknet", "url");
+        adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", "https://example.org/arknet", "url",
+                null, null, null);
 
         assertEquals(new Anchor("https://example.org/arknet", AnchorType.URL), registerProject.lastAnchor);
     }
@@ -155,9 +169,20 @@ class ProjectMcpToolsTest {
     @Test
     void addWithoutAContextAnchorAndWithoutAnExplicitAnchorParameterFailsInsteadOfDefaulting() {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "arknet", null, null));
+                () -> adapter.add(null, "arknet", null, null, null, null, null));
 
         assertTrue(ex.getMessage().contains("project_add"), ex.getMessage());
+    }
+
+    /** {@code project_add}'s new description/language/defaultLanguage arguments pass straight through. */
+    @Test
+    void addPassesDescriptionLanguageAndDefaultLanguageThrough() {
+        adapter.add(contextWithOrigin("/home/f/DEV/arknet"), "arknet", null, null,
+                "Ein Beispielprojekt.", "de", "de");
+
+        assertEquals("Ein Beispielprojekt.", registerProject.lastDescription);
+        assertEquals("de", registerProject.lastDescriptionLanguage);
+        assertEquals("de", registerProject.lastDefaultLanguage);
     }
 
     @Test
@@ -247,6 +272,24 @@ class ProjectMcpToolsTest {
     }
 
     @Test
+    void updateOnlyChangesDescriptionAndDefaultLanguageOfTheProjectResolvedFromTheContextAnchor() {
+        final Anchor callerAnchor = new Anchor("/home/f/DEV/arknet", AnchorType.PATH);
+        final Project target = new Project(new ProjectId("p-1"), "arknet", List.of(callerAnchor));
+        resolveProject.register(callerAnchor, target);
+        updateProject.result = new Project(target.id(), target.label(), target.anchors(),
+                "Ein Beispielprojekt.", "de");
+
+        final String rendered = adapter.update(
+                contextWithOrigin("/home/f/DEV/arknet"), "Ein Beispielprojekt.", "de", "de", null);
+
+        assertEquals(target.id(), updateProject.lastProjectId);
+        assertEquals("Ein Beispielprojekt.", updateProject.lastDescription);
+        assertEquals("de", updateProject.lastDescriptionLanguage);
+        assertEquals("de", updateProject.lastDefaultLanguage);
+        assertTrue(rendered.contains("Ein Beispielprojekt."), rendered);
+    }
+
+    @Test
     void listRendersEveryProjectWithAllItsAnchorsAndItsOpaqueId() {
         listProjects.all = List.of(
                 new Project(new ProjectId("id-1"), "arknet",
@@ -270,7 +313,7 @@ class ProjectMcpToolsTest {
     @Test
     void unknownAnchorTypeFailsWithAMessageNamingTheThreeAllowedValues() {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "arknet", "some-anchor", "nonsense"));
+                () -> adapter.add(null, "arknet", "some-anchor", "nonsense", null, null, null));
 
         assertTrue(ex.getMessage().contains("path"), ex.getMessage());
         assertTrue(ex.getMessage().contains("url"), ex.getMessage());
@@ -291,12 +334,38 @@ class ProjectMcpToolsTest {
     private static final class FakeRegisterProject implements RegisterProject {
         private String lastLabel;
         private Anchor lastAnchor;
+        private String lastDescription;
+        private String lastDescriptionLanguage;
+        private String lastDefaultLanguage;
 
         @Override
-        public Project register(final String label, final Anchor anchor) {
+        public Project register(final String label, final Anchor anchor, final String description,
+                final String descriptionLanguage, final String defaultLanguage) {
             lastLabel = label;
             lastAnchor = anchor;
-            return new Project(new ProjectId("test-project"), label, List.of(anchor));
+            lastDescription = description;
+            lastDescriptionLanguage = descriptionLanguage;
+            lastDefaultLanguage = defaultLanguage;
+            return new Project(new ProjectId("test-project"), label, List.of(anchor), description, defaultLanguage);
+        }
+    }
+
+    /** Structural fake implementing {@link UpdateProject}. */
+    private static final class FakeUpdateProject implements UpdateProject {
+        private ProjectId lastProjectId;
+        private String lastDescription;
+        private String lastDescriptionLanguage;
+        private String lastDefaultLanguage;
+        private Project result;
+
+        @Override
+        public Project update(final ProjectId projectId, final String description,
+                final String descriptionLanguage, final String defaultLanguage) {
+            lastProjectId = projectId;
+            lastDescription = description;
+            lastDescriptionLanguage = descriptionLanguage;
+            lastDefaultLanguage = defaultLanguage;
+            return result;
         }
     }
 

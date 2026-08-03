@@ -29,7 +29,9 @@ prjshapes:ProjectShape
     a sh:NodeShape ;
     sh:targetClass arkprj:Project ;
     sh:property prjshapes:Project-identifier ;
-    sh:property prjshapes:Project-anchor .
+    sh:property prjshapes:Project-anchor ;
+    sh:property prjshapes:Project-description ;
+    sh:property prjshapes:Project-defaultLanguage .
 
 prjshapes:Project-identifier
     a sh:PropertyShape ;
@@ -45,6 +47,20 @@ prjshapes:Project-anchor
     sh:path     arkprj:anchor ;
     sh:minCount 1 ;
     sh:message  "A Project needs at least one arkprj:anchor. There is no default anchor and no fallback (ADR-016 point 3) - a project without an anchor cannot be reached by any client."@en , "Ein Project braucht mindestens einen arkprj:anchor. Es gibt keinen Default-Anker und keinen Fallback (ADR-016 Punkt 3) - ein Projekt ohne Anker ist von keinem Client erreichbar."@de ;
+    sh:severity sh:Violation .
+
+prjshapes:Project-description
+    a sh:PropertyShape ;
+    sh:path     dcterms:description ;
+    sh:uniqueLang true ;
+    sh:message  "At most one dcterms:description per language tag - several untagged or same-language-tagged descriptions on one project are not allowed, but several DIFFERENT language tags are (a project's description may be written in several languages). dcterms:description itself is optional."@en , "Hoechstens eine dcterms:description je Sprach-Tag - mehrere untagged oder gleichsprachige Beschreibungen an einem Projekt sind nicht erlaubt, mehrere VERSCHIEDENE Sprach-Tags dagegen schon (die Beschreibung eines Projekts darf mehrsprachig sein). dcterms:description selbst ist optional."@de ;
+    sh:severity sh:Violation .
+
+prjshapes:Project-defaultLanguage
+    a sh:PropertyShape ;
+    sh:path     arkprj:defaultLanguage ;
+    sh:maxCount 1 ;
+    sh:message  "At most one arkprj:defaultLanguage - a project has a single default display/write language, not several. arkprj:defaultLanguage itself is optional."@en , "Hoechstens ein arkprj:defaultLanguage - ein Projekt hat eine einzelne Standard-Anzeige-/Schreibsprache, nicht mehrere. arkprj:defaultLanguage selbst ist optional."@de ;
     sh:severity sh:Violation .
 
 
