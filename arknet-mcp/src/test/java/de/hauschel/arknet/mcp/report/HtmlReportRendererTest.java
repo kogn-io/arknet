@@ -55,8 +55,18 @@ class HtmlReportRendererTest {
                 .contains("System bestaetigt die Bestellung");
         // The realised requirement is a chip linking to the requirement's own anchor.
         assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(FR_1) + "\">FR-1</a>");
-        // The primary actor shows the term itself and links to the actor's own resource; its
-        // running number is the tooltip, and the opaque identity stays in the raw triples.
+    }
+
+    /**
+     * The primary actor shows the term itself and links to the actor's own resource; its running
+     * number is the tooltip, and the opaque identity stays in the raw triples. Split out from
+     * {@link #rendersAUseCaseAsAFlowRatherThanAsItsTriples()} (issue #118): the actor chip is not
+     * part of the flow, it is a card-level reference like any other.
+     */
+    @Test
+    void linksThePrimaryActorAsAChipToItsOwnResource() {
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+
         assertThat(html).contains("<span class=\"blabel\">Primary actor</span>");
         assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(ID + "actor-1")
                 + "\" title=\"TERM-1\">Kunde</a>");

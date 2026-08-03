@@ -108,19 +108,16 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * The project hexagon (ADR-016) round-trips through the composition root, and its two write
-     * targets land where they must: the registry in the reserved system dataset, the
-     * self-description in the project's <em>own</em> dataset. Both go through the same shared
-     * {@link io.kogn.rdf.dataset.hosting.DatasetLifecycle} bean as every other hexagon, so this
-     * also pins that the reserved dataset coexists with the project datasets in one store rather
-     * than needing a second one.
+     * The project hexagon (ADR-016) round-trips through the composition root: a registered
+     * project is listed back by the service.
      *
-     * <p>Wired without a {@link ProjectResolver} on purpose - the anchor is looked up, never
-     * derived. That the registered anchor resolves back to its own project is what this asserts
-     * first: it is the property every other tool call now depends on for routing.</p>
+     * <p>Split from a formerly bundled test (issue #118) that also re-asserted "the registered
+     * anchor resolves back to its own project" - dropped here as redundant, since {@link
+     * #resolvesProjectIdByLookingUpARegisteredAnchor()} already covers exactly that behaviour,
+     * through the {@link ProjectResolver} bean every tool call actually routes on.</p>
      */
     @Test
-    void wiresProjectHexagonAndWritesRegistryAndSelfDescriptionToDistinctDatasets() {
+    void wiresProjectHexagonAndListsARegisteredProject() {
         contextRunner
                 .withPropertyValues(
                         "arknet.rdf.storage=" + storageDir)
@@ -132,21 +129,79 @@ class ArknetMcpConfigurationTest {
                     Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
                     Project registered = service.register("arknet", anchor, null, null, null);
 
-                    assertThat(service.resolve(anchor))
-                            .as("the very anchor that was registered must resolve back to its project")
-                            .isEqualTo(registered);
                     assertThat(service.list()).containsExactly(registered);
+                });
+    }
+
+    /**
+     * The registry write target of the project hexagon (ADR-016): a registered project's entry
+     * lands in the reserved system dataset, not in a project dataset.
+     */
+    @Test
+    void wiresProjectHexagonAndWritesTheRegistryToTheReservedSystemDataset() {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ProjectMcpTools.class);
+
+                    ProjectService service = context.getBean(ProjectService.class);
+                    Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
+                    service.register("arknet", anchor, null, null, null);
 
                     DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, ProjectId.RESERVED_SYSTEM_DATASET,
                             ArkprjVocabulary.REGISTRY_GRAPH))
                             .as("the registry belongs in the reserved system dataset")
                             .isPositive();
+                });
+    }
+
+    /**
+     * The self-description write target of the project hexagon (ADR-016): it lands in the
+     * project's <em>own</em> dataset, going through the same shared {@link
+     * io.kogn.rdf.dataset.hosting.DatasetLifecycle} bean as every other hexagon - so this also
+     * pins that the reserved dataset coexists with the project datasets in one store rather than
+     * needing a second one.
+     */
+    @Test
+    void wiresProjectHexagonAndWritesTheSelfDescriptionToTheProjectsOwnDataset() {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ProjectMcpTools.class);
+
+                    ProjectService service = context.getBean(ProjectService.class);
+                    Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
+                    Project registered = service.register("arknet", anchor, null, null, null);
+
+                    DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, registered.id().value(),
                             ArkprjVocabulary.IDENTITY_GRAPH))
-                            .as("and the self-description in the project's own dataset (ADR-016 point 7), "
+                            .as("the self-description belongs in the project's own dataset (ADR-016 point 7), "
                                     + "so a restored backup carries its identity with it")
                             .isPositive();
+                });
+    }
+
+    /** The registry must not be duplicated into the project's own dataset alongside the self-description. */
+    @Test
+    void wiresProjectHexagonAndDoesNotDuplicateTheRegistryIntoTheProjectsDataset() {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ProjectMcpTools.class);
+
+                    ProjectService service = context.getBean(ProjectService.class);
+                    Anchor anchor = new Anchor("/home/somebody/DEV/arknet", AnchorType.PATH);
+                    Project registered = service.register("arknet", anchor, null, null, null);
+
+                    DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, registered.id().value(),
                             ArkprjVocabulary.REGISTRY_GRAPH))
                             .as("the registry must not be duplicated into the project's dataset")

@@ -38,29 +38,57 @@ class UseCaseCardsTest {
     private static final Glossary GLOSSARY = Glossary.of(List.of(new Term(
             new TermId(ACTOR), new TermCode("TERM-1"), "Kunde", "Wer bestellt.", null)));
 
-    @Test
-    void buildsACockburnStyleCardWithTheFlowInOrder() {
-        final UseCaseCards cards = new UseCaseCards(
+    private static UseCaseCards cardsWithFr1Resolved() {
+        return new UseCaseCards(
                 projectId -> List.of(useCase()),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
+    }
 
-        final ModelSection section = cards.section(PROJECT, GLOSSARY);
+    @Test
+    void sectionTitleIsUseCases() {
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
 
         assertThat(section.title()).isEqualTo("Use Cases");
-        assertThat(section.cards()).singleElement().satisfies(card -> {
-            assertThat(card.code()).isEqualTo("UC1");
-            assertThat(card.title()).isEqualTo("Bestellung aufgeben");
-            assertThat(card.blocks()).element(0)
-                    .isEqualTo(new Block.Prose("Goal", RichText.plain("Der Kunde bestellt Artikel.")));
-            assertThat(card.blocks()).filteredOn(Block.Flow.class::isInstance)
-                    .singleElement()
-                    .asInstanceOf(InstanceOfAssertFactories.type(Block.Flow.class))
-                    .satisfies(flow -> assertThat(flow.steps())
-                            .extracting(FlowStep::position, FlowStep::text)
-                            .containsExactly(
-                                    Tuple.tuple(1, "Artikel in den Warenkorb legen"),
-                                    Tuple.tuple(2, "Bestellung bestaetigen")));
-        });
+    }
+
+    @Test
+    void cardCodeIsTheUseCasesBusinessCode() {
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+
+        assertThat(section.cards()).singleElement()
+                .satisfies(card -> assertThat(card.code()).isEqualTo("UC1"));
+    }
+
+    @Test
+    void cardTitleIsTheUseCasesTitle() {
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+
+        assertThat(section.cards()).singleElement()
+                .satisfies(card -> assertThat(card.title()).isEqualTo("Bestellung aufgeben"));
+    }
+
+    @Test
+    void cardStartsWithTheGoalAsProse() {
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+
+        assertThat(section.cards()).singleElement().satisfies(card ->
+                assertThat(card.blocks()).element(0)
+                        .isEqualTo(new Block.Prose("Goal", RichText.plain("Der Kunde bestellt Artikel."))));
+    }
+
+    @Test
+    void buildsACockburnStyleCardWithTheFlowInOrder() {
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+
+        assertThat(section.cards()).singleElement().satisfies(card ->
+                assertThat(card.blocks()).filteredOn(Block.Flow.class::isInstance)
+                        .singleElement()
+                        .asInstanceOf(InstanceOfAssertFactories.type(Block.Flow.class))
+                        .satisfies(flow -> assertThat(flow.steps())
+                                .extracting(FlowStep::position, FlowStep::text)
+                                .containsExactly(
+                                        Tuple.tuple(1, "Artikel in den Warenkorb legen"),
+                                        Tuple.tuple(2, "Bestellung bestaetigen"))));
     }
 
     /**
