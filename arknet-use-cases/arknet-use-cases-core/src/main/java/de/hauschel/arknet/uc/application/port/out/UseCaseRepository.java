@@ -57,13 +57,13 @@ public interface UseCaseRepository {
 
     /**
      * Replaces an existing use case by identity (including all its derived step resources), but
-     * only if its current concurrency token (the {@code arkprov:head} revision recorded by the
-     * last funnel write, ADR-014) still equals {@code expectedHead} - the compare-and-set guard
-     * against the lost-update race (mirroring {@code RequirementRepository#compareAndUpdate}). A
-     * read-modify-write round trip (e.g. {@code uc_update}) reads the current state and head
-     * together via {@link #findCurrentByCode}, derives {@code updated}, and calls this method with
-     * the head it observed - a mismatch means the read was already stale, and the caller must
-     * re-read and retry rather than silently discard the concurrent change.
+     * only if its current concurrency token still equals {@code expectedHead} - the
+     * compare-and-set guard against the lost-update race (mirroring
+     * {@code RequirementRepository#compareAndUpdate}). A read-modify-write round trip (e.g.
+     * {@code uc_update}) reads the current state and token together via
+     * {@link #findCurrentByCode}, derives {@code updated}, and calls this method with the token it
+     * observed - a mismatch means the read was already stale, and the caller must re-read and
+     * retry rather than silently discard the concurrent change.
      *
      * @param projectId    the project (architecture model) the use case lives in
      * @param expectedHead the {@link RevisionToken} the caller last observed for this use case
@@ -94,10 +94,10 @@ public interface UseCaseRepository {
     Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code);
 
     /**
-     * Reads a use case's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014). Backs the
-     * read side of the read-modify-write round trip {@link #compareAndUpdate} guards the write
-     * side of - mirrors {@code RequirementRepository#findCurrentByCode}.
+     * Reads a use case's current state together with its concurrency token (recorded by the last
+     * write through this port, ADR-014). Backs the read side of the read-modify-write round trip
+     * {@link #compareAndUpdate} guards the write side of - mirrors
+     * {@code RequirementRepository#findCurrentByCode}.
      *
      * @param projectId the project (architecture model) to look up the use case in
      * @param code        the use-case code (e.g. {@code UC1})
@@ -108,7 +108,7 @@ public interface UseCaseRepository {
 
     /**
      * A use case's state paired with its current concurrency token (the {@link RevisionToken}, or
-     * {@code null} if the use case predates the funnel's revision recording), as read together by
+     * {@code null} if no write has ever been recorded for this use case), as read together by
      * {@link #findCurrentByCode}.
      */
     record CurrentUseCase(UseCase value, RevisionToken head) {
