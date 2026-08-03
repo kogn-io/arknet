@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.req.adapter.kogniordf;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -162,6 +165,102 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement created = requirement(freshId(), code, "Login", "The system shall authenticate a user.");
 
         assertThrows(InvalidLanguageTagException.class, () -> repository.create(PROJECT_A, created, "de_DE"));
+    }
+
+    /**
+     * Regression for the review finding on issue #229 (PR #238): {@code compareAndUpdate}
+     * unconditionally re-canonicalized {@code titleLanguage}/{@code descriptionLanguage}, even
+     * though {@code RequirementService#updateWithOptimisticRetry} passes those through verbatim
+     * from {@code current.titleLanguage()}/{@code current.descriptionLanguage()} - the raw tag as
+     * read off the store - for every field a given call does not intend to touch. A store-first
+     * (ADR-005) title tagged with a dangling BCP-47 extension singleton (Turtle's own language-tag
+     * grammar places no structural constraint on subtags, so this is legal Turtle) is rejected not
+     * only by {@link de.hauschel.arknet.kernel.LanguageTag} but, identically, by RDF4J's own
+     * literal validation reached from the SHACL gate - so before the fix this blocked every future
+     * correction of the requirement, even one, like this one, that only changes {@code status} and
+     * never touches {@code title} at all; the fix falls back to an untagged literal rather than the
+     * unusable raw tag, which is the one literal form no tag validation ever rejects.
+     */
+    @Test
+    void compareAndUpdatePassesThroughAStoreFirstIllFormedTitleLanguageTagWithoutCrashing() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithTitleLanguageTag(PROJECT_A, id, "FR-1", "en-a");
+        RequirementCode code = new RequirementCode("FR-1");
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+                .orElseThrow();
+        Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
+                current.value().description(), current.value().type(), RequirementStatus.ACCEPTED,
+                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().usesTerms(), current.value().acceptanceCriteria());
+
+        assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
+                current.titleLanguage(), current.descriptionLanguage()));
+
+        Requirement reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
+        assertEquals(RequirementStatus.ACCEPTED, reloaded.status());
+        assertEquals("Login", reloaded.title());
+    }
+
+    /**
+     * Second regression for the same review finding: a store-first (ADR-005) title tagged with a
+     * <em>valid but non-canonical</em> tag (e.g. {@code "de-de"}, canonicalizing to {@code
+     * "de-DE"}) must not be duplicated once a pass-through {@code compareAndUpdate} rewrites it
+     * under its canonicalized form. Before the fix, the preservation query compared the raw
+     * stored tag {@code "de-de"} against the freshly canonicalized {@code "de-DE"} being written,
+     * mistook them for two different languages, and re-attached the "old" one alongside the new
+     * literal - two {@code dcterms:title} literals with the same text under case-differing,
+     * semantically identical tags.
+     */
+    @Test
+    void compareAndUpdatePassingThroughANonCanonicalStoreFirstTagDoesNotDuplicateTheTitle() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithTitleLanguageTag(PROJECT_A, id, "FR-1", "de-de");
+        RequirementCode code = new RequirementCode("FR-1");
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+                .orElseThrow();
+        Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
+                current.value().description(), current.value().type(), RequirementStatus.ACCEPTED,
+                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().usesTerms(), current.value().acceptanceCriteria());
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
+                current.titleLanguage(), current.descriptionLanguage());
+
+        assertEquals(1, countTitleLiterals(PROJECT_A, id));
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
+     * graph with its {@code dcterms:title} carrying {@code titleLanguageTag} verbatim - {@code
+     * req_add}/{@code req_update} always route a language tag through {@link
+     * de.hauschel.arknet.kernel.LanguageTag#canonicalize(String)} first, so an ill-formed or
+     * merely non-canonical tag on {@code title} is reachable only store-first (ADR-005).
+     */
+    private void givenLegacyRequirementWithTitleLanguageTag(ProjectId projectId, RequirementId id, String code,
+            String titleLanguageTag) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\"@" + titleLanguageTag + " ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    private long countTitleLiterals(ProjectId projectId, RequirementId id) {
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> <http://purl.org/dc/terms/title> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query).count();
+        }
     }
 
     private RevisionToken currentHead(RequirementCode code) {

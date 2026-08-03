@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.uc.adapter.kogniordf;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Path;
@@ -157,5 +158,86 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
         assertEquals("Customer selects items", asEnglish.steps().get(0).text());
         assertEquals("Kunde waehlt Artikel", asGerman.steps().get(0).text());
+    }
+
+    /**
+     * Regression for the review finding on issue #229 (PR #238), mirrors
+     * {@code KognioRdfRequirementRepositoryMultilingualTest
+     * #compareAndUpdatePassesThroughAStoreFirstIllFormedTitleLanguageTagWithoutCrashing}: a
+     * store-first (ADR-005) title tagged with a dangling BCP-47 extension singleton is rejected
+     * both by {@link de.hauschel.arknet.kernel.LanguageTag} and, identically, by RDF4J's own
+     * literal validation reached from the SHACL gate - before the fix this blocked every future
+     * correction of the use case, even a call, like this one, that leaves {@code title} untouched.
+     */
+    @Test
+    void compareAndUpdatePassesThroughAStoreFirstIllFormedTitleLanguageTagWithoutCrashing() {
+        UseCaseId id = freshId();
+        givenLegacyUseCaseWithTitleLanguageTag(PROJECT_A, id, "UC1", "en-a");
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+
+        assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
+                current.titleLanguage(), current.goalLanguage(), current.stepTextLanguageByPosition()));
+
+        UseCase reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
+        assertEquals("Place order", reloaded.title());
+    }
+
+    /**
+     * Second regression for the same review finding, mirrors
+     * {@code KognioRdfRequirementRepositoryMultilingualTest
+     * #compareAndUpdatePassingThroughANonCanonicalStoreFirstTagDoesNotDuplicateTheTitle}: a
+     * store-first (ADR-005) title tagged with a valid but non-canonical tag (e.g. {@code "de-de"},
+     * canonicalizing to {@code "de-DE"}) must not be duplicated once a pass-through
+     * {@code compareAndUpdate} rewrites it under its canonicalized form.
+     */
+    @Test
+    void compareAndUpdatePassingThroughANonCanonicalStoreFirstTagDoesNotDuplicateTheTitle() {
+        UseCaseId id = freshId();
+        givenLegacyUseCaseWithTitleLanguageTag(PROJECT_A, id, "UC1", "de-de");
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
+                current.titleLanguage(), current.goalLanguage(), current.stepTextLanguageByPosition());
+
+        assertEquals(1, countTitleLiterals(PROJECT_A, id));
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:UseCase} straight into the use-cases graph with its
+     * {@code dcterms:title} carrying {@code titleLanguageTag} verbatim - {@code uc_add}/
+     * {@code uc_update} always route a language tag through {@link
+     * de.hauschel.arknet.kernel.LanguageTag#canonicalize(String)} first, so an ill-formed or merely
+     * non-canonical tag on {@code title} is reachable only store-first (ADR-005).
+     */
+    private void givenLegacyUseCaseWithTitleLanguageTag(ProjectId projectId, UseCaseId id, String code,
+            String titleLanguageTag) {
+        String stepIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/use-cases> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#UseCase> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Place order\"@" + titleLanguageTag + " ; "
+                + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
+                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
+                + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
+                + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
+                + "<https://w3id.org/arknet/requirements#stepText> \"Customer selects items\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    private long countTitleLiterals(ProjectId projectId, UseCaseId id) {
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/use-cases> { "
+                + "<" + id.value().value() + "> <http://purl.org/dc/terms/title> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query).count();
+        }
     }
 }

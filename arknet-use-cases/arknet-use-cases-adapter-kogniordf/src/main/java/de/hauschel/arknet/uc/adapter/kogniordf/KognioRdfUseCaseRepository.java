@@ -27,6 +27,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -221,9 +222,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
         Objects.requireNonNull(stepTextLanguageByPosition, "stepTextLanguageByPosition");
         Map<Integer, String> stepTags = new LinkedHashMap<>();
-        stepTextLanguageByPosition.forEach((position, tag) -> stepTags.put(position, LanguageTag.canonicalize(tag)));
+        stepTextLanguageByPosition.forEach((position, tag) -> stepTags.put(position, canonicalizeLenient(tag)));
         write(projectId, updated, false, expectedHead,
-                LanguageTag.canonicalize(titleLanguage), LanguageTag.canonicalize(goalLanguage), stepTags);
+                canonicalizeLenient(titleLanguage), canonicalizeLenient(goalLanguage), stepTags);
     }
 
     private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
@@ -410,8 +411,48 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 + subject + " <" + predicateIri + "> ?o } }";
         return tx.select(query)
                 .map(row -> literalOf(row, "o"))
-                .filter(literal -> !Objects.equals(literal.getLanguageTag().orElse(null), writtenTag))
+                .filter(literal -> !Objects.equals(
+                        canonicalizeLenient(literal.getLanguageTag().orElse(null)), writtenTag))
                 .toList();
+    }
+
+    /**
+     * {@link LanguageTag#canonicalize(String)}, but falls back to {@code null} (untagged) instead
+     * of throwing {@link InvalidLanguageTagException} - used at the places in this class that
+     * handle a tag which may be a verbatim pass-through of whatever is already sitting in the store
+     * ({@code UseCaseService#updateWithOptimisticRetry} reads {@code current.titleLanguage()}/
+     * {@code current.goalLanguage()}/{@code current.stepTextLanguageByPosition()} straight off
+     * {@link LocalizedLiteral#languageTag()}, the raw tag as read from the store, never
+     * re-validated), rather than a freshly caller-supplied value already validated before it
+     * reached this adapter (as {@link #create}'s {@code language} argument is - that call site
+     * stays on the strict {@link LanguageTag#canonicalize(String)}).
+     *
+     * <p>The fallback is {@code null}, not the raw tag, deliberately: RDF4J's own literal
+     * construction ({@code Literals#isValidLanguageTag}, reached from {@link #write}'s SHACL gate)
+     * rejects exactly the same not-well-formed tags {@link LanguageTag#canonicalize(String)} does -
+     * via the identical {@code Locale.Builder#setLanguageTag} check - so re-embedding the untouched
+     * raw tag would still crash the gate a moment later with a different exception, not fix
+     * anything. Falling back to {@code null} instead writes the pass-through value as a plain,
+     * untagged literal - the one literal form no tag validation ever rejects - so a use case whose
+     * store-first (ADR-005) title/goal/step-text tag is irreparably malformed becomes editable
+     * again (at the cost of that one field's language tag) rather than permanently blocking every
+     * future correction, even one that never touches title/goal/step text at all.</p>
+     *
+     * <p>{@link #otherLanguageLiterals}/{@link #otherLanguageStepTexts} use the same helper for
+     * their comparisons, not to fall back on write: canonicalizing the read literal's tag before
+     * comparing makes the check robust against case-only drift (raw {@code "en-us"} vs. the now-
+     * canonicalized {@code "en-US"} being (re)written would otherwise look like two different
+     * languages, preserving the former as a spurious "other" variant and duplicating the literal) -
+     * and folding an irreparably malformed existing tag to {@code null} there too keeps it
+     * consistent with what {@link #write} is about to write for that same case, rather than
+     * preserving it as a bogus "other" variant.</p>
+     */
+    private static String canonicalizeLenient(String tag) {
+        try {
+            return LanguageTag.canonicalize(tag);
+        } catch (InvalidLanguageTagException e) {
+            return null;
+        }
     }
 
     /**
@@ -431,7 +472,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
             Literal text = literalOf(row, "text");
             String writtenTag = stepTagByPosition.get(position);
-            if (!Objects.equals(text.getLanguageTag().orElse(null), writtenTag)) {
+            if (!Objects.equals(canonicalizeLenient(text.getLanguageTag().orElse(null)), writtenTag)) {
                 byPosition.computeIfAbsent(position, key -> new ArrayList<>()).add(text);
             }
         });
