@@ -16,6 +16,9 @@ public interface ListUseCases {
     /**
      * Returns all use cases currently under management in the given project.
      *
+     * <p>No ordering is guaranteed: the result reflects whatever order the underlying store
+     * returns, not a sort on {@code UseCaseCode} or any other field.
+     *
      * @param projectId the project (architecture model) to list use cases from
      * @return all use cases, never {@code null}
      */

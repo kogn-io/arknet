@@ -210,8 +210,8 @@ public final class AdrMcpTools {
     }
 
     @McpTool(name = "adr_list", description = "List all recorded architecture decisions, one compact "
-            + "line each (code, status, title, and the codes it addresses/affects/supersedes). Use "
-            + "adr_get for a decision's full text.",
+            + "line each (code, status, title, and the codes it addresses/affects/supersedes/is "
+            + "superseded by). Use adr_get for a decision's full text.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,

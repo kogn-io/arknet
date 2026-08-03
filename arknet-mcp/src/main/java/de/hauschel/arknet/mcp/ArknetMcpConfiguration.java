@@ -98,9 +98,10 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link RequirementSchemaSource} - it reads only the classpath ontology, not the
  *       project store, so it needs no {@link DatasetLifecycle}.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
- *       {@link TermService} over an RDF/SKOS-persisted term repository) - the three
- *       term tools, assembled through {@link KognioRdfTermRepositoryFactory} (same
- *       RDF4J-free wiring as requirements).</li>
+ *       {@link TermService} over an RDF/SKOS-persisted term repository) - the four
+ *       term tools ({@code term_add}, {@code term_list}, {@code term_get},
+ *       {@code term_update}), assembled through {@link KognioRdfTermRepositoryFactory}
+ *       (same RDF4J-free wiring as requirements).</li>
  *   <li><strong>use-cases</strong> ({@link UseCaseMcpTools} over {@link UseCaseService} over
  *       an RDF-persisted use-case repository) - the four use-case tools, assembled through
  *       {@link KognioRdfUseCaseRepositoryFactory}. {@code uc_add}'s cross-BC label-to-identity
