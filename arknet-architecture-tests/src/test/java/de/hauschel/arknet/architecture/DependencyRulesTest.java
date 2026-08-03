@@ -43,10 +43,10 @@ import com.tngtech.archunit.lang.ArchRule;
  * classpath surfaces as a failure rather than a vacuous pass. For the former, break the
  * invariant on purpose -- add a {@code private org.eclipse.rdf4j.model.Model x;} field to
  * {@code ShaclWriteGate} (rule 1), to a {@code KognioRdf*Repository} (rule 2), to a
- * {@code *-core} class (rule 3), to a {@code *-adapter-mcp} class (rule 4), or to a
- * {@code de.hauschel.arknet.mcp} class such as {@code StoreReader} (rule 5) -- and confirm
- * the rule fails before trusting it. All five were confirmed to fail this way when
- * introduced.</p>
+ * {@code *-core} class (rule 3), to a {@code *-adapter-mcp} class (rule 4), to a
+ * {@code de.hauschel.arknet.mcp} class such as {@code StoreReader} (rule 5), or to a
+ * {@code de.hauschel.arknet.kernel} class (rule 6) -- and confirm the rule fails before
+ * trusting it. All six were confirmed to fail this way when introduced.</p>
  *
  * <p><strong>Why tests are excluded.</strong> The rules describe production code. Test code
  * legitimately reaches for concrete technology -- the {@code KognioRdf*RepositoryTest} classes
@@ -181,4 +181,24 @@ class DependencyRulesTest {
                     .because("arknet-mcp wires the out-adapters but does not itself reach for "
                             + "RDF4J-backed types; its generic read path uses only the "
                             + "technology-neutral kognio-rdf ports (ADR-006)");
+
+    /**
+     * Rule 6 -- the shared kernel stays technology-free too, mirroring rule 3's claim for the
+     * one module every {@code *-core} depends on.
+     *
+     * <p>True today by construction: {@code arknet-shared-kernel}'s POM declares nothing but
+     * JUnit. Left unguarded, that would only hold by reviewer attention -- a one-line dependency
+     * addition "for a helper type" would leak RDF technology into all six {@code *-core} modules
+     * through their shared dependency, without any test turning red. Unlike rule 3, there is no
+     * {@code ..adapter..} exception: the kernel has no adapter package.</p>
+     */
+    @ArchTest
+    static final ArchRule shared_kernel_stays_free_of_rdf_technology =
+            noClasses()
+                    .that().resideInAPackage("de.hauschel.arknet.kernel..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.eclipse.rdf4j..", "io.kogn..")
+                    .because("the shared kernel is depended on by every bounded context core and "
+                            + "must stay technology-neutral for the same reason rule 3 binds the "
+                            + "cores themselves");
 }
