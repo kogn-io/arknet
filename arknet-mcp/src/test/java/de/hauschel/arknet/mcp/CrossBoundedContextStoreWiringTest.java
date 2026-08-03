@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -65,7 +66,7 @@ class CrossBoundedContextStoreWiringTest {
             .withUserConfiguration(ArknetMcpConfiguration.class);
 
     @Test
-    void useCaseResolvesRequirementAndActorWrittenByTheOtherContextsOverTheSharedStore() {
+    void wiresASingleSharedDatasetLifecycleAndUseCaseMcpTools() {
         contextRunner
                 .withPropertyValues(
                         "arknet.rdf.storage=" + storageDir)
@@ -74,12 +75,31 @@ class CrossBoundedContextStoreWiringTest {
                     // One shared lifecycle, and the use-cases hexagon is wired as a tool bean.
                     assertThat(context).hasSingleBean(DatasetLifecycle.class);
                     assertThat(context).hasSingleBean(UseCaseMcpTools.class);
+                });
+    }
+
+    /**
+     * Shared setup for the domain-resolution assertions below: {@code req_add} (FR) and {@code
+     * term_add} (actor) into the same shared project store, then {@code uc_add} referencing that
+     * FR (by its code) and that actor (by name) - the service resolves both raw strings to opaque
+     * identities via ActorLookup/RequirementLookup before the real UseCase is constructed. {@code
+     * uc_get} reads the resolved cross-context edges back (looked up by code), so the resolved
+     * identity, not a label, is what the reference carries.
+     *
+     * <p>Split from a formerly bundled test (issue #118) that mixed this domain-resolution proof
+     * with the wiring assertions now in {@link #wiresASingleSharedDatasetLifecycleAndUseCaseMcpTools()}.</p>
+     */
+    private void assertOnResolvedUseCaseRoundTrip(final Consumer<ResolvedUseCaseRoundTrip> assertion) {
+        contextRunner
+                .withPropertyValues(
+                        "arknet.rdf.storage=" + storageDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
 
                     RequirementService requirements = context.getBean(RequirementService.class);
                     TermService terms = context.getBean(TermService.class);
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
-                    // req_add (FR) and term_add (actor) into the same shared project store.
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
@@ -87,9 +107,6 @@ class CrossBoundedContextStoreWiringTest {
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
                             new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
-                    // uc_add referencing that FR (by its code) and that actor (by name); the
-                    // service resolves both raw strings to opaque identities via ActorLookup/
-                    // RequirementLookup before the real UseCase is constructed.
                     UseCase created = useCases.add(PROJECT, new NewUseCase("Place order",
                             "Customer places an order", null, null, "Customer",
                             List.of(), null, null,
@@ -97,17 +114,27 @@ class CrossBoundedContextStoreWiringTest {
                                     List.of(fr.code().value()))),
                             List.of(), null));
 
-                    // uc_get reads the resolved cross-context edges back (looked up by code).
-                    // The resolved identity, not a label, is what the reference now carries -
-                    // assert it is stable/consistent with what was just created.
                     UseCase reloaded = useCases.get(PROJECT, created.code(), null).orElseThrow();
-                    assertThat(reloaded.primaryActor()).isEqualTo(created.primaryActor());
-                    ResourceId frId = fr.id().value();
-                    assertThat(reloaded.steps()).singleElement()
-                            .satisfies(step -> assertThat(step.realises())
-                                    .extracting(RequirementRef::value)
-                                    .containsExactly(frId));
+                    assertion.accept(new ResolvedUseCaseRoundTrip(created, reloaded, fr.id().value()));
                 });
+    }
+
+    /** The created/reloaded pair a resolved-round-trip assertion inspects, plus the FR's opaque identity. */
+    private record ResolvedUseCaseRoundTrip(UseCase created, UseCase reloaded, ResourceId requirementId) { }
+
+    @Test
+    void useCaseResolvesTheActorWrittenByTheOtherContextOverTheSharedStore() {
+        assertOnResolvedUseCaseRoundTrip(roundTrip ->
+                assertThat(roundTrip.reloaded().primaryActor()).isEqualTo(roundTrip.created().primaryActor()));
+    }
+
+    @Test
+    void useCaseResolvesTheRequirementWrittenByTheOtherContextOverTheSharedStore() {
+        assertOnResolvedUseCaseRoundTrip(roundTrip ->
+                assertThat(roundTrip.reloaded().steps()).singleElement()
+                        .satisfies(step -> assertThat(step.realises())
+                                .extracting(RequirementRef::value)
+                                .containsExactly(roundTrip.requirementId())));
     }
 
     @Test

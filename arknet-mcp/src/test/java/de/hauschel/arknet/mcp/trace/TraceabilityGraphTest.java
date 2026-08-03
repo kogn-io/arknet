@@ -183,8 +183,12 @@ class TraceabilityGraphTest {
     }
 
     @Test
-    void isReferencedTermIsTrueForTheUsedTermAndTheActor() {
+    void isReferencedTermIsTrueForTheUsedTerm() {
         assertThat(graph.isReferencedTerm(TERM_1_IRI)).isTrue();
+    }
+
+    @Test
+    void isReferencedTermIsTrueForTheActor() {
         assertThat(graph.isReferencedTerm(ACTOR_IRI)).isTrue();
     }
 
