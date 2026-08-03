@@ -83,7 +83,7 @@ class CrossBoundedContextStoreWiringTest {
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
-                            List.of("An order is placed and confirmed")));
+                            List.of("An order is placed and confirmed"), null));
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
                             new ActorFacet(ActorKind.HUMAN, "orderer"), null));
 
@@ -95,12 +95,12 @@ class CrossBoundedContextStoreWiringTest {
                             List.of(), null, null,
                             List.of(new NewStep(1, "Customer selects items and confirms",
                                     List.of(fr.code().value()))),
-                            List.of()));
+                            List.of(), null));
 
                     // uc_get reads the resolved cross-context edges back (looked up by code).
                     // The resolved identity, not a label, is what the reference now carries -
                     // assert it is stable/consistent with what was just created.
-                    UseCase reloaded = useCases.get(PROJECT, created.code()).orElseThrow();
+                    UseCase reloaded = useCases.get(PROJECT, created.code(), null).orElseThrow();
                     assertThat(reloaded.primaryActor()).isEqualTo(created.primaryActor());
                     ResourceId frId = fr.id().value();
                     assertThat(reloaded.steps()).singleElement()
@@ -129,7 +129,7 @@ class CrossBoundedContextStoreWiringTest {
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
                             null, null, "Customer", List.of(), null, null,
                             List.of(new NewStep(1, "does something", List.of("FR-1"))),
-                            List.of());
+                            List.of(), null);
 
                     assertThatThrownBy(() -> useCases.add(PROJECT, danglingFr))
                             .isInstanceOf(UnresolvedReferenceException.class)
@@ -158,12 +158,12 @@ class CrossBoundedContextStoreWiringTest {
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
-                            List.of("An order is placed and confirmed")));
+                            List.of("An order is placed and confirmed"), null));
                     Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null));
 
                     requirements.linkTerm(PROJECT, fr.code(), order.code().value());
 
-                    assertThat(requirements.get(PROJECT, fr.code()).orElseThrow().usesTerms())
+                    assertThat(requirements.get(PROJECT, fr.code(), null).orElseThrow().usesTerms())
                             .containsExactly(new TermRef(order.id().value()));
                 });
     }
@@ -184,14 +184,14 @@ class CrossBoundedContextStoreWiringTest {
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
-                            List.of("An order is placed and confirmed")));
+                            List.of("An order is placed and confirmed"), null));
 
                     assertThatThrownBy(() -> requirements.linkTerm(PROJECT, fr.code(), "TERM-99"))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("TERM-99")
                             .hasMessageContaining("term_add");
 
-                    assertThat(requirements.get(PROJECT, fr.code()).orElseThrow().usesTerms()).isEmpty();
+                    assertThat(requirements.get(PROJECT, fr.code(), null).orElseThrow().usesTerms()).isEmpty();
                 });
     }
 }

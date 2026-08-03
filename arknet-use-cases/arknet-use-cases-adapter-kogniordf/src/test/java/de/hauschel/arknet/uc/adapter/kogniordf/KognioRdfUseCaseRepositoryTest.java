@@ -129,7 +129,7 @@ class KognioRdfUseCaseRepositoryTest {
         RevisionToken head = repository.findCurrentByCode(projectId, updated.code())
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
-        repository.compareAndUpdate(projectId, head, updated);
+        repository.compareAndUpdate(projectId, head, updated, null, null, java.util.Map.of());
     }
 
     private void seed(ProjectId project, String graph, String triples) {
@@ -197,8 +197,8 @@ class KognioRdfUseCaseRepositoryTest {
     void createsAndFindsUseCaseByCodeWithStepsAndReferences() {
         seedReferences(PROJECT_A);
 
-        repository.create(PROJECT_A, placeOrder());
-        Optional<UseCase> found = repository.findByCode(PROJECT_A, CODE_1);
+        repository.create(PROJECT_A, placeOrder(), null);
+        Optional<UseCase> found = repository.findByCode(PROJECT_A, CODE_1, null);
 
         assertTrue(found.isPresent());
         UseCase uc = found.orElseThrow();
@@ -224,12 +224,12 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void findAllContainsAllSavedUseCases() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         UseCase second = new UseCase(ID_2, CODE_2, "Reset password", "User resets password",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "User requests a reset link", List.of())), List.of());
-        repository.create(PROJECT_A, second);
+        repository.create(PROJECT_A, second, null);
 
         List<UseCase> all = repository.findAll(PROJECT_A);
         assertEquals(2, all.size());
@@ -240,7 +240,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void updateReplacesByIdentityAndLeavesNoOrphanSteps() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
         // placeOrder has 2 main steps + 1 extension step = 3 step resources.
         assertEquals(3, countSteps(PROJECT_A));
 
@@ -250,7 +250,7 @@ class KognioRdfUseCaseRepositoryTest {
         replaceViaCompareAndUpdate(PROJECT_A, revised);
 
         assertEquals(1, repository.findAll(PROJECT_A).size());
-        UseCase found = repository.findByCode(PROJECT_A, CODE_1).orElseThrow();
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals("Place order (revised)", found.title());
         assertEquals(1, found.steps().size());
         assertTrue(found.supportingActors().isEmpty());
@@ -262,10 +262,10 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void createRejectsExistingIdentity() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         ResourceAlreadyExistsException ex = assertThrows(ResourceAlreadyExistsException.class,
-                () -> repository.create(PROJECT_A, placeOrder(ID_1, CODE_2)));
+                () -> repository.create(PROJECT_A, placeOrder(ID_1, CODE_2), null));
 
         assertEquals(ID_1.value(), ex.id());
         assertEquals(1, repository.findAll(PROJECT_A).size());
@@ -274,10 +274,10 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void createRejectsDuplicateCode() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         DuplicateUseCaseCodeException ex = assertThrows(DuplicateUseCaseCodeException.class,
-                () -> repository.create(PROJECT_A, placeOrder(ID_2, CODE_1)));
+                () -> repository.create(PROJECT_A, placeOrder(ID_2, CODE_1), null));
 
         assertEquals(CODE_1, ex.code());
         assertEquals(1, repository.findAll(PROJECT_A).size());
@@ -288,7 +288,7 @@ class KognioRdfUseCaseRepositoryTest {
         seedReferences(PROJECT_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder()));
+                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, java.util.Map.of()));
 
         assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
@@ -298,15 +298,15 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void compareAndUpdateAppliesWhenExpectedHeadMatchesTheStoredHead() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
         RevisionToken head = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.compareAndUpdate(PROJECT_A, head, revised);
+        repository.compareAndUpdate(PROJECT_A, head, revised, null, null, java.util.Map.of());
 
-        assertEquals(Optional.of(revised), repository.findByCode(PROJECT_A, CODE_1));
+        assertEquals(Optional.of(revised), repository.findByCode(PROJECT_A, CODE_1, null));
     }
 
     /**
@@ -318,7 +318,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void compareAndUpdateThrowsAndPersistsNothingWhenExpectedHeadIsStale() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
         RevisionToken staleHead = repository.findCurrentByCode(PROJECT_A, CODE_1).orElseThrow().head();
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         UseCase concurrentlyRevised = new UseCase(ID_1, CODE_1, "Place order (concurrently revised)",
@@ -331,8 +331,8 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt));
-        assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(PROJECT_A, CODE_1));
+                () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt, null, null, java.util.Map.of()));
+        assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(PROJECT_A, CODE_1, null));
     }
 
     @Test
@@ -340,20 +340,20 @@ class KognioRdfUseCaseRepositoryTest {
         seedReferences(PROJECT_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder()));
+                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, java.util.Map.of()));
         assertTrue(repository.findAll(PROJECT_A).isEmpty());
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1));
     }
 
     @Test
     void findByCodeReturnsEmptyForUnknownCode() {
-        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, new UseCaseCode("UC99")));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, new UseCaseCode("UC99"), null));
     }
 
     @Test
     void projectsAreIsolated() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         assertTrue(repository.findAll(PROJECT_B).isEmpty());
     }
@@ -369,11 +369,11 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void useCaseSurvivesItsPrimaryActorsPrefLabelBeingDeleted() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         deletePrefLabel(PROJECT_A, CUSTOMER.value());
 
-        Optional<UseCase> byCode = repository.findByCode(PROJECT_A, CODE_1);
+        Optional<UseCase> byCode = repository.findByCode(PROJECT_A, CODE_1, null);
         assertTrue(byCode.isPresent(), "findByCode must still return the use case");
         assertEquals(CUSTOMER, byCode.orElseThrow().primaryActor());
 
@@ -390,11 +390,11 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void useCaseSurvivesItsPrimaryActorBeingRenamed() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         renamePrefLabel(PROJECT_A, CUSTOMER.value(), "Customer", "Kunde");
 
-        UseCase found = repository.findByCode(PROJECT_A, CODE_1).orElseThrow();
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals(CUSTOMER, found.primaryActor());
     }
 
@@ -434,7 +434,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void findAllSkipsUseCaseWithBlankNodePrimaryActorInsteadOfFailingTheWholeList() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         UseCaseCode orphanCode = new UseCaseCode("UC-ORPHAN");
         seed(PROJECT_A, USE_CASES_GRAPH,
@@ -449,7 +449,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
-        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, orphanCode));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, orphanCode, null));
     }
 
     /**
@@ -464,7 +464,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void findAllSkipsUseCaseWithNoStepsInsteadOfFailingTheWholeList() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         UseCaseCode noStepsCode = new UseCaseCode("UC-NO-STEPS");
         seed(PROJECT_A, USE_CASES_GRAPH,
@@ -480,7 +480,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
-        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, noStepsCode));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, noStepsCode, null));
     }
 
     /**
@@ -498,7 +498,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void findAllSkipsUseCaseWithDuplicateStepPositionsInsteadOfFailingTheWholeList() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
 
         UseCaseCode duplicatePositionCode = new UseCaseCode("UC-DUP-POSITION");
         seed(PROJECT_A, USE_CASES_GRAPH,
@@ -530,7 +530,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
-        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, duplicatePositionCode));
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, duplicatePositionCode, null));
     }
 
     @Test
@@ -544,7 +544,7 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(new Step(1, "ok", List.of(FR_1_REF))), List.of());
 
         assertThrows(WriteConstraintViolationException.class,
-                () -> repository.create(PROJECT_A, invalid));
+                () -> repository.create(PROJECT_A, invalid, null));
         assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
 
@@ -580,13 +580,17 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * {@code rshapes:UseCase-title} is a shape ({@code dcterms:title} had none
-     * before). {@link UseCase#title()} is single-valued, so a second title is unreachable through
-     * {@link UseCaseRepository#create}, same rationale as
-     * {@link #gateRejectsUseCaseWithTwoPrimaryActors}.
+     * {@code rshapes:UseCase-title} carries {@code sh:uniqueLang true} (formerly
+     * {@code sh:maxCount 1}): two language-tagged titles sharing the exact same non-empty tag are
+     * rejected, but {@link UseCase#title()} stays single-valued at the domain level - a second
+     * title is unreachable through {@link UseCaseRepository#create}, same rationale as
+     * {@link #gateRejectsUseCaseWithTwoPrimaryActors}. Two plain, <em>untagged</em> titles are
+     * deliberately <strong>not</strong> covered here: {@code sh:uniqueLang} per the SHACL spec only
+     * ever compares literals that carry a non-empty language tag (mirroring the sibling
+     * requirements adapter's identical note).
      */
     @Test
-    void gateRejectsUseCaseWithTwoTitles() {
+    void gateRejectsUseCaseWithTwoTitlesSharingTheSameLanguageTag() {
         ValueFactory vf = SimpleValueFactory.getInstance();
         IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
@@ -597,8 +601,8 @@ class KognioRdfUseCaseRepositoryTest {
         Model twoTitles = new LinkedHashModel();
         twoTitles.add(useCase, RDF.TYPE, useCaseClass);
         twoTitles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
-        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
-        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order", "en"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order", "en"));
         twoTitles.add(useCase, primaryActor, actor);
         twoTitles.add(actor, RDF.TYPE, actorClass);
 
@@ -629,8 +633,8 @@ class KognioRdfUseCaseRepositoryTest {
         Model twoTitles = new LinkedHashModel();
         twoTitles.add(useCase, RDF.TYPE, useCaseClass);
         twoTitles.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
-        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
-        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order", "en"));
+        twoTitles.add(useCase, DCTERMS.TITLE, vf.createLiteral("Submit order", "en"));
         twoTitles.add(useCase, primaryActor, actor);
         twoTitles.add(actor, RDF.TYPE, actorClass);
 
@@ -638,28 +642,25 @@ class KognioRdfUseCaseRepositoryTest {
                 .buildGate(new DisplayLocale(Locale.ENGLISH, Locale.ENGLISH));
         WriteConstraintViolationException englishEx = assertThrows(WriteConstraintViolationException.class,
                 () -> englishGate.enforce(new RDF4JGraph(twoTitles)));
-        assertTrue(englishEx.getMessage().contains("A Use Case needs exactly one dcterms:title"),
+        assertTrue(englishEx.getMessage().contains("A Use Case needs at least one dcterms:title"),
                 englishEx.getMessage());
 
         ShaclWriteGate germanGate = KognioRdfUseCaseRepositoryFactory
                 .buildGate(new DisplayLocale(Locale.GERMAN, Locale.ENGLISH));
         WriteConstraintViolationException germanEx = assertThrows(WriteConstraintViolationException.class,
                 () -> germanGate.enforce(new RDF4JGraph(twoTitles)));
-        assertTrue(germanEx.getMessage().contains("Use Case braucht genau eine dcterms:title"),
+        assertTrue(germanEx.getMessage().contains("Use Case braucht mindestens eine dcterms:title"),
                 germanEx.getMessage());
     }
 
     /**
-     * {@code rshapes:UseCase-goal-count} is a {@code sh:Violation} shape carrying
-     * only the {@code sh:maxCount 1} - split out from the pre-existing {@code rshapes:UseCase-goal}
-     * (which stays a {@code sh:Warning} best-practice check on presence, unchanged), for the same
-     * reason as {@code rshapes:Requirement-motivatedBy-count} in
-     * {@code KognioRdfRequirementRepositoryTest}: a {@code sh:Warning}-severity {@code maxCount}
-     * never fires {@link WriteConstraintViolationException}. {@link UseCase#goal()} is
+     * {@code rshapes:UseCase-goal} carries {@code sh:uniqueLang true}: two language-tagged goals
+     * sharing the exact same non-empty tag are rejected, mirroring
+     * {@link #gateRejectsUseCaseWithTwoTitlesSharingTheSameLanguageTag}. {@link UseCase#goal()} is
      * single-valued, so a second value is unreachable through {@link UseCaseRepository#create}.
      */
     @Test
-    void gateRejectsUseCaseWithTwoGoals() {
+    void gateRejectsUseCaseWithTwoGoalsSharingTheSameLanguageTag() {
         ValueFactory vf = SimpleValueFactory.getInstance();
         IRI useCase = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         IRI actor = vf.createIRI("https://w3id.org/arknet/model/term/actor-1");
@@ -672,8 +673,8 @@ class KognioRdfUseCaseRepositoryTest {
         twoGoals.add(useCase, RDF.TYPE, useCaseClass);
         twoGoals.add(useCase, DCTERMS.IDENTIFIER, vf.createLiteral("UC-1"));
         twoGoals.add(useCase, DCTERMS.TITLE, vf.createLiteral("Place order"));
-        twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants the order placed quickly"));
-        twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants a confirmation email"));
+        twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants the order placed quickly", "en"));
+        twoGoals.add(useCase, useCaseGoal, vf.createLiteral("Customer wants a confirmation email", "en"));
         twoGoals.add(useCase, primaryActor, actor);
         twoGoals.add(actor, RDF.TYPE, actorClass);
 
@@ -685,14 +686,15 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * {@code rshapes:Step-text} carries {@code sh:maxCount 1}. {@link Step#text()}
-     * is single-valued, so a second {@code stepText} is unreachable through
-     * {@link UseCaseRepository#create} - exercised directly against a synthetic {@code arkreq:Step}
-     * candidate graph, since a step has no standalone read/write entry point of its own (it is
-     * only ever reached through its owning {@link UseCase}).
+     * {@code rshapes:Step-text} carries {@code sh:uniqueLang true}: two language-tagged step texts
+     * sharing the exact same non-empty tag are rejected. {@link Step#text()} is single-valued, so
+     * a second {@code stepText} is unreachable through {@link UseCaseRepository#create} -
+     * exercised directly against a synthetic {@code arkreq:Step} candidate graph, since a step has
+     * no standalone read/write entry point of its own (it is only ever reached through its owning
+     * {@link UseCase}).
      */
     @Test
-    void gateRejectsStepWithTwoTexts() {
+    void gateRejectsStepWithTwoTextsSharingTheSameLanguageTag() {
         ValueFactory vf = SimpleValueFactory.getInstance();
         IRI step = vf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         IRI stepClass = vf.createIRI("https://w3id.org/arknet/requirements#Step");
@@ -702,8 +704,8 @@ class KognioRdfUseCaseRepositoryTest {
         Model twoTexts = new LinkedHashModel();
         twoTexts.add(step, RDF.TYPE, stepClass);
         twoTexts.add(step, position, vf.createLiteral("1", XSD.INTEGER));
-        twoTexts.add(step, stepText, vf.createLiteral("Customer places the order"));
-        twoTexts.add(step, stepText, vf.createLiteral("Customer submits the order"));
+        twoTexts.add(step, stepText, vf.createLiteral("Customer places the order", "en"));
+        twoTexts.add(step, stepText, vf.createLiteral("Customer submits the order", "en"));
 
         ShaclWriteGate gate = KognioRdfUseCaseRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
 
@@ -727,7 +729,7 @@ class KognioRdfUseCaseRepositoryTest {
     @Test
     void createAndCompareAndUpdateEachRecordExactlyOneRevisionWithAQueryableHead() {
         seedReferences(PROJECT_A);
-        repository.create(PROJECT_A, placeOrder());
+        repository.create(PROJECT_A, placeOrder(), null);
         String subject = ID_1.value().value();
 
         assertEquals(1, revisionsOf(subject).size(), "create must record exactly one revision");
@@ -736,7 +738,7 @@ class KognioRdfUseCaseRepositoryTest {
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised);
+        repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised, null, null, java.util.Map.of());
 
         List<String> revisions = revisionsOf(subject);
         assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");

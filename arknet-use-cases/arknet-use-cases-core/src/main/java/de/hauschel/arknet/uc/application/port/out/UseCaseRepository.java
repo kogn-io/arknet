@@ -4,6 +4,7 @@
 package de.hauschel.arknet.uc.application.port.out;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ProjectId;
@@ -34,6 +35,20 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * correction to an already-created use case goes through the compare-and-set guard, mirroring
  * the requirements/bounded-context bounded contexts, so a guarded write path can never
  * be bypassed by accident.</p>
+ *
+ * <p><strong>Language, and why a full replace needs per-field/per-step tags.</strong>
+ * {@code title}/{@code goal}/each step's {@code text} may each legally carry several
+ * language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}). {@link #compareAndUpdate}
+ * replaces a use case's triples wholesale by identity - so preserving every language variant a
+ * caller did not touch cannot rely on simply never writing an untouched field; the out-adapter
+ * must capture every existing variant before the replace and re-attach every one the write is not
+ * itself targeting. Since {@link UpdateUseCase} lets a caller change {@code title}/{@code goal}
+ * independently of each other and of any patched step, {@link #compareAndUpdate} takes one
+ * language argument per field, plus a per-position map for steps - mirroring
+ * {@code RequirementRepository#compareAndUpdate}'s {@code titleLanguage}/
+ * {@code descriptionLanguage} split, generalised to a third, multi-instance field ({@code Step}).
+ * {@link #create} takes one shared tag instead, since a freshly created use case is written whole
+ * in one call (mirroring {@code TermRepository#create}).</p>
  */
 public interface UseCaseRepository {
 
@@ -42,6 +57,10 @@ public interface UseCaseRepository {
      *
      * @param projectId the project (architecture model) to store the use case in
      * @param useCase     the use case to create
+     * @param language    the BCP-47 language tag {@code useCase.title()}/{@code useCase.goal()}
+     *                    and every step's {@code text} are written in (e.g. {@code "de"}), or
+     *                    {@code null} for a plain, untagged literal - one shared tag, since a
+     *                    freshly created use case is written whole in one call
      * @throws ResourceAlreadyExistsException  if a use case with this identity already exists
      * @throws DuplicateUseCaseCodeException   if another use case already carries this use
      *                                          case's {@link UseCaseCode} - identity collision
@@ -53,7 +72,7 @@ public interface UseCaseRepository {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-use-cases-core} must not depend on.
      */
-    void create(ProjectId projectId, UseCase useCase);
+    void create(ProjectId projectId, UseCase useCase, String language);
 
     /**
      * Replaces an existing use case by identity (including all its derived step resources), but
@@ -71,6 +90,19 @@ public interface UseCaseRepository {
      *                     no revision to exist yet
      * @param updated      the use case to store in place of the current one, if its head still
      *                     matches {@code expectedHead}
+     * @param titleLanguage the BCP-47 language tag {@code updated.title()} is written in for this
+     *                      call, or {@code null} for untagged. A call that leaves {@code title}'s
+     *                      content unchanged must pass through the tag the value it read was
+     *                      itself resolved under (see {@link CurrentUseCase#titleLanguage()}), so
+     *                      the write is a scoped no-op on that variant rather than an unrelated
+     *                      retag/collapse
+     * @param goalLanguage  the same as {@code titleLanguage}, for {@code updated.goal()} (see
+     *                      {@link CurrentUseCase#goalLanguage()})
+     * @param stepTextLanguageByPosition the same as {@code titleLanguage}, per main-flow step
+     *                      position: the tag {@code updated.steps()}' step at that position is
+     *                      written in for this call, or {@code null} for untagged at that
+     *                      position. A position this call does not patch must carry through
+     *                      {@link CurrentUseCase#stepTextLanguageByPosition()}'s own entry for it
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
      *                                                all
      * @throws UseCaseConcurrentlyModifiedException if {@code expectedHead} no longer matches the
@@ -82,16 +114,21 @@ public interface UseCaseRepository {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-use-cases-core} must not depend on.
      */
-    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
+            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition);
 
     /**
      * Finds a use case by its human-readable business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the use case in
-     * @param code        the use-case code (e.g. {@code UC1})
+     * @param projectId     the project (architecture model) to look up the use case in
+     * @param code          the use-case code (e.g. {@code UC1})
+     * @param displayLocale the BCP-47 language tag the caller wants {@code title}/{@code goal}/
+     *                      each step's {@code text} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return the use case if present, otherwise {@link Optional#empty()}
      */
-    Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code);
+    Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale);
 
     /**
      * Reads a use case's current state together with its concurrency token (recorded by the last
@@ -110,8 +147,23 @@ public interface UseCaseRepository {
      * A use case's state paired with its current concurrency token (the {@link RevisionToken}, or
      * {@code null} if no write has ever been recorded for this use case), as read together by
      * {@link #findCurrentByCode}.
+     *
+     * @param value                      the use case as currently read
+     * @param head                       the concurrency token, or {@code null}
+     * @param titleLanguage              the BCP-47 language tag of the specific {@code title}
+     *                                   literal {@code value.title()} was selected from (or
+     *                                   {@code null} if untagged) - a read-modify-write round trip
+     *                                   that does not itself intend to change {@code title} must
+     *                                   pass this straight through to {@link #compareAndUpdate}'s
+     *                                   {@code titleLanguage} argument
+     * @param goalLanguage               the same as {@code titleLanguage}, for
+     *                                   {@code value.goal()}
+     * @param stepTextLanguageByPosition the same as {@code titleLanguage}, per main-flow step
+     *                                   position: the tag the step at that position's currently
+     *                                   selected {@code text} literal carries
      */
-    record CurrentUseCase(UseCase value, RevisionToken head) {
+    record CurrentUseCase(UseCase value, RevisionToken head, String titleLanguage, String goalLanguage,
+            Map<Integer, String> stepTextLanguageByPosition) {
     }
 
     /**

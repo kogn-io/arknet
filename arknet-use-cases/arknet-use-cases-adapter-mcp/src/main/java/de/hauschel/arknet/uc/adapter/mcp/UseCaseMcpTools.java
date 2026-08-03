@@ -14,6 +14,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
@@ -131,10 +132,33 @@ public final class UseCaseMcpTools {
      * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
      * delivery paths are open to every MCP client). Neither present is a caller error; there is no
      * default project and no fallback to a server-side working directory (decision 3).
+     *
+     * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
+     * needs the resolved project's configured default display language too, for the read tool
+     * ({@code uc_get}'s {@code displayLocale} default) - see {@link #effectiveDisplayLocale}. The
+     * write tools ({@code uc_add}/{@code uc_update}) deliberately do <strong>not</strong> use it
+     * (see that method's javadoc for why, mirroring
+     * {@code UbiquitousLanguageMcpTools#resolveProject}), but still resolve the full project so
+     * every tool here shares one resolution path.</p>
      */
-    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+    private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
+    }
+
+    /**
+     * Merges an explicit, caller-supplied {@code displayLocale} argument with {@code project}'s
+     * own configured default language for {@code uc_get}: the explicit value wins if the caller
+     * gave a non-blank one, otherwise the project's default is used (or {@code null} if it has
+     * none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s own
+     * remaining fallback chain). Mirrors {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale}
+     * - see that method's javadoc for why the write tools never call this.
+     */
+    private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit;
+        }
+        return project.defaultLanguage();
     }
 
     /**
@@ -196,6 +220,11 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Optional: alternative/exception flows as free-text lines, e.g. "
                     + "'2a. Payment declined -> use case ends in failure'", required = false)
             final List<String> extensions,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title, goal and every "
+                    + "step's text are written in, or omitted for a plain, untagged literal. NOT defaulted "
+                    + "from the project's configured default language - that default only affects how a use "
+                    + "case is displayed (uc_get), never what gets written.", required = false)
+            final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -203,7 +232,7 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final NewUseCase command = new NewUseCase(
                 title,
                 goal,
@@ -214,9 +243,10 @@ public final class UseCaseMcpTools {
                 blankToNull(precondition),
                 blankToNull(postcondition),
                 toNewSteps(steps),
-                extensions == null ? List.of() : List.copyOf(extensions));
-        final UseCase created = addUseCase.add(projectId, command);
-        return presenter.formatFull(projectId, created);
+                extensions == null ? List.of() : List.copyOf(extensions),
+                blankToNull(language));
+        final UseCase created = addUseCase.add(project.id(), command);
+        return presenter.formatFull(project.id(), created);
     }
 
     @McpTool(name = "uc_list", description = "List all use cases in this project (id, title, goal).",
@@ -230,7 +260,7 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final List<UseCase> all = listUseCases.list(projectId);
         return all.stream().map(UseCasePresenter::formatShort)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no use cases)");
@@ -243,6 +273,12 @@ public final class UseCaseMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the title/goal/"
+                    + "step texts in, overriding the project's own configured default language for this one "
+                    + "call. Falls back to the project default, then to the server's own default, then to an "
+                    + "untagged literal, then deterministically to any literal the use case carries.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -250,10 +286,11 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);
-        return getUseCase.get(projectId, code)
-                .map(uc -> presenter.formatFull(projectId, uc))
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        return getUseCase.get(project.id(), code, effective)
+                .map(uc -> presenter.formatFull(project.id(), uc))
                 .orElse("Use case not found: " + code.value());
     }
 
@@ -293,6 +330,13 @@ public final class UseCaseMcpTools {
                     + "untouched. A position with no matching step is rejected (optional, unchanged if omitted)",
                     required = false)
             final List<StepPatchInput> stepTextPatches,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') every field this call "
+                    + "actually touches (a non-omitted title/goal, each patched step's text) is written in, "
+                    + "or omitted for a plain, untagged literal. NOT defaulted from the project's configured "
+                    + "default language (see uc_add's same parameter); only the existing literal carrying "
+                    + "this same tag is replaced per field - every other language variant survives untouched.",
+                    required = false)
+            final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -300,11 +344,12 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final UseCaseCode code = new UseCaseCode(id);
         final UseCase updated = updateUseCase.update(projectId, code, blankToNull(title), blankToNull(goal),
                 blankToNull(scope), blankToNull(trigger), blankToNull(precondition), blankToNull(postcondition),
-                extensions == null ? null : List.copyOf(extensions), toStepTextPatches(stepTextPatches));
+                extensions == null ? null : List.copyOf(extensions), toStepTextPatches(stepTextPatches),
+                blankToNull(language));
         return presenter.formatFull(projectId, updated);
     }
 

@@ -64,6 +64,11 @@ public interface AddUseCase {
      *                         {@code 1..n} gap-free
      * @param extensions       alternative/exception flows as free text; {@code 0..n}
      *                         (may be {@code null}, treated as empty)
+     * @param language         the BCP-47 language tag {@code title}, {@code goal} and every
+     *                         step's {@code text} are written in (e.g. {@code "de"}), or
+     *                         {@code null} for a plain, untagged literal - one shared tag, since a
+     *                         use case is normally authored in one language at a time (mirroring
+     *                         {@code AddTerm.NewTerm#language()})
      */
     record NewUseCase(
             String title,
@@ -75,7 +80,8 @@ public interface AddUseCase {
             String precondition,
             String postcondition,
             List<NewStep> steps,
-            List<String> extensions) {
+            List<String> extensions,
+            String language) {
     }
 
     /**

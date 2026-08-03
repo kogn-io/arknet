@@ -73,7 +73,7 @@ class StoreExporterTest {
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT, requirementTitled("Login"));
+        requirements.create(PROJECT, requirementTitled("Login"), null);
         exporter = new StoreExporter(lifecycle);
     }
 
@@ -137,7 +137,7 @@ class StoreExporterTest {
     void exportTrigEscapesEmbeddedQuotesAndNewlinesInLiteralValues() throws Exception {
         String awkwardTitle = "Say \"hi\" then\nnew line";
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT, requirementIdentifiedAndTitled(FR_2_IRI, "FR-2", awkwardTitle));
+        requirements.create(PROJECT, requirementIdentifiedAndTitled(FR_2_IRI, "FR-2", awkwardTitle), null);
         // A distinct IRI/code, not FR_1_IRI: create() rejects a subject that already exists
         // (the "Login" seed from setUp), so the awkward-title requirement is a second one.
 

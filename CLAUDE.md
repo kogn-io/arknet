@@ -107,14 +107,16 @@ zuerst (`rdfs:label "Actor Role"@en , "Akteursrolle"@de`) -- der Bestand ist so
 gewachsen, und Konsistenz innerhalb einer Datei wiegt hier schwerer als die
 Englisch-Regel. Neue Beschriftungen also immer `@en` **und** `@de` anlegen;
 vorhandene einsprachige nicht nachtraeglich vereinheitlichen. Was **in den Store**
-geschrieben wird, folgt keiner einheitlichen Sprachregel: Requirement- und
-Use-Case-Text bleibt **einsprachig Deutsch** -- arknets eigene Ubiquitous
-Language, unberuehrt von dieser Regel --, waehrend Glossarbegriffe
-(`term_add`/`term_update`) und die optionale Projektbeschreibung
-(`project_add`/`project_update`) nativ **mehrsprachig** sind: mehrere
-sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
-`language`-Argument beim Schreiben gesetzt und beim Lesen ueber die
-`DisplayLocale`-Fallback-Kette aufgeloest. Die ADRs unter `docs/adr/`
+geschrieben wird, ist fuer die zentralen benannten/beschreibenden Felder nativ
+**mehrsprachig**: Glossarbegriffe (`term_add`/`term_update`), die optionale
+Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
+`description` (`req_add`/`req_update`) und UseCase-`title`/`goal`/Step-`text`
+(`uc_add`/`uc_update`) tragen jeweils mehrere sprachgetaggte RDF-Literale je
+Ressource, ueber ein optionales `language`-Argument beim Schreiben gesetzt und
+beim Lesen ueber die `DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-
+Felder (z.B. Requirement-`acceptanceCriterion`, UseCase-`scope`/`trigger`/
+`precondition`/`postcondition`/`extensions`) bleiben einfache, ungetaggte
+Literale ohne diesen Mechanismus. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
 Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.
 

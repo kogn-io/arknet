@@ -52,20 +52,18 @@ rshapes:Requirement-title
     a sh:PropertyShape ;
     sh:path     dcterms:title ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "A Requirement needs exactly one dcterms:title."@en , "Requirement braucht genau eine dcterms:title."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A Requirement needs at least one dcterms:title. sh:uniqueLang allows at most one dcterms:title per non-empty language tag - two titles sharing the same tag (e.g. both @en) are not allowed, but DIFFERENT language tags are (a requirement may be titled in several languages)."@en , "Requirement braucht mindestens eine dcterms:title. sh:uniqueLang erlaubt hoechstens eine dcterms:title je nicht-leerem Sprach-Tag - zwei Titel mit demselben Tag (z.B. beide @en) sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Requirement darf mehrsprachig betitelt sein)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-description
     a sh:PropertyShape ;
     sh:path     dcterms:description ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "A Requirement needs exactly one dcterms:description (the normative statement, min. 5 characters)."@en , "Requirement braucht genau eine dcterms:description (die normative Aussage, min. 5 Zeichen)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A Requirement needs at least one dcterms:description (the normative statement, min. 5 characters). sh:uniqueLang allows at most one dcterms:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (the normative statement may be given in several languages)."@en , "Requirement braucht mindestens eine dcterms:description (die normative Aussage, min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine dcterms:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die normative Aussage darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-priority
@@ -183,7 +181,7 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-identifier ;
     sh:property rshapes:UseCase-title ;
     sh:property rshapes:UseCase-goal ;
-    sh:property rshapes:UseCase-goal-count ;
+    sh:property rshapes:UseCase-goal-uniqueLang ;
     sh:property rshapes:UseCase-primaryActor ;
     sh:property rshapes:UseCase-satisfies ;
     sh:property rshapes:UseCase-mainStep .
@@ -202,25 +200,23 @@ rshapes:UseCase-title
     a sh:PropertyShape ;
     sh:path     dcterms:title ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 2 ;
-    sh:message  "A Use Case needs exactly one dcterms:title."@en , "Use Case braucht genau eine dcterms:title."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A Use Case needs at least one dcterms:title. sh:uniqueLang allows at most one dcterms:title per non-empty language tag - two titles sharing the same tag are not allowed, but DIFFERENT language tags are (a use case may be titled in several languages)."@en , "Use Case braucht mindestens eine dcterms:title. sh:uniqueLang erlaubt hoechstens eine dcterms:title je nicht-leerem Sprach-Tag - zwei Titel mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (ein Use Case darf mehrsprachig betitelt sein)."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-goal
     a sh:PropertyShape ;
     sh:path     arkreq:useCaseGoal ;
     sh:minCount 1 ;
-    sh:datatype xsd:string ;
     sh:message  "A Use Case should state an arkreq:useCaseGoal (goal-in-context)."@en , "Use Case sollte ein arkreq:useCaseGoal (goal-in-context) nennen."@de ;
     sh:severity sh:Warning .
 
-rshapes:UseCase-goal-count
+rshapes:UseCase-goal-uniqueLang
     a sh:PropertyShape ;
     sh:path     arkreq:useCaseGoal ;
-    sh:maxCount 1 ;
-    sh:message  "A Use Case may have at most one arkreq:useCaseGoal (the domain field is single-valued)."@en , "Use Case darf hoechstens ein arkreq:useCaseGoal haben (Domain-Feld ist einwertig)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "sh:uniqueLang allows at most one arkreq:useCaseGoal per non-empty language tag - two goals sharing the same tag are not allowed, but DIFFERENT language tags are (the goal may be stated in several languages). Formerly a plain sh:maxCount 1 (the domain field is single-valued)."@en , "sh:uniqueLang erlaubt hoechstens ein arkreq:useCaseGoal je nicht-leerem Sprach-Tag - zwei Goals mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (das Goal darf mehrsprachig formuliert sein). Vormals ein einfaches sh:maxCount 1 (Domain-Feld ist einwertig)."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-primaryActor
@@ -274,10 +270,9 @@ rshapes:Step-text
     a sh:PropertyShape ;
     sh:path     arkreq:stepText ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 3 ;
-    sh:message  "A Step needs exactly one arkreq:stepText (min. 3 characters)."@en , "Step braucht genau einen arkreq:stepText (min. 3 Zeichen)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A Step needs at least one arkreq:stepText (min. 3 characters). sh:uniqueLang allows at most one arkreq:stepText per non-empty language tag - two step texts sharing the same tag are not allowed, but DIFFERENT language tags are (a step's wording may be given in several languages)."@en , "Step braucht mindestens einen arkreq:stepText (min. 3 Zeichen). sh:uniqueLang erlaubt hoechstens einen arkreq:stepText je nicht-leerem Sprach-Tag - zwei Step-Texte mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (der Wortlaut eines Steps darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Step-realises

@@ -147,7 +147,7 @@ class RequirementMcpToolsTest {
     void addPassesAcceptanceCriteriaThroughAndRendersThem() {
         List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
 
-        String rendered = adapter.add(null, "t", "d", "FUNCTIONAL", criteria, null, null, null, null);
+        String rendered = adapter.add(null, "t", "d", "FUNCTIONAL", criteria, null, null, null, null, null);
 
         assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
         assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
@@ -162,7 +162,49 @@ class RequirementMcpToolsTest {
     @Test
     void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null, null));
+                () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null, null, null));
+    }
+
+    /**
+     * {@code req_add}'s {@code language} argument reaches {@link AddRequirement.NewRequirement}
+     * unchanged - never defaulted from the project's own configured display language (see that
+     * parameter's own javadoc for why).
+     */
+    @Test
+    void addPassesTheLanguageThrough() {
+        adapter.add(null, "t", "d", "FUNCTIONAL", List.of("Done when it works"), null, null, null, "de", null);
+
+        assertEquals("de", stub.lastAddCommand.language());
+    }
+
+    /** A blank {@code language} is treated as omitted (untagged), mirroring every other optional field. */
+    @Test
+    void addTreatsABlankLanguageAsOmitted() {
+        adapter.add(null, "t", "d", "FUNCTIONAL", List.of("Done when it works"), null, null, null, "  ", null);
+
+        assertEquals(null, stub.lastAddCommand.language());
+    }
+
+    /** An explicit {@code req_get} {@code displayLocale} wins over the project's own default. */
+    @Test
+    void getPassesAnExplicitDisplayLocaleThrough() {
+        RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveTerms, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithDefault.get(null, "FR-1", "en", null);
+
+        assertEquals("en", stub.lastGetDisplayLocale);
+    }
+
+    /** An omitted {@code req_get} {@code displayLocale} falls back to the project's own default. */
+    @Test
+    void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
+        RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
+                resolveTerms, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithDefault.get(null, "FR-1", null, null);
+
+        assertEquals("de", stub.lastGetDisplayLocale);
     }
 
     /** The one legal transition: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
@@ -219,7 +261,7 @@ class RequirementMcpToolsTest {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
         String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria,
-                "SHOULD_HAVE", null);
+                "SHOULD_HAVE", null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals("Neuer Titel", stub.lastUpdateTitle);
@@ -236,7 +278,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
@@ -253,7 +295,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateCanCorrectOnlyThePriority() {
-        String rendered = adapter.update(null, "FR-1", null, null, null, "SHOULD_HAVE", null);
+        String rendered = adapter.update(null, "FR-1", null, null, null, "SHOULD_HAVE", null, null);
 
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertEquals(null, stub.lastUpdateTitle);
@@ -269,7 +311,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateTreatsABlankPriorityAsOmitted() {
-        adapter.update(null, "FR-1", null, null, null, "  ", null);
+        adapter.update(null, "FR-1", null, null, null, "  ", null, null);
 
         assertEquals(null, stub.lastUpdatePriority);
     }
@@ -278,7 +320,15 @@ class RequirementMcpToolsTest {
     @Test
     void updateRejectsAnUnknownPriority() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE", null));
+                () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE", null, null));
+    }
+
+    /** {@code req_update}'s {@code language} argument reaches {@link UpdateRequirement} unchanged. */
+    @Test
+    void updatePassesTheLanguageThrough() {
+        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, "de", null);
+
+        assertEquals("de", stub.lastUpdateLanguage);
     }
 
     /** The resolvable case: a linked term shows its business code, not the raw IRI. */
@@ -398,6 +448,7 @@ class RequirementMcpToolsTest {
         private String lastUpdateDescription;
         private List<String> lastUpdateAcceptanceCriteria;
         private Priority lastUpdatePriority;
+        private String lastUpdateLanguage;
 
         @Override
         public Requirement add(ProjectId projectId, NewRequirement command) {
@@ -412,9 +463,14 @@ class RequirementMcpToolsTest {
             return allRequirements;
         }
 
+        private String lastGetDisplayLocale;
+
         @Override
-        public Optional<Requirement> get(ProjectId projectId, RequirementCode code) {
-            throw new UnsupportedOperationException();
+        public Optional<Requirement> get(ProjectId projectId, RequirementCode code, String displayLocale) {
+            lastGetDisplayLocale = displayLocale;
+            return Optional.of(new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL,
+                    RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, List.of(),
+                    List.of("Login succeeds with valid credentials")));
         }
 
         @Override
@@ -448,12 +504,13 @@ class RequirementMcpToolsTest {
 
         @Override
         public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-                List<String> acceptanceCriteria, Priority priority) {
+                List<String> acceptanceCriteria, Priority priority, String language) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
             lastUpdateDescription = description;
             lastUpdateAcceptanceCriteria = acceptanceCriteria;
             lastUpdatePriority = priority;
+            lastUpdateLanguage = language;
             return new Requirement(ID, code, title != null ? title : "t", description != null ? description : "d",
                     RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     priority != null ? priority : Priority.MUST_HAVE, null, null,

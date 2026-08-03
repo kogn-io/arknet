@@ -54,9 +54,11 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     private final Map<ProjectId, Map<RequirementId, Requirement>> byProject = new LinkedHashMap<>();
     private final Map<RequirementId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Set<RequirementId> legacyAcceptanceCriteria = new HashSet<>();
+    private final Map<RequirementId, String> titleLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<RequirementId, String> descriptionLanguageByIdentity = new LinkedHashMap<>();
 
     @Override
-    public void create(ProjectId projectId, Requirement requirement) {
+    public void create(ProjectId projectId, Requirement requirement, String language) {
         Map<RequirementId, Requirement> requirements = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (requirements.containsKey(requirement.id())) {
@@ -72,10 +74,13 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         }
         requirements.put(requirement.id(), requirement);
         headByIdentity.put(requirement.id(), new RevisionToken(UUID.randomUUID().toString()));
+        titleLanguageByIdentity.put(requirement.id(), language);
+        descriptionLanguageByIdentity.put(requirement.id(), language);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
+            String titleLanguage, String descriptionLanguage) {
         Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
         Requirement current = requirements.get(updated.id());
         if (current == null) {
@@ -86,6 +91,8 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         }
         requirements.put(updated.id(), updated);
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
+        titleLanguageByIdentity.put(updated.id(), titleLanguage);
+        descriptionLanguageByIdentity.put(updated.id(), descriptionLanguage);
         // Mirrors the real adapter's replace-by-identity write: whatever acceptanceCriteria
         // `updated` carries is written as real triples, so the identity is never legacy again
         // afterwards - the only way to reach this line for a previously-legacy identity is a
@@ -95,7 +102,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
+    public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code, String displayLocale) {
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(r -> r.code().equals(code))
                 .findFirst();
@@ -103,9 +110,11 @@ final class InMemoryRequirementRepository implements RequirementRepository {
 
     @Override
     public Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code) {
-        return findByCode(projectId, code)
+        return findByCode(projectId, code, null)
                 .map(requirement -> new CurrentRequirement(requirement, headByIdentity.get(requirement.id()),
-                        legacyAcceptanceCriteria.contains(requirement.id())));
+                        legacyAcceptanceCriteria.contains(requirement.id()),
+                        titleLanguageByIdentity.get(requirement.id()),
+                        descriptionLanguageByIdentity.get(requirement.id())));
     }
 
     /**
@@ -118,7 +127,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
      * structurally.
      */
     void createLegacy(ProjectId projectId, Requirement requirement) {
-        create(projectId, requirement);
+        create(projectId, requirement, null);
         legacyAcceptanceCriteria.add(requirement.id());
     }
 

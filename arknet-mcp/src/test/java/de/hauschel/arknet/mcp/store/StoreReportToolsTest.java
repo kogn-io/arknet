@@ -96,7 +96,7 @@ class StoreReportToolsTest {
         term1 = new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null);
-        requirements.create(PROJECT, fr1);
+        requirements.create(PROJECT, fr1, null);
         terms.create(PROJECT, term1, null);
 
         Prefixes prefixes = Prefixes.defaults();
@@ -355,7 +355,7 @@ class StoreReportToolsTest {
                     new RequirementCode("FR-1"), "Zweitprojekt",
                     "The system shall authenticate a second user.",
                     RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                    List.of("Zweitprojekt succeeds")));
+                    List.of("Zweitprojekt succeeds")), null);
 
             final Prefixes prefixes = Prefixes.defaults();
             final StoreReader reader = new StoreReader(lifecycle);
@@ -517,7 +517,7 @@ class StoreReportToolsTest {
                 new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
                 "The system shall authenticate a user in the other project.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials")));
+                List.of("Login succeeds with valid credentials")), null);
 
         try {
             String fromOtherProject = tools.resourceGet(null, "FR-1", OTHER_ANCHOR);

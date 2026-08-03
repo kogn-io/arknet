@@ -17,6 +17,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
@@ -144,10 +145,33 @@ public final class RequirementMcpTools {
      * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
      * delivery paths are open to every MCP client). Neither present is a caller error; there is no
      * default project and no fallback to a server-side working directory (decision 3).
+     *
+     * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
+     * needs the resolved project's configured default display language too, for the read tool
+     * ({@code req_get}'s {@code displayLocale} default) - see {@link #effectiveDisplayLocale}.
+     * The write tools ({@code req_add}/{@code req_update}) deliberately do <strong>not</strong>
+     * use it (see that method's javadoc for why, mirroring
+     * {@code UbiquitousLanguageMcpTools#resolveProject}), but still resolve the full project so
+     * every tool here shares one resolution path.</p>
      */
-    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+    private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
+    }
+
+    /**
+     * Merges an explicit, caller-supplied {@code displayLocale} argument with {@code project}'s
+     * own configured default language for {@code req_get}: the explicit value wins if the caller
+     * gave a non-blank one, otherwise the project's default is used (or {@code null} if it has
+     * none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s own
+     * remaining fallback chain). Mirrors {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale}
+     * - see that method's javadoc for why the write tools never call this.
+     */
+    private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit;
+        }
+        return project.defaultLanguage();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -171,6 +195,11 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Free-text quality category (optional, e.g. performance, security, "
                     + "reliability); only meaningful for NON_FUNCTIONAL requirements", required = false)
             final String qualityCategory,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title and description "
+                    + "are written in, or omitted for a plain, untagged literal. NOT defaulted from the "
+                    + "project's configured default language - that default only affects how a requirement "
+                    + "is displayed (req_get), never what gets written.", required = false)
+            final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -178,16 +207,17 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final RequirementType requirementType = RequirementType.valueOf(type);
         final Priority requirementPriority = blankToNull(priority) == null
                 ? null
                 : Priority.valueOf(priority.trim());
-        final Requirement created = addRequirement.add(projectId,
+        final Requirement created = addRequirement.add(project.id(),
                 new NewRequirement(title, description, requirementType, requirementPriority,
                         blankToNull(motivatedBy), blankToNull(qualityCategory),
-                        acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria)));
-        return presenter.format(projectId, created);
+                        acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria),
+                        blankToNull(language)));
+        return presenter.format(project.id(), created);
     }
 
     @McpTool(name = "req_list", description = "List all managed requirements.",
@@ -201,7 +231,7 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final List<Requirement> all = listRequirements.list(projectId);
         if (all.isEmpty()) {
             return "(no requirements)";
@@ -217,6 +247,12 @@ public final class RequirementMcpTools {
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') to display the title and "
+                    + "description in, overriding the project's own configured default language for this one "
+                    + "call. Falls back to the project default, then to the server's own default, then to an "
+                    + "untagged literal, then deterministically to any literal the requirement carries.",
+                    required = false)
+            final String displayLocale,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -224,10 +260,11 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final RequirementCode code = new RequirementCode(id);
-        return getRequirement.get(projectId, code)
-                .map(r -> presenter.format(projectId, r))
+        final String effective = effectiveDisplayLocale(project, displayLocale);
+        return getRequirement.get(project.id(), code, effective)
+                .map(r -> presenter.format(project.id(), r))
                 .orElse("Requirement not found: " + code.value());
     }
 
@@ -243,7 +280,7 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final RequirementCode code = new RequirementCode(id);
         // The requirements lifecycle permits exactly one transition: the tool's
         // external "status" parameter is kept for API stability, but AcceptRequirement itself no
@@ -282,7 +319,7 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final Requirement updated =
                 linkTerm.linkTerm(projectId, new RequirementCode(reqId), termId);
         return presenter.format(projectId, updated);
@@ -309,6 +346,12 @@ public final class RequirementMcpTools {
                     + "WONT_HAVE (optional, unchanged if omitted - omitting it cannot clear a priority "
                     + "that is already set)", required = false)
             final String priority,
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') a non-omitted title/"
+                    + "description is written in, or omitted for a plain, untagged literal. NOT defaulted "
+                    + "from the project's configured default language (see req_add's same parameter); only "
+                    + "the existing literal carrying this same tag is replaced - every other language "
+                    + "variant of a field being corrected survives untouched.", required = false)
+            final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
                     + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -316,14 +359,14 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final RequirementCode code = new RequirementCode(id);
         final Priority requirementPriority = blankToNull(priority) == null
                 ? null
                 : Priority.valueOf(priority.trim());
         final Requirement updated = updateRequirement.update(projectId, code, blankToNull(title),
                 blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria),
-                requirementPriority);
+                requirementPriority, blankToNull(language));
         return presenter.format(projectId, updated);
     }
 

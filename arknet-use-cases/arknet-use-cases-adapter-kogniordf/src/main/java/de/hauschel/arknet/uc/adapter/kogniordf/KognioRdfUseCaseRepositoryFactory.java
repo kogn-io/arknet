@@ -100,7 +100,7 @@ public final class KognioRdfUseCaseRepositoryFactory {
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate(displayLocale);
         WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, funnel);
+        return new KognioRdfUseCaseRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
     }
 
     /**

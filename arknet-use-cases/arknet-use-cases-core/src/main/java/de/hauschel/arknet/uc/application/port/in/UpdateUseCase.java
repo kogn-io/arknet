@@ -36,6 +36,15 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * <p><strong>Explicitly out of scope.</strong> {@code primaryActor}, {@code supportingActors},
  * full step-list restructuring (adding/removing/reordering steps) and {@code realises} edges are
  * untouched by this port - recreate the use case with {@code uc_add} if those need to change.</p>
+ *
+ * <p><strong>Language.</strong> {@code title}, {@code goal} and each patched step's {@code text}
+ * may each legally carry several language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}).
+ * {@code language} names the BCP-47 tag every language-tagged field <em>this call actually
+ * touches</em> is written in - whichever of {@code title}/{@code goal} is non-{@code null}, and
+ * every step named in {@code stepTextPatches} - mirroring {@code UpdateTerm}'s single shared
+ * {@code language} covering whichever of {@code prefLabel}/{@code definition} it touches. A field
+ * (or step) this call does not touch keeps every language variant it already had, untouched,
+ * exactly as before this parameter existed.</p>
  */
 public interface UpdateUseCase {
 
@@ -58,6 +67,11 @@ public interface UpdateUseCase {
      * @param stepTextPatches text corrections for individual existing main-flow steps, addressed
      *                        by their {@code position}, or {@code null} to leave every step
      *                        unchanged
+     * @param language        the BCP-47 language tag every field this call actually touches
+     *                        (a non-{@code null} {@code title}/{@code goal}, each patched step's
+     *                        text) is written in, or {@code null} for a plain, untagged literal.
+     *                        Only the existing literal carrying this same tag is replaced per
+     *                        field - every other language-tagged variant survives untouched
      * @return the updated use case
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists in
      *                                                {@code projectId}
@@ -69,5 +83,5 @@ public interface UpdateUseCase {
      */
     UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches);
+            List<StepTextPatch> stepTextPatches, String language);
 }

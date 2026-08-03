@@ -80,10 +80,10 @@ class ArknetMcpConfigurationTest {
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.",
                                     RequirementType.FUNCTIONAL, null, null, null,
-                                    List.of("The requirement round-trips through the store")));
+                                    List.of("The requirement round-trips through the store"), null));
 
                     assertThat(created.code().value()).isEqualTo("FR-1");
-                    assertThat(service.get(PROJECT, created.code()))
+                    assertThat(service.get(PROJECT, created.code(), null))
                             .isEqualTo(Optional.of(created));
                 });
     }
@@ -182,7 +182,7 @@ class ArknetMcpConfigurationTest {
                             new NewRequirement("Written before ADR-016",
                                     "The system shall keep data written under a derived id reachable.",
                                     RequirementType.FUNCTIONAL, null, null, null,
-                                    List.of("The requirement survives adoption")));
+                                    List.of("The requirement survives adoption"), null));
 
                     ProjectService projects = context.getBean(ProjectService.class);
                     ProjectResolver resolver = context.getBean(ProjectResolver.class);
@@ -201,7 +201,7 @@ class ArknetMcpConfigurationTest {
                     assertThat(projects.adoptable()).doesNotContain(legacy);
 
                     ProjectId routed = resolver.resolve("/home/a/DEV/arknet").id();
-                    assertThat(requirements.get(routed, before.code()))
+                    assertThat(requirements.get(routed, before.code(), null))
                             .as("the data written before adoption reads back through the routing path")
                             .isEqualTo(Optional.of(before));
                 });

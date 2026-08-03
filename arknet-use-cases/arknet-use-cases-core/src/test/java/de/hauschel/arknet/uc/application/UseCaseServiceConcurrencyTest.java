@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -96,15 +97,15 @@ class UseCaseServiceConcurrencyTest {
         UseCaseCode code = otherCaller.add(WS, newUseCase()).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null));
+                        null, null, null, null, null));
         UseCaseService underTest = new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         UseCase result = underTest.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null);
+                "Racing precondition", null, null, null, null);
 
         assertEquals("Concurrent trigger", result.trigger());
         assertEquals("Racing precondition", result.precondition());
-        UseCase stored = store.findByCode(WS, code).orElseThrow();
+        UseCase stored = store.findByCode(WS, code, null).orElseThrow();
         assertEquals("Concurrent trigger", stored.trigger());
         assertEquals("Racing precondition", stored.precondition());
     }
@@ -122,14 +123,14 @@ class UseCaseServiceConcurrencyTest {
                 new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null));
+                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null));
 
         assertEquals(UseCaseService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }
 
     private static NewUseCase newUseCase() {
         return new NewUseCase("Place order", "goal of Place order", null, null, "Customer",
-                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of());
+                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -161,18 +162,20 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, UseCase useCase) {
-            delegate.create(projectId, useCase);
+        public void create(ProjectId projectId, UseCase useCase, String language) {
+            delegate.create(projectId, useCase, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
+                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage,
+                    stepTextLanguageByPosition);
         }
 
         @Override
-        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
@@ -211,18 +214,20 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, UseCase useCase) {
-            delegate.create(projectId, useCase);
+        public void create(ProjectId projectId, UseCase useCase, String language) {
+            delegate.create(projectId, useCase, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
+                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage,
+                    stepTextLanguageByPosition);
         }
 
         @Override
-        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
@@ -256,22 +261,23 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, UseCase useCase) {
-            delegate.create(projectId, useCase);
+        public void create(ProjectId projectId, UseCase useCase, String language) {
+            delegate.create(projectId, useCase, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
+                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(projectId, updated.code())
+            delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new UseCaseNotFoundException(projectId, updated.code()));
             throw new UseCaseConcurrentlyModifiedException(projectId, updated.code());
         }
 
         @Override
-        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override

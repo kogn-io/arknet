@@ -118,12 +118,12 @@ class TraceabilityGraphTest {
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(new TermRef(ResourceId.of(TERM_1_IRI))),
-                List.of("Login succeeds with valid credentials")));
+                List.of("Login succeeds with valid credentials")), null);
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_2_IRI)), new RequirementCode("FR-2"), "Logout",
                 "The system shall let a user log out.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(), List.of("Logout succeeds")));
+                List.of(), List.of("Logout succeeds")), null);
 
         useCases.create(PROJECT, new UseCase(
                 new UseCaseId(ResourceId.of(UC_1_IRI)), new UseCaseCode("UC1"), "Log in",
@@ -131,7 +131,7 @@ class TraceabilityGraphTest {
                 new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
                 List.of(new Step(1, "Customer enters credentials",
                         List.of(new RequirementRef(ResourceId.of(FR_1_IRI))))),
-                List.of()));
+                List.of()), null);
 
         // BC-1: links TERM-4 via ubiquitousLanguageTerm, its own vision text does not name it -
         // graph-level accessors are what is under test here, text-mention matching is a

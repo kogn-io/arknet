@@ -19,9 +19,13 @@ public interface GetRequirement {
     /**
      * Looks up a requirement by its business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the requirement in
-     * @param code        the requirement code, e.g. {@code FR-1}
+     * @param projectId     the project (architecture model) to look up the requirement in
+     * @param code          the requirement code, e.g. {@code FR-1}
+     * @param displayLocale the BCP-47 language tag the caller wants {@code title}/
+     *                      {@code description} shown in (e.g. {@code "de"}), or {@code null} to
+     *                      fall back to the project's own configured default language, and from
+     *                      there to the process-wide default
      * @return the requirement if present, otherwise {@link Optional#empty()}
      */
-    Optional<Requirement> get(ProjectId projectId, RequirementCode code);
+    Optional<Requirement> get(ProjectId projectId, RequirementCode code, String displayLocale);
 }
