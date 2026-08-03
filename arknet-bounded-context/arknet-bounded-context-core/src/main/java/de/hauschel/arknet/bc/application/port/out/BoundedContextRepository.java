@@ -50,6 +50,11 @@ public interface BoundedContextRepository {
      *                                                {@link BoundedContextCode} - identity
      *                                                collision and business-label collision are
      *                                                distinct failure modes
+     * @throws RuntimeException if {@code boundedContext} violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-bounded-context-core} must not depend on.
      */
     void create(ProjectId projectId, BoundedContext boundedContext);
 
@@ -94,6 +99,11 @@ public interface BoundedContextRepository {
      * @throws DuplicateBoundedContextCodeException         if {@code updated.code()} already
      *                                                     labels a different bounded context in
      *                                                     the project
+     * @throws RuntimeException if {@code updated} violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-bounded-context-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, BoundedContext updated);
 

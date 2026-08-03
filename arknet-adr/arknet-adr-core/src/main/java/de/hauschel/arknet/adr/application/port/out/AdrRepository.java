@@ -48,6 +48,11 @@ public interface AdrRepository {
      * @throws DuplicateAdrCodeException      if another decision already carries this decision's
      *                                        {@link AdrCode} - identity collision and business-label
      *                                        collision are distinct failure modes
+     * @throws RuntimeException if {@code adr} violates a SHACL write constraint. The concrete
+     *                          signal type is deliberately not fixed by this port: a real
+     *                          implementation's {@code WriteConstraintViolationException} lives
+     *                          in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-adr-core} must not depend on.
      */
     void create(ProjectId projectId, Adr adr);
 
@@ -79,6 +84,11 @@ public interface AdrRepository {
      * @throws AdrConcurrentlyModifiedException if {@code expectedHead} no longer matches the stored
      *                                          decision's current head - a concurrent write raced
      *                                          ahead
+     * @throws RuntimeException if {@code updated} violates a SHACL write constraint. The concrete
+     *                          signal type is deliberately not fixed by this port: a real
+     *                          implementation's {@code WriteConstraintViolationException} lives
+     *                          in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-adr-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated);
 

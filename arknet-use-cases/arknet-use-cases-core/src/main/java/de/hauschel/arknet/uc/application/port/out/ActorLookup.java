@@ -32,6 +32,12 @@ public interface ActorLookup {
      * @param projectId the project (architecture model) to resolve the name in
      * @param actorName   the actor's human-readable name, e.g. {@code Customer}
      * @return the resolved actor's opaque subject identity
+     * @throws RuntimeException if {@code actorName} is unknown or ambiguous within
+     *                          {@code projectId}. The concrete signal type is deliberately not
+     *                          fixed by this port: a real implementation's {@code
+     *                          UnresolvedReferenceException} lives in {@code
+     *                          arknet-persistence-support}, a module {@code arknet-use-cases-core}
+     *                          must not depend on.
      */
     ResourceId resolveByName(ProjectId projectId, String actorName);
 }

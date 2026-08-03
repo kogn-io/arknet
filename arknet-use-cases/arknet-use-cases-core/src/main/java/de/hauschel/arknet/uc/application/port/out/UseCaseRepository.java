@@ -47,6 +47,11 @@ public interface UseCaseRepository {
      *                                          case's {@link UseCaseCode} - identity collision
      *                                          and business-label collision are distinct
      *                                          failure modes
+     * @throws RuntimeException if {@code useCase} violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-use-cases-core} must not depend on.
      */
     void create(ProjectId projectId, UseCase useCase);
 
@@ -71,6 +76,11 @@ public interface UseCaseRepository {
      * @throws UseCaseConcurrentlyModifiedException if {@code expectedHead} no longer matches the
      *                                                stored use case's current head - a
      *                                                concurrent write raced ahead
+     * @throws RuntimeException if {@code updated} violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-use-cases-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated);
 

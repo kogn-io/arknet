@@ -4,6 +4,7 @@
 package de.hauschel.arknet.bc.application.port.in;
 
 import de.hauschel.arknet.bc.domain.BoundedContext;
+import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -22,6 +23,9 @@ public interface AddBoundedContext {
      * @param projectId the project (architecture model) to add the bounded context to
      * @param command     the data describing the bounded context to create
      * @return the persisted bounded context including its assigned identity and code
+     * @throws DuplicateBoundedContextCodeException if a concurrent {@code bc_add} keeps claiming
+     *                                               the same candidate business code across every
+     *                                               retry attempt
      */
     BoundedContext add(ProjectId projectId, NewBoundedContext command);
 

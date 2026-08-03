@@ -6,9 +6,12 @@ package de.hauschel.arknet.uc.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
+import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
+import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 
 /**
  * Driving port: correct the goal-level fields and/or individual step wordings of an
@@ -56,6 +59,13 @@ public interface UpdateUseCase {
      *                        by their {@code position}, or {@code null} to leave every step
      *                        unchanged
      * @return the updated use case
+     * @throws UseCaseNotFoundException              if no use case with {@code code} exists in
+     *                                                {@code projectId}
+     * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the compare-and-set
+     *                                                race against a concurrent writer across every
+     *                                                retry attempt
+     * @throws StepPositionNotFoundException         if {@code stepTextPatches} names a position
+     *                                                with no matching existing step
      */
     UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,

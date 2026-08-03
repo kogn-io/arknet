@@ -31,6 +31,12 @@ public interface RequirementLookup {
      * @param projectId      the project (architecture model) to resolve the code in
      * @param requirementCode  the requirement's human-readable business code, e.g. {@code FR-5}
      * @return the resolved requirement's opaque subject identity
+     * @throws RuntimeException if {@code requirementCode} is unknown or ambiguous within
+     *                          {@code projectId}. The concrete signal type is deliberately not
+     *                          fixed by this port: a real implementation's {@code
+     *                          UnresolvedReferenceException} lives in {@code
+     *                          arknet-persistence-support}, a module {@code arknet-use-cases-core}
+     *                          must not depend on.
      */
     ResourceId resolveByCode(ProjectId projectId, String requirementCode);
 }

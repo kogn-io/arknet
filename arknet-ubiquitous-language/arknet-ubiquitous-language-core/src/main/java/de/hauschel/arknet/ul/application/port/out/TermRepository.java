@@ -62,6 +62,11 @@ public interface TermRepository {
      * @throws DuplicateTermCodeException     if another term already carries this term's
      *                                        {@link TermCode} - identity collision and
      *                                        business-label collision are distinct failure modes
+     * @throws RuntimeException if {@code term} violates a SHACL write constraint. The concrete
+     *                          signal type is deliberately not fixed by this port: a real
+     *                          implementation's {@code WriteConstraintViolationException} lives
+     *                          in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
     void create(ProjectId projectId, Term term);
 
@@ -100,6 +105,11 @@ public interface TermRepository {
      * @throws TermNotFoundException             if no term with this code exists
      * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's
      *                                            revision head across every retry attempt
+     * @throws RuntimeException if the patched term violates a SHACL write constraint. The
+     *                          concrete signal type is deliberately not fixed by this port: a
+     *                          real implementation's {@code WriteConstraintViolationException}
+     *                          lives in {@code arknet-persistence-support}, a module
+     *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet);
 

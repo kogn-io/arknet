@@ -6,6 +6,8 @@ package de.hauschel.arknet.uc.application.port.in;
 import java.util.List;
 
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
+import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.UseCase;
 
 /**
@@ -23,6 +25,11 @@ public interface AddUseCase {
      * @param projectId the project (architecture model) to add the use case to
      * @param command     the data describing the use case to create
      * @return the persisted use case including its assigned identity
+     * @throws DuplicateUseCaseCodeException if a concurrent {@code uc_add} keeps claiming the
+     *                                        same candidate business code across every retry
+     *                                        attempt
+     * @throws ResourceAlreadyExistsException if a use case with the newly minted identity already
+     *                                         exists
      */
     UseCase add(ProjectId projectId, NewUseCase command);
 

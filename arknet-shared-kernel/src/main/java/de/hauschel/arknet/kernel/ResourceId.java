@@ -40,6 +40,7 @@ public sealed interface ResourceId permits DefaultResourceId {
      *            characters
      * @return the wrapping {@link ResourceId}
      * @throws IllegalArgumentException if {@code iri} does not satisfy the above shape
+     * @throws NullPointerException if {@code iri} is null
      */
     static ResourceId of(String iri) {
         return new DefaultResourceId(iri);
