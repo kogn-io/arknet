@@ -410,8 +410,8 @@ public class KognioRdfTermRepository implements TermRepository {
                         rdf.createLiteral(current.actorFacet().role()));
             }
         }
-        // skos:definition carries no ulshapes PropertyShape at all (see class-level note) -
-        // nothing to assert either way when it is left untouched.
+        // skos:definition's shape carries sh:uniqueLang but no sh:minCount - nothing to assert
+        // for the gate to still pass when it is left untouched.
 
         funnel.compareAndUpdate(dataset, TERMS_GRAPH, subjectIriString, currentHead,
                 writeCandidate, assertedContext,

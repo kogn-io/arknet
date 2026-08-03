@@ -356,6 +356,59 @@ class ProjectServiceTest {
                 "the loser's label must not have applied");
     }
 
+    // --- ProjectService#update (targeted description/defaultLanguage patch) --
+
+    /**
+     * {@link ProjectService#update}'s no-op guard, documented on the method itself but never
+     * exercised: a call with both {@code description} and {@code defaultLanguage} {@code null}
+     * must return the project's current state without consulting the registry's write path at
+     * all - no revision, no moved head, mirroring {@code KognioRdfTermRepository#attemptUpdate}'s
+     * equivalent guard.
+     */
+    @Test
+    void updateWithNoFieldsIsANoOpAndPerformsNoWrite() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        int writesAfterRegister = registry.writeCount();
+
+        Project unchanged = service.update(project.id(), null, null, null);
+
+        assertEquals(project, unchanged);
+        assertEquals(writesAfterRegister, registry.writeCount());
+    }
+
+    /**
+     * The {@code update} counterpart of {@link #aStaleCompareAndUpdateOnTheFirstAttemptIsRetriedTransparently}:
+     * {@link ProjectService#update} keeps its own retry loop around {@link
+     * ProjectRegistry#updateAttributes} rather than reusing {@link
+     * ProjectService#updateWithOptimisticRetry} (see {@code arknet-project/CLAUDE.md}), and
+     * nothing exercised that loop.
+     */
+    @Test
+    void aStaleUpdateAttributesOnTheFirstAttemptIsRetriedTransparently() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        ProjectService retryingService =
+                new ProjectService(new ConflictsOnUpdateAttributesRegistry(registry, 1), selfDescription, datasets);
+
+        Project updated = retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null);
+
+        assertEquals("Architecture + Knowledge Net", updated.description());
+        assertEquals("Architecture + Knowledge Net",
+                registry.findById(project.id()).orElseThrow().description());
+    }
+
+    /** The {@code update} counterpart of {@link #aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent}. */
+    @Test
+    void aStaleUpdateAttributesThatNeverClearsIsRethrownAfterTheRetryBudgetIsSpent() {
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
+        int writesAfterRegister = registry.writeCount();
+        ProjectService retryingService = new ProjectService(
+                new ConflictsOnUpdateAttributesRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
+
+        assertThrows(StaleProjectException.class,
+                () -> retryingService.update(project.id(), "Architecture + Knowledge Net", "en", null));
+        assertEquals(writesAfterRegister, registry.writeCount(), "an exhausted retry must not have written anything");
+    }
+
     /**
      * Issue #67: {@link ProjectService#register}'s retry loop must stay invisible to a
      * well-formed caller too - mirroring the test above for the create path. A registry whose
@@ -502,6 +555,67 @@ class ProjectServiceTest {
         @Override
         public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
                 String descriptionLanguage, String defaultLanguage) {
+            return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
+                    defaultLanguage);
+        }
+    }
+
+    /**
+     * Decorator that reports a stale concurrency token on the first {@code failuresBeforeSuccess}
+     * {@link #updateAttributes} calls, then delegates every subsequent call unchanged - the
+     * {@code update} counterpart of {@link ConflictsOnCompareAndUpdateRegistry}, reproducing a
+     * concurrent writer's commit landing between {@link ProjectService#update}'s read and its own
+     * write to {@link ProjectRegistry#updateAttributes}, without relying on real threads or timing.
+     */
+    private static final class ConflictsOnUpdateAttributesRegistry implements ProjectRegistry {
+
+        private final ProjectRegistry delegate;
+        private final int failuresBeforeSuccess;
+        private int attempts;
+
+        ConflictsOnUpdateAttributesRegistry(ProjectRegistry delegate, int failuresBeforeSuccess) {
+            this.delegate = delegate;
+            this.failuresBeforeSuccess = failuresBeforeSuccess;
+        }
+
+        @Override
+        public void register(Project project, String description, String descriptionLanguage,
+                String defaultLanguage) {
+            delegate.register(project, description, descriptionLanguage, defaultLanguage);
+        }
+
+        @Override
+        public Optional<Project> findByAnchor(Anchor anchor) {
+            return delegate.findByAnchor(anchor);
+        }
+
+        @Override
+        public Optional<Project> findById(ProjectId id) {
+            return delegate.findById(id);
+        }
+
+        @Override
+        public List<Project> findAll() {
+            return delegate.findAll();
+        }
+
+        @Override
+        public Optional<CurrentProject> findCurrentById(ProjectId id) {
+            return delegate.findCurrentById(id);
+        }
+
+        @Override
+        public void compareAndUpdate(RevisionToken expectedHead, Project project) {
+            delegate.compareAndUpdate(expectedHead, project);
+        }
+
+        @Override
+        public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
+                String descriptionLanguage, String defaultLanguage) {
+            attempts++;
+            if (attempts <= failuresBeforeSuccess) {
+                throw new StaleProjectException(projectId);
+            }
             return delegate.updateAttributes(projectId, expectedHead, description, descriptionLanguage,
                     defaultLanguage);
         }
