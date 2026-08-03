@@ -212,8 +212,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             List<String> acceptanceCriteria, Priority priority, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        String tag = LanguageTag.canonicalize(language);
-        return updateWithOptimisticRetry(projectId, code, tag, current -> new Requirement(current.id(), current.code(),
+        return updateWithOptimisticRetry(projectId, code, language, current -> new Requirement(current.id(), current.code(),
                 title != null ? title : current.title(),
                 description != null ? description : current.description(),
                 current.type(), current.status(),
@@ -273,11 +272,13 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             // no-op), never under `language` - that tag only ever applies to a field this call is
             // actually changing. Without this distinction, accept()/linkTerm() (which always call
             // this with language == null and never touch either field) would retag or collapse
-            // whichever language variant findCurrentByCode happened to select.
+            // whichever language variant findCurrentByCode happened to select. Canonicalizing here,
+            // lazily, rather than eagerly in update(), means a malformed language argument only ever
+            // throws when this call is actually changing a language-tagged field under it.
             String titleLanguage = updated.title().equals(current.value().title())
-                    ? current.titleLanguage() : language;
+                    ? current.titleLanguage() : LanguageTag.canonicalize(language);
             String descriptionLanguage = updated.description().equals(current.value().description())
-                    ? current.descriptionLanguage() : language;
+                    ? current.descriptionLanguage() : LanguageTag.canonicalize(language);
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage);
                 return updated;

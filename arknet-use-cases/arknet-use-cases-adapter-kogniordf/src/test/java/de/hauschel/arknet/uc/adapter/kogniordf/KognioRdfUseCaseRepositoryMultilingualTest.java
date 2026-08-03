@@ -92,6 +92,10 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 List.of(new Step(1, stepText, List.of())), List.of());
     }
 
+    private static UseCase useCase(UseCaseId id, UseCaseCode code, String title, String goal, List<Step> steps) {
+        return new UseCase(id, code, title, goal, null, null, CUSTOMER, List.of(), null, null, steps, List.of());
+    }
+
     private RevisionToken currentHead(UseCaseCode code) {
         return repository.findCurrentByCode(PROJECT_A, code)
                 .map(UseCaseRepository.CurrentUseCase::head)
@@ -158,6 +162,69 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
         assertEquals("Customer selects items", asEnglish.steps().get(0).text());
         assertEquals("Kunde waehlt Artikel", asGerman.steps().get(0).text());
+    }
+
+    /**
+     * Multi-step regression for the same step-text preservation behaviour, mirrors
+     * {@link #compareAndUpdateWithANewLanguageForStepTextPreservesTheOriginalLanguageVariant} but
+     * with three main-flow steps: only the middle step (position 2) is patched under a new
+     * language, so {@link KognioRdfUseCaseRepository#otherLanguageStepTexts}'s position-keyed
+     * re-attachment across the wholesale delete-and-replace has to pick out exactly that one
+     * step's freshly-minted subject, not the other two's.
+     */
+    @Test
+    void compareAndUpdateWithANewLanguageForOneStepPreservesTheOtherStepsOriginalLanguageVariant() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseId id = freshId();
+        List<Step> original = List.of(
+                new Step(1, "Customer selects items", List.of()),
+                new Step(2, "Customer enters payment details", List.of()),
+                new Step(3, "Customer confirms order", List.of()));
+        repository.create(PROJECT_A, useCase(id, code, "Place order", "Order is placed", original), "en");
+        RevisionToken head = currentHead(code);
+
+        List<Step> withGermanSecondStep = List.of(
+                new Step(1, "Customer selects items", List.of()),
+                new Step(2, "Kunde gibt Zahlungsdetails ein", List.of()),
+                new Step(3, "Customer confirms order", List.of()));
+        UseCase updated = useCase(id, code, "Place order", "Order is placed", withGermanSecondStep);
+        repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", Map.of(1, "en", 2, "de", 3, "en"));
+
+        UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
+        UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("Customer selects items", asEnglish.steps().get(0).text());
+        assertEquals("Customer selects items", asGerman.steps().get(0).text());
+        assertEquals("Customer enters payment details", asEnglish.steps().get(1).text());
+        assertEquals("Kunde gibt Zahlungsdetails ein", asGerman.steps().get(1).text());
+        assertEquals("Customer confirms order", asEnglish.steps().get(2).text());
+        assertEquals("Customer confirms order", asGerman.steps().get(2).text());
+    }
+
+    /**
+     * Multi-step counterpart to the title/goal "no duplication under a pass-through-of-the-
+     * same-tag" tests ({@link #compareAndUpdatePassingThroughANonCanonicalStoreFirstTagDoesNotDuplicateTheTitle}):
+     * rewriting one step's text (position 2) under the language tag it already carries must not
+     * leave two {@code arkreq:stepText} literals sitting on that step's freshly-minted subject.
+     */
+    @Test
+    void compareAndUpdateWithTheSameLanguageForOneStepInAMultiStepUseCaseDoesNotDuplicateItsText() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseId id = freshId();
+        List<Step> original = List.of(
+                new Step(1, "Customer selects items", List.of()),
+                new Step(2, "Customer enters payment details", List.of()),
+                new Step(3, "Customer confirms order", List.of()));
+        repository.create(PROJECT_A, useCase(id, code, "Place order", "Order is placed", original), "en");
+        RevisionToken head = currentHead(code);
+
+        List<Step> withRewordedSecondStep = List.of(
+                new Step(1, "Customer selects items", List.of()),
+                new Step(2, "Customer enters payment details again", List.of()),
+                new Step(3, "Customer confirms order", List.of()));
+        UseCase updated = useCase(id, code, "Place order", "Order is placed", withRewordedSecondStep);
+        repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", Map.of(1, "en", 2, "en", 3, "en"));
+
+        assertEquals(1, countStepTextLiterals(id, 2));
     }
 
     /**
@@ -237,6 +304,23 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/use-cases> { "
                 + "<" + id.value().value() + "> <http://purl.org/dc/terms/title> ?o } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query).count();
+        }
+    }
+
+    /**
+     * Counts {@code arkreq:stepText} literals on whichever step subject currently sits at
+     * {@code position} - a step's own subject is re-minted on every write (class-level note), so
+     * this looks the current subject up via {@code arkreq:mainStep}/{@code arkreq:position} rather
+     * than addressing a step by IRI.
+     */
+    private long countStepTextLiterals(UseCaseId id, int position) {
+        String query = "SELECT ?text WHERE { GRAPH <https://w3id.org/arknet/model/use-cases> { "
+                + "<" + id.value().value() + "> <https://w3id.org/arknet/requirements#mainStep> ?step . "
+                + "?step <https://w3id.org/arknet/requirements#position> \"" + position
+                + "\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
+                + "<https://w3id.org/arknet/requirements#stepText> ?text } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             return handle.sparqlQuery().select(query).count();
         }
     }

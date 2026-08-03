@@ -167,8 +167,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             List<StepTextPatch> stepTextPatches, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        String tag = LanguageTag.canonicalize(language);
-        return updateWithOptimisticRetry(projectId, code, tag, current -> {
+        return updateWithOptimisticRetry(projectId, code, language, current -> {
             UseCase base = new UseCase(
                     current.id(), current.code(),
                     title != null ? title : current.title(),
@@ -213,11 +212,13 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             // mutation left byte-for-byte unchanged must round-trip under the exact tag it was
             // read under (a scoped no-op), never under `language` - that tag only ever applies to
             // whatever this call is actually changing (mirrors RequirementService's identical
-            // per-field distinction).
+            // per-field distinction). Canonicalizing here, lazily, rather than eagerly in update(),
+            // means a malformed language argument only ever throws when this call is actually
+            // changing a language-tagged field or step under it.
             String titleLanguage = updated.title().equals(current.value().title())
-                    ? current.titleLanguage() : language;
+                    ? current.titleLanguage() : LanguageTag.canonicalize(language);
             String goalLanguage = updated.goal().equals(current.value().goal())
-                    ? current.goalLanguage() : language;
+                    ? current.goalLanguage() : LanguageTag.canonicalize(language);
             Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
             List<Step> currentSteps = current.value().steps();
             List<Step> updatedSteps = updated.steps();
@@ -226,7 +227,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                 Step currentStep = currentSteps.get(i);
                 String stepLanguage = updatedStep.text().equals(currentStep.text())
                         ? current.stepTextLanguageByPosition().get(updatedStep.position())
-                        : language;
+                        : LanguageTag.canonicalize(language);
                 stepTextLanguageByPosition.put(updatedStep.position(), stepLanguage);
             }
             try {
