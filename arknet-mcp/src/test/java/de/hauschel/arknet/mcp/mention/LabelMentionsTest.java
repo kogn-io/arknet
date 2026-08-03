@@ -40,6 +40,23 @@ class LabelMentionsTest {
                 .containsExactly(new Mention<>(5, 22, "term-9"));
     }
 
+    /**
+     * The qualifier the class Javadoc now spells out (issue #150): "the longer label wins" only
+     * holds between mentions that start at the same position. Here the two labels overlap but
+     * start at different positions ("Kunde Auftrag" at 0, "Auftrag Positionen" at 6) - the
+     * earlier-starting match wins outright, even though the later, non-selected one is longer,
+     * and the longer label is dropped entirely rather than trimmed to what is left.
+     */
+    @Test
+    void anEarlierStartingMentionWinsOverALongerLaterStartingOverlap() {
+        final LabelMentions<String> matcher = LabelMentions.of(
+                List.of("term-1", "term-2"),
+                id -> "term-1".equals(id) ? "Kunde Auftrag" : "Auftrag Positionen");
+
+        assertThat(matcher.in("Kunde Auftrag Positionen werden geprueft."))
+                .containsExactly(new Mention<>(0, 13, "term-1"));
+    }
+
     @Test
     void mentionedInReturnsItemsInFirstAppearanceOrderAcrossTexts() {
         final LabelMentions<String> matcher = LabelMentions.of(

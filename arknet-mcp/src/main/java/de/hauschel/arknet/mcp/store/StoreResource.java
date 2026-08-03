@@ -41,13 +41,20 @@ public record StoreResource(String iri, List<Triple> outgoing) {
         outgoing = List.copyOf(outgoing);
     }
 
-    /** @return the object IRIs of all {@code rdf:type} statements, in encounter order. */
+    /**
+     * @return the object IRIs of all {@code rdf:type} statements, sorted alphabetically. Sorted,
+     *         not encounter order (issue #150): the statements come from a {@code SELECT
+     *         DISTINCT} with no {@code ORDER BY}, so encounter order is not guaranteed stable
+     *         across calls - a report diffed against an earlier run would otherwise show a type
+     *         list reshuffled for no real change.
+     */
     public List<String> types() {
         return outgoing.stream()
                 .filter(t -> RDF_TYPE.equals(t.predicate()))
                 .map(Triple::object)
                 .filter(RdfNode.Resource.class::isInstance)
                 .map(o -> ((RdfNode.Resource) o).iri())
+                .sorted()
                 .toList();
     }
 

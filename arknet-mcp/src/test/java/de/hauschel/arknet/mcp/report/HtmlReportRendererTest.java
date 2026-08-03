@@ -105,6 +105,29 @@ class HtmlReportRendererTest {
         assertThat(html).contains("id=\"r-" + anchorOf(orphan) + "\"");
     }
 
+    /**
+     * Issue #150, finding 6: two different IRIs whose non-alphanumeric runs collapse to the same
+     * sanitized text (a {@code .} and a {@code -} both become {@code -}) used to produce the
+     * exact same DOM id, so the second card's anchor - and every link to it - silently pointed at
+     * the first card instead. Appending a hash of the untouched, full IRI restores injectivity.
+     */
+    @Test
+    void givesTwoIrisThatSanitizeToTheSameTextDifferentAnchors() {
+        final String dotted = ID + "a.b";
+        final String dashed = ID + "a-b";
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(dotted, RDF_TYPE, ARKREQ + "Step"),
+                literal(dotted, ARKREQ + "stepText", "Erster"),
+                iri(dashed, RDF_TYPE, ARKREQ + "Step"),
+                literal(dashed, ARKREQ + "stepText", "Zweiter")));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), snapshot, "digest", views());
+
+        assertThat(anchorOf(dotted)).isNotEqualTo(anchorOf(dashed));
+        assertThat(html).contains("id=\"r-" + anchorOf(dotted) + "\"");
+        assertThat(html).contains("id=\"r-" + anchorOf(dashed) + "\"");
+    }
+
     /** Every card keeps its raw triples one click away, so the model view never has to be trusted blindly. */
     @Test
     void hangsTheRawTriplesOffEveryCard() {
@@ -288,8 +311,10 @@ class HtmlReportRendererTest {
                 iri(REVISION, RDF_TYPE, "https://w3id.org/arknet/provenance#Revision")));
     }
 
+    /** Mirrors {@code HtmlReportRenderer#resourceAnchor} for a namespace with no CURIE binding. */
     private static String anchorOf(final String iri) {
-        return iri.replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-|-$", "");
+        final String sanitized = iri.replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-|-$", "");
+        return sanitized + "-" + String.format("%08x", iri.hashCode());
     }
 
     private static Triple iri(final String subject, final String predicate, final String object) {

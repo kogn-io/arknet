@@ -30,12 +30,10 @@ import de.hauschel.arknet.ul.domain.Term;
  * reads the glossary once (it renders it as a section anyway) and hands it to every builder.
  * One store round trip fewer than before, not one more.</p>
  *
- * <p><strong>Matching is deliberately literal.</strong> A mention is the term's
- * {@code skos:prefLabel}, compared case-insensitively and only at word boundaries. German
- * inflections ({@code Kunden} for {@code Kunde}) are therefore missed - the alternative,
- * matching on word stems, silently claims {@code Kundendienst} is a mention of {@code Kunde},
- * and a wrong link in an architecture model costs more than a missed one. A {@link Term} holds
- * exactly one label and no synonyms, so there is nothing else to match against.</p>
+ * <p>A mention is a term's {@code skos:prefLabel} found in prose; the matching rules themselves
+ * (case-insensitive, word-boundary, longest-label-first) are not repeated here - they live once,
+ * for every caller, at {@link LabelMentions}. A {@link Term} holds exactly one label and no
+ * synonyms, so there is nothing else to match against.</p>
  */
 public final class Glossary {
 
@@ -86,9 +84,15 @@ public final class Glossary {
     }
 
     /**
-     * @param id the opaque term identity, e.g. from an {@code arkreq:usesTerm} edge
-     * @return the term it names, or {@code null} if this project has no such term - a
-     *         dangling edge, which the caller renders as a dead reference rather than dropping
+     * Null-tolerant on {@code id} itself, unlike {@link #ref(ResourceId)}: a caller that merely
+     * checks whether a term is known (before deciding whether to look up a {@link Ref} at all)
+     * should not have to null-check first.
+     *
+     * @param id the opaque term identity, e.g. from an {@code arkreq:usesTerm} edge, or
+     *           {@code null}
+     * @return the term it names, or {@code null} if {@code id} is {@code null} or this project
+     *         has no such term - a dangling edge, which the caller renders as a dead reference
+     *         rather than dropping
      */
     public Term term(final ResourceId id) {
         return id == null ? null : byId.get(id);
@@ -97,12 +101,19 @@ public final class Glossary {
     /**
      * The chip a reader should see for a term identity.
      *
-     * @param id the opaque term identity an edge points at
+     * <p>Unlike {@link #term(ResourceId)}, {@code id} must not be {@code null} here: a
+     * {@link Ref} always needs an IRI to point at, so there is no honest fallback for "no
+     * identity at all" the way there is for "an identity this project does not know". A caller
+     * that may have no identity to resolve should not call this method with one.</p>
+     *
+     * @param id the opaque term identity an edge points at; never {@code null}
      * @return the term's label with its code as the tooltip; for an identity this project
      *         does not know, the bare IRI as its own label - a dangling edge stays visible
      *         instead of being styled away
+     * @throws NullPointerException if {@code id} is {@code null}
      */
     public Ref ref(final ResourceId id) {
+        Objects.requireNonNull(id, "id");
         final Term term = term(id);
         return term == null
                 ? Ref.of(id.value(), id.value())

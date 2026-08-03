@@ -44,9 +44,4 @@ public record RichText(List<Span> spans) {
         }
         return out.toString();
     }
-
-    /** @return {@code true} if this text has no spans or no characters at all. */
-    public boolean isBlank() {
-        return text().isBlank();
-    }
 }

@@ -45,7 +45,8 @@ class DigestRendererTest {
         assertThat(digest).contains("# Project sample-project -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
         assertThat(digest).contains("req:").contains(REQ);
-        assertThat(digest).contains("# Handle for resource_get is the IRI (as a CURIE), NOT the label.");
+        assertThat(digest).contains("# Handle for resource_get: a CURIE, or a bare business id, or the"
+                + " full IRI when neither is unique. NEVER the label.");
         assertThat(digest).contains("1 arkreq:FunctionalRequirement");
         assertThat(digest).contains("1 skos:Concept");
         assertThat(digest).contains("req:FR-1 [FunctionalRequirement] \"Login\" Proposed MustHave"
@@ -72,6 +73,32 @@ class DigestRendererTest {
 
         assertThat(digest).doesNotContain(opaqueIri);
         assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
+    }
+
+    /**
+     * Issue #150, finding 3: the header promises a working {@code resource_get} drill-down, but
+     * {@link HandleResolver} rejects a bare id shared by several resources as ambiguous. Two
+     * resources with the same {@code dcterms:identifier} (a malformed store - business codes are
+     * meant to be unique - but the digest must not paper over it with a broken affordance) must
+     * therefore both fall back to their full IRI as the handle, never the shared bare id.
+     */
+    @Test
+    void handleFallsBackToTheFullIriWhenTheDctermsIdentifierIsSharedByAnotherResource() {
+        String first = OPAQUE + "11111111-1111-1111-1111-111111111111";
+        String second = OPAQUE + "22222222-2222-2222-2222-222222222222";
+        StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(first, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(first, TITLE, "Login"),
+                lit(first, IDENTIFIER, "FR-1"),
+                iri(second, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(second, TITLE, "Logout"),
+                lit(second, IDENTIFIER, "FR-1")));
+
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), snapshot);
+
+        assertThat(digest).contains("resource_get(\"" + first + "\")");
+        assertThat(digest).contains("resource_get(\"" + second + "\")");
+        assertThat(digest).doesNotContain("resource_get(\"FR-1\")");
     }
 
     @Test

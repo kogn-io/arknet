@@ -30,9 +30,10 @@ public final class AnchorContext {
      * Resolves the project a read-tool call targets: the explicit {@code projectAnchor} argument if
      * the caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 -
      * both delivery paths are open to every MCP client). Shared by {@link StoreReportTools}
-     * ({@code store_overview}/{@code resource_get}) and the traceability tools
-     * ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}), which each expose the
-     * same optional-anchor parameter, instead of each carrying its own copy.
+     * ({@code store_overview}/{@code resource_get}) and the five traceability tools
+     * ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}/
+     * {@code actor_usecase_matrix}/{@code term_cooccurrence}), which each expose the same
+     * optional-anchor parameter, instead of each carrying its own copy.
      *
      * <p><strong>An anchor, not an id.</strong> This parameter used to be called {@code workspace}
      * and was wrapped straight into a {@link ProjectId} - so a caller could address <em>any</em>
