@@ -90,9 +90,9 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * returned", and a separate {@link CountDownLatch}, released only once the writer's synchronous
  * write call has returned (commit included), orders "reader's follow-up reads run" strictly after
  * "writer committed". Only then do the reader's follow-up reads ({@code readUsesTerms}, {@code
- * readAcceptanceCriteria}) and its transaction's commit proceed. Mirrors {@code
- * RequirementServiceRealStoreConcurrencyTest}'s {@code GuardedLifecycle}/{@code GuardedHandle}
- * decoration technique, applied to {@code select} instead of {@code contains}.</p>
+ * readAcceptanceCriteria}) and its transaction's commit proceed. Mirrors the shared {@code
+ * GuardedLifecycle}/{@code GuardedHandle} decoration technique (arknet-persistence-test-support),
+ * applied to {@code select} instead of {@code contains}.</p>
  *
  * <p><strong>Why the assertion allows either pair, not just the pre-write one.</strong> Once the
  * fix is in place, the reader's transaction has observed the {@code title} pattern before the
@@ -237,9 +237,9 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
      * port {@link KognioRdfRequirementRepository#findByCode} actually calls it through, {@code
      * DatasetHandle#sparqlQuery()} pre-fix or the transactional {@code DatasetTx} post-fix -
      * pauses after its first invocation until {@code readerPastMainQuery}'s barrier releases and
-     * {@code writerCommitted}'s latch fires. Mirrors {@code
-     * RequirementServiceRealStoreConcurrencyTest}'s {@code GuardedLifecycle}/{@code
-     * GuardedHandle} pair, decorating {@code select} instead of {@code contains}.
+     * {@code writerCommitted}'s latch fires. Mirrors the shared {@code GuardedLifecycle}/{@code
+     * GuardedHandle} pair (arknet-persistence-test-support), decorating {@code select} instead of
+     * {@code contains}.
      */
     private RequirementRepository pausingAfterFirstSelectRepository(
             CyclicBarrier readerPastMainQuery, CountDownLatch writerCommitted) {
