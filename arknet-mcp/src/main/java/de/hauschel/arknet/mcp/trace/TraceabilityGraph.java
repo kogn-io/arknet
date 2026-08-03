@@ -83,6 +83,9 @@ public final class TraceabilityGraph {
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
+    /** {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint (issue #223). */
+    private static final String CONSTRAINED_BY = ArkreqVocabulary.CONSTRAINED_BY;
+
     // The three arkarch: edges an architecture decision owns (issue #69). Unlike ArkreqVocabulary/
     // ArkdddVocabulary, whose scope is deliberately the cross-module subset only, ArkarchVocabulary
     // mirrors its whole (ADR-only) ontology module - so these come from the same shared source the
@@ -103,6 +106,14 @@ public final class TraceabilityGraph {
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
+
+    // The three arkreq: Constraint subtypes (issue #223) - unlike arkreq:Requirement's two
+    // subtypes, there is no abstract arkreq:Constraint type triple to check against: this
+    // adapter's out-adapter always writes one of the three concrete subtypes, mirroring
+    // FUNCTIONAL_REQUIREMENT_TYPE/NON_FUNCTIONAL_REQUIREMENT_TYPE above.
+    private static final String TECHNICAL_CONSTRAINT_TYPE = ArkreqVocabulary.TECHNICAL_CONSTRAINT_TYPE;
+    private static final String BUSINESS_CONSTRAINT_TYPE = ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE;
+    private static final String REGULATORY_CONSTRAINT_TYPE = ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE;
 
     // arkproc:HumanActor/SystemActor below are, like UBIQUITOUS_LANGUAGE_TERM above, used only
     // within this class and duplicated rather than shared - the same two type IRIs are already
@@ -125,11 +136,13 @@ public final class TraceabilityGraph {
      * one is never asserted as a triple, so listing it would traverse an edge no writer produces
      * (issue #69). {@code arkarch:relatedTo} stays out on purpose: a symmetric "see also" cross-link
      * would make every related decision reachable from every other one and turn an impact report
-     * into a cluster dump.</p>
+     * into a cluster dump. {@code oslc_rm:constrainedBy} (Requirement -&gt; Constraint, issue #223)
+     * joins the set for the same reason as {@code usesTerm}: a changed or removed Constraint should
+     * surface the requirements bound by it in {@code impact_analysis}.
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
-            UBIQUITOUS_LANGUAGE_TERM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT, SUPERSEDES);
+            UBIQUITOUS_LANGUAGE_TERM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT, SUPERSEDES, CONSTRAINED_BY);
 
     private final Map<String, List<Triple>> outgoingBySubject;
     private final Map<String, List<Triple>> incomingByObject;
@@ -197,6 +210,14 @@ public final class TraceabilityGraph {
      */
     public List<String> termIris() {
         return subjectsOfType(CONCEPT_TYPE);
+    }
+
+    /**
+     * @return the IRIs of every {@code arkreq:Constraint} (technical, business and regulatory
+     *         alike), sorted - mirrors {@link #requirementIris()} (issue #223).
+     */
+    public List<String> constraintIris() {
+        return subjectsOfType(TECHNICAL_CONSTRAINT_TYPE, BUSINESS_CONSTRAINT_TYPE, REGULATORY_CONSTRAINT_TYPE);
     }
 
     /** @return the term IRIs a requirement uses via {@code arkreq:usesTerm}, sorted. */
@@ -303,6 +324,17 @@ public final class TraceabilityGraph {
                 .anyMatch(t -> USES_TERM.equals(t.predicate()) || PRIMARY_ACTOR.equals(t.predicate())
                         || SUPPORTING_ACTOR.equals(t.predicate())
                         || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate()));
+    }
+
+    /**
+     * @return {@code true} if a constraint is bound to at least one requirement via
+     *         {@code oslc_rm:constrainedBy} - mirrors {@link #isReferencedTerm(String)}
+     *         (issue #223).
+     */
+    public boolean isConstraintReferenced(String constraintIri) {
+        Objects.requireNonNull(constraintIri, "constraintIri");
+        return incomingByObject.getOrDefault(constraintIri, List.of()).stream()
+                .anyMatch(t -> CONSTRAINED_BY.equals(t.predicate()));
     }
 
     /** @return the IRIs of every {@code arkddd:BoundedContext}, sorted. */

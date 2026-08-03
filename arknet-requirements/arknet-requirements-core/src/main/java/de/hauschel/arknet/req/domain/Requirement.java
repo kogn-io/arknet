@@ -46,6 +46,13 @@ import java.util.Objects;
  * @param acceptanceCriteria the testable "Done when ..." criteria for this requirement; maps
  *                         to {@code arkreq:acceptanceCriterion}, {@code 1..n} and required by
  *                         the requirements SHACL shape (never {@code null} or empty)
+ * @param constrainedBy    the {@code arkreq:Constraint}s this requirement is bound by; maps to
+ *                         {@code oslc_rm:constrainedBy}, {@code 0..n}, held as bare identity
+ *                         references (never {@code null} or containing duplicates; a
+ *                         {@code null} argument is normalised to an empty list) - same reasoning
+ *                         as {@code usesTerms}: the out-adapter persists a requirement by
+ *                         replacing it wholesale, so a link kept outside this record would be
+ *                         silently dropped by the next status change
  */
 public record Requirement(
         RequirementId id,
@@ -58,7 +65,8 @@ public record Requirement(
         String motivatedBy,
         String qualityCategory,
         List<TermRef> usesTerms,
-        List<String> acceptanceCriteria) {
+        List<String> acceptanceCriteria,
+        List<ConstraintRef> constrainedBy) {
 
     public Requirement {
         Objects.requireNonNull(id, "id");
@@ -69,6 +77,7 @@ public record Requirement(
         Objects.requireNonNull(status, "status");
         usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
         acceptanceCriteria = acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria);
+        constrainedBy = constrainedBy == null ? List.of() : List.copyOf(constrainedBy);
         if (title.isBlank()) {
             throw new IllegalArgumentException("title must not be blank");
         }
@@ -86,6 +95,9 @@ public record Requirement(
         }
         if (new HashSet<>(usesTerms).size() != usesTerms.size()) {
             throw new IllegalArgumentException("usesTerms must not contain duplicate entries");
+        }
+        if (new HashSet<>(constrainedBy).size() != constrainedBy.size()) {
+            throw new IllegalArgumentException("constrainedBy must not contain duplicate entries");
         }
         if (qualityCategory != null && type != RequirementType.NON_FUNCTIONAL) {
             throw new IllegalArgumentException("qualityCategory is only allowed for non-functional requirements");
@@ -115,6 +127,6 @@ public record Requirement(
                     "illegal status transition " + status() + " -> " + RequirementStatus.ACCEPTED);
         }
         return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.ACCEPTED, priority(),
-                motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria());
+                motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria(), constrainedBy());
     }
 }

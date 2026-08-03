@@ -52,11 +52,16 @@ import de.hauschel.arknet.mcp.store.StoreExporter;
 import de.hauschel.arknet.mcp.store.StoreReader;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
+import de.hauschel.arknet.persistence.WriteFunnel;
+import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfConstraintRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfTermLookup;
+import de.hauschel.arknet.req.adapter.mcp.ConstraintMcpTools;
 import de.hauschel.arknet.req.adapter.mcp.RequirementMcpTools;
+import de.hauschel.arknet.req.application.ConstraintService;
 import de.hauschel.arknet.req.application.RequirementService;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
+import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
@@ -96,7 +101,14 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link RequirementMcpTools}. {@code req_schema} is backed by
  *       a third {@link KognioRdfRequirementRepositoryFactory} product,
  *       {@link RequirementSchemaSource} - it reads only the classpath ontology, not the
- *       project store, so it needs no {@link DatasetLifecycle}.</li>
+ *       project store, so it needs no {@link DatasetLifecycle}. This hexagon also carries a
+ *       second resource type, {@code Constraint} (issue #223, not a bounded context of its own):
+ *       {@link ConstraintMcpTools} exposes {@code constraint_add}/{@code constraint_list}/
+ *       {@code constraint_get} over {@link ConstraintService} over
+ *       {@link KognioRdfConstraintRepositoryFactory}, sharing the requirement repository's own
+ *       {@link WriteFunnel} bean ({@link #requirementsWriteFunnel}) rather than building a
+ *       second, functionally identical one; {@code req_link_constraint} stays on
+ *       {@link RequirementMcpTools} since it mutates the requirement.</li>
  *   <li><strong>ubiquitous-language</strong> ({@link UbiquitousLanguageMcpTools} over
  *       {@link TermService} over an RDF/SKOS-persisted term repository) - the four
  *       term tools ({@code term_add}, {@code term_list}, {@code term_get},
@@ -231,10 +243,35 @@ public class ArknetMcpConfiguration {
 
     // --- Requirements hexagon --------------------------------------------------
 
+    /**
+     * The shared {@link WriteFunnel} every write path of the requirements hexagon runs through -
+     * both {@link #requirementRepository} and {@link #constraintRepository} (issue #223): a
+     * {@code Constraint} shares the requirements SHACL shapes and ontology axioms, so this bean is
+     * built once and handed to both repositories rather than each building its own, functionally
+     * identical one.
+     */
+    @Bean
+    WriteFunnel requirementsWriteFunnel(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, displayLocale);
+    }
+
     @Bean
     RequirementRepository requirementRepository(
-            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
-        return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, displayLocale);
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
+            final WriteFunnel requirementsWriteFunnel) {
+        return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, displayLocale, requirementsWriteFunnel);
+    }
+
+    /**
+     * {@code Constraint} (issue #223) lives inside this same hexagon, not a bounded context of
+     * its own - so this repository shares {@link #requirementsWriteFunnel} rather than getting a
+     * SHACL write-gate/write-funnel pair of its own (see
+     * {@code KognioRdfConstraintRepositoryFactory}'s javadoc).
+     */
+    @Bean
+    ConstraintRepository constraintRepository(
+            final DatasetLifecycle datasetLifecycle, final WriteFunnel requirementsWriteFunnel) {
+        return KognioRdfConstraintRepositoryFactory.over(datasetLifecycle, requirementsWriteFunnel);
     }
 
     /**
@@ -273,8 +310,17 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementService requirementService(
             final RequirementRepository repository, final ResourceIdFactory resourceIdFactory,
-            final TermLookup requirementTermLookup, final RequirementSchemaSource requirementSchemaSource) {
-        return new RequirementService(repository, resourceIdFactory, requirementTermLookup, requirementSchemaSource);
+            final TermLookup requirementTermLookup, final ConstraintRepository constraintRepository,
+            final RequirementSchemaSource requirementSchemaSource) {
+        return new RequirementService(
+                repository, resourceIdFactory, requirementTermLookup, constraintRepository,
+                requirementSchemaSource);
+    }
+
+    @Bean
+    ConstraintService constraintService(
+            final ConstraintRepository constraintRepository, final ResourceIdFactory resourceIdFactory) {
+        return new ConstraintService(constraintRepository, resourceIdFactory);
     }
 
     /**
@@ -306,9 +352,21 @@ public class ArknetMcpConfiguration {
     @Bean
     RequirementMcpTools requirementMcpTools(
             final RequirementService service, final ResolveTerms resolveTerms,
-            final ProjectResolver projectResolver) {
+            final ConstraintService constraintService, final ProjectResolver projectResolver) {
         return new RequirementMcpTools(
-                service, service, service, service, service, service, service, resolveTerms, projectResolver);
+                service, service, service, service, service, service, service, service, resolveTerms,
+                constraintService, projectResolver);
+    }
+
+    /**
+     * The three constraint tools ({@code constraint_add}, {@code constraint_list},
+     * {@code constraint_get}). {@code req_link_constraint} itself stays on
+     * {@link #requirementMcpTools} - it mutates the requirement, not the constraint.
+     */
+    @Bean
+    ConstraintMcpTools constraintMcpTools(
+            final ConstraintService service, final ProjectResolver projectResolver) {
+        return new ConstraintMcpTools(service, service, service, projectResolver);
     }
 
     // --- Ubiquitous-language hexagon -------------------------------------------

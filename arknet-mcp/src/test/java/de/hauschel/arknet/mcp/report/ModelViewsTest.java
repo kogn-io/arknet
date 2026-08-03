@@ -141,7 +141,7 @@ class ModelViewsTest {
                 new RequirementId(ResourceId.of("https://w3id.org/arknet/id/fr-1")),
                 new RequirementCode("FR-1"), "Anmeldung", "Das System muss Nutzer authentifizieren.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(), List.of("Anmeldung gelingt mit gueltigen Zugangsdaten"));
+                List.of(), List.of("Anmeldung gelingt mit gueltigen Zugangsdaten"), List.of());
     }
 
     private static BoundedContext boundedContext() {

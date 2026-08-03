@@ -75,7 +75,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     private static Requirement requirement(RequirementId id, RequirementCode code, String title,
             String description) {
         return new Requirement(id, code, title, description, RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"));
+                RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"), List.of());
     }
 
     @Test
@@ -130,7 +130,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
 
         Requirement statusChangeOnly = new Requirement(created.id(), code, created.title(), created.description(),
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
-                created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria());
+                created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, statusChangeOnly, "en", "en");
 
         Requirement reloaded = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
@@ -191,7 +191,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), current.value().type(), RequirementStatus.ACCEPTED,
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
-                current.value().usesTerms(), current.value().acceptanceCriteria());
+                current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
                 current.titleLanguage(), current.descriptionLanguage()));
@@ -221,7 +221,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
                 current.value().description(), current.value().type(), RequirementStatus.ACCEPTED,
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
-                current.value().usesTerms(), current.value().acceptanceCriteria());
+                current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
                 current.titleLanguage(), current.descriptionLanguage());

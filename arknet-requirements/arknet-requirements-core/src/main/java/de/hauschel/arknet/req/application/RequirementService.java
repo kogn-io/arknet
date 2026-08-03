@@ -18,13 +18,19 @@ import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
+import de.hauschel.arknet.req.application.port.in.LinkConstraint;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
+import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
+import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.MissingAcceptanceCriteriaException;
 import de.hauschel.arknet.req.domain.Priority;
@@ -54,7 +60,10 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@code PROPOSED -> ACCEPTED} - see {@link Requirement#accept()}, which owns that rule;
  * this service only threads it through the read-modify-write round trip. Linking a
  * glossary term is idempotent and independent of the status lifecycle - terms may be linked to a
- * requirement in any status.</p>
+ * requirement in any status. {@link #linkConstraint} mirrors {@link #linkTerm} exactly for
+ * {@code oslc_rm:constrainedBy}, resolving the human-typed {@link ConstraintCode} via the
+ * constructor-injected {@link ConstraintRepository} instead of a cross-BC lookup port, since
+ * {@link Constraint} lives inside this same bounded context.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} retries its next-code computation
  * against a fresh read whenever a concurrent caller claims the same code first, and {@link
@@ -96,7 +105,7 @@ import de.hauschel.arknet.req.domain.TermRef;
  * only if it is told the correct tag to leave alone.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
-        AcceptRequirement, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
+        AcceptRequirement, LinkTerm, LinkConstraint, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops.
@@ -117,25 +126,32 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     private final RequirementRepository repository;
     private final ResourceIdFactory resourceIdFactory;
     private final TermLookup termLookup;
+    private final ConstraintRepository constraintRepository;
     private final RequirementSchemaSource schemaSource;
 
     /**
      * Creates the service.
      *
-     * @param repository        the driven persistence port (must not be {@code null})
-     * @param resourceIdFactory mints the opaque identity of a newly added requirement (must not
-     *                          be {@code null})
-     * @param termLookup        resolves a human-typed glossary term code to its opaque identity
-     *                          (must not be {@code null})
-     * @param schemaSource      supplies the {@code arkreq:} vocabulary as data, backing
-     *                          {@code req_schema} (must not be {@code null})
+     * @param repository            the driven persistence port (must not be {@code null})
+     * @param resourceIdFactory     mints the opaque identity of a newly added requirement (must
+     *                              not be {@code null})
+     * @param termLookup            resolves a human-typed glossary term code to its opaque
+     *                              identity (must not be {@code null})
+     * @param constraintRepository  resolves a human-typed constraint code to the constraint it
+     *                              names, for {@link #linkConstraint} - a direct, same-module
+     *                              dependency rather than a {@code TermLookup}-style cross-BC
+     *                              lookup port, since {@link Constraint} lives in this same
+     *                              bounded context (must not be {@code null})
+     * @param schemaSource          supplies the {@code arkreq:} vocabulary as data, backing
+     *                              {@code req_schema} (must not be {@code null})
      */
     public RequirementService(
             RequirementRepository repository, ResourceIdFactory resourceIdFactory, TermLookup termLookup,
-            RequirementSchemaSource schemaSource) {
+            ConstraintRepository constraintRepository, RequirementSchemaSource schemaSource) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
+        this.constraintRepository = Objects.requireNonNull(constraintRepository, "constraintRepository");
         this.schemaSource = Objects.requireNonNull(schemaSource, "schemaSource");
     }
 
@@ -157,7 +173,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                     Requirement requirement = new Requirement(id, code, command.title(),
                             command.description(), command.type(), RequirementStatus.PROPOSED,
                             command.priority(), command.motivatedBy(), command.qualityCategory(),
-                            List.of(), command.acceptanceCriteria());
+                            List.of(), command.acceptanceCriteria(), List.of());
                     repository.create(projectId, requirement, command.language());
                     return requirement;
                 });
@@ -203,7 +219,34 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             linked.add(term);
             return new Requirement(current.id(), current.code(), current.title(),
                     current.description(), current.type(), current.status(), current.priority(),
-                    current.motivatedBy(), current.qualityCategory(), linked, current.acceptanceCriteria());
+                    current.motivatedBy(), current.qualityCategory(), linked, current.acceptanceCriteria(),
+                    current.constrainedBy());
+        });
+    }
+
+    @Override
+    public Requirement linkConstraint(ProjectId projectId, RequirementCode code, String constraintCode) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(constraintCode, "constraintCode");
+        // Resolution does not depend on the requirement's current state, so it happens once,
+        // outside the retry loop below - mirrors linkTerm() exactly, except the lookup is a
+        // direct, same-module read against ConstraintRepository rather than a cross-BC
+        // TermLookup: Constraint lives inside this same bounded context.
+        ConstraintCode parsedCode = new ConstraintCode(constraintCode);
+        Constraint constraint = constraintRepository.findByCode(projectId, parsedCode)
+                .orElseThrow(() -> new ConstraintNotFoundException(projectId, parsedCode));
+        ConstraintRef ref = new ConstraintRef(constraint.id().value());
+        return updateWithOptimisticRetry(projectId, code, null, current -> {
+            if (current.constrainedBy().contains(ref)) {
+                return current;
+            }
+            List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
+            linked.add(ref);
+            return new Requirement(current.id(), current.code(), current.title(),
+                    current.description(), current.type(), current.status(), current.priority(),
+                    current.motivatedBy(), current.qualityCategory(), current.usesTerms(),
+                    current.acceptanceCriteria(), linked);
         });
     }
 
@@ -218,7 +261,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                 current.type(), current.status(),
                 priority != null ? priority : current.priority(), current.motivatedBy(),
                 current.qualityCategory(), current.usesTerms(),
-                acceptanceCriteria != null ? List.copyOf(acceptanceCriteria) : current.acceptanceCriteria()));
+                acceptanceCriteria != null ? List.copyOf(acceptanceCriteria) : current.acceptanceCriteria(),
+                current.constrainedBy()));
     }
 
     /**

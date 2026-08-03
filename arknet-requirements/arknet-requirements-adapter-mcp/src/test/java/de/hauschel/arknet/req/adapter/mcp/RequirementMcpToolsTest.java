@@ -26,9 +26,14 @@ import de.hauschel.arknet.req.application.port.in.AcceptRequirement;
 import de.hauschel.arknet.req.application.port.in.AddRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirement;
 import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
+import de.hauschel.arknet.req.application.port.in.LinkConstraint;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
+import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -42,7 +47,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the seven requirement
+ * Scaffold-level check that the adapter declares exactly the eight requirement
  * tools and guards its in-port dependencies, plus the term-display-resolution
  * contract ({@link ResolveTerms}): renders the resolved
  * business code, falls back to the bare IRI for an id it cannot resolve, and never
@@ -61,55 +66,63 @@ class RequirementMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
-    private final RequirementMcpTools adapter =
-            new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS);
+    private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
+    private final RequirementMcpTools adapter = new RequirementMcpTools(
+            stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS);
 
     @Test
-    void declaresTheSevenRequirementTools() {
+    void declaresTheEightRequirementTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(7, names.size());
+        assertEquals(8, names.size());
         assertTrue(names.containsAll(List.of(
-                "req_add", "req_list", "req_get", "req_set_status", "req_link_term", "req_update",
-                "req_schema")));
+                "req_add", "req_list", "req_get", "req_set_status", "req_link_term", "req_link_constraint",
+                "req_update", "req_schema")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        null, stub, stub, stub, stub, stub, stub, resolveTerms, PROJECTS));
+                        null, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, null, stub, stub, stub, stub, stub, resolveTerms, PROJECTS));
+                        stub, null, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, null, stub, stub, stub, stub, resolveTerms, PROJECTS));
+                        stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, null, stub, stub, stub, resolveTerms, PROJECTS));
+                        stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, null, stub, stub, resolveTerms, PROJECTS));
+                        stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, null, stub, resolveTerms, PROJECTS));
+                        stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, null, resolveTerms, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, null, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, resolveConstraints, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, null, resolveConstraints, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub, resolveTerms, null));
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, null));
     }
 
     /**
@@ -189,7 +202,7 @@ class RequirementMcpToolsTest {
     @Test
     void getPassesAnExplicitDisplayLocaleThrough() {
         RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveTerms, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "FR-1", "en", null);
 
@@ -200,7 +213,7 @@ class RequirementMcpToolsTest {
     @Test
     void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
         RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                resolveTerms, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "FR-1", null, null);
 
@@ -253,6 +266,29 @@ class RequirementMcpToolsTest {
         assertEquals(new RequirementCode("FR-1"), stub.lastLinkedRequirement);
         assertEquals("TERM-1", stub.lastLinkedTermCode);
         assertTrue(rendered.contains("[terms: TERM-1]"), rendered);
+    }
+
+    @Test
+    void linkConstraintPassesTheRawConstraintCodeThroughToTheInPort() {
+        resolveConstraints.register(ResourceId.of("https://w3id.org/arknet/id/TCON-1"), new ConstraintCode("TCON-1"));
+
+        String rendered = adapter.linkConstraint(null, "FR-1", "TCON-1", null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastLinkedConstraintRequirement);
+        assertEquals("TCON-1", stub.lastLinkedConstraintCode);
+        assertTrue(rendered.contains("[constraints: TCON-1]"), rendered);
+    }
+
+    /** Hard invariant, mirroring the term case: an unresolvable constraint falls back to its bare IRI. */
+    @Test
+    void linkConstraintFallsBackToTheBareIriWhenResolveConstraintsCannotResolveIt() {
+        ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-constraint");
+        stub.nextLinkedConstraintResourceId = unresolvable;
+        // Deliberately not registered with resolveConstraints - simulates a missing/deleted constraint.
+
+        String rendered = adapter.linkConstraint(null, "FR-1", "TCON-1", null);
+
+        assertTrue(rendered.contains("[constraints: https://w3id.org/arknet/id/unknown-constraint]"), rendered);
     }
 
     /** {@code req_update} passes every given field through to the in-port. */
@@ -428,19 +464,22 @@ class RequirementMcpToolsTest {
         List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
         return new Requirement(ID, new RequirementCode(code), "t", "d", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms,
-                List.of("Login succeeds with valid credentials"));
+                List.of("Login succeeds with valid credentials"), List.of());
     }
 
-    /** Structural stub implementing the seven driving in-ports. */
+    /** Structural stub implementing the eight driving in-ports. */
     private static final class Stub
             implements AddRequirement, ListRequirements, GetRequirement, AcceptRequirement, LinkTerm,
-            UpdateRequirement, GetRequirementSchema {
+            LinkConstraint, UpdateRequirement, GetRequirementSchema {
 
         private RequirementCode lastAcceptedRequirement;
         private RequirementCode lastLinkedRequirement;
         private String lastLinkedTermCode;
         private ResourceId nextLinkedTermResourceId;
         private List<ResourceId> nextLinkedTerms = List.of();
+        private RequirementCode lastLinkedConstraintRequirement;
+        private String lastLinkedConstraintCode;
+        private ResourceId nextLinkedConstraintResourceId;
         private List<Requirement> allRequirements = List.of();
         private NewRequirement lastAddCommand;
         private RequirementCode lastUpdatedRequirement;
@@ -455,7 +494,7 @@ class RequirementMcpToolsTest {
             lastAddCommand = command;
             return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
                     command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
-                    command.qualityCategory(), List.of(), command.acceptanceCriteria());
+                    command.qualityCategory(), List.of(), command.acceptanceCriteria(), List.of());
         }
 
         @Override
@@ -470,14 +509,14 @@ class RequirementMcpToolsTest {
             lastGetDisplayLocale = displayLocale;
             return Optional.of(new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL,
                     RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, List.of(),
-                    List.of("Login succeeds with valid credentials")));
+                    List.of("Login succeeds with valid credentials"), List.of()));
         }
 
         @Override
         public Requirement accept(ProjectId projectId, RequirementCode code) {
             lastAcceptedRequirement = code;
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
-                    Priority.MUST_HAVE, null, null, List.of(), List.of("Login succeeds with valid credentials"));
+                    Priority.MUST_HAVE, null, null, List.of(), List.of("Login succeeds with valid credentials"), List.of());
         }
 
         @Override
@@ -493,7 +532,19 @@ class RequirementMcpToolsTest {
             }
             List<TermRef> terms = ids.stream().map(TermRef::new).toList();
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                    Priority.MUST_HAVE, null, null, terms, List.of("Login succeeds with valid credentials"));
+                    Priority.MUST_HAVE, null, null, terms, List.of("Login succeeds with valid credentials"), List.of());
+        }
+
+        @Override
+        public Requirement linkConstraint(ProjectId projectId, RequirementCode code, String constraintCode) {
+            lastLinkedConstraintRequirement = code;
+            lastLinkedConstraintCode = constraintCode;
+            ResourceId id = nextLinkedConstraintResourceId != null
+                    ? nextLinkedConstraintResourceId
+                    : ResourceId.of("https://w3id.org/arknet/id/" + constraintCode);
+            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    Priority.MUST_HAVE, null, null, List.of(), List.of("Login succeeds with valid credentials"),
+                    List.of(new ConstraintRef(id)));
         }
 
         @Override
@@ -514,7 +565,7 @@ class RequirementMcpToolsTest {
             return new Requirement(ID, code, title != null ? title : "t", description != null ? description : "d",
                     RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     priority != null ? priority : Priority.MUST_HAVE, null, null,
-                    List.of(), acceptanceCriteria != null ? acceptanceCriteria : List.of("Done when it works"));
+                    List.of(), acceptanceCriteria != null ? acceptanceCriteria : List.of("Done when it works"), List.of());
         }
     }
 
@@ -541,6 +592,28 @@ class RequirementMcpToolsTest {
             calls++;
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(t -> wanted.contains(t.id())).toList();
+        }
+    }
+
+    /** {@link RecordingResolveTerms}, for {@link ResolveConstraints}. */
+    private static final class RecordingResolveConstraints implements ResolveConstraints {
+
+        private final List<ResolvedConstraint> known = new ArrayList<>();
+        private int calls;
+
+        void register(ResourceId id, ConstraintCode code) {
+            known.add(new ResolvedConstraint(id, code));
+        }
+
+        int callCount() {
+            return calls;
+        }
+
+        @Override
+        public List<ResolvedConstraint> resolveExisting(ProjectId projectId, ResourceId... ids) {
+            calls++;
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(c -> wanted.contains(c.id())).toList();
         }
     }
 }
