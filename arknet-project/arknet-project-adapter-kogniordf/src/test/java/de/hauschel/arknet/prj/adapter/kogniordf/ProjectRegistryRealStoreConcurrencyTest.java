@@ -366,6 +366,41 @@ class ProjectRegistryRealStoreConcurrencyTest {
                 "the loser's whole transaction must have rolled back - its label must not exist anywhere");
     }
 
+    /**
+     * The {@code updateAttributes} counterpart of the two {@code compareAndUpdate} races above
+     * (issue #230 review) - proof that {@code arkprov:head} is a concurrency token per
+     * <em>resource</em>, not per <em>predicate</em>, even though {@link
+     * KognioRdfProjectRegistry#updateAttributes} is a targeted patch that never touches
+     * {@code label}/{@code arkprj:anchor} at all. Both calls here patch the very same field
+     * ({@code arkprj:defaultLanguage}) with a different value, both read the very same head, and
+     * both pass the funnel's synchronous head check because neither sees the other's uncommitted
+     * write - only the second commit is rejected by the store, exactly like {@link
+     * #concurrentRenamesOfTheSameProject_leaveOneWinnerAndTellTheLoserItsHeadIsStale}. Were the
+     * two calls patching genuinely disjoint predicates instead (e.g. one {@code description}, the
+     * other {@code defaultLanguage}), the store's finer-grained conflict detection could let both
+     * survive the way {@link #twoUnrelatedRegistrationsOverlapWithoutCostingEitherOfThemTheWrite}
+     * shows for unrelated projects - this test pins the CAS guarantee on the case that actually
+     * matters: two writers correcting the <em>same</em> attribute.
+     */
+    @Test
+    void concurrentUpdateAttributesOfTheSameProject_leaveOneWinnerAndTellTheLoserItsHeadIsStale()
+            throws InterruptedException {
+        Project initial = new Project(freshId(), "arknet", List.of(pathAnchor("/home/dev/arknet")));
+        straightThrough.register(initial, null, null, null);
+        RevisionToken headBeforeRace = straightThrough.findCurrentById(initial.id()).orElseThrow().head();
+
+        Race race = raceUpdateAttributes(initial.id(), headBeforeRace, "de", "fr");
+
+        assertNull(race.winnerFailure(), "the winner commits first and must not fail");
+        assertInstanceOf(StaleProjectException.class, race.loserFailure(),
+                "the loser lost a genuine SERIALIZABLE conflict at commit, which compareAndUpdate must "
+                        + "translate into the same signal a synchronously stale caller would get");
+
+        Project stored = straightThrough.findById(initial.id()).orElseThrow();
+        assertTrue(Set.of("de", "fr").contains(stored.defaultLanguage()),
+                "only the winner's defaultLanguage may be visible - not both merged, not neither");
+    }
+
     // ---- the race itself -----------------------------------------------------------------
 
     /** What both callers came out of a race with: the winner's outcome and the loser's. */
@@ -464,6 +499,54 @@ class ProjectRegistryRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             try {
                 loserRegistry.compareAndUpdate(expectedHead, loser);
+            } catch (Throwable t) {
+                loserFailure.set(t);
+            }
+        });
+
+        winnerThread.start();
+        loserThread.start();
+        winnerThread.join();
+        loserThread.join();
+
+        assertNotNull(loserFailure.get(), "the loser must not have committed - the race was not raced otherwise");
+        return new Race(winnerFailure.get(), loserFailure.get());
+    }
+
+    /**
+     * Runs two {@code updateAttributes} calls against the same {@code expectedHead} concurrently
+     * through two separate registries, holding each caller at its first write until both have
+     * passed every guard, and the loser additionally until the winner has committed - the
+     * {@code updateAttributes} counterpart of {@link #raceCompareAndUpdates}. Both callers patch
+     * {@code defaultLanguage} with a different value, so a wrongly merged result (both values
+     * ending up stored) would be as visible a failure as neither losing.
+     */
+    private Race raceUpdateAttributes(ProjectId projectId, RevisionToken expectedHead,
+            String winnerDefaultLanguage, String loserDefaultLanguage) throws InterruptedException {
+        CyclicBarrier bothGuardsPassed = new CyclicBarrier(2);
+        CountDownLatch winnerCommitted = new CountDownLatch(1);
+
+        ProjectRegistry winnerRegistry = guardedRegistry(() -> awaitBarrier(bothGuardsPassed));
+        ProjectRegistry loserRegistry = guardedRegistry(() -> {
+            awaitBarrier(bothGuardsPassed);
+            awaitLatch(winnerCommitted);
+        });
+
+        AtomicReference<Throwable> winnerFailure = new AtomicReference<>();
+        AtomicReference<Throwable> loserFailure = new AtomicReference<>();
+
+        Thread winnerThread = new Thread(() -> {
+            try {
+                winnerRegistry.updateAttributes(projectId, expectedHead, null, null, winnerDefaultLanguage);
+            } catch (Throwable t) {
+                winnerFailure.set(t);
+            } finally {
+                winnerCommitted.countDown();
+            }
+        });
+        Thread loserThread = new Thread(() -> {
+            try {
+                loserRegistry.updateAttributes(projectId, expectedHead, null, null, loserDefaultLanguage);
             } catch (Throwable t) {
                 loserFailure.set(t);
             }

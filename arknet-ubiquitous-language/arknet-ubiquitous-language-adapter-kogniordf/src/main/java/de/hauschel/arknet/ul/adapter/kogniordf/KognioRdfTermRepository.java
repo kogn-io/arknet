@@ -31,6 +31,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -452,23 +453,10 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Deletes only the existing triple(s) of {@code subject} on {@code predicateIri} whose literal
-     * carries the same language tag as {@code language} - every other language-tagged (or
-     * untagged) variant of a multi-valued predicate such as {@code skos:prefLabel}/
-     * {@code skos:definition} survives untouched. A no-op if no literal with that tag exists.
-     *
-     * <p>This is the fix for the bug {@code term_update} used to have: an earlier version deleted
-     * <strong>every</strong> value of the predicate regardless of language before writing the one
-     * new literal, silently discarding every other language variant a store-first (ADR-005) term
-     * legally carried. {@code lang(?o)} is {@code ""} for a plain, untagged literal, which is
-     * exactly what {@code language == null} maps {@code tag} to below - so an untagged correction
-     * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
-     * tag.</p>
-     *
-     * @param language the BCP-47 tag of the literal being replaced, or {@code null} for untagged
-     */
-    /**
-     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged.
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged
+     * - and rejects one that is not well-formed at all, via the shared kernel {@link LanguageTag}
+     * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
+     * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
      *
      * <p>{@link #deleteTriplesOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
      * string RDF4J's {@code lang()} returns - the exact case a literal was written with - against
@@ -484,9 +472,25 @@ public class KognioRdfTermRepository implements TermRepository {
      * case-insensitively.</p>
      */
     private static String canonicalLanguageTag(String language) {
-        return language == null ? null : Locale.forLanguageTag(language).toLanguageTag();
+        return LanguageTag.canonicalize(language);
     }
 
+    /**
+     * Deletes only the existing triple(s) of {@code subject} on {@code predicateIri} whose literal
+     * carries the same language tag as {@code language} - every other language-tagged (or
+     * untagged) variant of a multi-valued predicate such as {@code skos:prefLabel}/
+     * {@code skos:definition} survives untouched. A no-op if no literal with that tag exists.
+     *
+     * <p>This is the fix for the bug {@code term_update} used to have: an earlier version deleted
+     * <strong>every</strong> value of the predicate regardless of language before writing the one
+     * new literal, silently discarding every other language variant a store-first (ADR-005) term
+     * legally carried. {@code lang(?o)} is {@code ""} for a plain, untagged literal, which is
+     * exactly what {@code language == null} maps {@code tag} to below - so an untagged correction
+     * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
+     * tag.</p>
+     *
+     * @param language the BCP-47 tag of the literal being replaced, or {@code null} for untagged
+     */
     private static String deleteTriplesOfLanguage(String subject, String predicateIri, String language) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.

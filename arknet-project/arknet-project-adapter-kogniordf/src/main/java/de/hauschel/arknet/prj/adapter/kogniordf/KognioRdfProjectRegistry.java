@@ -28,6 +28,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.persistence.ArkprjVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -168,7 +169,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         }
         if (defaultLanguage != null) {
             candidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DEFAULT_LANGUAGE),
-                    rdf.createLiteral(defaultLanguage));
+                    rdf.createLiteral(canonicalLanguageTag(defaultLanguage)));
         }
 
         funnel.create(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString, project.label(),
@@ -212,6 +213,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
             String descriptionLanguage, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         String descriptionTag = canonicalLanguageTag(descriptionLanguage);
+        String defaultLanguageTag = canonicalLanguageTag(defaultLanguage);
 
         ProjectRegistry.CurrentProject current = findCurrentById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
@@ -240,7 +242,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         }
         if (defaultLanguage != null) {
             writeCandidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DEFAULT_LANGUAGE),
-                    rdf.createLiteral(defaultLanguage));
+                    rdf.createLiteral(defaultLanguageTag));
         }
 
         funnel.compareAndUpdate(SYSTEM_DATASET, ArkprjVocabulary.REGISTRY_GRAPH, projectIriString,
@@ -256,13 +258,13 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                     if (defaultLanguage != null) {
                         tx.update(deleteAllTriplesOf(projectSubject, ArkprjVocabulary.DEFAULT_LANGUAGE));
                         tx.add(graphIri, singleTriple(projectIri, ArkprjVocabulary.DEFAULT_LANGUAGE,
-                                rdf.createLiteral(defaultLanguage)));
+                                rdf.createLiteral(defaultLanguageTag)));
                     }
                 });
 
         return new Project(projectId, currentProject.label(), currentProject.anchors(),
                 description != null ? description : currentProject.description(),
-                defaultLanguage != null ? defaultLanguage : currentProject.defaultLanguage());
+                defaultLanguage != null ? defaultLanguageTag : currentProject.defaultLanguage());
     }
 
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
@@ -272,13 +274,10 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     }
 
     /**
-     * Deletes only the existing {@code dcterms:description} triple(s) of {@code subject} whose
-     * literal carries the same language tag as {@code language} - every other language-tagged (or
-     * untagged) variant survives untouched. {@code lang(?o)} is {@code ""} for a plain, untagged
-     * literal, which is exactly what {@code language == null} maps {@code tag} to below.
-     */
-    /**
-     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged.
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged
+     * - and rejects one that is not well-formed at all, via the shared kernel {@link LanguageTag}
+     * (see that class's javadoc for why {@link Locale#forLanguageTag} is the wrong tool here: it
+     * never throws, silently degrading a typo like {@code "de_DE"} to {@code "und"}).
      *
      * <p>{@link #deleteDescriptionOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
      * string RDF4J's {@code lang()} returns against this method's {@code tag} argument, so an
@@ -293,9 +292,15 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * comparing tags case-insensitively.</p>
      */
     private static String canonicalLanguageTag(String language) {
-        return language == null ? null : Locale.forLanguageTag(language).toLanguageTag();
+        return LanguageTag.canonicalize(language);
     }
 
+    /**
+     * Deletes only the existing {@code dcterms:description} triple(s) of {@code subject} whose
+     * literal carries the same language tag as {@code language} - every other language-tagged (or
+     * untagged) variant survives untouched. {@code lang(?o)} is {@code ""} for a plain, untagged
+     * literal, which is exactly what {@code language == null} maps {@code tag} to below.
+     */
     private static String deleteDescriptionOfLanguage(String subject, String language) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.

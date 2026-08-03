@@ -4,6 +4,7 @@
 package de.hauschel.arknet.ul.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -54,6 +55,8 @@ import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * Regression test for the second interleaving of the code-assignment race, reproduced against a
@@ -184,6 +187,225 @@ class TermServiceRealStoreConcurrencyTest {
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(Term::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
+    }
+
+    /**
+     * The {@code term_update} counterpart of the race above (issue #230 review): two
+     * {@code term_update}-shaped calls against the very same term, both reading the same
+     * {@code arkprov:head}, each correcting a <em>different</em> language variant of
+     * {@code skos:prefLabel} - proof that the CAS token races on regardless, because it guards
+     * the whole resource, not a single predicate/language slot ({@code
+     * arknet-ubiquitous-language/CLAUDE.md}: "der Head ist pro Ressource, nicht pro
+     * Praedikat"). Unlike {@code ProjectRegistry#updateAttributes}'s CAS retry (which lives one
+     * layer up, in {@code ProjectService}), {@link KognioRdfTermRepository#update}'s retry loop
+     * lives inside the out-adapter itself and re-reads the current state on every attempt, so it
+     * absorbs the lost race transparently: neither caller ever sees {@link
+     * de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException}, and the assertions below
+     * pin the two failure modes a purely mocked/in-memory test cannot exercise - a lost update
+     * (the loser's {@code @fr} label silently missing) and an orphaned duplicate (the original
+     * {@code @de} label surviving next to its own correction, the exact defect the language-scoped
+     * delete in issue #228 exists to prevent).
+     */
+    @Test
+    void concurrentUpdatesOfDifferentLanguageVariants_bothSurviveWithoutLossOrDuplication()
+            throws InterruptedException {
+        TermRepository straightThrough = KognioRdfTermRepositoryFactory.over(realLifecycle);
+        TermId id = new TermId(new UuidResourceIdFactory().newId());
+        TermCode code = new TermCode("TERM-1");
+        straightThrough.create(WS, new Term(id, code, "Kunde", "Erste Definition.", null), "de");
+
+        CyclicBarrier bothGuardsPassed = new CyclicBarrier(2);
+        CountDownLatch winnerCommitted = new CountDownLatch(1);
+
+        TermRepository winnerRepository = guardedRepository(() -> awaitBarrier(bothGuardsPassed));
+        TermRepository loserRepository = guardedRepository(() -> {
+            awaitBarrier(bothGuardsPassed);
+            awaitLatch(winnerCommitted);
+        });
+
+        AtomicReference<Throwable> winnerFailure = new AtomicReference<>();
+        AtomicReference<Throwable> loserFailure = new AtomicReference<>();
+
+        Thread winnerThread = new Thread(() -> {
+            try {
+                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, "de");
+            } catch (Throwable t) {
+                winnerFailure.set(t);
+            } finally {
+                winnerCommitted.countDown();
+            }
+        }, "racer-A");
+        Thread loserThread = new Thread(() -> {
+            try {
+                loserRepository.update(WS, code, "Client", null, null, "fr");
+            } catch (Throwable t) {
+                loserFailure.set(t);
+            }
+        }, "racer-B");
+
+        winnerThread.start();
+        loserThread.start();
+        winnerThread.join();
+        loserThread.join();
+
+        assertNull(winnerFailure.get(), "the winner commits first and must not fail");
+        assertNull(loserFailure.get(),
+                "the internal retry loop (KognioRdfTermRepository#update) must absorb the lost race "
+                        + "with a fresh read - no caller-visible failure");
+
+        assertTrue(subjectHasLanguageTaggedPrefLabel(id, "Kunde (korrigiert)", "de"),
+                "the winner's corrected @de label must be stored");
+        assertTrue(subjectHasLanguageTaggedPrefLabel(id, "Client", "fr"),
+                "the loser's new @fr label must be stored - not lost to the lost race");
+        assertFalse(subjectHasLanguageTaggedPrefLabel(id, "Kunde", "de"),
+                "the original @de label must have been replaced, not left standing next to its own correction");
+        assertEquals(2, countPrefLabelTriples(id),
+                "exactly one prefLabel per language - no accumulated duplicate from the retried write");
+    }
+
+    /** Whether the term carries a {@code skos:prefLabel} literal with exactly this value and language tag. */
+    private boolean subjectHasLanguageTaggedPrefLabel(TermId id, String value, String tag) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \""
+                + value + "\"@" + tag + " } }";
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /** How many {@code skos:prefLabel} triples the term carries in total, across every language. */
+    private long countPrefLabelTriples(TermId id) {
+        String query = "SELECT (COUNT(?o) AS ?n) WHERE { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> "
+                + "{ <" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?o } }";
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .findFirst()
+                    .flatMap(row -> row.getValue("n"))
+                    .filter(io.kogn.rdf.terms.Literal.class::isInstance)
+                    .map(v -> Long.parseLong(((io.kogn.rdf.terms.Literal) v).getLexicalForm()))
+                    .orElse(0L);
+        }
+    }
+
+    /**
+     * A term repository whose first write transaction runs {@code beforeFirstWrite} right before
+     * its first {@code add} - after every guard of that transaction (the funnel's head check,
+     * inside {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}) has passed and
+     * before anything is written. Disarms itself afterwards, so {@link
+     * KognioRdfTermRepository#update}'s internal retry - a second, later transaction on this very
+     * same repository instance - runs unsynchronised, the same one-shot arming {@link
+     * #guardedService} uses for the create path's second guard.
+     */
+    private TermRepository guardedRepository(Runnable beforeFirstWrite) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+            if (armed.compareAndSet(true, false)) {
+                return new PausingOnFirstAddTx(tx, beforeFirstWrite);
+            }
+            return tx;
+        });
+        return KognioRdfTermRepositoryFactory.over(guarded);
+    }
+
+    /**
+     * Runs {@code beforeFirstWrite} once, immediately before its delegate's first {@link
+     * GraphStore#add} call - the point in {@link KognioRdfTermRepository}'s write body where the
+     * funnel's head check has already passed and no triple has been written yet. Unlike {@link
+     * GuardSyncTx} (which counts {@code contains()} calls for the {@code create} path's two
+     * uniqueness guards), {@code update}'s write body issues no {@code contains()} at all - its
+     * only guard is the funnel's own head comparison, reached before this transaction's body ever
+     * runs, so pausing on the first {@code add} is the correct, guard-count-independent hook.
+     */
+    private static final class PausingOnFirstAddTx implements DatasetTx {
+
+        private final DatasetTx delegate;
+        private final Runnable beforeFirstWrite;
+        private boolean pending = true;
+
+        PausingOnFirstAddTx(DatasetTx delegate, Runnable beforeFirstWrite) {
+            this.delegate = delegate;
+            this.beforeFirstWrite = beforeFirstWrite;
+        }
+
+        @Override
+        public long add(IRI graph, ReadableGraph data) {
+            if (pending) {
+                pending = false;
+                beforeFirstWrite.run();
+            }
+            return delegate.add(graph, data);
+        }
+
+        @Override
+        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.contains(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean ask(String query) {
+            return delegate.ask(query);
+        }
+
+        @Override
+        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.ask(query, bindings);
+        }
+
+        @Override
+        public long remove(IRI graph, ReadableGraph data) {
+            return delegate.remove(graph, data);
+        }
+
+        @Override
+        public void clear(IRI graph) {
+            delegate.clear(graph);
+        }
+
+        @Override
+        public ReadableGraph export(IRI graph) {
+            return delegate.export(graph);
+        }
+
+        @Override
+        public long count(IRI graph) {
+            return delegate.count(graph);
+        }
+
+        @Override
+        public long count() {
+            return delegate.count();
+        }
+
+        @Override
+        public void update(String sparqlUpdate) {
+            delegate.update(sparqlUpdate);
+        }
+
+        @Override
+        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            delegate.update(sparqlUpdate, bindings);
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query) {
+            return delegate.select(query);
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.select(query, bindings);
+        }
+
+        @Override
+        public ReadableGraph construct(String query) {
+            return delegate.construct(query);
+        }
+
+        @Override
+        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.construct(query, bindings);
+        }
     }
 
     /**
