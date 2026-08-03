@@ -544,8 +544,10 @@ class BoundedContextServiceRealStoreConcurrencyTest {
 
     /**
      * Runs {@code afterSecondGuard} exactly once its delegate's second {@code contains()} call
-     * returns - {@link KognioRdfBoundedContextRepository#write} issues exactly two: the identity
-     * guard, then (only reached when the identity guard passed) the code-uniqueness guard.
+     * returns - {@link WriteFunnel#create} (arknet-persistence-support), which
+     * {@link KognioRdfBoundedContextRepository#create} delegates to, issues exactly two: the
+     * identity guard, then (only reached when the identity guard passed) the code-uniqueness
+     * guard.
      */
     private static final class GuardSyncTx implements DatasetTx {
 

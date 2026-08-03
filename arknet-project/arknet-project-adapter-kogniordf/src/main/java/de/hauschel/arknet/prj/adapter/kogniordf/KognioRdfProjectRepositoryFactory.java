@@ -41,8 +41,8 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
  * {@link ShaclWriteGate}, which only know technology-neutral kognio-rdf ports. This naming
  * discipline is also an ArchUnit rule (see {@code arknet-architecture-tests}'s
  * {@code DependencyRulesTest}): only a class whose simple name ends in {@code RepositoryFactory}
- * (or {@code Factory}) may reference an RDF4J/kognio-rdf-rdf4j type, which is why this class keeps
- * that suffix even though it assembles two ports, not one repository.</p>
+ * may reference an RDF4J/kognio-rdf-rdf4j type, which is why this class keeps that suffix even
+ * though it assembles two ports, not one repository.</p>
  */
 public final class KognioRdfProjectRepositoryFactory {
 
