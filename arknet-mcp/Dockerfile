@@ -10,6 +10,9 @@
 # ---------------------------------------------------------------------------
 # Build stage: full JDK 25 + Maven, compiles the reactor and produces the
 # repackaged Spring Boot fat jar via spring-boot-maven-plugin:repackage.
+# The plugin is configured with classifier "exec" (issue #237) so the plain
+# thin jar stays the reactor's main artifact -- the fat jar this stage copies
+# below therefore carries the "-exec" suffix.
 # ---------------------------------------------------------------------------
 FROM maven:3.9-eclipse-temurin-25 AS build
 
@@ -40,7 +43,7 @@ RUN apk add --no-cache su-exec \
     && addgroup -S arknet && adduser -S arknet -G arknet
 
 WORKDIR /app
-COPY --from=build /build/arknet-mcp/target/arknet-mcp-*.jar app.jar
+COPY --from=build /build/arknet-mcp/target/arknet-mcp-*-exec.jar app.jar
 COPY arknet-mcp/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
