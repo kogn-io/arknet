@@ -239,12 +239,12 @@ Requirements BC (`arknet-requirements`) -- requirement lifecycle:
 
 | Tool | Description |
 |------|-------------|
-| `req_add` | Create a requirement (functional / non-functional) |
+| `req_add` | Create a requirement (functional / non-functional). Title and description are natively multilingual -- an optional `language` argument tags the literals being written (BCP-47, e.g. `"en"`); omitted, they stay untagged as before |
 | `req_list` | List all managed requirements |
-| `req_get` | Fetch a single requirement by identity (e.g. FR-1, NFR-7) |
+| `req_get` | Fetch a single requirement by identity (e.g. FR-1, NFR-7). An optional `displayLocale` argument picks which language variant of a multilingual title/description to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
 | `req_set_status` | Change lifecycle status (PROPOSED / ACCEPTED) |
 | `req_link_term` | Link a requirement to a glossary term (`arkreq:usesTerm`; the term must exist) |
-| `req_update` | Correct a requirement's title, description, acceptance criteria and/or MoSCoW priority (each optional, unchanged if omitted) |
+| `req_update` | Correct a requirement's title, description, acceptance criteria and/or MoSCoW priority (each optional, unchanged if omitted). `language` scopes a non-omitted title/description write to that one language's literal, leaving other language variants untouched |
 | `req_schema` | The `arkreq:` vocabulary (RequirementType, RequirementStatus, Priority) as data -- definition + allowed values, so a client need not guess |
 
 Ubiquitous Language BC -- glossary terms (SKOS Concepts):
@@ -260,10 +260,10 @@ Use Cases BC (`arknet-use-cases`) -- flow-oriented Cockburn use cases (bind FRs 
 
 | Tool | Description |
 |------|-------------|
-| `uc_add` | Create a complete use case in one call (goal, actor, trigger, numbered step flow with FR references) |
+| `uc_add` | Create a complete use case in one call (goal, actor, trigger, numbered step flow with FR references). Title, goal and every step's text are natively multilingual -- an optional `language` argument tags the literals being written (BCP-47, e.g. `"en"`); omitted, they stay untagged as before |
 | `uc_list` | List all use cases |
-| `uc_get` | Fetch a single use case with resolved steps and FR/actor edges (e.g. UC1) |
-| `uc_update` | Correct a use case's title, goal, scope, trigger, precondition, postcondition and/or extensions (each optional, unchanged if omitted), and/or the text of individual existing steps by position -- does not touch primaryActor, supportingActors, the step list's structure or realises links |
+| `uc_get` | Fetch a single use case with resolved steps and FR/actor edges (e.g. UC1). An optional `displayLocale` argument picks which language variant of a multilingual title/goal/step text to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
+| `uc_update` | Correct a use case's title, goal, scope, trigger, precondition, postcondition and/or extensions (each optional, unchanged if omitted), and/or the text of individual existing steps by position -- does not touch primaryActor, supportingActors, the step list's structure or realises links. `language` scopes a non-omitted title/goal/step-text write to that one language's literal, leaving other language variants untouched |
 
 Bounded Context BC (`arknet-bounded-context`) -- BoundedContext lifecycle (assigns glossary terms to a domain cut):
 

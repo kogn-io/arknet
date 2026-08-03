@@ -89,7 +89,7 @@ class RequirementServiceConcurrencyTest {
 
         assertEquals(2, result.usesTerms().size());
         assertTrue(result.usesTerms().containsAll(List.of(new TermRef(TERM_1), new TermRef(TERM_2))));
-        Requirement stored = store.findByCode(WS, code).orElseThrow();
+        Requirement stored = store.findByCode(WS, code, null).orElseThrow();
         assertEquals(2, stored.usesTerms().size());
     }
 
@@ -109,7 +109,7 @@ class RequirementServiceConcurrencyTest {
 
         assertEquals(RequirementStatus.ACCEPTED, result.status());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
-        Requirement stored = store.findByCode(WS, code).orElseThrow();
+        Requirement stored = store.findByCode(WS, code, null).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, stored.status());
         assertEquals(List.of(new TermRef(TERM_1)), stored.usesTerms());
     }
@@ -127,11 +127,11 @@ class RequirementServiceConcurrencyTest {
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null);
+        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null);
 
         assertEquals("Corrected description", result.description());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
-        Requirement stored = store.findByCode(WS, code).orElseThrow();
+        Requirement stored = store.findByCode(WS, code, null).orElseThrow();
         assertEquals("Corrected description", stored.description());
         assertEquals(List.of(new TermRef(TERM_1)), stored.usesTerms());
     }
@@ -184,7 +184,7 @@ class RequirementServiceConcurrencyTest {
 
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
-                RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"));
+                RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -217,18 +217,19 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, Requirement requirement) {
-            delegate.create(projectId, requirement);
+        public void create(ProjectId projectId, Requirement requirement, String language) {
+            delegate.create(projectId, requirement, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
+                String titleLanguage, String descriptionLanguage) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, descriptionLanguage);
         }
 
         @Override
-        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
@@ -271,18 +272,19 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, Requirement requirement) {
-            delegate.create(projectId, requirement);
+        public void create(ProjectId projectId, Requirement requirement, String language) {
+            delegate.create(projectId, requirement, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
+                String titleLanguage, String descriptionLanguage) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, descriptionLanguage);
         }
 
         @Override
-        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
@@ -322,15 +324,16 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, Requirement requirement) {
-            delegate.create(projectId, requirement);
+        public void create(ProjectId projectId, Requirement requirement, String language) {
+            delegate.create(projectId, requirement, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated) {
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
+                String titleLanguage, String descriptionLanguage) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(projectId, updated.code())
+            delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new de.hauschel.arknet.req.domain.RequirementNotFoundException(
                             projectId, updated.code()));
             throw new RequirementConcurrentlyModifiedException(
@@ -338,8 +341,8 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override

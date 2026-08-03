@@ -81,7 +81,7 @@ class KognioRdfRequirementLookupRequirementsSchemaTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
                 List.of(), List.of("Done when the model survives a restart."));
 
-        requirementRepository.create(PROJECT, requirement);
+        requirementRepository.create(PROJECT, requirement, null);
 
         assertEquals(id.value(), adrRequirementLookup.resolveByCode(PROJECT, "FR-1"));
     }

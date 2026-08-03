@@ -95,16 +95,16 @@ class TraceabilityMcpToolsTest {
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Login succeeds with valid credentials")));
+                    List.of("Login succeeds with valid credentials"), null));
             requirements.linkTerm(project, fr1.code(), term.code().value());
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Logout succeeds")));
+                    List.of("Logout succeeds"), null));
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
-                    List.of()));
+                    List.of(), null));
 
             String matrix = tools.traceMatrix(null, ANCHOR);
 
@@ -134,15 +134,15 @@ class TraceabilityMcpToolsTest {
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Login succeeds with valid credentials")));
+                    List.of("Login succeeds with valid credentials"), null));
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Logout succeeds")));
+                    List.of("Logout succeeds"), null));
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
-                    List.of()));
+                    List.of(), null));
 
             String report = tools.orphanCheck(null, ANCHOR);
 
@@ -175,13 +175,13 @@ class TraceabilityMcpToolsTest {
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Login succeeds with valid credentials")));
+                    List.of("Login succeeds with valid credentials"), null));
             requirements.linkTerm(project, fr1.code(), term.code().value());
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
-                    List.of()));
+                    List.of(), null));
 
             String impact = tools.impactAnalysis(null, term.code().value(), ANCHOR);
 
@@ -241,7 +241,7 @@ class TraceabilityMcpToolsTest {
             useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of())),
-                    List.of()));
+                    List.of(), null));
 
             String matrix = tools.actorUseCaseMatrix(null, ANCHOR);
 
@@ -270,11 +270,11 @@ class TraceabilityMcpToolsTest {
 
             requirements.add(ws, new NewRequirement("Bestandsdaten",
                     "Der Kunde sieht seine Bestellung ein.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Die Bestandsdaten werden korrekt angezeigt")));
+                    List.of("Die Bestandsdaten werden korrekt angezeigt"), null));
             useCases.add(ws, new NewUseCase("View order", "Kunde bestaetigt die Bestellung", null, null,
                     "Kunde", List.of(), null, null,
                     List.of(new NewStep(1, "Kunde ruft die Bestellung auf", List.of())),
-                    List.of()));
+                    List.of(), null));
 
             String report = tools.termCooccurrence(null, ANCHOR);
 

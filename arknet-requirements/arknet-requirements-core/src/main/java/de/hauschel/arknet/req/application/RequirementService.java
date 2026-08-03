@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -81,6 +82,18 @@ import de.hauschel.arknet.req.domain.TermRef;
  * of silently turning that placeholder into a persisted literal - see
  * {@link #updateWithOptimisticRetry}. Passing real criteria to {@code update} is exactly how a
  * caller closes that gap.</p>
+ *
+ * <p><strong>Language.</strong> {@code title}/{@code description} may each legally carry several
+ * language-tagged variants. {@link #updateWithOptimisticRetry} determines, per field, whether
+ * {@code mutation} actually changed it (byte-for-byte against what was just read): a changed
+ * field is written under {@code update}'s caller-supplied {@code language}; an unchanged field is
+ * written back under the exact tag {@link RequirementRepository.CurrentRequirement#titleLanguage()}/
+ * {@link RequirementRepository.CurrentRequirement#descriptionLanguage()} already carried - a
+ * scoped no-op at the store, not a retag. This is what keeps {@link #accept}/{@link #linkTerm}
+ * (which never touch either field and always call the helper with a {@code null} language) from
+ * collapsing a multilingual title/description down to one variant just because they do not know or
+ * care about language - the out-adapter preserves every other language variant regardless, but
+ * only if it is told the correct tag to leave alone.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         AcceptRequirement, LinkTerm, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
@@ -145,7 +158,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                             command.description(), command.type(), RequirementStatus.PROPOSED,
                             command.priority(), command.motivatedBy(), command.qualityCategory(),
                             List.of(), command.acceptanceCriteria());
-                    repository.create(projectId, requirement);
+                    repository.create(projectId, requirement, command.language());
                     return requirement;
                 });
     }
@@ -157,17 +170,20 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Optional<Requirement> get(ProjectId projectId, RequirementCode code) {
+    public Optional<Requirement> get(ProjectId projectId, RequirementCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code);
+        return repository.findByCode(projectId, code, displayLocale);
     }
 
     @Override
     public Requirement accept(ProjectId projectId, RequirementCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, Requirement::accept);
+        // accept() never touches title/description, so no call-scoped language applies - the
+        // ternaries in updateWithOptimisticRetry always fall back to the language each field was
+        // already read under.
+        return updateWithOptimisticRetry(projectId, code, null, Requirement::accept);
     }
 
     @Override
@@ -179,7 +195,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // outside the retry loop below - a lookup failure must propagate immediately and leave
         // the requirement untouched, exactly as before.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
-        return updateWithOptimisticRetry(projectId, code, current -> {
+        return updateWithOptimisticRetry(projectId, code, null, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -193,10 +209,11 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
 
     @Override
     public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> acceptanceCriteria, Priority priority) {
+            List<String> acceptanceCriteria, Priority priority, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, current -> new Requirement(current.id(), current.code(),
+        String tag = LanguageTag.canonicalize(language);
+        return updateWithOptimisticRetry(projectId, code, tag, current -> new Requirement(current.id(), current.code(),
                 title != null ? title : current.title(),
                 description != null ? description : current.description(),
                 current.type(), current.status(),
@@ -238,7 +255,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                                                   every retry attempt
      */
     private Requirement updateWithOptimisticRetry(
-            ProjectId projectId, RequirementCode code, UnaryOperator<Requirement> mutation) {
+            ProjectId projectId, RequirementCode code, String language, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(projectId, code)
@@ -251,8 +268,18 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                     && updated.acceptanceCriteria().equals(current.value().acceptanceCriteria())) {
                 throw new MissingAcceptanceCriteriaException(projectId, code);
             }
+            // title/description each get their own language: a field this mutation left byte-for-
+            // byte unchanged must round-trip under the exact tag it was read under (a scoped
+            // no-op), never under `language` - that tag only ever applies to a field this call is
+            // actually changing. Without this distinction, accept()/linkTerm() (which always call
+            // this with language == null and never touch either field) would retag or collapse
+            // whichever language variant findCurrentByCode happened to select.
+            String titleLanguage = updated.title().equals(current.value().title())
+                    ? current.titleLanguage() : language;
+            String descriptionLanguage = updated.description().equals(current.value().description())
+                    ? current.descriptionLanguage() : language;
             try {
-                repository.compareAndUpdate(projectId, current.head(), updated);
+                repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage);
                 return updated;
             } catch (RequirementConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the requirement between our read and our write -

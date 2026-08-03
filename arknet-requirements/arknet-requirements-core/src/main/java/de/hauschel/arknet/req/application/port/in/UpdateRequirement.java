@@ -24,6 +24,13 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * overloading {@code null} (the same rule the sibling {@code UpdateTerm} port applies to its
  * Actor facette).</p>
  *
+ * <p><strong>Language.</strong> {@code title}/{@code description} may each legally carry several
+ * language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}, mirroring {@code UpdateTerm}'s
+ * {@code prefLabel}/{@code definition}). {@code language} names the BCP-47 tag the supplied
+ * {@code title}/{@code description} argument(s) are written in for this one call - it applies to
+ * whichever of the two is actually non-{@code null} here; a field left {@code null} keeps every
+ * language variant it already had, untouched, exactly as before this parameter existed.</p>
+ *
  * <p><strong>Background.</strong> Backs the MVP tool {@code req_update}: requirements
  * elicited during an interview are sometimes sharpened afterwards, and until this port existed the
  * only correction path was duplicating the requirement under a new code. {@code priority} joined
@@ -48,8 +55,13 @@ public interface UpdateRequirement {
      *                            unchanged
      * @param priority            the new MoSCoW priority, or {@code null} to leave an already-set
      *                            one unchanged (never a request to remove it)
+     * @param language            the BCP-47 language tag a non-{@code null} {@code title}/
+     *                            {@code description} is written in, or {@code null} for a plain,
+     *                            untagged literal. Only the existing literal carrying this same
+     *                            tag is replaced - every other language-tagged variant of a field
+     *                            being corrected survives untouched
      * @return the updated requirement
      */
     Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> acceptanceCriteria, Priority priority);
+            List<String> acceptanceCriteria, Priority priority, String language);
 }

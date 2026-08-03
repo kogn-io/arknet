@@ -320,7 +320,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
 
     private static NewUseCase newUseCase() {
         return new NewUseCase("Place order", "goal of Place order", null, null, "Customer",
-                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of());
+                List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
     }
 
     // ---- synchronisation helpers ---------------------------------------------------------
@@ -398,18 +398,18 @@ class UseCaseServiceRealStoreConcurrencyTest {
         UseCaseService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
                 straightThrough.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null);
+                        null, null, null, null, null);
             }
         }));
 
         UseCase result = racing.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null);
+                "Racing precondition", null, null, null, null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         assertEquals("Concurrent trigger", result.trigger(),
                 "the retry must return the state it re-read, not its stale first read");
         assertEquals("Racing precondition", result.precondition());
-        UseCase stored = straightThrough.get(WS, code).orElseThrow();
+        UseCase stored = straightThrough.get(WS, code, null).orElseThrow();
         assertEquals("Concurrent trigger", stored.trigger(), "both writers' changes must survive");
         assertEquals("Racing precondition", stored.precondition());
     }

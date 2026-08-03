@@ -69,7 +69,7 @@ class RequirementServiceTest {
     void addAssignsFirstFunctionalCode() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
-                null, null, null, List.of("Done when it works")));
+                null, null, null, List.of("Done when it works"), null));
 
         assertEquals(new RequirementCode("FR-1"), added.code());
     }
@@ -78,7 +78,7 @@ class RequirementServiceTest {
     void addSetsProposedStatusByDefault() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
-                null, null, null, List.of("Done when it works")));
+                null, null, null, List.of("Done when it works"), null));
 
         assertEquals(RequirementStatus.PROPOSED, added.status());
     }
@@ -92,13 +92,13 @@ class RequirementServiceTest {
     void addPersistsAllSuppliedFields() {
         Requirement added = service.add(WS, new NewRequirement("User can log in",
                 "The system shall let a registered user authenticate.", RequirementType.FUNCTIONAL,
-                null, null, null, List.of("Done when it works")));
+                null, null, null, List.of("Done when it works"), null));
 
         assertEquals("User can log in", added.title());
         assertEquals("The system shall let a registered user authenticate.", added.description());
         assertEquals(RequirementType.FUNCTIONAL, added.type());
         assertEquals(List.of("Done when it works"), added.acceptanceCriteria());
-        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
 
     @Test
@@ -114,7 +114,7 @@ class RequirementServiceTest {
     void addAssignsNfrPrefixForNonFunctional() {
         Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
                 "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL,
-                null, null, null, List.of("Done when it works")));
+                null, null, null, List.of("Done when it works"), null));
 
         assertEquals(new RequirementCode("NFR-1"), added.code());
     }
@@ -123,22 +123,22 @@ class RequirementServiceTest {
     void addCarriesPriorityMotivatedByAndQualityCategoryThrough() {
         Requirement added = service.add(WS, new NewRequirement("Page loads < 200ms",
                 "95% of page loads shall complete in under 200ms.", RequirementType.NON_FUNCTIONAL,
-                Priority.MUST_HAVE, "https://w3id.org/arknet/model/goal/fast-ux", "performance", List.of("Done when it works")));
+                Priority.MUST_HAVE, "https://w3id.org/arknet/model/goal/fast-ux", "performance", List.of("Done when it works"), null));
 
         assertEquals(Priority.MUST_HAVE, added.priority());
         assertEquals("https://w3id.org/arknet/model/goal/fast-ux", added.motivatedBy());
         assertEquals("performance", added.qualityCategory());
-        assertEquals(added, repository.findByCode(WS, added.code()).orElseThrow());
+        assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
 
     @Test
     void addNumbersRunPerTypeIndependently() {
         RequirementCode fr1 = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null)).code();
         RequirementCode nfr1 = service.add(WS,
-                new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+                new NewRequirement("b", "desc b", RequirementType.NON_FUNCTIONAL, null, null, null, List.of("Done when it works"), null)).code();
         RequirementCode fr2 = service.add(WS,
-                new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+                new NewRequirement("c", "desc c", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null)).code();
 
         assertEquals(new RequirementCode("FR-1"), fr1);
         assertEquals(new RequirementCode("NFR-1"), nfr1);
@@ -148,10 +148,10 @@ class RequirementServiceTest {
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
-        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works")));
+        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null));
 
         Requirement inOther = service.add(other,
-                new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works")));
+                new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null));
 
         assertEquals(new RequirementCode("FR-1"), inOther.code());
         assertTrue(service.list(other).stream().allMatch(r -> r.title().equals("b")));
@@ -160,8 +160,8 @@ class RequirementServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works")));
-        service.add(WS, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works")));
+        service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null));
+        service.add(WS, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null));
 
         List<Requirement> all = service.list(WS);
 
@@ -173,33 +173,33 @@ class RequirementServiceTest {
     @Test
     void getReturnsPersistedRequirement() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null)).code();
 
-        assertTrue(service.get(WS, code).isPresent());
-        assertEquals("a", service.get(WS, code).orElseThrow().title());
+        assertTrue(service.get(WS, code, null).isPresent());
+        assertEquals("a", service.get(WS, code, null).orElseThrow().title());
     }
 
     @Test
     void getIsEmptyForUnknownCode() {
-        assertFalse(service.get(WS, new RequirementCode("FR-99")).isPresent());
+        assertFalse(service.get(WS, new RequirementCode("FR-99"), null).isPresent());
     }
 
     @Test
     void acceptTransitionsProposedToAccepted() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null)).code();
 
         Requirement accepted = service.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals("desc a", accepted.description());
-        assertEquals(RequirementStatus.ACCEPTED, repository.findByCode(WS, code).orElseThrow().status());
+        assertEquals(RequirementStatus.ACCEPTED, repository.findByCode(WS, code, null).orElseThrow().status());
     }
 
     @Test
     void acceptPreservesPriorityMotivatedByAndQualityCategory() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
-                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security", List.of("Done when it works"))).code();
+                Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security", List.of("Done when it works"), null)).code();
 
         Requirement accepted = service.accept(WS, code);
 
@@ -211,7 +211,7 @@ class RequirementServiceTest {
     @Test
     void acceptIsIdempotentWhenAlreadyAccepted() {
         RequirementCode code = service.add(WS,
-                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"))).code();
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null)).code();
         service.accept(WS, code);
 
         Requirement result = service.accept(WS, code);
@@ -233,19 +233,19 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
         Requirement updated = service.update(WS, code, "New title", "New description",
-                List.of("New done-when criterion"), null);
+                List.of("New done-when criterion"), null, null);
 
         assertEquals("New title", updated.title());
         assertEquals("New description", updated.description());
         assertEquals(List.of("New done-when criterion"), updated.acceptanceCriteria());
-        assertEquals(updated, service.get(WS, code).orElseThrow());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
     }
 
     @Test
     void updateWithNullFieldsLeavesThemUnchanged() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        Requirement updated = service.update(WS, code, null, "New description", null, null);
+        Requirement updated = service.update(WS, code, null, "New description", null, null, null);
 
         assertEquals("User can log in", updated.title());
         assertEquals("New description", updated.description());
@@ -255,9 +255,9 @@ class RequirementServiceTest {
     @Test
     void updateWithAllNullFieldsIsANoOp() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
-        Requirement before = service.get(WS, code).orElseThrow();
+        Requirement before = service.get(WS, code, null).orElseThrow();
 
-        Requirement result = service.update(WS, code, null, null, null, null);
+        Requirement result = service.update(WS, code, null, null, null, null, null);
 
         assertEquals(before, result);
     }
@@ -266,11 +266,11 @@ class RequirementServiceTest {
     void updatePreservesStatusLinkedTermsAndOtherFields() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.NON_FUNCTIONAL,
                 Priority.COULD_HAVE, "https://w3id.org/arknet/model/goal/g", "security",
-                List.of("Done when it works"))).code();
+                List.of("Done when it works"), null)).code();
         service.accept(WS, code);
         service.linkTerm(WS, code, "TERM-1");
 
-        Requirement updated = service.update(WS, code, "New title", null, null, null);
+        Requirement updated = service.update(WS, code, "New title", null, null, null, null);
 
         assertEquals(RequirementStatus.ACCEPTED, updated.status());
         assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
@@ -287,24 +287,24 @@ class RequirementServiceTest {
     @Test
     void updateChangesThePriorityWithoutTouchingAnyOtherField() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL,
-                Priority.MUST_HAVE, null, null, List.of("Done when it works"))).code();
+                Priority.MUST_HAVE, null, null, List.of("Done when it works"), null)).code();
 
-        Requirement updated = service.update(WS, code, null, null, null, Priority.SHOULD_HAVE);
+        Requirement updated = service.update(WS, code, null, null, null, Priority.SHOULD_HAVE, null);
 
         assertEquals(Priority.SHOULD_HAVE, updated.priority());
         assertEquals("a", updated.title());
         assertEquals("desc a", updated.description());
         assertEquals(List.of("Done when it works"), updated.acceptanceCriteria());
-        assertEquals(updated, service.get(WS, code).orElseThrow());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
     }
 
     /** A requirement added without a priority can have one set after the fact. */
     @Test
     void updateCanSetAPriorityThatWasNeverSet() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
-        assertNull(service.get(WS, code).orElseThrow().priority());
+        assertNull(service.get(WS, code, null).orElseThrow().priority());
 
-        Requirement updated = service.update(WS, code, null, null, null, Priority.COULD_HAVE);
+        Requirement updated = service.update(WS, code, null, null, null, Priority.COULD_HAVE, null);
 
         assertEquals(Priority.COULD_HAVE, updated.priority());
     }
@@ -316,9 +316,9 @@ class RequirementServiceTest {
     @Test
     void updateWithANullPriorityDoesNotClearAnAlreadySetOne() {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL,
-                Priority.MUST_HAVE, null, null, List.of("Done when it works"))).code();
+                Priority.MUST_HAVE, null, null, List.of("Done when it works"), null)).code();
 
-        Requirement updated = service.update(WS, code, "New title", null, null, null);
+        Requirement updated = service.update(WS, code, "New title", null, null, null, null);
 
         assertEquals(Priority.MUST_HAVE, updated.priority());
     }
@@ -327,13 +327,13 @@ class RequirementServiceTest {
     void updateRejectsABlankTitleViaTheDomainInvariant() {
         RequirementCode code = service.add(WS, newFunctionalRequirement()).code();
 
-        assertThrows(IllegalArgumentException.class, () -> service.update(WS, code, " ", null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> service.update(WS, code, " ", null, null, null, null));
     }
 
     @Test
     void updateThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null, null));
+                () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null, null, null));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -353,7 +353,7 @@ class RequirementServiceTest {
         Requirement linked = service.linkTerm(WS, code, "TERM-1");
 
         assertEquals(List.of(new TermRef(TERM_1)), linked.usesTerms());
-        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
     @Test
@@ -396,7 +396,7 @@ class RequirementServiceTest {
 
         assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
 
-        assertEquals(List.of(), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
     /**
@@ -413,7 +413,7 @@ class RequirementServiceTest {
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
         assertEquals(List.of(new TermRef(TERM_1)), accepted.usesTerms());
-        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1)), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
     /**
@@ -427,7 +427,7 @@ class RequirementServiceTest {
         Requirement accepted = service.accept(WS, code);
 
         assertEquals(List.of("Done when it works"), accepted.acceptanceCriteria());
-        assertEquals(List.of("Done when it works"), service.get(WS, code).orElseThrow().acceptanceCriteria());
+        assertEquals(List.of("Done when it works"), service.get(WS, code, null).orElseThrow().acceptanceCriteria());
     }
 
     /**
@@ -460,7 +460,7 @@ class RequirementServiceTest {
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
-        assertEquals(RequirementStatus.PROPOSED, service.get(WS, code).orElseThrow().status());
+        assertEquals(RequirementStatus.PROPOSED, service.get(WS, code, null).orElseThrow().status());
     }
 
     /** Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder}, via {@code linkTerm}. */
@@ -473,7 +473,7 @@ class RequirementServiceTest {
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
-        assertEquals(List.of(), service.get(WS, code).orElseThrow().usesTerms());
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
     }
 
     /**
@@ -486,11 +486,11 @@ class RequirementServiceTest {
         RequirementCode code = givenLegacyRequirement();
 
         MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
-                () -> service.update(WS, code, "New title", null, null, null));
+                () -> service.update(WS, code, "New title", null, null, null, null));
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
-        assertEquals("legacy title", service.get(WS, code).orElseThrow().title());
+        assertEquals("legacy title", service.get(WS, code, null).orElseThrow().title());
     }
 
     /**
@@ -502,10 +502,10 @@ class RequirementServiceTest {
     void updateAcceptsALegacyRequirementWhenExplicitAcceptanceCriteriaAreSupplied() {
         RequirementCode code = givenLegacyRequirement();
 
-        Requirement updated = service.update(WS, code, null, null, List.of("Real done-when criterion"), null);
+        Requirement updated = service.update(WS, code, null, null, List.of("Real done-when criterion"), null, null);
 
         assertEquals(List.of("Real done-when criterion"), updated.acceptanceCriteria());
-        assertEquals(List.of("Real done-when criterion"), service.get(WS, code).orElseThrow().acceptanceCriteria());
+        assertEquals(List.of("Real done-when criterion"), service.get(WS, code, null).orElseThrow().acceptanceCriteria());
     }
 
     /**
@@ -516,7 +516,7 @@ class RequirementServiceTest {
     @Test
     void acceptSucceedsOnceALegacyRequirementsAcceptanceCriteriaHaveBeenSupplied() {
         RequirementCode code = givenLegacyRequirement();
-        service.update(WS, code, null, null, List.of("Real done-when criterion"), null);
+        service.update(WS, code, null, null, List.of("Real done-when criterion"), null, null);
 
         Requirement accepted = service.accept(WS, code);
 
@@ -607,7 +607,7 @@ class RequirementServiceTest {
 
     private static NewRequirement newFunctionalRequirement() {
         return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
-                RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"));
+                RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

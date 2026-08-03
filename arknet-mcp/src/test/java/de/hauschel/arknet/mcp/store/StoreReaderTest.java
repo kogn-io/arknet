@@ -79,7 +79,7 @@ class StoreReaderTest {
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT, requirementTitled("Login"));
+        requirements.create(PROJECT, requirementTitled("Login"), null);
         storeReader = new StoreReader(lifecycle);
     }
 
@@ -96,7 +96,7 @@ class StoreReaderTest {
         RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        requirements.compareAndUpdate(PROJECT, head, updated);
+        requirements.compareAndUpdate(PROJECT, head, updated, null, null);
     }
 
     @AfterEach

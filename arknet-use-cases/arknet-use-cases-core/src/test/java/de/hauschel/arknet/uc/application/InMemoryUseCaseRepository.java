@@ -39,9 +39,12 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     private final Map<ProjectId, Map<UseCaseId, UseCase>> byProject = new LinkedHashMap<>();
     private final Map<UseCaseId, RevisionToken> headByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, String> titleLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, String> goalLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, Map<Integer, String>> stepTextLanguageByIdentity = new LinkedHashMap<>();
 
     @Override
-    public void create(ProjectId projectId, UseCase useCase) {
+    public void create(ProjectId projectId, UseCase useCase, String language) {
         Map<UseCaseId, UseCase> useCases = byProject.computeIfAbsent(projectId,
                 k -> new LinkedHashMap<>());
         if (useCases.containsKey(useCase.id())) {
@@ -53,10 +56,16 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         }
         useCases.put(useCase.id(), useCase);
         headByIdentity.put(useCase.id(), new RevisionToken(UUID.randomUUID().toString()));
+        titleLanguageByIdentity.put(useCase.id(), language);
+        goalLanguageByIdentity.put(useCase.id(), language);
+        Map<Integer, String> stepLanguages = new LinkedHashMap<>();
+        useCase.steps().forEach(step -> stepLanguages.put(step.position(), language));
+        stepTextLanguageByIdentity.put(useCase.id(), stepLanguages);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
+            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
         Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
         UseCase current = useCases.get(updated.id());
         if (current == null) {
@@ -67,10 +76,13 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         }
         useCases.put(updated.id(), updated);
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
+        titleLanguageByIdentity.put(updated.id(), titleLanguage);
+        goalLanguageByIdentity.put(updated.id(), goalLanguage);
+        stepTextLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(stepTextLanguageByPosition));
     }
 
     @Override
-    public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
+    public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale) {
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(uc -> uc.code().equals(code))
                 .findFirst();
@@ -78,8 +90,10 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     @Override
     public Optional<CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
-        return findByCode(projectId, code)
-                .map(useCase -> new CurrentUseCase(useCase, headByIdentity.get(useCase.id())));
+        return findByCode(projectId, code, null)
+                .map(useCase -> new CurrentUseCase(useCase, headByIdentity.get(useCase.id()),
+                        titleLanguageByIdentity.get(useCase.id()), goalLanguageByIdentity.get(useCase.id()),
+                        stepTextLanguageByIdentity.getOrDefault(useCase.id(), Map.of())));
     }
 
     @Override

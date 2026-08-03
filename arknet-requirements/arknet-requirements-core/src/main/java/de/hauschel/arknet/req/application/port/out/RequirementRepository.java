@@ -37,6 +37,21 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * therefore make that distinction explicit at the port - there is no unconditional update: every
  * correction to an already-created requirement goes through the compare-and-set guard, so a
  * guarded write path can never be bypassed by accident.</p>
+ *
+ * <p><strong>Language, and why a full replace needs two, not one.</strong>
+ * {@code title}/{@code description} may each legally carry several language-tagged variants
+ * (SKOS-S14-style {@code sh:uniqueLang}), exactly like {@code TermRepository}'s
+ * {@code prefLabel}/{@code definition}. Unlike {@code TermRepository#update} (a targeted
+ * per-predicate patch), {@link #compareAndUpdate} replaces a requirement's triples wholesale by
+ * identity - so preserving every language variant the caller did not touch cannot rely on simply
+ * never writing an untouched predicate; the out-adapter must capture every existing variant before
+ * the replace and re-attach every one the write is not itself targeting. Since {@link
+ * UpdateRequirement} already lets a caller change {@code title} and {@code description}
+ * independently (one, both, or neither, each under its own tag over separate calls), the two
+ * fields can legitimately end up carrying <em>different</em> single-call-scoped language tags at
+ * different times - {@link #compareAndUpdate} therefore takes one language argument per field,
+ * not one shared argument the way {@link #create}/{@code TermRepository#create} do for a
+ * brand-new resource written whole in one call.</p>
  */
 public interface RequirementRepository {
 
@@ -45,6 +60,10 @@ public interface RequirementRepository {
      *
      * @param projectId the project (architecture model) to store the requirement in
      * @param requirement the requirement to create
+     * @param language    the BCP-47 language tag {@code requirement.title()}/
+     *                    {@code requirement.description()} are written in (e.g. {@code "de"}), or
+     *                    {@code null} for a plain, untagged literal - the same tag applies to both
+     *                    fields, since a freshly created requirement is written whole in one call
      * @throws ResourceAlreadyExistsException   if a requirement with this identity already exists
      * @throws DuplicateRequirementCodeException if another requirement already carries this
      *                                            requirement's {@link RequirementCode} - identity
@@ -56,7 +75,7 @@ public interface RequirementRepository {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-requirements-core} must not depend on.
      */
-    void create(ProjectId projectId, Requirement requirement);
+    void create(ProjectId projectId, Requirement requirement, String language);
 
     /**
      * Replaces an existing requirement by identity, but only if its current concurrency token
@@ -83,6 +102,20 @@ public interface RequirementRepository {
      *                     no revision to exist yet
      * @param updated      the requirement to store in place of the current one, if its head still
      *                     matches {@code expectedHead}
+     * @param titleLanguage the BCP-47 language tag {@code updated.title()} is written in for this
+     *                      call, or {@code null} for a plain, untagged literal. A call that leaves
+     *                      the title's content unchanged must pass through the tag the value it
+     *                      read was itself resolved under (see
+     *                      {@link CurrentRequirement#titleLanguage()}), so the write is a scoped
+     *                      no-op on that one language variant rather than an unrelated
+     *                      retag/collapse; deletion is scoped to this same tag, so every other
+     *                      language-tagged variant of {@code title} survives untouched
+     * @param descriptionLanguage the same as {@code titleLanguage}, for
+     *                      {@code updated.description()} (see
+     *                      {@link CurrentRequirement#descriptionLanguage()} for the pass-through
+     *                      case) - independent of {@code titleLanguage}, since {@code title} and
+     *                      {@code description} may have been corrected under different tags on
+     *                      different calls
      * @throws RequirementNotFoundException              if no requirement with this identity
      *                                                    exists at all
      * @throws RequirementConcurrentlyModifiedException if {@code expectedHead} no longer matches
@@ -94,7 +127,8 @@ public interface RequirementRepository {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-requirements-core} must not depend on.
      */
-    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated);
+    void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
+            String titleLanguage, String descriptionLanguage);
 
     /**
      * Finds a requirement by its human-readable business code within a project.
@@ -106,8 +140,12 @@ public interface RequirementRepository {
      * guaranteed to come from one consistent snapshot of the store, never a combination of field
      * values that never coexisted at any single point in time.
      *
-     * @param projectId the project (architecture model) to look up the requirement in
-     * @param code        the requirement code (e.g. {@code FR-1})
+     * @param projectId     the project (architecture model) to look up the requirement in
+     * @param code          the requirement code (e.g. {@code FR-1})
+     * @param displayLocale the BCP-47 language tag the caller wants {@code title}/
+     *                      {@code description} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged
      * @return the requirement if present, otherwise {@link Optional#empty()}
      * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
      *                                                 SHACL-legal but not one of the MVP subset
@@ -119,7 +157,7 @@ public interface RequirementRepository {
      *                                            concurrent writers of this project's requirements
      *                                            (a pathological, sustained contention case)
      */
-    Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code);
+    Optional<Requirement> findByCode(ProjectId projectId, RequirementCode code, String displayLocale);
 
     /**
      * Reads a requirement's current state together with its concurrency token, backing the read
@@ -170,8 +208,22 @@ public interface RequirementRepository {
      *                                        untouched) would otherwise turn that read-time
      *                                        stand-in into a real, persisted literal - the bug
      *                                        this flag exists to let a caller reject instead.
+     * @param titleLanguage                   the BCP-47 language tag of the specific
+     *                                        {@code title} literal {@code value.title()} was
+     *                                        selected from (or {@code null} if that literal is
+     *                                        untagged). A read-modify-write round trip that does
+     *                                        not itself intend to change {@code title} must pass
+     *                                        this straight through to {@link
+     *                                        #compareAndUpdate}'s {@code titleLanguage} argument,
+     *                                        so the resulting write is a scoped no-op on the same
+     *                                        variant rather than an unrelated retag or a collapse
+     *                                        of every other language variant this requirement may
+     *                                        carry
+     * @param descriptionLanguage             the same as {@code titleLanguage}, for
+     *                                        {@code value.description()}
      */
-    record CurrentRequirement(Requirement value, RevisionToken head, boolean acceptanceCriteriaIsSynthesized) {
+    record CurrentRequirement(Requirement value, RevisionToken head, boolean acceptanceCriteriaIsSynthesized,
+            String titleLanguage, String descriptionLanguage) {
     }
 
     /**

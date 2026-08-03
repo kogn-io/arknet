@@ -119,7 +119,7 @@ class UseCaseMcpToolsTest {
                 "Customer", List.of("PaymentProvider"), "Customer is logged in", "Order is recorded",
                 List.of(new StepInput(1, "Customer selects items", List.of("FR-1")),
                         new StepInput(2, "Customer confirms and pays", List.of())),
-                List.of("2a. Payment declined -> use case ends in failure"), null);
+                List.of("2a. Payment declined -> use case ends in failure"), null, null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
         assertEquals("Place order", command.title());
@@ -139,7 +139,7 @@ class UseCaseMcpToolsTest {
     @Test
     void addNormalizesOmittedOptionalsToNullAndEmpty() {
         adapter.add(null, "Reset password", "User resets password", null, null, "Customer", null, null, null,
-                List.of(new StepInput(1, "User requests a reset link", null)), null, null);
+                List.of(new StepInput(1, "User requests a reset link", null)), null, null, null);
 
         AddUseCase.NewUseCase command = stub.lastCommand;
         assertNull(command.scope());
@@ -149,6 +149,60 @@ class UseCaseMcpToolsTest {
         assertTrue(command.supportingActors().isEmpty());
         assertTrue(command.extensions().isEmpty());
         assertTrue(command.steps().get(0).realises().isEmpty());
+    }
+
+    /** {@code uc_add}'s {@code language} argument reaches {@link AddUseCase.NewUseCase} unchanged. */
+    @Test
+    void addPassesTheLanguageThrough() {
+        adapter.add(null, "Place order", "Customer places an order", null, null, "Customer", null, null, null,
+                List.of(new StepInput(1, "Customer selects items", List.of())), null, "de", null);
+
+        assertEquals("de", stub.lastCommand.language());
+    }
+
+    /** A blank {@code language} is treated as omitted (untagged), mirroring every other optional field. */
+    @Test
+    void addTreatsABlankLanguageAsOmitted() {
+        adapter.add(null, "Place order", "Customer places an order", null, null, "Customer", null, null, null,
+                List.of(new StepInput(1, "Customer selects items", List.of())), null, "  ", null);
+
+        assertEquals(null, stub.lastCommand.language());
+    }
+
+    /** An explicit {@code uc_get} {@code displayLocale} wins over the project's own default. */
+    @Test
+    void getPassesAnExplicitDisplayLocaleThrough() {
+        stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
+                null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
+                null, null, List.of(new Step(1, "select items", List.of())), List.of()));
+        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms,
+                resolveRequirements, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithDefault.get(null, "UC1", "en", null);
+
+        assertEquals("en", stub.lastGetDisplayLocale);
+    }
+
+    /** An omitted {@code uc_get} {@code displayLocale} falls back to the project's own default. */
+    @Test
+    void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
+        stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
+                null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
+                null, null, List.of(new Step(1, "select items", List.of())), List.of()));
+        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms,
+                resolveRequirements, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithDefault.get(null, "UC1", null, null);
+
+        assertEquals("de", stub.lastGetDisplayLocale);
+    }
+
+    /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
+    @Test
+    void updatePassesTheLanguageThrough() {
+        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, "de", null);
+
+        assertEquals("de", stub.lastUpdateLanguage);
     }
 
     @Test
@@ -167,7 +221,7 @@ class UseCaseMcpToolsTest {
                         new Step(2, "Customer confirms and pays", List.of())),
                 List.of("2a. Payment declined -> use case ends in failure")));
 
-        String rendered = adapter.get(null, "UC1", null);
+        String rendered = adapter.get(null, "UC1", null, null);
 
         assertTrue(rendered.contains("UC1 Place order"));
         assertTrue(rendered.contains("primaryActor: Customer"));
@@ -193,7 +247,7 @@ class UseCaseMcpToolsTest {
                 "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
                 List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of()));
 
-        String rendered = adapter.get(null, "UC1", null);
+        String rendered = adapter.get(null, "UC1", null, null);
 
         assertTrue(rendered.contains("primaryActor: https://w3id.org/arknet/id/unknown-actor"), rendered);
         assertTrue(rendered.contains("realises https://w3id.org/arknet/id/unknown-req"), rendered);
@@ -202,7 +256,7 @@ class UseCaseMcpToolsTest {
     @Test
     void ucGetReturnsNotFoundMessageForUnknownCode() {
         stub.getResult = Optional.empty();
-        assertEquals("Use case not found: UC99", adapter.get(null, "UC99", null));
+        assertEquals("Use case not found: UC99", adapter.get(null, "UC99", null, null));
     }
 
     @Test
@@ -238,7 +292,7 @@ class UseCaseMcpToolsTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> adapter.add(null, "Place order", "goal", null, null, "Customer", null, null, null,
-                        List.of(new StepInput(1, "select items", List.of("FR-1"))), null, null));
+                        List.of(new StepInput(1, "select items", List.of("FR-1"))), null, null, null));
 
         assertTrue(thrown.getMessage().contains("FR-1"));
         assertTrue(thrown.getMessage().contains("req_add"));
@@ -249,7 +303,7 @@ class UseCaseMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger",
                 "New precondition", "New postcondition", List.of("2a. abort"),
-                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null);
+                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals("New title", stub.lastUpdateTitle);
@@ -269,7 +323,7 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals(null, stub.lastUpdateTitle);
@@ -285,7 +339,7 @@ class UseCaseMcpToolsTest {
     /** A blank string is treated as omitted, the same tolerance {@code uc_add} already applies. */
     @Test
     void updateTreatsABlankFieldAsOmitted() {
-        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null);
 
         assertEquals(null, stub.lastUpdateTitle);
     }
@@ -301,7 +355,7 @@ class UseCaseMcpToolsTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> adapter.update(null, "UC1", null, null, null, null, null, null, null,
-                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null));
+                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null));
 
         assertTrue(thrown.getMessage().contains("99"), thrown.getMessage());
     }
@@ -362,15 +416,20 @@ class UseCaseMcpToolsTest {
             return listResult;
         }
 
+        private String lastGetDisplayLocale;
+
         @Override
-        public Optional<UseCase> get(ProjectId projectId, UseCaseCode code) {
+        public Optional<UseCase> get(ProjectId projectId, UseCaseCode code, String displayLocale) {
+            lastGetDisplayLocale = displayLocale;
             return getResult;
         }
+
+        private String lastUpdateLanguage;
 
         @Override
         public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
                 String trigger, String precondition, String postcondition, List<String> extensions,
-                List<StepTextPatch> stepTextPatches) {
+                List<StepTextPatch> stepTextPatches, String language) {
             if (updateFailure != null) {
                 throw updateFailure;
             }
@@ -383,6 +442,7 @@ class UseCaseMcpToolsTest {
             lastUpdatePostcondition = postcondition;
             lastUpdateExtensions = extensions;
             lastUpdateStepTextPatches = stepTextPatches;
+            lastUpdateLanguage = language;
             ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
             return new UseCase(opaqueId("uc-1"), code, title != null ? title : "t",
                     goal != null ? goal : "goal", scope, trigger, primaryActor, List.of(), precondition,

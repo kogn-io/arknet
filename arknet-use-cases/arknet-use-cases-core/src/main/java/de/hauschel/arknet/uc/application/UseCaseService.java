@@ -3,12 +3,15 @@
 
 package de.hauschel.arknet.uc.application;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
@@ -131,7 +134,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                     command.trigger(), primaryActor, supportingActors,
                     command.precondition(), command.postcondition(), steps,
                     command.extensions());
-            repository.create(projectId, useCase);
+            repository.create(projectId, useCase, command.language());
             return useCase;
         });
     }
@@ -152,19 +155,20 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     }
 
     @Override
-    public Optional<UseCase> get(ProjectId projectId, UseCaseCode code) {
+    public Optional<UseCase> get(ProjectId projectId, UseCaseCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code);
+        return repository.findByCode(projectId, code, displayLocale);
     }
 
     @Override
     public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches) {
+            List<StepTextPatch> stepTextPatches, String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, current -> {
+        String tag = LanguageTag.canonicalize(language);
+        return updateWithOptimisticRetry(projectId, code, tag, current -> {
             UseCase base = new UseCase(
                     current.id(), current.code(),
                     title != null ? title : current.title(),
@@ -196,7 +200,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      *                                                every retry attempt
      */
     private UseCase updateWithOptimisticRetry(
-            ProjectId projectId, UseCaseCode code, UnaryOperator<UseCase> mutation) {
+            ProjectId projectId, UseCaseCode code, String language, UnaryOperator<UseCase> mutation) {
         UseCaseConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(projectId, code)
@@ -205,8 +209,29 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             if (updated.equals(current.value())) {
                 return current.value();
             }
+            // title/goal/each step's text each get their own language: a field or step this
+            // mutation left byte-for-byte unchanged must round-trip under the exact tag it was
+            // read under (a scoped no-op), never under `language` - that tag only ever applies to
+            // whatever this call is actually changing (mirrors RequirementService's identical
+            // per-field distinction).
+            String titleLanguage = updated.title().equals(current.value().title())
+                    ? current.titleLanguage() : language;
+            String goalLanguage = updated.goal().equals(current.value().goal())
+                    ? current.goalLanguage() : language;
+            Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
+            List<Step> currentSteps = current.value().steps();
+            List<Step> updatedSteps = updated.steps();
+            for (int i = 0; i < updatedSteps.size(); i++) {
+                Step updatedStep = updatedSteps.get(i);
+                Step currentStep = currentSteps.get(i);
+                String stepLanguage = updatedStep.text().equals(currentStep.text())
+                        ? current.stepTextLanguageByPosition().get(updatedStep.position())
+                        : language;
+                stepTextLanguageByPosition.put(updatedStep.position(), stepLanguage);
+            }
             try {
-                repository.compareAndUpdate(projectId, current.head(), updated);
+                repository.compareAndUpdate(projectId, current.head(), updated,
+                        titleLanguage, goalLanguage, stepTextLanguageByPosition);
                 return updated;
             } catch (UseCaseConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the use case between our read and our write -

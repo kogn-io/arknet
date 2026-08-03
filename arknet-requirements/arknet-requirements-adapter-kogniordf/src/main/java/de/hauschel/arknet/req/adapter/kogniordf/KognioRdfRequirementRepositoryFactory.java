@@ -126,7 +126,7 @@ public final class KognioRdfRequirementRepositoryFactory {
         Objects.requireNonNull(displayLocale, "displayLocale");
         ShaclWriteGate gate = buildGate(displayLocale);
         WriteFunnel funnel = new WriteFunnel(lifecycle, gate, WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfRequirementRepository(lifecycle, funnel);
+        return new KognioRdfRequirementRepository(lifecycle, displayLocale, funnel);
     }
 
     /**

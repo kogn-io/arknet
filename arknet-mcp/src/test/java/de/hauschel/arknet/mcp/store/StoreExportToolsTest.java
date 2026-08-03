@@ -61,7 +61,7 @@ class StoreExportToolsTest {
     void setUp() {
         lifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
         RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT_1, requirementTitled("Login"));
+        requirements.create(PROJECT_1, requirementTitled("Login"), null);
     }
 
     @AfterEach
@@ -149,7 +149,7 @@ class StoreExportToolsTest {
         try {
             RequirementRepository requirements =
                     KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"));
+            requirements.create(PROJECT_2, requirementTitled("Second"), null);
 
             StoreExportTools tools = new StoreExportTools(
                     listProjectsOf(
@@ -179,7 +179,7 @@ class StoreExportToolsTest {
         try {
             RequirementRepository requirements =
                     KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-            requirements.create(PROJECT_2, requirementTitled("Second"));
+            requirements.create(PROJECT_2, requirementTitled("Second"), null);
 
             StoreExportTools tools = new StoreExportTools(
                     listProjectsOf(
@@ -242,7 +242,7 @@ class StoreExportToolsTest {
             throws Exception {
         RequirementRepository requirements =
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
-        requirements.create(PROJECT_2, requirementTitled("Second"));
+        requirements.create(PROJECT_2, requirementTitled("Second"), null);
         try {
             Project working = new Project(PROJECT_1, "working", List.of(pathAnchor("/x")));
             Project broken = new Project(PROJECT_2, "broken", List.of(pathAnchor("/y")));

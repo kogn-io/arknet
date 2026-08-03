@@ -4,13 +4,16 @@
 package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import io.kogn.rdf.dataset.BindingSet;
+import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -23,6 +26,9 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
+import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.LanguageTag;
+import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -171,6 +177,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private final DatasetLifecycle lifecycle;
     private final ResourceIdFactory resourceIdFactory;
+    private final DisplayLocale displayLocale;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
 
@@ -183,28 +190,44 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * @param resourceIdFactory mints the opaque IRI of each derived step resource (must not be
      *                          {@code null}); the use-case root's own identity is minted above
      *                          the store and arrives on the {@link UseCase}
+     * @param displayLocale     the display-language preference selecting which {@code
+     *                          dcterms:title}/{@code arkreq:useCaseGoal}/{@code arkreq:stepText}
+     *                          the read paths surface for a multilingual use case (must not be
+     *                          {@code null})
      * @param funnel            the shared write funnel (ADR-013) both {@link #create} and
      *                          {@link #compareAndUpdate} run through - SHACL gate, dataset
      *                          acquisition, the in-transaction existence/head checks and the
      *                          commit-conflict translation (must not be {@code null})
      */
-    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, WriteFunnel funnel) {
+    KognioRdfUseCaseRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory,
+            DisplayLocale displayLocale, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
 
     @Override
-    public void create(ProjectId projectId, UseCase useCase) {
-        write(projectId, useCase, true, null);
+    public void create(ProjectId projectId, UseCase useCase, String language) {
+        Objects.requireNonNull(useCase, "useCase");
+        String tag = LanguageTag.canonicalize(language);
+        Map<Integer, String> stepTags = new LinkedHashMap<>();
+        useCase.steps().forEach(step -> stepTags.put(step.position(), tag));
+        write(projectId, useCase, true, null, tag, tag, stepTags);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated) {
-        write(projectId, updated, false, expectedHead);
+    public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
+            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+        Objects.requireNonNull(stepTextLanguageByPosition, "stepTextLanguageByPosition");
+        Map<Integer, String> stepTags = new LinkedHashMap<>();
+        stepTextLanguageByPosition.forEach((position, tag) -> stepTags.put(position, LanguageTag.canonicalize(tag)));
+        write(projectId, updated, false, expectedHead,
+                LanguageTag.canonicalize(titleLanguage), LanguageTag.canonicalize(goalLanguage), stepTags);
     }
 
-    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead) {
+    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
+            String titleTag, String goalTag, Map<Integer, String> stepTagByPosition) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
@@ -222,12 +245,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 .map(this::actorIriFor)
                 .toList();
 
-        // 2. Build the candidate graph.
+        // 2. Build the candidate graph. title/goal are written as the language-tagged (or, for a
+        //    null tag, plain untagged) literal titleTag/goalTag name - never more than one each,
+        //    since preserving every other language variant is the write body's job below, run
+        //    after this candidate has already passed the gate.
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(USE_CASE_TYPE));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(useCase.code().value()));
-        graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), rdf.createLiteral(useCase.title()));
-        graph.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), rdf.createLiteral(useCase.goal()));
+        graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), literalOf(useCase.title(), titleTag));
+        graph.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), literalOf(useCase.goal(), goalTag));
         addOptional(graph, subjectIri, DESIGN_SCOPE_PROPERTY, useCase.scope());
         addOptional(graph, subjectIri, TRIGGER_PROPERTY, useCase.trigger());
         addOptional(graph, subjectIri, PRECONDITION_PROPERTY, useCase.precondition());
@@ -238,14 +264,21 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         }
 
         // 3. Main-flow steps (own opaque resources) + the coarse UC->Requirement satisfies edge.
+        //    A step's IRI is minted afresh on every write (class-level note) - newStepIriByPosition
+        //    tracks which freshly-minted IRI ended up at which position, so an update's write body
+        //    below knows which new subject to re-attach a preserved other-language step-text
+        //    variant to (the position is stable across an update; the step's own IRI is not).
         Map<String, IRI> satisfies = new LinkedHashMap<>();
+        Map<Integer, IRI> newStepIriByPosition = new LinkedHashMap<>();
         for (Step step : useCase.steps()) {
             IRI stepIri = mintStepIri();
+            newStepIriByPosition.put(step.position(), stepIri);
             graph.add(subjectIri, rdf.createIRI(MAIN_STEP_PROPERTY), stepIri);
             graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
             graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
                     rdf.createLiteral(Integer.toString(step.position()), VocabXsd.INTEGER));
-            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(step.text()));
+            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY),
+                    literalOf(step.text(), stepTagByPosition.get(step.position())));
             for (RequirementRef ref : step.realises()) {
                 IRI reqIri = requirementIriFor(ref);
                 graph.add(stepIri, rdf.createIRI(STEP_REALISES_PROPERTY), reqIri);
@@ -310,16 +343,106 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     () -> new UseCaseNotFoundException(projectId, useCase.code()),
                     () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
                     tx -> {
+                        // Capture what deleteExisting is about to wipe but graph is not itself
+                        // rewriting: every title/goal literal whose language tag differs from
+                        // titleTag/goalTag, and every step-text literal (keyed by POSITION, not
+                        // step IRI - the old step subject is being deleted regardless) whose tag
+                        // differs from that position's stepTagByPosition entry. Mirrors
+                        // KognioRdfRequirementRepository#replaceTriplesForUpdate's
+                        // otherLanguageLiterals capture, just read inline here (the use-case
+                        // adapter has no equivalent shared helper method to call into).
+                        List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag);
+                        List<Literal> preservedGoals =
+                                otherLanguageLiterals(tx, subject, USE_CASE_GOAL_PROPERTY, goalTag);
+                        Map<Integer, List<Literal>> preservedStepTextsByPosition =
+                                otherLanguageStepTexts(tx, subject, stepTagByPosition);
+
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
+
+                        // Re-attach only after the gate has already run and the rewritten graph is
+                        // committed - the preserved literals are not new assertions, they already
+                        // existed in the store and are carried forward untouched (mirrors the
+                        // requirements adapter's usesTerm/language-variant preservation). A step's
+                        // preserved text variant re-attaches to the FRESHLY minted step IRI at the
+                        // same position (newStepIriByPosition) - the old step subject no longer
+                        // exists after deleteExisting, but nothing outside this adapter ever
+                        // referenced it (class-level "opaque value object" note), so moving a
+                        // preserved literal to the new subject at the same position is safe.
+                        if (!preservedTitles.isEmpty() || !preservedGoals.isEmpty()
+                                || !preservedStepTextsByPosition.isEmpty()) {
+                            Graph preserved = rdf.createGraph();
+                            for (Literal title : preservedTitles) {
+                                preserved.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), title);
+                            }
+                            for (Literal goal : preservedGoals) {
+                                preserved.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), goal);
+                            }
+                            preservedStepTextsByPosition.forEach((position, texts) -> {
+                                IRI newStepIri = newStepIriByPosition.get(position);
+                                if (newStepIri != null) {
+                                    for (Literal text : texts) {
+                                        preserved.add(newStepIri, rdf.createIRI(STEP_TEXT_PROPERTY), text);
+                                    }
+                                }
+                            });
+                            tx.add(graphIri, preserved);
+                        }
                     });
         }
     }
 
+    /**
+     * Reads every existing literal of {@code subject} on {@code predicateIri} whose language tag
+     * differs from {@code writtenTag}, inside the live write transaction, before
+     * {@code deleteExisting} would otherwise wipe them along with the rest of the subject's
+     * triples. Mirrors {@code KognioRdfTermRepository#deleteTriplesOfLanguage}'s scoping logic,
+     * inverted into a capture-and-reattach rather than a targeted delete, because this class's
+     * {@code deleteExisting} is an unconditional whole-subject-and-steps wipe, not a per-predicate
+     * patch.
+     *
+     * @param writtenTag the tag of the literal {@code graph} is about to (re)write for this
+     *                   predicate, or {@code null} for untagged - excluded here since it is not
+     *                   being preserved, it is being replaced
+     */
+    private List<Literal> otherLanguageLiterals(DatasetTx tx, String subject, String predicateIri, String writtenTag) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + predicateIri + "> ?o } }";
+        return tx.select(query)
+                .map(row -> literalOf(row, "o"))
+                .filter(literal -> !Objects.equals(literal.getLanguageTag().orElse(null), writtenTag))
+                .toList();
+    }
+
+    /**
+     * {@link #otherLanguageLiterals} for {@code arkreq:stepText}, keyed by main-flow step
+     * {@code arkreq:position} rather than by (about-to-be-deleted) step IRI: a step's own subject
+     * is re-minted on every write (class-level note), so what survives an update is the position's
+     * <em>other-language text</em>, re-attached to whichever new step IRI ends up at that same
+     * position - not the old step IRI itself.
+     */
+    private Map<Integer, List<Literal>> otherLanguageStepTexts(
+            DatasetTx tx, String subject, Map<Integer, String> stepTagByPosition) {
+        String query = "SELECT ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
+                + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } }";
+        Map<Integer, List<Literal>> byPosition = new LinkedHashMap<>();
+        tx.select(query).forEach(row -> {
+            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            Literal text = literalOf(row, "text");
+            String writtenTag = stepTagByPosition.get(position);
+            if (!Objects.equals(text.getLanguageTag().orElse(null), writtenTag)) {
+                byPosition.computeIfAbsent(position, key -> new ArrayList<>()).add(text);
+            }
+        });
+        return byPosition;
+    }
+
     @Override
-    public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code) {
+    public Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        DisplayLocale effective = withRequestedOverride(displayLocale);
         String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
                 + SparqlTerms.escape(code.value()) + "\" } }";
@@ -328,8 +451,25 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             if (head.isEmpty()) {
                 return Optional.empty();
             }
-            return readBySubject(handle, iriOf(head.get(), "s").getIRIString(), code);
+            return readBySubject(handle, iriOf(head.get(), "s").getIRIString(), code, effective);
         }
+    }
+
+    /**
+     * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
+     * for one call, e.g. an explicit {@code uc_get} {@code displayLocale} argument or a project's
+     * own default language merged in by the caller. Mirrors
+     * {@code KognioRdfRequirementRepository#withRequestedOverride}/
+     * {@code KognioRdfTermRepository#withRequestedOverride}.
+     *
+     * @param requestedOverride a BCP-47 language tag, or {@code null}/blank to use the configured
+     *                          {@link #displayLocale} unchanged
+     */
+    private DisplayLocale withRequestedOverride(String requestedOverride) {
+        if (requestedOverride == null || requestedOverride.isBlank()) {
+            return displayLocale;
+        }
+        return new DisplayLocale(Locale.forLanguageTag(requestedOverride), displayLocale.systemDefault());
     }
 
     @Override
@@ -344,7 +484,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     .toList();
             List<UseCase> result = new ArrayList<>();
             for (UseCaseRow row : rows) {
-                readBySubject(handle, row.subjectIri(), row.code()).ifPresent(result::add);
+                readBySubject(handle, row.subjectIri(), row.code(), displayLocale).ifPresent(result::add);
             }
             return List.copyOf(result);
         }
@@ -357,7 +497,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * of. Mirrors {@code KognioRdfRequirementRepository#findCurrentByCode}: reuses the same
      * subject lookup {@link #findByCode} does, then pairs the scalar/head read in one query call
      * via {@link #readCurrentBySubject} - one snapshot for the core fields and the head, exactly
-     * as {@link #readBySubject} reads the core fields alone.
+     * as {@link #readBySubject} reads the core fields alone. No per-call display-language override
+     * here: an internal read-modify-write round trip is not a caller-facing read, so this
+     * adapter's own configured {@link #displayLocale} is used (mirrors
+     * {@code KognioRdfRequirementRepository#findCurrentByCode}).
      */
     @Override
     public Optional<UseCaseRepository.CurrentUseCase> findCurrentByCode(ProjectId projectId, UseCaseCode code) {
@@ -394,11 +537,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * makes the whole scalar query yield no row for such a use case - the caller then treats it
      * as "not found", silently skipping only this one use case rather than crashing the whole
      * result list.</p>
+     *
+     * <p>{@code title}/{@code goal} are read separately, not joined here - both may now legally
+     * carry several language-tagged literals each (SKOS-S14-style {@code sh:uniqueLang}), so
+     * joining them into this single-row clause would multiply a subject into a row per
+     * title/goal candidate combination. {@link #readTitles}/{@link #readGoals} read them as their
+     * own follow-up queries instead, mirroring {@code KognioRdfRequirementRepository}.</p>
      */
     private static String scalarWhereClause(String subject) {
         return subject + " a <" + USE_CASE_TYPE + "> ; "
-                + "<" + TITLE_PROPERTY + "> ?title ; "
-                + "<" + USE_CASE_GOAL_PROPERTY + "> ?goal ; "
                 + "<" + PRIMARY_ACTOR_PROPERTY + "> ?primaryActor . "
                 + "FILTER(isIRI(?primaryActor)) "
                 + "OPTIONAL { " + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?scope } "
@@ -407,21 +554,22 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 + "OPTIONAL { " + subject + " <" + POSTCONDITION_PROPERTY + "> ?postcondition } ";
     }
 
-    private Optional<UseCase> readBySubject(DatasetHandle handle, String subjectIriString, UseCaseCode code) {
+    private Optional<UseCase> readBySubject(
+            DatasetHandle handle, String subjectIriString, UseCaseCode code, DisplayLocale locale) {
         if (!SparqlTerms.isValidIriReference(subjectIriString)) {
             // A syntactically impossible identifier cannot match anything in the store -
             // report "not found" instead of building a malformed SPARQL query.
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryActor "
+        String scalarQuery = "SELECT ?scope ?trigger ?precondition ?postcondition ?primaryActor "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} }";
 
         Optional<BindingSet> row = handle.sparqlQuery().select(scalarQuery).findFirst();
         if (row.isEmpty()) {
             return Optional.empty();
         }
-        return buildUseCase(handle, subjectIriString, code, subject, row.get());
+        return buildUseCase(handle, subjectIriString, code, subject, row.get(), locale);
     }
 
     /**
@@ -440,7 +588,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?title ?goal ?scope ?trigger ?precondition ?postcondition ?primaryActor ?head "
+        String scalarQuery = "SELECT ?scope ?trigger ?precondition ?postcondition ?primaryActor ?head "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
@@ -449,27 +597,62 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         if (row.isEmpty()) {
             return Optional.empty();
         }
-        Optional<UseCase> useCase = buildUseCase(handle, subjectIriString, code, subject, row.get());
+        Optional<UseCase> useCase = buildUseCase(handle, subjectIriString, code, subject, row.get(), displayLocale);
         if (useCase.isEmpty()) {
             return Optional.empty();
         }
+        Optional<LocalizedLiteral> title = displayLocale.select(readTitles(handle, subject));
+        Optional<LocalizedLiteral> goal = displayLocale.select(readGoals(handle, subject));
+        if (title.isEmpty() || goal.isEmpty()) {
+            return Optional.empty();
+        }
+        List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
+        Map<Integer, String> stepTextLanguageByPosition = toStepLanguages(stepAssemblies, displayLocale);
         RevisionToken head = row.get().getValue("head")
                 .filter(IRI.class::isInstance)
                 .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                 .orElse(null);
-        return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), head));
+        return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), head,
+                title.get().languageTag(), goal.get().languageTag(), stepTextLanguageByPosition));
+    }
+
+    /** Reads the {@code dcterms:title} candidates of one use case, tagged for {@link DisplayLocale}. */
+    private List<LocalizedLiteral> readTitles(DatasetHandle handle, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + TITLE_PROPERTY + "> ?o } }";
+        return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
+    /** {@link #readTitles} for {@code arkreq:useCaseGoal}. */
+    private List<LocalizedLiteral> readGoals(DatasetHandle handle, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + USE_CASE_GOAL_PROPERTY + "> ?o } }";
+        return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
     }
 
     /**
      * Builds a {@link UseCase} from {@code row} (the projection of {@link #scalarWhereClause})
-     * plus the follow-up reads {@link #readSupportingActors}/{@link #readMainSteps}/
-     * {@link #readExtensions} - shared by {@link #readBySubject} and
-     * {@link #readCurrentBySubject} so both build a {@link UseCase} identically.
+     * plus the follow-up reads {@link #readSupportingActors}/{@link #readMainStepAssemblies}/
+     * {@link #readExtensions}/{@link #readTitles}/{@link #readGoals} - shared by
+     * {@link #readBySubject} and {@link #readCurrentBySubject} so both build a {@link UseCase}
+     * identically. {@code locale} selects one {@code title}/{@code goal}/each step's {@code text}
+     * candidate out of however many language-tagged variants exist.
+     *
+     * <p>Returns {@link Optional#empty()} if this subject carries no {@code dcterms:title}/
+     * {@code arkreq:useCaseGoal} literal at all - {@code UseCase-title}/{@code UseCase-goal} carry
+     * {@code sh:minCount 1}, so this is unreachable via the MCP tools; a store-first (ADR-005) use
+     * case missing either is skipped here the same way a use case with zero main steps is.</p>
      */
-    private Optional<UseCase> buildUseCase(
-            DatasetHandle handle, String subjectIriString, UseCaseCode code, String subject, BindingSet row) {
+    private Optional<UseCase> buildUseCase(DatasetHandle handle, String subjectIriString, UseCaseCode code,
+            String subject, BindingSet row, DisplayLocale locale) {
+        Optional<LocalizedLiteral> title = locale.select(readTitles(handle, subject));
+        Optional<LocalizedLiteral> goal = locale.select(readGoals(handle, subject));
+        if (title.isEmpty() || goal.isEmpty()) {
+            return Optional.empty();
+        }
         List<ActorRef> supportingActors = readSupportingActors(handle, subject);
-        List<Step> steps = readMainSteps(handle, subject);
+        List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
+        List<Step> steps = toSteps(stepAssemblies, locale);
         if (steps.isEmpty()) {
             // arkreq:mainStep is only sh:Warning severity at sh:minCount 1 (not sh:Violation), so
             // ShaclWriteGate#enforce lets a store-first (ADR-005) use case through with zero main
@@ -492,8 +675,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         return Optional.of(new UseCase(
                 new UseCaseId(ResourceId.of(subjectIriString)),
                 code,
-                literalOf(row, "title").getLexicalForm(),
-                literalOf(row, "goal").getLexicalForm(),
+                title.get().value(),
+                goal.get().value(),
                 optionalLiteral(row, "scope"),
                 optionalLiteral(row, "trigger"),
                 new ActorRef(ResourceId.of(iriOf(row, "primaryActor").getIRIString())),
@@ -523,20 +706,66 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 .toList();
     }
 
-    private List<Step> readMainSteps(DatasetHandle handle, String subject) {
+    /**
+     * One main-flow step's position, every {@code arkreq:stepText} candidate collected across rows
+     * (tagged for {@link DisplayLocale}), and its {@code realises} references - the per-step
+     * accumulator {@link #readMainStepAssemblies} builds, since {@code arkreq:stepText} may now
+     * legally carry several language-tagged literals (SKOS-S14-style {@code sh:uniqueLang}),
+     * multiplying a step into one row per candidate.
+     */
+    private record StepAssembly(int position, List<LocalizedLiteral> textCandidates, List<RequirementRef> realises) {
+    }
+
+    /**
+     * Reads every main-flow step's position, {@code stepText} candidates and {@code realises}
+     * references, grouped by step IRI then sorted by position - the position, not the step's own
+     * (opaque, re-minted-on-every-write) IRI, is what a caller ({@link #toSteps}/
+     * {@link #toStepLanguages}) actually keys on.
+     */
+    private List<StepAssembly> readMainStepAssemblies(DatasetHandle handle, String subject) {
         String stepsQuery = "SELECT ?step ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
-                + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } } "
-                + "ORDER BY ?position";
+                + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } }";
         Map<String, List<RequirementRef>> realisesByStep = readMainStepRealises(handle, subject);
-        return handle.sparqlQuery().select(stepsQuery)
-                .map(row -> {
-                    int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
-                    String stepIri = iriOf(row, "step").getIRIString();
-                    return new Step(position, literalOf(row, "text").getLexicalForm(),
-                            realisesByStep.getOrDefault(stepIri, List.of()));
-                })
+        Map<String, Integer> positionByStep = new LinkedHashMap<>();
+        Map<String, List<LocalizedLiteral>> textsByStep = new LinkedHashMap<>();
+        handle.sparqlQuery().select(stepsQuery).forEach(row -> {
+            String stepIri = iriOf(row, "step").getIRIString();
+            positionByStep.putIfAbsent(stepIri, Integer.parseInt(literalOf(row, "position").getLexicalForm()));
+            textsByStep.computeIfAbsent(stepIri, key -> new ArrayList<>()).add(localizedLiteralOf(row, "text"));
+        });
+        return positionByStep.entrySet().stream()
+                .map(entry -> new StepAssembly(entry.getValue(), textsByStep.get(entry.getKey()),
+                        realisesByStep.getOrDefault(entry.getKey(), List.of())))
+                .sorted(Comparator.comparingInt(StepAssembly::position))
                 .toList();
+    }
+
+    /**
+     * Selects one {@code stepText} candidate per step via {@code locale}, building the ordered
+     * main flow - mirrors {@link DisplayLocale}'s required-join guarantee: {@code arkreq:stepText}
+     * carries {@code sh:minCount 1}, so a step this method sees always has at least one candidate.
+     */
+    private static List<Step> toSteps(List<StepAssembly> assemblies, DisplayLocale locale) {
+        return assemblies.stream()
+                .map(assembly -> new Step(assembly.position(),
+                        locale.select(assembly.textCandidates())
+                                .map(LocalizedLiteral::value)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "stepText is a required join, so at least one candidate must exist")),
+                        assembly.realises()))
+                .toList();
+    }
+
+    /**
+     * The BCP-47 language tag each step's currently-selected {@code stepText} candidate carries,
+     * keyed by position - backs {@link UseCaseRepository.CurrentUseCase#stepTextLanguageByPosition()}.
+     */
+    private static Map<Integer, String> toStepLanguages(List<StepAssembly> assemblies, DisplayLocale locale) {
+        Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
+        assemblies.forEach(assembly -> locale.select(assembly.textCandidates())
+                .ifPresent(selected -> stepTextLanguageByPosition.put(assembly.position(), selected.languageTag())));
+        return stepTextLanguageByPosition;
     }
 
     /**
@@ -576,10 +805,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Mirrors {@code UseCase.requireConsecutiveStepPositions} as a non-throwing predicate: the
-     * step at list index {@code i} must carry position {@code i + 1}. {@code steps} is read
-     * ordered by {@code arkreq:position} (see {@link #readMainSteps}), so a store-first (ADR-005)
-     * gap, duplicate or descending position is detected here before it ever reaches
-     * {@link UseCase}'s constructor.
+     * step at list index {@code i} must carry position {@code i + 1}. {@code steps} is built by
+     * {@link #toSteps} from {@link #readMainStepAssemblies}, itself sorted by
+     * {@code arkreq:position}, so a store-first (ADR-005) gap, duplicate or descending position is
+     * detected here before it ever reaches {@link UseCase}'s constructor.
      */
     private static boolean hasConsecutiveStepPositions(List<Step> steps) {
         for (int i = 0; i < steps.size(); i++) {
@@ -637,6 +866,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         }
     }
 
+    /** Builds a language-tagged literal, or a plain untagged one when {@code tag} is {@code null}. */
+    private Literal literalOf(String value, String tag) {
+        return tag == null ? rdf.createLiteral(value) : rdf.createLiteral(value, tag);
+    }
+
     private static String optionalLiteral(BindingSet row, String name) {
         return row.getValue(name).map(value -> ((Literal) value).getLexicalForm()).orElse(null);
     }
@@ -649,5 +883,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static Literal literalOf(BindingSet row, String name) {
         return (Literal) row.getValue(name)
                 .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /** Converts a bound literal into the technology-neutral {@link LocalizedLiteral} projection. */
+    private static LocalizedLiteral localizedLiteralOf(BindingSet row, String name) {
+        Literal literal = literalOf(row, name);
+        return new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null));
     }
 }

@@ -41,6 +41,10 @@ public interface AddRequirement {
      *                        only meaningful for {@link RequirementType#NON_FUNCTIONAL}
      * @param acceptanceCriteria the testable "Done when ..." criteria; required, at least one
      *                        entry
+     * @param language        the BCP-47 language tag {@code title}/{@code description} are
+     *                        written in (e.g. {@code "de"}), or {@code null} for a plain,
+     *                        untagged literal - the same tag applies to both fields, since a
+     *                        requirement is normally elicited in one language at a time
      */
     record NewRequirement(
             String title,
@@ -49,6 +53,7 @@ public interface AddRequirement {
             Priority priority,
             String motivatedBy,
             String qualityCategory,
-            List<String> acceptanceCriteria) {
+            List<String> acceptanceCriteria,
+            String language) {
     }
 }
