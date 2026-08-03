@@ -93,9 +93,6 @@ public final class ArkreqVocabulary {
     /** {@code skos:Concept} - the type of a glossary term (including actor-facetted ones). */
     public static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
 
-    /** {@code arkreq:Constraint} - the abstract base type of a constraint (issue #223). */
-    public static final String CONSTRAINT_TYPE = NAMESPACE + "Constraint";
-
     /** {@code arkreq:TechnicalConstraint} - the type of a technical constraint. */
     public static final String TECHNICAL_CONSTRAINT_TYPE = NAMESPACE + "TechnicalConstraint";
 
