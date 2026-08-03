@@ -36,3 +36,16 @@ einen eigenen ADR-008-Borrow ansprechen muesste. Ein Aufrufer, der nur die `Proj
 `resolve(anchor).id()`. `defaultLanguage` ist reine Lesepraeferenz: es beeinflusst nie, was ein
 Schreib-Tool ohne eigenes `language`-Argument tatsaechlich schreibt (das bleibt ungetaggt) -- nur,
 welche Sprachvariante ein Lesepfad ohne explizite Anfrage bevorzugt zeigt.
+
+Der pure Helfer `LanguageTag` (`canonicalize(String)`) kanonisiert jeden von aussen kommenden
+`language`-Wert (Term/Project) auf seine normalisierte BCP-47-Form (`"DE"` -> `"de"`), bevor ein
+Out-Adapter ihn schreibt oder einen sprachscoped Delete-Filter damit baut -- der Grund liegt hier,
+nicht in `Locale.forLanguageTag`: dessen eigenes Javadoc nennt es bewusst nachsichtig, es wirft nie
+und laesst einen nicht parsbaren Rest fallen, sodass ein Tippfehler wie `"de_DE"` (Java-`Locale`s
+eigene `toString()`-Konvention nutzt Unterstrich, BCP-47 Bindestrich) stillschweigend bis `"und"`
+(unbestimmt) degradiert. `LanguageTag` nutzt stattdessen `Locale.Builder#setLanguageTag`, das exakt
+auf diesem Fall wirft, und uebersetzt das in die eigene `InvalidLanguageTagException`, statt einen
+`java.util`-Typ ueber die Port-Grenze lecken zu lassen. Liegt im Kernel, weil sowohl
+arknet-ubiquitous-language als auch arknet-project denselben Helfer brauchen und ein nicht
+kanonisierter Tag sonst asymmetrisch zwischen Schreiben und dem zugehoerigen sprachscoped Delete
+divergieren kann (zwei verschieden gecaste Literale fuer dieselbe Sprache statt einer Korrektur).
