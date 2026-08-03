@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-persistence-test-support</artifactId>
+    <description>Test support for the kognio-rdf out-adapters: decorators for DatasetLifecycle, DatasetHandle and DatasetTx that pin a chosen interleaving of two writers against a real on-disk store, so a race reproduces deterministically instead of flakily. Consumed at test scope by the requirement, use-case, bounded-context and term real-store concurrency tests.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-terms</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset</artifactId>
+        </dependency>
+        <!-- DatasetLifecycle/DatasetHandle/DatasetId live in this dedicated hosting port module
+             since kognio-rdf 0.2.x; DatasetTx (decorated here too) stays in rdf-dataset. -->
+        <dependency>
+            <groupId>io.kogn.rdf</groupId>
+            <artifactId>rdf-dataset-hosting</artifactId>
+        </dependency>
+    </dependencies>
+</project>

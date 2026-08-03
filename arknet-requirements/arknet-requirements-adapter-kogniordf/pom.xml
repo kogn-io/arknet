@@ -90,6 +90,15 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Test-only: the shared DatasetLifecycle/DatasetHandle/DatasetTx decorators
+             RequirementServiceRealStoreConcurrencyTest uses to pin the interleaving of two
+             writers against a real on-disk store (#117). A normal main-scope artifact consumed
+             at test scope - this codebase uses no test-jar classifier anywhere. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-persistence-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

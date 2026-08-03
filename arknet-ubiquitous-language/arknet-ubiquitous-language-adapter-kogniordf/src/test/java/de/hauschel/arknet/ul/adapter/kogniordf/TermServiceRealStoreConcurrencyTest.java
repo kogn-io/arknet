@@ -15,7 +15,6 @@ import java.lang.management.OperatingSystemMXBean;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -23,7 +22,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -38,12 +36,8 @@ import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
-import io.kogn.rdf.dataset.DatasetExport;
-import io.kogn.rdf.dataset.DatasetTransactor;
 import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.GraphStore;
-import io.kogn.rdf.dataset.SparqlQuery;
-import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.ReadableGraph;
@@ -51,6 +45,8 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
+import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
@@ -557,182 +553,5 @@ class TermServiceRealStoreConcurrencyTest {
         });
         TermRepository repository = KognioRdfTermRepositoryFactory.over(guarded);
         return new TermService(repository, new UuidResourceIdFactory());
-    }
-
-    /** Wraps a real {@link DatasetLifecycle}, decorating every acquired transaction's {@link DatasetTx}. */
-    private static final class GuardedLifecycle implements DatasetLifecycle {
-
-        private final DatasetLifecycle delegate;
-        private final Function<DatasetTx, DatasetTx> txDecorator;
-
-        GuardedLifecycle(DatasetLifecycle delegate, Function<DatasetTx, DatasetTx> txDecorator) {
-            this.delegate = delegate;
-            this.txDecorator = txDecorator;
-        }
-
-        @Override
-        public DatasetHandle acquire(DatasetId id) {
-            return new GuardedHandle(delegate.acquire(id), txDecorator);
-        }
-
-        @Override
-        public void close(DatasetId id) {
-            delegate.close(id);
-        }
-
-        @Override
-        public void delete(DatasetId id) {
-            delegate.delete(id);
-        }
-
-        @Override
-        public Set<DatasetId> list() {
-            return delegate.list();
-        }
-    }
-
-    private static final class GuardedHandle implements DatasetHandle {
-
-        private final DatasetHandle delegate;
-        private final Function<DatasetTx, DatasetTx> txDecorator;
-
-        GuardedHandle(DatasetHandle delegate, Function<DatasetTx, DatasetTx> txDecorator) {
-            this.delegate = delegate;
-            this.txDecorator = txDecorator;
-        }
-
-        @Override
-        public GraphStore graphStore() {
-            return delegate.graphStore();
-        }
-
-        @Override
-        public SparqlQuery sparqlQuery() {
-            return delegate.sparqlQuery();
-        }
-
-        @Override
-        public SparqlUpdate sparqlUpdate() {
-            return delegate.sparqlUpdate();
-        }
-
-        @Override
-        public DatasetExport datasetExport() {
-            return delegate.datasetExport();
-        }
-
-        @Override
-        public DatasetTransactor transactor() {
-            DatasetTransactor real = delegate.transactor();
-            return new DatasetTransactor() {
-                @Override
-                public <T> T inTransaction(Function<DatasetTx, T> fn) {
-                    return real.inTransaction(tx -> fn.apply(txDecorator.apply(tx)));
-                }
-            };
-        }
-
-        @Override
-        public void close() {
-            delegate.close();
-        }
-    }
-
-    /**
-     * Runs {@code afterSecondGuard} exactly once its delegate's second {@code contains()} call
-     * returns - {@link KognioRdfTermRepository#create} issues exactly two on the create path: the
-     * identity guard, then the code-uniqueness guard.
-     */
-    private static final class GuardSyncTx implements DatasetTx {
-
-        private final DatasetTx delegate;
-        private final Runnable afterSecondGuard;
-        private int guardCount;
-
-        GuardSyncTx(DatasetTx delegate, Runnable afterSecondGuard) {
-            this.delegate = delegate;
-            this.afterSecondGuard = afterSecondGuard;
-        }
-
-        @Override
-        public boolean ask(String query) {
-            return delegate.ask(query);
-        }
-
-        @Override
-        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            return delegate.ask(query, bindings);
-        }
-
-        @Override
-        public long add(IRI graph, ReadableGraph data) {
-            return delegate.add(graph, data);
-        }
-
-        @Override
-        public long remove(IRI graph, ReadableGraph data) {
-            return delegate.remove(graph, data);
-        }
-
-        @Override
-        public void clear(IRI graph) {
-            delegate.clear(graph);
-        }
-
-        @Override
-        public ReadableGraph export(IRI graph) {
-            return delegate.export(graph);
-        }
-
-        @Override
-        public long count(IRI graph) {
-            return delegate.count(graph);
-        }
-
-        @Override
-        public long count() {
-            return delegate.count();
-        }
-
-        @Override
-        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
-                io.kogn.rdf.terms.RDFTerm object) {
-            boolean result = delegate.contains(graph, subject, predicate, object);
-            guardCount++;
-            if (guardCount == 2) {
-                afterSecondGuard.run();
-            }
-            return result;
-        }
-
-        @Override
-        public void update(String sparqlUpdate) {
-            delegate.update(sparqlUpdate);
-        }
-
-        @Override
-        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            delegate.update(sparqlUpdate, bindings);
-        }
-
-        @Override
-        public Stream<BindingSet> select(String query) {
-            return delegate.select(query);
-        }
-
-        @Override
-        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            return delegate.select(query, bindings);
-        }
-
-        @Override
-        public ReadableGraph construct(String query) {
-            return delegate.construct(query);
-        }
-
-        @Override
-        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
-            return delegate.construct(query, bindings);
-        }
     }
 }

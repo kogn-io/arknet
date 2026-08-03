@@ -81,6 +81,7 @@
         <module>arknet-mcp</module>
         <module>arknet-shared-kernel</module>
         <module>arknet-persistence-support</module>
+        <module>arknet-persistence-test-support</module>
         <module>arknet-requirements</module>
         <module>arknet-ubiquitous-language</module>
         <module>arknet-use-cases</module>
@@ -119,6 +120,16 @@
             <dependency>
                 <groupId>de.hauschel.arknet</groupId>
                 <artifactId>arknet-persistence-support</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- Test-Support fuer dieselben kognio-rdf-Out-Adapter: die DatasetLifecycle-/
+                 DatasetHandle-/DatasetTx-Dekoratoren, mit denen die *RealStoreConcurrencyTest
+                 der BCs eine Verschraenkung zweier Schreiber gegen den echten Store festnageln.
+                 Eigenes Modul statt test-jar (die gibt es hier nirgends), von den Konsumenten
+                 im test-Scope gezogen (#117). -->
+            <dependency>
+                <groupId>de.hauschel.arknet</groupId>
+                <artifactId>arknet-persistence-test-support</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- jackson-annotations ausgeschlossen: rdf4j-bom managed selbst 2.21, obwohl
