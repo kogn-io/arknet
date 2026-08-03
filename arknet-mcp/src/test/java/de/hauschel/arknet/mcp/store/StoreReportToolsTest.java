@@ -280,7 +280,7 @@ class StoreReportToolsTest {
             final Prefixes prefixes = Prefixes.defaults();
             final StoreReader reader = new StoreReader(lifecycle);
             final ProjectResolver projects = anchor ->
-                    unsafeAnchor.equals(anchor) ? unsafeProject : resolveTestAnchor(anchor);
+                    unsafeAnchor.equals(anchor) ? new ResolvedProject(unsafeProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithUnsafeId = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
                     modelViews(), projects, NO_LABELS, reportDir, null);
@@ -316,7 +316,7 @@ class StoreReportToolsTest {
             final Prefixes prefixes = Prefixes.defaults();
             final StoreReader reader = new StoreReader(lifecycle);
             final ProjectResolver projects = anchor ->
-                    escapingAnchor.equals(anchor) ? escapingProject : resolveTestAnchor(anchor);
+                    escapingAnchor.equals(anchor) ? new ResolvedProject(escapingProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithEscapingId = new StoreReportTools(
                     reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
                     modelViews(), projects, NO_LABELS, reportDir, null);
@@ -361,10 +361,10 @@ class StoreReportToolsTest {
             final StoreReader reader = new StoreReader(lifecycle);
             final ProjectResolver projects = anchor -> {
                 if (slashAnchor.equals(anchor)) {
-                    return slashProject;
+                    return new ResolvedProject(slashProject, null);
                 }
                 if (underscoreAnchor.equals(anchor)) {
-                    return underscoreProject;
+                    return new ResolvedProject(underscoreProject, null);
                 }
                 return resolveTestAnchor(anchor);
             };

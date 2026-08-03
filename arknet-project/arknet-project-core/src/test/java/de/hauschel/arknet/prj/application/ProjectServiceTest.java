@@ -82,10 +82,10 @@ class ProjectServiceTest {
      */
     @Test
     void registerWithADuplicateLabelThrowsAndPropagatesTheDuplicateProjectLabelException() {
-        service.register("arknet", pathAnchor("/home/fred/arknet"));
+        service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
 
         DuplicateProjectLabelException ex = assertThrows(DuplicateProjectLabelException.class,
-                () -> service.register("arknet", pathAnchor("/home/fred/arknet-copy")));
+                () -> service.register("arknet", pathAnchor("/home/fred/arknet-copy"), null, null, null));
 
         assertEquals("arknet", ex.label());
     }
@@ -188,8 +188,8 @@ class ProjectServiceTest {
 
     @Test
     void renameToADuplicateLabelThrows() {
-        Project a = service.register("project-a", pathAnchor("/home/fred/a"));
-        service.register("project-b", pathAnchor("/home/fred/b"));
+        Project a = service.register("project-a", pathAnchor("/home/fred/a"), null, null, null);
+        service.register("project-b", pathAnchor("/home/fred/b"), null, null, null);
 
         DuplicateProjectLabelException ex = assertThrows(DuplicateProjectLabelException.class,
                 () -> service.rename(a.id(), "project-b"));
@@ -204,7 +204,7 @@ class ProjectServiceTest {
      */
     @Test
     void renamingToTheCurrentLabelIsIdempotentAndPerformsNoSecondWrite() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
         int writesAfterRegister = registry.writeCount();
 
         Project renamed = service.rename(project.id(), "arknet");
@@ -332,7 +332,7 @@ class ProjectServiceTest {
      */
     @Test
     void aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
                 new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);
@@ -345,7 +345,7 @@ class ProjectServiceTest {
     /** The {@code rename} counterpart of {@link #aStaleCompareAndUpdateThatNeverClearsOnAttachIsRethrownAfterTheRetryBudgetIsSpent}. */
     @Test
     void aStaleCompareAndUpdateThatNeverClearsOnRenameIsRethrownAfterTheRetryBudgetIsSpent() {
-        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"));
+        Project project = service.register("arknet", pathAnchor("/home/fred/arknet"), null, null, null);
         int writesAfterRegister = registry.writeCount();
         ProjectService retryingService = new ProjectService(
                 new ConflictsOnCompareAndUpdateRegistry(registry, Integer.MAX_VALUE), selfDescription, datasets);

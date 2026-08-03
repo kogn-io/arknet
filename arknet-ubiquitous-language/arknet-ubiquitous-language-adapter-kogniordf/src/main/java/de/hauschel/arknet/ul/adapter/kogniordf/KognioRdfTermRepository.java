@@ -235,8 +235,9 @@ public class KognioRdfTermRepository implements TermRepository {
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         graph.add(subjectIri, rdf.createIRI(IN_SCHEME_PROPERTY), schemeIri);
         graph.add(subjectIri, rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(term.code().value()));
-        graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(term.prefLabel(), language));
-        graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), literalOf(term.definition(), language));
+        String tag = canonicalLanguageTag(language);
+        graph.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), literalOf(term.prefLabel(), tag));
+        graph.add(subjectIri, rdf.createIRI(DEFINITION_PROPERTY), literalOf(term.definition(), tag));
         // The per-project glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
@@ -317,10 +318,11 @@ public class KognioRdfTermRepository implements TermRepository {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
+        String tag = canonicalLanguageTag(language);
         TermConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet, language);
+                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet, tag);
             } catch (TermConcurrentlyModifiedException e) {
                 // A concurrent writer advanced the head between our read and our write - retry
                 // against the now-current state instead of surfacing a transient race.
@@ -465,6 +467,26 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * @param language the BCP-47 tag of the literal being replaced, or {@code null} for untagged
      */
+    /**
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged.
+     *
+     * <p>{@link #deleteTriplesOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
+     * string RDF4J's {@code lang()} returns - the exact case a literal was written with - against
+     * this method's {@code tag} argument, so an un-normalized case mismatch between two calls
+     * (e.g. {@code term_add(..., language="de")} followed by {@code term_update(...,
+     * language="DE")}) leaves the existing {@code @de} literal undeleted and inserts a second
+     * {@code @DE} one instead of correcting it - two literals for one language, defeating
+     * {@code sh:uniqueLang} and the exact bug this scoped delete exists to fix, only triggered by
+     * case instead of missing scoping. Canonicalizing every tag through this method before both
+     * writing a literal ({@link #literalOf}) and building the delete filter keeps stored tags in
+     * one consistent case, so a later scoped delete always matches - the same guarantee
+     * {@code DisplayLocale#matching} already gives the read side by comparing tags
+     * case-insensitively.</p>
+     */
+    private static String canonicalLanguageTag(String language) {
+        return language == null ? null : Locale.forLanguageTag(language).toLanguageTag();
+    }
+
     private static String deleteTriplesOfLanguage(String subject, String predicateIri, String language) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.

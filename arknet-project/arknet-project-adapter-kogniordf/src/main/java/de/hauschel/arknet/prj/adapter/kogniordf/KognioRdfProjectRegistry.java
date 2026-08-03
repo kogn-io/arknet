@@ -6,6 +6,7 @@ package de.hauschel.arknet.prj.adapter.kogniordf;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -163,7 +164,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         // corrupt yet - compareAndUpdate's replace-by-identity write must never do the same.
         if (description != null) {
             candidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DESCRIPTION),
-                    literalOf(description, descriptionLanguage));
+                    literalOf(description, canonicalLanguageTag(descriptionLanguage)));
         }
         if (defaultLanguage != null) {
             candidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DEFAULT_LANGUAGE),
@@ -210,6 +211,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     public Project updateAttributes(ProjectId projectId, RevisionToken expectedHead, String description,
             String descriptionLanguage, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
+        String descriptionTag = canonicalLanguageTag(descriptionLanguage);
 
         ProjectRegistry.CurrentProject current = findCurrentById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
@@ -234,7 +236,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
         }
         if (description != null) {
             writeCandidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DESCRIPTION),
-                    literalOf(description, descriptionLanguage));
+                    literalOf(description, descriptionTag));
         }
         if (defaultLanguage != null) {
             writeCandidate.add(projectIri, rdf.createIRI(ArkprjVocabulary.DEFAULT_LANGUAGE),
@@ -247,9 +249,9 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                 () -> new StaleProjectException(projectId),
                 tx -> {
                     if (description != null) {
-                        tx.update(deleteDescriptionOfLanguage(projectSubject, descriptionLanguage));
+                        tx.update(deleteDescriptionOfLanguage(projectSubject, descriptionTag));
                         tx.add(graphIri, singleTriple(projectIri, ArkprjVocabulary.DESCRIPTION,
-                                literalOf(description, descriptionLanguage)));
+                                literalOf(description, descriptionTag)));
                     }
                     if (defaultLanguage != null) {
                         tx.update(deleteAllTriplesOf(projectSubject, ArkprjVocabulary.DEFAULT_LANGUAGE));
@@ -275,6 +277,25 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * untagged) variant survives untouched. {@code lang(?o)} is {@code ""} for a plain, untagged
      * literal, which is exactly what {@code language == null} maps {@code tag} to below.
      */
+    /**
+     * Canonicalizes a BCP-47 tag (e.g. {@code "DE"} -&gt; {@code "de"}), or {@code null} unchanged.
+     *
+     * <p>{@link #deleteDescriptionOfLanguage}'s {@code FILTER(lang(?o) = "tag")} compares the raw
+     * string RDF4J's {@code lang()} returns against this method's {@code tag} argument, so an
+     * un-normalized case mismatch between two calls (e.g. {@code project_add(...,
+     * language="de")} followed by {@code project_update(..., language="DE")}) leaves the existing
+     * {@code @de} literal undeleted and inserts a second {@code @DE} one instead of correcting it
+     * - the same class of bug fixed for {@code TermRepository#update}
+     * ({@code KognioRdfTermRepository#canonicalLanguageTag}), only triggered by case here.
+     * Canonicalizing every tag through this method before both writing a literal and building the
+     * delete filter keeps stored tags in one consistent case, so a later scoped delete always
+     * matches - the same guarantee {@code DisplayLocale#matching} already gives the read side by
+     * comparing tags case-insensitively.</p>
+     */
+    private static String canonicalLanguageTag(String language) {
+        return language == null ? null : Locale.forLanguageTag(language).toLanguageTag();
+    }
+
     private static String deleteDescriptionOfLanguage(String subject, String language) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.

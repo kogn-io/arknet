@@ -325,6 +325,31 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * P0 regression (PR #230 review comment): {@code deleteTriplesOfLanguage}'s
+     * {@code FILTER(lang(?o) = "tag")} compared the raw, unnormalized BCP-47 tag
+     * case-sensitively - a later correction spelling the same language with a different case
+     * (e.g. {@code "DE"} where the term was originally written with {@code "de"}) missed the
+     * existing literal and inserted a second, differently-cased one instead of replacing it,
+     * defeating {@code sh:uniqueLang}. Fixed by canonicalizing every tag through
+     * {@code canonicalLanguageTag} before both writing a literal and building the delete filter,
+     * so the two calls always agree on one case.
+     */
+    @Test
+    void updateWithADifferentlyCasedLanguageTagReplacesTheSameStoredVariantInsteadOfDuplicatingIt() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        Term term = new Term(id, code, "Kunde", "Person, die eine Bestellung aufgibt.", null);
+        repository.create(PROJECT_A, term, "de");
+
+        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, null, "DE");
+
+        assertEquals("Stammkunde", result.prefLabel());
+        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "de"));
+        assertFalse(subjectHasPrefLabelWithRawLanguageTag(PROJECT_A, id, "DE"),
+                "a case-differing language argument must not leave a duplicate, differently-cased literal behind");
+    }
+
+    /**
      * {@code term_add}'s new {@code language} argument (issue #228): a term registered with an
      * explicit language tag stores its {@code prefLabel}/{@code definition} as language-tagged
      * literals, not the plain untagged ones {@code create} wrote before this argument existed.
@@ -396,6 +421,24 @@ class KognioRdfTermRepositoryTest {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
                 + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label . "
                 + "FILTER(lang(?label) = \"\" && str(?label) = \"" + value + "\") } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /**
+     * Whether {@code id} carries a {@code skos:prefLabel} literal whose RAW, unnormalized
+     * language tag is exactly {@code rawTag} - bypasses the {@code "value"@tag} triple-pattern
+     * matching {@link #subjectHasLanguageTaggedPrefLabel} relies on (RDF term equality may treat
+     * differently-cased tags as the same term) and instead mirrors production's own
+     * {@code deleteTriplesOfLanguage} filter ({@code FILTER(lang(?o) = "tag")}, a case-sensitive
+     * string comparison against the tag exactly as stored) so a test can tell a canonicalized
+     * write from a raw, un-normalized one.
+     */
+    private boolean subjectHasPrefLabelWithRawLanguageTag(ProjectId projectId, TermId id, String rawTag) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?o . "
+                + "FILTER(lang(?o) = \"" + rawTag + "\") } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().ask(query);
         }
@@ -884,7 +927,7 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
 
-        Term found = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow();
+        Term found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow();
 
         assertTrue(List.of("Kaeufer", "Verkaeufer").contains(found.actorFacet().role()));
     }
@@ -912,8 +955,8 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
 
-        String first = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().actorFacet().role();
-        String second = repository.findByCode(PROJECT_A, new TermCode("TERM-1")).orElseThrow().actorFacet().role();
+        String first = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow().actorFacet().role();
+        String second = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow().actorFacet().role();
 
         assertEquals(first, second);
     }

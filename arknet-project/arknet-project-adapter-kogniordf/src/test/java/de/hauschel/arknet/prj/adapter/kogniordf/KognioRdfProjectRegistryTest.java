@@ -323,6 +323,62 @@ class KognioRdfProjectRegistryTest {
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 
+    // ---- description language-scoped delete (PR #230 review) --------------------------------
+
+    /**
+     * P0 regression (PR #230 review comment): {@code deleteDescriptionOfLanguage}'s
+     * {@code FILTER(lang(?o) = "tag")} compared the raw, unnormalized BCP-47 tag
+     * case-sensitively - a later correction spelling the same language with a different case
+     * (e.g. {@code "DE"} where the description was originally written with {@code "de"}) missed
+     * the existing literal and inserted a second, differently-cased one instead of replacing it,
+     * defeating {@code sh:uniqueLang}. Fixed by canonicalizing every tag through
+     * {@code canonicalLanguageTag} before both writing a literal and building the delete filter,
+     * so the two calls always agree on one case - mirrors {@code KognioRdfTermRepositoryTest}'s
+     * equivalent regression test for {@code skos:prefLabel}.
+     */
+    @Test
+    void updateAttributesWithADifferentlyCasedLanguageTagReplacesTheSameStoredVariantInsteadOfDuplicatingIt() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet", List.of(pathAnchor("/home/dev/arknet")));
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null);
+
+        ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
+        Project updated = registry.updateAttributes(id, current.head(),
+                "Architecture models machines understand.", "DE", null);
+
+        assertEquals("Architecture models machines understand.", updated.description());
+        assertTrue(subjectHasDescriptionTaggedAs(id, "Architecture models machines understand.", "de"));
+        assertFalse(subjectHasDescriptionWithRawLanguageTag(id, "DE"),
+                "a case-differing language argument must not leave a duplicate, differently-cased literal behind");
+    }
+
+    /** Whether the registered project {@code id} carries this exact {@code dcterms:description} literal+tag. */
+    private boolean subjectHasDescriptionTaggedAs(ProjectId id, String value, String tag) {
+        String projectSubject = "https://w3id.org/arknet/project/" + id.value();
+        String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { <" + projectSubject
+                + "> <" + ArkprjVocabulary.DESCRIPTION + "> \"" + value + "\"@" + tag + " } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /**
+     * Whether {@code id} carries a {@code dcterms:description} literal whose RAW, unnormalized
+     * language tag is exactly {@code rawTag} - bypasses the {@code "value"@tag} triple-pattern
+     * matching {@link #subjectHasDescriptionTaggedAs} relies on (RDF term equality may treat
+     * differently-cased tags as the same term) and instead mirrors production's own
+     * {@code deleteDescriptionOfLanguage} filter ({@code FILTER(lang(?o) = "tag")}, a
+     * case-sensitive string comparison against the tag exactly as stored).
+     */
+    private boolean subjectHasDescriptionWithRawLanguageTag(ProjectId id, String rawTag) {
+        String projectSubject = "https://w3id.org/arknet/project/" + id.value();
+        String query = "ASK { GRAPH <" + ArkprjVocabulary.REGISTRY_GRAPH + "> { <" + projectSubject
+                + "> <" + ArkprjVocabulary.DESCRIPTION + "> ?o . FILTER(lang(?o) = \"" + rawTag + "\") } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(ProjectId.RESERVED_SYSTEM_DATASET))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
     // ---- self-description -------------------------------------------------------------------
 
     @Test

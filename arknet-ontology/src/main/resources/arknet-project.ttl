@@ -102,6 +102,16 @@ arkprj:defaultLanguage a owl:DatatypeProperty ;
     rdfs:label   "default language"@en , "Standardsprache"@de ;
     rdfs:comment "A project's optional, single default display/write language, as a BCP-47 language tag (e.g. 'de'). Other bounded contexts read it as the second-priority tier of a display-language fallback chain (after an explicit per-call override, before an untagged literal) - it never changes what an omitted write-time language argument writes, which stays untagged regardless of this value."@en , "Die optionale, einwertige Standard-Anzeige-/Schreibsprache eines Projekts, als BCP-47-Sprach-Tag (z.B. 'de'). Andere Bounded Contexts lesen sie als zweite Prioritaetsstufe einer Anzeigesprachen-Fallback-Kette (nach einem expliziten Aufruf-Override, vor einem ungetaggten Literal) - sie aendert nie, was ein weggelassenes Sprach-Argument beim Schreiben schreibt, das bleibt unabhaengig von diesem Wert ungetaggt."@de .
 
+# dcterms:description on arkprj:Project: an optional, multilingual free-text description
+# (Domain arkprj:Project, Range: language-tagged string literals). Unlike
+# arkreq:Requirement's dcterms:description below - mandatory, exactly one - a project's
+# description may be absent entirely, and when present may carry several literals, one per
+# BCP-47 language tag (the same store-first multi-valued pattern as skos:prefLabel/
+# skos:definition in arknet-ubiquitous-language) - no owl:Restriction is declared here for
+# that reason, since neither a fixed cardinality nor a single range value would hold.
+# prjshapes:Project-description (project-shapes.ttl) enforces sh:uniqueLang true: at most
+# one literal per language tag, several different tags coexisting by design.
+
 ##############################################################################
 #  2. ANCHOR
 ##############################################################################
