@@ -186,6 +186,10 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <mainClass>de.hauschel.arknet.mcp.ArknetMcpApplication</mainClass>
+                    <!-- Keep the thin, regular jar as the main artifact (arknet-architecture-tests
+                         resolves it as a test dependency, issue #237); the executable fat jar
+                         goes out under this classifier instead, see arknet-mcp/Dockerfile. -->
+                    <classifier>exec</classifier>
                 </configuration>
                 <executions>
                     <execution>
