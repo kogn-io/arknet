@@ -606,6 +606,147 @@ class WriteFunnelTest {
                 "a failed write must not record a revision");
     }
 
+    // ---- null-check contract (constructors, create/update/compareAndUpdate) --------------
+
+    /**
+     * Both constructors validate every collaborator with {@code Objects.requireNonNull} -
+     * mirrors {@code ShaclWriteGateTest#rejectsNullArguments} for the analogous contract on
+     * {@link ShaclWriteGate}. Left untested, a dropped guard would surface only as an NPE deep
+     * inside {@code rdf.createIRI(null)} or similar instead of a clear message at the
+     * boundary.
+     */
+    @Test
+    void constructorsRejectNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        DatasetLifecycle lifecycle = fixture.lifecycle;
+        ShaclWriteGate gate = validGate();
+        Predicate<RuntimeException> isWriteConflict = e -> false;
+        Clock clock = Clock.systemUTC();
+
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(null, gate, isWriteConflict));
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(lifecycle, null, isWriteConflict));
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(lifecycle, gate, null));
+
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(null, gate, isWriteConflict, clock));
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(lifecycle, null, isWriteConflict, clock));
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(lifecycle, gate, null, clock));
+        assertThrows(NullPointerException.class, () -> new WriteFunnel(lifecycle, gate, isWriteConflict, null));
+    }
+
+    /**
+     * The short {@code create} overload (bound {@code commitConflict}) checks the same
+     * parameters as the full overload below, plus its own early {@code duplicateCode} check
+     * before delegating. {@code assertedContext} is deliberately excluded: it is documented as
+     * optional ({@code null} if the shapes need none).
+     */
+    @Test
+    void createShortOverloadRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+
+        assertThrows(NullPointerException.class, () -> funnel.create(null, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, null, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, null, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null,
+                candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                null, null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, null, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, null));
+    }
+
+    /** The full {@code create} overload additionally checks {@code commitConflict}. */
+    @Test
+    void createFullOverloadRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+        UnaryOperator<RuntimeException> commitConflict = UnaryOperator.identity();
+
+        assertThrows(NullPointerException.class, () -> funnel.create(null, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, null, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, null, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null,
+                candidate(), null, Signals::unexpected, Signals::unexpected, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                null, null, Signals::unexpected, Signals::unexpected, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, null, Signals::unexpected, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, null, commitConflict, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, null, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.create(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, CODE,
+                candidate(), null, Signals::unexpected, Signals::unexpected, commitConflict, null));
+    }
+
+    /** {@code assertedContext} is deliberately excluded here too - optional, {@code null} means none. */
+    @Test
+    void updateRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+
+        assertThrows(NullPointerException.class, () -> funnel.update(null, GRAPH_IRI, SUBJECT_IRI,
+                candidate(), null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.update(fixture.dataset, null, SUBJECT_IRI,
+                candidate(), null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.update(fixture.dataset, GRAPH_IRI, null,
+                candidate(), null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.update(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                null, null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.update(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                candidate(), null, null, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.update(fixture.dataset, GRAPH_IRI, SUBJECT_IRI,
+                candidate(), null, Signals::unexpected, null));
+    }
+
+    /**
+     * {@code assertedContext} and {@code expectedHead} are deliberately excluded: both are
+     * documented as optionally {@code null} ({@code expectedHead} meaning "no revision recorded
+     * yet").
+     */
+    @Test
+    void compareAndUpdateRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+        String expectedHead = "https://w3id.org/arknet/revision/current";
+
+        assertThrows(NullPointerException.class, () -> funnel.compareAndUpdate(null, GRAPH_IRI, SUBJECT_IRI,
+                expectedHead, candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.compareAndUpdate(fixture.dataset, null, SUBJECT_IRI,
+                expectedHead, candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class, () -> funnel.compareAndUpdate(fixture.dataset, GRAPH_IRI, null,
+                expectedHead, candidate(), null, Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, expectedHead, null, null,
+                        Signals::unexpected, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, expectedHead, candidate(),
+                        null, null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, expectedHead, candidate(),
+                        null, Signals::unexpected, null, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.compareAndUpdate(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, expectedHead, candidate(),
+                        null, Signals::unexpected, Signals::unexpected, null));
+    }
+
+    /** A conforming, minimal gate wired the same way {@link Fixture#funnelAt} builds one. */
+    private ShaclWriteGate validGate() {
+        RDF graphs = new SimpleRdf();
+        return new ShaclWriteGate(new RecordingValidation(new ShaclReport(true, List.of())), graphs.createGraph(),
+                graphs.createGraph(), ValidationOptions.defaults(), DisplayLocale.DEFAULT);
+    }
+
     private static List<String> subjectsTyped(ReadableGraph graph, String type) {
         return graph.stream()
                 .filter(triple -> triple.getPredicate().getIRIString().equals(VocabRdf.TYPE.getIRIString()))
