@@ -30,7 +30,11 @@ the skill's generic methodology.
   priority file: all five generic tools (`store_overview`, `resource_get`, `trace_matrix`,
   `orphan_check`, `impact_analysis`) and the HTML report read through the same
   `readSnapshot`/`outgoing`/`incoming` snapshot. A filtering bug there (see #136, blank-node
-  subjects) distorts five tools simultaneously, not just one.
+  subjects) distorts five tools simultaneously, not just one. `resource_history` (issue #251)
+  shares only the existence check (`outgoing`/`incoming`, for its "not found" case) with that
+  snapshot, not the snapshot itself: its revision data comes from `StoreReader#history`, a
+  deliberately separate query over `ArkprovVocabulary#PROVENANCE_GRAPH` - the one graph the
+  shared snapshot excludes on purpose.
 - `ArknetMcpConfiguration.java` (~660 lines, the central wiring) doesn't deserve a craftsmanship
   deduction in this skill — that's `/clean-code-review`'s job. For Full Review the only thing
   that matters: is every one of the six BC bean families actually wired per-call rather than as

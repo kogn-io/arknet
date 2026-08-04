@@ -59,6 +59,16 @@ public final class ArkprovVocabulary {
      */
     public static final String PROVENANCE_GRAPH = "https://w3id.org/arknet/model/provenance";
 
+    /**
+     * Base IRI a revision's own identity is minted under - flat and opaque
+     * ({@code REVISION_IRI_BASE + UUID}), deliberately separate from the resource-identity base
+     * a bounded context mints under: a revision is infrastructure the funnel owns, not a model
+     * resource. Shared between {@link WriteFunnel}, which mints revision identities under it,
+     * and any read path that needs to recognise or shorten one for display (e.g. a
+     * change-history read path) - the same "future change views" role the class javadoc names.
+     */
+    public static final String REVISION_IRI_BASE = "https://w3id.org/arknet/revision/";
+
     /** {@code arkprov:Revision} - the type of one immutable revision (a {@code prov:Entity}). */
     public static final String REVISION_TYPE = NAMESPACE + "Revision";
 

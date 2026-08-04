@@ -21,8 +21,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
+import io.kogn.rdf.terms.Graph;
+import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.SimpleRdf;
 import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -536,6 +540,85 @@ class StoreReportToolsTest {
     @Test
     void resourceGetRejectsAnUnregisteredAnchor() {
         assertThatThrownBy(() -> tools.resourceGet(null, "FR-1", "/never/registered"))
+                .isInstanceOf(UnresolvedProjectAnchorException.class)
+                .hasMessageContaining("/never/registered");
+    }
+
+    /**
+     * Happy path for issue #251: {@code setUp}'s create is the only write {@code fr1} has gone
+     * through so far, so its history is exactly one revision, and it is the current one.
+     */
+    @Test
+    void resourceHistoryShowsExactlyOneCurrentRevisionForAFreshlyCreatedResource() {
+        String result = tools.resourceHistory(null, "FR-1", ANCHOR);
+
+        assertThat(result).contains("# History (1)").contains("(current)");
+    }
+
+    /**
+     * A further write through the funnel must extend the history and move the current marker to
+     * the new revision, without losing the first one.
+     */
+    @Test
+    void resourceHistoryReflectsAFurtherWriteThroughTheFunnelAndMovesTheCurrentMarker() {
+        RequirementRepository requirements = KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        RequirementRepository.CurrentRequirement current =
+                requirements.findCurrentByCode(PROJECT, fr1.code()).orElseThrow();
+        Requirement updated = new Requirement(
+                fr1.id(), fr1.code(), "Login v2", fr1.description(), fr1.type(), fr1.status(), fr1.priority(),
+                null, null, null, fr1.acceptanceCriteria(), List.of());
+        requirements.compareAndUpdate(PROJECT, current.head(), updated, null, null);
+
+        String result = tools.resourceHistory(null, "FR-1", ANCHOR);
+
+        assertThat(result).contains("# History (2)");
+        assertThat(result.lines().filter(line -> line.contains("(current)")).count()).isEqualTo(1);
+    }
+
+    /**
+     * A resource that exists but was written entirely store-first (ADR-005) - straight into a
+     * model graph, bypassing every repository and therefore the funnel - has no revision to
+     * report: an empty, non-error history, not a "not found".
+     */
+    @Test
+    void resourceHistoryReportsNoRevisionsForAnExistingResourceWrittenOnlyStoreFirst() {
+        String storeFirstIri = "https://w3id.org/arknet/id/store-report-test-store-first-1";
+        seedStoreFirstResource(storeFirstIri);
+
+        String result = tools.resourceHistory(null, storeFirstIri, ANCHOR);
+
+        assertThat(result).contains("# History (0)");
+        assertThat(result).doesNotContain("not found");
+    }
+
+    /** Writes a single triple straight into a model graph, touching no repository or funnel. */
+    private void seedStoreFirstResource(String iri) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        graph.add(rdf.createIRI(iri), rdf.createIRI("http://purl.org/dc/terms/title"),
+                rdf.createLiteral("Store-first resource"));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-report-test-store-first-graph"), graph);
+                return null;
+            });
+        }
+    }
+
+    /** A syntactically valid but unknown IRI is reported identically to {@code resource_get}. */
+    @Test
+    void resourceHistoryReportsNotFoundForAWellFormedButUnknownIri() {
+        String unknownIri = "https://w3id.org/arknet/id/store-report-test-does-not-exist";
+
+        String result = tools.resourceHistory(null, unknownIri, ANCHOR);
+
+        assertThat(result).isEqualTo(ResourceRenderer.notFoundMessage(Prefixes.defaults(), unknownIri));
+    }
+
+    /** An anchor no project is registered under is rejected, never quietly resolved. */
+    @Test
+    void resourceHistoryRejectsAnUnregisteredAnchor() {
+        assertThatThrownBy(() -> tools.resourceHistory(null, "FR-1", "/never/registered"))
                 .isInstanceOf(UnresolvedProjectAnchorException.class)
                 .hasMessageContaining("/never/registered");
     }

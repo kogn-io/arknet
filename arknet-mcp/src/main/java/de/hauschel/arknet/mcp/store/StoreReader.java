@@ -58,6 +58,14 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * change signal - which is what {@code arkprov:head} means - would be misled. The head becomes
  * visible again when it stops lying, i.e. once those paths are resolved into the funnel; until
  * then the trail accumulates in the store without any generic reader surfacing it.</p>
+ *
+ * <p><strong>{@link #history} is the one deliberate exception</strong> (issue #251): unlike
+ * {@link #readSnapshot}/{@link #outgoing}/{@link #incoming}, it reads exactly
+ * {@link ArkprovVocabulary#PROVENANCE_GRAPH} on purpose - showing the trail, not the model, is
+ * its whole job. It marks a revision "current" by reading the resource's actual
+ * {@code arkprov:head} triple rather than assuming the newest timestamp is current, so it never
+ * asserts more than the store itself does about which revision a write path last moved the head
+ * to.</p>
  */
 public final class StoreReader {
 
@@ -204,6 +212,64 @@ public final class StoreReader {
                     .distinct()
                     .toList();
         }
+    }
+
+    /**
+     * Reads a resource's change history (issue #251): every {@code arkprov:Revision} the shared
+     * write funnel has recorded for it (ADR-013/ADR-014), oldest first, with the one matching
+     * the resource's current {@code arkprov:head} marked {@link Revision#current}.
+     *
+     * <p>A resource the funnel has never written through - written entirely store-first
+     * (ADR-005), or predating the funnel - has recorded no revision and yields an empty list,
+     * not an error; distinguishing that from "no such resource" is the caller's job (as
+     * {@code resource_get} already does for {@link #outgoing}/{@link #incoming} being empty).
+     * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list:
+     * the funnel only ever records a revision under a subject's own opaque IRI, never a blank
+     * node, so no revision can name one via {@code prov:specializationOf}.</p>
+     *
+     * @param projectId the project to read
+     * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
+     * @return the revisions, oldest first
+     */
+    public List<Revision> history(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(iri, "iri");
+        String iriRef = SparqlTerms.iriRef(iri);
+        try (DatasetHandle handle = acquire(projectId)) {
+            String headIri = currentHead(handle, iriRef);
+            String query = "SELECT ?revision ?time WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                    + "?revision <" + ArkprovVocabulary.SPECIALIZATION_OF + "> " + iriRef + " . "
+                    + "?revision <" + ArkprovVocabulary.GENERATED_AT_TIME + "> ?time . "
+                    + "} } ORDER BY ?time";
+            return handle.sparqlQuery().select(query)
+                    .map(row -> toRevision(row, headIri))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .toList();
+        }
+    }
+
+    /** Reads {@code iriRef}'s current {@code arkprov:head}, or {@code null} if it has none. */
+    private static String currentHead(DatasetHandle handle, String iriRef) {
+        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + iriRef + " <" + ArkprovVocabulary.HEAD + "> ?head } }";
+        return handle.sparqlQuery().select(query)
+                .map(row -> row.getValue("head").orElse(null))
+                .filter(IRI.class::isInstance)
+                .map(term -> ((IRI) term).getIRIString())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static Optional<Revision> toRevision(BindingSet row, String headIri) {
+        RDFTerm revision = row.getValue("revision").orElse(null);
+        RDFTerm time = row.getValue("time").orElse(null);
+        if (!(revision instanceof IRI revisionIri) || !(time instanceof Literal timeLiteral)) {
+            return Optional.empty();
+        }
+        String revisionIriString = revisionIri.getIRIString();
+        return Optional.of(new Revision(revisionIriString, timeLiteral.getLexicalForm(),
+                revisionIriString.equals(headIri)));
     }
 
     /** Acquires the project's dataset - the one line every read method here shares. */

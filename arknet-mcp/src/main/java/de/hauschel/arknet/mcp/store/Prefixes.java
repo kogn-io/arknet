@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
+
 /**
  * Bidirectional CURIE / IRI resolver over a fixed set of namespace bindings.
  *
@@ -38,8 +40,9 @@ public final class Prefixes {
      * under since that refactor; {@link #MODEL_INSTANCE_BASE} predates it and is no longer
      * produced. It is not the only base anything is minted under: the shared write funnel mints
      * revision and activity identities under its own bases (ADR-014), deliberately outside this
-     * one because a revision is infrastructure rather than a model resource - which is also why
-     * no reader here ever renders them (see {@code StoreReader}).
+     * one because a revision is infrastructure rather than a model resource. Only the revision
+     * base is bound here (as {@code rev:}, since {@code resource_history} does render revision
+     * IRIs, issue #251) - the activity base has no reader here to shorten it for.
      */
     public static final String INSTANCE_BASE = "https://w3id.org/arknet/id/";
 
@@ -65,13 +68,17 @@ public final class Prefixes {
     /**
      * The default arknet bindings: instance namespaces (requirement, term, actor) plus the
      * standard vocabularies the bounded contexts write (arkreq, arkproc, arkarch, arkddd,
-     * arknet core, skos, dcterms, rdf, rdfs, xsd).
+     * arknet core, skos, dcterms, rdf, rdfs, xsd), plus one revision-instance binding
+     * ({@code rev:}).
      *
-     * <p>No {@code arkprov:}/{@code prov:}/revision bindings: {@code StoreReader} excludes the
-     * provenance graph from every read path (ADR-014), so no provenance IRI ever reaches a
-     * renderer or the prefix legend. They belong here the day the head pointer becomes visible,
-     * not before - a binding for something unreachable is a promise the read path does not
-     * keep.</p>
+     * <p>Still no {@code arkprov:}/{@code prov:} predicate bindings: {@code StoreReader}
+     * excludes the provenance graph's predicates/head pointer from every model read path
+     * (ADR-014), so none of them ever reaches a renderer or the prefix legend - a binding for
+     * something unreachable is a promise the read path does not keep. The one exception is
+     * {@code rev:}, bound to {@code ArkprovVocabulary#REVISION_IRI_BASE}: {@code
+     * resource_history} (issue #251) is the one read path that deliberately does surface a
+     * revision's own IRI, so it needs this binding to shorten one for display, the same way
+     * every other reachable IRI is shortened.</p>
      *
      * @return the default resolver
      */
@@ -80,6 +87,7 @@ public final class Prefixes {
                 new Prefix("req", MODEL_INSTANCE_BASE + "requirement/"),
                 new Prefix("term", MODEL_INSTANCE_BASE + "term/"),
                 new Prefix("act", MODEL_INSTANCE_BASE + "actor/"),
+                new Prefix("rev", ArkprovVocabulary.REVISION_IRI_BASE),
                 new Prefix("arknet", "https://w3id.org/arknet/core#"),
                 new Prefix("arkreq", "https://w3id.org/arknet/requirements#"),
                 new Prefix("arkproc", "https://w3id.org/arknet/process#"),
