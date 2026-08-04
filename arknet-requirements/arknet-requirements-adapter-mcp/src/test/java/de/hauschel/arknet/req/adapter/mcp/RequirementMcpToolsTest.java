@@ -168,6 +168,19 @@ class RequirementMcpToolsTest {
     }
 
     /**
+     * {@code req_get}/{@code req_list} must render a requirement's normative statement, not just
+     * its title - the actual bug behind issue #249. Mirrors {@link ConstraintPresenter}'s
+     * {@code title: statement} rendering.
+     */
+    @Test
+    void addRendersTheNormativeDescriptionAlongsideTheTitle() {
+        String rendered = adapter.add(null, "Login", "The system shall authenticate users via OAuth2",
+                "FUNCTIONAL", List.of("Done when it works"), null, null, null, null, null);
+
+        assertTrue(rendered.contains("The system shall authenticate users via OAuth2"), rendered);
+    }
+
+    /**
      * {@code acceptanceCriteria} carries no {@code required = false} - a missing value is
      * caught by the domain's {@code sh:minCount 1} invariant ({@link Requirement}'s compact
      * constructor), not silently normalised away here.
