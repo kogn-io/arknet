@@ -88,8 +88,9 @@ final class RequirementPresenter {
                 : " [constraints: " + r.constrainedBy().stream().map(ref -> renderConstraint(ref, constraintsById))
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
         final String criteria = " [done when: " + String.join("; ", r.acceptanceCriteria()) + "]";
-        return "%s [%s] %s (%s)%s%s%s%s".formatted(
-                r.code().value(), r.type(), r.title(), r.status(), priority, terms, constraints, criteria);
+        return "%s [%s] %s (%s)%s: %s%s%s%s".formatted(
+                r.code().value(), r.type(), r.title(), r.status(), priority, r.description(), terms, constraints,
+                criteria);
     }
 
     /** Renders one schema term as {@code term: definition (values: A, B, ...)}. */
