@@ -6,7 +6,8 @@
 - Status: Konsolidierung aus doc42 + dddprocess + ddd-forge
 - Repository: Code und Pull Requests leben auf GitHub (`github.com/kogn-io/arknet`, Apache-2.0).
   Bugs/Feature-Requests laufen ueber den GitHub-Issue-Tracker (Label-Schema
-  `prio:*`/`type:*`/`deferred`), offene Fragen ueber GitHub Discussions. Siehe README
+  `prio:*`, Typ-Labels (`bug`/`enhancement`/`chore`/`refactor`/`documentation`/`vision`/...),
+  `deferred`), offene Fragen ueber GitHub Discussions. Siehe README
   "Repository"-Abschnitt.
 
 ## Architektur
