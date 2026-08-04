@@ -127,6 +127,46 @@ public record UseCase(
     }
 
     /**
+     * Returns a new use case with {@code realisesByPosition} applied to {@link #steps()} by
+     * position - correcting only each named step's {@code realises} references and leaving its
+     * {@code text}, every unmatched step and every other field of this use case untouched.
+     *
+     * <p>A position's value list <strong>replaces</strong> that step's entire {@code realises} set
+     * wholesale; an empty list is the explicit signal to clear it, distinct from omitting the
+     * position altogether (which leaves it untouched) - the same "provided value replaces
+     * wholesale, absent means unchanged" rule {@code extensions} already follows at the
+     * whole-use-case level (issue #255). Unlike {@code priority} in the sibling requirements
+     * bounded context, where clearing an already-set value was deliberately left out of scope, a
+     * wrong {@code realises} reference is a correctable mistake, not merely an unset optional
+     * field.</p>
+     *
+     * @param projectId          the project the correction is issued against, for the exception
+     *                           message only (see {@link #withStepTextPatches} for why this is
+     *                           never stored on the aggregate)
+     * @param realisesByPosition the corrected, already-resolved realises set for each named
+     *                           existing step, keyed by {@code position}; never {@code null}
+     * @return a new use case with the patched steps
+     * @throws StepPositionNotFoundException if a key names a position no step in {@link #steps()}
+     *                                        carries
+     */
+    public UseCase withStepRealisesPatches(ProjectId projectId, Map<Integer, List<RequirementRef>> realisesByPosition) {
+        Objects.requireNonNull(realisesByPosition, "realisesByPosition");
+        Map<Integer, List<RequirementRef>> remaining = new LinkedHashMap<>(realisesByPosition);
+        List<Step> patched = steps.stream()
+                .map(step -> {
+                    List<RequirementRef> newRealises = remaining.remove(step.position());
+                    return newRealises != null ? new Step(step.position(), step.text(), newRealises) : step;
+                })
+                .toList();
+        if (!remaining.isEmpty()) {
+            int unmatchedPosition = remaining.keySet().iterator().next();
+            throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
+        }
+        return new UseCase(id, code, title, goal, scope, trigger, primaryActor, supportingActors,
+                precondition, postcondition, patched, extensions);
+    }
+
+    /**
      * Enforces that step positions are gap-free, duplicate-free and ascending:
      * the step at index {@code i} must carry position {@code i + 1}.
      */

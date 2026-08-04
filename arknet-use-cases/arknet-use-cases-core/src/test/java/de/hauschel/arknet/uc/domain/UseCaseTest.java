@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -189,6 +190,61 @@ class UseCaseTest {
         assertSame(PROJECT, ex.projectId());
         assertEquals(CODE, ex.useCaseCode());
         assertEquals(99, ex.position());
+    }
+
+    /**
+     * {@link UseCase#withStepRealisesPatches} corrects only the matched step's
+     * {@code realises}, leaving its {@code text}, every unmatched step and every other field of
+     * the use case untouched (issue #255).
+     */
+    @Test
+    void withStepRealisesPatchesCorrectsOnlyTheMatchedStepsRealisesLeavingTextAndOtherStepsUntouched() {
+        RequirementRef fr7 = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-7"));
+        UseCase uc = useCaseWithSteps(List.of(
+                new Step(1, "select items", List.of(FR5)),
+                new Step(2, "confirm", List.of())));
+
+        UseCase patched = uc.withStepRealisesPatches(PROJECT, Map.of(1, List.of(fr7)));
+
+        assertEquals("select items", patched.steps().get(0).text());
+        assertEquals(List.of(fr7), patched.steps().get(0).realises());
+        assertEquals("confirm", patched.steps().get(1).text());
+        assertEquals(List.of(), patched.steps().get(1).realises());
+        assertEquals(uc.id(), patched.id());
+        assertEquals(uc.code(), patched.code());
+    }
+
+    /**
+     * An empty list for a named position clears that step's existing {@code realises} set - the
+     * explicit, unambiguous signal to remove references, distinct from omitting the position
+     * altogether (issue #255).
+     */
+    @Test
+    void withStepRealisesPatchesClearsRealisesWhenGivenAnEmptyList() {
+        UseCase uc = useCaseWithSteps(List.of(new Step(1, "select items", List.of(FR5))));
+
+        UseCase patched = uc.withStepRealisesPatches(PROJECT, Map.of(1, List.of()));
+
+        assertTrue(patched.steps().get(0).realises().isEmpty());
+    }
+
+    @Test
+    void withStepRealisesPatchesRejectsAPatchForAnUnknownPosition() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        StepPositionNotFoundException ex = assertThrows(StepPositionNotFoundException.class,
+                () -> uc.withStepRealisesPatches(PROJECT, Map.of(99, List.of(FR5))));
+
+        assertSame(PROJECT, ex.projectId());
+        assertEquals(CODE, ex.useCaseCode());
+        assertEquals(99, ex.position());
+    }
+
+    @Test
+    void withStepRealisesPatchesRejectsNullMap() {
+        UseCase uc = useCaseWithSteps(List.of(step(1, "select items")));
+
+        assertThrows(NullPointerException.class, () -> uc.withStepRealisesPatches(PROJECT, null));
     }
 
     @Test

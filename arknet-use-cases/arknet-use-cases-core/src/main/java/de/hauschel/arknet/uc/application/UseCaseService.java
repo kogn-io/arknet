@@ -63,13 +63,16 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@code RequirementService}).</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a use case's
- * goal-level fields and/or an individual step's text after the fact, without the
- * delete-and-recreate round trip through {@code uc_add} that would risk a new {@link UseCaseCode}
- * and orphaned {@code realises}/{@code extensions} references. Every scalar argument is optional
- * ({@code null} leaves it unchanged); {@code stepTextPatches} corrects only the {@code text} of
- * existing main-flow steps by position, never their {@code realises} references, and never adds,
- * removes or reorders steps. {@code primaryActor}, {@code supportingActors} and full step-list
- * restructuring stay out of this port's scope - see {@link UpdateUseCase}.</p>
+ * goal-level fields and/or an individual step's text and/or realises references after the fact,
+ * without the delete-and-recreate round trip through {@code uc_add} that would risk a new
+ * {@link UseCaseCode} and orphaned {@code realises}/{@code extensions} references. Every scalar
+ * argument is optional ({@code null} leaves it unchanged); {@code stepTextPatches} corrects only
+ * the {@code text} of existing main-flow steps by position, never their {@code realises}
+ * references, while the separate, independent {@code stepRealisesPatches} corrects only a named
+ * step's {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
+ * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor},
+ * {@code supportingActors} and full step-list restructuring stay out of this port's scope - see
+ * {@link UpdateUseCase}.</p>
  */
 public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, UpdateUseCase {
 
@@ -164,9 +167,14 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     @Override
     public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches, String language) {
+            List<StepTextPatch> stepTextPatches, List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches,
+            String language) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        // Reference resolution happens once, before the retry, mirroring add(): an unresolvable
+        // requirement code must fail immediately and is not a code-collision race to retry on.
+        Map<Integer, List<RequirementRef>> realisesByPosition = stepRealisesPatches == null
+                ? null : toRealisesByPosition(projectId, stepRealisesPatches);
         return updateWithOptimisticRetry(projectId, code, language, current -> {
             UseCase base = new UseCase(
                     current.id(), current.code(),
@@ -179,8 +187,23 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                     postcondition != null ? postcondition : current.postcondition(),
                     current.steps(),
                     extensions != null ? List.copyOf(extensions) : current.extensions());
-            return stepTextPatches != null ? base.withStepTextPatches(projectId, stepTextPatches) : base;
+            base = stepTextPatches != null ? base.withStepTextPatches(projectId, stepTextPatches) : base;
+            return realisesByPosition != null ? base.withStepRealisesPatches(projectId, realisesByPosition) : base;
         });
+    }
+
+    private Map<Integer, List<RequirementRef>> toRealisesByPosition(
+            ProjectId projectId, List<UpdateUseCase.StepRealisesPatch> patches) {
+        Map<Integer, List<RequirementRef>> byPosition = new LinkedHashMap<>();
+        for (UpdateUseCase.StepRealisesPatch patch : patches) {
+            List<RequirementRef> resolved = patch.realises() == null
+                    ? List.of()
+                    : patch.realises().stream()
+                            .map(code -> new RequirementRef(requirementLookup.resolveByCode(projectId, code)))
+                            .toList();
+            byPosition.put(patch.position(), resolved);
+        }
+        return byPosition;
     }
 
     /**

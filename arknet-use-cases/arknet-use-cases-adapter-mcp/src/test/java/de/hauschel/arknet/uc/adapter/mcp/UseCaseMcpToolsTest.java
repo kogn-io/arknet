@@ -200,7 +200,7 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, "de", null);
+        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, "de", null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -303,7 +303,7 @@ class UseCaseMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger",
                 "New precondition", "New postcondition", List.of("2a. abort"),
-                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null);
+                List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals("New title", stub.lastUpdateTitle);
@@ -317,13 +317,25 @@ class UseCaseMcpToolsTest {
         assertTrue(rendered.contains("New title"), rendered);
     }
 
+    /** {@code uc_update} maps {@code stepRealisesPatches} to {@link UpdateUseCase.StepRealisesPatch}. */
+    @Test
+    void updatePassesStepRealisesPatchesThroughMappedToThePort() {
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null,
+                List.of(new UseCaseMcpTools.StepRealisesPatchInput(1, List.of("FR-1", "FR-2")),
+                        new UseCaseMcpTools.StepRealisesPatchInput(2, List.of())),
+                null, null);
+
+        assertEquals(List.of(new UpdateUseCase.StepRealisesPatch(1, List.of("FR-1", "FR-2")),
+                new UpdateUseCase.StepRealisesPatch(2, List.of())), stub.lastUpdateStepRealisesPatches);
+    }
+
     /**
      * An omitted field must reach {@link UpdateUseCase} as {@code null} - so the port (not this
      * adapter) decides that "unchanged" means "leave the existing value".
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals(null, stub.lastUpdateTitle);
@@ -334,12 +346,13 @@ class UseCaseMcpToolsTest {
         assertEquals(null, stub.lastUpdatePostcondition);
         assertEquals(null, stub.lastUpdateExtensions);
         assertEquals(null, stub.lastUpdateStepTextPatches);
+        assertEquals(null, stub.lastUpdateStepRealisesPatches);
     }
 
     /** A blank string is treated as omitted, the same tolerance {@code uc_add} already applies. */
     @Test
     void updateTreatsABlankFieldAsOmitted() {
-        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(null, stub.lastUpdateTitle);
     }
@@ -355,7 +368,7 @@ class UseCaseMcpToolsTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> adapter.update(null, "UC1", null, null, null, null, null, null, null,
-                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null));
+                        List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null, null));
 
         assertTrue(thrown.getMessage().contains("99"), thrown.getMessage());
     }
@@ -386,6 +399,7 @@ class UseCaseMcpToolsTest {
         private String lastUpdatePostcondition;
         private List<String> lastUpdateExtensions;
         private List<StepTextPatch> lastUpdateStepTextPatches;
+        private List<UpdateUseCase.StepRealisesPatch> lastUpdateStepRealisesPatches;
         private RuntimeException updateFailure;
 
         @Override
@@ -429,7 +443,8 @@ class UseCaseMcpToolsTest {
         @Override
         public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
                 String trigger, String precondition, String postcondition, List<String> extensions,
-                List<StepTextPatch> stepTextPatches, String language) {
+                List<StepTextPatch> stepTextPatches, List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches,
+                String language) {
             if (updateFailure != null) {
                 throw updateFailure;
             }
@@ -442,6 +457,7 @@ class UseCaseMcpToolsTest {
             lastUpdatePostcondition = postcondition;
             lastUpdateExtensions = extensions;
             lastUpdateStepTextPatches = stepTextPatches;
+            lastUpdateStepRealisesPatches = stepRealisesPatches;
             lastUpdateLanguage = language;
             ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
             return new UseCase(opaqueId("uc-1"), code, title != null ? title : "t",
