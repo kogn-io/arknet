@@ -129,15 +129,17 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@code prefLabel} shape still sees the resulting state truthfully without this class ever
  * persisting that assertion again.</p>
  *
- * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel}
- * in several languages ({@code "Kunde"@de}, {@code "Customer"@en}) - SKOS-legal and store-first
- * reachable (ADR-005). {@link #findByCode}/{@link #findAll} therefore join {@code prefLabel} as a
- * <em>multi-valued</em> (but still mandatory) pattern, group the resulting rows per subject, and
- * let the injected {@link DisplayLocale} pick the label to display through a fallback chain
- * (requested language, system default, untagged, deterministic last resort). A concept is never
- * dropped for lacking the requested language - only the shown language degrades. {@code findByIds}
- * (the {@link ResolveTerms} batch) is deliberately untouched: it joins only {@code identifier},
- * never {@code prefLabel}.</p>
+ * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel} and
+ * {@code skos:definition} in several languages ({@code "Kunde"@de}/{@code "Eine juristische..."@de},
+ * {@code "Customer"@en}/{@code "A legal..."@en}) - SKOS-legal and store-first reachable (ADR-005).
+ * {@link #findByCode}/{@link #findAll} therefore join both {@code prefLabel} and {@code definition}
+ * as <em>multi-valued</em> (but still mandatory) patterns, group the resulting rows per subject, and
+ * let the injected {@link DisplayLocale} pick both fields' displayed value through the very same
+ * fallback chain instance (requested language, system default, untagged, deterministic last resort)
+ * - so a card showing both fields for one concept never mixes two languages between them (issue
+ * #248). A concept is never dropped for lacking the requested language - only the shown language
+ * degrades. {@code findByIds} (the {@link ResolveTerms} batch) is deliberately untouched: it joins
+ * only {@code identifier}, never {@code prefLabel}/{@code definition}.</p>
  *
  * <p><strong>Blank-node subject guard.</strong> {@code ulshapes:TermShape} carries no
  * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first (ADR-005) concept whose
@@ -155,12 +157,14 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * <p><strong>Row multiplication on {@code skos:definition}.</strong> Like
  * {@code prefLabel}, {@code skos:definition} carries no {@code sh:maxCount} in {@code ulshapes} -
  * a store-first (ADR-005) concept with two definition literals (e.g. one per language) legally
- * multiplies a subject into two SPARQL rows. Unlike {@code prefLabel}, there is no
- * {@link DisplayLocale} guarantee for {@code definition} (a deliberately narrower scope), so
- * {@link #findByCode}/{@link #findAll} instead take the first-seen value deterministically (stable
- * because the grouping map preserves row insertion order) and log a single {@code WARN} per
- * assembled {@link Term} when more than one distinct value was seen - visible instead of silently
- * dropped, without inventing a second display-selection mechanism next to {@link DisplayLocale}.</p>
+ * multiplies a subject into two SPARQL rows. {@code definition} shares the exact same
+ * {@link DisplayLocale} fallback chain as {@code prefLabel} (issue #248): a card that shows a
+ * concept's label and its definition side by side must resolve both against the very same
+ * {@link DisplayLocale}, or the two fields silently disagree on the displayed language for one
+ * and the same resource - which is precisely the bug an earlier, definition-only "first-seen"
+ * shortcut caused. {@link #findByCode}/{@link #findAll} therefore collect {@code definition}
+ * candidates exactly like {@code prefLabel} and let {@link TermAssembly#toTerm} select from both
+ * with one shared {@link DisplayLocale} instance.</p>
  *
  * <p><strong>Row multiplication on {@code arkproc:actorRole}.</strong> Neither {@code ulshapes}
  * nor {@code arknet-actor.ttl} constrain {@code arkproc:actorRole} with {@code sh:maxCount}
@@ -624,7 +628,7 @@ public class KognioRdfTermRepository implements TermRepository {
         selectFn.apply(query).forEach(row -> {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
-            assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            assembly.addDefinition(literalOf(row, "definition"));
             assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
         });
         return bySubject.values().stream().findFirst();
@@ -686,7 +690,7 @@ public class KognioRdfTermRepository implements TermRepository {
         selectFn.apply(query).forEach(row -> {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
-            assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+            assembly.addDefinition(literalOf(row, "definition"));
             assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             String head = headOf(row);
             if (head != null) {
@@ -725,7 +729,7 @@ public class KognioRdfTermRepository implements TermRepository {
             handle.sparqlQuery().select(query).forEach(row -> {
                 TermAssembly assembly = assemblyFor(bySubject, row, null);
                 assembly.addPrefLabel(literalOf(row, "prefLabel"));
-                assembly.addDefinition(literalOf(row, "definition").getLexicalForm());
+                assembly.addDefinition(literalOf(row, "definition"));
                 assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             });
             return bySubject.values().stream().map(assembly -> assembly.toTerm(displayLocale)).toList();
@@ -770,8 +774,11 @@ public class KognioRdfTermRepository implements TermRepository {
      * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel},
      * {@code skos:definition} and {@code arkproc:actorRole} candidates across rows, then choosing
      * one of each when the concept is finally materialised into a {@link Term}: {@code prefLabel}
-     * via the {@link DisplayLocale} fallback chain, {@code definition}/{@code actorRole}
-     * deterministically as the first-seen value (no display-language guarantee for either field),
+     * and {@code definition} both via the very same {@link DisplayLocale} fallback chain, applied
+     * to that one {@link DisplayLocale} instance passed into {@link #toTerm} - a card rendering
+     * both fields for one resource therefore always sees them resolved for the same language
+     * (issue #248). {@code actorRole} is not (yet) language-tagged at write time (see
+     * {@link #create}/{@link #attemptUpdate}), so it keeps its own, narrower first-seen policy,
      * logging a {@code WARN} if more than one distinct value was collected.
      */
     private static final class TermAssembly {
@@ -780,7 +787,7 @@ public class KognioRdfTermRepository implements TermRepository {
         private final TermCode code;
         private final ActorKind actorKind;
         private final List<LocalizedLiteral> prefLabels = new ArrayList<>();
-        private final List<String> definitions = new ArrayList<>();
+        private final List<LocalizedLiteral> definitions = new ArrayList<>();
         private final List<String> actorRoles = new ArrayList<>();
 
         private TermAssembly(TermId id, TermCode code, ActorKind actorKind) {
@@ -793,8 +800,8 @@ public class KognioRdfTermRepository implements TermRepository {
             prefLabels.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
         }
 
-        private void addDefinition(String definition) {
-            definitions.add(definition);
+        private void addDefinition(Literal literal) {
+            definitions.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
         }
 
         /** Collects one row's {@code arkproc:actorRole} candidate, or does nothing if the row bound none. */
@@ -804,12 +811,24 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         }
 
+        /**
+         * Materialises this accumulator into a {@link Term}, selecting {@code prefLabel} and
+         * {@code definition} from the very same {@code displayLocale} - the fix for issue #248:
+         * an earlier version resolved {@code definition} independently of {@code prefLabel} (a
+         * first-seen, store-row-order pick), so a term whose label and definition were not both
+         * available in the same language could show label and definition in two different
+         * languages on the very same card.
+         */
         private Term toTerm(DisplayLocale displayLocale) {
             String prefLabel = displayLocale.select(prefLabels)
                     .map(LocalizedLiteral::value)
                     .orElseThrow(() -> new IllegalStateException(
                             "prefLabel is a required join, so at least one candidate must exist"));
-            return new Term(id, code, prefLabel, firstDistinctDefinition(), actorFacet());
+            String definition = displayLocale.select(definitions)
+                    .map(LocalizedLiteral::value)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "definition is a required join, so at least one candidate must exist"));
+            return new Term(id, code, prefLabel, definition, actorFacet());
         }
 
         /**
@@ -825,26 +844,10 @@ public class KognioRdfTermRepository implements TermRepository {
         }
 
         /**
-         * Returns the first-seen {@code skos:definition} candidate (stable across repeated calls,
-         * since {@link LinkedHashMap}/row order preserves insertion order), logging a single
-         * {@code WARN} when the subject carried more than one distinct value - a
-         * "stille Luege" this makes visible instead of silently swallowing.
-         */
-        private String firstDistinctDefinition() {
-            long distinctCount = definitions.stream().distinct().count();
-            if (distinctCount > 1) {
-                LOG.warn("Term {}: field 'definition' had {} distinct values, returning the first",
-                        id.value().value(), distinctCount);
-            }
-            return definitions.get(0);
-        }
-
-        /**
          * Returns the first-seen {@code arkproc:actorRole} candidate, or {@code null} if the
-         * subject carried none at all (the join is {@code OPTIONAL} - unlike {@code definition} an
-         * empty candidate list is legal), logging a single {@code WARN} when more than one
-         * distinct value was collected - the same row-multiplication policy as
-         * {@link #firstDistinctDefinition()}.
+         * subject carried none at all (the join is {@code OPTIONAL}), logging a single
+         * {@code WARN} when more than one distinct value was collected - a "stille Luege" this
+         * makes visible instead of silently swallowing.
          */
         private String firstDistinctActorRole() {
             if (actorRoles.isEmpty()) {

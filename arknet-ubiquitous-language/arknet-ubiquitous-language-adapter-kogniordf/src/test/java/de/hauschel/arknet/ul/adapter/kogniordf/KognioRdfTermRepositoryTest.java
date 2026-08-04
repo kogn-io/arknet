@@ -887,6 +887,71 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * Reproduces issue #248 (the TERM-5 case from the arknet self-interview): a concept whose
+     * {@code skos:prefLabel} AND {@code skos:definition} are both available in German and
+     * English. Before the fix, {@code prefLabel} was selected via the injected
+     * {@link DisplayLocale} while {@code definition} was taken as the first-seen SPARQL row
+     * regardless of the requested language - so a German-locale reader could see the German
+     * label next to the English definition on the very same card. This pins the fix: a reader
+     * configured for one language sees BOTH fields resolved to that same language, and a
+     * differently-configured reader over the identical store sees the other language for BOTH.
+     */
+    @Test
+    void findByCodeResolvesPrefLabelAndDefinitionToTheSameLanguage() {
+        TermId id = freshId();
+        givenMultilingualConceptWithDefinition(PROJECT_A, id, "TERM-5",
+                "\"Legal Person\"@en, \"Juristische Person\"@de",
+                "\"A legal person is a non-human entity recognised in law.\"@en, "
+                        + "\"Eine juristische Person ist eine im Recht anerkannte Nicht-Person.\"@de");
+
+        Term german = readerFor(Locale.GERMAN, Locale.ENGLISH)
+                .findByCode(PROJECT_A, new TermCode("TERM-5"), null).orElseThrow();
+        Term english = readerFor(Locale.ENGLISH, Locale.GERMAN)
+                .findByCode(PROJECT_A, new TermCode("TERM-5"), null).orElseThrow();
+
+        assertEquals("Juristische Person", german.prefLabel());
+        assertEquals("Eine juristische Person ist eine im Recht anerkannte Nicht-Person.", german.definition());
+        assertEquals("Legal Person", english.prefLabel());
+        assertEquals("A legal person is a non-human entity recognised in law.", english.definition());
+    }
+
+    /** Same cross-field consistency guarantee for the batch read behind {@code term_list}/the store report. */
+    @Test
+    void findAllResolvesPrefLabelAndDefinitionToTheSameLanguage() {
+        givenMultilingualConceptWithDefinition(PROJECT_A, freshId(), "TERM-5",
+                "\"Legal Person\"@en, \"Juristische Person\"@de",
+                "\"A legal person is a non-human entity recognised in law.\"@en, "
+                        + "\"Eine juristische Person ist eine im Recht anerkannte Nicht-Person.\"@de");
+
+        Term german = readerFor(Locale.GERMAN, Locale.ENGLISH).findAll(PROJECT_A).get(0);
+
+        assertEquals("Juristische Person", german.prefLabel());
+        assertEquals("Eine juristische Person ist eine im Recht anerkannte Nicht-Person.", german.definition());
+    }
+
+    /**
+     * Writes a {@code skos:Concept} with a language-tagged {@code skos:prefLabel} list AND a
+     * language-tagged {@code skos:definition} list (both spliced verbatim into a SPARQL object
+     * list, e.g. {@code "\"Kunde\"@de, \"Customer\"@en"}) - {@link #givenMultilingualConcept}'s
+     * sibling for the cross-field consistency tests, since that helper only varies {@code
+     * prefLabel} and takes a single, untagged {@code definition}.
+     */
+    private void givenMultilingualConceptWithDefinition(
+            ProjectId projectId, TermId id, String code, String prefLabelList, String definitionList) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://www.w3.org/2004/02/skos/core#definition> " + definitionList + " ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> " + prefLabelList + " } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
      * Writes a {@code skos:Concept} with two {@code skos:definition} literals straight into the
      * terms graph - shape-legal ({@code ulshapes:TermShape} places no constraint on the property's
      * cardinality), but unreachable via {@code term_add}/{@code term_update}, which only ever
