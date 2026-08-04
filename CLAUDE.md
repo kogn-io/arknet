@@ -68,8 +68,6 @@ gearbeitet wird.
 
 - **Metamodell** = OWL-Ontologie (arknet-*.ttl)
 - **Architekturmodell** = Instanzdaten des Nutzers (.ttl)
-- **Projektion** = generiertes Artefakt (AsciiDoc/HTML/PDF, PlantUML, Turtle)
-- **Viewpoint** = SPARQL-Query + Template + Rolle
 - **Shape** = SHACL-Validierungsregel
 - **Projekt** = der Gegenstand, an dem Requirements, Glossarbegriffe und Use Cases haengen; ein
   Dataset haelt die Daten genau eines Projekts, die Projektgrenze ist damit die Datengrenze
@@ -92,7 +90,6 @@ gearbeitet wird.
   und Artefaktnamen, nicht fuer Packages.
 - Turtle als Primaerformat (nicht JSON-LD)
 - SHACL-Validierung bei jedem Load (RDF4J SHACL Sail)
-- Projektionen als Plugin: `.sparql` + Template-Datei-Paar
 
 ## Claude Code Plugin
 
