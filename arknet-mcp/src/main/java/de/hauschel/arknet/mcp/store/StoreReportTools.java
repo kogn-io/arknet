@@ -70,7 +70,12 @@ public final class StoreReportTools {
      * @param storeReader       the generic store read path
      * @param prefixes          the CURIE / IRI resolver
      * @param displayLocale     the display language to select among a resource's language-tagged
-     *                          labels, shared with the traceability tools' read path (issue #141)
+     *                          labels, shared with the traceability tools' read path (issue #141) -
+     *                          used here as-is, unlike that read path, which additionally merges
+     *                          in the resolved project's own default language per call (issue
+     *                          #274); a project whose configured default differs from this
+     *                          daemon's may therefore see a different label here than in {@code
+     *                          orphan_check}/{@code trace_matrix} for the very same term
      * @param htmlRenderer      the self-contained HTML report renderer
      * @param modelViews        assembles the report's per-bounded-context sections; never fails the
      *                          tool - a context whose read path throws is reported as a warning in

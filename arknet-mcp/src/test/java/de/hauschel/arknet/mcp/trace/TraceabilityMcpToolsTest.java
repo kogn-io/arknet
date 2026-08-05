@@ -79,6 +79,19 @@ class TraceabilityMcpToolsTest {
                 .id();
     }
 
+    /**
+     * Same as {@link #registerProject}, but with a configured project default language - needed
+     * to reproduce issue #274: a project whose default language differs from the daemon's
+     * process-wide {@code DisplayLocale} bean (english unless configured, see
+     * {@code ArknetMcpConfiguration#displayLocale}).
+     */
+    private static ProjectId registerProject(
+            final org.springframework.context.ApplicationContext context, final String defaultLanguage) {
+        return context.getBean(ProjectService.class)
+                .register("trace-tools-test", new Anchor(ANCHOR, AnchorType.PATH), null, null, defaultLanguage)
+                .id();
+    }
+
     @Test
     void traceMatrixReportsUsedTermsAndRealisingUseCasesPerRequirement() {
         runner().run(context -> {
@@ -282,6 +295,42 @@ class TraceabilityMcpToolsTest {
             assertThat(report).contains("## Term pairs named together in the same text (1)");
             assertThat(report).contains(kunde.code().value()).contains(bestellung.code().value());
             assertThat(report).contains("2 text(s)");
+        });
+    }
+
+    /**
+     * Regression test for issue #274: a project whose configured default language ({@code "de"})
+     * differs from the daemon's process-wide {@code DisplayLocale} bean (english unless
+     * configured) must still have its unlinked-mention scan match against <em>its own</em>
+     * default-language label, not the daemon's. TERM-1 carries both an {@code @de} and an
+     * {@code @en} {@code skos:prefLabel} - reproducing the real-world case (arknet's own glossary,
+     * TERM-15 "Business-Code"/"Business Code") that let a genuine unlinked mention slip past
+     * {@code orphan_check} before this fix: the requirement's german prose names the term under
+     * its german label, which only matches if the project's own default is honoured rather than
+     * the daemon's.
+     */
+    @Test
+    void orphanCheckMatchesUnlinkedMentionsAgainstTheProjectsOwnDefaultLanguageNotTheDaemons() {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            ProjectId project = registerProject(context, "de");
+            RequirementService requirements = context.getBean(RequirementService.class);
+            TermService terms = context.getBean(TermService.class);
+            TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
+
+            Term term = terms.add(project,
+                    new NewTerm("Business-Code", "Ein Business-Code ist eine kurze Kennung.", null, null), "de");
+            terms.update(project, term.code(), "Business Code", "A business code is a short identifier.",
+                    null, "en", "de", null);
+
+            requirements.add(project, new NewRequirement("Requirement anlegen",
+                    "Nach dem Anlegen liefert das System einen eindeutigen Business-Code fuer das Requirement.",
+                    RequirementType.FUNCTIONAL, null, null, null,
+                    List.of("Ein Anlageversuch ohne Titel wird abgelehnt."), null), "de");
+
+            String report = tools.orphanCheck(null, ANCHOR);
+
+            assertThat(report).contains("mentions \"Business-Code\"").contains("-- no usesTerm edge");
         });
     }
 }
