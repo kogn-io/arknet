@@ -141,11 +141,12 @@ public final class WriteFunnel {
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
 
     /**
-     * Base IRIs the funnel mints revision/activity identities under - flat and opaque like the
-     * kernel's resource identities, but deliberately under their own bases: a revision is
-     * infrastructure the funnel owns, not a model resource a bounded context minted.
+     * Base IRI the funnel mints activity identities under - flat and opaque like the kernel's
+     * resource identities, but deliberately under its own base: an activity is infrastructure
+     * the funnel owns, not a model resource a bounded context minted. The revision counterpart
+     * lives in {@link ArkprovVocabulary#REVISION_IRI_BASE} - shared, not private here, because a
+     * revision (unlike an activity) is something a read path needs to recognise too.
      */
-    private static final String REVISION_IRI_BASE = "https://w3id.org/arknet/revision/";
     private static final String ACTIVITY_IRI_BASE = "https://w3id.org/arknet/activity/";
 
     private final DatasetLifecycle lifecycle;
@@ -473,7 +474,7 @@ public final class WriteFunnel {
             tx.update("DELETE WHERE { " + headPattern + " }");
         }
 
-        IRI revision = rdf.createIRI(REVISION_IRI_BASE + UUID.randomUUID());
+        IRI revision = rdf.createIRI(ArkprovVocabulary.REVISION_IRI_BASE + UUID.randomUUID());
         IRI activity = rdf.createIRI(ACTIVITY_IRI_BASE + UUID.randomUUID());
         IRI resource = rdf.createIRI(subjectIri);
 

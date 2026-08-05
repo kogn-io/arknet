@@ -99,11 +99,11 @@ class UseCaseServiceConcurrencyTest {
         UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null, null, DEFAULT_LANGUAGE));
+                        null, null, null, null, null, null, DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         UseCase result = underTest.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null, null, DEFAULT_LANGUAGE);
+                "Racing precondition", null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Concurrent trigger", result.trigger());
         assertEquals("Racing precondition", result.precondition());
@@ -125,7 +125,8 @@ class UseCaseServiceConcurrencyTest {
                 new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null, DEFAULT_LANGUAGE));
+                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null,
+                        null, DEFAULT_LANGUAGE));
 
         assertEquals(UseCaseService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }

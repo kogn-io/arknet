@@ -259,6 +259,31 @@ class KognioRdfUseCaseRepositoryTest {
         assertEquals(1, countSteps(PROJECT_A));
     }
 
+    /**
+     * {@code compareAndUpdate} rebuilds {@code stepRealises} wholesale from {@code steps()} on
+     * every write (issue #255's {@code uc_update} realises-correction path is built entirely on
+     * this existing behaviour, with no repository change): a step that had no {@code realises}
+     * reference can gain one, and a step that had one can lose it, in the same call.
+     */
+    @Test
+    void compareAndUpdateReplacesAStepsRealisesWholesaleAddingAndClearingInTheSameWrite() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        UseCase revised = new UseCase(ID_1, CODE_1, "Place order", "Customer places an order",
+                "Webshop", "Customer opens the cart", CUSTOMER,
+                List.of(PAYMENT_PROVIDER), "Customer is logged in", "Order is recorded",
+                List.of(
+                        new Step(1, "Customer selects items", List.of()),
+                        new Step(2, "Customer confirms and pays", List.of(FR_1_REF))),
+                List.of("2a. Payment declined -> use case ends in failure"));
+        replaceViaCompareAndUpdate(PROJECT_A, revised);
+
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals(List.of(), found.steps().get(0).realises());
+        assertEquals(List.of(FR_1_REF), found.steps().get(1).realises());
+    }
+
     @Test
     void createRejectsExistingIdentity() {
         seedReferences(PROJECT_A);

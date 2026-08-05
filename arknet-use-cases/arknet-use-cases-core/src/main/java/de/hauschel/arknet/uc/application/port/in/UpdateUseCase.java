@@ -26,16 +26,21 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@code null} leaves that field unchanged, so a caller can correct only what actually needs
  * correcting.</p>
  *
- * <p><strong>Step corrections are text-only (deliberately narrow scope).</strong>
+ * <p><strong>Step corrections are two independent, narrowly-scoped mechanisms.</strong>
  * {@code stepTextPatches} lets a caller fix the wording of one or more existing main-flow steps
- * by {@link de.hauschel.arknet.uc.domain.Step#position() position} - nothing else about a step.
- * It cannot add, remove or reorder steps, and it never touches a step's
- * {@link de.hauschel.arknet.uc.domain.Step#realises() realises} references. A patch naming a
- * position with no matching step is rejected rather than silently ignored.</p>
+ * by {@link de.hauschel.arknet.uc.domain.Step#position() position} - nothing else about a step;
+ * it never touches a step's {@link de.hauschel.arknet.uc.domain.Step#realises() realises}
+ * references. {@code stepRealisesPatches} is a separate, independent list that instead corrects
+ * only a step's {@code realises} references, leaving its {@code text} untouched: a listed
+ * position's value list replaces that step's entire {@code realises} set wholesale, with an
+ * empty list the explicit, unambiguous signal to clear it - distinct from omitting the position
+ * altogether, which leaves it unchanged (issue #255). Neither mechanism can add, remove or
+ * reorder steps, and a patch naming a position with no matching step is rejected rather than
+ * silently ignored, in either list.</p>
  *
- * <p><strong>Explicitly out of scope.</strong> {@code primaryActor}, {@code supportingActors},
- * full step-list restructuring (adding/removing/reordering steps) and {@code realises} edges are
- * untouched by this port - recreate the use case with {@code uc_add} if those need to change.</p>
+ * <p><strong>Explicitly out of scope.</strong> {@code primaryActor}, {@code supportingActors} and
+ * full step-list restructuring (adding/removing/reordering steps) are untouched by this port -
+ * recreate the use case with {@code uc_add} if those need to change.</p>
  *
  * <p><strong>Language.</strong> {@code title}, {@code goal} and each patched step's {@code text}
  * may each legally carry several language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}).
@@ -69,28 +74,36 @@ public interface UpdateUseCase {
      * @param postcondition   the new postcondition, or {@code null} to leave it unchanged
      * @param extensions      the new alternative/exception flows, replacing the existing ones
      *                        wholesale, or {@code null} to leave them unchanged
-     * @param stepTextPatches text corrections for individual existing main-flow steps, addressed
-     *                        by their {@code position}, or {@code null} to leave every step
-     *                        unchanged
-     * @param language        the BCP-47 language tag every field this call actually touches
-     *                        (a non-{@code null} {@code title}/{@code goal}, each patched step's
-     *                        text) is written in, or {@code null} to fall back to
-     *                        {@code defaultLanguage}. Only the existing literal carrying the tag
-     *                        actually written is replaced per field - every other language-tagged
-     *                        variant survives untouched, except an existing untagged one that a
-     *                        fallback to {@code defaultLanguage} sweeps away (see class-level
-     *                        Language note)
-     * @param defaultLanguage the target project's configured default language (see
-     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
-     *                        or {@code null} if it has none - only consulted for a field/step this
-     *                        call is actually changing and that ships no {@code language}
+     * @param stepTextPatches     text corrections for individual existing main-flow steps,
+     *                            addressed by their {@code position}, or {@code null} to leave
+     *                            every step's text unchanged
+     * @param stepRealisesPatches corrections to individual existing main-flow steps'
+     *                            {@code realises} references, addressed by their
+     *                            {@code position} - each listed position's value list replaces
+     *                            that step's entire {@code realises} set wholesale, an empty
+     *                            list clears it, and a position not listed here is left
+     *                            unchanged; {@code null} to leave every step's realises
+     *                            unchanged
+     * @param language            the BCP-47 language tag every field this call actually touches
+     *                            (a non-{@code null} {@code title}/{@code goal}, each patched
+     *                            step's text) is written in, or {@code null} to fall back to
+     *                            {@code defaultLanguage}. Only the existing literal carrying the
+     *                            tag actually written is replaced per field - every other
+     *                            language-tagged variant survives untouched, except an existing
+     *                            untagged one that a fallback to {@code defaultLanguage} sweeps
+     *                            away (see class-level Language note)
+     * @param defaultLanguage     the target project's configured default language (see
+     *                            {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                            or {@code null} if it has none - only consulted for a field/step
+     *                            this call is actually changing and that ships no {@code language}
      * @return the updated use case
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists in
      *                                                {@code projectId}
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the compare-and-set
      *                                                race against a concurrent writer across every
      *                                                retry attempt
-     * @throws StepPositionNotFoundException         if {@code stepTextPatches} names a position
+     * @throws StepPositionNotFoundException         if {@code stepTextPatches} or
+     *                                                {@code stepRealisesPatches} names a position
      *                                                with no matching existing step
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if a changed field/step
      *                                                ships no {@code language} and {@code
@@ -98,5 +111,24 @@ public interface UpdateUseCase {
      */
     UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches, String language, String defaultLanguage);
+            List<StepTextPatch> stepTextPatches, List<StepRealisesPatch> stepRealisesPatches, String language,
+            String defaultLanguage);
+
+    /**
+     * A correction to one existing main-flow step's {@code realises} references, addressed by
+     * {@code position}.
+     *
+     * <p><strong>Raw human-typed references.</strong> {@code realises} is a list of plain business
+     * codes here (e.g. {@code FR-1}), not {@link de.hauschel.arknet.uc.domain.RequirementRef}:
+     * resolving them to the referenced requirements' opaque identities is the application
+     * service's job, mirroring {@link AddUseCase.NewStep#realises()}.</p>
+     *
+     * @param position 1-based position of the existing step to correct - must match a step already
+     *                 present in the use case
+     * @param realises business codes of the functional requirements this step should realise going
+     *                 forward, replacing its current realises set wholesale; empty to clear all
+     *                 references for this step
+     */
+    record StepRealisesPatch(int position, List<String> realises) {
+    }
 }

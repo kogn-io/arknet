@@ -20,13 +20,18 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
+import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.domain.Project;
 
 /**
- * Read-only store tools exposed over MCP: {@code store_overview} and {@code resource_get}.
- * Both are fed by one generic {@code SELECT ?s ?p ?o} ({@link StoreReader}), so no bounded
- * context needs a read tool of its own and a new one appears without a type-to-tool mapping.
+ * Read-only store tools exposed over MCP: {@code store_overview}, {@code resource_get} and
+ * {@code resource_history}. The first two are fed by one generic {@code SELECT ?s ?p ?o}
+ * ({@link StoreReader}), so no bounded context needs a read tool of its own and a new one
+ * appears without a type-to-tool mapping. {@code resource_history} (issue #251) reads a
+ * different, deliberately separate query over {@link ArkprovVocabulary#PROVENANCE_GRAPH} - the
+ * one place in this class that shows the change trail rather than the model, exactly the trail
+ * {@code store_overview}/{@code resource_get} exclude on purpose (see {@link StoreReader}).
  *
  * <p><strong>Two audiences, two shapes.</strong> The tool's return value - what the agent
  * reads - stays the domain-agnostic text digest built from that one query. The HTML report -
@@ -40,9 +45,9 @@ import de.hauschel.arknet.prj.domain.Project;
  * has no domain of its own. Borrowing four contexts' read in-ports for display is the same
  * gateway role ADR-008 grants a driving adapter. The rendering, CURIE resolution and query
  * execution live in isolated, unit-testable collaborators ({@link StoreReader},
- * {@link DigestRenderer}, {@link ResourceRenderer}, {@link HtmlReportRenderer},
- * {@link ModelViews}, {@link Prefixes}); this class only orchestrates them and declares the
- * {@code @McpTool} surface.</p>
+ * {@link DigestRenderer}, {@link ResourceRenderer}, {@link HistoryRenderer},
+ * {@link HtmlReportRenderer}, {@link ModelViews}, {@link Prefixes}); this class only
+ * orchestrates them and declares the {@code @McpTool} surface.</p>
  */
 public final class StoreReportTools {
 
@@ -53,7 +58,9 @@ public final class StoreReportTools {
     private final ModelViews modelViews;
     private final DigestRenderer digestRenderer;
     private final ResourceRenderer resourceRenderer;
+    private final HistoryRenderer historyRenderer;
     private final HandleResolver handleResolver;
+    private final Prefixes prefixes;
     private final ProjectResolver projects;
     private final FindProject findProject;
     private final Path fallbackReportDir;
@@ -92,12 +99,13 @@ public final class StoreReportTools {
             final Path fallbackReportDir,
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
-        Objects.requireNonNull(prefixes, "prefixes");
+        this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
         Objects.requireNonNull(displayLocale, "displayLocale");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
         this.modelViews = Objects.requireNonNull(modelViews, "modelViews");
         this.digestRenderer = new DigestRenderer(prefixes, displayLocale);
         this.resourceRenderer = new ResourceRenderer(prefixes);
+        this.historyRenderer = new HistoryRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
         this.projects = Objects.requireNonNull(projects, "projects");
         this.findProject = Objects.requireNonNull(findProject, "findProject");
@@ -154,6 +162,35 @@ public final class StoreReportTools {
         final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
         final List<Triple> incoming = storeReader.incoming(projectId, iri);
         return resourceRenderer.render(iri, outgoing, incoming);
+    }
+
+    @McpTool(name = "resource_history",
+            description = "Change history of ONE resource: every PROV-O revision the shared write funnel"
+                    + " has recorded for it (ADR-013/ADR-014), oldest first, with the current revision marked"
+                    + " '(current)'. The id is a CURIE (e.g. req:FR-1) or a full IRI; as a convenience a bare"
+                    + " business id (e.g. FR-1) is resolved via dcterms:identifier. A resource that was only"
+                    + " ever written store-first, or predates the funnel, has no history - not an error.",
+            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+    public String resourceHistory(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Resource handle: CURIE (req:FR-1), full IRI, bare id (FR-1), or a"
+                    + " blank-node reference (_:...) exactly as shown by store_overview")
+            final String id,
+            @McpToolParam(description = "Optional anchor identifying the project to read from, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
+        final String iri = handleResolver.resolve(projectId, id);
+        final List<Triple> outgoing = storeReader.outgoing(projectId, iri);
+        final List<Triple> incoming = storeReader.incoming(projectId, iri);
+        if (outgoing.isEmpty() && incoming.isEmpty()) {
+            return ResourceRenderer.notFoundMessage(prefixes, iri);
+        }
+        final List<Revision> history = storeReader.history(projectId, iri);
+        return historyRenderer.render(iri, history);
     }
 
     /**
