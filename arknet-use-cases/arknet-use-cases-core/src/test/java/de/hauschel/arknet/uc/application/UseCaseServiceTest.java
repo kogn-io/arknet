@@ -115,7 +115,7 @@ class UseCaseServiceTest {
     void updateWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
-        service.update(WS, code, "New title", null, null, null, null, null, null, null, null, "de");
+        service.update(WS, code, "New title", null, null, null, null, null, null, null, null, null, "de");
 
         UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
         assertEquals("de", current.titleLanguage());
@@ -127,7 +127,7 @@ class UseCaseServiceTest {
         UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
         assertThrows(MissingDefaultLanguageException.class, () -> service.update(
-                WS, code, "New title", null, null, null, null, null, null, null, null, null));
+                WS, code, "New title", null, null, null, null, null, null, null, null, null, null));
 
         assertEquals("Place order", service.get(WS, code, null).orElseThrow().title());
     }
