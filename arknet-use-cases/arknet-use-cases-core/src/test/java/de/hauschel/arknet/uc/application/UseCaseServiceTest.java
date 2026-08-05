@@ -285,13 +285,14 @@ class UseCaseServiceTest {
     }
 
     /**
-     * {@code extensionsRestructured} (passed on to {@link UseCaseRepository#compareAndUpdate}, see
-     * its own javadoc) must stay {@code false} for an update that only edits content in place -
-     * here, translating the single position whose content changed. The real out-adapter relies on
-     * this to know a prior other-language variant at that position is still safe to preserve; the
-     * real out-adapter's {@code KognioRdfUseCaseRepositoryMultilingualTest
+     * {@code stableExtensionPrefixLength} (passed on to
+     * {@link UseCaseRepository#compareAndUpdate}, see its own javadoc) must cover every position
+     * for an update that only edits content in place - here, translating the single position whose
+     * content changed. The real out-adapter relies on this to know a prior other-language variant
+     * at that position is still safe to preserve; the real out-adapter's {@code
+     * KognioRdfUseCaseRepositoryMultilingualTest
      * #compareAndUpdateWithAnInsertedExtensionDoesNotMisattachAPriorPositionsOtherLanguageVariant}
-     * covers the store-level consequence, this covers the service's own computation of the flag.
+     * covers the store-level consequence, this covers the service's own computation of the value.
      */
     @Test
     void updateThatOnlyTranslatesTheTrailingExtensionIsNotFlaggedAsRestructured() {
@@ -302,15 +303,15 @@ class UseCaseServiceTest {
         service.update(WS, code, null, null, null, null, null, null,
                 List.of("2a. A", "3a. B (de)"), null, null, "de", DEFAULT_LANGUAGE);
 
-        assertFalse(repository.lastExtensionsRestructured());
+        assertEquals(2, repository.lastStableExtensionPrefixLength());
     }
 
     /**
      * Counterpart to {@link #updateThatOnlyTranslatesTheTrailingExtensionIsNotFlaggedAsRestructured}:
      * inserting a new extension ahead of an existing position shifts everything after it, so more
-     * than one position diverges once the longest common leading prefix is factored out - the flag
-     * must come out {@code true}, telling the out-adapter position-based preservation is unsafe for
-     * this call.
+     * than one position diverges once the longest common leading prefix is factored out - the value
+     * must come out as exactly that prefix's length (1: only position 1, "2a. A", still matches),
+     * telling the out-adapter position-based preservation is unsafe beyond it for this call.
      */
     @Test
     void updateThatInsertsAnExtensionIsFlaggedAsRestructured() {
@@ -321,7 +322,7 @@ class UseCaseServiceTest {
         service.update(WS, code, null, null, null, null, null, null,
                 List.of("2a. A", "2b. New", "3a. B"), null, null, null, DEFAULT_LANGUAGE);
 
-        assertTrue(repository.lastExtensionsRestructured());
+        assertEquals(1, repository.lastStableExtensionPrefixLength());
     }
 
     @Test

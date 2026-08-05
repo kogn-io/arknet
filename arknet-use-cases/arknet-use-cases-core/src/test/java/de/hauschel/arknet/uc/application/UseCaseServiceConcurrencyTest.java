@@ -174,10 +174,10 @@ class UseCaseServiceConcurrencyTest {
                 String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
                 String preconditionLanguage, String postconditionLanguage,
                 Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-                String defaultLanguage, boolean extensionsRestructured) {
+                String defaultLanguage, int stableExtensionPrefixLength) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage, scopeLanguage,
                     triggerLanguage, preconditionLanguage, postconditionLanguage, stepTextLanguageByPosition,
-                    extensionTextLanguageByPosition, defaultLanguage, extensionsRestructured);
+                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength);
         }
 
         @Override
@@ -230,10 +230,10 @@ class UseCaseServiceConcurrencyTest {
                 String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
                 String preconditionLanguage, String postconditionLanguage,
                 Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-                String defaultLanguage, boolean extensionsRestructured) {
+                String defaultLanguage, int stableExtensionPrefixLength) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage, scopeLanguage,
                     triggerLanguage, preconditionLanguage, postconditionLanguage, stepTextLanguageByPosition,
-                    extensionTextLanguageByPosition, defaultLanguage, extensionsRestructured);
+                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength);
         }
 
         @Override
@@ -281,7 +281,7 @@ class UseCaseServiceConcurrencyTest {
                 String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
                 String preconditionLanguage, String postconditionLanguage,
                 Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-                String defaultLanguage, boolean extensionsRestructured) {
+                String defaultLanguage, int stableExtensionPrefixLength) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code(), null)

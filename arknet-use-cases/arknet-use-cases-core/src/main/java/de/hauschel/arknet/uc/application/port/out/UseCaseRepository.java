@@ -137,23 +137,28 @@ public interface UseCaseRepository {
      *                      dropped instead of preserved (issue #258). Has no bearing on which tag
      *                      is actually written - that decision was already made by the caller (see
      *                      {@code UpdateUseCase}'s own {@code defaultLanguage} parameter)
-     * @param extensionsRestructured {@code true} if {@code updated.extensions()} inserts, removes
-     *                      or reorders extensions relative to the list {@link #findCurrentByCode}
-     *                      last read (more than one position's content diverges once the longest
-     *                      common leading prefix between the old and new list is factored out) -
-     *                      {@code false} for a call that only edits content in place (e.g. a
-     *                      translation of the single trailing position that changed, or a plain
-     *                      append/truncate at the end). Extension positions are not stable
-     *                      identities the way main-flow-step positions are ({@code stepTextPatches}
-     *                      never adds/removes/reorders steps, but a wholesale {@code extensions}
-     *                      replace explicitly may) - re-attaching an old position's other-language
-     *                      variant by position alone, once that position may now denote a
-     *                      completely different extension, would silently graft a stale translation
-     *                      onto unrelated content. {@code true} tells the implementation to suspend
-     *                      per-position other-language-variant preservation for extensions on this
-     *                      call entirely (dropping any such variant instead of misattaching it) -
-     *                      main-flow-step preservation is unaffected, its positions stay stable by
-     *                      construction
+     * @param stableExtensionPrefixLength the number of leading {@code updated.extensions()}
+     *                      positions (1-based, so a value of {@code n} covers positions
+     *                      {@code 1..n}) whose identity is still stable relative to the list
+     *                      {@link #findCurrentByCode} last read - position-based other-language-
+     *                      variant preservation for extensions is safe up to (and including) this
+     *                      length, and must be suspended beyond it. Extension positions are not
+     *                      stable identities the way main-flow-step positions are ({@code
+     *                      stepTextPatches} never adds/removes/reorders steps, but a wholesale
+     *                      {@code extensions} replace explicitly may) - re-attaching an old
+     *                      position's other-language variant by position alone, once that position
+     *                      may now denote a completely different extension, would silently graft a
+     *                      stale translation onto unrelated content. For a call that only edits
+     *                      content in place (e.g. a translation of the single trailing position
+     *                      that changed, or a plain append/truncate at the end) every position stays
+     *                      stable, so the caller passes the length of the longer of the two lists
+     *                      (or any value at least that large); for a call that inserts, removes or
+     *                      reorders extensions, the caller passes the length of the longest common
+     *                      leading prefix the old and new lists still share - beyond that prefix the
+     *                      position numbering no longer refers to "the same" extension on both
+     *                      sides, so preservation there must be dropped entirely rather than
+     *                      misattached. Main-flow-step preservation is unaffected by this parameter,
+     *                      its positions stay stable by construction
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
      *                                                all
      * @throws UseCaseConcurrentlyModifiedException if {@code expectedHead} no longer matches the
@@ -169,7 +174,7 @@ public interface UseCaseRepository {
             String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
             String preconditionLanguage, String postconditionLanguage,
             Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-            String defaultLanguage, boolean extensionsRestructured);
+            String defaultLanguage, int stableExtensionPrefixLength);
 
     /**
      * Finds a use case by its human-readable business code within a project.

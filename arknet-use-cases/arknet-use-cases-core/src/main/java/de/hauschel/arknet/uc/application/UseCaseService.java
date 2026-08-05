@@ -293,7 +293,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             // one position diverging past that prefix (on either side) is the signature of such a
             // restructure, as opposed to a single in-place edit (a translation of the trailing
             // position, or a plain tail append/truncate) - see compareAndUpdate's
-            // extensionsRestructured javadoc for why that distinction matters.
+            // stableExtensionPrefixLength javadoc for why that distinction matters.
             int commonExtensionPrefixLength = 0;
             while (commonExtensionPrefixLength < currentExtensions.size()
                     && commonExtensionPrefixLength < updatedExtensions.size()
@@ -304,12 +304,18 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             boolean extensionsRestructured =
                     currentExtensions.size() - commonExtensionPrefixLength > 1
                             || updatedExtensions.size() - commonExtensionPrefixLength > 1;
+            // A restructure only forfeits position-based preservation beyond the common prefix -
+            // the leading positions it left untouched keep it, exactly like a plain in-place edit
+            // (where every position stays stable, hence the unbounded upper end here).
+            int stableExtensionPrefixLength = extensionsRestructured
+                    ? commonExtensionPrefixLength
+                    : Math.max(currentExtensions.size(), updatedExtensions.size());
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated,
                         titleLanguage, goalLanguage, scopeLanguage, triggerLanguage,
                         preconditionLanguage, postconditionLanguage,
                         stepTextLanguageByPosition, extensionTextLanguageByPosition, defaultLanguage,
-                        extensionsRestructured);
+                        stableExtensionPrefixLength);
                 return updated;
             } catch (UseCaseConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the use case between our read and our write -
