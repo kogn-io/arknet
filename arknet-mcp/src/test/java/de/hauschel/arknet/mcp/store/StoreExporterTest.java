@@ -37,6 +37,7 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -91,7 +92,7 @@ class StoreExporterTest {
                 new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials"), List.of());
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
     }
 
     private String exportTrig() {

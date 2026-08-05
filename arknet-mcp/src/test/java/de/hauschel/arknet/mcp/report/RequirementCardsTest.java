@@ -5,12 +5,14 @@ package de.hauschel.arknet.mcp.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -151,14 +153,23 @@ class RequirementCardsTest {
                 new RequirementCode("FR-1"), "Bestellen", description,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 linked.stream().map(TermRef::new).toList(),
-                criteria.isEmpty() ? List.of("Es funktioniert.") : criteria, List.of());
+                toCriteria(criteria.isEmpty() ? List.of("Es funktioniert.") : criteria), List.of());
     }
 
     private static Requirement requirement(final String code, final String iri, final String title) {
         return new Requirement(
                 new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
                 "Beschreibung.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
-                null, null, List.of(), List.of("Es funktioniert."), List.of());
+                null, null, List.of(), toCriteria(List.of("Es funktioniert.")), List.of());
+    }
+
+    private static List<AcceptanceCriterion> toCriteria(final List<String> texts) {
+        final List<AcceptanceCriterion> criteria = new ArrayList<>();
+        int position = 1;
+        for (final String text : texts) {
+            criteria.add(new AcceptanceCriterion(position++, text));
+        }
+        return criteria;
     }
 
     private static Term term(final ResourceId id, final String code, final String label) {

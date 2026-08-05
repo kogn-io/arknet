@@ -20,6 +20,7 @@ import de.hauschel.arknet.bc.domain.BoundedContextId;
 import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -141,7 +142,8 @@ class ModelViewsTest {
                 new RequirementId(ResourceId.of("https://w3id.org/arknet/id/fr-1")),
                 new RequirementCode("FR-1"), "Anmeldung", "Das System muss Nutzer authentifizieren.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(), List.of("Anmeldung gelingt mit gueltigen Zugangsdaten"), List.of());
+                List.of(), List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten")),
+                List.of());
     }
 
     private static BoundedContext boundedContext() {

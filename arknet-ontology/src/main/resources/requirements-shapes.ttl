@@ -110,9 +110,8 @@ rshapes:Requirement-acceptanceCriterion
     a sh:PropertyShape ;
     sh:path     arkreq:acceptanceCriterion ;
     sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:minLength 5 ;
-    sh:message  "A Requirement needs at least one arkreq:acceptanceCriterion (a testable done-when, min. 5 characters)."@en , "Requirement braucht mindestens ein arkreq:acceptanceCriterion (testbares Done-when, min. 5 Zeichen)."@de ;
+    sh:class    arkreq:AcceptanceCriterion ;
+    sh:message  "A Requirement needs at least one arkreq:acceptanceCriterion (a testable done-when, its own arkreq:AcceptanceCriterion resource)."@en , "Requirement braucht mindestens ein arkreq:acceptanceCriterion (testbares Done-when, eigene arkreq:AcceptanceCriterion-Ressource)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-constrainedBy
@@ -321,6 +320,37 @@ rshapes:Step-realises
     sh:path     arkreq:stepRealises ;
     sh:class    arkreq:Requirement ;
     sh:message  "arkreq:stepRealises must point to an arkreq:Requirement."@en , "arkreq:stepRealises muss auf ein arkreq:Requirement zeigen."@de ;
+    sh:severity sh:Violation .
+
+
+##############################################################################
+#  ACCEPTANCE CRITERION SHAPES  (issue #266 -- own resource instead of a
+#  flat, untagged xsd:string multiset; mirrors the STEP SHAPES above)
+##############################################################################
+
+rshapes:AcceptanceCriterionShape
+    a sh:NodeShape ;
+    sh:targetClass arkreq:AcceptanceCriterion ;
+    sh:property rshapes:AcceptanceCriterion-position ;
+    sh:property rshapes:AcceptanceCriterion-text .
+
+rshapes:AcceptanceCriterion-position
+    a sh:PropertyShape ;
+    sh:path     arkreq:position ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 1 ;
+    sh:message  "An AcceptanceCriterion needs exactly one arkreq:position (1-based order, >= 1)."@en , "AcceptanceCriterion braucht genau eine arkreq:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:AcceptanceCriterion-text
+    a sh:PropertyShape ;
+    sh:path     arkreq:criterionText ;
+    sh:minCount 1 ;
+    sh:minLength 5 ;
+    sh:uniqueLang true ;
+    sh:message  "An AcceptanceCriterion needs at least one arkreq:criterionText (min. 5 characters). sh:uniqueLang allows at most one arkreq:criterionText per non-empty language tag - two criterion texts sharing the same tag are not allowed, but DIFFERENT language tags are (a criterion's wording may be given in several languages)."@en , "AcceptanceCriterion braucht mindestens einen arkreq:criterionText (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens einen arkreq:criterionText je nicht-leerem Sprach-Tag - zwei Kriterientexte mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (der Wortlaut eines Kriteriums darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
 
 

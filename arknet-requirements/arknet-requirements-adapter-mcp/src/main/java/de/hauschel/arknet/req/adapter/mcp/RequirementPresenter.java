@@ -12,6 +12,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementSchemaTerm;
@@ -87,7 +88,9 @@ final class RequirementPresenter {
                 ? ""
                 : " [constraints: " + r.constrainedBy().stream().map(ref -> renderConstraint(ref, constraintsById))
                         .reduce((a, b) -> a + ", " + b).orElse("") + "]";
-        final String criteria = " [done when: " + String.join("; ", r.acceptanceCriteria()) + "]";
+        final String criteria = " [done when: " + r.acceptanceCriteria().stream()
+                .map(AcceptanceCriterion::text)
+                .collect(Collectors.joining("; ")) + "]";
         return "%s [%s] %s (%s)%s: %s%s%s%s".formatted(
                 r.code().value(), r.type(), r.title(), r.status(), priority, r.description(), terms, constraints,
                 criteria);

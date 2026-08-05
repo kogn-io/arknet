@@ -45,6 +45,7 @@ import de.hauschel.arknet.req.domain.ConstraintId;
 import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -138,13 +139,13 @@ class TraceabilityGraphTest {
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(new TermRef(ResourceId.of(TERM_1_IRI))),
-                List.of("Login succeeds with valid credentials"),
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")),
                 List.of(new ConstraintRef(ResourceId.of(CON_1_IRI)))), null);
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_2_IRI)), new RequirementCode("FR-2"), "Logout",
                 "The system shall let a user log out.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
-                List.of(), List.of("Logout succeeds"), List.of()), null);
+                List.of(), List.of(new AcceptanceCriterion(1, "Logout succeeds")), List.of()), null);
 
         useCases.create(PROJECT, new UseCase(
                 new UseCaseId(ResourceId.of(UC_1_IRI)), new UseCaseCode("UC1"), "Log in",

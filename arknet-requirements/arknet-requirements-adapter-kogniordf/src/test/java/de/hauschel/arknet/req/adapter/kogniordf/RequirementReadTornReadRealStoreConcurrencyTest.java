@@ -54,6 +54,7 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -77,8 +78,9 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * observationally identical to a legitimate post-write read a moment later, so a test built on it
  * could not distinguish a fixed read path from a lucky one. Changing {@code title} <em>and</em>
  * {@code acceptanceCriteria} in the same {@code req_update} call instead produces two
- * observably different value pairs - {@code (OLD title, OLD criteria)} before the write,
- * {@code (NEW title, NEW criteria)} after it - so a torn read is caught the moment either field
+ * observably different value pairs - {@code (OLD title, [OLD criterion])} before the write,
+ * {@code (NEW title, [OLD criterion, NEW criterion])} after it, {@code req_update} appending
+ * rather than replacing (issue #266) - so a torn read is caught the moment either field
  * comes from the wrong pair, deterministically, not statistically.</p>
  *
  * <p><strong>Forcing the interleaving, path-agnostically.</strong> {@link
@@ -209,7 +211,7 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         Thread writerThread = new Thread(() -> {
             awaitBarrier(readerPastMainQuery);
             try {
-                plainService.update(WS, code, NEW_TITLE, null, List.of(NEW_CRITERION), null, null, "en");
+                plainService.update(WS, code, NEW_TITLE, null, List.of(NEW_CRITERION), null, null, null, "en");
             } finally {
                 writerCommitted.countDown();
             }
@@ -228,10 +230,11 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         assertNull(readerFailure.get(), () -> "reader threw: " + readerFailure.get());
         Requirement observed = readResult.get().orElseThrow(() -> new AssertionError("requirement not found"));
 
-        boolean matchesPreWriteSnapshot =
-                OLD_TITLE.equals(observed.title()) && List.of(OLD_CRITERION).equals(observed.acceptanceCriteria());
-        boolean matchesPostWriteSnapshot =
-                NEW_TITLE.equals(observed.title()) && List.of(NEW_CRITERION).equals(observed.acceptanceCriteria());
+        boolean matchesPreWriteSnapshot = OLD_TITLE.equals(observed.title())
+                && List.of(new AcceptanceCriterion(1, OLD_CRITERION)).equals(observed.acceptanceCriteria());
+        boolean matchesPostWriteSnapshot = NEW_TITLE.equals(observed.title())
+                && List.of(new AcceptanceCriterion(1, OLD_CRITERION), new AcceptanceCriterion(2, NEW_CRITERION))
+                        .equals(observed.acceptanceCriteria());
         String diagnostics = "observed title='" + observed.title() + "', acceptanceCriteria="
                 + observed.acceptanceCriteria() + " - neither the pre-write pair (" + OLD_TITLE + ", "
                 + OLD_CRITERION + ") nor the post-write pair (" + NEW_TITLE + ", " + NEW_CRITERION + ")";

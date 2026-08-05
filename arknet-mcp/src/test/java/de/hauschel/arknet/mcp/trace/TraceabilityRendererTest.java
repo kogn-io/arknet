@@ -41,6 +41,7 @@ class TraceabilityRendererTest {
     private static final String SUPPORTING_ACTOR = ARKREQ + "supportingActor";
     private static final String USE_CASE_GOAL = ARKREQ + "useCaseGoal";
     private static final String ACCEPTANCE_CRITERION = ARKREQ + "acceptanceCriterion";
+    private static final String CRITERION_TEXT = ARKREQ + "criterionText";
     private static final String DOMAIN_VISION = ARKDDD + "domainVision";
     private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD + "ubiquitousLanguageTerm";
     private static final String HUMAN_ACTOR_TYPE = ARKPROC + "HumanActor";
@@ -56,6 +57,7 @@ class TraceabilityRendererTest {
     private static final String TERM_10 = ID + "term-10";
     private static final String TERM_A = ID + "term-a";
     private static final String TERM_B = ID + "term-b";
+    private static final String CRITERION_10 = ID + "criterion-10";
     private static final String TERM_C = ID + "term-c";
     private static final String STEP_1 = ID + "step-1";
     private static final String UC_1 = ID + "uc-1";
@@ -322,7 +324,9 @@ class TraceabilityRendererTest {
                 lit(FR_10, TITLE, "Bestandsdaten"),
                 lit(FR_10, IDENTIFIER, "FR-10"),
                 lit(FR_10, DESCRIPTION, "Der Kunde meldet sich an."),
-                lit(FR_10, ACCEPTANCE_CRITERION, "Die Bestellung wird angezeigt."))), DisplayLocale.DEFAULT);
+                iri(FR_10, ACCEPTANCE_CRITERION, CRITERION_10),
+                iri(CRITERION_10, RDF_TYPE, ARKREQ + "AcceptanceCriterion"),
+                lit(CRITERION_10, CRITERION_TEXT, "Die Bestellung wird angezeigt."))), DisplayLocale.DEFAULT);
 
         String report = renderer.termCooccurrence(PROJECT, graph);
 

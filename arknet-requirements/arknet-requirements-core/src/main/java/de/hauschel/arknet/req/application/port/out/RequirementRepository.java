@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.application.port.out;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.ResourceId;
@@ -61,9 +62,11 @@ public interface RequirementRepository {
      * @param projectId the project (architecture model) to store the requirement in
      * @param requirement the requirement to create
      * @param language    the BCP-47 language tag {@code requirement.title()}/
-     *                    {@code requirement.description()} are written in (e.g. {@code "de"}), or
-     *                    {@code null} for a plain, untagged literal - the same tag applies to both
-     *                    fields, since a freshly created requirement is written whole in one call
+     *                    {@code requirement.description()}/every
+     *                    {@code requirement.acceptanceCriteria()} entry's {@code text} are written
+     *                    in (e.g. {@code "de"}), or {@code null} for a plain, untagged literal -
+     *                    the same tag applies to all of them, since a freshly created requirement
+     *                    is written whole in one call
      * @throws ResourceAlreadyExistsException   if a requirement with this identity already exists
      * @throws DuplicateRequirementCodeException if another requirement already carries this
      *                                            requirement's {@link RequirementCode} - identity
@@ -116,6 +119,19 @@ public interface RequirementRepository {
      *                      case) - independent of {@code titleLanguage}, since {@code title} and
      *                      {@code description} may have been corrected under different tags on
      *                      different calls
+     * @param acceptanceCriteriaLanguageByPosition the BCP-47 language tag each
+     *                      {@code updated.acceptanceCriteria()} entry's {@code text} is written in,
+     *                      keyed by {@link de.hauschel.arknet.req.domain.AcceptanceCriterion#position()}
+     *                      - mirrors {@code titleLanguage}/{@code descriptionLanguage} per position
+     *                      instead of once for the whole field, the same shape
+     *                      {@code UseCaseRepository#compareAndUpdate}'s
+     *                      {@code stepTextLanguageByPosition} already uses for {@code Step#text()}.
+     *                      A position whose criterion this call leaves byte-for-byte unchanged must
+     *                      carry the tag it was read under (see
+     *                      {@link CurrentRequirement#acceptanceCriteriaLanguageByPosition()}); a
+     *                      newly appended position (issue #266 - {@code req_update} only appends or
+     *                      patches in place, never reorders) has no prior tag to preserve and is
+     *                      always freshly resolved
      * @param defaultLanguage the target project's configured default language (see
      *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                      or {@code null} if it has none. Used only to decide whether an
@@ -142,7 +158,8 @@ public interface RequirementRepository {
      *                          {@code arknet-requirements-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage, String defaultLanguage);
+            String titleLanguage, String descriptionLanguage,
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage);
 
     /**
      * Finds a requirement by its human-readable business code within a project.
@@ -235,9 +252,23 @@ public interface RequirementRepository {
      *                                        carry
      * @param descriptionLanguage             the same as {@code titleLanguage}, for
      *                                        {@code value.description()}
+     * @param acceptanceCriteriaLanguageByPosition the BCP-47 language tag each
+     *                                        {@code value.acceptanceCriteria()} entry's currently
+     *                                        selected {@code text} candidate carries, keyed by
+     *                                        {@link de.hauschel.arknet.req.domain.AcceptanceCriterion#position()}
+     *                                        (or {@code null} for that position if untagged). A
+     *                                        read-modify-write round trip that leaves a given
+     *                                        position's criterion unchanged must pass this straight
+     *                                        through to {@link #compareAndUpdate}'s
+     *                                        {@code acceptanceCriteriaLanguageByPosition} argument
+     *                                        for that position, so the resulting write is a scoped
+     *                                        no-op on the same variant rather than an unrelated
+     *                                        retag or a collapse of every other language variant
+     *                                        that criterion may carry
      */
     record CurrentRequirement(Requirement value, RevisionToken head, boolean acceptanceCriteriaIsSynthesized,
-            String titleLanguage, String descriptionLanguage) {
+            String titleLanguage, String descriptionLanguage,
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition) {
     }
 
     /**

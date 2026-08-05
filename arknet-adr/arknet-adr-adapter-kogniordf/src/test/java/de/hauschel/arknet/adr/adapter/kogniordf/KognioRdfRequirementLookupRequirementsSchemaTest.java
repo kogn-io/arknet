@@ -27,6 +27,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -79,7 +80,8 @@ class KognioRdfRequirementLookupRequirementsSchemaTest {
         Requirement requirement = new Requirement(id, new RequirementCode("FR-1"),
                 "Store the model", "The system shall persist the architecture model.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null,
-                List.of(), List.of("Done when the model survives a restart."), List.of());
+                List.of(), List.of(new AcceptanceCriterion(1, "Done when the model survives a restart.")),
+                List.of());
 
         requirementRepository.create(PROJECT, requirement, null);
 

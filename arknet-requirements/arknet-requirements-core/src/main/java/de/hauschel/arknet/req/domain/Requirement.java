@@ -3,9 +3,14 @@
 
 package de.hauschel.arknet.req.domain;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * A single requirement (functional or non-functional) under management.
@@ -43,9 +48,15 @@ import java.util.Objects;
  *                         rather than a side edge: the out-adapter persists a requirement by
  *                         replacing it wholesale, so a link kept outside this record would be
  *                         silently dropped by the next status change.
- * @param acceptanceCriteria the testable "Done when ..." criteria for this requirement; maps
- *                         to {@code arkreq:acceptanceCriterion}, {@code 1..n} and required by
- *                         the requirements SHACL shape (never {@code null} or empty)
+ * @param acceptanceCriteria the testable "Done when ..." criteria for this requirement, each its
+ *                         own positioned {@link AcceptanceCriterion} value object (issue #266,
+ *                         mirroring {@code de.hauschel.arknet.uc.domain.UseCase#steps()}); maps
+ *                         to {@code arkreq:acceptanceCriterion} object-property edges to
+ *                         {@code arkreq:AcceptanceCriterion} resources, {@code 1..n} and required
+ *                         by the requirements SHACL shape (never {@code null} or empty). Numbered
+ *                         {@code 1, 2, ..., n} with no gaps, no duplicates and in ascending order -
+ *                         i.e. the criterion at list index {@code i} carries position
+ *                         {@code i + 1} - and no two criteria carry the same {@code text}
  * @param constrainedBy    the {@code arkreq:Constraint}s this requirement is bound by; maps to
  *                         {@code oslc_rm:constrainedBy}, {@code 0..n}, held as bare identity
  *                         references (never {@code null} or containing duplicates; a
@@ -65,7 +76,7 @@ public record Requirement(
         String motivatedBy,
         String qualityCategory,
         List<TermRef> usesTerms,
-        List<String> acceptanceCriteria,
+        List<AcceptanceCriterion> acceptanceCriteria,
         List<ConstraintRef> constrainedBy) {
 
     public Requirement {
@@ -87,10 +98,9 @@ public record Requirement(
         if (acceptanceCriteria.isEmpty()) {
             throw new IllegalArgumentException("acceptanceCriteria must not be empty");
         }
-        if (acceptanceCriteria.stream().anyMatch(String::isBlank)) {
-            throw new IllegalArgumentException("acceptanceCriteria must not contain blank entries");
-        }
-        if (new HashSet<>(acceptanceCriteria).size() != acceptanceCriteria.size()) {
+        requireConsecutiveAcceptanceCriterionPositions(acceptanceCriteria);
+        if (new HashSet<>(acceptanceCriteria.stream().map(AcceptanceCriterion::text).toList()).size()
+                != acceptanceCriteria.size()) {
             throw new IllegalArgumentException("acceptanceCriteria must not contain duplicate entries");
         }
         if (new HashSet<>(usesTerms).size() != usesTerms.size()) {
@@ -128,5 +138,91 @@ public record Requirement(
         }
         return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.ACCEPTED, priority(),
                 motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria(), constrainedBy());
+    }
+
+    /**
+     * Returns a new requirement with {@code newCriteriaTexts} appended to {@link #acceptanceCriteria()},
+     * numbered continuing from the current highest position - the only way this bounded context
+     * lets a caller add criteria to an already-created requirement (mirrors
+     * {@code de.hauschel.arknet.uc.domain.UseCase}'s own "no mid-list insert/reorder" stance for
+     * its {@code extensions}, deliberately narrower than that type's own step machinery: see
+     * {@link #withAcceptanceCriteriaTextPatches} for the complementary in-place correction).
+     *
+     * @param newCriteriaTexts the non-blank criterion texts to append, in order; {@code null} or
+     *                         empty is a no-op returning {@code this} unchanged
+     * @return a new requirement with the additional criteria appended
+     */
+    public Requirement withAppendedAcceptanceCriteria(List<String> newCriteriaTexts) {
+        if (newCriteriaTexts == null || newCriteriaTexts.isEmpty()) {
+            return this;
+        }
+        List<AcceptanceCriterion> appended = new ArrayList<>(acceptanceCriteria);
+        int nextPosition = acceptanceCriteria.size() + 1;
+        for (String text : newCriteriaTexts) {
+            appended.add(new AcceptanceCriterion(nextPosition++, text));
+        }
+        return new Requirement(id, code, title, description, type, status, priority, motivatedBy,
+                qualityCategory, usesTerms, appended, constrainedBy);
+    }
+
+    /**
+     * Returns a new requirement with {@code patches} applied to {@link #acceptanceCriteria()} by
+     * position - correcting only each matched criterion's {@code text} and leaving every unmatched
+     * criterion and every other field of this requirement untouched. Mirrors
+     * {@code de.hauschel.arknet.uc.domain.UseCase#withStepTextPatches} exactly (issue #266): the
+     * safe, non-reorder in-place pattern, deliberately not the restructuring-capable
+     * {@code extensions} pattern that same type also carries - a criterion's position is its only
+     * identity, and letting it shift would misattach an already-written language variant to the
+     * wrong criterion on the next read (the exact bug class {@code UseCase#extensions()}'s own
+     * restructuring guard exists to close, avoided here by never allowing the shift in the first
+     * place).
+     *
+     * <p>{@code projectId} is a pure pass-through for
+     * {@link AcceptanceCriterionPositionNotFoundException}'s message - it is never stored on this
+     * record, the same rule {@code Step}'s sibling patch method follows.</p>
+     *
+     * @param projectId the project the correction is issued against, for the exception message only
+     * @param patches   text corrections for individual existing criteria, addressed by their
+     *                  {@code position}; never {@code null}
+     * @return a new requirement with the patched criteria
+     * @throws AcceptanceCriterionPositionNotFoundException if a patch names a position no criterion
+     *                                                       in {@link #acceptanceCriteria()} carries
+     */
+    public Requirement withAcceptanceCriteriaTextPatches(ProjectId projectId, List<AcceptanceCriterionTextPatch> patches) {
+        Objects.requireNonNull(patches, "patches");
+        Map<Integer, String> textByPosition = new LinkedHashMap<>();
+        for (AcceptanceCriterionTextPatch patch : patches) {
+            textByPosition.put(patch.position(), patch.text());
+        }
+        List<AcceptanceCriterion> patched = acceptanceCriteria.stream()
+                .map(criterion -> {
+                    String newText = textByPosition.remove(criterion.position());
+                    return newText != null ? new AcceptanceCriterion(criterion.position(), newText) : criterion;
+                })
+                .toList();
+        if (!textByPosition.isEmpty()) {
+            int unmatchedPosition = textByPosition.keySet().iterator().next();
+            throw new AcceptanceCriterionPositionNotFoundException(projectId, code, unmatchedPosition);
+        }
+        return new Requirement(id, code, title, description, type, status, priority, motivatedBy,
+                qualityCategory, usesTerms, patched, constrainedBy);
+    }
+
+    /**
+     * Enforces that acceptance-criterion positions are gap-free, duplicate-free and ascending:
+     * the criterion at index {@code i} must carry position {@code i + 1}. Mirrors
+     * {@code UseCase#requireConsecutiveStepPositions}.
+     */
+    private static void requireConsecutiveAcceptanceCriterionPositions(List<AcceptanceCriterion> criteria) {
+        for (int i = 0; i < criteria.size(); i++) {
+            int expected = i + 1;
+            int actual = criteria.get(i).position();
+            if (actual != expected) {
+                throw new IllegalArgumentException(
+                        "acceptance-criterion positions must be gap-free, duplicate-free and ascending "
+                                + "(1.." + criteria.size() + "); expected position " + expected
+                                + " at index " + i + " but was " + actual);
+            }
+        }
     }
 }
