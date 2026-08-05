@@ -303,6 +303,71 @@ class HtmlReportRendererTest {
         assertThat(html).doesNotContain("<p class=\"project-desc\">");
     }
 
+    /**
+     * issue #270 (part 2 of #248): when a card's title came from a literal that has more than one
+     * language variant among the resource's own raw triples, the report embeds every variant -
+     * the active one visible, the rest hidden - for the toolbar's client-side language switch to
+     * toggle between. No new store read: the raw triples the report already carries are the only
+     * source.
+     */
+    @Test
+    void offersEveryLanguageVariantOfACardTitle() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Bestellen", "de"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Order", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+
+        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">");
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de\">Bestellen</span>");
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"en\" hidden>Order</span>");
+    }
+
+    /** Same mechanism for a {@link Block.Prose} field - here a requirement's description. */
+    @Test
+    void offersEveryLanguageVariantOfAProseBlock() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(),
+                        List.of(Block.Prose.plain("Description", "Der Kunde bestellt.")))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literalLang(FR_1, "http://purl.org/dc/terms/description", "Der Kunde bestellt.", "de"),
+                literalLang(FR_1, "http://purl.org/dc/terms/description", "The customer orders.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+
+        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">");
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de\">Der Kunde bestellt.</span>");
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"en\" hidden>The customer orders.</span>");
+    }
+
+    /** A field with only one language on offer stays exactly as it rendered before this issue. */
+    @Test
+    void leavesATitleUnwrappedWhenOnlyOneLanguageExists() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Bestellen", "de")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+
+        assertThat(html).contains("<h3>Bestellen</h3>");
+        assertThat(html).doesNotContain("<span class=\"lang-group\"");
+    }
+
+    /** The toolbar always offers the control; the script hides it when no field has variants. */
+    @Test
+    void addsALanguageSwitchToTheToolbar() {
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+
+        assertThat(html).contains("id=\"lang-switch\"").contains("<option value=\"\">Original</option>");
+    }
+
     // --- fixtures --------------------------------------------------------------
 
     private static ModelViews.Views views(final ModelSection... sections) {
@@ -351,5 +416,10 @@ class HtmlReportRendererTest {
 
     private static Triple literal(final String subject, final String predicate, final String value) {
         return new Triple(subject, predicate, new RdfNode.Literal(value, null, null));
+    }
+
+    private static Triple literalLang(
+            final String subject, final String predicate, final String value, final String lang) {
+        return new Triple(subject, predicate, new RdfNode.Literal(value, null, lang));
     }
 }
