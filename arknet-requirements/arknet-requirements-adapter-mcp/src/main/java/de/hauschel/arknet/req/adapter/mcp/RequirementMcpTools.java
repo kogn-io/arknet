@@ -157,12 +157,12 @@ public final class RequirementMcpTools {
      * default project and no fallback to a server-side working directory (decision 3).
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default display language too, for the read tool
-     * ({@code req_get}'s {@code displayLocale} default) - see {@link #effectiveDisplayLocale}.
-     * The write tools ({@code req_add}/{@code req_update}) deliberately do <strong>not</strong>
-     * use it (see that method's javadoc for why, mirroring
-     * {@code UbiquitousLanguageMcpTools#resolveProject}), but still resolve the full project so
-     * every tool here shares one resolution path.</p>
+     * needs the resolved project's configured default language for two, independent purposes -
+     * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code req_get}'s)
+     * {@code displayLocale} default, while {@code req_add}/{@code req_update} instead pass
+     * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
+     * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
+     * (issue #258) - two different consumers of the very same field, not one the write tools skip.</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -206,9 +206,9 @@ public final class RequirementMcpTools {
                     + "reliability); only meaningful for NON_FUNCTIONAL requirements", required = false)
             final String qualityCategory,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title and description "
-                    + "are written in, or omitted for a plain, untagged literal. NOT defaulted from the "
-                    + "project's configured default language - that default only affects how a requirement "
-                    + "is displayed (req_get), never what gets written.", required = false)
+                    + "are written in. Falls back to the project's configured default language "
+                    + "(project_update) if omitted; if the project has no default either, the call is "
+                    + "rejected rather than writing an untagged literal.", required = false)
             final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
@@ -226,7 +226,8 @@ public final class RequirementMcpTools {
                 new NewRequirement(title, description, requirementType, requirementPriority,
                         blankToNull(motivatedBy), blankToNull(qualityCategory),
                         acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria),
-                        blankToNull(language)));
+                        blankToNull(language)),
+                project.defaultLanguage());
         return presenter.format(project.id(), created);
     }
 
@@ -383,10 +384,13 @@ public final class RequirementMcpTools {
                     + "that is already set)", required = false)
             final String priority,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') a non-omitted title/"
-                    + "description is written in, or omitted for a plain, untagged literal. NOT defaulted "
-                    + "from the project's configured default language (see req_add's same parameter); only "
-                    + "the existing literal carrying this same tag is replaced - every other language "
-                    + "variant of a field being corrected survives untouched.", required = false)
+                    + "description is written in. Falls back to the project's configured default language "
+                    + "(see req_add's same parameter) if omitted; if the project has no default either, "
+                    + "the call is rejected rather than writing an untagged literal. Only the existing "
+                    + "literal carrying the tag actually written is replaced - every other language "
+                    + "variant of a field being corrected survives untouched, except a stale untagged "
+                    + "one left over from before a language was ever supplied, which is swept away when "
+                    + "the resolved tag equals the project's default.", required = false)
             final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
@@ -395,15 +399,15 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final RequirementCode code = new RequirementCode(id);
         final Priority requirementPriority = blankToNull(priority) == null
                 ? null
                 : Priority.valueOf(priority.trim());
-        final Requirement updated = updateRequirement.update(projectId, code, blankToNull(title),
+        final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
                 blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria),
-                requirementPriority, blankToNull(language));
-        return presenter.format(projectId, updated);
+                requirementPriority, blankToNull(language), project.defaultLanguage());
+        return presenter.format(project.id(), updated);
     }
 
     @McpTool(name = "req_schema",

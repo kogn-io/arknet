@@ -116,6 +116,20 @@ public interface RequirementRepository {
      *                      case) - independent of {@code titleLanguage}, since {@code title} and
      *                      {@code description} may have been corrected under different tags on
      *                      different calls
+     * @param defaultLanguage the target project's configured default language (see
+     *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                      or {@code null} if it has none. Used only to decide whether an
+     *                      existing <em>untagged</em> literal on {@code title}/{@code description}
+     *                      should be swept away rather than preserved as an "other" language
+     *                      variant: when {@code titleLanguage}/{@code descriptionLanguage}
+     *                      (canonicalized) equals {@code defaultLanguage} (canonicalized), the
+     *                      literal being written is - by construction - the very literal an
+     *                      omitted {@code language} argument would have resolved to, so a
+     *                      still-untagged sibling of the same predicate is a stale duplicate of it,
+     *                      not a genuine other-language variant, and is dropped instead of
+     *                      preserved (issue #258). Has no bearing on which tag is actually
+     *                      written - that decision was already made by the caller (see
+     *                      {@code UpdateRequirement}'s own {@code defaultLanguage} parameter)
      * @throws RequirementNotFoundException              if no requirement with this identity
      *                                                    exists at all
      * @throws RequirementConcurrentlyModifiedException if {@code expectedHead} no longer matches
@@ -128,7 +142,7 @@ public interface RequirementRepository {
      *                          {@code arknet-requirements-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage);
+            String titleLanguage, String descriptionLanguage, String defaultLanguage);
 
     /**
      * Finds a requirement by its human-readable business code within a project.

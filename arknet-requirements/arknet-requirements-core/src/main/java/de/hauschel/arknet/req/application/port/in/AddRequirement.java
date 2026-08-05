@@ -22,14 +22,22 @@ public interface AddRequirement {
     /**
      * Adds a new requirement.
      *
-     * @param projectId the project (architecture model) to add the requirement to
-     * @param command     the data describing the requirement to create
+     * @param projectId       the project (architecture model) to add the requirement to
+     * @param command         the data describing the requirement to create
+     * @param defaultLanguage the target project's configured default language (see
+     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        or {@code null} if it has none - the tag {@code title}/
+     *                        {@code description} are written under when {@code command.language()}
+     *                        is {@code null} (see {@link de.hauschel.arknet.kernel.LanguageTag
+     *                        #resolveWriteLanguage})
      * @return the persisted requirement including its assigned identity
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code
+     *                        command.language()} and {@code defaultLanguage} are both {@code null}
      */
-    Requirement add(ProjectId projectId, NewRequirement command);
+    Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage);
 
     /**
-     * Input data for {@link #add(ProjectId, NewRequirement)}.
+     * Input data for {@link #add(ProjectId, NewRequirement, String)}.
      *
      * @param title           short human-readable summary
      * @param description     the normative statement ("The system shall ...")
@@ -42,9 +50,10 @@ public interface AddRequirement {
      * @param acceptanceCriteria the testable "Done when ..." criteria; required, at least one
      *                        entry
      * @param language        the BCP-47 language tag {@code title}/{@code description} are
-     *                        written in (e.g. {@code "de"}), or {@code null} for a plain,
-     *                        untagged literal - the same tag applies to both fields, since a
-     *                        requirement is normally elicited in one language at a time
+     *                        written in (e.g. {@code "de"}), or {@code null} to fall back to the
+     *                        target project's configured default language - the same tag applies
+     *                        to both fields, since a requirement is normally elicited in one
+     *                        language at a time
      */
     record NewRequirement(
             String title,

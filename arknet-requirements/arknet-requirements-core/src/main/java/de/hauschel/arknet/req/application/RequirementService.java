@@ -95,14 +95,17 @@ import de.hauschel.arknet.req.domain.TermRef;
  * <p><strong>Language.</strong> {@code title}/{@code description} may each legally carry several
  * language-tagged variants. {@link #updateWithOptimisticRetry} determines, per field, whether
  * {@code mutation} actually changed it (byte-for-byte against what was just read): a changed
- * field is written under {@code update}'s caller-supplied {@code language}; an unchanged field is
- * written back under the exact tag {@link RequirementRepository.CurrentRequirement#titleLanguage()}/
+ * field is written under {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}'s
+ * resolution of {@code update}'s caller-supplied {@code language} against the target project's
+ * {@code defaultLanguage} (issue #258 - a changed field with neither is rejected, never silently
+ * written untagged); an unchanged field is written back under the exact tag {@link
+ * RequirementRepository.CurrentRequirement#titleLanguage()}/
  * {@link RequirementRepository.CurrentRequirement#descriptionLanguage()} already carried - a
  * scoped no-op at the store, not a retag. This is what keeps {@link #accept}/{@link #linkTerm}
- * (which never touch either field and always call the helper with a {@code null} language) from
- * collapsing a multilingual title/description down to one variant just because they do not know or
- * care about language - the out-adapter preserves every other language variant regardless, but
- * only if it is told the correct tag to leave alone.</p>
+ * (which never touch either field and always call the helper with a {@code null} language and a
+ * {@code null} defaultLanguage) from collapsing a multilingual title/description down to one
+ * variant just because they do not know or care about language - the out-adapter preserves every
+ * other language variant regardless, but only if it is told the correct tag to leave alone.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         AcceptRequirement, LinkTerm, LinkConstraint, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
@@ -156,7 +159,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public Requirement add(ProjectId projectId, NewRequirement command) {
+    public Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
@@ -167,6 +170,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // same candidate code; CodeAssignment turns that race into an invisible, automatic retry
         // instead of surfacing the out-adapter's guard as a caller-visible failure.
         RequirementId id = new RequirementId(resourceIdFactory.newId());
+        // Resolved once, outside the retry: the language a fresh requirement is written under does
+        // not depend on which code candidate ultimately wins, and a missing default must reject
+        // the call before any code is even computed (issue #258).
+        String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
                 DuplicateRequirementCodeException.class, () -> {
                     RequirementCode code = nextCode(projectId, command.type());
@@ -174,7 +181,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                             command.description(), command.type(), RequirementStatus.PROPOSED,
                             command.priority(), command.motivatedBy(), command.qualityCategory(),
                             List.of(), command.acceptanceCriteria(), List.of());
-                    repository.create(projectId, requirement, command.language());
+                    repository.create(projectId, requirement, language);
                     return requirement;
                 });
     }
@@ -198,8 +205,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Objects.requireNonNull(code, "code");
         // accept() never touches title/description, so no call-scoped language applies - the
         // ternaries in updateWithOptimisticRetry always fall back to the language each field was
-        // already read under.
-        return updateWithOptimisticRetry(projectId, code, null, Requirement::accept);
+        // already read under, and never reach LanguageTag#resolveWriteLanguage - passing a null
+        // defaultLanguage here is therefore safe even though this project may well have one
+        // configured.
+        return updateWithOptimisticRetry(projectId, code, null, null, Requirement::accept);
     }
 
     @Override
@@ -211,7 +220,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // outside the retry loop below - a lookup failure must propagate immediately and leave
         // the requirement untouched, exactly as before.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
-        return updateWithOptimisticRetry(projectId, code, null, current -> {
+        // linkTerm() never touches title/description either - same null/null rationale as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -237,7 +247,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Constraint constraint = constraintRepository.findByCode(projectId, parsedCode)
                 .orElseThrow(() -> new ConstraintNotFoundException(projectId, parsedCode));
         ConstraintRef ref = new ConstraintRef(constraint.id().value());
-        return updateWithOptimisticRetry(projectId, code, null, current -> {
+        // linkConstraint() never touches title/description either - same null/null rationale as
+        // accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
@@ -252,10 +264,11 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
 
     @Override
     public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> acceptanceCriteria, Priority priority, String language) {
+            List<String> acceptanceCriteria, Priority priority, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, language, current -> new Requirement(current.id(), current.code(),
+        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage,
+                current -> new Requirement(current.id(), current.code(),
                 title != null ? title : current.title(),
                 description != null ? description : current.description(),
                 current.type(), current.status(),
@@ -296,9 +309,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                                                  acceptance criterion
      * @throws RequirementConcurrentlyModifiedException if the write keeps losing the race across
      *                                                   every retry attempt
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code mutation}
+     *                                                   actually changes {@code title} or
+     *                                                   {@code description} and neither {@code
+     *                                                   language} nor {@code defaultLanguage} is
+     *                                                   given
      */
-    private Requirement updateWithOptimisticRetry(
-            ProjectId projectId, RequirementCode code, String language, UnaryOperator<Requirement> mutation) {
+    private Requirement updateWithOptimisticRetry(ProjectId projectId, RequirementCode code, String language,
+            String defaultLanguage, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(projectId, code)
@@ -313,18 +331,20 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             }
             // title/description each get their own language: a field this mutation left byte-for-
             // byte unchanged must round-trip under the exact tag it was read under (a scoped
-            // no-op), never under `language` - that tag only ever applies to a field this call is
-            // actually changing. Without this distinction, accept()/linkTerm() (which always call
-            // this with language == null and never touch either field) would retag or collapse
-            // whichever language variant findCurrentByCode happened to select. Canonicalizing here,
-            // lazily, rather than eagerly in update(), means a malformed language argument only ever
-            // throws when this call is actually changing a language-tagged field under it.
+            // no-op), never under `language`/`defaultLanguage` - those only ever apply to a field
+            // this call is actually changing. Without this distinction, accept()/linkTerm() (which
+            // always call this with language == null and defaultLanguage == null and never touch
+            // either field) would retag or collapse whichever language variant findCurrentByCode
+            // happened to select. Resolving here, lazily, rather than eagerly in update(), means a
+            // malformed/missing language argument only ever throws when this call is actually
+            // changing a language-tagged field under it (issue #258).
             String titleLanguage = updated.title().equals(current.value().title())
-                    ? current.titleLanguage() : LanguageTag.canonicalize(language);
+                    ? current.titleLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
             String descriptionLanguage = updated.description().equals(current.value().description())
-                    ? current.descriptionLanguage() : LanguageTag.canonicalize(language);
+                    ? current.descriptionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
             try {
-                repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage);
+                repository.compareAndUpdate(
+                        projectId, current.head(), updated, titleLanguage, descriptionLanguage, defaultLanguage);
                 return updated;
             } catch (RequirementConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the requirement between our read and our write -

@@ -44,6 +44,8 @@ import de.hauschel.arknet.req.domain.TermRef;
 class RequirementServiceConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
+    /** These races are orthogonal to issue #258's default-language resolution - always given explicitly. */
+    private static final String DEFAULT_LANGUAGE = "en";
     private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final ResourceId TERM_2 = ResourceId.of("https://w3id.org/arknet/id/term-2");
     /** These concurrency races are orthogonal to {@code req_schema} - never exercised here. */
@@ -83,7 +85,7 @@ class RequirementServiceConcurrencyTest {
      */
     @Test
     void concurrentLinkTermCallsForDifferentTermsBothSurvive() {
-        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
+        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-2"));
         RequirementService underTest =
@@ -103,7 +105,7 @@ class RequirementServiceConcurrencyTest {
      */
     @Test
     void acceptSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
-        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
+        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1"));
         RequirementService underTest =
@@ -125,13 +127,13 @@ class RequirementServiceConcurrencyTest {
      */
     @Test
     void updateSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
-        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
+        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.linkTerm(WS, code, "TERM-1"));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null);
+        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Corrected description", result.description());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
@@ -150,7 +152,7 @@ class RequirementServiceConcurrencyTest {
      */
     @Test
     void linkTermGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
-        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement()).code();
+        RequirementCode code = otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
@@ -172,11 +174,11 @@ class RequirementServiceConcurrencyTest {
     @Test
     void concurrentAddCallsForTheSameTypeBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllRepository racing = new RaceOnFirstFindAllRepository(store,
-                () -> otherCaller.add(WS, newFunctionalRequirement()));
+                () -> otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.add(WS, newFunctionalRequirement());
+        Requirement result = underTest.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
 
         assertEquals(new RequirementCode("FR-2"), result.code());
         assertEquals(2, store.findAll(WS).size());
@@ -227,8 +229,9 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-                String titleLanguage, String descriptionLanguage) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, descriptionLanguage);
+                String titleLanguage, String descriptionLanguage, String defaultLanguage) {
+            delegate.compareAndUpdate(
+                    projectId, expectedHead, updated, titleLanguage, descriptionLanguage, defaultLanguage);
         }
 
         @Override
@@ -282,8 +285,9 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-                String titleLanguage, String descriptionLanguage) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, descriptionLanguage);
+                String titleLanguage, String descriptionLanguage, String defaultLanguage) {
+            delegate.compareAndUpdate(
+                    projectId, expectedHead, updated, titleLanguage, descriptionLanguage, defaultLanguage);
         }
 
         @Override
@@ -334,7 +338,7 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-                String titleLanguage, String descriptionLanguage) {
+                String titleLanguage, String descriptionLanguage, String defaultLanguage) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code(), null)
