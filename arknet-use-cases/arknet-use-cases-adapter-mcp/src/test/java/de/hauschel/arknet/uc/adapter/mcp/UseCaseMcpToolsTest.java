@@ -389,7 +389,7 @@ class UseCaseMcpToolsTest {
         private RuntimeException updateFailure;
 
         @Override
-        public UseCase add(ProjectId projectId, AddUseCase.NewUseCase command) {
+        public UseCase add(ProjectId projectId, AddUseCase.NewUseCase command, String defaultLanguage) {
             this.lastCommand = command;
             if (addFailure != null) {
                 throw addFailure;
@@ -429,7 +429,7 @@ class UseCaseMcpToolsTest {
         @Override
         public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
                 String trigger, String precondition, String postcondition, List<String> extensions,
-                List<StepTextPatch> stepTextPatches, String language) {
+                List<StepTextPatch> stepTextPatches, String language, String defaultLanguage) {
             if (updateFailure != null) {
                 throw updateFailure;
             }

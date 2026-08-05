@@ -103,6 +103,20 @@ public interface UseCaseRepository {
      *                      written in for this call, or {@code null} for untagged at that
      *                      position. A position this call does not patch must carry through
      *                      {@link CurrentUseCase#stepTextLanguageByPosition()}'s own entry for it
+     * @param defaultLanguage the target project's configured default language (see
+     *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                      or {@code null} if it has none. Used only to decide whether an existing
+     *                      <em>untagged</em> literal on {@code title}/{@code goal}/a step's
+     *                      {@code text} should be swept away rather than preserved as an "other"
+     *                      language variant: when the tag written for that field/step
+     *                      (canonicalized) equals {@code defaultLanguage} (canonicalized), the
+     *                      literal being written is - by construction - the very literal an
+     *                      omitted {@code language} argument would have resolved to, so a
+     *                      still-untagged sibling of the same predicate/position is a stale
+     *                      duplicate of it, not a genuine other-language variant, and is dropped
+     *                      instead of preserved (issue #258). Has no bearing on which tag is
+     *                      actually written - that decision was already made by the caller (see
+     *                      {@code UpdateUseCase}'s own {@code defaultLanguage} parameter)
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
      *                                                all
      * @throws UseCaseConcurrentlyModifiedException if {@code expectedHead} no longer matches the
@@ -115,7 +129,8 @@ public interface UseCaseRepository {
      *                          {@code arknet-use-cases-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition);
+            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+            String defaultLanguage);
 
     /**
      * Finds a use case by its human-readable business code within a project.

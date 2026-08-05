@@ -219,16 +219,29 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+            String defaultLanguage) {
         Objects.requireNonNull(stepTextLanguageByPosition, "stepTextLanguageByPosition");
         Map<Integer, String> stepTags = new LinkedHashMap<>();
         stepTextLanguageByPosition.forEach((position, tag) -> stepTags.put(position, canonicalizeLenient(tag)));
         write(projectId, updated, false, expectedHead,
-                canonicalizeLenient(titleLanguage), canonicalizeLenient(goalLanguage), stepTags);
+                canonicalizeLenient(titleLanguage), canonicalizeLenient(goalLanguage), stepTags,
+                canonicalizeLenient(defaultLanguage));
     }
 
     private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
             String titleTag, String goalTag, Map<Integer, String> stepTagByPosition) {
+        write(projectId, useCase, expectAbsent, expectedHead, titleTag, goalTag, stepTagByPosition, null);
+    }
+
+    /**
+     * @param defaultTag the target project's configured default language, canonicalized, or
+     *                    {@code null} if it has none/this is a {@link #create} - see the class-
+     *                    level "Sweeping a stale untagged sibling" note (mirrors {@code
+     *                    KognioRdfRequirementRepository#replaceTriplesForUpdate}'s own parameter)
+     */
+    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
+            String titleTag, String goalTag, Map<Integer, String> stepTagByPosition, String defaultTag) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
@@ -351,12 +364,16 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         // differs from that position's stepTagByPosition entry. Mirrors
                         // KognioRdfRequirementRepository#replaceTriplesForUpdate's
                         // otherLanguageLiterals capture, just read inline here (the use-case
-                        // adapter has no equivalent shared helper method to call into).
-                        List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag);
+                        // adapter has no equivalent shared helper method to call into). defaultTag
+                        // additionally sweeps a stale untagged sibling whenever the field/step's
+                        // written tag equals the project's default (issue #258) - see
+                        // otherLanguageLiterals/otherLanguageStepTexts's own defaultTag javadoc.
+                        List<Literal> preservedTitles =
+                                otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag, defaultTag);
                         List<Literal> preservedGoals =
-                                otherLanguageLiterals(tx, subject, USE_CASE_GOAL_PROPERTY, goalTag);
+                                otherLanguageLiterals(tx, subject, USE_CASE_GOAL_PROPERTY, goalTag, defaultTag);
                         Map<Integer, List<Literal>> preservedStepTextsByPosition =
-                                otherLanguageStepTexts(tx, subject, stepTagByPosition);
+                                otherLanguageStepTexts(tx, subject, stepTagByPosition, defaultTag);
 
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
@@ -405,14 +422,28 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * @param writtenTag the tag of the literal {@code graph} is about to (re)write for this
      *                   predicate, or {@code null} for untagged - excluded here since it is not
      *                   being preserved, it is being replaced
+     * @param defaultTag the target project's configured default language, canonicalized, or
+     *                   {@code null} if it has none - when it equals {@code writtenTag}, an
+     *                   existing <em>untagged</em> literal is excluded here too (issue #258),
+     *                   swept away as a stale duplicate of the literal now being written under its
+     *                   proper default tag rather than preserved as a genuine other-language
+     *                   variant (mirrors {@code KognioRdfRequirementRepository#otherLanguageLiterals}'s
+     *                   own {@code defaultTag} parameter)
      */
-    private List<Literal> otherLanguageLiterals(DatasetTx tx, String subject, String predicateIri, String writtenTag) {
+    private List<Literal> otherLanguageLiterals(
+            DatasetTx tx, String subject, String predicateIri, String writtenTag, String defaultTag) {
         String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " <" + predicateIri + "> ?o } }";
+        boolean sweepUntagged = defaultTag != null && defaultTag.equals(writtenTag);
         return tx.select(query)
                 .map(row -> literalOf(row, "o"))
-                .filter(literal -> !Objects.equals(
-                        canonicalizeLenient(literal.getLanguageTag().orElse(null)), writtenTag))
+                .filter(literal -> {
+                    String existingTag = canonicalizeLenient(literal.getLanguageTag().orElse(null));
+                    if (sweepUntagged && existingTag == null) {
+                        return false;
+                    }
+                    return !Objects.equals(existingTag, writtenTag);
+                })
                 .toList();
     }
 
@@ -461,9 +492,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * is re-minted on every write (class-level note), so what survives an update is the position's
      * <em>other-language text</em>, re-attached to whichever new step IRI ends up at that same
      * position - not the old step IRI itself.
+     *
+     * @param defaultTag the target project's configured default language, canonicalized, or
+     *                   {@code null} if it has none - same issue #258 sweep as
+     *                   {@link #otherLanguageLiterals}'s own {@code defaultTag}, applied per
+     *                   position: a position whose written tag equals {@code defaultTag} sweeps an
+     *                   existing untagged step text at that position instead of preserving it
      */
     private Map<Integer, List<Literal>> otherLanguageStepTexts(
-            DatasetTx tx, String subject, Map<Integer, String> stepTagByPosition) {
+            DatasetTx tx, String subject, Map<Integer, String> stepTagByPosition, String defaultTag) {
         String query = "SELECT ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
                 + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } }";
@@ -472,7 +509,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
             Literal text = literalOf(row, "text");
             String writtenTag = stepTagByPosition.get(position);
-            if (!Objects.equals(canonicalizeLenient(text.getLanguageTag().orElse(null)), writtenTag)) {
+            String existingTag = canonicalizeLenient(text.getLanguageTag().orElse(null));
+            boolean sweepUntagged = defaultTag != null && defaultTag.equals(writtenTag) && existingTag == null;
+            if (!sweepUntagged && !Objects.equals(existingTag, writtenTag)) {
                 byPosition.computeIfAbsent(position, key -> new ArrayList<>()).add(text);
             }
         });

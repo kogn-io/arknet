@@ -129,7 +129,7 @@ class KognioRdfUseCaseRepositoryTest {
         RevisionToken head = repository.findCurrentByCode(projectId, updated.code())
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
-        repository.compareAndUpdate(projectId, head, updated, null, null, java.util.Map.of());
+        repository.compareAndUpdate(projectId, head, updated, null, null, java.util.Map.of(), null);
     }
 
     private void seed(ProjectId project, String graph, String triples) {
@@ -288,7 +288,7 @@ class KognioRdfUseCaseRepositoryTest {
         seedReferences(PROJECT_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, java.util.Map.of()));
+                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, java.util.Map.of(), null));
 
         assertTrue(repository.findAll(PROJECT_A).isEmpty());
     }
@@ -304,7 +304,7 @@ class KognioRdfUseCaseRepositoryTest {
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.compareAndUpdate(PROJECT_A, head, revised, null, null, java.util.Map.of());
+        repository.compareAndUpdate(PROJECT_A, head, revised, null, null, java.util.Map.of(), null);
 
         assertEquals(Optional.of(revised), repository.findByCode(PROJECT_A, CODE_1, null));
     }
@@ -331,7 +331,7 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt, null, null, java.util.Map.of()));
+                () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt, null, null, java.util.Map.of(), null));
         assertEquals(Optional.of(concurrentlyRevised), repository.findByCode(PROJECT_A, CODE_1, null));
     }
 
@@ -340,7 +340,7 @@ class KognioRdfUseCaseRepositoryTest {
         seedReferences(PROJECT_A);
 
         assertThrows(UseCaseNotFoundException.class,
-                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, java.util.Map.of()));
+                () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, java.util.Map.of(), null));
         assertTrue(repository.findAll(PROJECT_A).isEmpty());
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1));
     }
@@ -738,7 +738,7 @@ class KognioRdfUseCaseRepositoryTest {
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
-        repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised, null, null, java.util.Map.of());
+        repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised, null, null, java.util.Map.of(), null);
 
         List<String> revisions = revisionsOf(subject);
         assertEquals(2, revisions.size(), "compareAndUpdate must record exactly one more revision");

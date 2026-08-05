@@ -22,20 +22,29 @@ public interface AddUseCase {
     /**
      * Adds a new use case.
      *
-     * @param projectId the project (architecture model) to add the use case to
-     * @param command     the data describing the use case to create
+     * @param projectId       the project (architecture model) to add the use case to
+     * @param command         the data describing the use case to create
+     * @param defaultLanguage the target project's configured default language (see
+     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        or {@code null} if it has none - the tag {@code title}/{@code goal}/
+     *                        every step's {@code text} are written under when {@code
+     *                        command.language()} is {@code null} (see
+     *                        {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage})
      * @return the persisted use case including its assigned identity
      * @throws DuplicateUseCaseCodeException if a concurrent {@code uc_add} keeps claiming the
      *                                        same candidate business code across every retry
      *                                        attempt
      * @throws ResourceAlreadyExistsException if a use case with the newly minted identity already
      *                                         exists
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code
+     *                                        command.language()} and {@code defaultLanguage} are
+     *                                        both {@code null}
      */
-    UseCase add(ProjectId projectId, NewUseCase command);
+    UseCase add(ProjectId projectId, NewUseCase command, String defaultLanguage);
 
     /**
-     * Input data for {@link #add(ProjectId, NewUseCase)}. Mirrors {@link UseCase} minus the
-     * identity, which the service assigns.
+     * Input data for {@link #add(ProjectId, NewUseCase, String)}. Mirrors {@link UseCase} minus
+     * the identity, which the service assigns.
      *
      * <p><strong>Raw human-typed references.</strong> {@code primaryActor},
      * {@code supportingActors} and each step's {@code realises} are plain business
@@ -66,8 +75,9 @@ public interface AddUseCase {
      *                         (may be {@code null}, treated as empty)
      * @param language         the BCP-47 language tag {@code title}, {@code goal} and every
      *                         step's {@code text} are written in (e.g. {@code "de"}), or
-     *                         {@code null} for a plain, untagged literal - one shared tag, since a
-     *                         use case is normally authored in one language at a time (mirroring
+     *                         {@code null} to fall back to the target project's configured
+     *                         default language - one shared tag, since a use case is normally
+     *                         authored in one language at a time (mirroring
      *                         {@code AddTerm.NewTerm#language()})
      */
     record NewUseCase(
