@@ -241,10 +241,11 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Optional: alternative/exception flows as free-text lines, e.g. "
                     + "'2a. Payment declined -> use case ends in failure'", required = false)
             final List<String> extensions,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title, goal and every "
-                    + "step's text are written in. Falls back to the project's configured default language "
-                    + "(project_update) if omitted; if the project has no default either, the call is "
-                    + "rejected rather than writing an untagged literal.", required = false)
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title, goal, scope, "
+                    + "trigger, precondition, postcondition and every step's/extension's text are written in. "
+                    + "Falls back to the project's configured default language (project_update) if omitted; if "
+                    + "the project has no default either, the call is rejected rather than writing an untagged "
+                    + "literal.", required = false)
             final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
@@ -365,13 +366,15 @@ public final class UseCaseMcpTools {
                     required = false)
             final List<StepRealisesPatchInput> stepRealisesPatches,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') every field this call "
-                    + "actually touches (a non-omitted title/goal, each patched step's text) is written in. "
-                    + "Falls back to the project's configured default language (see uc_add's same parameter) "
-                    + "if omitted; if the project has no default either, the call is rejected rather than "
-                    + "writing an untagged literal. Only the existing literal carrying the tag actually "
-                    + "written is replaced per field - every other language variant survives untouched, "
-                    + "except a stale untagged one left over from before a language was ever supplied, which "
-                    + "is swept away when the resolved tag equals the project's default.", required = false)
+                    + "actually touches (a non-omitted title/goal/scope/trigger/precondition/postcondition, "
+                    + "each patched step's text, and, if extensions is given, every entry of it) is written "
+                    + "in. Falls back to the project's configured default language (see uc_add's same "
+                    + "parameter) if omitted; if the project has no default either, the call is rejected "
+                    + "rather than writing an untagged literal. Only the existing literal carrying the tag "
+                    + "actually written is replaced per field - every other language variant survives "
+                    + "untouched, except a stale untagged one left over from before a language was ever "
+                    + "supplied, which is swept away when the resolved tag equals the project's default.",
+                    required = false)
             final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "

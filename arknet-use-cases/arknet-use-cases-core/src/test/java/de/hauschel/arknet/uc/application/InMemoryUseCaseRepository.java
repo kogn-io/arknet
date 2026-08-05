@@ -41,7 +41,12 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
     private final Map<UseCaseId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Map<UseCaseId, String> titleLanguageByIdentity = new LinkedHashMap<>();
     private final Map<UseCaseId, String> goalLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, String> scopeLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, String> triggerLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, String> preconditionLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, String> postconditionLanguageByIdentity = new LinkedHashMap<>();
     private final Map<UseCaseId, Map<Integer, String>> stepTextLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<UseCaseId, Map<Integer, String>> extensionTextLanguageByIdentity = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, UseCase useCase, String language) {
@@ -58,19 +63,30 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         headByIdentity.put(useCase.id(), new RevisionToken(UUID.randomUUID().toString()));
         titleLanguageByIdentity.put(useCase.id(), language);
         goalLanguageByIdentity.put(useCase.id(), language);
+        scopeLanguageByIdentity.put(useCase.id(), language);
+        triggerLanguageByIdentity.put(useCase.id(), language);
+        preconditionLanguageByIdentity.put(useCase.id(), language);
+        postconditionLanguageByIdentity.put(useCase.id(), language);
         Map<Integer, String> stepLanguages = new LinkedHashMap<>();
         useCase.steps().forEach(step -> stepLanguages.put(step.position(), language));
         stepTextLanguageByIdentity.put(useCase.id(), stepLanguages);
+        Map<Integer, String> extensionLanguages = new LinkedHashMap<>();
+        for (int position = 1; position <= useCase.extensions().size(); position++) {
+            extensionLanguages.put(position, language);
+        }
+        extensionTextLanguageByIdentity.put(useCase.id(), extensionLanguages);
     }
 
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+            String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
+            String preconditionLanguage, String postconditionLanguage,
+            Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
             String defaultLanguage) {
-        // This fake stores a single title/goal/step-text value per identity (no multi-valued
-        // literals), so there is nothing for it to sweep - defaultLanguage only matters to the
-        // real out-adapter's language-variant preservation, exercised by
-        // KognioRdfUseCaseRepositoryMultilingualTest instead.
+        // This fake stores a single title/goal/scope/trigger/precondition/postcondition/step-text/
+        // extension-text value per identity (no multi-valued literals), so there is nothing for it
+        // to sweep - defaultLanguage only matters to the real out-adapter's language-variant
+        // preservation, exercised by KognioRdfUseCaseRepositoryMultilingualTest instead.
         Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
         UseCase current = useCases.get(updated.id());
         if (current == null) {
@@ -83,7 +99,12 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
         titleLanguageByIdentity.put(updated.id(), titleLanguage);
         goalLanguageByIdentity.put(updated.id(), goalLanguage);
+        scopeLanguageByIdentity.put(updated.id(), scopeLanguage);
+        triggerLanguageByIdentity.put(updated.id(), triggerLanguage);
+        preconditionLanguageByIdentity.put(updated.id(), preconditionLanguage);
+        postconditionLanguageByIdentity.put(updated.id(), postconditionLanguage);
         stepTextLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(stepTextLanguageByPosition));
+        extensionTextLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(extensionTextLanguageByPosition));
     }
 
     @Override
@@ -98,7 +119,11 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         return findByCode(projectId, code, null)
                 .map(useCase -> new CurrentUseCase(useCase, headByIdentity.get(useCase.id()),
                         titleLanguageByIdentity.get(useCase.id()), goalLanguageByIdentity.get(useCase.id()),
-                        stepTextLanguageByIdentity.getOrDefault(useCase.id(), Map.of())));
+                        scopeLanguageByIdentity.get(useCase.id()), triggerLanguageByIdentity.get(useCase.id()),
+                        preconditionLanguageByIdentity.get(useCase.id()),
+                        postconditionLanguageByIdentity.get(useCase.id()),
+                        stepTextLanguageByIdentity.getOrDefault(useCase.id(), Map.of()),
+                        extensionTextLanguageByIdentity.getOrDefault(useCase.id(), Map.of())));
     }
 
     @Override

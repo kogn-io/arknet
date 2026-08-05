@@ -37,18 +37,19 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * be bypassed by accident.</p>
  *
  * <p><strong>Language, and why a full replace needs per-field/per-step tags.</strong>
- * {@code title}/{@code goal}/each step's {@code text} may each legally carry several
- * language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}). {@link #compareAndUpdate}
+ * {@code title}/{@code goal}/{@code scope}/{@code trigger}/{@code precondition}/
+ * {@code postcondition}/each step's {@code text}/each extension's text may each legally carry
+ * several language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}). {@link #compareAndUpdate}
  * replaces a use case's triples wholesale by identity - so preserving every language variant a
  * caller did not touch cannot rely on simply never writing an untouched field; the out-adapter
  * must capture every existing variant before the replace and re-attach every one the write is not
- * itself targeting. Since {@link UpdateUseCase} lets a caller change {@code title}/{@code goal}
+ * itself targeting. Since {@link UpdateUseCase} lets a caller change any of these fields
  * independently of each other and of any patched step, {@link #compareAndUpdate} takes one
- * language argument per field, plus a per-position map for steps - mirroring
- * {@code RequirementRepository#compareAndUpdate}'s {@code titleLanguage}/
- * {@code descriptionLanguage} split, generalised to a third, multi-instance field ({@code Step}).
- * {@link #create} takes one shared tag instead, since a freshly created use case is written whole
- * in one call (mirroring {@code TermRepository#create}).</p>
+ * language argument per scalar field, plus a per-position map for steps and one for extensions -
+ * mirroring {@code RequirementRepository#compareAndUpdate}'s {@code titleLanguage}/
+ * {@code descriptionLanguage} split, generalised to the two multi-instance fields ({@code Step},
+ * extension). {@link #create} takes one shared tag instead, since a freshly created use case is
+ * written whole in one call (mirroring {@code TermRepository#create}).</p>
  */
 public interface UseCaseRepository {
 
@@ -57,8 +58,10 @@ public interface UseCaseRepository {
      *
      * @param projectId the project (architecture model) to store the use case in
      * @param useCase     the use case to create
-     * @param language    the BCP-47 language tag {@code useCase.title()}/{@code useCase.goal()}
-     *                    and every step's {@code text} are written in (e.g. {@code "de"}), or
+     * @param language    the BCP-47 language tag {@code useCase.title()}/{@code useCase.goal()}/
+     *                    {@code useCase.scope()}/{@code useCase.trigger()}/
+     *                    {@code useCase.precondition()}/{@code useCase.postcondition()} and every
+     *                    step's/extension's {@code text} are written in (e.g. {@code "de"}), or
      *                    {@code null} for a plain, untagged literal - one shared tag, since a
      *                    freshly created use case is written whole in one call
      * @throws ResourceAlreadyExistsException  if a use case with this identity already exists
@@ -98,24 +101,41 @@ public interface UseCaseRepository {
      *                      retag/collapse
      * @param goalLanguage  the same as {@code titleLanguage}, for {@code updated.goal()} (see
      *                      {@link CurrentUseCase#goalLanguage()})
+     * @param scopeLanguage the same as {@code titleLanguage}, for {@code updated.scope()} (see
+     *                      {@link CurrentUseCase#scopeLanguage()})
+     * @param triggerLanguage the same as {@code titleLanguage}, for {@code updated.trigger()} (see
+     *                      {@link CurrentUseCase#triggerLanguage()})
+     * @param preconditionLanguage the same as {@code titleLanguage}, for
+     *                      {@code updated.precondition()} (see
+     *                      {@link CurrentUseCase#preconditionLanguage()})
+     * @param postconditionLanguage the same as {@code titleLanguage}, for
+     *                      {@code updated.postcondition()} (see
+     *                      {@link CurrentUseCase#postconditionLanguage()})
      * @param stepTextLanguageByPosition the same as {@code titleLanguage}, per main-flow step
      *                      position: the tag {@code updated.steps()}' step at that position is
      *                      written in for this call, or {@code null} for untagged at that
      *                      position. A position this call does not patch must carry through
      *                      {@link CurrentUseCase#stepTextLanguageByPosition()}'s own entry for it
+     * @param extensionTextLanguageByPosition the same as {@code stepTextLanguageByPosition}, per
+     *                      extension position (1-based, in {@code updated.extensions()}'s order):
+     *                      the tag the extension text at that position is written in for this
+     *                      call, or {@code null} for untagged at that position. A position this
+     *                      call does not change must carry through
+     *                      {@link CurrentUseCase#extensionTextLanguageByPosition()}'s own entry
+     *                      for it
      * @param defaultLanguage the target project's configured default language (see
      *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                      or {@code null} if it has none. Used only to decide whether an existing
-     *                      <em>untagged</em> literal on {@code title}/{@code goal}/a step's
-     *                      {@code text} should be swept away rather than preserved as an "other"
-     *                      language variant: when the tag written for that field/step
-     *                      (canonicalized) equals {@code defaultLanguage} (canonicalized), the
-     *                      literal being written is - by construction - the very literal an
-     *                      omitted {@code language} argument would have resolved to, so a
-     *                      still-untagged sibling of the same predicate/position is a stale
-     *                      duplicate of it, not a genuine other-language variant, and is dropped
-     *                      instead of preserved (issue #258). Has no bearing on which tag is
-     *                      actually written - that decision was already made by the caller (see
+     *                      <em>untagged</em> literal on one of the scalar fields above, a step's
+     *                      {@code text} or an extension's text should be swept away rather than
+     *                      preserved as an "other" language variant: when the tag written for that
+     *                      field/step/extension (canonicalized) equals {@code defaultLanguage}
+     *                      (canonicalized), the literal being written is - by construction - the
+     *                      very literal an omitted {@code language} argument would have resolved
+     *                      to, so a still-untagged sibling of the same predicate/position is a
+     *                      stale duplicate of it, not a genuine other-language variant, and is
+     *                      dropped instead of preserved (issue #258). Has no bearing on which tag
+     *                      is actually written - that decision was already made by the caller (see
      *                      {@code UpdateUseCase}'s own {@code defaultLanguage} parameter)
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
      *                                                all
@@ -129,7 +149,9 @@ public interface UseCaseRepository {
      *                          {@code arknet-use-cases-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+            String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
+            String preconditionLanguage, String postconditionLanguage,
+            Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
             String defaultLanguage);
 
     /**
@@ -138,9 +160,10 @@ public interface UseCaseRepository {
      * @param projectId     the project (architecture model) to look up the use case in
      * @param code          the use-case code (e.g. {@code UC1})
      * @param displayLocale the BCP-47 language tag the caller wants {@code title}/{@code goal}/
-     *                      each step's {@code text} shown in, overriding this repository's own
-     *                      configured display-language preference for this one call, or
-     *                      {@code null} to use that preference unchanged
+     *                      {@code scope}/{@code trigger}/{@code precondition}/{@code postcondition}/
+     *                      each step's/extension's {@code text} shown in, overriding this
+     *                      repository's own configured display-language preference for this one
+     *                      call, or {@code null} to use that preference unchanged
      * @return the use case if present, otherwise {@link Optional#empty()}
      */
     Optional<UseCase> findByCode(ProjectId projectId, UseCaseCode code, String displayLocale);
@@ -173,12 +196,24 @@ public interface UseCaseRepository {
      *                                   {@code titleLanguage} argument
      * @param goalLanguage               the same as {@code titleLanguage}, for
      *                                   {@code value.goal()}
+     * @param scopeLanguage              the same as {@code titleLanguage}, for
+     *                                   {@code value.scope()}
+     * @param triggerLanguage            the same as {@code titleLanguage}, for
+     *                                   {@code value.trigger()}
+     * @param preconditionLanguage       the same as {@code titleLanguage}, for
+     *                                   {@code value.precondition()}
+     * @param postconditionLanguage      the same as {@code titleLanguage}, for
+     *                                   {@code value.postcondition()}
      * @param stepTextLanguageByPosition the same as {@code titleLanguage}, per main-flow step
      *                                   position: the tag the step at that position's currently
      *                                   selected {@code text} literal carries
+     * @param extensionTextLanguageByPosition the same as {@code stepTextLanguageByPosition}, per
+     *                                   extension position (1-based, in
+     *                                   {@code value.extensions()}'s order)
      */
     record CurrentUseCase(UseCase value, RevisionToken head, String titleLanguage, String goalLanguage,
-            Map<Integer, String> stepTextLanguageByPosition) {
+            String scopeLanguage, String triggerLanguage, String preconditionLanguage, String postconditionLanguage,
+            Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition) {
     }
 
     /**

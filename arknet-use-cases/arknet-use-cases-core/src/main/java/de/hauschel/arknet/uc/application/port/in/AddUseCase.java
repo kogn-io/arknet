@@ -27,8 +27,9 @@ public interface AddUseCase {
      * @param defaultLanguage the target project's configured default language (see
      *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - the tag {@code title}/{@code goal}/
-     *                        every step's {@code text} are written under when {@code
-     *                        command.language()} is {@code null} (see
+     *                        {@code scope}/{@code trigger}/{@code precondition}/
+     *                        {@code postcondition}/every step's/extension's {@code text} are
+     *                        written under when {@code command.language()} is {@code null} (see
      *                        {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage})
      * @return the persisted use case including its assigned identity
      * @throws DuplicateUseCaseCodeException if a concurrent {@code uc_add} keeps claiming the
@@ -73,11 +74,12 @@ public interface AddUseCase {
      *                         {@code 1..n} gap-free
      * @param extensions       alternative/exception flows as free text; {@code 0..n}
      *                         (may be {@code null}, treated as empty)
-     * @param language         the BCP-47 language tag {@code title}, {@code goal} and every
-     *                         step's {@code text} are written in (e.g. {@code "de"}), or
-     *                         {@code null} to fall back to the target project's configured
-     *                         default language - one shared tag, since a use case is normally
-     *                         authored in one language at a time (mirroring
+     * @param language         the BCP-47 language tag {@code title}, {@code goal}, {@code scope},
+     *                         {@code trigger}, {@code precondition}, {@code postcondition} and
+     *                         every step's/extension's {@code text} are written in (e.g.
+     *                         {@code "de"}), or {@code null} to fall back to the target project's
+     *                         configured default language - one shared tag, since a use case is
+     *                         normally authored in one language at a time (mirroring
      *                         {@code AddTerm.NewTerm#language()})
      */
     record NewUseCase(

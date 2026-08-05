@@ -1,6 +1,6 @@
 ##############################################################################
 #  arknet - Architecture Knowledge Net
-#  Requirements SHACL Shapes  :  Version 0.2.0
+#  Requirements SHACL Shapes  :  Version 0.3.0
 #
 #  Validates requirements-specific concepts (arkreq:).
 #  Core DDD shapes are in arknet-shapes.ttl, process shapes in process-shapes.ttl.
@@ -191,6 +191,10 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-title ;
     sh:property rshapes:UseCase-goal ;
     sh:property rshapes:UseCase-goal-uniqueLang ;
+    sh:property rshapes:UseCase-scope-uniqueLang ;
+    sh:property rshapes:UseCase-trigger-uniqueLang ;
+    sh:property rshapes:UseCase-precondition-uniqueLang ;
+    sh:property rshapes:UseCase-postcondition-uniqueLang ;
     sh:property rshapes:UseCase-primaryActor ;
     sh:property rshapes:UseCase-satisfies ;
     sh:property rshapes:UseCase-mainStep .
@@ -226,6 +230,34 @@ rshapes:UseCase-goal-uniqueLang
     sh:path     arkreq:useCaseGoal ;
     sh:uniqueLang true ;
     sh:message  "sh:uniqueLang allows at most one arkreq:useCaseGoal per non-empty language tag - two goals sharing the same tag are not allowed, but DIFFERENT language tags are (the goal may be stated in several languages). Formerly a plain sh:maxCount 1 (the domain field is single-valued)."@en , "sh:uniqueLang erlaubt hoechstens ein arkreq:useCaseGoal je nicht-leerem Sprach-Tag - zwei Goals mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (das Goal darf mehrsprachig formuliert sein). Vormals ein einfaches sh:maxCount 1 (Domain-Feld ist einwertig)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-scope-uniqueLang
+    a sh:PropertyShape ;
+    sh:path     arkreq:designScope ;
+    sh:uniqueLang true ;
+    sh:message  "sh:uniqueLang allows at most one arkreq:designScope per non-empty language tag - two scope statements sharing the same tag are not allowed, but DIFFERENT language tags are (the design scope, itself optional, may be stated in several languages)."@en , "sh:uniqueLang erlaubt hoechstens eine arkreq:designScope je nicht-leerem Sprach-Tag - zwei Scope-Angaben mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (der optionale Design Scope darf mehrsprachig formuliert sein)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-trigger-uniqueLang
+    a sh:PropertyShape ;
+    sh:path     arkreq:trigger ;
+    sh:uniqueLang true ;
+    sh:message  "sh:uniqueLang allows at most one arkreq:trigger per non-empty language tag - two triggers sharing the same tag are not allowed, but DIFFERENT language tags are (the triggering event, itself optional, may be stated in several languages)."@en , "sh:uniqueLang erlaubt hoechstens einen arkreq:trigger je nicht-leerem Sprach-Tag - zwei Trigger mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (das optionale ausloesende Ereignis darf mehrsprachig formuliert sein)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-precondition-uniqueLang
+    a sh:PropertyShape ;
+    sh:path     arkreq:useCasePrecondition ;
+    sh:uniqueLang true ;
+    sh:message  "sh:uniqueLang allows at most one arkreq:useCasePrecondition per non-empty language tag - two preconditions sharing the same tag are not allowed, but DIFFERENT language tags are (the precondition, itself optional, may be stated in several languages)."@en , "sh:uniqueLang erlaubt hoechstens eine arkreq:useCasePrecondition je nicht-leerem Sprach-Tag - zwei Preconditions mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die optionale Precondition darf mehrsprachig formuliert sein)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-postcondition-uniqueLang
+    a sh:PropertyShape ;
+    sh:path     arkreq:useCasePostcondition ;
+    sh:uniqueLang true ;
+    sh:message  "sh:uniqueLang allows at most one arkreq:useCasePostcondition per non-empty language tag - two postconditions sharing the same tag are not allowed, but DIFFERENT language tags are (the postcondition, itself optional, may be stated in several languages)."@en , "sh:uniqueLang erlaubt hoechstens eine arkreq:useCasePostcondition je nicht-leerem Sprach-Tag - zwei Postconditions mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die optionale Postcondition darf mehrsprachig formuliert sein)."@de ;
     sh:severity sh:Violation .
 
 rshapes:UseCase-primaryActor
