@@ -65,7 +65,13 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * its whole job. It marks a revision "current" by reading the resource's actual
  * {@code arkprov:head} triple rather than assuming the newest timestamp is current, so it never
  * asserts more than the store itself does about which revision a write path last moved the head
- * to.</p>
+ * to. That head test is folded into the very same {@code SELECT} that lists the revisions (one
+ * {@code EXISTS} per row) rather than run as a separate query beforehand: each {@code select()}
+ * call opens and closes its own {@code RepositoryConnection}
+ * ({@code io.kogn.rdf.rdf4j.dataset.SparqlQueryRdf4j}), so two sequential queries share no
+ * snapshot - a write moving the head between them would make the second query's row list disagree
+ * with the first query's now-stale head, mismarking the true current revision as historical (or
+ * vice versa). A single query cannot straddle such a write.</p>
  */
 public final class StoreReader {
 
@@ -235,41 +241,31 @@ public final class StoreReader {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
         String iriRef = SparqlTerms.iriRef(iri);
+        String query = "SELECT ?revision ?time (EXISTS { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + iriRef + " <" + ArkprovVocabulary.HEAD + "> ?revision } } AS ?isCurrent) WHERE { "
+                + "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?revision <" + ArkprovVocabulary.SPECIALIZATION_OF + "> " + iriRef + " . "
+                + "?revision <" + ArkprovVocabulary.GENERATED_AT_TIME + "> ?time . "
+                + "} } ORDER BY ?time";
         try (DatasetHandle handle = acquire(projectId)) {
-            String headIri = currentHead(handle, iriRef);
-            String query = "SELECT ?revision ?time WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                    + "?revision <" + ArkprovVocabulary.SPECIALIZATION_OF + "> " + iriRef + " . "
-                    + "?revision <" + ArkprovVocabulary.GENERATED_AT_TIME + "> ?time . "
-                    + "} } ORDER BY ?time";
             return handle.sparqlQuery().select(query)
-                    .map(row -> toRevision(row, headIri))
+                    .map(StoreReader::toRevision)
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .toList();
         }
     }
 
-    /** Reads {@code iriRef}'s current {@code arkprov:head}, or {@code null} if it has none. */
-    private static String currentHead(DatasetHandle handle, String iriRef) {
-        String query = "SELECT ?head WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + iriRef + " <" + ArkprovVocabulary.HEAD + "> ?head } }";
-        return handle.sparqlQuery().select(query)
-                .map(row -> row.getValue("head").orElse(null))
-                .filter(IRI.class::isInstance)
-                .map(term -> ((IRI) term).getIRIString())
-                .findFirst()
-                .orElse(null);
-    }
-
-    private static Optional<Revision> toRevision(BindingSet row, String headIri) {
+    private static Optional<Revision> toRevision(BindingSet row) {
         RDFTerm revision = row.getValue("revision").orElse(null);
         RDFTerm time = row.getValue("time").orElse(null);
-        if (!(revision instanceof IRI revisionIri) || !(time instanceof Literal timeLiteral)) {
+        RDFTerm isCurrent = row.getValue("isCurrent").orElse(null);
+        if (!(revision instanceof IRI revisionIri) || !(time instanceof Literal timeLiteral)
+                || !(isCurrent instanceof Literal currentLiteral)) {
             return Optional.empty();
         }
-        String revisionIriString = revisionIri.getIRIString();
-        return Optional.of(new Revision(revisionIriString, timeLiteral.getLexicalForm(),
-                revisionIriString.equals(headIri)));
+        return Optional.of(new Revision(revisionIri.getIRIString(), timeLiteral.getLexicalForm(),
+                Boolean.parseBoolean(currentLiteral.getLexicalForm())));
     }
 
     /** Acquires the project's dataset - the one line every read method here shares. */
