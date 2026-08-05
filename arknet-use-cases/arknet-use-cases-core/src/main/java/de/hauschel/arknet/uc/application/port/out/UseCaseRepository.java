@@ -148,17 +148,19 @@ public interface UseCaseRepository {
      *                      {@code extensions} replace explicitly may) - re-attaching an old
      *                      position's other-language variant by position alone, once that position
      *                      may now denote a completely different extension, would silently graft a
-     *                      stale translation onto unrelated content. For a call that only edits
-     *                      content in place (e.g. a translation of the single trailing position
-     *                      that changed, or a plain append/truncate at the end) every position stays
-     *                      stable, so the caller passes the length of the longer of the two lists
-     *                      (or any value at least that large); for a call that inserts, removes or
-     *                      reorders extensions, the caller passes the length of the longest common
-     *                      leading prefix the old and new lists still share - beyond that prefix the
-     *                      position numbering no longer refers to "the same" extension on both
-     *                      sides, so preservation there must be dropped entirely rather than
-     *                      misattached. Main-flow-step preservation is unaffected by this parameter,
-     *                      its positions stay stable by construction
+     *                      stale translation onto unrelated content. A same-length replace can only
+     *                      ever edit existing positions' content in place - the model has no
+     *                      separate move/reorder operation, only a wholesale list replace - so every
+     *                      position stays stable regardless of how many of them changed text, and
+     *                      the caller passes the updated list's own length. A length change is real
+     *                      evidence of an insert/remove, so the caller instead passes the length of
+     *                      the longest common leading prefix the old and new lists still share -
+     *                      beyond that prefix the position numbering no longer refers to "the same"
+     *                      extension on both sides, so preservation there must be dropped entirely
+     *                      rather than misattached. A same-length reorder (a swap) is indistinguishable
+     *                      from an in-place edit by content alone and is not covered - it is not a
+     *                      supported operation on this list today. Main-flow-step preservation is
+     *                      unaffected by this parameter, its positions stay stable by construction
      * @throws UseCaseNotFoundException              if no use case with this identity exists at
      *                                                all
      * @throws UseCaseConcurrentlyModifiedException if {@code expectedHead} no longer matches the

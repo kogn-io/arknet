@@ -286,30 +286,31 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                         : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
                 extensionTextLanguageByPosition.put(position, extensionLanguage);
             }
-            // A position is only a stable identity across this call if it survives inside the
-            // longest leading prefix the old and new lists still share - beyond that prefix, a
-            // wholesale extensions replace may have inserted, removed or reordered items, and the
-            // position numbering no longer refers to "the same" extension on both sides. More than
-            // one position diverging past that prefix (on either side) is the signature of such a
-            // restructure, as opposed to a single in-place edit (a translation of the trailing
-            // position, or a plain tail append/truncate) - see compareAndUpdate's
-            // stableExtensionPrefixLength javadoc for why that distinction matters.
-            int commonExtensionPrefixLength = 0;
-            while (commonExtensionPrefixLength < currentExtensions.size()
-                    && commonExtensionPrefixLength < updatedExtensions.size()
-                    && currentExtensions.get(commonExtensionPrefixLength)
-                            .equals(updatedExtensions.get(commonExtensionPrefixLength))) {
-                commonExtensionPrefixLength++;
+            // A same-length extensions replace can only ever edit content in place - the model has
+            // no separate move/reorder operation, only a wholesale list replace - so every position
+            // keeps its identity regardless of how many of them changed text (issue #254/PR #267
+            // review: a prefix scan that stops at the first content mismatch wrongly starves every
+            // position after it, even ones a multi-position edit left byte-for-byte untouched).
+            // Only a length change is real evidence of an insert/remove: positions beyond the
+            // longest leading prefix the old and new lists still share no longer refer to "the
+            // same" extension on either side, so preservation there must be suspended - see
+            // compareAndUpdate's stableExtensionPrefixLength javadoc for why that distinction
+            // matters. A same-length reorder (a swap) is not distinguishable from an in-place edit
+            // by content alone and is accepted as a residual, undetected case - it is not a
+            // supported operation on this list today.
+            int stableExtensionPrefixLength;
+            if (currentExtensions.size() == updatedExtensions.size()) {
+                stableExtensionPrefixLength = updatedExtensions.size();
+            } else {
+                int commonExtensionPrefixLength = 0;
+                while (commonExtensionPrefixLength < currentExtensions.size()
+                        && commonExtensionPrefixLength < updatedExtensions.size()
+                        && currentExtensions.get(commonExtensionPrefixLength)
+                                .equals(updatedExtensions.get(commonExtensionPrefixLength))) {
+                    commonExtensionPrefixLength++;
+                }
+                stableExtensionPrefixLength = commonExtensionPrefixLength;
             }
-            boolean extensionsRestructured =
-                    currentExtensions.size() - commonExtensionPrefixLength > 1
-                            || updatedExtensions.size() - commonExtensionPrefixLength > 1;
-            // A restructure only forfeits position-based preservation beyond the common prefix -
-            // the leading positions it left untouched keep it, exactly like a plain in-place edit
-            // (where every position stays stable, hence the unbounded upper end here).
-            int stableExtensionPrefixLength = extensionsRestructured
-                    ? commonExtensionPrefixLength
-                    : Math.max(currentExtensions.size(), updatedExtensions.size());
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated,
                         titleLanguage, goalLanguage, scopeLanguage, triggerLanguage,

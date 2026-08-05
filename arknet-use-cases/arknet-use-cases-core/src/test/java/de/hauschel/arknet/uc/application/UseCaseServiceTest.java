@@ -325,6 +325,29 @@ class UseCaseServiceTest {
         assertEquals(1, repository.lastStableExtensionPrefixLength());
     }
 
+    /**
+     * Review finding on issue #254 (PR #267): a same-length extensions replace that edits a
+     * middle position must not starve a later, untouched position's stability just because a
+     * leading-prefix scan stopped at the first mismatch. Three extensions, all English; call 1
+     * translates only the trailing position (a plain in-place edit); call 2 then translates only
+     * the middle position, leaving the trailing position - already carrying its own German
+     * variant from call 1 - completely untouched. The trailing position must still come out
+     * stable, or the real out-adapter would silently drop its call-1 translation.
+     */
+    @Test
+    void updateThatTranslatesAMiddleExtensionLeavesATrailingExtensionStable() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "3a. B", "4a. C"), null, null, null, DEFAULT_LANGUAGE);
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "3a. B", "4a. C (de)"), null, null, "de", DEFAULT_LANGUAGE);
+
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "3a. B (de)", "4a. C (de)"), null, null, "de", DEFAULT_LANGUAGE);
+
+        assertEquals(3, repository.lastStableExtensionPrefixLength());
+    }
+
     @Test
     void updatePreservesPrimaryActorSupportingActorsAndSteps() {
         NewUseCase command = new NewUseCase("Place order", "Customer places an order", "Webshop",
