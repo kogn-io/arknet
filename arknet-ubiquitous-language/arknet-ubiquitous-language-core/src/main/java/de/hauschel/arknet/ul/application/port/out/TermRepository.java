@@ -162,10 +162,15 @@ public interface TermRepository {
     /**
      * Returns all terms stored in a project glossary.
      *
-     * @param projectId the project (architecture model) to list terms from
+     * @param projectId     the project (architecture model) to list terms from
+     * @param displayLocale the BCP-47 language tag the caller wants each term's {@code
+     *                      prefLabel}/{@code definition} shown in, overriding this repository's
+     *                      own configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged - the same per-call
+     *                      override {@link #findByCode} already accepts (issue #274)
      * @return all terms, never {@code null}
      */
-    List<Term> findAll(ProjectId projectId);
+    List<Term> findAll(ProjectId projectId, String displayLocale);
 
     /**
      * Finds every term in a project whose identity is among {@code ids}, in one store

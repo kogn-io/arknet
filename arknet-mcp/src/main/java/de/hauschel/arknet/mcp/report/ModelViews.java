@@ -106,7 +106,12 @@ public final class ModelViews {
      */
     private Glossary glossary(final ProjectId projectId, final List<String> failures) {
         try {
-            return Glossary.of(terms.list(projectId));
+            // No per-project displayLocale override here (unlike term_list's own fix, issue #274):
+            // this section is built once per store_overview call from the process-wide DisplayLocale
+            // bean, not read fresh per project, so it cannot yet be merged with the target project's
+            // own default language the way TraceabilityMcpTools now is - a documented, separate
+            // follow-up, not folded into this fix.
+            return Glossary.of(terms.list(projectId, null));
         } catch (final RuntimeException e) {
             failures.add("Glossary: could not be read (" + e.getClass().getSimpleName() + ": " + e.getMessage()
                     + ") - its terms appear under \"Other resources\" below, and references to them show as"

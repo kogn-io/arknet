@@ -148,7 +148,7 @@ class StoreReportToolsTest {
      */
     private ModelViews modelViews() {
         return new ModelViews(
-                projectId -> PROJECT.equals(projectId) ? List.of(term1) : List.of(),
+                (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(term1) : List.of(),
                 new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(
                         projectId -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),

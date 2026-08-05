@@ -106,6 +106,24 @@ public record DisplayLocale(Locale requested, Locale systemDefault) {
     }
 
     /**
+     * Overrides this locale's {@link #requested} tier for one call - e.g. an explicit tool
+     * {@code displayLocale} argument, or a project's own configured default language merged in
+     * by the caller - leaving {@link #systemDefault} and the rest of {@link #select}'s fallback
+     * chain untouched. A {@code null} or blank {@code requestedOverride} returns this instance
+     * unchanged, so an override that matches nothing still degrades exactly the way the
+     * process-wide default already does.
+     *
+     * @param requestedOverride a BCP-47 language tag, or {@code null}/blank to leave this
+     *                          instance unchanged
+     */
+    public DisplayLocale withRequestedOverride(String requestedOverride) {
+        if (requestedOverride == null || requestedOverride.isBlank()) {
+            return this;
+        }
+        return new DisplayLocale(Locale.forLanguageTag(requestedOverride), systemDefault);
+    }
+
+    /**
      * The best candidate whose language tag matches {@code locale}'s primary language subtag,
      * compared case-insensitively (so {@code "de"} matches {@code "de"} and {@code "de-DE"}).
      * Among those, an exact full-tag match (e.g. {@code "en-US"} for a requested {@code "en-US"})

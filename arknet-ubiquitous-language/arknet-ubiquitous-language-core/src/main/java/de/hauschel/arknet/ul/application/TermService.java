@@ -116,9 +116,9 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     }
 
     @Override
-    public List<Term> list(ProjectId projectId) {
+    public List<Term> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return repository.findAll(projectId);
+        return repository.findAll(projectId, displayLocale);
     }
 
     @Override
@@ -164,7 +164,10 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
      * number currently in use, plus one (starting at 1).
      */
     private TermCode nextCode(ProjectId projectId) {
-        int next = repository.findAll(projectId).stream()
+        // Only each term's TermCode is read here, never a label, so this call has no need for a
+        // display language override - null uses the repository's own configured preference, which
+        // has no bearing on this method's result either way.
+        int next = repository.findAll(projectId, null).stream()
                 .mapToInt(t -> runningNumber(t.code()))
                 .max()
                 .orElse(0) + 1;
