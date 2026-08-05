@@ -16,7 +16,8 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@code arknet-ubiquitous-language-core}, so it cannot look an actor up as a domain object - it
  * can only ask the shared store, through this port, which resource a name currently denotes.
  * Resolution goes via the actor term's {@code skos:prefLabel}, constrained to concepts carrying
- * an actor type ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}).</p>
+ * an actor type ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code
+ * arkproc:LegalActor}).</p>
  *
  * <p>Called once, at the moment a use case is written - not on every subsequent read. An
  * implementation rejects an unknown or ambiguous name with a runtime exception rather than

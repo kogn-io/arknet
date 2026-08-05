@@ -82,9 +82,18 @@ class KognioRdfActorLookupTest {
         assertEquals(ResourceId.of(actorIri), resolved);
     }
 
+    @Test
+    void resolvesAKnownLegalActorNameToItsSubjectIdentity() {
+        String actorIri = givenLegalActor(PROJECT_A, "kunde-gmbh", "Kunde GmbH");
+
+        ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Kunde GmbH");
+
+        assertEquals(ResourceId.of(actorIri), resolved);
+    }
+
     /**
-     * The type-union constraint (human or system actor) must actually matter: a plain glossary
-     * concept sharing the same {@code skos:prefLabel} but carrying neither actor type must not
+     * The type-union constraint (human, system or legal actor) must actually matter: a plain
+     * glossary concept sharing the same {@code skos:prefLabel} but carrying no actor type must not
      * satisfy the reference.
      */
     @Test
@@ -157,6 +166,16 @@ class KognioRdfActorLookupTest {
         String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
                 + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
                 + "<https://w3id.org/arknet/process#SystemActor> ; "
+                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+        write(projectId, insert);
+        return actorIri;
+    }
+
+    private String givenLegalActor(ProjectId projectId, String slug, String prefLabel) {
+        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
+                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
+                + "<https://w3id.org/arknet/process#LegalActor> ; "
                 + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
         write(projectId, insert);
         return actorIri;

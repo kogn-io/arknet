@@ -387,7 +387,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 |--------|--------|----------|
 | `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...), reusable across every module |
 | `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (Context Mapping, tactical DDD) |
-| `arknet-actor.ttl` | `arkproc:` | Actor, HumanActor, SystemActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module `arknet-use-cases`/`arknet-bounded-context` actually write |
+| `arknet-actor.ttl` | `arkproc:` | Actor, HumanActor, SystemActor, LegalActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module `arknet-use-cases`/`arknet-bounded-context` actually write |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 | `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
