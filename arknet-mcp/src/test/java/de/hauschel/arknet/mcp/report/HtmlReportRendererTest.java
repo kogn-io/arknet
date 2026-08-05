@@ -359,6 +359,52 @@ class HtmlReportRendererTest {
         assertThat(html).doesNotContain("<span class=\"lang-group\"");
     }
 
+    /**
+     * A pre-#258 (2026-08-04) resource may carry an untagged literal alongside a tagged one for
+     * the same predicate - {@link DisplayLocale#select} can pick the untagged one (fallback step
+     * 3). It must still offer a switch, keyed under the {@link DisplayLocale#systemDefault()}
+     * language, rather than silently dropping the field from the toolbar (issue #273).
+     */
+    @Test
+    void includesAnUntaggedLiteralAsALanguageVariant() {
+        final ModelSection section = new ModelSection("Glossary", "glossary", "", List.of(
+                new ModelCard("TERM-1", "Customer", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literal(FR_1, "http://purl.org/dc/terms/title", "Customer"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Kunde", "de")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+
+        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"en\">");
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"en\">Customer</span>");
+        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de\" hidden>Kunde</span>");
+    }
+
+    /**
+     * Two different predicates on the same subject may coincidentally carry a literal with the
+     * same text (here: a requirement's title and its acceptance criterion both happen to read
+     * "Bestellen" in German). Matching {@code displayed} back to a predicate by text alone cannot
+     * tell them apart, so the switch must not attach to whichever one is found first - that would
+     * show the other field's text once the reader picks another language (issue #273).
+     */
+    @Test
+    void doesNotMixLanguageVariantsWhenAnotherFieldSharesTheDisplayedText() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literalLang(FR_1, ARKREQ + "acceptanceCriterion", "Bestellen", "de"),
+                literalLang(FR_1, ARKREQ + "acceptanceCriterion", "Zustimmung", "en"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Bestellen", "de"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Order", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+
+        assertThat(html).contains("<h3>Bestellen</h3>");
+        assertThat(html).doesNotContain("<span class=\"lang-group\"");
+    }
+
     /** The toolbar always offers the control; the script hides it when no field has variants. */
     @Test
     void addsALanguageSwitchToTheToolbar() {

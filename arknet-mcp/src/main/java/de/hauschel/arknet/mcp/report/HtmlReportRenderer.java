@@ -342,40 +342,55 @@ public final class HtmlReportRenderer {
      * The language variants of a card's title or a {@link Block.Prose} text - found among the
      * same subject's own raw triples, which the raw view a level down already shows in full. No
      * new store access and no domain/port plumbing: the store read already carried every
-     * language-tagged literal, this only stops throwing the alternates away before the report can
-     * offer a client-side switch between them (issue #270, part 2 of #248).
+     * literal, this only stops throwing the alternates away before the report can offer a
+     * client-side switch between them (issue #270, part 2 of #248).
+     *
+     * <p>An untagged literal (a store-first edit, or an older resource written before issue #258)
+     * is a candidate variant too - {@link DisplayLocale#select} can return one per step 3 of its
+     * fallback chain, so a switch built only from tagged literals would silently omit exactly
+     * that field. It is keyed by {@link #displayLocale}'s {@code systemDefault} language, the same
+     * language an untagged literal would be shown under if the store held no other candidate.</p>
+     *
+     * <p>The match back from {@code displayed} to a predicate is by text equality alone - there is
+     * no predicate available at the call sites to match on instead. If more than one predicate on
+     * {@code subject} carries a literal with that exact text, which one is meant is ambiguous;
+     * this returns {@link Optional#empty()} rather than guessing and risking a switch that shows
+     * an unrelated field's text once the reader picks another language.</p>
      *
      * @param subject   the card's own raw resource, or {@code null} if the snapshot holds none
      * @param displayed the text currently shown, already selected by {@link #displayLocale}
      * @return the active language together with every other language sharing {@code displayed}'s
      *         predicate, or {@link Optional#empty()} if {@code displayed} cannot be matched back
-     *         to a language-tagged literal, or only one language exists for it
+     *         to exactly one predicate, or only one language exists for it
      */
-    private static Optional<LangVariants> languageVariants(final StoreResource subject, final String displayed) {
+    private Optional<LangVariants> languageVariants(final StoreResource subject, final String displayed) {
         if (subject == null) {
             return Optional.empty();
         }
-        String predicate = null;
-        String activeLang = null;
+        final Map<String, RdfNode.Literal> matchByPredicate = new LinkedHashMap<>();
         for (final Triple triple : subject.outgoing()) {
-            if (triple.object() instanceof RdfNode.Literal literal
-                    && literal.languageTag() != null && literal.lexicalForm().equals(displayed)) {
-                predicate = triple.predicate();
-                activeLang = literal.languageTag();
-                break;
+            if (triple.object() instanceof RdfNode.Literal literal && literal.lexicalForm().equals(displayed)) {
+                matchByPredicate.putIfAbsent(triple.predicate(), literal);
             }
         }
-        if (predicate == null) {
+        if (matchByPredicate.size() != 1) {
             return Optional.empty();
         }
+        final Map.Entry<String, RdfNode.Literal> match = matchByPredicate.entrySet().iterator().next();
+        final String predicate = match.getKey();
+        final String activeLang = languageKey(match.getValue());
         final Map<String, String> byLang = new LinkedHashMap<>();
         for (final Triple triple : subject.outgoing()) {
-            if (predicate.equals(triple.predicate())
-                    && triple.object() instanceof RdfNode.Literal literal && literal.languageTag() != null) {
-                byLang.putIfAbsent(literal.languageTag(), literal.lexicalForm());
+            if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
+                byLang.putIfAbsent(languageKey(literal), literal.lexicalForm());
             }
         }
         return byLang.size() > 1 ? Optional.of(new LangVariants(activeLang, byLang)) : Optional.empty();
+    }
+
+    /** {@code literal}'s language tag, or {@link #displayLocale}'s system default if untagged. */
+    private String languageKey(final RdfNode.Literal literal) {
+        return literal.languageTag() != null ? literal.languageTag() : displayLocale.systemDefault().toLanguageTag();
     }
 
     /**
