@@ -261,6 +261,25 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
+     * Same class of bug as {@link #updateChangingOnlyActorKindPreservesTheExistingActorRole}, from
+     * the other direction: correcting {@code actorKind} away from {@code LEGAL} must remove the
+     * stale {@code arkproc:LegalActor} type triple, not leave the subject typed as two actor kinds
+     * at once.
+     */
+    @Test
+    void updateChangingActorKindAwayFromLegalRemovesTheStaleType() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A,
+                new Term(id, code, "Kunde GmbH", "def a", new ActorFacet(ActorKind.LEGAL, "Besteller")), null);
+
+        repository.update(PROJECT_A, code, null, null, new ActorFacet(ActorKind.HUMAN, "Besteller"), null);
+
+        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#LegalActor"));
+        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
+    }
+
+    /**
      * Bug 3 (the fix this PR ships, issue #228): {@code update()}'s delete used to be a blind
      * {@code DELETE WHERE} over the whole predicate, regardless of language - every write that
      * corrected a term without stating a {@code language} (the untagged case, still the common
@@ -677,6 +696,22 @@ class KognioRdfTermRepositoryTest {
     }
 
     @Test
+    void createsAndFindsTermWithLegalActorFacet() {
+        TermId id = freshId();
+        Term term = new Term(id, new TermCode("TERM-1"), "Kunde GmbH", "Ein Unternehmen, das Bestellungen aufgibt.",
+                new ActorFacet(ActorKind.LEGAL, "Besteller"));
+
+        repository.create(PROJECT_A, term, null);
+        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null);
+
+        assertEquals(Optional.of(term), found);
+        ActorFacet facet = found.orElseThrow().actorFacet();
+        assertEquals(ActorKind.LEGAL, facet.kind());
+        assertEquals("Besteller", facet.role());
+        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#LegalActor"));
+    }
+
+    @Test
     void createsAndFindsTermWithoutActorFacet() {
         TermId id = freshId();
         Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
@@ -687,6 +722,7 @@ class KognioRdfTermRepositoryTest {
         assertNull(found.orElseThrow().actorFacet());
         assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
         assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#SystemActor"));
+        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#LegalActor"));
     }
 
     @Test

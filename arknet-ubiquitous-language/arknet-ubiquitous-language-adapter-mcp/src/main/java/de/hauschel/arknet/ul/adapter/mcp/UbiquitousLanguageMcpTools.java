@@ -166,7 +166,8 @@ public final class UbiquitousLanguageMcpTools {
                     + "tenancy, who-triggers-what, ...). Those belong in an ADR (adr_add)")
             final String definition,
             @McpToolParam(description = "Optional: mark this term as an actor (a skos:Concept that is "
-                    + "additionally an arkproc:Actor). Actor kind: HUMAN or SYSTEM", required = false)
+                    + "additionally an arkproc:Actor). Actor kind: HUMAN, SYSTEM or LEGAL (a legal person, "
+                    + "e.g. an organization, company or association)", required = false)
             final String actorKind,
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
@@ -230,8 +231,9 @@ public final class UbiquitousLanguageMcpTools {
                     + "no architecture, technology, or implementation decisions (source-of-record, persistence, "
                     + "tenancy, who-triggers-what, ...). Those belong in an ADR (adr_add)", required = false)
             final String definition,
-            @McpToolParam(description = "Optional: (re-)mark this term as an actor. Actor kind: HUMAN or SYSTEM. "
-                    + "Leaves an already-set actor facette unchanged if omitted", required = false)
+            @McpToolParam(description = "Optional: (re-)mark this term as an actor. Actor kind: HUMAN, SYSTEM or "
+                    + "LEGAL (a legal person, e.g. an organization, company or association). Leaves an "
+                    + "already-set actor facette unchanged if omitted", required = false)
             final String actorKind,
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind. Omitting it while "

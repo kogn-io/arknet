@@ -26,10 +26,11 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  * <p><strong>Strict cross-BC actor resolution.</strong> Use-cases and
  * ubiquitous-language actors share one per-project store. This adapter looks up a name by
  * {@code skos:prefLabel} among concepts carrying an actor type
- * ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}); an unknown or ambiguous name aborts
- * with a didactic {@link UnresolvedReferenceException}. This is called once, from the application
- * service, at the moment a use case is written - {@code KognioRdfUseCaseRepository} no longer
- * performs this lookup itself; it just persists the {@link ResourceId} it is handed.</p>
+ * ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code arkproc:LegalActor}); an unknown
+ * or ambiguous name aborts with a didactic {@link UnresolvedReferenceException}. This is called
+ * once, from the application service, at the moment a use case is written -
+ * {@code KognioRdfUseCaseRepository} no longer performs this lookup itself; it just persists the
+ * {@link ResourceId} it is handed.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) -
  * it never imports RDF4J or any other backend-specific type. The backend
@@ -55,6 +56,7 @@ public final class KognioRdfActorLookup implements ActorLookup {
     private static final String PREF_LABEL_PROPERTY = SKOS_NAMESPACE + "prefLabel";
     private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
     private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
+    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
     // Mirrors the graph IRI the ubiquitous-language out-adapter writes into. The bounded contexts
     // share one project dataset; resolving an actor means reading across into that sibling graph.
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
@@ -79,7 +81,8 @@ public final class KognioRdfActorLookup implements ActorLookup {
         String query = "SELECT ?actor WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?actor <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
                 + "FILTER(STR(?prefLabel) = \"" + SparqlTerms.escape(actorName) + "\") "
-                + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } } }";
+                + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } "
+                + "UNION { ?actor a <" + LEGAL_ACTOR_TYPE + "> } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
@@ -89,7 +92,7 @@ public final class KognioRdfActorLookup implements ActorLookup {
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Actor '" + actorName
                         + "' does not exist in project '" + projectId.value()
-                        + "'. Create it first with term_add (actorKind human|system) before a use case "
+                        + "'. Create it first with term_add (actorKind human|system|legal) before a use case "
                         + "references it.");
             }
             if (matches.size() > 1) {

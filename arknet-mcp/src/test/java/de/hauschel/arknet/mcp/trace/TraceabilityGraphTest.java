@@ -338,6 +338,22 @@ class TraceabilityGraphTest {
         }
     }
 
+    /** Same as {@link #seedActorConcept(String, String)}, but typed {@code arkproc:LegalActor}. */
+    private void seedLegalActorConcept(String actorIri, String label) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        IRI actor = rdf.createIRI(actorIri);
+        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("https://w3id.org/arknet/process#LegalActor"));
+        graph.add(actor, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"), rdf.createLiteral(label));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unreferenced-legal-actor-graph"), graph);
+                return null;
+            });
+        }
+    }
+
     /** Overwrites a requirement's {@code dcterms:description} with raw prose, for prose-matching tests. */
     private void seedRequirementDescription(String requirementIri, String description) {
         RDF rdf = new SimpleRdf();
@@ -434,6 +450,18 @@ class TraceabilityGraphTest {
 
         assertThat(freshGraph.actorIris()).containsExactlyInAnyOrder(ACTOR_IRI, unreferencedActorIri);
         assertThat(freshGraph.useCasesOf(unreferencedActorIri)).isEmpty();
+    }
+
+    /** Same regression as {@link #actorIrisIncludesAnActorNoUseCaseReferencesYet()}, for the third actor kind. */
+    @Test
+    void actorIrisIncludesALegalActorNoUseCaseReferencesYet() {
+        String legalActorIri = "https://w3id.org/arknet/id/trace-test-legal-actor-unreferenced";
+        seedLegalActorConcept(legalActorIri, "Kunde GmbH");
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.actorIris()).containsExactlyInAnyOrder(ACTOR_IRI, legalActorIri);
     }
 
     @Test

@@ -192,6 +192,7 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
     private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
     private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
+    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
     private static final String ACTOR_ROLE_PROPERTY = ARKPROC_NAMESPACE + "actorRole";
 
     /**
@@ -251,8 +252,7 @@ public class KognioRdfTermRepository implements TermRepository {
         // hangs off the subject, so it moves with the now-opaque identity for free.
         ActorFacet actorFacet = term.actorFacet();
         if (actorFacet != null) {
-            String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
-            graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+            graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorTypeOf(actorFacet.kind())));
             if (actorFacet.role() != null) {
                 graph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY), rdf.createLiteral(actorFacet.role()));
             }
@@ -402,8 +402,7 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         }
         if (actorFacet != null) {
-            String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
-            writeCandidate.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+            writeCandidate.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorTypeOf(actorFacet.kind())));
             if (actorFacet.role() != null) {
                 writeCandidate.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
                         rdf.createLiteral(actorFacet.role()));
@@ -433,9 +432,9 @@ public class KognioRdfTermRepository implements TermRepository {
                     if (actorFacet != null) {
                         tx.update(deleteType(subject, HUMAN_ACTOR_TYPE));
                         tx.update(deleteType(subject, SYSTEM_ACTOR_TYPE));
+                        tx.update(deleteType(subject, LEGAL_ACTOR_TYPE));
                         Graph actorGraph = rdf.createGraph();
-                        String actorType = actorFacet.kind() == ActorKind.HUMAN ? HUMAN_ACTOR_TYPE : SYSTEM_ACTOR_TYPE;
-                        actorGraph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorType));
+                        actorGraph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorTypeOf(actorFacet.kind())));
                         // A null role leaves the existing arkproc:actorRole triple (if any) alone,
                         // instead of deleting it - correcting only the kind must not silently wipe
                         // an already-set role the caller never mentioned.
@@ -449,6 +448,14 @@ public class KognioRdfTermRepository implements TermRepository {
                 });
 
         return resultingTerm(current, prefLabel, definition, actorFacet);
+    }
+
+    private static String actorTypeOf(ActorKind kind) {
+        return switch (kind) {
+            case HUMAN -> HUMAN_ACTOR_TYPE;
+            case SYSTEM -> SYSTEM_ACTOR_TYPE;
+            case LEGAL -> LEGAL_ACTOR_TYPE;
+        };
     }
 
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
@@ -609,6 +616,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
+                + "OPTIONAL { ?s a <" + LEGAL_ACTOR_TYPE + "> . BIND(true AS ?isLegal) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } ";
     }
 
@@ -619,7 +627,7 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     private Optional<TermAssembly> readAssemblyByCode(
             Function<String, Stream<BindingSet>> selectFn, TermCode code) {
-        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole WHERE { GRAPH <"
+        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
                 + termByCodeWhereClause(code)
                 + "} }";
@@ -678,7 +686,7 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     private Optional<CurrentTerm> readCurrentByCode(
             Function<String, Stream<BindingSet>> selectFn, TermCode code) {
-        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?actorRole ?head WHERE { GRAPH <"
+        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole ?head WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
                 + termByCodeWhereClause(code)
                 + "} "
@@ -713,7 +721,7 @@ public class KognioRdfTermRepository implements TermRepository {
     public List<Term> findAll(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
 
-        String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?actorRole "
+        String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?s a <" + CONCEPT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
@@ -722,6 +730,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
+                + "OPTIONAL { ?s a <" + LEGAL_ACTOR_TYPE + "> . BIND(true AS ?isLegal) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -834,7 +843,8 @@ public class KognioRdfTermRepository implements TermRepository {
         /**
          * Rebuilds the {@link ActorFacet} from {@link #actorKind} (single-valued, read once at
          * construction) and {@link #firstDistinctActorRole()} - {@code null} if the subject
-         * carries neither {@code arkproc:HumanActor} nor {@code arkproc:SystemActor}.
+         * carries none of {@code arkproc:HumanActor}/{@code arkproc:SystemActor}/
+         * {@code arkproc:LegalActor}.
          */
         private ActorFacet actorFacet() {
             if (actorKind == null) {
@@ -931,10 +941,10 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
-     * Reconstructs the {@link ActorKind} of a term row, or {@code null} if the subject carries no
-     * {@code arkproc:HumanActor}/{@code arkproc:SystemActor} type. The role itself is deliberately
-     * not read here - see {@link TermAssembly#addActorRole} for why it is collected per row
-     * instead of once at construction.
+     * Reconstructs the {@link ActorKind} of a term row, or {@code null} if the subject carries none
+     * of {@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code arkproc:LegalActor}. The role
+     * itself is deliberately not read here - see {@link TermAssembly#addActorRole} for why it is
+     * collected per row instead of once at construction.
      */
     private static ActorKind actorKindOf(BindingSet row) {
         if (row.hasBinding("isHuman")) {
@@ -942,6 +952,9 @@ public class KognioRdfTermRepository implements TermRepository {
         }
         if (row.hasBinding("isSystem")) {
             return ActorKind.SYSTEM;
+        }
+        if (row.hasBinding("isLegal")) {
+            return ActorKind.LEGAL;
         }
         return null;
     }

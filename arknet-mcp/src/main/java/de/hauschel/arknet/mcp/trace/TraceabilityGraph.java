@@ -115,12 +115,13 @@ public final class TraceabilityGraph {
     private static final String BUSINESS_CONSTRAINT_TYPE = ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE;
     private static final String REGULATORY_CONSTRAINT_TYPE = ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE;
 
-    // arkproc:HumanActor/SystemActor below are, like UBIQUITOUS_LANGUAGE_TERM above, used only
-    // within this class and duplicated rather than shared - the same two type IRIs are already
-    // duplicated as adapter-private constants in the ul/uc kogniordf out-adapters, and this class
-    // stays free of any dependency on either adapter (see the class javadoc).
+    // arkproc:HumanActor/SystemActor/LegalActor below are, like UBIQUITOUS_LANGUAGE_TERM above,
+    // used only within this class and duplicated rather than shared - the same three type IRIs
+    // are already duplicated as adapter-private constants in the ul/uc kogniordf out-adapters, and
+    // this class stays free of any dependency on either adapter (see the class javadoc).
     private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
     private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
+    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
 
     /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").
@@ -265,15 +266,15 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return the IRIs of every {@code arkproc:HumanActor}/{@code SystemActor} in the project,
-     *         sorted - independent of whether any use case references it via {@code
-     *         arkreq:primaryActor}/{@code supportingActor}. {@code actor_usecase_matrix}'s
+     * @return the IRIs of every {@code arkproc:HumanActor}/{@code SystemActor}/{@code LegalActor}
+     *         in the project, sorted - independent of whether any use case references it via
+     *         {@code arkreq:primaryActor}/{@code supportingActor}. {@code actor_usecase_matrix}'s
      *         "Actors" section unions this with {@link #actorsOf(String)}'s results so an actor
      *         nobody's use case references yet still appears, instead of silently disappearing
      *         from a matrix whose own tool description promises "for every actor" (issue #147).
      */
     public List<String> actorIris() {
-        return subjectsOfType(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE);
+        return subjectsOfType(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE, LEGAL_ACTOR_TYPE);
     }
 
     /**
