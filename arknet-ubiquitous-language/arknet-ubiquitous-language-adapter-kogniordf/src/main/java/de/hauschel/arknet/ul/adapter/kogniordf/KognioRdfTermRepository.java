@@ -380,7 +380,12 @@ public class KognioRdfTermRepository implements TermRepository {
      * defensive only, {@link #attemptUpdate} never lets one arise going forward).
      *
      * <p>Only {@link #update} calls this - see {@link TermCycleException}'s javadoc for why
-     * {@link #create} structurally cannot trigger it.</p>
+     * {@link #create} structurally cannot trigger it. {@link #attemptUpdate} calls it twice per
+     * attempt: once before the write transaction (a fast, friendly rejection for the ordinary
+     * sequential case) and once more inside {@link WriteFunnel#compareAndUpdate}'s write body,
+     * against {@code tx::select} rather than the pre-transaction {@code selectFn} - the second call
+     * is what actually guards against two terms racing to close a cycle from opposite ends; see
+     * that call site.</p>
      */
     private void assertNoCycle(Function<String, Stream<BindingSet>> selectFn, ProjectId projectId, TermCode code,
             String selfSubjectIri, TermCode candidateBroaderCode, String candidateBroaderIri) {
@@ -498,13 +503,19 @@ public class KognioRdfTermRepository implements TermRepository {
      * see one consistent snapshot. {@code broader.isPresent()} sets/replaces the triple;
      * {@code broader.isEmpty()} (an explicit clear) removes it without asserting a replacement;
      * {@code broader == null} (unchanged) re-asserts {@code current}'s own existing target for
-     * the gate, mirroring the {@code prefLabel}/{@code actorRole} "untouched" branches below.</p>
+     * the gate, mirroring the {@code prefLabel}/{@code actorRole} "untouched" branches below. This
+     * pre-transaction check alone only catches a concurrent change that had already fully
+     * committed by the time it ran; {@link #assertNoCycle} runs a second time, against {@code
+     * tx::select}, inside the write body handed to {@link WriteFunnel#compareAndUpdate} - see that
+     * call site for why two terms racing to close a cycle from opposite ends needs an in-transaction
+     * re-check, not just this one.</p>
      */
     private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
             ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
         DatasetId dataset = new DatasetId(projectId.value());
         CurrentTerm currentTerm;
         String broaderTargetIri = null;
+        TermCode broaderCode = null;
         // Collects the broader target's shape-legal-reference state (see
         // assertBroaderTargetShapeState) while the DatasetHandle below is still open - unlike
         // every other assertedContext contribution further down, this one needs a live read
@@ -516,11 +527,12 @@ public class KognioRdfTermRepository implements TermRepository {
             currentTerm = readCurrentByCode(selectFn, code)
                     .orElseThrow(() -> new TermNotFoundException(projectId, code));
             if (broader != null && broader.isPresent()) {
-                TermCode broaderCode = broader.get();
-                broaderTargetIri = resolveTermSubjectIri(selectFn, broaderCode)
-                        .orElseThrow(() -> new TermNotFoundException(projectId, broaderCode));
+                TermCode resolvedBroaderCode = broader.get();
+                broaderCode = resolvedBroaderCode;
+                broaderTargetIri = resolveTermSubjectIri(selectFn, resolvedBroaderCode)
+                        .orElseThrow(() -> new TermNotFoundException(projectId, resolvedBroaderCode));
                 assertNoCycle(selectFn, projectId, code,
-                        currentTerm.assembly().id.value().value(), broaderCode, broaderTargetIri);
+                        currentTerm.assembly().id.value().value(), resolvedBroaderCode, broaderTargetIri);
                 assertBroaderTargetShapeState(broaderTargetAssertedContext, selectFn, broaderTargetIri);
             } else if (broader == null && currentTerm.assembly().broaderSubjectIri != null) {
                 assertBroaderTargetShapeState(
@@ -589,11 +601,35 @@ public class KognioRdfTermRepository implements TermRepository {
         broaderTargetAssertedContext.stream().forEach(assertedContext::add);
 
         String finalBroaderTargetIri = broaderTargetIri;
+        TermCode finalBroaderCode = broaderCode;
         funnel.compareAndUpdate(dataset, TERMS_GRAPH, subjectIriString, currentHead,
                 writeCandidate, assertedContext,
                 () -> new TermNotFoundException(projectId, code),
                 () -> new TermConcurrentlyModifiedException(projectId, code),
                 tx -> {
+                    if (broader != null && broader.isPresent()) {
+                        // Re-verify inside the very transaction the CAS head check also runs in
+                        // (issue #252 review, "two terms racing into a cycle together"). The
+                        // pre-transaction assertNoCycle above only ever sees a concurrent change
+                        // that fully committed before this method's own read - it is a fast,
+                        // friendly rejection for the ordinary sequential case, not the guard. Two
+                        // term_update calls that each give the other term a fresh, still-empty
+                        // broader chain to read can otherwise both pass that pre-transaction check
+                        // and each go on to write a different subject, so neither commit conflicts
+                        // on the surface - yet together they close a cycle no single check ever
+                        // saw. Reading the candidate's chain again here, from this transaction's
+                        // own snapshot via tx::select, gives the store's SERIALIZABLE isolation
+                        // something to actually overlap with a concurrent term_update racing to
+                        // close the same cycle from the other end: both transactions now read the
+                        // very chain state the other one is about to write, so one commit loses as
+                        // a genuine write conflict (translated to TermConcurrentlyModifiedException
+                        // below, absorbed by update()'s retry) instead of both succeeding blindly.
+                        // A retry's fresh pre-transaction check then sees the now-real cycle and
+                        // reports it as TermCycleException, exactly as a purely sequential caller
+                        // would have seen it from the start.
+                        assertNoCycle(tx::select, projectId, code, subjectIriString,
+                                finalBroaderCode, finalBroaderTargetIri);
+                    }
                     if (prefLabel != null) {
                         tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, language, defaultLanguage));
                         tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, language)));
@@ -823,11 +859,15 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@link #readAssemblyByCode} and {@link #readCurrentByCode}: the mandatory joins (type,
      * identifier, prefLabel, definition) plus the blank-node subject guard and the three optional
      * actor-facet joins that scope a single-term read to one {@code code}, plus the optional
-     * {@code skos:broader} join (issue #252): binding both the target's raw subject
+     * {@code skos:broader} join (issue #252): binding the target's raw subject
      * ({@code ?broaderSubject}, needed to re-assert the untouched triple during
-     * {@link #attemptUpdate}'s gate check) and its business code ({@code ?broaderCode}, needed to
-     * project {@link Term#broader()}) in the same OPTIONAL group, so the two always agree on which
-     * target they name. Extracted because both
+     * {@link #attemptUpdate}'s gate check) in its own {@code OPTIONAL}, and its business code
+     * ({@code ?broaderCode}, needed to project {@link Term#broader()}) in a second, nested
+     * {@code OPTIONAL} scoped inside the first. A store-first (ADR-005) broader target that itself
+     * carries no {@code dcterms:identifier} therefore still binds {@code ?broaderSubject} - the
+     * edge stays visible to {@link #attemptUpdate}'s gate check even though {@link Term#broader()}
+     * cannot name it by code; a single, non-nested {@code OPTIONAL} joining both variables together
+     * used to drop the whole edge (subject included) whenever the code binding failed. Extracted because both
      * callers build a {@link TermAssembly} from the same row shape - drift between two
      * near-identical read paths in this class was a real bug twice before, so
      * this text now lives in one place. The caller supplies the surrounding
@@ -844,8 +884,8 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
                 + "OPTIONAL { ?s a <" + LEGAL_ACTOR_TYPE + "> . BIND(true AS ?isLegal) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } "
-                + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . ?broaderSubject <"
-                + IDENTIFIER_PROPERTY + "> ?broaderCode . FILTER(isIRI(?broaderSubject)) } ";
+                + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . FILTER(isIRI(?broaderSubject)) "
+                + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } ";
     }
 
     /**
@@ -963,8 +1003,8 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
                 + "OPTIONAL { ?s a <" + LEGAL_ACTOR_TYPE + "> . BIND(true AS ?isLegal) } "
                 + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } "
-                + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . ?broaderSubject <"
-                + IDENTIFIER_PROPERTY + "> ?broaderCode . FILTER(isIRI(?broaderSubject)) } } }";
+                + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . FILTER(isIRI(?broaderSubject)) "
+                + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Map<String, TermAssembly> bySubject = new LinkedHashMap<>();

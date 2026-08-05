@@ -5,6 +5,7 @@ package de.hauschel.arknet.ul.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -45,6 +46,7 @@ import io.kogn.rdf.terms.ReadableGraph;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.testsupport.GuardSyncTx;
 import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 import de.hauschel.arknet.ul.application.TermService;
@@ -52,6 +54,7 @@ import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
@@ -257,6 +260,214 @@ class TermServiceRealStoreConcurrencyTest {
                 "the original @de label must have been replaced, not left standing next to its own correction");
         assertEquals(2, countPrefLabelTriples(id),
                 "exactly one prefLabel per language - no accumulated duplicate from the retried write");
+    }
+
+    /**
+     * The should-fix finding from issue #252's own review (PR #268): two {@code term_update} calls,
+     * each setting the <em>other</em> term as its own {@code skos:broader}, close a cycle no single
+     * call's guard alone can ever see - racer-A's cycle check only walks TERM-B's chain, racer-B's
+     * only walks TERM-A's, and if both run before either commits, both see an empty chain and both
+     * believe themselves safe. Reproduced by pausing racer-A's transaction right after its
+     * in-transaction re-check of TERM-B's chain ({@link KognioRdfTermRepository#assertNoCycle},
+     * called from inside {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate}'s write
+     * body) but before racer-A writes anything, letting racer-B's whole {@code term_update} run and
+     * commit to completion, then releasing racer-A.
+     *
+     * <p>Before that in-transaction re-check existed, racer-A's only cycle check ran entirely before
+     * its own write transaction opened - a snapshot read racer-B's later commit could never
+     * invalidate, so racer-A would go on to commit its own half of the cycle unchallenged and the
+     * store would end up holding both halves. With the re-check running against {@code tx::select}
+     * instead, racer-A's read of TERM-B's (still empty) chain becomes part of its own transaction's
+     * read set: racer-B's concurrent commit of {@code TERM-B.broader=TERM-A} invalidates that read
+     * under the store's {@code SERIALIZABLE} isolation, racer-A's own commit loses as a genuine
+     * write conflict (translated to {@link de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException}),
+     * and {@link KognioRdfTermRepository#update}'s retry loop re-runs {@code attemptUpdate} from
+     * scratch - whose fresh pre-transaction {@code assertNoCycle} now sees the real, already-committed
+     * {@code TERM-B.broader=TERM-A} and correctly rejects racer-A with {@link TermCycleException}
+     * instead of silently completing the cycle.</p>
+     */
+    @Test
+    void concurrentUpdatesRacingToCloseATwoTermCycle_racerAIsRejectedInsteadOfBothSucceeding()
+            throws InterruptedException {
+        TermRepository straightThrough = KognioRdfTermRepositoryFactory.over(realLifecycle);
+        TermId idA = new TermId(new UuidResourceIdFactory().newId());
+        TermId idB = new TermId(new UuidResourceIdFactory().newId());
+        TermCode codeA = new TermCode("TERM-1");
+        TermCode codeB = new TermCode("TERM-2");
+        straightThrough.create(WS, new Term(idA, codeA, "Begriff A", "Erste Definition.", null), "de");
+        straightThrough.create(WS, new Term(idB, codeB, "Begriff B", "Zweite Definition.", null), "de");
+
+        CountDownLatch racerAReachedReCheck = new CountDownLatch(1);
+        CountDownLatch racerBCommitted = new CountDownLatch(1);
+
+        TermRepository racerARepository = pausingAfterSecondSelectRepository(() -> {
+            racerAReachedReCheck.countDown();
+            awaitLatch(racerBCommitted);
+        });
+
+        AtomicReference<Throwable> racerAFailure = new AtomicReference<>();
+        AtomicReference<Throwable> racerBFailure = new AtomicReference<>();
+
+        Thread racerAThread = new Thread(() -> {
+            try {
+                racerARepository.update(WS, codeA, null, null, null, "de", null, Optional.of(codeB));
+            } catch (Throwable t) {
+                racerAFailure.set(t);
+            }
+        }, "racer-A");
+        Thread racerBThread = new Thread(() -> {
+            try {
+                awaitLatch(racerAReachedReCheck);
+                straightThrough.update(WS, codeB, null, null, null, "de", null, Optional.of(codeA));
+            } catch (Throwable t) {
+                racerBFailure.set(t);
+            } finally {
+                racerBCommitted.countDown();
+            }
+        }, "racer-B");
+
+        racerAThread.start();
+        racerBThread.start();
+        racerAThread.join();
+        racerBThread.join();
+
+        assertNull(racerBFailure.get(), "racer-B runs and commits unobstructed - the cycle's other half");
+        assertNotNull(racerAFailure.get(),
+                "racer-A must not silently complete the cycle once racer-B has closed the other half");
+        assertInstanceOf(TermCycleException.class, racerAFailure.get(),
+                "racer-A's retry re-reads the now-real chain and must report it as a cycle, not a "
+                        + "generic concurrent-modification failure");
+
+        assertTrue(subjectHasBroader(idB, idA), "racer-B's half of the (attempted) cycle must be persisted");
+        assertFalse(subjectHasBroader(idA, idB), "racer-A's half must NOT be persisted - no cycle in the store");
+    }
+
+    /** Whether {@code subject} carries a {@code skos:broader} edge to exactly {@code target}. */
+    private boolean subjectHasBroader(TermId subject, TermId target) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"
+                + subject.value().value() + "> <" + ArkreqVocabulary.BROADER + "> <" + target.value().value() + "> } }";
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /**
+     * A term repository whose first write transaction runs {@code afterSecondSelect} the moment its
+     * delegate's <em>second</em> {@code select()} call has returned - the funnel's own {@code
+     * arkprov:head} read is the first, {@link KognioRdfTermRepository#assertNoCycle}'s in-transaction
+     * re-check of the candidate broader term's chain is the second, so this pauses a caller right
+     * after it has read the other term's (at that point still empty) chain but before it writes
+     * anything. Disarms itself afterwards, exactly like {@link #guardedRepository}, so a retried
+     * attempt on the same repository instance runs unimpeded.
+     */
+    private TermRepository pausingAfterSecondSelectRepository(Runnable afterSecondSelect) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+            if (armed.compareAndSet(true, false)) {
+                return new PausingOnSecondSelectTx(tx, afterSecondSelect);
+            }
+            return tx;
+        });
+        return KognioRdfTermRepositoryFactory.over(guarded);
+    }
+
+    /**
+     * Runs {@code afterSecondSelect} once, immediately after its delegate's second {@link
+     * DatasetTx#select(String)} call has returned. Mirrors {@link PausingOnFirstAddTx}'s shape but
+     * counts reads instead of writes, since the interleaving this pins must be held open one read
+     * short of the write, not at the write itself.
+     */
+    private static final class PausingOnSecondSelectTx implements DatasetTx {
+
+        private final DatasetTx delegate;
+        private final Runnable afterSecondSelect;
+        private int selectCount;
+
+        PausingOnSecondSelectTx(DatasetTx delegate, Runnable afterSecondSelect) {
+            this.delegate = delegate;
+            this.afterSecondSelect = afterSecondSelect;
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query) {
+            Stream<BindingSet> result = delegate.select(query);
+            selectCount++;
+            if (selectCount == 2) {
+                afterSecondSelect.run();
+            }
+            return result;
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.select(query, bindings);
+        }
+
+        @Override
+        public long add(IRI graph, ReadableGraph data) {
+            return delegate.add(graph, data);
+        }
+
+        @Override
+        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.contains(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean ask(String query) {
+            return delegate.ask(query);
+        }
+
+        @Override
+        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.ask(query, bindings);
+        }
+
+        @Override
+        public long remove(IRI graph, ReadableGraph data) {
+            return delegate.remove(graph, data);
+        }
+
+        @Override
+        public void clear(IRI graph) {
+            delegate.clear(graph);
+        }
+
+        @Override
+        public ReadableGraph export(IRI graph) {
+            return delegate.export(graph);
+        }
+
+        @Override
+        public long count(IRI graph) {
+            return delegate.count(graph);
+        }
+
+        @Override
+        public long count() {
+            return delegate.count();
+        }
+
+        @Override
+        public void update(String sparqlUpdate) {
+            delegate.update(sparqlUpdate);
+        }
+
+        @Override
+        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            delegate.update(sparqlUpdate, bindings);
+        }
+
+        @Override
+        public ReadableGraph construct(String query) {
+            return delegate.construct(query);
+        }
+
+        @Override
+        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.construct(query, bindings);
+        }
     }
 
     /** Whether the term carries a {@code skos:prefLabel} literal with exactly this value and language tag. */
