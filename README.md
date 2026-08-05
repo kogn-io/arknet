@@ -24,6 +24,12 @@ validate and write to.
 
 ## Why
 
+arknet is built on a specific bet: that architecture knowledge is
+increasingly read and written by AI coding agents, not only by humans
+skimming a wiki. That raises the bar past "readable" -- an agent needs a
+model it can act on without guessing, which prose was never designed to
+guarantee.
+
 Architecture documentation written as prose -- wikis, Word docs, code
 comments -- drifts from the code and from itself: a use case can go on
 referencing a requirement that was deleted months ago, a glossary term can
