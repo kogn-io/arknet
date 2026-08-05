@@ -190,11 +190,17 @@ public final class UseCaseMcpTools {
      * wholesale - an empty list explicitly clears it, distinct from omitting the step's position
      * from {@code stepRealisesPatches} altogether (which leaves its realises untouched).
      *
+     * <p>{@code realises} is mandatory for every listed position - unlike {@link StepInput#realises()},
+     * which may be omitted. Once a position is listed here, {@code null}/omitted {@code realises}
+     * is rejected rather than silently treated as "clear all references": that ambiguity is exactly
+     * what would let a caller who simply forgot the field delete requirement links by accident
+     * (issue #255). To leave a step's realises untouched, do not list its position at all.</p>
+     *
      * @param position 1-based position of the existing step to correct - must match a step already
      *                 present in the use case
-     * @param realises labels of the functional requirements this step should realise going
-     *                 forward (e.g. {@code FR-1}), replacing its current set wholesale; empty to
-     *                 clear all references
+     * @param realises mandatory: labels of the functional requirements this step should realise
+     *                 going forward (e.g. {@code FR-1}), replacing its current set wholesale; an
+     *                 explicit empty list clears all references
      */
     public record StepRealisesPatchInput(int position, List<String> realises) {
     }
@@ -352,8 +358,11 @@ public final class UseCaseMcpTools {
                     + "references: a JSON array of {position: 1-based int of the step to correct, realises: "
                     + "array of requirement labels like 'FR-1' this step should realise, replacing its "
                     + "current set wholesale - an empty array explicitly clears all references for that "
-                    + "step}. A position not listed here is left untouched; a position with no matching step "
-                    + "is rejected (optional, unchanged if omitted)", required = false)
+                    + "step}. realises is REQUIRED for every listed position - omitting it is rejected "
+                    + "rather than treated as clearing the step, precisely to avoid an accidental deletion; "
+                    + "send realises: [] to clear on purpose. A position not listed here is left untouched; "
+                    + "a position with no matching step is rejected (optional, unchanged if omitted)",
+                    required = false)
             final List<StepRealisesPatchInput> stepRealisesPatches,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') every field this call "
                     + "actually touches (a non-omitted title/goal, each patched step's text) is written in, "
@@ -403,9 +412,26 @@ public final class UseCaseMcpTools {
             return null;
         }
         return patches.stream()
-                .map(p -> new UpdateUseCase.StepRealisesPatch(p.position(),
-                        p.realises() == null ? List.of() : List.copyOf(p.realises())))
+                .map(p -> new UpdateUseCase.StepRealisesPatch(p.position(), requireRealises(p)))
                 .toList();
+    }
+
+    /**
+     * Rejects a listed {@link StepRealisesPatchInput} whose {@code realises} was omitted/{@code
+     * null} instead of silently treating it as "clear all references" - the one place a
+     * forgotten field would otherwise flip from uc_update's usual "omitted means unchanged" into
+     * an unintended deletion (issue #255). A step this call is not patching at all must simply
+     * not appear in {@code stepRealisesPatches}; a listed position always needs its own explicit
+     * {@code realises}, {@code []} to clear it.
+     */
+    private static List<String> requireRealises(final StepRealisesPatchInput patch) {
+        if (patch.realises() == null) {
+            throw new IllegalArgumentException("stepRealisesPatches entry for position " + patch.position()
+                    + " is missing realises - to clear all realises references for this step, send an "
+                    + "explicit empty array (realises: []); to leave this step's realises untouched, omit "
+                    + "its position from stepRealisesPatches entirely instead of listing it");
+        }
+        return List.copyOf(patch.realises());
     }
 
     private static String blankToNull(final String value) {

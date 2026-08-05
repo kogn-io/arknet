@@ -330,6 +330,23 @@ class UseCaseMcpToolsTest {
     }
 
     /**
+     * A listed {@code stepRealisesPatches} position with {@code realises} omitted/{@code null}
+     * must be rejected rather than silently treated as "clear all references" for that step - the
+     * one place a caller who simply forgot the field would otherwise delete requirement links by
+     * accident (issue #255). To leave a step's realises untouched, its position must not be listed
+     * at all; to clear it on purpose, {@code realises} must be an explicit empty list.
+     */
+    @Test
+    void updateRejectsAStepRealisesPatchWithOmittedRealises() {
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null,
+                        List.of(new UseCaseMcpTools.StepRealisesPatchInput(3, null)), null, null));
+
+        assertTrue(thrown.getMessage().contains("3"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("realises"), thrown.getMessage());
+    }
+
+    /**
      * An omitted field must reach {@link UpdateUseCase} as {@code null} - so the port (not this
      * adapter) decides that "unchanged" means "leave the existing value".
      */
