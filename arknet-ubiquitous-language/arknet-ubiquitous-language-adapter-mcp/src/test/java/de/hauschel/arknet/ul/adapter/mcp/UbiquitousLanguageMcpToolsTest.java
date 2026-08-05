@@ -102,7 +102,12 @@ class UbiquitousLanguageMcpToolsTest {
                 () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null, null));
     }
 
-    /** {@code term_add}'s {@code language} argument passes straight through, never defaulted from the project. */
+    /**
+     * {@code term_add}'s explicit {@code language} argument passes straight through unchanged -
+     * this adapter never merges it with the project's configured default language itself; the
+     * explicit-wins-otherwise-fall-back-to-default resolution (issue #258) happens one layer down,
+     * in {@code TermService#add}, via {@code LanguageTag#resolveWriteLanguage}.
+     */
     @Test
     void addPassesTheLanguageArgumentThroughUnchanged() {
         adapter.add(null, "Kunde", "def a", null, null, "de", null);
@@ -213,7 +218,7 @@ class UbiquitousLanguageMcpToolsTest {
         private Optional<Term> termForGet = Optional.empty();
 
         @Override
-        public Term add(ProjectId projectId, NewTerm command) {
+        public Term add(ProjectId projectId, NewTerm command, String defaultLanguage) {
             lastCommand = command;
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")),
                     new TermCode("TERM-1"), command.prefLabel(), command.definition(),
@@ -233,7 +238,7 @@ class UbiquitousLanguageMcpToolsTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet, String language) {
+                ActorFacet actorFacet, String language, String defaultLanguage) {
             lastUpdatedTerm = code;
             lastUpdatePrefLabel = prefLabel;
             lastUpdateDefinition = definition;

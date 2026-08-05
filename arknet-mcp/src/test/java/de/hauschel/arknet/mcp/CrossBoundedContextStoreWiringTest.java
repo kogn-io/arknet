@@ -103,16 +103,16 @@ class CrossBoundedContextStoreWiringTest {
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
-                            List.of("An order is placed and confirmed"), null));
+                            List.of("An order is placed and confirmed"), null), "en");
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
-                            new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+                            new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
 
                     UseCase created = useCases.add(PROJECT, new NewUseCase("Place order",
                             "Customer places an order", null, null, "Customer",
                             List.of(), null, null,
                             List.of(new NewStep(1, "Customer selects items and confirms",
                                     List.of(fr.code().value()))),
-                            List.of(), null));
+                            List.of(), null), "en");
 
                     UseCase reloaded = useCases.get(PROJECT, created.code(), null).orElseThrow();
                     assertion.accept(new ResolvedUseCaseRoundTrip(created, reloaded, fr.id().value()));
@@ -151,14 +151,14 @@ class CrossBoundedContextStoreWiringTest {
                     // strict step-realises resolution must abort on the unknown FR (order in the
                     // out-adapter resolves the primary actor first, hence seed it).
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
-                            new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+                            new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
 
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
                             null, null, "Customer", List.of(), null, null,
                             List.of(new NewStep(1, "does something", List.of("FR-1"))),
                             List.of(), null);
 
-                    assertThatThrownBy(() -> useCases.add(PROJECT, danglingFr))
+                    assertThatThrownBy(() -> useCases.add(PROJECT, danglingFr, "en"))
                             .isInstanceOf(UnresolvedReferenceException.class)
                             .hasMessageContaining("FR-1")
                             .hasMessageContaining("req_add");
@@ -185,8 +185,8 @@ class CrossBoundedContextStoreWiringTest {
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
-                            List.of("An order is placed and confirmed"), null));
-                    Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null));
+                            List.of("An order is placed and confirmed"), null), "en");
+                    Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null), "en");
 
                     requirements.linkTerm(PROJECT, fr.code(), order.code().value());
 
@@ -211,7 +211,7 @@ class CrossBoundedContextStoreWiringTest {
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.",
                             RequirementType.FUNCTIONAL, null, null, null,
-                            List.of("An order is placed and confirmed"), null));
+                            List.of("An order is placed and confirmed"), null), "en");
 
                     assertThatThrownBy(() -> requirements.linkTerm(PROJECT, fr.code(), "TERM-99"))
                             .isInstanceOf(UnresolvedReferenceException.class)

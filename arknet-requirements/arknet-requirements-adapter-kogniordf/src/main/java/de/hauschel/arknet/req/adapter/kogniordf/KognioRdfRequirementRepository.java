@@ -314,11 +314,12 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage) {
+            String titleLanguage, String descriptionLanguage, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
         String titleTag = canonicalizeLenient(titleLanguage);
         String descriptionTag = canonicalizeLenient(descriptionLanguage);
+        String defaultTag = canonicalizeLenient(defaultLanguage);
 
         String subjectIriString = updated.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
@@ -343,7 +344,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 () -> new RequirementNotFoundException(projectId, updated.code()),
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriplesForUpdate(
-                        tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag));
+                        tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag, defaultTag));
     }
 
     /**
@@ -429,9 +430,27 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * IRI-ness. A variant already carrying {@code titleTag}/{@code descriptionTag} is
      * <em>not</em> re-attached: it is exactly the one {@code graph} is about to (re)write, so
      * re-attaching it too would duplicate it.</p>
+     *
+     * <p><strong>Sweeping a stale untagged sibling of a default-language write (issue #258).</strong>
+     * {@code defaultTag} is the target project's configured default language, canonicalized. When
+     * {@code titleTag}/{@code descriptionTag} equals it, the literal {@code graph} is about to
+     * write <em>is</em>, by construction, what an omitted {@code language} argument would have
+     * resolved to ({@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}) - so an
+     * existing <em>untagged</em> literal on that same predicate is no longer a genuine other-
+     * language variant to preserve, it is a stale duplicate of the very value now being written
+     * under its proper tag, left over from before this project had, or before a caller supplied,
+     * a language. {@link #otherLanguageLiterals} excludes it from what it preserves in exactly
+     * that one case, so it is silently dropped by {@code deleteExisting} along with everything
+     * else - a lazy, incremental normalisation triggered only by the next write that happens to
+     * touch this field, not a batch migration. A write under any other tag (including a
+     * non-default {@code language} explicitly supplied against a project that does have a
+     * default) leaves an existing untagged literal untouched, exactly as before this fix -
+     * {@code defaultTag} being {@code null} (no project default configured) never matches a
+     * non-{@code null} {@code titleTag}/{@code descriptionTag}, so this sweep is unreachable for
+     * a project without one.</p>
      */
     private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
-            String titleTag, String descriptionTag) {
+            String titleTag, String descriptionTag, String defaultTag) {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(!isIRI(?term)) }";
@@ -458,8 +477,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<RDFTerm> unjoinableConstrainedBy = tx.select(selectUnjoinableConstrainedBy)
                 .map(row -> termOf(row, "constraint"))
                 .toList();
-        List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag);
-        List<Literal> preservedDescriptions = otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag);
+        List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag, defaultTag);
+        List<Literal> preservedDescriptions =
+                otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag, defaultTag);
         tx.update(deleteExisting);
         tx.add(graphIri, graph);
         // Re-attach the preserved edges only after the gate has already run and the rewritten
@@ -513,14 +533,27 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * @param writtenTag the tag of the literal {@code graph} is about to (re)write for this
      *                   predicate, or {@code null} for untagged - excluded here since it is not
      *                   being preserved, it is being replaced
+     * @param defaultTag the target project's configured default language, canonicalized, or
+     *                   {@code null} if it has none - when it equals {@code writtenTag}, an
+     *                   existing <em>untagged</em> literal is excluded here too (issue #258): see
+     *                   {@link #replaceTriplesForUpdate}'s "Sweeping a stale untagged sibling"
+     *                   note for why that untagged literal is a stale duplicate, not a genuine
+     *                   other-language variant, in exactly that case
      */
-    private List<Literal> otherLanguageLiterals(DatasetTx tx, String subject, String predicateIri, String writtenTag) {
+    private List<Literal> otherLanguageLiterals(
+            DatasetTx tx, String subject, String predicateIri, String writtenTag, String defaultTag) {
         String query = "SELECT ?o WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + subject + " <" + predicateIri + "> ?o } }";
+        boolean sweepUntagged = defaultTag != null && defaultTag.equals(writtenTag);
         return tx.select(query)
                 .map(row -> literalOf(row, "o"))
-                .filter(literal -> !Objects.equals(
-                        canonicalizeLenient(literal.getLanguageTag().orElse(null)), writtenTag))
+                .filter(literal -> {
+                    String existingTag = canonicalizeLenient(literal.getLanguageTag().orElse(null));
+                    if (sweepUntagged && existingTag == null) {
+                        return false;
+                    }
+                    return !Objects.equals(existingTag, writtenTag);
+                })
                 .toList();
     }
 

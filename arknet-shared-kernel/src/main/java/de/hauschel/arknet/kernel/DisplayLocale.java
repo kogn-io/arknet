@@ -34,7 +34,11 @@ import java.util.Optional;
  * <ol>
  *   <li>a literal tagged with the {@link #requested} language;</li>
  *   <li>else a literal tagged with the {@link #systemDefault} language;</li>
- *   <li>else a plain, untagged literal (today's normal case - {@code term_add} writes untagged);</li>
+ *   <li>else a plain, untagged literal (a store-first (ADR-005) edit, or an older resource
+ *       written before a project had a configured default language - since issue #258, a write
+ *       without an explicit {@code language} falls back to the project's default rather than
+ *       writing untagged, so this step is no longer the normal case for a project with one
+ *       configured);</li>
  *   <li>else <em>some</em> literal, but chosen <strong>deterministically</strong> - two calls
  *       with the same candidate set return the same value (a stable Java-side ordering over the
  *       collected candidates, never the incidental row order a store returns).</li>

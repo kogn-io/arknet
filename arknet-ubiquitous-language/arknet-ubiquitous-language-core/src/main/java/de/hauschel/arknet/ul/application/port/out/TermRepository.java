@@ -104,9 +104,23 @@ public interface TermRepository {
      *                    role untouched - only the type is always replaced
      * @param language    the BCP-47 language tag the new {@code prefLabel}/{@code definition} is
      *                    written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
-     *                    literal. Deletion is scoped to this same tag: only the existing literal
+     *                    literal (the caller, {@code TermService#update}, has already resolved a
+     *                    {@code null} against the project's default before this port sees it, or
+     *                    rejected the call - see {@code UpdateTerm}'s own {@code language}
+     *                    parameter). Deletion is scoped to this same tag: only the existing literal
      *                    carrying it is removed, so every other language-tagged variant of a field
      *                    being corrected survives untouched
+     * @param defaultLanguage the target project's configured default language, canonicalized by
+     *                    the caller, or {@code null} if it has none. Used only to decide whether an
+     *                    existing <em>untagged</em> literal on {@code prefLabel}/{@code definition}
+     *                    should be swept away rather than preserved: when the tag actually written
+     *                    for that field equals {@code defaultLanguage}, the literal being written
+     *                    is - by construction - the very literal an omitted {@code language}
+     *                    argument would have resolved to, so a still-untagged sibling of the same
+     *                    predicate is a stale duplicate of it, not a genuine other-language
+     *                    variant, and the delete filter widens to remove it too (issue #258). Has
+     *                    no bearing on which tag is actually written - that decision was already
+     *                    made by the caller
      * @return the term's up-to-date state after the correction
      * @throws TermNotFoundException             if no term with this code exists
      * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's
@@ -118,7 +132,7 @@ public interface TermRepository {
      *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
-            String language);
+            String language, String defaultLanguage);
 
     /**
      * Finds a term by its human-readable business code within a project.

@@ -65,7 +65,12 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+            String defaultLanguage) {
+        // This fake stores a single title/goal/step-text value per identity (no multi-valued
+        // literals), so there is nothing for it to sweep - defaultLanguage only matters to the
+        // real out-adapter's language-variant preservation, exercised by
+        // KognioRdfUseCaseRepositoryMultilingualTest instead.
         Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
         UseCase current = useCases.get(updated.id());
         if (current == null) {

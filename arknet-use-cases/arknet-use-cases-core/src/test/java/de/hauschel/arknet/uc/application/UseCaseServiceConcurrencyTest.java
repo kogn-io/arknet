@@ -44,6 +44,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 class UseCaseServiceConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
+    /** These races are orthogonal to issue #258's default-language resolution - always given explicitly. */
+    private static final String DEFAULT_LANGUAGE = "en";
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
 
     private InMemoryUseCaseRepository store;
@@ -72,11 +74,11 @@ class UseCaseServiceConcurrencyTest {
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newUseCase()));
+                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE));
         UseCaseService underTest =
                 new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
-        UseCase result = underTest.add(WS, newUseCase());
+        UseCase result = underTest.add(WS, newUseCase(), DEFAULT_LANGUAGE);
 
         assertEquals(new UseCaseCode("UC2"), result.code());
         assertEquals(2, store.findAll(WS).size());
@@ -94,14 +96,14 @@ class UseCaseServiceConcurrencyTest {
      */
     @Test
     void updateSurvivesAConcurrentUpdateOfADifferentFieldBetweenReadAndWrite() {
-        UseCaseCode code = otherCaller.add(WS, newUseCase()).code();
+        UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null, null, null));
+                        null, null, null, null, null, null, DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         UseCase result = underTest.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null, null, null);
+                "Racing precondition", null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Concurrent trigger", result.trigger());
         assertEquals("Racing precondition", result.precondition());
@@ -117,14 +119,14 @@ class UseCaseServiceConcurrencyTest {
      */
     @Test
     void updateGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
-        UseCaseCode code = otherCaller.add(WS, newUseCase()).code();
+        UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
         UseCaseService underTest =
                 new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
                 () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null,
-                        null));
+                        null, DEFAULT_LANGUAGE));
 
         assertEquals(UseCaseService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }
@@ -169,9 +171,10 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+                String defaultLanguage) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage,
-                    stepTextLanguageByPosition);
+                    stepTextLanguageByPosition, defaultLanguage);
         }
 
         @Override
@@ -221,9 +224,10 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+                String defaultLanguage) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage,
-                    stepTextLanguageByPosition);
+                    stepTextLanguageByPosition, defaultLanguage);
         }
 
         @Override
@@ -268,7 +272,8 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition) {
+                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
+                String defaultLanguage) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code(), null)

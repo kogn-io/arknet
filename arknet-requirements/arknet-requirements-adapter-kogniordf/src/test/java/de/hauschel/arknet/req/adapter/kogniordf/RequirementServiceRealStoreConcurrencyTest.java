@@ -171,7 +171,7 @@ class RequirementServiceRealStoreConcurrencyTest {
         Thread winnerThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Requirement result = winnerService.add(WS, newFunctionalRequirement());
+                Requirement result = winnerService.add(WS, newFunctionalRequirement(), "en");
                 winnerResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } finally {
@@ -182,7 +182,7 @@ class RequirementServiceRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Requirement result = loserService.add(WS, newFunctionalRequirement());
+                Requirement result = loserService.add(WS, newFunctionalRequirement(), "en");
                 loserResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } catch (RuntimeException e) {

@@ -155,7 +155,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         Thread winnerThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                UseCase result = winnerService.add(WS, newUseCase());
+                UseCase result = winnerService.add(WS, newUseCase(), "en");
                 winnerResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } finally {
@@ -166,7 +166,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                UseCase result = loserService.add(WS, newUseCase());
+                UseCase result = loserService.add(WS, newUseCase(), "en");
                 loserResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } catch (RuntimeException e) {
@@ -383,18 +383,18 @@ class UseCaseServiceRealStoreConcurrencyTest {
     @Test
     void updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead() {
         UseCaseService straightThrough = serviceOver(realLifecycle);
-        UseCaseCode code = straightThrough.add(WS, newUseCase()).code();
+        UseCaseCode code = straightThrough.add(WS, newUseCase(), "en").code();
 
         AtomicBoolean pending = new AtomicBoolean(true);
         UseCaseService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
                 straightThrough.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null, null, null);
+                        null, null, null, null, null, null, "en");
             }
         }));
 
         UseCase result = racing.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null, null, null);
+                "Racing precondition", null, null, null, null, null, "en");
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         assertEquals("Concurrent trigger", result.trigger(),

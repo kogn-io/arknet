@@ -80,7 +80,11 @@ final class InMemoryRequirementRepository implements RequirementRepository {
 
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage) {
+            String titleLanguage, String descriptionLanguage, String defaultLanguage) {
+        // This fake stores a single title/description value per identity (no multi-valued
+        // literals), so there is nothing for it to sweep - defaultLanguage only matters to the
+        // real out-adapter's language-variant preservation, exercised by
+        // KognioRdfRequirementRepositoryMultilingualTest instead.
         Map<RequirementId, Requirement> requirements = byProject.getOrDefault(projectId, Map.of());
         Requirement current = requirements.get(updated.id());
         if (current == null) {

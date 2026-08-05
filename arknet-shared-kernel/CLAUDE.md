@@ -33,9 +33,17 @@ jeder Tool-Aufruf ohnehin fuer das Routing macht, beantwortet die Sprachfrage "f
 statt dass ein Bounded Context, der die Standardsprache braucht (heute nur
 ubiquitous-language, fuer `term_get`s Anzeige-Fallback), den Project-BC dafuer ein zweites Mal ueber
 einen eigenen ADR-008-Borrow ansprechen muesste. Ein Aufrufer, der nur die `ProjectId` braucht, liest
-`resolve(anchor).id()`. `defaultLanguage` ist reine Lesepraeferenz: es beeinflusst nie, was ein
-Schreib-Tool ohne eigenes `language`-Argument tatsaechlich schreibt (das bleibt ungetaggt) -- nur,
-welche Sprachvariante ein Lesepfad ohne explizite Anfrage bevorzugt zeigt.
+`resolve(anchor).id()`. `defaultLanguage` bedient seit Issue #258 zwei Rollen: lesend waehlt es,
+welche Sprachvariante ein Lesepfad ohne explizite Anfrage bevorzugt zeigt (unveraendert); schreibend
+ist es fuer requirements/ubiquitous-language/use-cases der Fallback, auf den `LanguageTag#resolveWriteLanguage`
+ein weggelassenes `language`-Argument aufloest -- ein Schreib-Tool ohne eigenes `language` schreibt
+also nicht mehr ungetaggt, sondern unter `defaultLanguage`; hat das Projekt keins konfiguriert UND
+der Aufrufer auch kein `language` mitgegeben, lehnt der Aufruf mit `MissingDefaultLanguageException`
+ab, statt still ungetaggt zu schreiben. `arknet-project`s eigener Beschreibungs-Schreibpfad
+(`project_add`/`project_update`) bleibt davon unberuehrt: er kanonisiert ein mitgegebenes `language`
+weiterhin nur mit `LanguageTag#canonicalize` und schreibt ohne eins ungetaggt, da ein Projekt kein
+Konzept einer eigenen Default-Sprache-fuer-sich-selbst hat (es *ist* die Quelle von `defaultLanguage`
+fuer die anderen BCs).
 
 Der pure Helfer `LanguageTag` (`canonicalize(String)`) kanonisiert jeden von aussen kommenden
 `language`-Wert (Term/Project) auf seine normalisierte BCP-47-Form (`"DE"` -> `"de"`), bevor ein
@@ -49,3 +57,19 @@ auf diesem Fall wirft, und uebersetzt das in die eigene `InvalidLanguageTagExcep
 arknet-ubiquitous-language als auch arknet-project denselben Helfer brauchen und ein nicht
 kanonisierter Tag sonst asymmetrisch zwischen Schreiben und dem zugehoerigen sprachscoped Delete
 divergieren kann (zwei verschieden gecaste Literale fuer dieselbe Sprache statt einer Korrektur).
+
+Dieselbe Klasse traegt seit Issue #258 zusaetzlich `resolveWriteLanguage(String explicit, String
+projectDefaultLanguage)`: die eine Stelle, an der jeder Schreibpfad von requirements,
+ubiquitous-language und use-cases ermittelt, unter welchem Tag ein Feld tatsaechlich geschrieben
+wird -- `explicit` (kanonisiert) gewinnt immer, sonst `projectDefaultLanguage` (kanonisiert), sonst
+wirft die Methode `MissingDefaultLanguageException` (ebenfalls im Kernel), statt still ein
+ungetaggtes Literal zu schreiben. Loest damit die fruehere Design-Entscheidung ab, nach der ein
+weggelassenes `language`-Argument immer ungetaggt blieb (issue #228/PR #230): jenes Verhalten liess
+sich mit den vorhandenen Tools weder entfernen noch nachtraeglich taggen und produzierte bei einem
+spaeteren Update auf ein bereits sprachgetaggtes Feld eine dauerhafte ungetaggte Dublette. Der zu
+dieser Umkehrung gehoerige Sweep bestehender ungetaggter Literale (ein Schreiben unter dem
+kanonisierten `defaultLanguage` raeumt ein noch bestehendes ungetaggtes Literal desselben
+Praedikats/Subjects mit auf, statt es als vermeintliche andere Sprachvariante zu bewahren) ist kein
+gemeinsamer Kernel-Mechanismus, sondern in jedem der drei Out-Adapter in dessen eigenem Stil
+nachgebaut (Java-Stream-Filter bei req/uc, SPARQL-`FILTER`-Erweiterung bei ul) -- Details je in
+`arknet-requirements/CLAUDE.md`, `arknet-ubiquitous-language/CLAUDE.md`, `arknet-use-cases/CLAUDE.md`.

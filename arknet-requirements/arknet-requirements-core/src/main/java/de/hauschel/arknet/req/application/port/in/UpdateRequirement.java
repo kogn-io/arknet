@@ -29,7 +29,15 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * {@code prefLabel}/{@code definition}). {@code language} names the BCP-47 tag the supplied
  * {@code title}/{@code description} argument(s) are written in for this one call - it applies to
  * whichever of the two is actually non-{@code null} here; a field left {@code null} keeps every
- * language variant it already had, untouched, exactly as before this parameter existed.</p>
+ * language variant it already had, untouched, exactly as before this parameter existed. A field
+ * that <em>is</em> being changed but ships no {@code language} falls back to {@code
+ * defaultLanguage} (see {@link #update(ProjectId, RequirementCode, String, String, java.util.List,
+ * Priority, String, String)}'s {@code defaultLanguage} parameter) rather than staying untagged
+ * (issue #258) - and if a changed field's existing value already carries an untagged literal
+ * under the same predicate, writing that field under a tag equal to {@code defaultLanguage} sweeps
+ * the untagged one away instead of preserving it as a spurious "other" variant (see
+ * {@code RequirementRepository#compareAndUpdate}'s {@code defaultLanguage} parameter for the
+ * out-adapter side of this).</p>
  *
  * <p><strong>Background.</strong> Backs the MVP tool {@code req_update}: requirements
  * elicited during an interview are sometimes sharpened afterwards, and until this port existed the
@@ -56,12 +64,22 @@ public interface UpdateRequirement {
      * @param priority            the new MoSCoW priority, or {@code null} to leave an already-set
      *                            one unchanged (never a request to remove it)
      * @param language            the BCP-47 language tag a non-{@code null} {@code title}/
-     *                            {@code description} is written in, or {@code null} for a plain,
-     *                            untagged literal. Only the existing literal carrying this same
-     *                            tag is replaced - every other language-tagged variant of a field
-     *                            being corrected survives untouched
+     *                            {@code description} is written in, or {@code null} to fall back
+     *                            to {@code defaultLanguage}. Only the existing literal carrying
+     *                            the tag actually written is replaced - every other
+     *                            language-tagged variant of a field being corrected survives
+     *                            untouched, except an existing untagged one that a fallback to
+     *                            {@code defaultLanguage} sweeps away (see class-level Language
+     *                            note)
+     * @param defaultLanguage     the target project's configured default language (see
+     *                            {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                            or {@code null} if it has none - only consulted for a field this
+     *                            call is actually changing and that ships no {@code language}
      * @return the updated requirement
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if a changed field ships
+     *                            no {@code language} and {@code defaultLanguage} is {@code null}
+     *                            too
      */
     Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> acceptanceCriteria, Priority priority, String language);
+            List<String> acceptanceCriteria, Priority priority, String language, String defaultLanguage);
 }

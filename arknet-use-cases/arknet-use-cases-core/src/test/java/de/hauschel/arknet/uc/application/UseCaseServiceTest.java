@@ -17,12 +17,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.MissingDefaultLanguageException;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepRealisesPatch;
+import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
@@ -39,6 +41,12 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 class UseCaseServiceTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
+    /**
+     * A project default language for tests that do not themselves exercise issue #258's
+     * language-resolution policy - passed explicitly so a {@code null} {@code language} argument
+     * in a fixture (e.g. {@link #newUseCase(String)}) still resolves instead of throwing.
+     */
+    private static final String DEFAULT_LANGUAGE = "en";
 
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
     private static final ResourceId PAYMENT_PROVIDER_ID =
@@ -70,17 +78,64 @@ class UseCaseServiceTest {
 
     @Test
     void addAssignsFirstCode() {
-        UseCase added = service.add(WS, newUseCase("Place order"));
+        UseCase added = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
 
         assertEquals(new UseCaseCode("UC1"), added.code());
         assertEquals("Place order", added.title());
         assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
 
+    /**
+     * Issue #258, decision 2: a write without an explicit {@code language} falls back to the
+     * target project's configured {@code defaultLanguage} instead of writing an untagged literal.
+     */
+    @Test
+    void addWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), "de").code();
+
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+        assertEquals("de", current.goalLanguage());
+    }
+
+    /**
+     * Issue #258, decision 1: a write without an explicit {@code language}, targeting a project
+     * with no configured default either, is rejected instead of silently writing an untagged
+     * literal - and nothing is persisted.
+     */
+    @Test
+    void addWithoutLanguageAndWithoutAProjectDefaultIsRejected() {
+        assertThrows(MissingDefaultLanguageException.class, () -> service.add(WS, newUseCase("Place order"), null));
+
+        assertEquals(List.of(), service.list(WS));
+    }
+
+    /** Mirrors {@link #addWithoutLanguageFallsBackToTheProjectsDefaultLanguage}, for {@code update}. */
+    @Test
+    void updateWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, "New title", null, null, null, null, null, null, null, null, null, "de");
+
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+    }
+
+    /** Mirrors {@link #addWithoutLanguageAndWithoutAProjectDefaultIsRejected}, for {@code update}. */
+    @Test
+    void updateWithoutLanguageAndWithoutAProjectDefaultIsRejected() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        assertThrows(MissingDefaultLanguageException.class, () -> service.update(
+                WS, code, "New title", null, null, null, null, null, null, null, null, null, null));
+
+        assertEquals("Place order", service.get(WS, code, null).orElseThrow().title());
+    }
+
     @Test
     void addMintsAFreshOpaqueIdentityViaTheFactory() {
-        UseCase first = service.add(WS, newUseCase("a"));
-        UseCase second = service.add(WS, newUseCase("b"));
+        UseCase first = service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);
+        UseCase second = service.add(WS, newUseCase("b"), DEFAULT_LANGUAGE);
 
         assertNotEquals(first.id(), second.id());
         assertEquals(2, resourceIdFactory.mintedCount());
@@ -95,7 +150,7 @@ class UseCaseServiceTest {
                         new NewStep(2, "confirm", List.of())),
                 List.of("2a. Payment declined -> abort"), null);
 
-        UseCase added = service.add(WS, command);
+        UseCase added = service.add(WS, command, DEFAULT_LANGUAGE);
 
         assertEquals("Webshop", added.scope());
         assertEquals("Customer opens the cart", added.trigger());
@@ -113,7 +168,7 @@ class UseCaseServiceTest {
         NewUseCase command = new NewUseCase("Broken", "goal", null, null, "Unknown",
                 List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
 
-        assertThrows(NoSuchElementException.class, () -> service.add(WS, command));
+        assertThrows(NoSuchElementException.class, () -> service.add(WS, command, DEFAULT_LANGUAGE));
         assertTrue(service.list(WS).isEmpty());
     }
 
@@ -123,23 +178,23 @@ class UseCaseServiceTest {
                 List.of(), null, null,
                 List.of(new NewStep(1, "do something", List.of("FR-UNKNOWN"))), List.of(), null);
 
-        assertThrows(NoSuchElementException.class, () -> service.add(WS, command));
+        assertThrows(NoSuchElementException.class, () -> service.add(WS, command, DEFAULT_LANGUAGE));
         assertTrue(service.list(WS).isEmpty());
     }
 
     @Test
     void addNumbersRunningPerProject() {
-        assertEquals(new UseCaseCode("UC1"), service.add(WS, newUseCase("a")).code());
-        assertEquals(new UseCaseCode("UC2"), service.add(WS, newUseCase("b")).code());
-        assertEquals(new UseCaseCode("UC3"), service.add(WS, newUseCase("c")).code());
+        assertEquals(new UseCaseCode("UC1"), service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE).code());
+        assertEquals(new UseCaseCode("UC2"), service.add(WS, newUseCase("b"), DEFAULT_LANGUAGE).code());
+        assertEquals(new UseCaseCode("UC3"), service.add(WS, newUseCase("c"), DEFAULT_LANGUAGE).code());
     }
 
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
-        service.add(WS, newUseCase("a"));
+        service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);
 
-        UseCase inOther = service.add(other, newUseCase("b"));
+        UseCase inOther = service.add(other, newUseCase("b"), DEFAULT_LANGUAGE);
 
         assertEquals(new UseCaseCode("UC1"), inOther.code());
         assertEquals(1, service.list(other).size());
@@ -148,8 +203,8 @@ class UseCaseServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(WS, newUseCase("a"));
-        service.add(WS, newUseCase("b"));
+        service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);
+        service.add(WS, newUseCase("b"), DEFAULT_LANGUAGE);
 
         List<UseCase> all = service.list(WS);
 
@@ -160,7 +215,7 @@ class UseCaseServiceTest {
 
     @Test
     void getReturnsPersistedUseCase() {
-        UseCaseCode code = service.add(WS, newUseCase("a")).code();
+        UseCaseCode code = service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE).code();
 
         assertTrue(service.get(WS, code, null).isPresent());
         assertEquals("a", service.get(WS, code, null).orElseThrow().title());
@@ -173,7 +228,7 @@ class UseCaseServiceTest {
 
     @Test
     void addGetListRoundtrip() {
-        UseCase added = service.add(WS, newUseCase("Place order"));
+        UseCase added = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
 
         UseCase fetched = service.get(WS, added.code(), null).orElseThrow();
 
@@ -183,10 +238,10 @@ class UseCaseServiceTest {
 
     @Test
     void updateChangesGoalLevelFields() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, "New title", "New goal", "New scope", "New trigger",
-                "New precondition", "New postcondition", null, null, null, null);
+                "New precondition", "New postcondition", null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("New title", updated.title());
         assertEquals("New goal", updated.goal());
@@ -199,10 +254,10 @@ class UseCaseServiceTest {
 
     @Test
     void updateWithNullFieldsLeavesThemUnchanged() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
-        UseCase updated =
-                service.update(WS, code, null, "New goal", null, null, null, null, null, null, null, null);
+        UseCase updated = service.update(
+                WS, code, null, "New goal", null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Place order", updated.title());
         assertEquals("New goal", updated.goal());
@@ -210,20 +265,21 @@ class UseCaseServiceTest {
 
     @Test
     void updateWithEverythingOmittedIsANoOp() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
         UseCase before = service.get(WS, code, null).orElseThrow();
 
-        UseCase result = service.update(WS, code, null, null, null, null, null, null, null, null, null, null);
+        UseCase result = service.update(
+                WS, code, null, null, null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(before, result);
     }
 
     @Test
     void updateReplacesExtensionsWholesale() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, null, null, null, null, null, null,
-                List.of("2a. Payment declined -> abort"), null, null, null);
+                List.of("2a. Payment declined -> abort"), null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(List.of("2a. Payment declined -> abort"), updated.extensions());
     }
@@ -234,11 +290,11 @@ class UseCaseServiceTest {
                 "Customer opens the cart", "Customer", List.of("PaymentProvider"),
                 "Customer is logged in", "Order is recorded",
                 List.of(new NewStep(1, "select items", List.of("FR5"))), List.of(), null);
-        UseCaseCode code = service.add(WS, command).code();
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
         UseCase before = service.get(WS, code, null).orElseThrow();
 
-        UseCase updated =
-                service.update(WS, code, "New title", null, null, null, null, null, null, null, null, null);
+        UseCase updated = service.update(
+                WS, code, "New title", null, null, null, null, null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(before.primaryActor(), updated.primaryActor());
         assertEquals(before.supportingActors(), updated.supportingActors());
@@ -249,7 +305,7 @@ class UseCaseServiceTest {
     void updateThrowsWhenUseCaseUnknown() {
         UseCaseNotFoundException ex = assertThrows(UseCaseNotFoundException.class,
                 () -> service.update(WS, new UseCaseCode("UC99"), "New title", null, null, null, null, null,
-                        null, null, null, null));
+                        null, null, null, null, DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
@@ -262,10 +318,10 @@ class UseCaseServiceTest {
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),
                 List.of(), null);
-        UseCaseCode code = service.add(WS, command).code();
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, null, null, null, null, null, null, null,
-                List.of(new StepTextPatch(1, "select the desired items")), null, null);
+                List.of(new StepTextPatch(1, "select the desired items")), null, null, DEFAULT_LANGUAGE);
 
         assertEquals("select the desired items", updated.steps().get(0).text());
         assertEquals(List.of(new RequirementRef(FR5_ID)), updated.steps().get(0).realises());
@@ -279,11 +335,11 @@ class UseCaseServiceTest {
                 List.of(new NewStep(1, "select items", List.of()),
                         new NewStep(2, "confirm", List.of())),
                 List.of(), null);
-        UseCaseCode code = service.add(WS, command).code();
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, null, null, null, null, null, null, null,
                 List.of(new StepTextPatch(1, "select the desired items"),
-                        new StepTextPatch(2, "confirm and pay")), null, null);
+                        new StepTextPatch(2, "confirm and pay")), null, null, DEFAULT_LANGUAGE);
 
         assertEquals("select the desired items", updated.steps().get(0).text());
         assertEquals("confirm and pay", updated.steps().get(1).text());
@@ -291,11 +347,11 @@ class UseCaseServiceTest {
 
     @Test
     void updateRejectsAStepTextPatchForAnUnknownPosition() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
         StepPositionNotFoundException ex = assertThrows(StepPositionNotFoundException.class,
                 () -> service.update(WS, code, null, null, null, null, null, null, null,
-                        List.of(new StepTextPatch(99, "does not exist")), null, null));
+                        List.of(new StepTextPatch(99, "does not exist")), null, null, DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.useCaseCode());
@@ -314,12 +370,12 @@ class UseCaseServiceTest {
 
     @Test
     void updateWithAnUnknownStepPositionPatchLeavesTheUseCaseUntouched() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
         UseCase before = service.get(WS, code, null).orElseThrow();
 
         assertThrows(StepPositionNotFoundException.class,
                 () -> service.update(WS, code, "attempted title change", null, null, null, null, null, null,
-                        List.of(new StepTextPatch(99, "does not exist")), null, null));
+                        List.of(new StepTextPatch(99, "does not exist")), null, null, DEFAULT_LANGUAGE));
 
         assertEquals(before, service.get(WS, code, null).orElseThrow());
     }
@@ -333,10 +389,10 @@ class UseCaseServiceTest {
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),
                 List.of(), null);
-        UseCaseCode code = service.add(WS, command).code();
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, null, null, null, null, null, null, null, null,
-                List.of(new StepRealisesPatch(1, List.of("FR7"))), null);
+                List.of(new StepRealisesPatch(1, List.of("FR7"))), null, DEFAULT_LANGUAGE);
 
         assertEquals("select items", updated.steps().get(0).text());
         assertEquals(List.of(new RequirementRef(fr7Id)), updated.steps().get(0).realises());
@@ -346,21 +402,21 @@ class UseCaseServiceTest {
 
     @Test
     void updateWithStepRealisesPatchesPropagatesAnUnknownRequirementReferenceFromTheLookupPort() {
-        UseCaseCode code = service.add(WS, newUseCase("Place order")).code();
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
 
         assertThrows(NoSuchElementException.class,
                 () -> service.update(WS, code, null, null, null, null, null, null, null, null,
-                        List.of(new StepRealisesPatch(1, List.of("FR-UNKNOWN"))), null));
+                        List.of(new StepRealisesPatch(1, List.of("FR-UNKNOWN"))), null, DEFAULT_LANGUAGE));
     }
 
     @Test
     void updateWithStepRealisesPatchesClearsAnExistingRealisesSetWhenGivenAnEmptyList() {
         NewUseCase command = new NewUseCase("Place order", "goal", null, null, "Customer", List.of(),
                 null, null, List.of(new NewStep(1, "select items", List.of("FR5"))), List.of(), null);
-        UseCaseCode code = service.add(WS, command).code();
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, null, null, null, null, null, null, null, null,
-                List.of(new StepRealisesPatch(1, List.of())), null);
+                List.of(new StepRealisesPatch(1, List.of())), null, DEFAULT_LANGUAGE);
 
         assertTrue(updated.steps().get(0).realises().isEmpty());
     }
@@ -374,11 +430,11 @@ class UseCaseServiceTest {
                 List.of(new NewStep(1, "select items", List.of("FR5")),
                         new NewStep(2, "confirm", List.of())),
                 List.of(), null);
-        UseCaseCode code = service.add(WS, command).code();
+        UseCaseCode code = service.add(WS, command, DEFAULT_LANGUAGE).code();
 
         UseCase updated = service.update(WS, code, null, null, null, null, null, null, null,
                 List.of(new StepTextPatch(2, "confirm and pay")),
-                List.of(new StepRealisesPatch(1, List.of("FR7"))), null);
+                List.of(new StepRealisesPatch(1, List.of("FR7"))), null, DEFAULT_LANGUAGE);
 
         assertEquals("select items", updated.steps().get(0).text());
         assertEquals(List.of(new RequirementRef(fr7Id)), updated.steps().get(0).realises());

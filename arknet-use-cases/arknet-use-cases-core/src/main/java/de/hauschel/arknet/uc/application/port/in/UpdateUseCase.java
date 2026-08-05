@@ -49,7 +49,12 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * every step named in {@code stepTextPatches} - mirroring {@code UpdateTerm}'s single shared
  * {@code language} covering whichever of {@code prefLabel}/{@code definition} it touches. A field
  * (or step) this call does not touch keeps every language variant it already had, untouched,
- * exactly as before this parameter existed.</p>
+ * exactly as before this parameter existed. A field/step that <em>is</em> being changed but ships
+ * no {@code language} falls back to {@code defaultLanguage} (issue #258) rather than staying
+ * untagged - and if that field/step's existing value already carries an untagged literal, writing
+ * it under a tag equal to {@code defaultLanguage} sweeps the untagged one away instead of
+ * preserving it as a spurious "other" variant (see {@code UseCaseRepository#compareAndUpdate}'s
+ * {@code defaultLanguage} parameter for the out-adapter side of this).</p>
  */
 public interface UpdateUseCase {
 
@@ -81,10 +86,16 @@ public interface UpdateUseCase {
      *                            unchanged
      * @param language            the BCP-47 language tag every field this call actually touches
      *                            (a non-{@code null} {@code title}/{@code goal}, each patched
-     *                            step's text) is written in, or {@code null} for a plain,
-     *                            untagged literal. Only the existing literal carrying this same
-     *                            tag is replaced per field - every other language-tagged variant
-     *                            survives untouched
+     *                            step's text) is written in, or {@code null} to fall back to
+     *                            {@code defaultLanguage}. Only the existing literal carrying the
+     *                            tag actually written is replaced per field - every other
+     *                            language-tagged variant survives untouched, except an existing
+     *                            untagged one that a fallback to {@code defaultLanguage} sweeps
+     *                            away (see class-level Language note)
+     * @param defaultLanguage     the target project's configured default language (see
+     *                            {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                            or {@code null} if it has none - only consulted for a field/step
+     *                            this call is actually changing and that ships no {@code language}
      * @return the updated use case
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists in
      *                                                {@code projectId}
@@ -94,10 +105,14 @@ public interface UpdateUseCase {
      * @throws StepPositionNotFoundException         if {@code stepTextPatches} or
      *                                                {@code stepRealisesPatches} names a position
      *                                                with no matching existing step
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if a changed field/step
+     *                                                ships no {@code language} and {@code
+     *                                                defaultLanguage} is {@code null} too
      */
     UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
             String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches, List<StepRealisesPatch> stepRealisesPatches, String language);
+            List<StepTextPatch> stepTextPatches, List<StepRealisesPatch> stepRealisesPatches, String language,
+            String defaultLanguage);
 
     /**
      * A correction to one existing main-flow step's {@code realises} references, addressed by

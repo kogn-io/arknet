@@ -5,6 +5,7 @@ package de.hauschel.arknet.uc.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -130,7 +131,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
                 "Customer selects items");
         repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en",
-                Map.of(1, "en"));
+                Map.of(1, "en"), null);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -156,7 +157,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
 
         UseCase withGermanStepText = useCase(created.id(), code, "Place order", "Order is placed",
                 "Kunde waehlt Artikel");
-        repository.compareAndUpdate(PROJECT_A, head, withGermanStepText, "en", "en", Map.of(1, "de"));
+        repository.compareAndUpdate(PROJECT_A, head, withGermanStepText, "en", "en", Map.of(1, "de"), null);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -188,7 +189,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new Step(2, "Kunde gibt Zahlungsdetails ein", List.of()),
                 new Step(3, "Customer confirms order", List.of()));
         UseCase updated = useCase(id, code, "Place order", "Order is placed", withGermanSecondStep);
-        repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", Map.of(1, "en", 2, "de", 3, "en"));
+        repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", Map.of(1, "en", 2, "de", 3, "en"), null);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -222,9 +223,99 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new Step(2, "Customer enters payment details again", List.of()),
                 new Step(3, "Customer confirms order", List.of()));
         UseCase updated = useCase(id, code, "Place order", "Order is placed", withRewordedSecondStep);
-        repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", Map.of(1, "en", 2, "en", 3, "en"));
+        repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", Map.of(1, "en", 2, "en", 3, "en"), null);
 
         assertEquals(1, countStepTextLiterals(id, 2));
+    }
+
+    /**
+     * Issue #258, decision 3: a {@code compareAndUpdate} that writes {@code title} under the tag
+     * equal to the project's {@code defaultLanguage} sweeps away a stale untagged sibling of the
+     * same predicate instead of preserving it as a spurious "other" language variant.
+     */
+    @Test
+    void compareAndUpdateSweepsAnUntaggedTitleWhenTheWrittenTagEqualsTheProjectDefault() {
+        UseCaseId id = freshId();
+        givenLegacyUseCaseWithUntaggedTitle(PROJECT_A, id, "UC1");
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCase withGermanTitle = useCase(id, code, "Bestellung aufgeben", current.value().goal(),
+                current.value().steps());
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de",
+                current.goalLanguage(), current.stepTextLanguageByPosition(), "de");
+
+        assertEquals(1, countTitleLiterals(PROJECT_A, id));
+        UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("Bestellung aufgeben", reloaded.title());
+    }
+
+    /**
+     * Regression guard for the same sweep (issue #258): writing {@code title} under an
+     * <em>explicit</em>, non-default language must leave an existing untagged variant alone.
+     */
+    @Test
+    void compareAndUpdateKeepsAnUntaggedTitleWhenTheWrittenTagDiffersFromTheProjectDefault() {
+        UseCaseId id = freshId();
+        givenLegacyUseCaseWithUntaggedTitle(PROJECT_A, id, "UC1");
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCase withFrenchTitle = useCase(id, code, "Passer commande", current.value().goal(),
+                current.value().steps());
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr",
+                current.goalLanguage(), current.stepTextLanguageByPosition(), "de");
+
+        assertEquals(2, countTitleLiterals(PROJECT_A, id));
+        assertTrue(hasUntaggedTitle(PROJECT_A, id, "Place order"));
+        UseCase asFrench = repository.findByCode(PROJECT_A, code, "fr").orElseThrow();
+        assertEquals("Passer commande", asFrench.title());
+    }
+
+    /**
+     * Issue #258, decision 3, {@code otherLanguageStepTexts}'s own independent implementation
+     * (distinct from {@code otherLanguageLiterals}, since a step's subject is re-minted on every
+     * write - class-level note): a {@code compareAndUpdate} that writes a step's {@code text}
+     * under the tag equal to the project's {@code defaultLanguage} sweeps away that position's
+     * stale untagged sibling instead of preserving it as a spurious "other" language variant.
+     */
+    @Test
+    void compareAndUpdateSweepsAnUntaggedStepTextWhenTheWrittenTagEqualsTheProjectDefault() {
+        UseCaseId id = freshId();
+        givenLegacyUseCaseWithUntaggedStepText(PROJECT_A, id, "UC1");
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCase withGermanStepText = useCase(id, code, current.value().title(), current.value().goal(),
+                List.of(new Step(1, "Kunde waehlt Artikel", List.of())));
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), withGermanStepText, current.titleLanguage(),
+                current.goalLanguage(), Map.of(1, "de"), "de");
+
+        assertEquals(1, countStepTextLiterals(id, 1));
+        UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("Kunde waehlt Artikel", reloaded.steps().get(0).text());
+    }
+
+    /**
+     * Regression guard for the same sweep (issue #258): writing a step's {@code text} under an
+     * <em>explicit</em>, non-default language must leave that position's existing untagged variant
+     * alone.
+     */
+    @Test
+    void compareAndUpdateKeepsAnUntaggedStepTextWhenTheWrittenTagDiffersFromTheProjectDefault() {
+        UseCaseId id = freshId();
+        givenLegacyUseCaseWithUntaggedStepText(PROJECT_A, id, "UC1");
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        UseCase withFrenchStepText = useCase(id, code, current.value().title(), current.value().goal(),
+                List.of(new Step(1, "Le client choisit des articles", List.of())));
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchStepText, current.titleLanguage(),
+                current.goalLanguage(), Map.of(1, "fr"), "de");
+
+        assertEquals(2, countStepTextLiterals(id, 1));
+        UseCase asFrench = repository.findByCode(PROJECT_A, code, "fr").orElseThrow();
+        assertEquals("Le client choisit des articles", asFrench.steps().get(0).text());
     }
 
     /**
@@ -244,7 +335,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
 
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
-                current.titleLanguage(), current.goalLanguage(), current.stepTextLanguageByPosition()));
+                current.titleLanguage(), current.goalLanguage(), current.stepTextLanguageByPosition(), null));
 
         UseCase reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
         assertEquals("Place order", reloaded.title());
@@ -266,7 +357,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
 
         repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
-                current.titleLanguage(), current.goalLanguage(), current.stepTextLanguageByPosition());
+                current.titleLanguage(), current.goalLanguage(), current.stepTextLanguageByPosition(), null);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
     }
@@ -297,6 +388,69 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 tx.update(insert);
                 return null;
             });
+        }
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:UseCase} straight into the use-cases graph with its
+     * {@code dcterms:title} carrying no language tag at all - the store-first (ADR-005) state
+     * issue #258's sweep normalises lazily, one write at a time.
+     */
+    private void givenLegacyUseCaseWithUntaggedTitle(ProjectId projectId, UseCaseId id, String code) {
+        String stepIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/use-cases> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#UseCase> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Place order\" ; "
+                + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
+                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
+                + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
+                + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
+                + "<https://w3id.org/arknet/requirements#stepText> \"Customer selects items\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:UseCase} straight into the use-cases graph with its main
+     * step's {@code arkreq:stepText} (position 1) carrying no language tag at all - the store-first
+     * (ADR-005) state issue #258's sweep normalises lazily, one write at a time, mirrors {@link
+     * #givenLegacyUseCaseWithUntaggedTitle} for {@code otherLanguageStepTexts}'s own independent
+     * implementation.
+     */
+    private void givenLegacyUseCaseWithUntaggedStepText(ProjectId projectId, UseCaseId id, String code) {
+        String stepIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/use-cases> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#UseCase> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Place order\" ; "
+                + "<https://w3id.org/arknet/requirements#useCaseGoal> \"Order is placed\" ; "
+                + "<https://w3id.org/arknet/requirements#primaryActor> <" + CUSTOMER.value().value() + "> ; "
+                + "<https://w3id.org/arknet/requirements#mainStep> <" + stepIri + "> . "
+                + "<" + stepIri + "> a <https://w3id.org/arknet/requirements#Step> ; "
+                + "<https://w3id.org/arknet/requirements#position> \"1\"^^<http://www.w3.org/2001/XMLSchema#integer> ; "
+                + "<https://w3id.org/arknet/requirements#stepText> \"Customer selects items\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /** Whether {@code id}'s {@code dcterms:title} still carries an untagged {@code text} literal. */
+    private boolean hasUntaggedTitle(ProjectId projectId, UseCaseId id, String text) {
+        String query = "ASK { GRAPH <https://w3id.org/arknet/model/use-cases> { "
+                + "<" + id.value().value() + "> <http://purl.org/dc/terms/title> \"" + text + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().ask(query);
         }
     }
 

@@ -96,7 +96,7 @@ class StoreReaderTest {
         RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        requirements.compareAndUpdate(PROJECT, head, updated, null, null);
+        requirements.compareAndUpdate(PROJECT, head, updated, null, null, null);
     }
 
     @AfterEach

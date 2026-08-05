@@ -55,7 +55,9 @@ final class InMemoryTermRepository implements TermRepository {
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language) {
+            ActorFacet actorFacet, String language, String defaultLanguage) {
+        // Nothing multi-valued to sweep in this plain in-memory fake either (see class-level
+        // note) - defaultLanguage is accepted and ignored here too.
         Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
         Term current = terms.values().stream()
                 .filter(t -> t.code().equals(code))

@@ -379,8 +379,10 @@ public class ArknetMcpConfiguration {
      * through a fixed fallback chain (requested language, {@code arknet.locale.requested} -> system
      * default, {@code arknet.locale.default} -> untagged literal -> a deterministic last resort) so
      * a term is never swallowed for lacking the requested language. Both properties default to
-     * English; since {@code term_add} writes untagged labels today, the untagged step surfaces them
-     * regardless.
+     * English; a project with a configured {@code defaultLanguage} (ADR-016) now has {@code
+     * term_add}/{@code term_update} write under that tag rather than untagged (issue #258), so the
+     * untagged step here only surfaces a term for a project without one, or an older term written
+     * before it had one.
      */
     @Bean
     DisplayLocale displayLocale(

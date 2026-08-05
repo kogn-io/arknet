@@ -192,9 +192,12 @@ class RequirementMcpToolsTest {
     }
 
     /**
-     * {@code req_add}'s {@code language} argument reaches {@link AddRequirement.NewRequirement}
-     * unchanged - never defaulted from the project's own configured display language (see that
-     * parameter's own javadoc for why).
+     * {@code req_add}'s explicit {@code language} argument reaches {@link
+     * AddRequirement.NewRequirement} unchanged - this adapter never merges it with the project's
+     * configured default language itself (unlike {@code displayLocale}'s {@code
+     * effectiveDisplayLocale} merge); the explicit-wins-otherwise-fall-back-to-default resolution
+     * (issue #258) happens one layer down, in {@link AddRequirement#add}, via {@code
+     * LanguageTag#resolveWriteLanguage}.
      */
     @Test
     void addPassesTheLanguageThrough() {
@@ -503,7 +506,7 @@ class RequirementMcpToolsTest {
         private String lastUpdateLanguage;
 
         @Override
-        public Requirement add(ProjectId projectId, NewRequirement command) {
+        public Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage) {
             lastAddCommand = command;
             return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
                     command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
@@ -568,7 +571,7 @@ class RequirementMcpToolsTest {
 
         @Override
         public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-                List<String> acceptanceCriteria, Priority priority, String language) {
+                List<String> acceptanceCriteria, Priority priority, String language, String defaultLanguage) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
             lastUpdateDescription = description;
