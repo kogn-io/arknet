@@ -89,22 +89,22 @@ class TraceabilityMcpToolsTest {
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null, null));
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null, null), "en");
             terms.add(project, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Login succeeds with valid credentials"), null));
+                    List.of("Login succeeds with valid credentials"), null), "en");
             requirements.linkTerm(project, fr1.code(), term.code().value());
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Logout succeeds"), null));
+                    List.of("Logout succeeds"), null), "en");
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
-                    List.of(), null));
+                    List.of(), null), "en");
 
             String matrix = tools.traceMatrix(null, ANCHOR);
 
@@ -128,21 +128,21 @@ class TraceabilityMcpToolsTest {
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            terms.add(project, new NewTerm("Passwort", "A secret credential.", null, null));
+            terms.add(project, new NewTerm("Passwort", "A secret credential.", null, null), "en");
             terms.add(project, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Login succeeds with valid credentials"), null));
+                    List.of("Login succeeds with valid credentials"), null), "en");
             Requirement fr2 = requirements.add(project, new NewRequirement("Logout",
                     "The system shall let a user log out.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Logout succeeds"), null));
+                    List.of("Logout succeeds"), null), "en");
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
-                    List.of(), null));
+                    List.of(), null), "en");
 
             String report = tools.orphanCheck(null, ANCHOR);
 
@@ -169,19 +169,19 @@ class TraceabilityMcpToolsTest {
             UseCaseService useCases = context.getBean(UseCaseService.class);
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
-            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null, null));
+            Term term = terms.add(project, new NewTerm("Anmeldung", "The act of proving one's identity.", null, null), "en");
             terms.add(project, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
 
             Requirement fr1 = requirements.add(project, new NewRequirement("Login",
                     "The system shall authenticate a user.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Login succeeds with valid credentials"), null));
+                    List.of("Login succeeds with valid credentials"), null), "en");
             requirements.linkTerm(project, fr1.code(), term.code().value());
 
             useCases.add(project, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of(fr1.code().value()))),
-                    List.of(), null));
+                    List.of(), null), "en");
 
             String impact = tools.impactAnalysis(null, term.code().value(), ANCHOR);
 
@@ -237,11 +237,11 @@ class TraceabilityMcpToolsTest {
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             Term actor = terms.add(ws, new NewTerm("Customer", "A person placing an order.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
             useCases.add(ws, new NewUseCase("Log in", "Customer authenticates", null, null, "Customer",
                     List.of(), null, null,
                     List.of(new NewStep(1, "Customer enters credentials", List.of())),
-                    List.of(), null));
+                    List.of(), null), "en");
 
             String matrix = tools.actorUseCaseMatrix(null, ANCHOR);
 
@@ -264,17 +264,17 @@ class TraceabilityMcpToolsTest {
             TraceabilityMcpTools tools = context.getBean(TraceabilityMcpTools.class);
 
             Term kunde = terms.add(ws, new NewTerm("Kunde", "A customer.",
-                    new ActorFacet(ActorKind.HUMAN, "orderer"), null));
-            Term bestellung = terms.add(ws, new NewTerm("Bestellung", "An order.", null, null));
-            terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null, null));
+                    new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
+            Term bestellung = terms.add(ws, new NewTerm("Bestellung", "An order.", null, null), "en");
+            terms.add(ws, new NewTerm("Vertrag", "A binding agreement.", null, null), "en");
 
             requirements.add(ws, new NewRequirement("Bestandsdaten",
                     "Der Kunde sieht seine Bestellung ein.", RequirementType.FUNCTIONAL, null, null, null,
-                    List.of("Die Bestandsdaten werden korrekt angezeigt"), null));
+                    List.of("Die Bestandsdaten werden korrekt angezeigt"), null), "en");
             useCases.add(ws, new NewUseCase("View order", "Kunde bestaetigt die Bestellung", null, null,
                     "Kunde", List.of(), null, null,
                     List.of(new NewStep(1, "Kunde ruft die Bestellung auf", List.of())),
-                    List.of(), null));
+                    List.of(), null), "en");
 
             String report = tools.termCooccurrence(null, ANCHOR);
 

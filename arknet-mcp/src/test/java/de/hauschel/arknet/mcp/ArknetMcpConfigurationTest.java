@@ -80,7 +80,7 @@ class ArknetMcpConfigurationTest {
                             new NewRequirement("Wired via composition root",
                                     "The composition root shall wire the requirements hexagon.",
                                     RequirementType.FUNCTIONAL, null, null, null,
-                                    List.of("The requirement round-trips through the store"), null));
+                                    List.of("The requirement round-trips through the store"), null), "en");
 
                     assertThat(created.code().value()).isEqualTo("FR-1");
                     assertThat(service.get(PROJECT, created.code(), null))
@@ -99,7 +99,7 @@ class ArknetMcpConfigurationTest {
 
                     TermService service = context.getBean(TermService.class);
                     Term created = service.add(PROJECT,
-                            new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null, null));
+                            new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null, null), "en");
 
                     assertThat(created.code().value()).isEqualTo("TERM-1");
                     assertThat(service.get(PROJECT, created.code(), null))
@@ -237,7 +237,7 @@ class ArknetMcpConfigurationTest {
                             new NewRequirement("Written before ADR-016",
                                     "The system shall keep data written under a derived id reachable.",
                                     RequirementType.FUNCTIONAL, null, null, null,
-                                    List.of("The requirement survives adoption"), null));
+                                    List.of("The requirement survives adoption"), null), "en");
 
                     ProjectService projects = context.getBean(ProjectService.class);
                     ProjectResolver resolver = context.getBean(ProjectResolver.class);
