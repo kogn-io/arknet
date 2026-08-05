@@ -83,7 +83,9 @@ final class InMemoryTermRepository implements TermRepository {
     }
 
     @Override
-    public List<Term> findAll(ProjectId projectId) {
+    public List<Term> findAll(ProjectId projectId, String displayLocale) {
+        // Nothing multi-valued to select a language variant from in this plain in-memory fake
+        // either (see class-level note) - displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 

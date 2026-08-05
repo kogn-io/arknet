@@ -836,13 +836,16 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
-     * for one call, e.g. an explicit {@code term_get} {@code displayLocale} argument or a
-     * project's own default language merged in by the caller (ADR-016-adjacent: the
-     * ubiquitous-language MCP adapter combines an explicit override with
-     * {@code ResolvedProject#defaultLanguage()} before this method ever sees it). The configured
-     * {@code systemDefault} tier - and the rest of {@link DisplayLocale#select}'s fallback chain -
-     * is unaffected, so an override that matches nothing still degrades exactly the way the
-     * process-wide default already does.
+     * for one call - shared by {@link #findByCode} and {@link #findAll}, e.g. an explicit
+     * {@code term_get} {@code displayLocale} argument or a project's own default language merged
+     * in by the caller (ADR-016-adjacent: the ubiquitous-language MCP adapter combines an
+     * explicit override with {@code ResolvedProject#defaultLanguage()} before {@link #findByCode}
+     * ever sees it, and passes {@code ResolvedProject#defaultLanguage()} straight through - {@code
+     * term_list} has no explicit {@code displayLocale} tool argument of its own to merge against -
+     * before {@link #findAll} sees it, issue #274). The configured {@code systemDefault} tier -
+     * and the rest of {@link DisplayLocale#select}'s fallback chain - is unaffected, so an
+     * override that matches nothing still degrades exactly the way the process-wide default
+     * already does.
      *
      * @param requestedOverride a BCP-47 language tag, or {@code null}/blank to use the configured
      *                          {@link #displayLocale} unchanged
@@ -988,9 +991,10 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     @Override
-    public List<Term> findAll(ProjectId projectId) {
+    public List<Term> findAll(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
 
+        DisplayLocale effective = withRequestedOverride(displayLocale);
         String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole "
                 + "?broaderSubject ?broaderCode "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
@@ -1014,7 +1018,7 @@ public class KognioRdfTermRepository implements TermRepository {
                 assembly.addDefinition(literalOf(row, "definition"));
                 assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             });
-            return bySubject.values().stream().map(assembly -> assembly.toTerm(displayLocale)).toList();
+            return bySubject.values().stream().map(assembly -> assembly.toTerm(effective)).toList();
         }
     }
 

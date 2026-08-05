@@ -91,8 +91,8 @@ class TermServiceTest {
         Term inOther = service.add(other, new NewTerm("Bestellung", "def b", null, null), DEFAULT_LANGUAGE);
 
         assertEquals(new TermCode("TERM-1"), inOther.code());
-        assertTrue(service.list(other).stream().allMatch(t -> t.prefLabel().equals("Bestellung")));
-        assertEquals(1, service.list(WS).size());
+        assertTrue(service.list(other, null).stream().allMatch(t -> t.prefLabel().equals("Bestellung")));
+        assertEquals(1, service.list(WS, null).size());
     }
 
     @Test
@@ -100,7 +100,7 @@ class TermServiceTest {
         service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
         service.add(WS, new NewTerm("Bestellung", "def b", null, null), DEFAULT_LANGUAGE);
 
-        List<Term> all = service.list(WS);
+        List<Term> all = service.list(WS, null);
 
         assertEquals(2, all.size());
         assertEquals("Gutschrift", all.get(0).prefLabel());
@@ -161,7 +161,7 @@ class TermServiceTest {
         assertThrows(MissingDefaultLanguageException.class,
                 () -> service.add(WS, new NewTerm("Gutschrift", "def a", null, null), null));
 
-        assertEquals(List.of(), service.list(WS));
+        assertEquals(List.of(), service.list(WS, null));
     }
 
     /** Mirrors {@link #addWithoutLanguageFallsBackToTheProjectsDefaultLanguage}, for {@code update}. */
@@ -413,9 +413,9 @@ class TermServiceTest {
         }
 
         @Override
-        public List<Term> findAll(ProjectId projectId) {
+        public List<Term> findAll(ProjectId projectId, String displayLocale) {
             findAllCalls++;
-            return delegate.findAll(projectId);
+            return delegate.findAll(projectId, displayLocale);
         }
 
         @Override

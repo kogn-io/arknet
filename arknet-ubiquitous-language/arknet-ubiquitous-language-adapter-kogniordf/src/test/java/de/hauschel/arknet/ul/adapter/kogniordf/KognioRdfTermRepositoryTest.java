@@ -121,12 +121,12 @@ class KognioRdfTermRepositoryTest {
     void findAllContainsAllCreatedTerms() {
         Term first = new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null);
         repository.create(PROJECT_A, first, null);
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
 
         Term second = new Term(freshId(), new TermCode("TERM-2"), "Bestellung", "def b", null);
         repository.create(PROJECT_A, second, null);
 
-        List<Term> all = repository.findAll(PROJECT_A);
+        List<Term> all = repository.findAll(PROJECT_A, null);
         assertEquals(2, all.size());
         assertTrue(all.contains(first));
         assertTrue(all.contains(second));
@@ -142,7 +142,7 @@ class KognioRdfTermRepositoryTest {
 
         assertThrows(ResourceAlreadyExistsException.class,
                 () -> repository.create(PROJECT_A, collidingId, null));
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertEquals(Optional.of(term), repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null));
     }
 
@@ -161,7 +161,7 @@ class KognioRdfTermRepositoryTest {
 
         assertThrows(DuplicateTermCodeException.class,
                 () -> repository.create(PROJECT_A, collidingCode, null));
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertEquals(Optional.of(first), repository.findByCode(PROJECT_A, code, null));
     }
 
@@ -169,7 +169,7 @@ class KognioRdfTermRepositoryTest {
     void updateRejectsAnUnknownCode() {
         assertThrows(TermNotFoundException.class,
                 () -> repository.update(PROJECT_A, new TermCode("TERM-1"), "Erstattung", null, null, null, null, null));
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
 
     @Test
@@ -183,7 +183,7 @@ class KognioRdfTermRepositoryTest {
         assertEquals("Gutschrift", result.prefLabel());
         assertEquals("Ueberarbeitete Definition.", result.definition());
         assertEquals(Optional.of(result), repository.findByCode(PROJECT_A, code, null));
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
     }
 
     /** The opaque identity is preserved across an update - only the term's state changes. */
@@ -454,7 +454,7 @@ class KognioRdfTermRepositoryTest {
                 new TermCode("TERM-404"));
 
         assertThrows(TermNotFoundException.class, () -> repository.create(PROJECT_A, narrower, null));
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
 
     @Test
@@ -791,7 +791,7 @@ class KognioRdfTermRepositoryTest {
 
         repository.create(PROJECT_A, term, null);
 
-        assertTrue(repository.findAll(PROJECT_B).isEmpty());
+        assertTrue(repository.findAll(PROJECT_B, null).isEmpty());
     }
 
     /**
@@ -881,7 +881,7 @@ class KognioRdfTermRepositoryTest {
                 new ActorFacet(ActorKind.HUMAN, "Besteller"));
         repository.create(PROJECT_A, withFacet, null);
 
-        List<Term> all = repository.findAll(PROJECT_A);
+        List<Term> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
@@ -977,7 +977,29 @@ class KognioRdfTermRepositoryTest {
                 "\"Kunde\"@de, \"Customer\"@en");
         TermRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
-        List<Term> all = germanReader.findAll(PROJECT_A);
+        List<Term> all = germanReader.findAll(PROJECT_A, null);
+
+        assertEquals(1, all.size());
+        assertEquals("Kunde", all.get(0).prefLabel());
+    }
+
+    /**
+     * {@code term_list}'s own default-language resolution (issue #274): a per-call override wins
+     * over the repository's own constructor-configured display language for {@link #findAll} too,
+     * the same as {@link #findByCodeDisplayLocaleArgumentOverridesTheConfiguredDefault} already
+     * proves for {@link #findByCode} - {@code UbiquitousLanguageMcpTools#list} passes the calling
+     * project's own configured default language as this argument, not an explicit tool argument
+     * (unlike {@code term_get}'s {@code displayLocale}), but this repository method itself does
+     * not distinguish the two: whatever string it is handed simply overrides the configured
+     * {@code requested} tier for this one call.
+     */
+    @Test
+    void findAllDisplayLocaleArgumentOverridesTheConfiguredDefault() {
+        givenMultilingualConcept(PROJECT_A, freshId(), "TERM-1", "Person, die bestellt.",
+                "\"Kunde\"@de, \"Customer\"@en");
+        TermRepository englishReader = readerFor(Locale.ENGLISH, Locale.ENGLISH);
+
+        List<Term> all = englishReader.findAll(PROJECT_A, "de");
 
         assertEquals(1, all.size());
         assertEquals("Kunde", all.get(0).prefLabel());
@@ -1049,7 +1071,7 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         givenTermWithTwoDefinitions(PROJECT_A, id, "TERM-1", "Erste Definition.", "Zweite Definition.");
 
-        List<Term> all = repository.findAll(PROJECT_A);
+        List<Term> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertTrue(List.of("Erste Definition.", "Zweite Definition.").contains(all.get(0).definition()));
@@ -1109,7 +1131,7 @@ class KognioRdfTermRepositoryTest {
                 "\"A legal person is a non-human entity recognised in law.\"@en, "
                         + "\"Eine juristische Person ist eine im Recht anerkannte Nicht-Person.\"@de");
 
-        Term german = readerFor(Locale.GERMAN, Locale.ENGLISH).findAll(PROJECT_A).get(0);
+        Term german = readerFor(Locale.GERMAN, Locale.ENGLISH).findAll(PROJECT_A, null).get(0);
 
         assertEquals("Juristische Person", german.prefLabel());
         assertEquals("Eine juristische Person ist eine im Recht anerkannte Nicht-Person.", german.definition());
@@ -1189,7 +1211,7 @@ class KognioRdfTermRepositoryTest {
         TermId id = freshId();
         givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
 
-        List<Term> all = repository.findAll(PROJECT_A);
+        List<Term> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertTrue(List.of("Kaeufer", "Verkaeufer").contains(all.get(0).actorFacet().role()));
@@ -1367,7 +1389,7 @@ class KognioRdfTermRepositoryTest {
         repository.create(PROJECT_A, validTerm, null);
         givenBlankNodeTerm(PROJECT_A, "TERM-9", "Blinder Fleck", "def blank");
 
-        List<Term> all = repository.findAll(PROJECT_A);
+        List<Term> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(List.of(validTerm), all);
     }

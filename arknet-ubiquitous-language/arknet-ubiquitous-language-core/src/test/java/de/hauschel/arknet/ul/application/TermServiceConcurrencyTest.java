@@ -68,8 +68,8 @@ class TermServiceConcurrencyTest {
         Term result = underTest.add(WS, newTerm(), "en");
 
         assertEquals(new TermCode("TERM-2"), result.code());
-        assertEquals(2, store.findAll(WS).size());
-        assertTrue(store.findAll(WS).stream()
+        assertEquals(2, store.findAll(WS, null).size());
+        assertTrue(store.findAll(WS, null).stream()
                 .map(Term::code)
                 .toList()
                 .containsAll(List.of(new TermCode("TERM-1"), new TermCode("TERM-2"))));
@@ -125,8 +125,8 @@ class TermServiceConcurrencyTest {
         }
 
         @Override
-        public List<Term> findAll(ProjectId projectId) {
-            List<Term> result = delegate.findAll(projectId);
+        public List<Term> findAll(ProjectId projectId, String displayLocale) {
+            List<Term> result = delegate.findAll(projectId, displayLocale);
             if (!injected) {
                 injected = true;
                 injection.run();

@@ -46,7 +46,7 @@ class ModelViewsTest {
     @Test
     void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
         final ModelViews views = new ModelViews(
-                projectId -> List.of(term()),
+                (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards(projectId -> {
                     throw new IllegalStateException("store closed");
                 }, (projectId, ids) -> List.of()),
@@ -73,7 +73,7 @@ class ModelViewsTest {
     @Test
     void survivesAnUnreadableGlossaryAndSaysSo() {
         final ModelViews views = new ModelViews(
-                projectId -> {
+                (projectId, displayLocale) -> {
                     throw new IllegalStateException("glossary unreadable");
                 },
                 new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
@@ -95,7 +95,7 @@ class ModelViewsTest {
     @Test
     void leavesOutEmptySections() {
         final ModelViews views = new ModelViews(
-                projectId -> List.of(term()),
+                (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
@@ -115,7 +115,7 @@ class ModelViewsTest {
     @Test
     void ordersSectionsFromStrategicToDetailed() {
         final ModelViews views = new ModelViews(
-                projectId -> List.of(term()),
+                (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),

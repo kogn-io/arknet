@@ -117,12 +117,15 @@ public final class UbiquitousLanguageMcpTools {
      * default project and no fallback to a server-side working directory (decision 3).
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default language for two, independent purposes -
+     * needs the resolved project's configured default language for three, independent purposes -
      * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code term_get}'s)
-     * {@code displayLocale} default, while {@code term_add}/{@code term_update} instead pass
+     * {@code displayLocale} default; {@code term_add}/{@code term_update} instead pass
      * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the {@code
-     * defaultLanguage} a write falls back to when the caller omits {@code language} (issue #258) -
-     * two different consumers of the very same field, not one the write tools skip.</p>
+     * defaultLanguage} a write falls back to when the caller omits {@code language} (issue #258);
+     * and {@code term_list} - which, unlike {@code term_get}, exposes no explicit
+     * {@code displayLocale} tool argument to merge against - likewise passes it straight through
+     * as the display language every listed term's label is read in (issue #274). Three different
+     * consumers of the very same field, not one the other two skip.</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -199,7 +202,11 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        final List<Term> all = listTerms.list(project.id());
+        // No explicit displayLocale tool argument to merge against here, unlike term_get - every
+        // listed term's label is read straight under the resolved project's own configured
+        // default language (issue #274), the same value term_add/term_update already pass through
+        // for the write side.
+        final List<Term> all = listTerms.list(project.id(), project.defaultLanguage());
         return all.stream().map(UbiquitousLanguageMcpTools::format)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no terms)");
     }

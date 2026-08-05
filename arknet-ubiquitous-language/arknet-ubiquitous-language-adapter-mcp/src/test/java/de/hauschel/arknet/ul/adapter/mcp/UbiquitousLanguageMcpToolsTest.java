@@ -41,6 +41,14 @@ class UbiquitousLanguageMcpToolsTest {
     /** Stands in for the registry lookup: every anchor this test sends resolves to {@link #PROJECT}. */
     private static final ProjectResolver PROJECTS = anchor -> new ResolvedProject(PROJECT, null);
 
+    /**
+     * Same fixed resolution as {@link #PROJECTS}, but {@link #PROJECT} carries a configured
+     * default language - needed to prove {@code term_list} passes it through (issue #274), the
+     * same way {@link #getPassesTheDisplayLocaleArgumentThrough} already proves for {@code
+     * term_get}'s explicit argument.
+     */
+    private static final ProjectResolver PROJECTS_WITH_GERMAN_DEFAULT = anchor -> new ResolvedProject(PROJECT, "de");
+
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
             new UbiquitousLanguageMcpTools(stub, stub, stub, stub, PROJECTS);
@@ -248,6 +256,26 @@ class UbiquitousLanguageMcpToolsTest {
         assertEquals("de", stub.lastGetDisplayLocale);
     }
 
+    /**
+     * {@code term_list} exposes no explicit {@code displayLocale} tool argument of its own
+     * (unlike {@code term_get}) - issue #274 asks only that it fall back to the resolved
+     * project's own configured default language automatically, the same value {@code
+     * term_add}/{@code term_update} already pass to their in-ports. Before this fix, {@code
+     * UbiquitousLanguageMcpTools#list} called {@code listTerms.list(project.id())} without any
+     * locale at all, so every listed term's label was read under whichever language the
+     * process-wide, per-daemon default happened to be - never the calling project's own, even
+     * for a project (like this test's) whose configured default differs from it.
+     */
+    @Test
+    void listPassesTheProjectsDefaultLanguageThrough() {
+        UbiquitousLanguageMcpTools adapterWithGermanDefault =
+                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
+
+        adapterWithGermanDefault.list(null, null);
+
+        assertEquals("de", stub.lastListDisplayLocale);
+    }
+
     /** Structural stub implementing the four driving in-ports. */
     private static final class Stub implements AddTerm, ListTerms, GetTerm, UpdateTerm {
 
@@ -259,6 +287,7 @@ class UbiquitousLanguageMcpToolsTest {
         private String lastUpdateLanguage;
         private Optional<TermCode> lastUpdateBroader;
         private String lastGetDisplayLocale;
+        private String lastListDisplayLocale;
         private List<Term> termsForList = List.of();
         private Optional<Term> termForGet = Optional.empty();
 
@@ -271,7 +300,8 @@ class UbiquitousLanguageMcpToolsTest {
         }
 
         @Override
-        public List<Term> list(ProjectId projectId) {
+        public List<Term> list(ProjectId projectId, String displayLocale) {
+            lastListDisplayLocale = displayLocale;
             return termsForList;
         }
 

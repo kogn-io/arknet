@@ -182,7 +182,7 @@ class TermServiceRealStoreConcurrencyTest {
         assertNotNull(loserResult.get(), diagnostics);
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
-        List<Term> stored = KognioRdfTermRepositoryFactory.over(realLifecycle).findAll(WS);
+        List<Term> stored = KognioRdfTermRepositoryFactory.over(realLifecycle).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(Term::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);
