@@ -109,12 +109,12 @@ vorhandene einsprachige nicht nachtraeglich vereinheitlichen. Was **in den Store
 geschrieben wird, ist fuer die zentralen benannten/beschreibenden Felder nativ
 **mehrsprachig**: Glossarbegriffe (`term_add`/`term_update`), die optionale
 Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
-`description` (`req_add`/`req_update`) und UseCase-`title`/`goal`/Step-`text`
+`description` (`req_add`/`req_update`) und UseCase-`title`/`goal`/`scope`/
+`trigger`/`precondition`/`postcondition`/Step-`text`/Extension-`text`
 (`uc_add`/`uc_update`) tragen jeweils mehrere sprachgetaggte RDF-Literale je
 Ressource, ueber ein optionales `language`-Argument beim Schreiben gesetzt und
 beim Lesen ueber die `DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-
-Felder (z.B. Requirement-`acceptanceCriterion`, UseCase-`scope`/`trigger`/
-`precondition`/`postcondition`/`extensions`) bleiben einfache, ungetaggte
+Felder (z.B. Requirement-`acceptanceCriterion`) bleiben einfache, ungetaggte
 Literale ohne diesen Mechanismus. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
 Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.

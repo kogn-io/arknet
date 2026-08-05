@@ -192,9 +192,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *                          {@code null}); the use-case root's own identity is minted above
      *                          the store and arrives on the {@link UseCase}
      * @param displayLocale     the display-language preference selecting which {@code
-     *                          dcterms:title}/{@code arkreq:useCaseGoal}/{@code arkreq:stepText}
-     *                          the read paths surface for a multilingual use case (must not be
-     *                          {@code null})
+     *                          dcterms:title}/{@code arkreq:useCaseGoal}/{@code arkreq:designScope}/
+     *                          {@code arkreq:trigger}/{@code arkreq:useCasePrecondition}/
+     *                          {@code arkreq:useCasePostcondition}/each main-flow-step's and
+     *                          extension-step's {@code arkreq:stepText} the read paths surface for
+     *                          a multilingual use case (must not be {@code null})
      * @param funnel            the shared write funnel (ADR-013) both {@link #create} and
      *                          {@link #compareAndUpdate} run through - SHACL gate, dataset
      *                          acquisition, the in-transaction existence/head checks and the
@@ -214,24 +216,31 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         String tag = LanguageTag.canonicalize(language);
         Map<Integer, String> stepTags = new LinkedHashMap<>();
         useCase.steps().forEach(step -> stepTags.put(step.position(), tag));
-        write(projectId, useCase, true, null, tag, tag, stepTags);
+        Map<Integer, String> extensionTags = new LinkedHashMap<>();
+        for (int position = 1; position <= useCase.extensions().size(); position++) {
+            extensionTags.put(position, tag);
+        }
+        write(projectId, useCase, true, null, tag, tag, tag, tag, tag, tag, stepTags, extensionTags, null,
+                Integer.MAX_VALUE);
     }
 
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-            String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
-            String defaultLanguage) {
+            String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
+            String preconditionLanguage, String postconditionLanguage,
+            Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
+            String defaultLanguage, int stableExtensionPrefixLength) {
         Objects.requireNonNull(stepTextLanguageByPosition, "stepTextLanguageByPosition");
+        Objects.requireNonNull(extensionTextLanguageByPosition, "extensionTextLanguageByPosition");
         Map<Integer, String> stepTags = new LinkedHashMap<>();
         stepTextLanguageByPosition.forEach((position, tag) -> stepTags.put(position, canonicalizeLenient(tag)));
+        Map<Integer, String> extensionTags = new LinkedHashMap<>();
+        extensionTextLanguageByPosition.forEach((position, tag) -> extensionTags.put(position, canonicalizeLenient(tag)));
         write(projectId, updated, false, expectedHead,
-                canonicalizeLenient(titleLanguage), canonicalizeLenient(goalLanguage), stepTags,
-                canonicalizeLenient(defaultLanguage));
-    }
-
-    private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
-            String titleTag, String goalTag, Map<Integer, String> stepTagByPosition) {
-        write(projectId, useCase, expectAbsent, expectedHead, titleTag, goalTag, stepTagByPosition, null);
+                canonicalizeLenient(titleLanguage), canonicalizeLenient(goalLanguage),
+                canonicalizeLenient(scopeLanguage), canonicalizeLenient(triggerLanguage),
+                canonicalizeLenient(preconditionLanguage), canonicalizeLenient(postconditionLanguage),
+                stepTags, extensionTags, canonicalizeLenient(defaultLanguage), stableExtensionPrefixLength);
     }
 
     /**
@@ -239,9 +248,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *                    {@code null} if it has none/this is a {@link #create} - see the class-
      *                    level "Sweeping a stale untagged sibling" note (mirrors {@code
      *                    KognioRdfRequirementRepository#replaceTriplesForUpdate}'s own parameter)
+     * @param stableExtensionPrefixLength see {@link UseCaseRepository#compareAndUpdate}'s own
+     *                    parameter of the same name; always {@link Integer#MAX_VALUE} for a
+     *                    {@link #create} - there is no prior extensions list to have restructured
+     *                    relative to, so every position is stable
      */
     private void write(ProjectId projectId, UseCase useCase, boolean expectAbsent, RevisionToken expectedHead,
-            String titleTag, String goalTag, Map<Integer, String> stepTagByPosition, String defaultTag) {
+            String titleTag, String goalTag, String scopeTag, String triggerTag, String preconditionTag,
+            String postconditionTag, Map<Integer, String> stepTagByPosition,
+            Map<Integer, String> extensionTagByPosition, String defaultTag, int stableExtensionPrefixLength) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(useCase, "useCase");
 
@@ -259,19 +274,20 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 .map(this::actorIriFor)
                 .toList();
 
-        // 2. Build the candidate graph. title/goal are written as the language-tagged (or, for a
-        //    null tag, plain untagged) literal titleTag/goalTag name - never more than one each,
-        //    since preserving every other language variant is the write body's job below, run
-        //    after this candidate has already passed the gate.
+        // 2. Build the candidate graph. title/goal/scope/trigger/precondition/postcondition are
+        //    written as the language-tagged (or, for a null tag, plain untagged) literal named by
+        //    their own *Tag parameter - never more than one each, since preserving every other
+        //    language variant is the write body's job below, run after this candidate has already
+        //    passed the gate.
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(USE_CASE_TYPE));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(useCase.code().value()));
         graph.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), literalOf(useCase.title(), titleTag));
         graph.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), literalOf(useCase.goal(), goalTag));
-        addOptional(graph, subjectIri, DESIGN_SCOPE_PROPERTY, useCase.scope());
-        addOptional(graph, subjectIri, TRIGGER_PROPERTY, useCase.trigger());
-        addOptional(graph, subjectIri, PRECONDITION_PROPERTY, useCase.precondition());
-        addOptional(graph, subjectIri, POSTCONDITION_PROPERTY, useCase.postcondition());
+        addOptional(graph, subjectIri, DESIGN_SCOPE_PROPERTY, useCase.scope(), scopeTag);
+        addOptional(graph, subjectIri, TRIGGER_PROPERTY, useCase.trigger(), triggerTag);
+        addOptional(graph, subjectIri, PRECONDITION_PROPERTY, useCase.precondition(), preconditionTag);
+        addOptional(graph, subjectIri, POSTCONDITION_PROPERTY, useCase.postcondition(), postconditionTag);
         graph.add(subjectIri, rdf.createIRI(PRIMARY_ACTOR_PROPERTY), primaryActorIri);
         for (IRI supporting : supportingActorIris) {
             graph.add(subjectIri, rdf.createIRI(SUPPORTING_ACTOR_PROPERTY), supporting);
@@ -303,15 +319,21 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             graph.add(subjectIri, rdf.createIRI(SATISFIES_PROPERTY), reqIri);
         }
 
-        // 4. Extensions: free-text alternative/exception flows as opaque extensionStep resources.
+        // 4. Extensions: alternative/exception flows as opaque extensionStep resources - the same
+        //    Step-shaped RDF structure as main-flow steps, tagged per position the same way
+        //    (newExtensionStepIriByPosition mirrors newStepIriByPosition above, for the same
+        //    re-minted-IRI/stable-position reason).
+        Map<Integer, IRI> newExtensionStepIriByPosition = new LinkedHashMap<>();
         int extensionPosition = 1;
         for (String extension : useCase.extensions()) {
             IRI stepIri = mintStepIri();
+            newExtensionStepIriByPosition.put(extensionPosition, stepIri);
             graph.add(subjectIri, rdf.createIRI(EXTENSION_STEP_PROPERTY), stepIri);
             graph.add(stepIri, VocabRdf.TYPE, rdf.createIRI(STEP_TYPE));
             graph.add(stepIri, rdf.createIRI(POSITION_PROPERTY),
                     rdf.createLiteral(Integer.toString(extensionPosition), VocabXsd.INTEGER));
-            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY), rdf.createLiteral(extension));
+            graph.add(stepIri, rdf.createIRI(STEP_TEXT_PROPERTY),
+                    literalOf(extension, extensionTagByPosition.get(extensionPosition)));
             extensionPosition++;
         }
 
@@ -358,11 +380,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
                     tx -> {
                         // Capture what deleteExisting is about to wipe but graph is not itself
-                        // rewriting: every title/goal literal whose language tag differs from
-                        // titleTag/goalTag, and every step-text literal (keyed by POSITION, not
+                        // rewriting: every title/goal/scope/trigger/precondition/postcondition
+                        // literal whose language tag differs from its own *Tag parameter, and
+                        // every main-flow-step/extension-step text literal (keyed by POSITION, not
                         // step IRI - the old step subject is being deleted regardless) whose tag
-                        // differs from that position's stepTagByPosition entry. Mirrors
-                        // KognioRdfRequirementRepository#replaceTriplesForUpdate's
+                        // differs from that position's stepTagByPosition/extensionTagByPosition
+                        // entry. Mirrors KognioRdfRequirementRepository#replaceTriplesForUpdate's
                         // otherLanguageLiterals capture, just read inline here (the use-case
                         // adapter has no equivalent shared helper method to call into). defaultTag
                         // additionally sweeps a stale untagged sibling whenever the field/step's
@@ -372,8 +395,27 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                                 otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag, defaultTag);
                         List<Literal> preservedGoals =
                                 otherLanguageLiterals(tx, subject, USE_CASE_GOAL_PROPERTY, goalTag, defaultTag);
-                        Map<Integer, List<Literal>> preservedStepTextsByPosition =
-                                otherLanguageStepTexts(tx, subject, stepTagByPosition, defaultTag);
+                        List<Literal> preservedScopes =
+                                otherLanguageLiterals(tx, subject, DESIGN_SCOPE_PROPERTY, scopeTag, defaultTag);
+                        List<Literal> preservedTriggers =
+                                otherLanguageLiterals(tx, subject, TRIGGER_PROPERTY, triggerTag, defaultTag);
+                        List<Literal> preservedPreconditions = otherLanguageLiterals(
+                                tx, subject, PRECONDITION_PROPERTY, preconditionTag, defaultTag);
+                        List<Literal> preservedPostconditions = otherLanguageLiterals(
+                                tx, subject, POSTCONDITION_PROPERTY, postconditionTag, defaultTag);
+                        Map<Integer, List<Literal>> preservedStepTextsByPosition = otherLanguageStepTexts(
+                                tx, subject, MAIN_STEP_PROPERTY, stepTagByPosition, defaultTag, Integer.MAX_VALUE);
+                        // Beyond stableExtensionPrefixLength, this call's extensions list inserted,
+                        // removed or reordered items relative to what was last read - position
+                        // numbering no longer identifies "the same" extension across old and new, so
+                        // preserving an old position's other-language variant there would graft it
+                        // onto whatever unrelated content the write now puts at that position (see
+                        // UseCaseRepository#compareAndUpdate's own javadoc). Positions up to and
+                        // including stableExtensionPrefixLength are untouched by the restructure and
+                        // keep ordinary position-based preservation.
+                        Map<Integer, List<Literal>> preservedExtensionTextsByPosition = otherLanguageStepTexts(
+                                tx, subject, EXTENSION_STEP_PROPERTY, extensionTagByPosition, defaultTag,
+                                stableExtensionPrefixLength);
 
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
@@ -383,12 +425,15 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         // existed in the store and are carried forward untouched (mirrors the
                         // requirements adapter's usesTerm/language-variant preservation). A step's
                         // preserved text variant re-attaches to the FRESHLY minted step IRI at the
-                        // same position (newStepIriByPosition) - the old step subject no longer
-                        // exists after deleteExisting, but nothing outside this adapter ever
-                        // referenced it (class-level "opaque value object" note), so moving a
-                        // preserved literal to the new subject at the same position is safe.
-                        if (!preservedTitles.isEmpty() || !preservedGoals.isEmpty()
-                                || !preservedStepTextsByPosition.isEmpty()) {
+                        // same position (newStepIriByPosition/newExtensionStepIriByPosition) - the
+                        // old step subject no longer exists after deleteExisting, but nothing
+                        // outside this adapter ever referenced it (class-level "opaque value
+                        // object" note), so moving a preserved literal to the new subject at the
+                        // same position is safe.
+                        if (!preservedTitles.isEmpty() || !preservedGoals.isEmpty() || !preservedScopes.isEmpty()
+                                || !preservedTriggers.isEmpty() || !preservedPreconditions.isEmpty()
+                                || !preservedPostconditions.isEmpty() || !preservedStepTextsByPosition.isEmpty()
+                                || !preservedExtensionTextsByPosition.isEmpty()) {
                             Graph preserved = rdf.createGraph();
                             for (Literal title : preservedTitles) {
                                 preserved.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), title);
@@ -396,8 +441,28 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                             for (Literal goal : preservedGoals) {
                                 preserved.add(subjectIri, rdf.createIRI(USE_CASE_GOAL_PROPERTY), goal);
                             }
+                            for (Literal scope : preservedScopes) {
+                                preserved.add(subjectIri, rdf.createIRI(DESIGN_SCOPE_PROPERTY), scope);
+                            }
+                            for (Literal trigger : preservedTriggers) {
+                                preserved.add(subjectIri, rdf.createIRI(TRIGGER_PROPERTY), trigger);
+                            }
+                            for (Literal precondition : preservedPreconditions) {
+                                preserved.add(subjectIri, rdf.createIRI(PRECONDITION_PROPERTY), precondition);
+                            }
+                            for (Literal postcondition : preservedPostconditions) {
+                                preserved.add(subjectIri, rdf.createIRI(POSTCONDITION_PROPERTY), postcondition);
+                            }
                             preservedStepTextsByPosition.forEach((position, texts) -> {
                                 IRI newStepIri = newStepIriByPosition.get(position);
+                                if (newStepIri != null) {
+                                    for (Literal text : texts) {
+                                        preserved.add(newStepIri, rdf.createIRI(STEP_TEXT_PROPERTY), text);
+                                    }
+                                }
+                            });
+                            preservedExtensionTextsByPosition.forEach((position, texts) -> {
+                                IRI newStepIri = newExtensionStepIriByPosition.get(position);
                                 if (newStepIri != null) {
                                     for (Literal text : texts) {
                                         preserved.add(newStepIri, rdf.createIRI(STEP_TEXT_PROPERTY), text);
@@ -487,26 +552,41 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
-     * {@link #otherLanguageLiterals} for {@code arkreq:stepText}, keyed by main-flow step
-     * {@code arkreq:position} rather than by (about-to-be-deleted) step IRI: a step's own subject
-     * is re-minted on every write (class-level note), so what survives an update is the position's
-     * <em>other-language text</em>, re-attached to whichever new step IRI ends up at that same
-     * position - not the old step IRI itself.
+     * {@link #otherLanguageLiterals} for {@code arkreq:stepText}, keyed by {@code edgeProperty}
+     * step's {@code arkreq:position} rather than by (about-to-be-deleted) step IRI: a step's own
+     * subject is re-minted on every write (class-level note), so what survives an update is the
+     * position's <em>other-language text</em>, re-attached to whichever new step IRI ends up at
+     * that same position - not the old step IRI itself. Shared by both step flavours this adapter
+     * writes - {@code edgeProperty} is {@link #MAIN_STEP_PROPERTY} for the main flow or
+     * {@link #EXTENSION_STEP_PROPERTY} for extensions - since both are {@code arkreq:Step}-shaped
+     * resources reached the same way, differing only in which edge connects them to the use case.
      *
+     * @param edgeProperty the edge from the use-case subject to its steps whose text is being
+     *                     preserved: {@link #MAIN_STEP_PROPERTY} or {@link #EXTENSION_STEP_PROPERTY}
      * @param defaultTag the target project's configured default language, canonicalized, or
      *                   {@code null} if it has none - same issue #258 sweep as
      *                   {@link #otherLanguageLiterals}'s own {@code defaultTag}, applied per
      *                   position: a position whose written tag equals {@code defaultTag} sweeps an
      *                   existing untagged step text at that position instead of preserving it
+     * @param maxPreservedPosition the highest position (inclusive) preservation is safe for -
+     *                   {@link Integer#MAX_VALUE} for main-flow steps, whose positions are always
+     *                   stable, or {@code UseCaseRepository#compareAndUpdate}'s
+     *                   {@code stableExtensionPrefixLength} for extension steps, whose positions
+     *                   beyond a restructure's common prefix no longer identify "the same"
+     *                   extension across old and new (see that parameter's own javadoc)
      */
     private Map<Integer, List<Literal>> otherLanguageStepTexts(
-            DatasetTx tx, String subject, Map<Integer, String> stepTagByPosition, String defaultTag) {
+            DatasetTx tx, String subject, String edgeProperty, Map<Integer, String> stepTagByPosition,
+            String defaultTag, int maxPreservedPosition) {
         String query = "SELECT ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
-                + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
+                + subject + " <" + edgeProperty + "> ?step . "
                 + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } }";
         Map<Integer, List<Literal>> byPosition = new LinkedHashMap<>();
         tx.select(query).forEach(row -> {
             int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            if (position > maxPreservedPosition) {
+                return;
+            }
             Literal text = literalOf(row, "text");
             String writtenTag = stepTagByPosition.get(position);
             String existingTag = canonicalizeLenient(text.getLanguageTag().orElse(null));
@@ -618,20 +698,18 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * as "not found", silently skipping only this one use case rather than crashing the whole
      * result list.</p>
      *
-     * <p>{@code title}/{@code goal} are read separately, not joined here - both may now legally
-     * carry several language-tagged literals each (SKOS-S14-style {@code sh:uniqueLang}), so
+     * <p>{@code title}/{@code goal}/{@code scope}/{@code trigger}/{@code precondition}/
+     * {@code postcondition} are all read separately, not joined here - each may now legally
+     * carry several language-tagged literals (SKOS-S14-style {@code sh:uniqueLang}), so
      * joining them into this single-row clause would multiply a subject into a row per
-     * title/goal candidate combination. {@link #readTitles}/{@link #readGoals} read them as their
-     * own follow-up queries instead, mirroring {@code KognioRdfRequirementRepository}.</p>
+     * candidate combination. {@link #readTitles}/{@link #readGoals}/{@link #readScopes}/
+     * {@link #readTriggers}/{@link #readPreconditions}/{@link #readPostconditions} read them as
+     * their own follow-up queries instead, mirroring {@code KognioRdfRequirementRepository}.</p>
      */
     private static String scalarWhereClause(String subject) {
         return subject + " a <" + USE_CASE_TYPE + "> ; "
                 + "<" + PRIMARY_ACTOR_PROPERTY + "> ?primaryActor . "
-                + "FILTER(isIRI(?primaryActor)) "
-                + "OPTIONAL { " + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?scope } "
-                + "OPTIONAL { " + subject + " <" + TRIGGER_PROPERTY + "> ?trigger } "
-                + "OPTIONAL { " + subject + " <" + PRECONDITION_PROPERTY + "> ?precondition } "
-                + "OPTIONAL { " + subject + " <" + POSTCONDITION_PROPERTY + "> ?postcondition } ";
+                + "FILTER(isIRI(?primaryActor)) ";
     }
 
     private Optional<UseCase> readBySubject(
@@ -642,7 +720,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?scope ?trigger ?precondition ?postcondition ?primaryActor "
+        String scalarQuery = "SELECT ?primaryActor "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} }";
 
         Optional<BindingSet> row = handle.sparqlQuery().select(scalarQuery).findFirst();
@@ -668,7 +746,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             return Optional.empty();
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
-        String scalarQuery = "SELECT ?scope ?trigger ?precondition ?postcondition ?primaryActor ?head "
+        String scalarQuery = "SELECT ?primaryActor ?head "
                 + "WHERE { GRAPH <" + USE_CASES_GRAPH + "> { " + scalarWhereClause(subject) + "} "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } } }";
@@ -686,14 +764,25 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         if (title.isEmpty() || goal.isEmpty()) {
             return Optional.empty();
         }
+        Optional<LocalizedLiteral> scope = displayLocale.select(readScopes(handle, subject));
+        Optional<LocalizedLiteral> trigger = displayLocale.select(readTriggers(handle, subject));
+        Optional<LocalizedLiteral> precondition = displayLocale.select(readPreconditions(handle, subject));
+        Optional<LocalizedLiteral> postcondition = displayLocale.select(readPostconditions(handle, subject));
         List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
         Map<Integer, String> stepTextLanguageByPosition = toStepLanguages(stepAssemblies, displayLocale);
+        List<StepAssembly> extensionAssemblies = readExtensionStepAssemblies(handle, subject);
+        Map<Integer, String> extensionTextLanguageByPosition = toStepLanguages(extensionAssemblies, displayLocale);
         RevisionToken head = row.get().getValue("head")
                 .filter(IRI.class::isInstance)
                 .map(value -> new RevisionToken(((IRI) value).getIRIString()))
                 .orElse(null);
         return Optional.of(new UseCaseRepository.CurrentUseCase(useCase.get(), head,
-                title.get().languageTag(), goal.get().languageTag(), stepTextLanguageByPosition));
+                title.get().languageTag(), goal.get().languageTag(),
+                scope.map(LocalizedLiteral::languageTag).orElse(null),
+                trigger.map(LocalizedLiteral::languageTag).orElse(null),
+                precondition.map(LocalizedLiteral::languageTag).orElse(null),
+                postcondition.map(LocalizedLiteral::languageTag).orElse(null),
+                stepTextLanguageByPosition, extensionTextLanguageByPosition));
     }
 
     /** Reads the {@code dcterms:title} candidates of one use case, tagged for {@link DisplayLocale}. */
@@ -710,13 +799,44 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
     }
 
+    /** {@link #readTitles} for {@code arkreq:designScope}. */
+    private List<LocalizedLiteral> readScopes(DatasetHandle handle, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + DESIGN_SCOPE_PROPERTY + "> ?o } }";
+        return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
+    /** {@link #readTitles} for {@code arkreq:trigger}. */
+    private List<LocalizedLiteral> readTriggers(DatasetHandle handle, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + TRIGGER_PROPERTY + "> ?o } }";
+        return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
+    /** {@link #readTitles} for {@code arkreq:useCasePrecondition}. */
+    private List<LocalizedLiteral> readPreconditions(DatasetHandle handle, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + PRECONDITION_PROPERTY + "> ?o } }";
+        return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
+    /** {@link #readTitles} for {@code arkreq:useCasePostcondition}. */
+    private List<LocalizedLiteral> readPostconditions(DatasetHandle handle, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + subject + " <" + POSTCONDITION_PROPERTY + "> ?o } }";
+        return handle.sparqlQuery().select(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
     /**
      * Builds a {@link UseCase} from {@code row} (the projection of {@link #scalarWhereClause})
      * plus the follow-up reads {@link #readSupportingActors}/{@link #readMainStepAssemblies}/
-     * {@link #readExtensions}/{@link #readTitles}/{@link #readGoals} - shared by
-     * {@link #readBySubject} and {@link #readCurrentBySubject} so both build a {@link UseCase}
-     * identically. {@code locale} selects one {@code title}/{@code goal}/each step's {@code text}
-     * candidate out of however many language-tagged variants exist.
+     * {@link #readExtensionStepAssemblies}/{@link #readTitles}/{@link #readGoals}/
+     * {@link #readScopes}/{@link #readTriggers}/{@link #readPreconditions}/
+     * {@link #readPostconditions} - shared by {@link #readBySubject} and
+     * {@link #readCurrentBySubject} so both build a {@link UseCase} identically. {@code locale}
+     * selects one {@code title}/{@code goal}/{@code scope}/{@code trigger}/{@code precondition}/
+     * {@code postcondition}/each step's/extension's {@code text} candidate out of however many
+     * language-tagged variants exist.
      *
      * <p>Returns {@link Optional#empty()} if this subject carries no {@code dcterms:title}/
      * {@code arkreq:useCaseGoal} literal at all - {@code UseCase-title}/{@code UseCase-goal} carry
@@ -730,6 +850,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         if (title.isEmpty() || goal.isEmpty()) {
             return Optional.empty();
         }
+        String scope = locale.select(readScopes(handle, subject)).map(LocalizedLiteral::value).orElse(null);
+        String trigger = locale.select(readTriggers(handle, subject)).map(LocalizedLiteral::value).orElse(null);
+        String precondition =
+                locale.select(readPreconditions(handle, subject)).map(LocalizedLiteral::value).orElse(null);
+        String postcondition =
+                locale.select(readPostconditions(handle, subject)).map(LocalizedLiteral::value).orElse(null);
         List<ActorRef> supportingActors = readSupportingActors(handle, subject);
         List<StepAssembly> stepAssemblies = readMainStepAssemblies(handle, subject);
         List<Step> steps = toSteps(stepAssemblies, locale);
@@ -750,19 +876,20 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             // whole project.
             return Optional.empty();
         }
-        List<String> extensions = readExtensions(handle, subject);
+        List<StepAssembly> extensionAssemblies = readExtensionStepAssemblies(handle, subject);
+        List<String> extensions = toExtensionTexts(extensionAssemblies, locale);
 
         return Optional.of(new UseCase(
                 new UseCaseId(ResourceId.of(subjectIriString)),
                 code,
                 title.get().value(),
                 goal.get().value(),
-                optionalLiteral(row, "scope"),
-                optionalLiteral(row, "trigger"),
+                scope,
+                trigger,
                 new ActorRef(ResourceId.of(iriOf(row, "primaryActor").getIRIString())),
                 supportingActors,
-                optionalLiteral(row, "precondition"),
-                optionalLiteral(row, "postcondition"),
+                precondition,
+                postcondition,
                 steps,
                 extensions));
     }
@@ -787,26 +914,50 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
-     * One main-flow step's position, every {@code arkreq:stepText} candidate collected across rows
-     * (tagged for {@link DisplayLocale}), and its {@code realises} references - the per-step
-     * accumulator {@link #readMainStepAssemblies} builds, since {@code arkreq:stepText} may now
-     * legally carry several language-tagged literals (SKOS-S14-style {@code sh:uniqueLang}),
-     * multiplying a step into one row per candidate.
+     * One step's (main-flow or extension) position, every {@code arkreq:stepText} candidate
+     * collected across rows (tagged for {@link DisplayLocale}), and its {@code realises}
+     * references (always empty for an extension step) - the per-step accumulator
+     * {@link #readStepAssemblies} builds, since {@code arkreq:stepText} may now legally carry
+     * several language-tagged literals (SKOS-S14-style {@code sh:uniqueLang}), multiplying a step
+     * into one row per candidate.
      */
     private record StepAssembly(int position, List<LocalizedLiteral> textCandidates, List<RequirementRef> realises) {
     }
 
     /**
      * Reads every main-flow step's position, {@code stepText} candidates and {@code realises}
-     * references, grouped by step IRI then sorted by position - the position, not the step's own
-     * (opaque, re-minted-on-every-write) IRI, is what a caller ({@link #toSteps}/
-     * {@link #toStepLanguages}) actually keys on.
+     * references. Delegates the query itself to {@link #readStepAssemblies}, shared with
+     * {@link #readExtensionStepAssemblies} - both step flavours are {@code arkreq:Step}-shaped
+     * resources reached the same way, differing only in the edge and in whether
+     * {@code stepRealises} applies.
      */
     private List<StepAssembly> readMainStepAssemblies(DatasetHandle handle, String subject) {
+        return readStepAssemblies(handle, subject, MAIN_STEP_PROPERTY, readMainStepRealises(handle, subject));
+    }
+
+    /**
+     * {@link #readMainStepAssemblies} for extension steps ({@code arkreq:extensionStep}): no
+     * {@code arkreq:stepRealises} concept applies to a free-text extension (unlike a main-flow
+     * step, an extension is not itself a {@link Step} value object), so every assembly's
+     * {@code realises} is empty.
+     */
+    private List<StepAssembly> readExtensionStepAssemblies(DatasetHandle handle, String subject) {
+        return readStepAssemblies(handle, subject, EXTENSION_STEP_PROPERTY, Map.of());
+    }
+
+    /**
+     * Reads every step reached from {@code subject} via {@code edgeProperty}'s position and
+     * {@code stepText} candidates, grouped by step IRI then sorted by position - the position, not
+     * the step's own (opaque, re-minted-on-every-write) IRI, is what a caller ({@link #toSteps}/
+     * {@link #toExtensionTexts}/{@link #toStepLanguages}) actually keys on. {@code realisesByStep}
+     * (keyed by step IRI, as read by {@link #readMainStepRealises}) is merged in verbatim - empty
+     * for the extension-step caller, which has no such concept.
+     */
+    private List<StepAssembly> readStepAssemblies(DatasetHandle handle, String subject, String edgeProperty,
+            Map<String, List<RequirementRef>> realisesByStep) {
         String stepsQuery = "SELECT ?step ?position ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
-                + subject + " <" + MAIN_STEP_PROPERTY + "> ?step . "
+                + subject + " <" + edgeProperty + "> ?step . "
                 + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } }";
-        Map<String, List<RequirementRef>> realisesByStep = readMainStepRealises(handle, subject);
         Map<String, Integer> positionByStep = new LinkedHashMap<>();
         Map<String, List<LocalizedLiteral>> textsByStep = new LinkedHashMap<>();
         handle.sparqlQuery().select(stepsQuery).forEach(row -> {
@@ -838,8 +989,24 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
-     * The BCP-47 language tag each step's currently-selected {@code stepText} candidate carries,
-     * keyed by position - backs {@link UseCaseRepository.CurrentUseCase#stepTextLanguageByPosition()}.
+     * {@link #toSteps} for extensions: selects one {@code stepText} candidate per extension via
+     * {@code locale}, in position order, yielding the plain text {@link UseCase#extensions()}
+     * carries (an extension has no {@code realises} concept, unlike a main-flow {@link Step}).
+     */
+    private static List<String> toExtensionTexts(List<StepAssembly> assemblies, DisplayLocale locale) {
+        return assemblies.stream()
+                .map(assembly -> locale.select(assembly.textCandidates())
+                        .map(LocalizedLiteral::value)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "stepText is a required join, so at least one candidate must exist")))
+                .toList();
+    }
+
+    /**
+     * The BCP-47 language tag each step's/extension's currently-selected {@code stepText}
+     * candidate carries, keyed by position - backs both
+     * {@link UseCaseRepository.CurrentUseCase#stepTextLanguageByPosition()} (main-flow steps) and
+     * {@link UseCaseRepository.CurrentUseCase#extensionTextLanguageByPosition()} (extensions).
      */
     private static Map<Integer, String> toStepLanguages(List<StepAssembly> assemblies, DisplayLocale locale) {
         Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
@@ -899,16 +1066,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         return true;
     }
 
-    private List<String> readExtensions(DatasetHandle handle, String subject) {
-        String query = "SELECT ?text WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
-                + subject + " <" + EXTENSION_STEP_PROPERTY + "> ?step . "
-                + "?step <" + POSITION_PROPERTY + "> ?position ; <" + STEP_TEXT_PROPERTY + "> ?text } } "
-                + "ORDER BY ?position";
-        return handle.sparqlQuery().select(query)
-                .map(row -> literalOf(row, "text").getLexicalForm())
-                .toList();
-    }
-
     // ---- already-resolved reference conversion -----------------------------------------
 
     /**
@@ -940,19 +1097,20 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         return rdf.createIRI(resourceIdFactory.newId().value());
     }
 
-    private void addOptional(Graph graph, IRI subject, String property, String value) {
+    /**
+     * Adds {@code value} as the language-tagged (or untagged, for a {@code null} tag) literal
+     * object of {@code property} - skipped entirely when {@code value} is {@code null}, since
+     * scope/trigger/precondition/postcondition are optional fields.
+     */
+    private void addOptional(Graph graph, IRI subject, String property, String value, String tag) {
         if (value != null) {
-            graph.add(subject, rdf.createIRI(property), rdf.createLiteral(value));
+            graph.add(subject, rdf.createIRI(property), literalOf(value, tag));
         }
     }
 
     /** Builds a language-tagged literal, or a plain untagged one when {@code tag} is {@code null}. */
     private Literal literalOf(String value, String tag) {
         return tag == null ? rdf.createLiteral(value) : rdf.createLiteral(value, tag);
-    }
-
-    private static String optionalLiteral(BindingSet row, String name) {
-        return row.getValue(name).map(value -> ((Literal) value).getLexicalForm()).orElse(null);
     }
 
     private static IRI iriOf(BindingSet row, String name) {

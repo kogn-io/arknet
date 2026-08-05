@@ -225,10 +225,12 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the race across
      *                                                every retry attempt
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code mutation}
-     *                                                actually changes {@code title}, {@code goal}
-     *                                                or any step's {@code text} and neither
-     *                                                {@code language} nor {@code defaultLanguage}
-     *                                                is given
+     *                                                actually changes {@code title}, {@code goal},
+     *                                                {@code scope}, {@code trigger},
+     *                                                {@code precondition}, {@code postcondition},
+     *                                                any step's {@code text} or any extension's
+     *                                                text and neither {@code language} nor
+     *                                                {@code defaultLanguage} is given
      */
     private UseCase updateWithOptimisticRetry(ProjectId projectId, UseCaseCode code, String language,
             String defaultLanguage, UnaryOperator<UseCase> mutation) {
@@ -240,17 +242,27 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             if (updated.equals(current.value())) {
                 return current.value();
             }
-            // title/goal/each step's text each get their own language: a field or step this
+            // title/goal/scope/trigger/precondition/postcondition/each step's text/each
+            // extension's text each get their own language: a field, step or extension this
             // mutation left byte-for-byte unchanged must round-trip under the exact tag it was
             // read under (a scoped no-op), never under `language`/`defaultLanguage` - those only
             // ever apply to whatever this call is actually changing (mirrors RequirementService's
             // identical per-field distinction). Resolving here, lazily, rather than eagerly in
             // update(), means a malformed/missing language argument only ever throws when this
-            // call is actually changing a language-tagged field or step under it (issue #258).
+            // call is actually changing a language-tagged field, step or extension under it
+            // (issue #258).
             String titleLanguage = updated.title().equals(current.value().title())
                     ? current.titleLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
             String goalLanguage = updated.goal().equals(current.value().goal())
                     ? current.goalLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            String scopeLanguage = Objects.equals(updated.scope(), current.value().scope())
+                    ? current.scopeLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            String triggerLanguage = Objects.equals(updated.trigger(), current.value().trigger())
+                    ? current.triggerLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            String preconditionLanguage = Objects.equals(updated.precondition(), current.value().precondition())
+                    ? current.preconditionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            String postconditionLanguage = Objects.equals(updated.postcondition(), current.value().postcondition())
+                    ? current.postconditionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
             Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
             List<Step> currentSteps = current.value().steps();
             List<Step> updatedSteps = updated.steps();
@@ -262,9 +274,49 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                         : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
                 stepTextLanguageByPosition.put(updatedStep.position(), stepLanguage);
             }
+            Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
+            List<String> currentExtensions = current.value().extensions();
+            List<String> updatedExtensions = updated.extensions();
+            for (int i = 0; i < updatedExtensions.size(); i++) {
+                int position = i + 1;
+                boolean unchanged = i < currentExtensions.size()
+                        && updatedExtensions.get(i).equals(currentExtensions.get(i));
+                String extensionLanguage = unchanged
+                        ? current.extensionTextLanguageByPosition().get(position)
+                        : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+                extensionTextLanguageByPosition.put(position, extensionLanguage);
+            }
+            // A same-length extensions replace can only ever edit content in place - the model has
+            // no separate move/reorder operation, only a wholesale list replace - so every position
+            // keeps its identity regardless of how many of them changed text (issue #254/PR #267
+            // review: a prefix scan that stops at the first content mismatch wrongly starves every
+            // position after it, even ones a multi-position edit left byte-for-byte untouched).
+            // Only a length change is real evidence of an insert/remove: positions beyond the
+            // longest leading prefix the old and new lists still share no longer refer to "the
+            // same" extension on either side, so preservation there must be suspended - see
+            // compareAndUpdate's stableExtensionPrefixLength javadoc for why that distinction
+            // matters. A same-length reorder (a swap) is not distinguishable from an in-place edit
+            // by content alone and is accepted as a residual, undetected case - it is not a
+            // supported operation on this list today.
+            int stableExtensionPrefixLength;
+            if (currentExtensions.size() == updatedExtensions.size()) {
+                stableExtensionPrefixLength = updatedExtensions.size();
+            } else {
+                int commonExtensionPrefixLength = 0;
+                while (commonExtensionPrefixLength < currentExtensions.size()
+                        && commonExtensionPrefixLength < updatedExtensions.size()
+                        && currentExtensions.get(commonExtensionPrefixLength)
+                                .equals(updatedExtensions.get(commonExtensionPrefixLength))) {
+                    commonExtensionPrefixLength++;
+                }
+                stableExtensionPrefixLength = commonExtensionPrefixLength;
+            }
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated,
-                        titleLanguage, goalLanguage, stepTextLanguageByPosition, defaultLanguage);
+                        titleLanguage, goalLanguage, scopeLanguage, triggerLanguage,
+                        preconditionLanguage, postconditionLanguage,
+                        stepTextLanguageByPosition, extensionTextLanguageByPosition, defaultLanguage,
+                        stableExtensionPrefixLength);
                 return updated;
             } catch (UseCaseConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the use case between our read and our write -

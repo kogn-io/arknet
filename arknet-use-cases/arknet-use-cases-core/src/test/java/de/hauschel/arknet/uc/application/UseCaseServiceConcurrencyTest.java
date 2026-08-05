@@ -171,10 +171,13 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
-                String defaultLanguage) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage,
-                    stepTextLanguageByPosition, defaultLanguage);
+                String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
+                String preconditionLanguage, String postconditionLanguage,
+                Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
+                String defaultLanguage, int stableExtensionPrefixLength) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage, scopeLanguage,
+                    triggerLanguage, preconditionLanguage, postconditionLanguage, stepTextLanguageByPosition,
+                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength);
         }
 
         @Override
@@ -224,10 +227,13 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
-                String defaultLanguage) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage,
-                    stepTextLanguageByPosition, defaultLanguage);
+                String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
+                String preconditionLanguage, String postconditionLanguage,
+                Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
+                String defaultLanguage, int stableExtensionPrefixLength) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, goalLanguage, scopeLanguage,
+                    triggerLanguage, preconditionLanguage, postconditionLanguage, stepTextLanguageByPosition,
+                    extensionTextLanguageByPosition, defaultLanguage, stableExtensionPrefixLength);
         }
 
         @Override
@@ -272,8 +278,10 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, UseCase updated,
-                String titleLanguage, String goalLanguage, Map<Integer, String> stepTextLanguageByPosition,
-                String defaultLanguage) {
+                String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
+                String preconditionLanguage, String postconditionLanguage,
+                Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
+                String defaultLanguage, int stableExtensionPrefixLength) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
             delegate.findByCode(projectId, updated.code(), null)

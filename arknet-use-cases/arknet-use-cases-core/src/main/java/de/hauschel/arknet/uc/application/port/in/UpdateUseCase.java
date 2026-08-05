@@ -42,19 +42,23 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * full step-list restructuring (adding/removing/reordering steps) are untouched by this port -
  * recreate the use case with {@code uc_add} if those need to change.</p>
  *
- * <p><strong>Language.</strong> {@code title}, {@code goal} and each patched step's {@code text}
- * may each legally carry several language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}).
- * {@code language} names the BCP-47 tag every language-tagged field <em>this call actually
- * touches</em> is written in - whichever of {@code title}/{@code goal} is non-{@code null}, and
- * every step named in {@code stepTextPatches} - mirroring {@code UpdateTerm}'s single shared
- * {@code language} covering whichever of {@code prefLabel}/{@code definition} it touches. A field
- * (or step) this call does not touch keeps every language variant it already had, untouched,
- * exactly as before this parameter existed. A field/step that <em>is</em> being changed but ships
+ * <p><strong>Language.</strong> {@code title}, {@code goal}, {@code scope}, {@code trigger},
+ * {@code precondition}, {@code postcondition}, each patched step's {@code text} and each entry of
+ * {@code extensions} may each legally carry several language-tagged variants (SKOS-S14-style
+ * {@code sh:uniqueLang}). {@code language} names the BCP-47 tag every language-tagged field
+ * <em>this call actually touches</em> is written in - whichever of {@code title}/{@code goal}/
+ * {@code scope}/{@code trigger}/{@code precondition}/{@code postcondition} is non-{@code null},
+ * every step named in {@code stepTextPatches}, and, if {@code extensions} is non-{@code null},
+ * every entry of it - mirroring {@code UpdateTerm}'s single shared {@code language} covering
+ * whichever of {@code prefLabel}/{@code definition} it touches. A field (or step, or extension)
+ * this call does not touch keeps every language variant it already had, untouched, exactly as
+ * before this parameter existed. A field/step/extension that <em>is</em> being changed but ships
  * no {@code language} falls back to {@code defaultLanguage} (issue #258) rather than staying
- * untagged - and if that field/step's existing value already carries an untagged literal, writing
- * it under a tag equal to {@code defaultLanguage} sweeps the untagged one away instead of
- * preserving it as a spurious "other" variant (see {@code UseCaseRepository#compareAndUpdate}'s
- * {@code defaultLanguage} parameter for the out-adapter side of this).</p>
+ * untagged - and if that field/step/extension's existing value already carries an untagged
+ * literal, writing it under a tag equal to {@code defaultLanguage} sweeps the untagged one away
+ * instead of preserving it as a spurious "other" variant (see
+ * {@code UseCaseRepository#compareAndUpdate}'s {@code defaultLanguage} parameter for the
+ * out-adapter side of this).</p>
  */
 public interface UpdateUseCase {
 
@@ -85,13 +89,15 @@ public interface UpdateUseCase {
      *                            unchanged; {@code null} to leave every step's realises
      *                            unchanged
      * @param language            the BCP-47 language tag every field this call actually touches
-     *                            (a non-{@code null} {@code title}/{@code goal}, each patched
-     *                            step's text) is written in, or {@code null} to fall back to
-     *                            {@code defaultLanguage}. Only the existing literal carrying the
-     *                            tag actually written is replaced per field - every other
-     *                            language-tagged variant survives untouched, except an existing
-     *                            untagged one that a fallback to {@code defaultLanguage} sweeps
-     *                            away (see class-level Language note)
+     *                            (a non-{@code null} {@code title}/{@code goal}/{@code scope}/
+     *                            {@code trigger}/{@code precondition}/{@code postcondition}, each
+     *                            patched step's text, and, if {@code extensions} is non-{@code
+     *                            null}, every entry of it) is written in, or {@code null} to fall
+     *                            back to {@code defaultLanguage}. Only the existing literal
+     *                            carrying the tag actually written is replaced per field - every
+     *                            other language-tagged variant survives untouched, except an
+     *                            existing untagged one that a fallback to {@code defaultLanguage}
+     *                            sweeps away (see class-level Language note)
      * @param defaultLanguage     the target project's configured default language (see
      *                            {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                            or {@code null} if it has none - only consulted for a field/step
