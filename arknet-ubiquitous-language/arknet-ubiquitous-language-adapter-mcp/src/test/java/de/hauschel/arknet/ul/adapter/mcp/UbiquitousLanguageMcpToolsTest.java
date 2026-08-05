@@ -81,6 +81,15 @@ class UbiquitousLanguageMcpToolsTest {
     }
 
     @Test
+    void addPassesThroughLegalActorKind() {
+        String rendered = adapter.add(null, "Kunde GmbH", "Ein Unternehmen, das Bestellungen aufgibt.", "LEGAL",
+                "Besteller", null, null);
+
+        assertEquals(new ActorFacet(ActorKind.LEGAL, "Besteller"), stub.lastCommand.actorFacet());
+        assertTrue(rendered.contains("[actor:LEGAL role=Besteller]"), rendered);
+    }
+
+    @Test
     void addWithoutActorKindLeavesFacetNull() {
         adapter.add(null, "Gutschrift", "def a", null, null, null, null);
 

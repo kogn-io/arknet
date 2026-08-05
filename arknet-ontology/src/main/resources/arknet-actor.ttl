@@ -1,13 +1,13 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  Actor Ontology  ·  Version 0.1.0
+#  Actor Ontology  ·  Version 0.2.0
 #
 #  Namespace  : https://w3id.org/arknet/process#
 #  License    : CC-BY-4.0
 #
-#  Scope: the Actor taxonomy - HumanActor, SystemActor and actorRole - used
-#  to identify who or what participates in a use case (primaryActor/
-#  supportingActor) or fills a role on a bounded context.
+#  Scope: the Actor taxonomy - HumanActor, SystemActor, LegalActor and
+#  actorRole - used to identify who or what participates in a use case
+#  (primaryActor/supportingActor) or fills a role on a bounded context.
 #
 #  Namespace note: this module lives under process#, not actor#, because
 #  arkproc:HumanActor/arkproc:SystemActor are already used as types on
@@ -36,12 +36,12 @@
     a owl:Ontology ;
     dcterms:title    "arknet Actor Ontology"@en ;
     dcterms:description "Human and system actors participating in a bounded context or use case."@en ;
-    dcterms:version  "0.1.0" ;
+    dcterms:version  "0.2.0" ;
     dcterms:created  "2026-07-29"^^xsd:date ;
     dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkproc" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
-    owl:versionInfo  "0.1.0" .
+    owl:versionInfo  "0.2.0" .
 
 
 ##############################################################################
@@ -65,6 +65,13 @@ arkproc:SystemActor a owl:Class ;
     rdfs:comment "An actor representing an external system or service that participates in the process."@en ,
                  "Ein Akteur, der ein externes System oder einen externen Dienst repraesentiert, der am Prozess beteiligt ist."@de ;
     skos:example "PaymentService, InventoryService, EmailService" .
+
+arkproc:LegalActor a owl:Class ;
+    rdfs:subClassOf arkproc:Actor ;
+    rdfs:label "Legal Actor"@en , "Juristische Person"@de ;
+    rdfs:comment "An actor representing a legal person (an organization, company or association) that participates in the process, as opposed to a natural person acting on its behalf."@en ,
+                 "Ein Akteur, der eine juristische Person (eine Organisation, ein Unternehmen oder ein Verein) repraesentiert, die am Prozess beteiligt ist, im Unterschied zu einer fuer sie handelnden natuerlichen Person."@de ;
+    skos:example "Kunde GmbH, Zulieferer AG, Standardisierungsgremium" .
 
 arkproc:actorRole a owl:DatatypeProperty ;
     rdfs:domain arkproc:Actor ;

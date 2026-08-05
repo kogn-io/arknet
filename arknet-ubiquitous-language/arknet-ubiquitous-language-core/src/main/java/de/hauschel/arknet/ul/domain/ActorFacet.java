@@ -11,8 +11,8 @@ import java.util.Objects;
  * (fachliche Rolle im BC); kein actorName, da der skos:prefLabel bereits der
  * Name ist (keine Drift).
  *
- * @param kind whether the actor is a human or a system; maps to
- *             {@code arkproc:HumanActor}/{@code arkproc:SystemActor}
+ * @param kind whether the actor is a human, a system, or a legal person; maps to
+ *             {@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code arkproc:LegalActor}
  * @param role the actor's role in the bounded context; maps to
  *             {@code arkproc:actorRole}. Optional (may be {@code null})
  */
