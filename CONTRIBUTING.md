@@ -74,6 +74,13 @@ and test it as you would any other code. Unreviewed machine-generated output is
 not a shortcut around the bar above -- and large or sweeping AI-generated changes
 may be rejected on scope alone, regardless of correctness.
 
+## AI processing of contributions
+
+Issues, discussions, and pull request content in this repository may be
+processed by AI systems (Anthropic). If you do not want that, please do not
+post here. Please refrain from posting personally identifiable information
+(PII) or similarly sensitive data in issues, discussions, or pull requests.
+
 ## Licensing
 
 By submitting a contribution you agree that it is licensed under the project's
