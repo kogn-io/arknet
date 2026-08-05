@@ -83,6 +83,16 @@ public final class TraceabilityGraph {
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
+    /** {@code skos:broader} - Term -&gt; its broader (superordinate) Term (issue #252). */
+    private static final String BROADER = ArkreqVocabulary.BROADER;
+
+    /**
+     * {@code skos:definition} - a term's meaning, scanned by {@link #unlinkedMentions()}'s third
+     * sweep for a mention of another term the source does not link via {@code broader} (issue
+     * #252).
+     */
+    private static final String DEFINITION = ArkreqVocabulary.DEFINITION;
+
     /** {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint (issue #223). */
     private static final String CONSTRAINED_BY = ArkreqVocabulary.CONSTRAINED_BY;
 
@@ -316,15 +326,32 @@ public final class TraceabilityGraph {
     /**
      * @return {@code true} if a term is used by a requirement ({@code arkreq:usesTerm}), plays
      *         an actor role in a use case ({@code arkreq:primaryActor}/
-     *         {@code arkreq:supportingActor}), or is a bounded context's ubiquitous language
-     *         ({@code arkddd:ubiquitousLanguageTerm})
+     *         {@code arkreq:supportingActor}), is a bounded context's ubiquitous language
+     *         ({@code arkddd:ubiquitousLanguageTerm}), or is another term's broader (superordinate)
+     *         term ({@code skos:broader}, issue #252) - an interior/root taxonomy term stops
+     *         being reported as an orphan once something is hung under it
      */
     public boolean isReferencedTerm(String termIri) {
         Objects.requireNonNull(termIri, "termIri");
         return incomingByObject.getOrDefault(termIri, List.of()).stream()
                 .anyMatch(t -> USES_TERM.equals(t.predicate()) || PRIMARY_ACTOR.equals(t.predicate())
                         || SUPPORTING_ACTOR.equals(t.predicate())
-                        || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate()));
+                        || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate())
+                        || BROADER.equals(t.predicate()));
+    }
+
+    /**
+     * @return the term IRI a term specializes via {@code skos:broader}, if it has one
+     *         (issue #252)
+     */
+    public Optional<String> broaderTerm(String termIri) {
+        Objects.requireNonNull(termIri, "termIri");
+        return outgoingBySubject.getOrDefault(termIri, List.of()).stream()
+                .filter(t -> BROADER.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
+                .findFirst();
     }
 
     /**
@@ -384,6 +411,14 @@ public final class TraceabilityGraph {
         return literals(Objects.requireNonNull(useCaseIri, "useCaseIri"), USE_CASE_GOAL);
     }
 
+    /**
+     * @return the {@code skos:definition} text of a term, for scanning it for unlinked mentions of
+     *         other glossary terms (issue #252) - mirrors {@link #boundedContextProseTexts(String)}
+     */
+    public List<String> termProseTexts(String termIri) {
+        return literals(Objects.requireNonNull(termIri, "termIri"), DEFINITION);
+    }
+
     /** @return the {@code prefLabel}/{@code title} label of every term IRI that carries one. */
     public Map<String, String> termLabels() {
         Map<String, String> labels = new LinkedHashMap<>();
@@ -407,7 +442,16 @@ public final class TraceabilityGraph {
      * them to the identical engine - not by term IRI, which would let the two matching passes
      * pick different terms for the same ambiguous mention (issue #141).</p>
      *
-     * @return the unlinked mentions found across every requirement and bounded context
+     * <p>A third sweep (issue #252) scans every term's own {@code skos:definition} for a mention
+     * of some <em>other</em> glossary term: a taxonomy term's prose commonly names its
+     * superordinate ("A Human Actor is an Actor who ...") without that being an accident the way
+     * an unrelated mention in a requirement/bounded-context prose is - so a mentioned term counts
+     * as unlinked here only when it is not the very term {@link #broaderTerm(String)} already
+     * names as this term's own broader term. A term's mention of its own label within its own
+     * definition is never reported (a term cannot be its own broader term anyway, see
+     * {@link de.hauschel.arknet.ul.domain.TermCycleException}).</p>
+     *
+     * @return the unlinked mentions found across every requirement, bounded context and term
      */
     public List<UnlinkedMention> unlinkedMentions() {
         Map<String, String> termLabels = termLabels();
@@ -437,15 +481,28 @@ public final class TraceabilityGraph {
                 }
             }
         }
+        for (String termIri : termIris) {
+            String broader = broaderTerm(termIri).orElse(null);
+            for (String mentionedTermIri : matcher.mentionedIn(termProseTexts(termIri))) {
+                if (mentionedTermIri.equals(termIri)) {
+                    continue;
+                }
+                if (!mentionedTermIri.equals(broader)) {
+                    found.add(new UnlinkedMention(
+                            termIri, mentionedTermIri, termLabels.get(mentionedTermIri), "broader"));
+                }
+            }
+        }
         return List.copyOf(found);
     }
 
     /**
-     * @param sourceIri     the requirement or bounded context whose prose names the term
+     * @param sourceIri     the requirement, bounded context or term whose prose names the term
      * @param termIri       the mentioned term
      * @param termLabel     the term's {@code skos:prefLabel}, as named in the prose
-     * @param edgeLocalName the missing edge's local name ({@code usesTerm} or
-     *                      {@code ubiquitousLanguageTerm}), for the "no ... edge" message
+     * @param edgeLocalName the missing edge's local name ({@code usesTerm},
+     *                      {@code ubiquitousLanguageTerm} or {@code broader}), for the
+     *                      "no ... edge" message
      */
     public record UnlinkedMention(String sourceIri, String termIri, String termLabel, String edgeLocalName) {
     }

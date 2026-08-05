@@ -55,9 +55,12 @@ final class InMemoryTermRepository implements TermRepository {
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language, String defaultLanguage) {
+            ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
         // Nothing multi-valued to sweep in this plain in-memory fake either (see class-level
-        // note) - defaultLanguage is accepted and ignored here too.
+        // note) - defaultLanguage is accepted and ignored here too. broader (issue #252) is not
+        // resolved/cycle-checked here either - that is the real out-adapter's concern (see
+        // TermCycleException's javadoc), this fake just applies the same
+        // null-unchanged/empty-clear/present-replace tri-state TermService already hands it.
         Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
         Term current = terms.values().stream()
                 .filter(t -> t.code().equals(code))
@@ -66,7 +69,8 @@ final class InMemoryTermRepository implements TermRepository {
         Term updated = new Term(current.id(), current.code(),
                 prefLabel != null ? prefLabel : current.prefLabel(),
                 definition != null ? definition : current.definition(),
-                actorFacet != null ? actorFacet : current.actorFacet());
+                actorFacet != null ? actorFacet : current.actorFacet(),
+                broader != null ? broader.orElse(null) : current.broader());
         terms.put(updated.id(), updated);
         return updated;
     }

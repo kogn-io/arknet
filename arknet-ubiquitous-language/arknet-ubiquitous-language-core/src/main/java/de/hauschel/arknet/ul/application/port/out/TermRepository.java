@@ -14,6 +14,7 @@ import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
+import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 
@@ -64,6 +65,8 @@ public interface TermRepository {
      * @throws DuplicateTermCodeException     if another term already carries this term's
      *                                        {@link TermCode} - identity collision and
      *                                        business-label collision are distinct failure modes
+     * @throws TermNotFoundException          if {@code term.broader()} is set but does not
+     *                                        resolve to an existing term in the project
      * @throws RuntimeException if {@code term} violates a SHACL write constraint. The concrete
      *                          signal type is deliberately not fixed by this port: a real
      *                          implementation's {@code WriteConstraintViolationException} lives
@@ -121,8 +124,17 @@ public interface TermRepository {
      *                    variant, and the delete filter widens to remove it too (issue #258). Has
      *                    no bearing on which tag is actually written - that decision was already
      *                    made by the caller
+     * @param broader     {@code null} to leave an already-set {@code skos:broader} term untouched,
+     *                    {@link Optional#empty()} to clear it, or {@link Optional#of} the code of
+     *                    an already-existing term to set/replace it - resolved and cycle-checked
+     *                    against this project's own glossary (issue #252)
      * @return the term's up-to-date state after the correction
-     * @throws TermNotFoundException             if no term with this code exists
+     * @throws TermNotFoundException             if no term with this code exists, or if
+     *                                            {@code broader} carries a code that does not
+     *                                            resolve to an existing term in the project
+     * @throws TermCycleException                if setting {@code broader} would make
+     *                                            {@code code} its own (direct or transitive)
+     *                                            broader term
      * @throws TermConcurrentlyModifiedException if a concurrent writer kept advancing the term's
      *                                            revision head across every retry attempt
      * @throws RuntimeException if the patched term violates a SHACL write constraint. The
@@ -132,7 +144,7 @@ public interface TermRepository {
      *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
-            String language, String defaultLanguage);
+            String language, String defaultLanguage, Optional<TermCode> broader);
 
     /**
      * Finds a term by its human-readable business code within a project.

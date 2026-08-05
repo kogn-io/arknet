@@ -224,6 +224,82 @@ class TraceabilityGraphTest {
         assertThat(graph.isReferencedTerm(TERM_4_IRI)).isTrue();
     }
 
+    /**
+     * Issue #252: an interior/root taxonomy term must stop being reported as an orphan once
+     * something is hung under it via {@code skos:broader}, even though nothing else references it.
+     */
+    @Test
+    void isReferencedTermIsTrueForATermThatIsAnotherTermsBroaderTerm() {
+        String broaderIri = "https://w3id.org/arknet/id/trace-test-broader-parent";
+        String narrowerIri = "https://w3id.org/arknet/id/trace-test-broader-child";
+        seedTermWithBroader(broaderIri, "TERM-BROADER-1", "Actor", "Someone or something acting.", null);
+        seedTermWithBroader(narrowerIri, "TERM-BROADER-2", "Human Actor", "A human acting.", broaderIri);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.isReferencedTerm(broaderIri)).isTrue();
+    }
+
+    @Test
+    void broaderTermOfATermWithABroaderReturnsTheTarget() {
+        String broaderIri = "https://w3id.org/arknet/id/trace-test-broadertermof-parent";
+        String narrowerIri = "https://w3id.org/arknet/id/trace-test-broadertermof-child";
+        seedTermWithBroader(broaderIri, "TERM-BT-1", "Actor", "Someone or something acting.", null);
+        seedTermWithBroader(narrowerIri, "TERM-BT-2", "Human Actor", "A human acting.", broaderIri);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.broaderTerm(narrowerIri)).contains(broaderIri);
+    }
+
+    @Test
+    void broaderTermOfATermWithNoBroaderIsEmpty() {
+        assertThat(graph.broaderTerm(TERM_1_IRI)).isEmpty();
+    }
+
+    @Test
+    void termProseTextsOfATermContainsItsDefinition() {
+        assertThat(graph.termProseTexts(TERM_1_IRI)).containsExactly("The act of proving one's identity.");
+    }
+
+    /**
+     * Issue #252's positive case: a term's definition commonly mentions its own broader term's
+     * label without that being an accident ("A Human Actor is an Actor who ..."), so
+     * {@link TraceabilityGraph#unlinkedMentions()} must not flag it.
+     */
+    @Test
+    void unlinkedMentionsDoesNotFlagATermsMentionOfItsOwnBroaderTerm() {
+        String broaderIri = "https://w3id.org/arknet/id/trace-test-mention-broader-parent";
+        String narrowerIri = "https://w3id.org/arknet/id/trace-test-mention-broader-child";
+        seedTermWithBroader(broaderIri, "TERM-MB-1", "Actor", "Someone or something acting.", null);
+        seedTermWithBroader(narrowerIri, "TERM-MB-2", "Human Actor", "A human Actor who buys.", broaderIri);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.unlinkedMentions())
+                .filteredOn(mention -> mention.sourceIri().equals(narrowerIri) && mention.termIri().equals(broaderIri))
+                .isEmpty();
+    }
+
+    /**
+     * Issue #252's negative case: a term's definition mentioning some <em>other</em> glossary
+     * term - not its own broader term - is exactly the kind of unlinked mention
+     * {@code orphan_check} should surface, with {@code "broader"} as the missing edge's name.
+     */
+    @Test
+    void unlinkedMentionsFlagsATermsMentionOfAnotherTermThatIsNotItsBroaderTerm() {
+        String mentioningIri = "https://w3id.org/arknet/id/trace-test-mention-unlinked";
+        seedTermWithBroader(mentioningIri, "TERM-MU-1", "Regular Customer",
+                "A Customer who orders repeatedly.", null);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.unlinkedMentions())
+                .filteredOn(mention -> mention.sourceIri().equals(mentioningIri))
+                .extracting(TraceabilityGraph.UnlinkedMention::termIri, TraceabilityGraph.UnlinkedMention::edgeLocalName)
+                .containsExactly(org.assertj.core.api.Assertions.tuple(ACTOR_IRI, "broader"));
+    }
+
     @Test
     void boundedContextIrisContainsBc1() {
         assertThat(graph.boundedContextIris()).containsExactly(BC_1_IRI);
@@ -313,6 +389,34 @@ class TraceabilityGraphTest {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-multilingual-graph"), graph);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Writes a fresh {@code skos:Concept} with a code, {@code skos:prefLabel}, {@code
+     * skos:definition} and, if {@code broaderIri} is non-{@code null}, a {@code skos:broader}
+     * edge to it - directly, bypassing {@link de.hauschel.arknet.ul.application.TermService} and
+     * its cycle protection, since these graph-level tests only need the resulting triples, not
+     * the write path's own validation (issue #252).
+     */
+    private void seedTermWithBroader(String termIri, String code, String prefLabel, String definition,
+            String broaderIri) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        IRI term = rdf.createIRI(termIri);
+        graph.add(term, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+        graph.add(term, rdf.createIRI("http://purl.org/dc/terms/identifier"), rdf.createLiteral(code));
+        graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"), rdf.createLiteral(prefLabel));
+        graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#definition"),
+                rdf.createLiteral(definition));
+        if (broaderIri != null) {
+            graph.add(term, rdf.createIRI("http://www.w3.org/2004/02/skos/core#broader"), rdf.createIRI(broaderIri));
+        }
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-broader-graph"), graph);
                 return null;
             });
         }

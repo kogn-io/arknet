@@ -6,6 +6,7 @@ package de.hauschel.arknet.ul.application.port.in;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Driving port: register a new glossary term.
@@ -30,6 +31,8 @@ public interface AddTerm {
      * @return the persisted term including its assigned identity
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code
      *                        command.language()} and {@code defaultLanguage} are both {@code null}
+     * @throws de.hauschel.arknet.ul.domain.TermNotFoundException if {@code command.broader()} does
+     *                        not resolve to an existing term in the target project
      */
     Term add(ProjectId projectId, NewTerm command, String defaultLanguage);
 
@@ -46,7 +49,21 @@ public interface AddTerm {
      *                   target project's configured default language - the same tag applies to
      *                   both fields, since a term is normally registered in one language at a
      *                   time
+     * @param broader    optional code of an already-existing term this one specializes (its
+     *                   superordinate, single-valued {@code skos:broader} term), or {@code null}
+     *                   for none - resolved against the target project's own glossary, since a
+     *                   fresh term can never already sit anywhere in an existing broader chain,
+     *                   cycle protection never triggers here (only {@code term_update} can create
+     *                   a cycle)
      */
-    record NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language) {
+    record NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language, TermCode broader) {
+
+        /**
+         * Convenience constructor for a new term with no {@code broader} reference - equivalent
+         * to passing {@code null} for {@link #broader} explicitly.
+         */
+        public NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language) {
+            this(prefLabel, definition, actorFacet, language, null);
+        }
     }
 }
