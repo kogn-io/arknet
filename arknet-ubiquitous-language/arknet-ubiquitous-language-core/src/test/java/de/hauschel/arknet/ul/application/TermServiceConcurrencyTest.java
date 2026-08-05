@@ -114,8 +114,9 @@ class TermServiceConcurrencyTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet, String language, String defaultLanguage) {
-            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language, defaultLanguage);
+                ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language, defaultLanguage,
+                    broader);
         }
 
         @Override

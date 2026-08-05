@@ -171,7 +171,7 @@ class TermServiceTest {
         SpyTermRepository spy = new SpyTermRepository(repository);
         TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
 
-        serviceUnderTest.update(WS, added.code(), "Erstattung", null, null, null, "de");
+        serviceUnderTest.update(WS, added.code(), "Erstattung", null, null, null, "de", null);
 
         assertEquals("de", spy.lastUpdateLanguage);
     }
@@ -182,7 +182,7 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
 
         assertThrows(MissingDefaultLanguageException.class,
-                () -> service.update(WS, added.code(), "Erstattung", null, null, null, null));
+                () -> service.update(WS, added.code(), "Erstattung", null, null, null, null, null));
 
         assertEquals("Gutschrift", service.get(WS, added.code(), null).orElseThrow().prefLabel());
     }
@@ -198,7 +198,7 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Kunde", "def a", null, null), DEFAULT_LANGUAGE);
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
 
-        Term updated = service.update(WS, added.code(), null, null, facet, null, null);
+        Term updated = service.update(WS, added.code(), null, null, facet, null, null, null);
 
         assertEquals(facet, updated.actorFacet());
     }
@@ -251,7 +251,7 @@ class TermServiceTest {
     void updateChangesOnlyPrefLabel() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), "Erstattung", null, null, null, DEFAULT_LANGUAGE);
+        Term updated = service.update(WS, added.code(), "Erstattung", null, null, null, DEFAULT_LANGUAGE, null);
 
         assertEquals("Erstattung", updated.prefLabel());
         assertEquals("def a", updated.definition());
@@ -261,7 +261,7 @@ class TermServiceTest {
     void updateChangesOnlyDefinition() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), null, "def b", null, null, DEFAULT_LANGUAGE);
+        Term updated = service.update(WS, added.code(), null, "def b", null, null, DEFAULT_LANGUAGE, null);
 
         assertEquals("Gutschrift", updated.prefLabel());
         assertEquals("def b", updated.definition());
@@ -272,7 +272,7 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Kunde", "def a", null, null), DEFAULT_LANGUAGE);
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
 
-        Term updated = service.update(WS, added.code(), null, null, facet, null, DEFAULT_LANGUAGE);
+        Term updated = service.update(WS, added.code(), null, null, facet, null, DEFAULT_LANGUAGE, null);
 
         assertEquals("Kunde", updated.prefLabel());
         assertEquals("def a", updated.definition());
@@ -284,7 +284,7 @@ class TermServiceTest {
         ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
         Term added = service.add(WS, new NewTerm("Kunde", "def a", facet, null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), "Bestandskunde", null, null, null, DEFAULT_LANGUAGE);
+        Term updated = service.update(WS, added.code(), "Bestandskunde", null, null, null, DEFAULT_LANGUAGE, null);
 
         assertEquals(facet, updated.actorFacet());
     }
@@ -294,7 +294,7 @@ class TermServiceTest {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
         ActorFacet facet = new ActorFacet(ActorKind.SYSTEM, "Zahlungsdienst");
 
-        Term updated = service.update(WS, added.code(), "Erstattung", "def b", facet, null, DEFAULT_LANGUAGE);
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", facet, null, DEFAULT_LANGUAGE, null);
 
         assertEquals("Erstattung", updated.prefLabel());
         assertEquals("def b", updated.definition());
@@ -305,7 +305,7 @@ class TermServiceTest {
     void updateKeepsIdentityAndCodeUnchanged() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
 
-        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, null, DEFAULT_LANGUAGE);
+        Term updated = service.update(WS, added.code(), "Erstattung", "def b", null, null, DEFAULT_LANGUAGE, null);
 
         assertEquals(added.id(), updated.id());
         assertEquals(added.code(), updated.code());
@@ -315,7 +315,7 @@ class TermServiceTest {
     void updatePersistsTheChange() {
         Term added = service.add(WS, new NewTerm("Gutschrift", "def a", null, null), DEFAULT_LANGUAGE);
 
-        service.update(WS, added.code(), "Erstattung", null, null, null, DEFAULT_LANGUAGE);
+        service.update(WS, added.code(), "Erstattung", null, null, null, DEFAULT_LANGUAGE, null);
 
         assertEquals("Erstattung", repository.findByCode(WS, added.code(), null).orElseThrow().prefLabel());
     }
@@ -323,7 +323,35 @@ class TermServiceTest {
     @Test
     void updateThrowsWhenCodeIsUnknown() {
         assertThrows(TermNotFoundException.class,
-                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null, null, DEFAULT_LANGUAGE));
+                () -> service.update(WS, new TermCode("TERM-99"), "Erstattung", null, null, null, DEFAULT_LANGUAGE, null));
+    }
+
+    /** {@code add}'s optional {@code broader} command field passes straight through. */
+    @Test
+    void addPassesTheBroaderCodeThrough() {
+        TermCode broader = service.add(WS, new NewTerm("Actor", "def a", null, null), DEFAULT_LANGUAGE).code();
+
+        Term narrower = service.add(WS, new NewTerm("Human Actor", "def b", null, null, broader), DEFAULT_LANGUAGE);
+
+        assertEquals(broader, narrower.broader());
+    }
+
+    /**
+     * {@code update}'s {@code broader} argument is a {@code null}-or-{@link Optional} tri-state
+     * (issue #252) - {@code update} must pass it through to the repository entirely unmerged,
+     * exactly like every other field {@link #updateNeverReadsBeforeDelegatingToTheRepository}
+     * already guards.
+     */
+    @Test
+    void updatePassesTheBroaderOptionalThroughUnmerged() {
+        TermCode broader = service.add(WS, new NewTerm("Actor", "def a", null, null), DEFAULT_LANGUAGE).code();
+        Term added = service.add(WS, new NewTerm("Human Actor", "def b", null, null, broader), DEFAULT_LANGUAGE);
+        assertEquals(broader, added.broader());
+
+        Term updated = service.update(
+                WS, added.code(), null, null, null, null, DEFAULT_LANGUAGE, Optional.empty());
+
+        assertNull(updated.broader());
     }
 
     /**
@@ -344,7 +372,7 @@ class TermServiceTest {
         SpyTermRepository spy = new SpyTermRepository(delegate);
         TermService serviceUnderTest = new TermService(spy, new UuidResourceIdFactory());
 
-        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null, null, DEFAULT_LANGUAGE);
+        serviceUnderTest.update(WS, seeded.code(), "Erstattung", null, null, null, DEFAULT_LANGUAGE, null);
 
         assertEquals(0, spy.findByCodeCalls);
         assertEquals(0, spy.findAllCalls);
@@ -372,9 +400,10 @@ class TermServiceTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet, String language, String defaultLanguage) {
+                ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
             lastUpdateLanguage = language;
-            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language, defaultLanguage);
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language, defaultLanguage,
+                    broader);
         }
 
         @Override

@@ -69,4 +69,26 @@ class TermTest {
 
         assertEquals(facet, term.actorFacet());
     }
+
+    @Test
+    void holdsNoBroaderByDefault() {
+        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null);
+
+        assertNull(term.broader());
+    }
+
+    @Test
+    void holdsBroaderWhenPresent() {
+        TermCode broader = new TermCode("TERM-2");
+        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null, broader);
+
+        assertEquals(broader, term.broader());
+    }
+
+    /** Domain-level guard: even without seeing the graph, a term cannot claim itself as broader. */
+    @Test
+    void rejectsItsOwnCodeAsBroader() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Term(ID, CODE, "Gutschrift", "def", null, CODE));
+    }
 }

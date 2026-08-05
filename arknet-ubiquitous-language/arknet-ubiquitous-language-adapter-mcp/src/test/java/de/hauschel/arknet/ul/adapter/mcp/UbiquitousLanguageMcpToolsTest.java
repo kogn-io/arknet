@@ -74,7 +74,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void addPassesThroughActorFacet() {
         String rendered = adapter.add(null, "Kunde", "Person, die eine Bestellung aufgibt.", "HUMAN", "Besteller",
-                null, null);
+                null, null, null);
 
         assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), stub.lastCommand.actorFacet());
         assertTrue(rendered.contains("[actor:HUMAN role=Besteller]"), rendered);
@@ -83,7 +83,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void addPassesThroughLegalActorKind() {
         String rendered = adapter.add(null, "Kunde GmbH", "Ein Unternehmen, das Bestellungen aufgibt.", "LEGAL",
-                "Besteller", null, null);
+                "Besteller", null, null, null);
 
         assertEquals(new ActorFacet(ActorKind.LEGAL, "Besteller"), stub.lastCommand.actorFacet());
         assertTrue(rendered.contains("[actor:LEGAL role=Besteller]"), rendered);
@@ -91,7 +91,7 @@ class UbiquitousLanguageMcpToolsTest {
 
     @Test
     void addWithoutActorKindLeavesFacetNull() {
-        adapter.add(null, "Gutschrift", "def a", null, null, null, null);
+        adapter.add(null, "Gutschrift", "def a", null, null, null, null, null);
 
         assertNull(stub.lastCommand.actorFacet());
     }
@@ -99,7 +99,7 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void addRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null, null));
+                () -> adapter.add(null, "Gutschrift", "def a", "NOT_A_KIND", null, null, null, null));
     }
 
     /**
@@ -110,7 +110,7 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void addPassesTheLanguageArgumentThroughUnchanged() {
-        adapter.add(null, "Kunde", "def a", null, null, "de", null);
+        adapter.add(null, "Kunde", "def a", null, null, null, "de", null);
 
         assertEquals("de", stub.lastCommand.language());
     }
@@ -118,8 +118,8 @@ class UbiquitousLanguageMcpToolsTest {
     /** {@code term_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
-        String rendered =
-                adapter.update(null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde", "de", null);
+        String rendered = adapter.update(
+                null, "TERM-1", "Erstattung", "Neue Definition", "HUMAN", "Kunde", null, "de", null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertEquals("Erstattung", stub.lastUpdatePrefLabel);
@@ -137,7 +137,7 @@ class UbiquitousLanguageMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "TERM-1", null, null, null, null, null, null);
+        adapter.update(null, "TERM-1", null, null, null, null, null, null, null);
 
         assertEquals(new TermCode("TERM-1"), stub.lastUpdatedTerm);
         assertNull(stub.lastUpdatePrefLabel);
@@ -149,7 +149,51 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void updateRejectsInvalidActorKind() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null, null, null));
+                () -> adapter.update(null, "TERM-1", null, null, "NOT_A_KIND", null, null, null, null));
+    }
+
+    /** {@code term_add}'s optional {@code broader} argument resolves to a {@link TermCode}. */
+    @Test
+    void addPassesThroughTheBroaderCode() {
+        adapter.add(null, "Human Actor", "A human acting.", null, null, "TERM-1", null, null);
+
+        assertEquals(new TermCode("TERM-1"), stub.lastCommand.broader());
+    }
+
+    /** Omitting {@code broader} on {@code term_add} leaves it unset. */
+    @Test
+    void addWithoutBroaderLeavesItNull() {
+        adapter.add(null, "Actor", "Someone or something acting.", null, null, null, null, null);
+
+        assertNull(stub.lastCommand.broader());
+    }
+
+    /**
+     * {@code term_update}'s {@code broader} argument is a three-way signal (issue #252), unlike
+     * every other argument: omitting it must reach {@link UpdateTerm} as {@code null} (leave an
+     * already-set broader term unchanged).
+     */
+    @Test
+    void updateOmittingBroaderPassesNullThrough() {
+        adapter.update(null, "TERM-1", null, null, null, null, null, null, null);
+
+        assertNull(stub.lastUpdateBroader);
+    }
+
+    /** An explicit, non-blank {@code broader} resolves to {@code Optional.of(...)} - set/replace. */
+    @Test
+    void updatePassesANonBlankBroaderAsOptionalOfTheCode() {
+        adapter.update(null, "TERM-1", null, null, null, null, "TERM-2", null, null);
+
+        assertEquals(Optional.of(new TermCode("TERM-2")), stub.lastUpdateBroader);
+    }
+
+    /** An explicit blank {@code broader} resolves to {@code Optional.empty()} - explicit clear. */
+    @Test
+    void updatePassesABlankBroaderAsOptionalEmpty() {
+        adapter.update(null, "TERM-1", null, null, null, null, "", null, null);
+
+        assertEquals(Optional.empty(), stub.lastUpdateBroader);
     }
 
     @Test
@@ -213,6 +257,7 @@ class UbiquitousLanguageMcpToolsTest {
         private String lastUpdateDefinition;
         private ActorFacet lastUpdateActorFacet;
         private String lastUpdateLanguage;
+        private Optional<TermCode> lastUpdateBroader;
         private String lastGetDisplayLocale;
         private List<Term> termsForList = List.of();
         private Optional<Term> termForGet = Optional.empty();
@@ -238,14 +283,16 @@ class UbiquitousLanguageMcpToolsTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet, String language, String defaultLanguage) {
+                ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
             lastUpdatedTerm = code;
             lastUpdatePrefLabel = prefLabel;
             lastUpdateDefinition = definition;
             lastUpdateActorFacet = actorFacet;
             lastUpdateLanguage = language;
+            lastUpdateBroader = broader;
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code,
-                    prefLabel != null ? prefLabel : "p", definition != null ? definition : "d", actorFacet);
+                    prefLabel != null ? prefLabel : "p", definition != null ? definition : "d", actorFacet,
+                    broader != null ? broader.orElse(null) : null);
         }
     }
 }

@@ -5,6 +5,7 @@ package de.hauschel.arknet.ul.adapter.mcp;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -170,6 +171,11 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = "Optional: the actor's role in the bounded context "
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
             final String actorRole,
+            @McpToolParam(description = "Optional: identity (e.g. TERM-1) of an already-existing term this one "
+                    + "specializes - its broader, superordinate term (skos:broader), e.g. 'Human Actor' as the "
+                    + "broader term of 'Customer'. Rejected if the code does not resolve to an existing term",
+                    required = false)
+            final String broader,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the label and definition "
                     + "are written in. Falls back to the project's configured default language "
                     + "(project_update) if omitted; if the project has no default either, the call is "
@@ -179,7 +185,9 @@ public final class UbiquitousLanguageMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorFacet facet = parseActorFacet(actorKind, actorRole);
-        final Term created = addTerm.add(project.id(), new NewTerm(label, definition, facet, blankToNull(language)),
+        final TermCode broaderCode = blankToNull(broader) == null ? null : new TermCode(broader.trim());
+        final Term created = addTerm.add(project.id(),
+                new NewTerm(label, definition, facet, blankToNull(language), broaderCode),
                 project.defaultLanguage());
         return format(created);
     }
@@ -239,6 +247,13 @@ public final class UbiquitousLanguageMcpTools {
                     + "giving actorKind leaves an already-set role unchanged (it does not clear it)",
                     required = false)
             final String actorRole,
+            @McpToolParam(description = "Optional: identity (e.g. TERM-1) of an already-existing term this one "
+                    + "specializes - its broader, superordinate term (skos:broader). Omit to leave an "
+                    + "already-set broader term unchanged; pass an empty string to explicitly clear it; pass "
+                    + "a term identity to set/replace it. Rejected if the code does not resolve to an existing "
+                    + "term, or if it would make the term its own (direct or transitive) broader term",
+                    required = false)
+            final String broader,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the new label/definition "
                     + "is written in. Falls back to the project's configured default language (see "
                     + "term_add's same parameter) if omitted; if the project has no default either, the "
@@ -253,8 +268,9 @@ public final class UbiquitousLanguageMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final ActorFacet facet = parseActorFacet(actorKind, actorRole);
+        final Optional<TermCode> broaderPatch = parseBroaderPatch(broader);
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
-                facet, blankToNull(language), project.defaultLanguage());
+                facet, blankToNull(language), project.defaultLanguage(), broaderPatch);
         return format(updated);
     }
 
@@ -264,12 +280,29 @@ public final class UbiquitousLanguageMcpTools {
                 : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
     }
 
+    /**
+     * Parses {@code term_update}'s {@code broader} argument into {@link UpdateTerm}'s
+     * {@code null}-or-{@link Optional} tri-state (see that port's class-level "Broader" note):
+     * unlike every other {@code term_update} argument, an omitted/blank {@code broader} cannot
+     * share the usual "leave unchanged" meaning with "explicitly clear" - a caller needs a way to
+     * say both. Omitting the argument entirely ({@code broader == null}) leaves an already-set
+     * broader term unchanged; explicitly passing an empty/blank string clears it; any other value
+     * is the code of the term to set/replace it with.
+     */
+    private static Optional<TermCode> parseBroaderPatch(final String broader) {
+        if (broader == null) {
+            return null;
+        }
+        return broader.isBlank() ? Optional.empty() : Optional.of(new TermCode(broader.trim()));
+    }
+
     private static String format(final Term t) {
         final ActorFacet facet = t.actorFacet();
         final String actor = facet == null
                 ? ""
                 : " [actor:%s%s]".formatted(facet.kind(), facet.role() == null ? "" : " role=" + facet.role());
-        return "%s %s - %s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), actor);
+        final String broader = t.broader() == null ? "" : " [broader:%s]".formatted(t.broader().value());
+        return "%s %s - %s%s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), actor, broader);
     }
 
     private static String blankToNull(final String value) {

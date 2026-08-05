@@ -3,6 +3,8 @@
 
 package de.hauschel.arknet.ul.application.port.in;
 
+import java.util.Optional;
+
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
@@ -39,6 +41,16 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * a {@code null} {@link ActorFacet#role() role} leaves an already-set role untouched too, so
  * correcting only the kind (e.g. {@code HUMAN} to {@code SYSTEM}) never has to restate the role to
  * avoid losing it.</p>
+ *
+ * <p><strong>Broader (issue #252).</strong> Unlike every other field on this port, {@code
+ * broader} genuinely needs three states, not two - "leave unchanged" and "clear an already-set
+ * broader term" are different signals, and this port's usual {@code null}-means-unchanged
+ * sentinel can only ever mean one of them. {@code broader} is therefore a {@code null}-or-{@link
+ * Optional} argument: {@code null} (the outer reference itself) leaves an already-set broader
+ * term untouched, exactly like every other field here; a non-{@code null} {@link
+ * Optional#empty()} explicitly clears it; a non-{@code null} {@link Optional#of} sets/replaces
+ * it. Setting a new broader term is resolved and cycle-checked against the target project's own
+ * glossary - a term must not become its own (direct or transitive) broader term.</p>
  */
 public interface UpdateTerm {
 
@@ -65,11 +77,19 @@ public interface UpdateTerm {
      *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                        or {@code null} if it has none - only consulted when {@code
      *                        prefLabel}/{@code definition} is actually non-{@code null} here
+     * @param broader         {@code null} to leave an already-set broader term untouched, {@link
+     *                        Optional#empty()} to clear it, or {@link Optional#of} the code of an
+     *                        already-existing term to set/replace it (see the class-level
+     *                        "Broader" note)
      * @return the updated term
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code prefLabel} or
      *                        {@code definition} is non-{@code null}, {@code language} is
      *                        {@code null} and {@code defaultLanguage} is {@code null} too
+     * @throws de.hauschel.arknet.ul.domain.TermNotFoundException if {@code broader} carries a
+     *                        code that does not resolve to an existing term in the target project
+     * @throws de.hauschel.arknet.ul.domain.TermCycleException if setting {@code broader} would
+     *                        make {@code code} its own (direct or transitive) broader term
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
-            String language, String defaultLanguage);
+            String language, String defaultLanguage, Optional<TermCode> broader);
 }

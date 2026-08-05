@@ -224,7 +224,7 @@ class TermServiceRealStoreConcurrencyTest {
 
         Thread winnerThread = new Thread(() -> {
             try {
-                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, "de", null);
+                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, "de", null, null);
             } catch (Throwable t) {
                 winnerFailure.set(t);
             } finally {
@@ -233,7 +233,7 @@ class TermServiceRealStoreConcurrencyTest {
         }, "racer-A");
         Thread loserThread = new Thread(() -> {
             try {
-                loserRepository.update(WS, code, "Client", null, null, "fr", null);
+                loserRepository.update(WS, code, "Client", null, null, "fr", null, null);
             } catch (Throwable t) {
                 loserFailure.set(t);
             }

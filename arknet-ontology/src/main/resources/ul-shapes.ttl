@@ -24,7 +24,8 @@ ulshapes:TermShape
     sh:targetClass skos:Concept ;
     sh:property ulshapes:Term-prefLabel ;
     sh:property ulshapes:Term-definition ;
-    sh:property ulshapes:Term-inScheme .
+    sh:property ulshapes:Term-inScheme ;
+    sh:property ulshapes:Term-broader .
 
 ulshapes:Term-prefLabel
     a sh:PropertyShape ;
@@ -49,6 +50,15 @@ ulshapes:Term-inScheme
     sh:class    skos:ConceptScheme ;
     sh:message  "Best practice: A term should be placed in a glossary (skos:ConceptScheme) via skos:inScheme."@en , "Best Practice: Ein Begriff sollte via skos:inScheme in einem Glossar (skos:ConceptScheme) liegen."@de ;
     sh:severity sh:Warning .
+
+ulshapes:Term-broader
+    a sh:PropertyShape ;
+    sh:path     skos:broader ;
+    sh:maxCount 1 ;
+    sh:class    skos:Concept ;
+    sh:nodeKind sh:IRI ;
+    sh:message  "skos:broader is optional but, if present, must reference exactly one other skos:Concept (IRI) - the term's single broader (superordinate) term."@en , "skos:broader ist optional, muss aber, falls vorhanden, genau einen anderen skos:Concept (IRI) referenzieren - den einen uebergeordneten (broader) Begriff des Begriffs."@de ;
+    sh:severity sh:Violation .
 
 
 ##############################################################################

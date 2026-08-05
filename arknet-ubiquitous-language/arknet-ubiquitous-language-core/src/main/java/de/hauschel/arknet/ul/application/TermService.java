@@ -108,7 +108,8 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
             TermCode code = nextCode(projectId);
-            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
+            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet(),
+                    command.broader());
             repository.create(projectId, term, language);
             return term;
         });
@@ -129,7 +130,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language, String defaultLanguage) {
+            ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         // Unlike RequirementService/UseCaseService, this method never reads the current term
@@ -145,7 +146,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
                 ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
                 : language;
         return repository.update(projectId, code, prefLabel, definition, actorFacet, effectiveLanguage,
-                defaultLanguage);
+                defaultLanguage, broader);
     }
 
     @Override

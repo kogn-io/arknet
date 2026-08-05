@@ -93,6 +93,19 @@ public final class ArkreqVocabulary {
     /** {@code skos:Concept} - the type of a glossary term (including actor-facetted ones). */
     public static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
 
+    /**
+     * {@code skos:broader} - Term -&gt; the broader (superordinate) Term it specializes
+     * (issue #252). Only this forward direction is ever asserted as a triple - {@code
+     * skos:narrower} is left to a reader, never written a second time by hand.
+     */
+    public static final String BROADER = SKOS_NAMESPACE + "broader";
+
+    /**
+     * {@code skos:definition} - the meaning of a glossary term; scanned as its prose text by the
+     * term-mention sweep of {@code orphan_check}'s unlinked-mention check (issue #252).
+     */
+    public static final String DEFINITION = SKOS_NAMESPACE + "definition";
+
     /** {@code arkreq:TechnicalConstraint} - the type of a technical constraint. */
     public static final String TECHNICAL_CONSTRAINT_TYPE = NAMESPACE + "TechnicalConstraint";
 
