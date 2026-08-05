@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.adapter.kogniordf;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +33,7 @@ import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
+import io.kogn.rdf.terms.vocab.VocabXsd;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -39,6 +41,7 @@ import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
@@ -48,6 +51,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.DuplicateRequirementCodeException;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
@@ -71,8 +75,9 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory}, never derived from the
  * business code), stored in one named graph shared by all requirements: five mandatory triples
  * (identifier, type, title, description, status) plus one or more mandatory
- * {@code arkreq:acceptanceCriterion} literal triples ({@code 1..n}, testable
- * "Done when ..." criteria) plus up to three optional triples for {@code priority},
+ * {@code arkreq:acceptanceCriterion} edges ({@code 1..n}, testable "Done when ..." criteria) to
+ * own, positioned {@code arkreq:AcceptanceCriterion} resources (issue #266, mirroring
+ * {@code arkreq:mainStep}/{@code arkreq:Step}) plus up to three optional triples for {@code priority},
  * {@code motivatedBy} and {@code qualityCategory} - written only when the corresponding field is
  * non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so that requirements without
  * them still match. The {@code dcterms:identifier} triple carries the
@@ -201,22 +206,41 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String CONSTRAINED_BY_PROPERTY = ArkreqVocabulary.CONSTRAINED_BY;
 
     /**
-     * Stands in for a requirement that predates the mandatory acceptance-criterion invariant:
-     * {@code arkreq:acceptanceCriterion} became
-     * mandatory ({@code sh:minCount 1}) only with this field, so a requirement written by an
-     * older {@code req_add} carries none. The gate blocks that state on the next <em>write</em>,
-     * but reading is not gated - and {@link Requirement}'s constructor rejects an empty list
-     * unconditionally, so without this substitution {@link #findByCode}/{@link #findAll} would
-     * throw for every such pre-existing requirement instead of returning it. Substituting here,
-     * at the adapter boundary, keeps that domain invariant intact (it never sees an empty list)
-     * while surfacing the gap instead of crashing.
-     *
-     * <p>This same substitution also catches the case where the read result is
-     * non-empty yet still constructor-illegal after {@link #sanitizeAcceptanceCriteria}
-     * filters/dedupes it down to nothing - see that method's javadoc.</p>
+     * {@code arkreq:AcceptanceCriterion} (issue #266) - the own resource type an
+     * {@code arkreq:acceptanceCriterion} edge now points at, mirroring
+     * {@code KognioRdfUseCaseRepository}'s {@code STEP_TYPE}. Adapter-private (not shared via
+     * {@link ArkreqVocabulary}) because, unlike {@link #ACCEPTANCE_CRITERION_PROPERTY}/
+     * {@link #CRITERION_TEXT_PROPERTY}, nothing outside this adapter needs to test a node's type
+     * against it - the traceability read path only ever follows the edge straight to
+     * {@code criterionText}, the same way it never checks {@code arkreq:Step}'s type either.
      */
-    private static final List<String> LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER =
-            List.of("(Altdatensatz - kein Akzeptanzkriterium hinterlegt)");
+    private static final String ACCEPTANCE_CRITERION_TYPE = ARKREQ_NAMESPACE + "AcceptanceCriterion";
+
+    /**
+     * {@code arkreq:position} (issue #266) - shared with {@code arkreq:Step}'s own ordinal, see
+     * that ontology term's comment. Adapter-private for the same reason
+     * {@code KognioRdfUseCaseRepository}'s own {@code POSITION_PROPERTY} is: nothing outside the
+     * two out-adapters that write it needs the IRI.
+     */
+    private static final String POSITION_PROPERTY = ARKREQ_NAMESPACE + "position";
+
+    /** {@code arkreq:criterionText} (issue #266) - AcceptanceCriterion's testable "Done when ..." text. */
+    private static final String CRITERION_TEXT_PROPERTY = ArkreqVocabulary.CRITERION_TEXT;
+
+    /**
+     * Stands in for a requirement that predates the mandatory acceptance-criterion invariant, or
+     * whose acceptance-criterion positions are store-first (ADR-005) malformed (a gap or
+     * duplicate): {@code arkreq:acceptanceCriterion} became mandatory ({@code sh:minCount 1}) only
+     * with this field, so a requirement written by an older {@code req_add} carries none. The gate
+     * blocks that state on the next <em>write</em>, but reading is not gated - and
+     * {@link Requirement}'s constructor rejects an empty or non-consecutively-positioned list
+     * unconditionally, so without this substitution {@link #findByCode}/{@link #findAll} would
+     * throw for every such requirement instead of returning it. Substituting here, at the adapter
+     * boundary, keeps that domain invariant intact (it never sees an illegal list) while surfacing
+     * the gap instead of crashing - see {@link #acceptanceCriteriaOrLegacyPlaceholder}.
+     */
+    private static final List<AcceptanceCriterion> LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER =
+            List.of(new AcceptanceCriterion(1, "(Altdatensatz - kein Akzeptanzkriterium hinterlegt)"));
 
     private static final String MUST_HAVE_PRIORITY = ARKREQ_NAMESPACE + "MustHave";
     private static final String SHOULD_HAVE_PRIORITY = ARKREQ_NAMESPACE + "ShouldHave";
@@ -235,6 +259,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final int MAX_READ_RETRY_ATTEMPTS = CodeAssignment.DEFAULT_MAX_ATTEMPTS;
 
     private final DatasetLifecycle lifecycle;
+    private final ResourceIdFactory resourceIdFactory;
     private final DisplayLocale displayLocale;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
@@ -242,17 +267,24 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Creates the adapter.
      *
-     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from - used by the
-     *                      read paths (must not be {@code null})
-     * @param displayLocale the display-language preference selecting which {@code dcterms:title}/
-     *                      {@code dcterms:description} the read paths surface for a multilingual
-     *                      requirement (must not be {@code null})
+     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from - used by
+     *                          the read paths (must not be {@code null})
+     * @param resourceIdFactory mints the opaque IRI of each derived acceptance-criterion resource
+     *                          (issue #266; must not be {@code null}) - the same kernel-owned
+     *                          scheme {@code KognioRdfUseCaseRepository} uses to mint its own
+     *                          derived step resources
+     * @param displayLocale     the display-language preference selecting which {@code
+     *                          dcterms:title}/{@code dcterms:description}/each acceptance
+     *                          criterion's {@code arkreq:criterionText} the read paths surface for
+     *                          a multilingual requirement (must not be {@code null})
      * @param funnel        the shared write funnel (ADR-013) every write runs through - both
      *                      {@link #create} and {@link #compareAndUpdate} (must not be
      *                      {@code null})
      */
-    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, DisplayLocale displayLocale, WriteFunnel funnel) {
+    KognioRdfRequirementRepository(DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory,
+            DisplayLocale displayLocale, WriteFunnel funnel) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
+        this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.funnel = Objects.requireNonNull(funnel, "funnel");
     }
@@ -262,6 +294,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(requirement, "requirement");
         String tag = LanguageTag.canonicalize(language);
+        Map<Integer, String> criteriaTags = new LinkedHashMap<>();
+        requirement.acceptanceCriteria().forEach(criterion -> criteriaTags.put(criterion.position(), tag));
 
         // ResourceId#of validates IRIREF-safety at construction, so requirement.id()'s
         // wrapped IRI is already guaranteed safe to embed here - no separate check needed.
@@ -288,7 +322,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         //    this adapter no longer re-verifies it. constrainedBy is different (see
         //    #constraintAssertedContext): its target's own ConstraintShape lives in this same
         //    shapes file, so a bare type assertion is not enough to satisfy it.
-        Graph graph = buildCandidateGraph(subjectIri, requirement, termIris, constraintIris, tag, tag);
+        RequirementCandidate candidate =
+                buildCandidateGraph(subjectIri, requirement, termIris, constraintIris, tag, tag, criteriaTags);
+        Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
             assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
@@ -314,12 +350,16 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage, String defaultLanguage) {
+            String titleLanguage, String descriptionLanguage,
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
+        Objects.requireNonNull(acceptanceCriteriaLanguageByPosition, "acceptanceCriteriaLanguageByPosition");
         String titleTag = canonicalizeLenient(titleLanguage);
         String descriptionTag = canonicalizeLenient(descriptionLanguage);
         String defaultTag = canonicalizeLenient(defaultLanguage);
+        Map<Integer, String> criteriaTags = new LinkedHashMap<>();
+        acceptanceCriteriaLanguageByPosition.forEach((position, tag) -> criteriaTags.put(position, canonicalizeLenient(tag)));
 
         String subjectIriString = updated.id().value().value();
         IRI subjectIri = rdf.createIRI(subjectIriString);
@@ -331,7 +371,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<IRI> constraintIris = updated.constrainedBy().stream()
                 .map(this::constraintIriFor)
                 .toList();
-        Graph graph = buildCandidateGraph(subjectIri, updated, termIris, constraintIris, titleTag, descriptionTag);
+        RequirementCandidate candidate = buildCandidateGraph(
+                subjectIri, updated, termIris, constraintIris, titleTag, descriptionTag, criteriaTags);
+        Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
             assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
@@ -343,26 +385,41 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 expectedHead == null ? null : expectedHead.value(), graph, assertedContext,
                 () -> new RequirementNotFoundException(projectId, updated.code()),
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceTriplesForUpdate(
-                        tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag, defaultTag));
+                tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag,
+                        criteriaTags, defaultTag, candidate.criterionIriByPosition()));
+    }
+
+    /**
+     * {@link #buildCandidateGraph}'s result: the candidate {@link Graph} itself, plus the opaque
+     * IRI freshly minted for each acceptance-criterion position (issue #266) - a criterion node is
+     * an aggregate-internal value object re-minted on every write (mirroring
+     * {@code KognioRdfUseCaseRepository}'s {@code Step} nodes), so {@link #replaceTriplesForUpdate}
+     * needs this mapping to know which new subject a preserved other-language criterion-text
+     * variant re-attaches to.
+     */
+    private record RequirementCandidate(Graph graph, Map<Integer, IRI> criterionIriByPosition) {
     }
 
     /**
      * Builds the candidate graph for one requirement's triples: five mandatory triples
      * (identifier, type, title, description, status), one or more mandatory
-     * {@code arkreq:acceptanceCriterion} literals, up to three optional triples ({@code priority},
-     * {@code motivatedBy}, {@code qualityCategory}), zero or more {@code arkreq:usesTerm}
-     * edges to {@code termIris}, and zero or more {@code oslc_rm:constrainedBy} edges to
-     * {@code constraintIris}. Shared by {@link #create} and {@link #compareAndUpdate} so both
-     * write paths serialise a {@link Requirement} identically. {@code title}/{@code description}
-     * are written as the language-tagged (or, for a {@code null} tag, plain untagged) literal
-     * {@code titleTag}/{@code descriptionTag} name - never more than one each, since preserving
-     * every other language variant a store-first (ADR-005) or earlier {@code req_update} may have
-     * left is {@link #replaceTriplesForUpdate}'s job, run after this candidate has already passed
-     * the gate.
+     * {@code arkreq:acceptanceCriterion} edges to freshly minted {@code arkreq:AcceptanceCriterion}
+     * resources (issue #266; own {@code arkreq:position}/{@code arkreq:criterionText} triples each,
+     * mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), up to three optional triples
+     * ({@code priority}, {@code motivatedBy}, {@code qualityCategory}), zero or more
+     * {@code arkreq:usesTerm} edges to {@code termIris}, and zero or more
+     * {@code oslc_rm:constrainedBy} edges to {@code constraintIris}. Shared by {@link #create} and
+     * {@link #compareAndUpdate} so both write paths serialise a {@link Requirement} identically.
+     * {@code title}/{@code description}/each criterion's text are written as the language-tagged
+     * (or, for a {@code null} tag, plain untagged) literal named by {@code titleTag}/
+     * {@code descriptionTag}/{@code criteriaTagByPosition} - never more than one each, since
+     * preserving every other language variant a store-first (ADR-005) or earlier {@code req_update}
+     * may have left is {@link #replaceTriplesForUpdate}'s job, run after this candidate has already
+     * passed the gate.
      */
-    private Graph buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris,
-            List<IRI> constraintIris, String titleTag, String descriptionTag) {
+    private RequirementCandidate buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris,
+            List<IRI> constraintIris, String titleTag, String descriptionTag,
+            Map<Integer, String> criteriaTagByPosition) {
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
         graph.add(subjectIri, VocabDct.IDENTIFIER, rdf.createLiteral(requirement.code().value()));
@@ -384,13 +441,31 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         for (IRI termIri : termIris) {
             graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termIri);
         }
-        for (String criterion : requirement.acceptanceCriteria()) {
-            graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), rdf.createLiteral(criterion));
+        Map<Integer, IRI> criterionIriByPosition = new LinkedHashMap<>();
+        for (AcceptanceCriterion criterion : requirement.acceptanceCriteria()) {
+            IRI criterionIri = mintCriterionIri();
+            criterionIriByPosition.put(criterion.position(), criterionIri);
+            graph.add(subjectIri, rdf.createIRI(ACCEPTANCE_CRITERION_PROPERTY), criterionIri);
+            graph.add(criterionIri, VocabRdf.TYPE, rdf.createIRI(ACCEPTANCE_CRITERION_TYPE));
+            graph.add(criterionIri, rdf.createIRI(POSITION_PROPERTY),
+                    rdf.createLiteral(Integer.toString(criterion.position()), VocabXsd.INTEGER));
+            graph.add(criterionIri, rdf.createIRI(CRITERION_TEXT_PROPERTY),
+                    literalOf(criterion.text(), criteriaTagByPosition.get(criterion.position())));
         }
         for (IRI constraintIri : constraintIris) {
             graph.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintIri);
         }
-        return graph;
+        return new RequirementCandidate(graph, criterionIriByPosition);
+    }
+
+    /**
+     * Mints an opaque IRI for a derived acceptance-criterion resource (issue #266), from the same
+     * kernel scheme as the requirement root - mirrors
+     * {@code KognioRdfUseCaseRepository#mintStepIri}. A criterion is a value object with no stable
+     * identity of its own: nothing outside this adapter ever references its IRI.
+     */
+    private IRI mintCriterionIri() {
+        return rdf.createIRI(resourceIdFactory.newId().value());
     }
 
     /**
@@ -448,9 +523,25 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code defaultTag} being {@code null} (no project default configured) never matches a
      * non-{@code null} {@code titleTag}/{@code descriptionTag}, so this sweep is unreachable for
      * a project without one.</p>
+     *
+     * <p><strong>Acceptance-criterion resources are followed and re-minted too (issue
+     * #266).</strong> {@code deleteExisting} now also follows every {@code arkreq:acceptanceCriterion}
+     * edge and deletes the pointed-at {@code arkreq:AcceptanceCriterion} resource's own triples -
+     * mirroring {@code KognioRdfUseCaseRepository}'s {@code mainStep}/{@code extensionStep}
+     * traversal for {@code arkreq:Step}: a criterion node has no stable identity of its own (see
+     * {@link #mintCriterionIri}), so leaving its old triples behind would only accumulate orphaned
+     * garbage no future read ever reaches again. {@code criteriaTagByPosition}/
+     * {@code newCriterionIriByPosition} extend the very same capture-before-delete/reattach-after-
+     * write mechanism to each criterion's {@code arkreq:criterionText}, keyed by
+     * {@code arkreq:position} rather than the (about-to-be-deleted) criterion IRI - exactly
+     * {@code KognioRdfUseCaseRepository#otherLanguageStepTexts}'s own reasoning, safe here without
+     * that class's extra {@code stableExtensionPrefixLength} guard because {@code req_update} never
+     * lets a criterion's position shift (append-only + in-place patch, never reorder/delete - see
+     * {@code Requirement#withAppendedAcceptanceCriteria}/{@code #withAcceptanceCriteriaTextPatches}).
      */
     private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
-            String titleTag, String descriptionTag, String defaultTag) {
+            String titleTag, String descriptionTag, Map<Integer, String> criteriaTagByPosition, String defaultTag,
+            Map<Integer, IRI> newCriterionIriByPosition) {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
                 + "FILTER(!isIRI(?term)) }";
@@ -461,7 +552,14 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         String selectUnjoinableConstrainedBy = "SELECT ?constraint WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
                 + "> ?constraint } FILTER(!isIRI(?constraint)) }";
-        String deleteExisting = "DELETE WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " ?p ?o } }";
+        // Deletes the requirement subject's own triples AND, following each acceptanceCriterion
+        // edge, every existing AcceptanceCriterion resource's triples (issue #266) - see this
+        // method's class-level note above. Mirrors KognioRdfUseCaseRepository#write's own
+        // deleteExisting for mainStep/extensionStep exactly, one edge instead of two.
+        String deleteExisting = "DELETE { GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s ?p ?o } } WHERE { "
+                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
+                + "{ " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?s . ?s ?p ?o } } }";
 
         // Capture what a replacing write is about to destroy but could never have read (see
         // selectUnjoinableUsesTerms above) before deleteExisting wipes it, inside this same
@@ -480,6 +578,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag, defaultTag);
         List<Literal> preservedDescriptions =
                 otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag, defaultTag);
+        Map<Integer, List<Literal>> preservedCriteriaTextsByPosition =
+                otherLanguageAcceptanceCriterionTexts(tx, subject, criteriaTagByPosition, defaultTag);
         tx.update(deleteExisting);
         tx.add(graphIri, graph);
         // Re-attach the preserved edges only after the gate has already run and the rewritten
@@ -509,7 +609,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
             tx.add(graphIri, preservedEdges);
         }
-        if (!preservedTitles.isEmpty() || !preservedDescriptions.isEmpty()) {
+        if (!preservedTitles.isEmpty() || !preservedDescriptions.isEmpty()
+                || !preservedCriteriaTextsByPosition.isEmpty()) {
             Graph preservedLanguageVariants = rdf.createGraph();
             for (Literal title : preservedTitles) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(TITLE_PROPERTY), title);
@@ -517,6 +618,18 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             for (Literal description : preservedDescriptions) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), description);
             }
+            // A preserved criterion-text variant re-attaches to the FRESHLY minted criterion IRI at
+            // the same position (newCriterionIriByPosition) - the old criterion subject no longer
+            // exists after deleteExisting, but nothing outside this adapter ever referenced it
+            // (mirrors KognioRdfUseCaseRepository's identical Step re-attachment).
+            preservedCriteriaTextsByPosition.forEach((position, texts) -> {
+                IRI newCriterionIri = newCriterionIriByPosition.get(position);
+                if (newCriterionIri != null) {
+                    for (Literal text : texts) {
+                        preservedLanguageVariants.add(newCriterionIri, rdf.createIRI(CRITERION_TEXT_PROPERTY), text);
+                    }
+                }
+            });
             tx.add(graphIri, preservedLanguageVariants);
         }
     }
@@ -555,6 +668,42 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     return !Objects.equals(existingTag, writtenTag);
                 })
                 .toList();
+    }
+
+    /**
+     * {@link #otherLanguageLiterals} for {@code arkreq:criterionText}, keyed by acceptance-criterion
+     * {@code arkreq:position} rather than by (about-to-be-deleted) criterion IRI (issue #266) - a
+     * criterion's own subject is re-minted on every write ({@link #mintCriterionIri}), so what
+     * survives an update is the position's <em>other-language text</em>, re-attached to whichever
+     * new criterion IRI ends up at that same position - not the old criterion IRI itself. Mirrors
+     * {@code KognioRdfUseCaseRepository#otherLanguageStepTexts} exactly, minus that method's
+     * {@code stableExtensionPrefixLength} restructuring guard: unreachable here, since
+     * {@code req_update} never reorders or removes an acceptance criterion (append-only + in-place
+     * patch), so every position this query finds is by construction still stable.
+     *
+     * @param defaultTag the target project's configured default language, canonicalized, or
+     *                   {@code null} if it has none - same issue #258 sweep as
+     *                   {@link #otherLanguageLiterals}'s own {@code defaultTag}, applied per
+     *                   position: a position whose written tag equals {@code defaultTag} sweeps an
+     *                   existing untagged criterion text at that position instead of preserving it
+     */
+    private Map<Integer, List<Literal>> otherLanguageAcceptanceCriterionTexts(
+            DatasetTx tx, String subject, Map<Integer, String> criteriaTagByPosition, String defaultTag) {
+        String query = "SELECT ?position ?text WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion . "
+                + "?criterion <" + POSITION_PROPERTY + "> ?position ; <" + CRITERION_TEXT_PROPERTY + "> ?text } }";
+        Map<Integer, List<Literal>> byPosition = new LinkedHashMap<>();
+        tx.select(query).forEach(row -> {
+            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            Literal text = literalOf(row, "text");
+            String writtenTag = criteriaTagByPosition.get(position);
+            String existingTag = canonicalizeLenient(text.getLanguageTag().orElse(null));
+            boolean sweepUntagged = defaultTag != null && defaultTag.equals(writtenTag) && existingTag == null;
+            if (!sweepUntagged && !Objects.equals(existingTag, writtenTag)) {
+                byPosition.computeIfAbsent(position, key -> new ArrayList<>()).add(text);
+            }
+        });
+        return byPosition;
     }
 
     /**
@@ -625,7 +774,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * multiplication {@code priority}/{@code qualityCategory} already cause, but for two
      * <em>mandatory</em> fields every caller of this clause currently assumes are single-valued
      * per row. {@link #readTitles}/{@link #readDescriptions} read them as their own follow-up
-     * queries instead, the same way {@link #readAcceptanceCriteria} already does for
+     * queries instead, the same way {@link #readAcceptanceCriterionAssemblies} already does for
      * {@code arkreq:acceptanceCriterion}.</p>
      */
     private static String requirementWhereClause(String identifierClause) {
@@ -676,14 +825,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private Optional<Requirement> requirementOf(
             ProjectId projectId, BindingSet row, RequirementCode code, SparqlQuery query, DisplayLocale locale) {
         String subjectIriString = iriOf(row, "s").getIRIString();
-        return requirementOf(projectId, row, code, query, locale, acceptanceCriteriaOrLegacyPlaceholder(
-                readAcceptanceCriteria(query::select, SparqlTerms.iriRef(subjectIriString))));
+        String subject = SparqlTerms.iriRef(subjectIriString);
+        List<AcceptanceCriterionAssembly> assemblies = readAcceptanceCriterionAssemblies(query::select, subject);
+        List<AcceptanceCriterion> criteria =
+                acceptanceCriteriaOrLegacyPlaceholder(toAcceptanceCriteria(assemblies, locale));
+        return requirementOf(projectId, row, code, query, locale, criteria);
     }
 
     /**
      * {@link #requirementOf(ProjectId, BindingSet, RequirementCode, SparqlQuery, DisplayLocale)}
      * with the caller already holding the resolved {@code acceptanceCriteria} list - the seam
-     * {@link #findCurrentByCode} uses so it can read {@link #readAcceptanceCriteria} exactly once
+     * {@link #findCurrentByCode} uses so it can read {@link #readAcceptanceCriterionAssemblies} exactly once
      * and still learn, before building the {@link Requirement}, whether the result it is about to
      * embed is a real store value or the legacy placeholder (see {@link
      * RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}).
@@ -699,7 +851,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
     private Optional<Requirement> requirementOf(ProjectId projectId, BindingSet row, RequirementCode code,
-            SparqlQuery query, DisplayLocale locale, List<String> acceptanceCriteria) {
+            SparqlQuery query, DisplayLocale locale, List<AcceptanceCriterion> acceptanceCriteria) {
         String subjectIriString = iriOf(row, "s").getIRIString();
         String subject = SparqlTerms.iriRef(subjectIriString);
         return selectTitleDescription(query::select, subject, locale).map(selection -> new Requirement(
@@ -817,7 +969,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@inheritDoc}
      *
      * <p><strong>One-transaction snapshot (issue #171).</strong> The main row, {@link
-     * #readUsesTerms} and {@link #readAcceptanceCriteria} all run against the same live
+     * #readUsesTerms} and {@link #readAcceptanceCriterionAssemblies} all run against the same live
      * {@link DatasetTx}, inside one {@link #readInTransaction} call - unlike
      * {@link #findCurrentByCode}, this method has no concurrency token a caller compares before
      * acting on the result, so a concurrent funnel write landing between two of these three reads
@@ -869,7 +1021,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@link #requirementByCodeWhereClause} (the core fields) plus the head itself come from this
      * method's one query call - one snapshot, which is the load-bearing guarantee,
      * not an ordering of clauses within that query. {@link #requirementOf} then issues two
-     * further, independent queries, via {@link #readUsesTerms} and {@link #readAcceptanceCriteria},
+     * further, independent queries, via {@link #readUsesTerms} and {@link #readAcceptanceCriterionAssemblies},
      * to fill in {@code usesTerms} and {@code acceptanceCriteria}; those later reads are safe
      * precisely because they can only be fresher, never staler, than the head: a concurrent funnel
      * write landing in between moves the head, so {@link RequirementRepository#compareAndUpdate}
@@ -880,9 +1032,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * - plus one {@code OPTIONAL} join into
      * {@link ArkprovVocabulary#PROVENANCE_GRAPH} for the head, and the {@code
      * acceptanceCriteriaIsSynthesized} flag {@link #findByCode} has no need for: this method reads
-     * {@link #readAcceptanceCriteria} itself (rather than delegating to {@link
+     * {@link #readAcceptanceCriterionAssemblies} itself (rather than delegating to {@link
      * #requirementOf(ProjectId, BindingSet, RequirementCode, DatasetHandle)}) so it can tell, before the
-     * {@link Requirement} is built, whether {@link #sanitizeAcceptanceCriteria} left anything at
+     * {@link Requirement} is built, whether {@link #hasConsecutiveAcceptanceCriterionPositions} left anything at
      * all - i.e. whether the subject carries a real {@code arkreq:acceptanceCriterion} triple or
      * none, the fact {@link RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()}
      * exists to carry back to the caller (see {@link
@@ -921,12 +1073,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             if (titleAndDescription.isEmpty()) {
                 return Optional.empty();
             }
-            List<String> sanitizedCriteria = sanitizeAcceptanceCriteria(
-                    readAcceptanceCriteria(handle.sparqlQuery()::select, subject));
-            boolean acceptanceCriteriaIsSynthesized = sanitizedCriteria.isEmpty();
-            List<String> acceptanceCriteria = acceptanceCriteriaIsSynthesized
+            List<AcceptanceCriterionAssembly> criterionAssemblies =
+                    readAcceptanceCriterionAssemblies(handle.sparqlQuery()::select, subject);
+            List<AcceptanceCriterion> rawCriteria = toAcceptanceCriteria(criterionAssemblies, displayLocale);
+            boolean acceptanceCriteriaIsSynthesized =
+                    rawCriteria.isEmpty() || !hasConsecutiveAcceptanceCriterionPositions(rawCriteria);
+            List<AcceptanceCriterion> acceptanceCriteria = acceptanceCriteriaIsSynthesized
                     ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER
-                    : sanitizedCriteria;
+                    : rawCriteria;
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition = acceptanceCriteriaIsSynthesized
+                    ? Map.of()
+                    : toAcceptanceCriteriaLanguages(criterionAssemblies, displayLocale);
             TitleDescriptionSelection selection = titleAndDescription.get();
             Requirement requirement = new Requirement(
                     new RequirementId(ResourceId.of(subjectIriString)),
@@ -947,7 +1104,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     .orElse(null);
             return Optional.of(new RequirementRepository.CurrentRequirement(
                     requirement, head, acceptanceCriteriaIsSynthesized,
-                    selection.title().languageTag(), selection.description().languageTag()));
+                    selection.title().languageTag(), selection.description().languageTag(),
+                    acceptanceCriteriaLanguageByPosition));
         }
     }
 
@@ -977,7 +1135,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             return readInTransaction(projectId, handle, tx -> {
                 Map<String, List<TermRef>> termsBySubject = readUsesTermsBySubject(tx);
                 Map<String, List<ConstraintRef>> constraintsBySubject = readConstrainedByBySubject(tx);
-                Map<String, List<String>> criteriaBySubject = readAcceptanceCriteriaBySubject(tx);
+                Map<String, List<AcceptanceCriterionAssembly>> criteriaAssembliesBySubject =
+                        readAcceptanceCriterionAssembliesBySubject(tx);
                 Map<String, List<LocalizedLiteral>> titlesBySubject = readTitlesBySubject(tx);
                 Map<String, List<LocalizedLiteral>> descriptionsBySubject = readDescriptionsBySubject(tx);
                 // Grouped by subject (see the class-level note above): priority/
@@ -1008,8 +1167,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                             }
                             return entry.getValue().toRequirement(title.get().value(), description.get().value(),
                                     termsBySubject.getOrDefault(entry.getKey(), List.of()),
-                                    acceptanceCriteriaOrLegacyPlaceholder(
-                                            criteriaBySubject.getOrDefault(entry.getKey(), List.of())),
+                                    acceptanceCriteriaOrLegacyPlaceholder(toAcceptanceCriteria(
+                                            criteriaAssembliesBySubject.getOrDefault(entry.getKey(), List.of()),
+                                            displayLocale)),
                                     constraintsBySubject.getOrDefault(entry.getKey(), List.of()));
                         })
                         .filter(Objects::nonNull)
@@ -1084,7 +1244,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         }
 
         private Requirement toRequirement(String title, String description, List<TermRef> usesTerms,
-                List<String> acceptanceCriteria, List<ConstraintRef> constrainedBy) {
+                List<AcceptanceCriterion> acceptanceCriteria, List<ConstraintRef> constrainedBy) {
             return new Requirement(id, code, title, description, type, status,
                     firstDistinct(priorities, "priority"), motivatedBy,
                     firstDistinct(qualityCategories, "qualityCategory"), usesTerms, acceptanceCriteria,
@@ -1240,64 +1400,146 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     // ---- acceptanceCriterion reading ---------------------------------------------------
 
-    /** Reads the {@code arkreq:acceptanceCriterion} literals of one requirement, in lexical order. */
-    private List<String> readAcceptanceCriteria(Function<String, Stream<BindingSet>> selectFn, String subject) {
-        String query = "SELECT ?criterion WHERE { "
-                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY
-                + "> ?criterion } } ORDER BY ?criterion";
-        return selectFn.apply(query)
-                .map(row -> literalOf(row, "criterion").getLexicalForm())
+    /**
+     * One acceptance criterion's position and every {@code arkreq:criterionText} candidate
+     * collected across rows (tagged for {@link DisplayLocale}) - the per-criterion accumulator
+     * {@link #readAcceptanceCriterionAssemblies} builds, since {@code arkreq:criterionText} may
+     * legally carry several language-tagged literals (SKOS-S14-style {@code sh:uniqueLang}),
+     * multiplying a criterion into one row per candidate. Mirrors
+     * {@code KognioRdfUseCaseRepository}'s {@code StepAssembly} (issue #266).
+     */
+    private record AcceptanceCriterionAssembly(int position, List<LocalizedLiteral> textCandidates) {
+    }
+
+    /**
+     * Reads every acceptance criterion's position and {@code criterionText} candidates, grouped by
+     * criterion IRI then sorted by position - the position, not the criterion's own (opaque,
+     * re-minted-on-every-write) IRI, is what a caller ({@link #toAcceptanceCriteria}/
+     * {@link #toAcceptanceCriteriaLanguages}) actually keys on. Mirrors
+     * {@code KognioRdfUseCaseRepository#readMainStepAssemblies}.
+     *
+     * <p>{@code FILTER(isIRI(?criterion))} mirrors {@link #readUsesTerms}: {@code
+     * arkreq:acceptanceCriterion} carries no {@code sh:nodeKind} constraint, so a store-first
+     * (ADR-005) edge may legally target a blank node - excluded here rather than crashing on the
+     * {@link IRI} cast, unreachable via the MCP tools since {@link #mintCriterionIri} always mints
+     * a proper IRI.</p>
+     */
+    private List<AcceptanceCriterionAssembly> readAcceptanceCriterionAssemblies(
+            Function<String, Stream<BindingSet>> selectFn, String subject) {
+        String query = "SELECT ?criterion ?position ?text WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + subject + " <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion . "
+                + "?criterion <" + POSITION_PROPERTY + "> ?position ; <" + CRITERION_TEXT_PROPERTY + "> ?text } "
+                + "FILTER(isIRI(?criterion)) }";
+        Map<String, Integer> positionByCriterion = new LinkedHashMap<>();
+        Map<String, List<LocalizedLiteral>> textsByCriterion = new LinkedHashMap<>();
+        selectFn.apply(query).forEach(row -> {
+            String criterionIri = iriOf(row, "criterion").getIRIString();
+            positionByCriterion.putIfAbsent(
+                    criterionIri, Integer.parseInt(literalOf(row, "position").getLexicalForm()));
+            textsByCriterion.computeIfAbsent(criterionIri, key -> new ArrayList<>())
+                    .add(localizedLiteralOf(row, "text"));
+        });
+        return positionByCriterion.entrySet().stream()
+                .map(entry -> new AcceptanceCriterionAssembly(entry.getValue(), textsByCriterion.get(entry.getKey())))
+                .sorted(Comparator.comparingInt(AcceptanceCriterionAssembly::position))
                 .toList();
     }
 
-    /** Bulk variant of {@link #readAcceptanceCriteria}: all requirements' criteria in one query. */
-    private Map<String, List<String>> readAcceptanceCriteriaBySubject(SparqlQuery query) {
-        String sparql = "SELECT ?s ?criterion WHERE { "
-                + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion } "
-                + "} ORDER BY ?s ?criterion";
-        Map<String, List<String>> bySubject = new LinkedHashMap<>();
-        query.select(sparql).forEach(row -> bySubject
-                .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
-                .add(literalOf(row, "criterion").getLexicalForm()));
+    /** Bulk variant of {@link #readAcceptanceCriterionAssemblies}: every requirement's criteria in one query. */
+    private Map<String, List<AcceptanceCriterionAssembly>> readAcceptanceCriterionAssembliesBySubject(
+            SparqlQuery query) {
+        String sparql = "SELECT ?s ?criterion ?position ?text WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + "?s <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion . "
+                + "?criterion <" + POSITION_PROPERTY + "> ?position ; <" + CRITERION_TEXT_PROPERTY + "> ?text } "
+                + "FILTER(isIRI(?criterion)) } ORDER BY ?s ?position";
+        Map<String, Map<String, Integer>> positionByCriterionBySubject = new LinkedHashMap<>();
+        Map<String, Map<String, List<LocalizedLiteral>>> textsByCriterionBySubject = new LinkedHashMap<>();
+        query.select(sparql).forEach(row -> {
+            String subjectIri = iriOf(row, "s").getIRIString();
+            String criterionIri = iriOf(row, "criterion").getIRIString();
+            positionByCriterionBySubject.computeIfAbsent(subjectIri, key -> new LinkedHashMap<>())
+                    .putIfAbsent(criterionIri, Integer.parseInt(literalOf(row, "position").getLexicalForm()));
+            textsByCriterionBySubject.computeIfAbsent(subjectIri, key -> new LinkedHashMap<>())
+                    .computeIfAbsent(criterionIri, key -> new ArrayList<>())
+                    .add(localizedLiteralOf(row, "text"));
+        });
+        Map<String, List<AcceptanceCriterionAssembly>> bySubject = new LinkedHashMap<>();
+        positionByCriterionBySubject.forEach((subjectIri, positionByCriterion) -> {
+            Map<String, List<LocalizedLiteral>> textsByCriterion = textsByCriterionBySubject.get(subjectIri);
+            bySubject.put(subjectIri, positionByCriterion.entrySet().stream()
+                    .map(entry -> new AcceptanceCriterionAssembly(entry.getValue(), textsByCriterion.get(entry.getKey())))
+                    .sorted(Comparator.comparingInt(AcceptanceCriterionAssembly::position))
+                    .toList());
+        });
         return bySubject;
     }
 
     /**
-     * Substitutes {@link #LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER} for a read result that is
-     * empty, or becomes empty once {@link #sanitizeAcceptanceCriteria} has filtered/deduped it -
-     * see that method's and the placeholder constant's javadoc for why an empty list must never
-     * reach {@link Requirement}'s constructor.
+     * Selects one {@code criterionText} candidate per criterion via {@code locale}, building the
+     * ordered acceptance-criteria list - mirrors {@code KognioRdfUseCaseRepository#toSteps}. A
+     * candidate that is empty (no language variant matched, unreachable for a criterion whose
+     * {@code criterionText} carries {@code sh:minCount 1}) or resolves to a blank string (a
+     * store-first, ADR-005, malformed literal the SHACL gate only guards at write time) is skipped
+     * rather than handed to {@link AcceptanceCriterion}'s blank-rejecting constructor - the
+     * resulting gap in the position sequence is caught by
+     * {@link #hasConsecutiveAcceptanceCriterionPositions} and folds into the same legacy-placeholder
+     * substitution as a requirement with no criteria at all (see
+     * {@link #acceptanceCriteriaOrLegacyPlaceholder}), rather than crashing {@link #findByCode}/
+     * {@link #findAll} for the whole project.
      */
-    private static List<String> acceptanceCriteriaOrLegacyPlaceholder(List<String> criteria) {
-        List<String> sanitized = sanitizeAcceptanceCriteria(criteria);
-        return sanitized.isEmpty() ? LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER : sanitized;
+    private static List<AcceptanceCriterion> toAcceptanceCriteria(
+            List<AcceptanceCriterionAssembly> assemblies, DisplayLocale locale) {
+        List<AcceptanceCriterion> result = new ArrayList<>();
+        for (AcceptanceCriterionAssembly assembly : assemblies) {
+            locale.select(assembly.textCandidates())
+                    .map(LocalizedLiteral::value)
+                    .filter(text -> !text.isBlank())
+                    .ifPresent(text -> result.add(new AcceptanceCriterion(assembly.position(), text)));
+        }
+        return result;
     }
 
     /**
-     * Filters blank entries and deduplicates {@code criteria} by lexical form, keeping the
-     * first-occurring value for each duplicate. Which of two colliding literals "wins" is
-     * therefore deterministic per read (driven by the caller's {@code ORDER BY ?criterion}) but
-     * otherwise unspecified.
-     *
-     * <p><strong>Why.</strong> {@link #readAcceptanceCriteria}/
-     * {@link #readAcceptanceCriteriaBySubject} read each {@code arkreq:acceptanceCriterion}
-     * literal via {@code literalOf(...).getLexicalForm()}, discarding its language tag and
-     * datatype; {@code RequirementShape} places no {@code sh:languageIn}/uniqueness constraint on
-     * the property, so a store-first (ADR-005) requirement can legally carry two literals that
-     * normalize to the same string (e.g. the same text tagged {@code @en} and {@code @de}) or a
-     * whitespace-only literal alongside a valid one. {@link Requirement}'s constructor rejects
-     * both a duplicate and a blank entry unconditionally, so without this step
-     * {@link #findByCode}/{@link #findAll} would throw for such a requirement instead of returning
-     * it - the same read-path-crashes-on-write-time-only-invariant class of bug already fixed
-     * for the all-empty case, one level deeper: here the list is non-empty yet still
-     * constructor-illegal. Store-first duplicate/blank criteria are a gap to surface, not a case
-     * worth resolving more cleverly than that.</p>
+     * The BCP-47 language tag each criterion's currently-selected {@code criterionText} candidate
+     * carries, keyed by position - backs
+     * {@link RequirementRepository.CurrentRequirement#acceptanceCriteriaLanguageByPosition()}.
+     * Mirrors {@code KognioRdfUseCaseRepository#toStepLanguages}.
      */
-    private static List<String> sanitizeAcceptanceCriteria(List<String> criteria) {
-        return criteria.stream()
-                .filter(criterion -> !criterion.isBlank())
-                .distinct()
-                .toList();
+    private static Map<Integer, String> toAcceptanceCriteriaLanguages(
+            List<AcceptanceCriterionAssembly> assemblies, DisplayLocale locale) {
+        Map<Integer, String> languageByPosition = new LinkedHashMap<>();
+        assemblies.forEach(assembly -> locale.select(assembly.textCandidates())
+                .ifPresent(selected -> languageByPosition.put(assembly.position(), selected.languageTag())));
+        return languageByPosition;
+    }
+
+    /**
+     * Mirrors {@code UseCase#requireConsecutiveStepPositions} as a non-throwing predicate: the
+     * criterion at list index {@code i} must carry position {@code i + 1}. A store-first (ADR-005)
+     * gap or duplicate position - nothing in SHACL forbids two {@code arkreq:AcceptanceCriterion}
+     * nodes under the same requirement sharing a position - is detected here before it ever reaches
+     * {@link Requirement}'s constructor.
+     */
+    private static boolean hasConsecutiveAcceptanceCriterionPositions(List<AcceptanceCriterion> criteria) {
+        for (int i = 0; i < criteria.size(); i++) {
+            if (criteria.get(i).position() != i + 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Substitutes {@link #LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER} for a read result that is empty
+     * or, once read back, does not carry gap-free, duplicate-free, ascending positions (a
+     * store-first, ADR-005, malformed acceptance-criteria set) - see
+     * {@link #hasConsecutiveAcceptanceCriterionPositions} and the placeholder constant's javadoc for
+     * why neither must ever reach {@link Requirement}'s constructor.
+     */
+    private static List<AcceptanceCriterion> acceptanceCriteriaOrLegacyPlaceholder(List<AcceptanceCriterion> criteria) {
+        return !criteria.isEmpty() && hasConsecutiveAcceptanceCriterionPositions(criteria)
+                ? criteria
+                : LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER;
     }
 
     /**

@@ -27,6 +27,8 @@ import de.hauschel.arknet.req.application.port.in.AddRequirement.NewRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.ConstraintRef;
@@ -117,7 +119,7 @@ class RequirementServiceTest {
         assertEquals("User can log in", added.title());
         assertEquals("The system shall let a registered user authenticate.", added.description());
         assertEquals(RequirementType.FUNCTIONAL, added.type());
-        assertEquals(List.of("Done when it works"), added.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), added.acceptanceCriteria());
         assertEquals(added, repository.findByCode(WS, added.code(), null).orElseThrow());
     }
 
@@ -152,7 +154,7 @@ class RequirementServiceTest {
     void updateWithoutLanguageFallsBackToTheProjectsDefaultLanguage() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        service.update(WS, code, "New title", null, null, null, null, "de");
+        service.update(WS, code, "New title", null, null, null, null, null, "de");
 
         RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
         assertEquals("de", current.titleLanguage());
@@ -164,7 +166,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
         assertThrows(MissingDefaultLanguageException.class,
-                () -> service.update(WS, code, "New title", null, null, null, null, null));
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null));
 
         assertEquals("User can log in", service.get(WS, code, null).orElseThrow().title());
     }
@@ -297,27 +299,58 @@ class RequirementServiceTest {
     }
 
     @Test
-    void updateChangesTitleDescriptionAndAcceptanceCriteria() {
+    void updateChangesTitleDescriptionAndAppendsANewAcceptanceCriterion() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
         Requirement updated = service.update(WS, code, "New title", "New description",
-                List.of("New done-when criterion"), null, null, DEFAULT_LANGUAGE);
+                List.of("New done-when criterion"), null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("New title", updated.title());
         assertEquals("New description", updated.description());
-        assertEquals(List.of("New done-when criterion"), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works"),
+                new AcceptanceCriterion(2, "New done-when criterion")), updated.acceptanceCriteria());
         assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    /**
+     * {@code req_update} only appends or in-place patches acceptance criteria (issue #266) - it
+     * cannot restate/replace the whole list wholesale the way {@code title}/{@code description}
+     * can be corrected. Correcting an existing criterion's wording goes through
+     * {@code acceptanceCriteriaTextPatches} instead.
+     */
+    @Test
+    void updateCorrectsAnExistingAcceptanceCriterionByPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        Requirement updated = service.update(WS, code, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Corrected done-when criterion")), null, null,
+                DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Corrected done-when criterion")),
+                updated.acceptanceCriteria());
+        assertEquals(updated, service.get(WS, code, null).orElseThrow());
+    }
+
+    @Test
+    void updateAcceptanceCriteriaTextPatchRejectsAnUnknownPosition() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        assertThrows(de.hauschel.arknet.req.domain.AcceptanceCriterionPositionNotFoundException.class,
+                () -> service.update(WS, code, null, null, null,
+                        List.of(new AcceptanceCriterionTextPatch(9, "no such criterion")), null, null,
+                        DEFAULT_LANGUAGE));
     }
 
     @Test
     void updateWithNullFieldsLeavesThemUnchanged() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        Requirement updated = service.update(WS, code, null, "New description", null, null, null, DEFAULT_LANGUAGE);
+        Requirement updated =
+                service.update(WS, code, null, "New description", null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("User can log in", updated.title());
         assertEquals("New description", updated.description());
-        assertEquals(List.of("Done when it works"), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), updated.acceptanceCriteria());
     }
 
     @Test
@@ -325,7 +358,7 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         Requirement before = service.get(WS, code, null).orElseThrow();
 
-        Requirement result = service.update(WS, code, null, null, null, null, null, DEFAULT_LANGUAGE);
+        Requirement result = service.update(WS, code, null, null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(before, result);
     }
@@ -338,7 +371,8 @@ class RequirementServiceTest {
         service.accept(WS, code);
         service.linkTerm(WS, code, "TERM-1");
 
-        Requirement updated = service.update(WS, code, "New title", null, null, null, null, DEFAULT_LANGUAGE);
+        Requirement updated =
+                service.update(WS, code, "New title", null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(RequirementStatus.ACCEPTED, updated.status());
         assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
@@ -357,12 +391,13 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL,
                 Priority.MUST_HAVE, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
-        Requirement updated = service.update(WS, code, null, null, null, Priority.SHOULD_HAVE, null, DEFAULT_LANGUAGE);
+        Requirement updated =
+                service.update(WS, code, null, null, null, null, Priority.SHOULD_HAVE, null, DEFAULT_LANGUAGE);
 
         assertEquals(Priority.SHOULD_HAVE, updated.priority());
         assertEquals("a", updated.title());
         assertEquals("desc a", updated.description());
-        assertEquals(List.of("Done when it works"), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), updated.acceptanceCriteria());
         assertEquals(updated, service.get(WS, code, null).orElseThrow());
     }
 
@@ -372,7 +407,8 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
         assertNull(service.get(WS, code, null).orElseThrow().priority());
 
-        Requirement updated = service.update(WS, code, null, null, null, Priority.COULD_HAVE, null, DEFAULT_LANGUAGE);
+        Requirement updated =
+                service.update(WS, code, null, null, null, null, Priority.COULD_HAVE, null, DEFAULT_LANGUAGE);
 
         assertEquals(Priority.COULD_HAVE, updated.priority());
     }
@@ -386,7 +422,8 @@ class RequirementServiceTest {
         RequirementCode code = service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL,
                 Priority.MUST_HAVE, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
 
-        Requirement updated = service.update(WS, code, "New title", null, null, null, null, DEFAULT_LANGUAGE);
+        Requirement updated =
+                service.update(WS, code, "New title", null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals(Priority.MUST_HAVE, updated.priority());
     }
@@ -395,13 +432,15 @@ class RequirementServiceTest {
     void updateRejectsABlankTitleViaTheDomainInvariant() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
 
-        assertThrows(IllegalArgumentException.class, () -> service.update(WS, code, " ", null, null, null, null, DEFAULT_LANGUAGE));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.update(WS, code, " ", null, null, null, null, null, DEFAULT_LANGUAGE));
     }
 
     @Test
     void updateThrowsWhenRequirementUnknown() {
         RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
-                () -> service.update(WS, new RequirementCode("FR-42"), "New title", null, null, null, null, DEFAULT_LANGUAGE));
+                () -> service.update(
+                        WS, new RequirementCode("FR-42"), "New title", null, null, null, null, null, DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
@@ -569,8 +608,9 @@ class RequirementServiceTest {
 
         Requirement accepted = service.accept(WS, code);
 
-        assertEquals(List.of("Done when it works"), accepted.acceptanceCriteria());
-        assertEquals(List.of("Done when it works"), service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), accepted.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")),
+                service.get(WS, code, null).orElseThrow().acceptanceCriteria());
     }
 
     /**
@@ -582,7 +622,7 @@ class RequirementServiceTest {
 
         Requirement linked = service.linkTerm(WS, code, "TERM-1");
 
-        assertEquals(List.of("Done when it works"), linked.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), linked.acceptanceCriteria());
     }
 
     /**
@@ -629,7 +669,7 @@ class RequirementServiceTest {
         RequirementCode code = givenLegacyRequirement();
 
         MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
-                () -> service.update(WS, code, "New title", null, null, null, null, DEFAULT_LANGUAGE));
+                () -> service.update(WS, code, "New title", null, null, null, null, null, DEFAULT_LANGUAGE));
 
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
@@ -637,18 +677,39 @@ class RequirementServiceTest {
     }
 
     /**
-     * The escape hatch: a caller closing the gap by supplying real acceptance criteria to
-     * {@code update} must succeed - the guard only blocks a write that would carry the
-     * placeholder forward unchanged, not one that explicitly replaces it.
+     * The escape hatch: a caller closing the gap by patching the placeholder's own position (the
+     * only way {@code update} can touch an already-existing criterion, issue #266) with real text
+     * must succeed - the guard only blocks a write that would carry the placeholder forward
+     * unchanged, not one that explicitly overwrites it.
      */
     @Test
-    void updateAcceptsALegacyRequirementWhenExplicitAcceptanceCriteriaAreSupplied() {
+    void updateAcceptsALegacyRequirementWhenThePlaceholderPositionIsPatchedWithRealText() {
         RequirementCode code = givenLegacyRequirement();
 
-        Requirement updated = service.update(WS, code, null, null, List.of("Real done-when criterion"), null, null, DEFAULT_LANGUAGE);
+        Requirement updated = service.update(WS, code, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Real done-when criterion")), null, null,
+                DEFAULT_LANGUAGE);
 
-        assertEquals(List.of("Real done-when criterion"), updated.acceptanceCriteria());
-        assertEquals(List.of("Real done-when criterion"), service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), updated.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")),
+                service.get(WS, code, null).orElseThrow().acceptanceCriteria());
+    }
+
+    /**
+     * Merely appending a new criterion after the placeholder does not close the gap: the
+     * placeholder itself would still be persisted at position 1, exactly the state the guard
+     * exists to prevent.
+     */
+    @Test
+    void updateStillRejectsALegacyRequirementWhenOnlyAppendingWithoutPatchingThePlaceholder() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, null, null, List.of("A new, additional criterion"), null, null, null,
+                        DEFAULT_LANGUAGE));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
     }
 
     /**
@@ -659,12 +720,14 @@ class RequirementServiceTest {
     @Test
     void acceptSucceedsOnceALegacyRequirementsAcceptanceCriteriaHaveBeenSupplied() {
         RequirementCode code = givenLegacyRequirement();
-        service.update(WS, code, null, null, List.of("Real done-when criterion"), null, null, DEFAULT_LANGUAGE);
+        service.update(WS, code, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Real done-when criterion")), null, null,
+                DEFAULT_LANGUAGE);
 
         Requirement accepted = service.accept(WS, code);
 
         assertEquals(RequirementStatus.ACCEPTED, accepted.status());
-        assertEquals(List.of("Real done-when criterion"), accepted.acceptanceCriteria());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Real done-when criterion")), accepted.acceptanceCriteria());
     }
 
     /**
@@ -682,7 +745,8 @@ class RequirementServiceTest {
                 new RequirementId(resourceIdFactory.newId()), code, "legacy title",
                 "A requirement predating the acceptance-criterion invariant.", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, List.of(),
-                List.of("(legacy placeholder - no acceptance criterion on record)"), List.of());
+                List.of(new AcceptanceCriterion(1, "(legacy placeholder - no acceptance criterion on record)")),
+                List.of());
         repository.createLegacy(WS, legacy);
         return code;
     }

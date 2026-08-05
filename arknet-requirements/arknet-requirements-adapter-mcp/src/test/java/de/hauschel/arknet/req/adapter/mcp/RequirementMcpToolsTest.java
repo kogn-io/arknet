@@ -32,6 +32,8 @@ import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintRef;
 import de.hauschel.arknet.req.domain.Priority;
@@ -312,15 +314,26 @@ class RequirementMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
-        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria,
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria, null,
                 "SHOULD_HAVE", null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals("Neuer Titel", stub.lastUpdateTitle);
         assertEquals("Neue Beschreibung", stub.lastUpdateDescription);
-        assertEquals(criteria, stub.lastUpdateAcceptanceCriteria);
+        assertEquals(criteria, stub.lastUpdateNewAcceptanceCriteria);
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertTrue(rendered.contains("Neuer Titel"), rendered);
+    }
+
+    /** {@code req_update}'s {@code acceptanceCriteriaTextPatches} reach {@link UpdateRequirement} unchanged. */
+    @Test
+    void updatePassesAcceptanceCriteriaTextPatchesThroughToTheInPort() {
+        adapter.update(null, "FR-1", null, null, null,
+                List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null,
+                null);
+
+        assertEquals(List.of(new AcceptanceCriterionTextPatch(1, "Korrigierter Text")),
+                stub.lastUpdateAcceptanceCriteriaTextPatches);
     }
 
     /**
@@ -330,12 +343,13 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
         assertEquals(null, stub.lastUpdateDescription);
-        assertEquals(null, stub.lastUpdateAcceptanceCriteria);
+        assertEquals(null, stub.lastUpdateNewAcceptanceCriteria);
+        assertEquals(null, stub.lastUpdateAcceptanceCriteriaTextPatches);
         assertEquals(null, stub.lastUpdatePriority);
     }
 
@@ -347,12 +361,12 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateCanCorrectOnlyThePriority() {
-        String rendered = adapter.update(null, "FR-1", null, null, null, "SHOULD_HAVE", null, null);
+        String rendered = adapter.update(null, "FR-1", null, null, null, null, "SHOULD_HAVE", null, null);
 
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertEquals(null, stub.lastUpdateTitle);
         assertEquals(null, stub.lastUpdateDescription);
-        assertEquals(null, stub.lastUpdateAcceptanceCriteria);
+        assertEquals(null, stub.lastUpdateNewAcceptanceCriteria);
         assertTrue(rendered.contains("SHOULD_HAVE"), rendered);
     }
 
@@ -363,7 +377,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateTreatsABlankPriorityAsOmitted() {
-        adapter.update(null, "FR-1", null, null, null, "  ", null, null);
+        adapter.update(null, "FR-1", null, null, null, null, "  ", null, null);
 
         assertEquals(null, stub.lastUpdatePriority);
     }
@@ -372,13 +386,13 @@ class RequirementMcpToolsTest {
     @Test
     void updateRejectsAnUnknownPriority() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "FR-1", null, null, null, "NICE_TO_HAVE", null, null));
+                () -> adapter.update(null, "FR-1", null, null, null, null, "NICE_TO_HAVE", null, null));
     }
 
     /** {@code req_update}'s {@code language} argument reaches {@link UpdateRequirement} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, "de", null);
+        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, "de", null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -476,11 +490,13 @@ class RequirementMcpToolsTest {
         assertEquals(0, resolveTerms.callCount());
     }
 
+    private static final List<AcceptanceCriterion> DEFAULT_CRITERIA =
+            List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials"));
+
     private static Requirement requirementWithTerms(String code, ResourceId... termIds) {
         List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
         return new Requirement(ID, new RequirementCode(code), "t", "d", RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms,
-                List.of("Login succeeds with valid credentials"), List.of());
+                RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms, DEFAULT_CRITERIA, List.of());
     }
 
     /** Structural stub implementing the eight driving in-ports. */
@@ -501,7 +517,8 @@ class RequirementMcpToolsTest {
         private RequirementCode lastUpdatedRequirement;
         private String lastUpdateTitle;
         private String lastUpdateDescription;
-        private List<String> lastUpdateAcceptanceCriteria;
+        private List<String> lastUpdateNewAcceptanceCriteria;
+        private List<AcceptanceCriterionTextPatch> lastUpdateAcceptanceCriteriaTextPatches;
         private Priority lastUpdatePriority;
         private String lastUpdateLanguage;
 
@@ -510,7 +527,7 @@ class RequirementMcpToolsTest {
             lastAddCommand = command;
             return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
                     command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
-                    command.qualityCategory(), List.of(), command.acceptanceCriteria(), List.of());
+                    command.qualityCategory(), List.of(), toCriteria(command.acceptanceCriteria()), List.of());
         }
 
         @Override
@@ -524,15 +541,15 @@ class RequirementMcpToolsTest {
         public Optional<Requirement> get(ProjectId projectId, RequirementCode code, String displayLocale) {
             lastGetDisplayLocale = displayLocale;
             return Optional.of(new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL,
-                    RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, List.of(),
-                    List.of("Login succeeds with valid credentials"), List.of()));
+                    RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA,
+                    List.of()));
         }
 
         @Override
         public Requirement accept(ProjectId projectId, RequirementCode code) {
             lastAcceptedRequirement = code;
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
-                    Priority.MUST_HAVE, null, null, List.of(), List.of("Login succeeds with valid credentials"), List.of());
+                    Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
         }
 
         @Override
@@ -548,7 +565,7 @@ class RequirementMcpToolsTest {
             }
             List<TermRef> terms = ids.stream().map(TermRef::new).toList();
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                    Priority.MUST_HAVE, null, null, terms, List.of("Login succeeds with valid credentials"), List.of());
+                    Priority.MUST_HAVE, null, null, terms, DEFAULT_CRITERIA, List.of());
         }
 
         @Override
@@ -559,8 +576,7 @@ class RequirementMcpToolsTest {
                     ? nextLinkedConstraintResourceId
                     : ResourceId.of("https://w3id.org/arknet/id/" + constraintCode);
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                    Priority.MUST_HAVE, null, null, List.of(), List.of("Login succeeds with valid credentials"),
-                    List.of(new ConstraintRef(id)));
+                    Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of(new ConstraintRef(id)));
         }
 
         @Override
@@ -571,17 +587,32 @@ class RequirementMcpToolsTest {
 
         @Override
         public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-                List<String> acceptanceCriteria, Priority priority, String language, String defaultLanguage) {
+                List<String> newAcceptanceCriteria, List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+                Priority priority, String language, String defaultLanguage) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
             lastUpdateDescription = description;
-            lastUpdateAcceptanceCriteria = acceptanceCriteria;
+            lastUpdateNewAcceptanceCriteria = newAcceptanceCriteria;
+            lastUpdateAcceptanceCriteriaTextPatches = acceptanceCriteriaTextPatches;
             lastUpdatePriority = priority;
             lastUpdateLanguage = language;
-            return new Requirement(ID, code, title != null ? title : "t", description != null ? description : "d",
-                    RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                    priority != null ? priority : Priority.MUST_HAVE, null, null,
-                    List.of(), acceptanceCriteria != null ? acceptanceCriteria : List.of("Done when it works"), List.of());
+            Requirement base = new Requirement(ID, code, title != null ? title : "t",
+                    description != null ? description : "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    priority != null ? priority : Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA,
+                    List.of());
+            base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
+            return acceptanceCriteriaTextPatches != null
+                    ? base.withAcceptanceCriteriaTextPatches(projectId, acceptanceCriteriaTextPatches)
+                    : base;
+        }
+
+        private static List<AcceptanceCriterion> toCriteria(List<String> texts) {
+            List<AcceptanceCriterion> criteria = new ArrayList<>();
+            int position = 1;
+            for (String text : texts) {
+                criteria.add(new AcceptanceCriterion(position++, text));
+            }
+            return criteria;
         }
     }
 

@@ -15,6 +15,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.TermRef;
 
@@ -76,12 +77,12 @@ public final class RequirementCards {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         final List<String> texts = new ArrayList<>();
         texts.add(requirement.description());
-        texts.addAll(requirement.acceptanceCriteria());
+        requirement.acceptanceCriteria().stream().map(AcceptanceCriterion::text).forEach(texts::add);
 
         final List<Block> blocks = new ArrayList<>();
         blocks.add(new Block.Prose("Description", glossary.markUp(requirement.description(), linked)));
         blocks.add(new Block.Bullets("Acceptance criteria", requirement.acceptanceCriteria().stream()
-                .map(criterion -> glossary.markUp(criterion, linked))
+                .map(criterion -> glossary.markUp(criterion.text(), linked))
                 .toList()));
         if (requirement.qualityCategory() != null) {
             blocks.add(Block.Prose.plain("Quality category", requirement.qualityCategory()));

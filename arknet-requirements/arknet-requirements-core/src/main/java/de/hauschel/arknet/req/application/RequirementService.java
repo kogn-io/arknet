@@ -4,7 +4,9 @@
 package de.hauschel.arknet.req.application;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -27,6 +29,8 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Constraint;
 import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
@@ -174,16 +178,31 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // not depend on which code candidate ultimately wins, and a missing default must reject
         // the call before any code is even computed (issue #258).
         String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
+        List<AcceptanceCriterion> acceptanceCriteria = toPositionedAcceptanceCriteria(command.acceptanceCriteria());
         return CodeAssignment.createRetryingOnCodeCollision(MAX_RETRY_ATTEMPTS,
                 DuplicateRequirementCodeException.class, () -> {
                     RequirementCode code = nextCode(projectId, command.type());
                     Requirement requirement = new Requirement(id, code, command.title(),
                             command.description(), command.type(), RequirementStatus.PROPOSED,
                             command.priority(), command.motivatedBy(), command.qualityCategory(),
-                            List.of(), command.acceptanceCriteria(), List.of());
+                            List.of(), acceptanceCriteria, List.of());
                     repository.create(projectId, requirement, language);
                     return requirement;
                 });
+    }
+
+    /**
+     * Numbers plain acceptance-criterion texts {@code 1..n} in list order - a fresh requirement
+     * has no caller-addressable position yet, unlike {@code req_update}'s position-addressed
+     * corrections (issue #266).
+     */
+    private static List<AcceptanceCriterion> toPositionedAcceptanceCriteria(List<String> texts) {
+        List<AcceptanceCriterion> criteria = new ArrayList<>();
+        int position = 1;
+        for (String text : texts) {
+            criteria.add(new AcceptanceCriterion(position++, text));
+        }
+        return criteria;
     }
 
     @Override
@@ -264,18 +283,23 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
 
     @Override
     public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> acceptanceCriteria, Priority priority, String language, String defaultLanguage) {
+            List<String> newAcceptanceCriteria, List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+            Priority priority, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage,
-                current -> new Requirement(current.id(), current.code(),
-                title != null ? title : current.title(),
-                description != null ? description : current.description(),
-                current.type(), current.status(),
-                priority != null ? priority : current.priority(), current.motivatedBy(),
-                current.qualityCategory(), current.usesTerms(),
-                acceptanceCriteria != null ? List.copyOf(acceptanceCriteria) : current.acceptanceCriteria(),
-                current.constrainedBy()));
+        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, current -> {
+            Requirement base = new Requirement(current.id(), current.code(),
+                    title != null ? title : current.title(),
+                    description != null ? description : current.description(),
+                    current.type(), current.status(),
+                    priority != null ? priority : current.priority(), current.motivatedBy(),
+                    current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria(),
+                    current.constrainedBy());
+            base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);
+            return acceptanceCriteriaTextPatches != null
+                    ? base.withAcceptanceCriteriaTextPatches(projectId, acceptanceCriteriaTextPatches)
+                    : base;
+        });
     }
 
     /**
@@ -296,12 +320,16 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * <p><strong>Legacy acceptance-criteria guard.</strong> If {@code current}'s acceptance
      * criteria are a read-time placeholder (no {@code arkreq:acceptanceCriterion} triple actually
      * exists yet, see {@link RequirementRepository.CurrentRequirement#acceptanceCriteriaIsSynthesized()})
-     * and {@code mutation} did not itself replace them with a real, explicit list, the write is
-     * rejected with {@link MissingAcceptanceCriteriaException} instead of proceeding: a plain
-     * replace-by-identity write would otherwise turn that placeholder into a genuine, persisted
-     * literal, after which the gap it was meant to surface becomes permanently invisible. Only
-     * {@link #update} can supply a real replacement here ({@code acceptanceCriteria != null}); a
-     * no-op mutation never reaches this check, since it already returned above.</p>
+     * and {@code mutation} left the placeholder's position ({@code 1}, the only entry a synthesized
+     * list ever carries) with its exact placeholder text, the write is rejected with
+     * {@link MissingAcceptanceCriteriaException} instead of proceeding: a plain replace-by-identity
+     * write would otherwise turn that placeholder into a genuine, persisted literal, after which
+     * the gap it was meant to surface becomes permanently invisible. Merely appending further
+     * criteria after it (via {@link Requirement#withAppendedAcceptanceCriteria}) does not clear the
+     * guard - the placeholder itself would still be persisted at position {@code 1} - only
+     * {@link #update} patching that exact position with real text (via
+     * {@link Requirement#withAcceptanceCriteriaTextPatches}) does. A no-op mutation never reaches
+     * this check, since it already returned above.</p>
      *
      * @throws RequirementNotFoundException            if no requirement with {@code code} exists
      * @throws MissingAcceptanceCriteriaException      if the write would carry a legacy
@@ -310,8 +338,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * @throws RequirementConcurrentlyModifiedException if the write keeps losing the race across
      *                                                   every retry attempt
      * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code mutation}
-     *                                                   actually changes {@code title} or
-     *                                                   {@code description} and neither {@code
+     *                                                   actually changes {@code title},
+     *                                                   {@code description} or any acceptance
+     *                                                   criterion's text and neither {@code
      *                                                   language} nor {@code defaultLanguage} is
      *                                                   given
      */
@@ -325,26 +354,37 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             if (updated.equals(current.value())) {
                 return current.value();
             }
-            if (current.acceptanceCriteriaIsSynthesized()
-                    && updated.acceptanceCriteria().equals(current.value().acceptanceCriteria())) {
-                throw new MissingAcceptanceCriteriaException(projectId, code);
+            if (current.acceptanceCriteriaIsSynthesized()) {
+                AcceptanceCriterion placeholder = current.value().acceptanceCriteria().get(0);
+                AcceptanceCriterion stillAtPlaceholderPosition = updated.acceptanceCriteria().stream()
+                        .filter(criterion -> criterion.position() == placeholder.position())
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException(
+                                "acceptance criteria never lose an existing position (append/patch-only, "
+                                        + "issue #266)"));
+                if (stillAtPlaceholderPosition.text().equals(placeholder.text())) {
+                    throw new MissingAcceptanceCriteriaException(projectId, code);
+                }
             }
-            // title/description each get their own language: a field this mutation left byte-for-
-            // byte unchanged must round-trip under the exact tag it was read under (a scoped
-            // no-op), never under `language`/`defaultLanguage` - those only ever apply to a field
-            // this call is actually changing. Without this distinction, accept()/linkTerm() (which
-            // always call this with language == null and defaultLanguage == null and never touch
-            // either field) would retag or collapse whichever language variant findCurrentByCode
-            // happened to select. Resolving here, lazily, rather than eagerly in update(), means a
-            // malformed/missing language argument only ever throws when this call is actually
-            // changing a language-tagged field under it (issue #258).
+            // title/description/each acceptance criterion's text each get their own language: a
+            // field/position this mutation left byte-for-byte unchanged must round-trip under the
+            // exact tag it was read under (a scoped no-op), never under `language`/
+            // `defaultLanguage` - those only ever apply to a field/position this call is actually
+            // changing. Without this distinction, accept()/linkTerm() (which always call this with
+            // language == null and defaultLanguage == null and never touch either field) would
+            // retag or collapse whichever language variant findCurrentByCode happened to select.
+            // Resolving here, lazily, rather than eagerly in update(), means a malformed/missing
+            // language argument only ever throws when this call is actually changing a
+            // language-tagged field under it (issue #258).
             String titleLanguage = updated.title().equals(current.value().title())
                     ? current.titleLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
             String descriptionLanguage = updated.description().equals(current.value().description())
                     ? current.descriptionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition =
+                    acceptanceCriteriaLanguageByPosition(current, updated, language, defaultLanguage);
             try {
-                repository.compareAndUpdate(
-                        projectId, current.head(), updated, titleLanguage, descriptionLanguage, defaultLanguage);
+                repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage,
+                        acceptanceCriteriaLanguageByPosition, defaultLanguage);
                 return updated;
             } catch (RequirementConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the requirement between our read and our write -
@@ -353,6 +393,36 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             }
         }
         throw lastConflict;
+    }
+
+    /**
+     * The BCP-47 language tag each of {@code updated}'s acceptance-criterion positions is written
+     * under: a position whose {@code text} this mutation left byte-for-byte unchanged round-trips
+     * under the exact tag {@code current} carried for it (a scoped no-op - {@code current}'s map
+     * has no entry for a position that did not exist yet, but such a position is by construction
+     * always changed relative to {@code current}, so that branch is never taken for it); every
+     * other position (a patched existing one, or a newly appended one) is freshly resolved via
+     * {@link LanguageTag#resolveWriteLanguage}. Mirrors the {@code titleLanguage}/
+     * {@code descriptionLanguage} distinction directly above, once per position instead of once for
+     * the whole field - the same shape {@code UseCaseService#updateWithOptimisticRetry} already
+     * uses for {@code Step#text()} via {@code stepTextLanguageByPosition}.
+     */
+    private static Map<Integer, String> acceptanceCriteriaLanguageByPosition(
+            RequirementRepository.CurrentRequirement current, Requirement updated, String language,
+            String defaultLanguage) {
+        Map<Integer, String> currentTextByPosition = new LinkedHashMap<>();
+        for (AcceptanceCriterion criterion : current.value().acceptanceCriteria()) {
+            currentTextByPosition.put(criterion.position(), criterion.text());
+        }
+        Map<Integer, String> languageByPosition = new LinkedHashMap<>();
+        for (AcceptanceCriterion criterion : updated.acceptanceCriteria()) {
+            String currentText = currentTextByPosition.get(criterion.position());
+            String resolved = criterion.text().equals(currentText)
+                    ? current.acceptanceCriteriaLanguageByPosition().get(criterion.position())
+                    : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            languageByPosition.put(criterion.position(), resolved);
+        }
+        return languageByPosition;
     }
 
     @Override

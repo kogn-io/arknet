@@ -5,7 +5,8 @@ package de.hauschel.arknet.persistence;
 
 /**
  * The absolute IRIs of the {@code arkreq:} object properties that carry cross-resource edges in
- * the store, plus the one literal-valued property ({@code arkreq:acceptanceCriterion}) whose text
+ * the store, plus the one literal-valued property ({@code arkreq:criterionText}, issue #266 -
+ * reached one hop past the object property {@code arkreq:acceptanceCriterion}) whose text
  * the same reader scans, plus the type IRIs the traceability traversal tests those edges'
  * endpoints against, as Java {@code String} constants - the single source of truth shared by the
  * code that <em>writes</em> them (the {@code *-adapter-kogniordf} out-adapters) and the code that
@@ -60,8 +61,21 @@ public final class ArkreqVocabulary {
     /** {@code arkreq:stepRealises} - Step -&gt; the Requirement it realises. */
     public static final String STEP_REALISES = NAMESPACE + "stepRealises";
 
-    /** {@code arkreq:acceptanceCriterion} - Requirement -&gt; one testable "Done when ..." criterion. */
+    /**
+     * {@code arkreq:acceptanceCriterion} - Requirement -&gt; one positioned, testable
+     * {@code arkreq:AcceptanceCriterion} resource (issue #266; formerly a literal-valued
+     * {@code xsd:string} property, now an object property mirroring {@code arkreq:mainStep}).
+     */
     public static final String ACCEPTANCE_CRITERION = NAMESPACE + "acceptanceCriterion";
+
+    /**
+     * {@code arkreq:criterionText} - AcceptanceCriterion -&gt; its testable "Done when ..." text
+     * (issue #266). Shared here (rather than kept adapter-private the way {@code arkreq:stepText}
+     * is) because {@code arknet-mcp}'s traceability read path needs it too, to scan a
+     * requirement's acceptance-criteria prose for unlinked glossary mentions - the same reason
+     * {@link #ACCEPTANCE_CRITERION} itself is already shared.
+     */
+    public static final String CRITERION_TEXT = NAMESPACE + "criterionText";
 
     /**
      * {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint. Reused from OSLC RM (not an

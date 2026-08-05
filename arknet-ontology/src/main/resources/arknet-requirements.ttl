@@ -122,11 +122,21 @@ arkreq:rationale a owl:DatatypeProperty ;
     rdfs:label  "rationale"@en ;
     rdfs:comment "Begruendung, warum diese Anforderung existiert."@de .
 
-arkreq:acceptanceCriterion a owl:DatatypeProperty ;
+arkreq:acceptanceCriterion a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
-    rdfs:range  xsd:string ;
+    rdfs:range  arkreq:AcceptanceCriterion ;
     rdfs:label  "acceptance criterion"@en ;
-    rdfs:comment "Testbares Kriterium (Done when ...). Kann mehrfach vorkommen."@de .
+    rdfs:comment "Ein testbares, positioniertes Kriterium (Done when ...) dieser Anforderung. Kann mehrfach vorkommen -- eigene Ressource statt Freitext-Literal, analog zu arkreq:mainStep/arkreq:Step (issue #266)."@de .
+
+arkreq:AcceptanceCriterion a owl:Class ;
+    rdfs:label   "Acceptance Criterion"@en , "Akzeptanzkriterium"@de ;
+    rdfs:comment "Ein einzelnes, positioniertes testbares Kriterium (Done when ...) einer Anforderung. Bewusst reiner Freitext -- kein Given/When/Then, keine Unterfelder (issue #266). Keine eigene realises-Kante wie arkreq:Step: ein Akzeptanzkriterium ist Erfuellungsnachweis der eigenen Requirement, nicht Traceability zu anderen."@de .
+
+arkreq:criterionText a owl:DatatypeProperty ;
+    rdfs:domain arkreq:AcceptanceCriterion ;
+    rdfs:range  xsd:string ;
+    rdfs:label  "criterion text"@en ;
+    rdfs:comment "Der testbare Kriterientext (Done when ...)."@de .
 
 arkreq:qualityCategory a owl:DatatypeProperty ;
     rdfs:domain arkreq:NonFunctionalRequirement ;
@@ -313,11 +323,10 @@ arkreq:Step a owl:Class ;
     rdfs:comment "Ein einzelner Schritt in einem Use-Case-Ablauf -- Hauptablauf (arkreq:mainStep) oder Ausnahme/Alternative (arkreq:extensionStep)."@de .
 
 arkreq:position a owl:DatatypeProperty ;
-    rdfs:domain arkreq:Step ;
     rdfs:range  xsd:integer ;
     a owl:FunctionalProperty ;
     rdfs:label  "position"@en ;
-    rdfs:comment "1-basierte Ordnungsposition des Schritts innerhalb seines Ablaufs. Bewusst keine rdf:List -- Ordnung ueber eine ganzzahlige Position (einfacher zu schreiben und per SPARQL zu sortieren)."@de .
+    rdfs:comment "1-basierte Ordnungsposition innerhalb einer geordneten Liste -- geteilt von arkreq:Step (Ablaufschritt) und arkreq:AcceptanceCriterion (issue #266). Bewusst keine rdf:List -- Ordnung ueber eine ganzzahlige Position (einfacher zu schreiben und per SPARQL zu sortieren)."@de .
 
 arkreq:stepText a owl:DatatypeProperty ;
     rdfs:domain arkreq:Step ;

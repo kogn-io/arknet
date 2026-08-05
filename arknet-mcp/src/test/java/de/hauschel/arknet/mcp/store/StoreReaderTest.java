@@ -8,7 +8,9 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +36,7 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -88,7 +91,7 @@ class StoreReaderTest {
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials"), List.of());
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
     }
 
     /** Reads {@code updated}'s current head and immediately applies it through the CAS guard. */
@@ -96,7 +99,14 @@ class StoreReaderTest {
         RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        requirements.compareAndUpdate(PROJECT, head, updated, null, null, null);
+        requirements.compareAndUpdate(PROJECT, head, updated, null, null, noAcceptanceCriteriaLanguages(updated), null);
+    }
+
+    /** An untagged (all-{@code null}) map, covering every position {@code updated} carries. */
+    private static Map<Integer, String> noAcceptanceCriteriaLanguages(Requirement updated) {
+        Map<Integer, String> languages = new LinkedHashMap<>();
+        updated.acceptanceCriteria().forEach(criterion -> languages.put(criterion.position(), null));
+        return languages;
     }
 
     @AfterEach

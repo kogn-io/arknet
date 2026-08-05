@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +49,7 @@ import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFactory;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.domain.Priority;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -96,7 +98,7 @@ class StoreReportToolsTest {
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials"), List.of());
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
         term1 = new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null);
@@ -359,7 +361,7 @@ class StoreReportToolsTest {
                     new RequirementCode("FR-1"), "Zweitprojekt",
                     "The system shall authenticate a second user.",
                     RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                    List.of("Zweitprojekt succeeds"), List.of()), null);
+                    List.of(new AcceptanceCriterion(1, "Zweitprojekt succeeds")), List.of()), null);
 
             final Prefixes prefixes = Prefixes.defaults();
             final StoreReader reader = new StoreReader(lifecycle);
@@ -521,7 +523,7 @@ class StoreReportToolsTest {
                 new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
                 "The system shall authenticate a user in the other project.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
-                List.of("Login succeeds with valid credentials"), List.of()), null);
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
 
         try {
             String fromOtherProject = tools.resourceGet(null, "FR-1", OTHER_ANCHOR);
@@ -567,7 +569,8 @@ class StoreReportToolsTest {
         Requirement updated = new Requirement(
                 fr1.id(), fr1.code(), "Login v2", fr1.description(), fr1.type(), fr1.status(), fr1.priority(),
                 null, null, null, fr1.acceptanceCriteria(), List.of());
-        requirements.compareAndUpdate(PROJECT, current.head(), updated, null, null, null);
+        requirements.compareAndUpdate(
+                PROJECT, current.head(), updated, null, null, noAcceptanceCriteriaLanguages(updated), null);
 
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
 
@@ -621,5 +624,12 @@ class StoreReportToolsTest {
         assertThatThrownBy(() -> tools.resourceHistory(null, "FR-1", "/never/registered"))
                 .isInstanceOf(UnresolvedProjectAnchorException.class)
                 .hasMessageContaining("/never/registered");
+    }
+
+    /** An untagged (all-{@code null}) map, covering every position {@code updated} carries. */
+    private static Map<Integer, String> noAcceptanceCriteriaLanguages(Requirement updated) {
+        Map<Integer, String> languages = new LinkedHashMap<>();
+        updated.acceptanceCriteria().forEach(criterion -> languages.put(criterion.position(), null));
+        return languages;
     }
 }

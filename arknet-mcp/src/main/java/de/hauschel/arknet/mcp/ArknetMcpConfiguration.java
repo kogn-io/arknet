@@ -257,9 +257,10 @@ public class ArknetMcpConfiguration {
 
     @Bean
     RequirementRepository requirementRepository(
-            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale,
-            final WriteFunnel requirementsWriteFunnel) {
-        return KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, displayLocale, requirementsWriteFunnel);
+            final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
+            final DisplayLocale displayLocale, final WriteFunnel requirementsWriteFunnel) {
+        return KognioRdfRequirementRepositoryFactory.over(
+                datasetLifecycle, resourceIdFactory, displayLocale, requirementsWriteFunnel);
     }
 
     /**

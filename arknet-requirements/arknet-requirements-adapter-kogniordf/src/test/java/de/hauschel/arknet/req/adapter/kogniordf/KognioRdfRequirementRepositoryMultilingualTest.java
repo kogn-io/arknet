@@ -9,7 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +32,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RevisionToken;
+import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
@@ -76,7 +80,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     private static Requirement requirement(RequirementId id, RequirementCode code, String title,
             String description) {
         return new Requirement(id, code, title, description, RequirementType.FUNCTIONAL,
-                RequirementStatus.PROPOSED, null, null, null, null, List.of("Login succeeds with valid credentials"), List.of());
+                RequirementStatus.PROPOSED, null, null, null, null,
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
     }
 
     @Test
@@ -104,7 +109,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
 
         Requirement withGermanTitle = requirement(created.id(), code, "Anmeldung",
                 "The system shall authenticate a user.");
-        repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null);
+        repository.compareAndUpdate(
+                PROJECT_A, head, withGermanTitle, "de", "en", noAcceptanceCriteriaLanguages(withGermanTitle), null);
 
         Requirement asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -132,7 +138,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement statusChangeOnly = new Requirement(created.id(), code, created.title(), created.description(),
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
                 created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria(), List.of());
-        repository.compareAndUpdate(PROJECT_A, head, statusChangeOnly, "en", "en", null);
+        repository.compareAndUpdate(
+                PROJECT_A, head, statusChangeOnly, "en", "en", noAcceptanceCriteriaLanguages(statusChangeOnly), null);
 
         Requirement reloaded = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         assertEquals("Login", reloaded.title());
@@ -150,7 +157,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
 
         Requirement withGermanDescription = requirement(created.id(), code, "Login",
                 "Das System soll einen Benutzer authentifizieren.");
-        repository.compareAndUpdate(PROJECT_A, head, withGermanDescription, "en", "de", null);
+        repository.compareAndUpdate(PROJECT_A, head, withGermanDescription, "en", "de",
+                noAcceptanceCriteriaLanguages(withGermanDescription), null);
 
         Requirement asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -158,6 +166,137 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         assertEquals("Login", asGerman.title());
         assertEquals("The system shall authenticate a user.", asEnglish.description());
         assertEquals("Das System soll einen Benutzer authentifizieren.", asGerman.description());
+    }
+
+    /**
+     * Issue #266: each acceptance criterion carries its own language tag, keyed by position - a
+     * multi-criteria requirement's positions must round-trip together, mirroring
+     * {@code KognioRdfUseCaseRepositoryMultilingualTest}'s step-text coverage.
+     */
+    @Test
+    void createWritesTaggedAcceptanceCriteriaSelectableViaDisplayLocale() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirementWithCriteria(freshId(), code, "Login",
+                "The system shall authenticate a user.",
+                List.of("Anmeldung gelingt mit gueltigen Zugangsdaten",
+                        "Anmeldung schlaegt bei falschem Passwort fehl"));
+        repository.create(PROJECT_A, created, "de");
+
+        Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals(created.acceptanceCriteria(), asGerman.acceptanceCriteria());
+    }
+
+    /**
+     * The regression this issue exists to fix, for acceptance criteria: a {@code compareAndUpdate}
+     * that corrects only <em>one</em> criterion's text under a new language must leave every other
+     * criterion's own language variant (including that same criterion's own prior variant) exactly
+     * as it was - not delete it, not silently retag it, not duplicate it. Mirrors
+     * {@code KognioRdfUseCaseRepositoryMultilingualTest#compareAndUpdateWithANewLanguageForOneStepPreservesTheOtherStepsOriginalLanguageVariant}.
+     */
+    @Test
+    void compareAndUpdateWithANewLanguageForOneAcceptanceCriterionPreservesTheOtherCriterionsLanguageVariant() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirementWithCriteria(freshId(), code, "Login",
+                "The system shall authenticate a user.",
+                List.of("Login succeeds with valid credentials", "Login is rate-limited"));
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken head = currentHead(code);
+
+        List<AcceptanceCriterion> updatedCriteria = List.of(
+                new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"),
+                created.acceptanceCriteria().get(1));
+        Requirement withGermanFirstCriterion = new Requirement(created.id(), code, created.title(),
+                created.description(), created.type(), created.status(), created.priority(),
+                created.motivatedBy(), created.qualityCategory(), created.usesTerms(), updatedCriteria,
+                created.constrainedBy());
+        Map<Integer, String> languages = new LinkedHashMap<>();
+        languages.put(1, "de");
+        languages.put(2, "en");
+        repository.compareAndUpdate(PROJECT_A, head, withGermanFirstCriterion, "en", "en", languages, null);
+
+        Requirement asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
+        Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("Login succeeds with valid credentials", asEnglish.acceptanceCriteria().get(0).text());
+        assertEquals("Anmeldung gelingt mit gueltigen Zugangsdaten", asGerman.acceptanceCriteria().get(0).text());
+        // Position 2 was never touched by this call - both reads must still see the one
+        // English-tagged variant, not a duplicate or a dangling second value.
+        assertEquals("Login is rate-limited", asEnglish.acceptanceCriteria().get(1).text());
+        assertEquals("Login is rate-limited", asGerman.acceptanceCriteria().get(1).text());
+    }
+
+    /**
+     * Issue #258, decision 3, for acceptance criteria: a {@code compareAndUpdate} that writes a
+     * criterion's text under the tag equal to the project's {@code defaultLanguage} sweeps away a
+     * stale untagged sibling of that same position instead of preserving it as a spurious "other"
+     * language variant.
+     */
+    @Test
+    void compareAndUpdateSweepsAnUntaggedAcceptanceCriterionTextWhenTheWrittenTagEqualsTheProjectDefault() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithUntaggedAcceptanceCriterionText(PROJECT_A, id, "FR-1");
+        RequirementCode code = new RequirementCode("FR-1");
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
+                .orElseThrow();
+        List<AcceptanceCriterion> updatedCriteria =
+                List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"));
+        Requirement withGermanCriterion = new Requirement(current.value().id(), code, current.value().title(),
+                current.value().description(), current.value().type(), current.value().status(),
+                current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
+                current.value().usesTerms(), updatedCriteria, current.value().constrainedBy());
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), withGermanCriterion, current.titleLanguage(),
+                current.descriptionLanguage(), Map.of(1, "de"), "de");
+
+        assertEquals(1, countAcceptanceCriterionTextLiterals(PROJECT_A, id));
+        Requirement reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("Anmeldung gelingt mit gueltigen Zugangsdaten", reloaded.acceptanceCriteria().get(0).text());
+    }
+
+    private static Requirement requirementWithCriteria(RequirementId id, RequirementCode code, String title,
+            String description, List<String> criteriaTexts) {
+        List<AcceptanceCriterion> criteria = new ArrayList<>();
+        int position = 1;
+        for (String text : criteriaTexts) {
+            criteria.add(new AcceptanceCriterion(position++, text));
+        }
+        return new Requirement(id, code, title, description, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, criteria, List.of());
+    }
+
+    /**
+     * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
+     * graph with a single {@code arkreq:AcceptanceCriterion} resource whose {@code
+     * arkreq:criterionText} carries no language tag at all - the store-first (ADR-005) state
+     * issue #258's sweep normalises lazily, mirrors {@link #givenLegacyRequirementWithUntaggedTitle}.
+     */
+    private void givenLegacyRequirementWithUntaggedAcceptanceCriterionText(ProjectId projectId, RequirementId id,
+            String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\" ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> <" + id.value().value() + "-c1> . "
+                + "<" + id.value().value() + "-c1> <https://w3id.org/arknet/requirements#position> 1 ; "
+                + "<https://w3id.org/arknet/requirements#criterionText> \"Login succeeds with valid credentials\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /** Counts every {@code arkreq:criterionText} literal at position 1 of {@code id}'s sole criterion. */
+    private long countAcceptanceCriterionTextLiterals(ProjectId projectId, RequirementId id) {
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> <https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "?criterion . ?criterion <https://w3id.org/arknet/requirements#criterionText> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query).count();
+        }
     }
 
     /**
@@ -180,7 +319,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de", current.descriptionLanguage(),
-                "de");
+                noAcceptanceCriteriaLanguages(withGermanTitle), "de");
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
         Requirement reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -206,7 +345,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr", current.descriptionLanguage(),
-                "de");
+                noAcceptanceCriteriaLanguages(withFrenchTitle), "de");
 
         assertEquals(2, countTitleLiterals(PROJECT_A, id));
         assertTrue(hasUntaggedTitle(PROJECT_A, id, "Login"));
@@ -249,7 +388,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
-                current.titleLanguage(), current.descriptionLanguage(), null));
+                current.titleLanguage(), current.descriptionLanguage(),
+                noAcceptanceCriteriaLanguages(statusChangeOnly), null));
 
         Requirement reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
         assertEquals(RequirementStatus.ACCEPTED, reloaded.status());
@@ -279,7 +419,8 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
-                current.titleLanguage(), current.descriptionLanguage(), null);
+                current.titleLanguage(), current.descriptionLanguage(),
+                noAcceptanceCriteriaLanguages(statusChangeOnly), null);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
     }
@@ -354,5 +495,16 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         return repository.findCurrentByCode(PROJECT_A, code)
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
+    }
+
+    /**
+     * An untagged (all-{@code null}) {@code acceptanceCriteriaLanguageByPosition}, covering every
+     * position {@code updated} carries - these tests never exercise per-criterion language
+     * resolution, only {@code title}/{@code description}.
+     */
+    private static Map<Integer, String> noAcceptanceCriteriaLanguages(Requirement updated) {
+        Map<Integer, String> languages = new LinkedHashMap<>();
+        updated.acceptanceCriteria().forEach(criterion -> languages.put(criterion.position(), null));
+        return languages;
     }
 }

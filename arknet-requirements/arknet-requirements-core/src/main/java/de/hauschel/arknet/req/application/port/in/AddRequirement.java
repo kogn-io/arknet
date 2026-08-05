@@ -47,8 +47,11 @@ public interface AddRequirement {
      *                        {@code null})
      * @param qualityCategory free-text quality category; optional (may be {@code null}),
      *                        only meaningful for {@link RequirementType#NON_FUNCTIONAL}
-     * @param acceptanceCriteria the testable "Done when ..." criteria; required, at least one
-     *                        entry
+     * @param acceptanceCriteria the testable "Done when ..." criteria, as plain texts; required,
+     *                        at least one entry - assigned positions {@code 1..n} in list order by
+     *                        the implementing service (issue #266; a fresh requirement has no
+     *                        caller-addressable position yet, unlike {@code req_update}'s
+     *                        position-addressed corrections)
      * @param language        the BCP-47 language tag {@code title}/{@code description} are
      *                        written in (e.g. {@code "de"}), or {@code null} to fall back to the
      *                        target project's configured default language - the same tag applies

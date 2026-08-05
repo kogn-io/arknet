@@ -28,6 +28,7 @@ import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
+import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -366,6 +367,9 @@ public final class RequirementMcpTools {
             description = "Correct an already-created requirement's title, description, acceptance "
                     + "criteria and/or MoSCoW priority. Every argument is optional - an omitted one leaves "
                     + "that field unchanged; an omitted priority never removes an already-set one. "
+                    + "newAcceptanceCriteria appends new criteria after the existing ones; "
+                    + "acceptanceCriteriaTextPatches corrects the wording of one or more existing criteria "
+                    + "by position - neither can insert mid-list, delete or reorder a criterion. "
                     + "Does not touch status (use req_set_status) or linked terms (use req_link_term).")
     public String update(
             final McpSyncRequestContext context,
@@ -376,21 +380,27 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "New normative statement, e.g. 'The system shall ...' (optional, "
                     + "unchanged if omitted)", required = false)
             final String description,
-            @McpToolParam(description = "New testable 'Done when ...' criteria, replacing the existing ones "
-                    + "wholesale (optional, unchanged if omitted)", required = false)
-            final List<String> acceptanceCriteria,
+            @McpToolParam(description = "New testable 'Done when ...' criteria to append after the existing "
+                    + "ones (optional, none appended if omitted)", required = false)
+            final List<String> newAcceptanceCriteria,
+            @McpToolParam(description = "Text corrections for individual existing acceptance criteria: a JSON "
+                    + "array of {position: 1-based int of the criterion to correct, text: the corrected text}. "
+                    + "Only the named criteria's text changes - every other criterion is untouched. A position "
+                    + "with no matching criterion is rejected (optional, unchanged if omitted)",
+                    required = false)
+            final List<AcceptanceCriterionPatchInput> acceptanceCriteriaTextPatches,
             @McpToolParam(description = "New MoSCoW priority: MUST_HAVE, SHOULD_HAVE, COULD_HAVE or "
                     + "WONT_HAVE (optional, unchanged if omitted - omitting it cannot clear a priority "
                     + "that is already set)", required = false)
             final String priority,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') a non-omitted title/"
-                    + "description is written in. Falls back to the project's configured default language "
-                    + "(see req_add's same parameter) if omitted; if the project has no default either, "
-                    + "the call is rejected rather than writing an untagged literal. Only the existing "
-                    + "literal carrying the tag actually written is replaced - every other language "
-                    + "variant of a field being corrected survives untouched, except a stale untagged "
-                    + "one left over from before a language was ever supplied, which is swept away when "
-                    + "the resolved tag equals the project's default.", required = false)
+                    + "description/touched acceptance criterion is written in. Falls back to the project's "
+                    + "configured default language (see req_add's same parameter) if omitted; if the project "
+                    + "has no default either, the call is rejected rather than writing an untagged literal. "
+                    + "Only the existing literal carrying the tag actually written is replaced - every other "
+                    + "language variant of a field/criterion being corrected survives untouched, except a "
+                    + "stale untagged one left over from before a language was ever supplied, which is swept "
+                    + "away when the resolved tag equals the project's default.", required = false)
             final String language,
             @McpToolParam(description = "Optional anchor identifying the project this call "
                     + "targets, used INSTEAD of the anchor your transport sends in the "
@@ -405,9 +415,30 @@ public final class RequirementMcpTools {
                 ? null
                 : Priority.valueOf(priority.trim());
         final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
-                blankToNull(description), acceptanceCriteria == null ? null : List.copyOf(acceptanceCriteria),
+                blankToNull(description),
+                newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
+                toAcceptanceCriteriaTextPatches(acceptanceCriteriaTextPatches),
                 requirementPriority, blankToNull(language), project.defaultLanguage());
         return presenter.format(project.id(), updated);
+    }
+
+    /**
+     * A text-only correction for one existing acceptance criterion, as passed by the agent to
+     * {@code req_update}. Mirrors {@code UseCaseMcpTools.StepPatchInput}.
+     *
+     * @param position 1-based position of the existing criterion to correct - must match a
+     *                 criterion already present in the requirement
+     * @param text     the corrected criterion text
+     */
+    public record AcceptanceCriterionPatchInput(int position, String text) {
+    }
+
+    private static List<AcceptanceCriterionTextPatch> toAcceptanceCriteriaTextPatches(
+            final List<AcceptanceCriterionPatchInput> patches) {
+        if (patches == null) {
+            return null;
+        }
+        return patches.stream().map(p -> new AcceptanceCriterionTextPatch(p.position(), p.text())).toList();
     }
 
     @McpTool(name = "req_schema",

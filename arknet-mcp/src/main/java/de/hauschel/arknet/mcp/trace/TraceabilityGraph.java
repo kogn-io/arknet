@@ -80,6 +80,7 @@ public final class TraceabilityGraph {
     private static final String EXTENSION_STEP = ArkreqVocabulary.EXTENSION_STEP;
     private static final String STEP_REALISES = ArkreqVocabulary.STEP_REALISES;
     private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
+    private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
@@ -384,13 +385,19 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return the {@code dcterms:description} and {@code arkreq:acceptanceCriterion} texts of a
-     *         requirement, for scanning it for unlinked glossary mentions
+     * @return the {@code dcterms:description} text and every {@code arkreq:acceptanceCriterion}
+     *         resource's {@code arkreq:criterionText} of a requirement, for scanning it for
+     *         unlinked glossary mentions. {@code arkreq:acceptanceCriterion} is an object property
+     *         since issue #266 (pointing at its own {@code arkreq:AcceptanceCriterion} resource,
+     *         mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), so this is a two-hop read:
+     *         the edge's target IRIs, then each target's own {@code criterionText} literal(s).
      */
     public List<String> requirementProseTexts(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
         List<String> texts = new ArrayList<>(literals(requirementIri, DCTERMS_DESCRIPTION));
-        texts.addAll(literals(requirementIri, ACCEPTANCE_CRITERION));
+        for (String criterionIri : resourceObjects(requirementIri, ACCEPTANCE_CRITERION)) {
+            texts.addAll(literals(criterionIri, CRITERION_TEXT));
+        }
         return texts;
     }
 
@@ -513,6 +520,21 @@ public final class TraceabilityGraph {
                 .map(Triple::object)
                 .filter(RdfNode.Literal.class::isInstance)
                 .map(o -> ((RdfNode.Literal) o).lexicalForm())
+                .toList();
+    }
+
+    /**
+     * {@link #literals(String, String)}, for a resource-object edge instead of a literal-valued
+     * one - backs {@link #requirementProseTexts(String)}'s hop from an {@code
+     * arkreq:acceptanceCriterion} edge to its target {@code arkreq:AcceptanceCriterion} resource
+     * (issue #266).
+     */
+    private List<String> resourceObjects(String subject, String predicate) {
+        return outgoingBySubject.getOrDefault(subject, List.of()).stream()
+                .filter(t -> predicate.equals(t.predicate()))
+                .map(Triple::object)
+                .filter(RdfNode.Resource.class::isInstance)
+                .map(o -> ((RdfNode.Resource) o).iri())
                 .toList();
     }
 

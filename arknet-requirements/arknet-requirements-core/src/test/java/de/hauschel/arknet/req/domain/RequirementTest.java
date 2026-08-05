@@ -12,6 +12,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 
 /**
@@ -25,12 +26,14 @@ class RequirementTest {
     private static final RequirementId ID =
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
     private static final RequirementCode CODE = new RequirementCode("FR-1");
+    private static final ProjectId PROJECT_ID = new ProjectId("test-project");
     private static final TermRef TERM_1 =
             new TermRef(ResourceId.of("https://w3id.org/arknet/id/22222222-2222-2222-2222-222222222222"));
     private static final TermRef TERM_2 =
             new TermRef(ResourceId.of("https://w3id.org/arknet/id/33333333-3333-3333-3333-333333333333"));
-    private static final List<String> CRITERIA = List.of("Login succeeds with valid credentials");
-    private static final String CRITERION_2 = "Login is rejected with invalid credentials";
+    private static final List<AcceptanceCriterion> CRITERIA =
+            List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials"));
+    private static final String CRITERION_2_TEXT = "Login is rejected with invalid credentials";
 
     @Test
     void holdsItsFields() {
@@ -85,14 +88,15 @@ class RequirementTest {
 
     @Test
     void acceptanceCriteriaAreDefensivelyCopied() {
-        List<String> criteria = new ArrayList<>(CRITERIA);
+        List<AcceptanceCriterion> criteria = new ArrayList<>(CRITERIA);
         Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, criteria, List.of());
 
-        criteria.add(CRITERION_2);
+        criteria.add(new AcceptanceCriterion(2, CRITERION_2_TEXT));
 
         assertEquals(CRITERIA, req.acceptanceCriteria());
-        assertThrows(UnsupportedOperationException.class, () -> req.acceptanceCriteria().add(CRITERION_2));
+        assertThrows(UnsupportedOperationException.class,
+                () -> req.acceptanceCriteria().add(new AcceptanceCriterion(2, CRITERION_2_TEXT)));
     }
 
     @Test
@@ -110,17 +114,32 @@ class RequirementTest {
     }
 
     @Test
-    void rejectsBlankAcceptanceCriterion() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                        null, null, null, null, List.of("Login succeeds", "   "), List.of()));
+    void rejectsAcceptanceCriterionWithBlankText() {
+        assertThrows(IllegalArgumentException.class, () -> new AcceptanceCriterion(1, "   "));
     }
 
     @Test
-    void rejectsDuplicateAcceptanceCriteria() {
+    void rejectsAcceptanceCriterionPositionBelowOne() {
+        assertThrows(IllegalArgumentException.class, () -> new AcceptanceCriterion(0, "Login succeeds"));
+    }
+
+    @Test
+    void rejectsAcceptanceCriteriaWithGapInPositions() {
         assertThrows(IllegalArgumentException.class,
                 () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
-                        null, null, null, null, List.of("Login succeeds", "Login succeeds"), List.of()));
+                        null, null, null, null,
+                        List.of(new AcceptanceCriterion(1, "Login succeeds"), new AcceptanceCriterion(3, "Gap")),
+                        List.of()));
+    }
+
+    @Test
+    void rejectsDuplicateAcceptanceCriteriaText() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                        null, null, null, null,
+                        List.of(new AcceptanceCriterion(1, "Login succeeds"),
+                                new AcceptanceCriterion(2, "Login succeeds")),
+                        List.of()));
     }
 
     @Test
@@ -208,6 +227,54 @@ class RequirementTest {
         Requirement result = req.accept();
 
         assertEquals(req, result);
+    }
+
+    @Test
+    void withAppendedAcceptanceCriteriaContinuesPositionsAfterExisting() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        Requirement appended = req.withAppendedAcceptanceCriteria(List.of(CRITERION_2_TEXT, "Third criterion"));
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials"),
+                new AcceptanceCriterion(2, CRITERION_2_TEXT), new AcceptanceCriterion(3, "Third criterion")),
+                appended.acceptanceCriteria());
+    }
+
+    @Test
+    void withAppendedAcceptanceCriteriaIsANoOpForNullOrEmpty() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        assertEquals(req, req.withAppendedAcceptanceCriteria(null));
+        assertEquals(req, req.withAppendedAcceptanceCriteria(List.of()));
+    }
+
+    @Test
+    void withAcceptanceCriteriaTextPatchesCorrectsOnlyTheNamedPosition() {
+        List<AcceptanceCriterion> twoCriteria = List.of(
+                new AcceptanceCriterion(1, "Login succeeds with valid credentials"),
+                new AcceptanceCriterion(2, CRITERION_2_TEXT));
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, twoCriteria, List.of());
+
+        Requirement patched = req.withAcceptanceCriteriaTextPatches(
+                PROJECT_ID, List.of(new AcceptanceCriterionTextPatch(2, "Corrected second criterion")));
+
+        assertEquals(List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials"),
+                new AcceptanceCriterion(2, "Corrected second criterion")), patched.acceptanceCriteria());
+    }
+
+    @Test
+    void withAcceptanceCriteriaTextPatchesRejectsUnknownPosition() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        AcceptanceCriterionPositionNotFoundException exception = assertThrows(
+                AcceptanceCriterionPositionNotFoundException.class,
+                () -> req.withAcceptanceCriteriaTextPatches(
+                        PROJECT_ID, List.of(new AcceptanceCriterionTextPatch(7, "no such criterion"))));
+        assertEquals(7, exception.position());
     }
 
     @Test
