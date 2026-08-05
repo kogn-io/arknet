@@ -420,4 +420,62 @@ class StoreReaderTest {
             });
         }
     }
+
+    /**
+     * Regression/happy-path coverage for issue #251: the {@code setUp} create is the resource's
+     * only write so far, so it must have recorded exactly one revision, and that one is the
+     * current head.
+     */
+    @Test
+    void historyHasExactlyOneCurrentRevisionAfterASingleCreate() {
+        List<Revision> history = storeReader.history(PROJECT, FR_1_IRI);
+
+        assertThat(history).hasSize(1);
+        assertThat(history.get(0).current()).isTrue();
+        assertThat(history.get(0).generatedAtTime()).isNotBlank();
+        assertThat(history.get(0).iri()).isEqualTo(headIri());
+    }
+
+    /**
+     * Issue #251's central case: three writes through the funnel (the {@code setUp} create plus
+     * two {@link #replaceViaCompareAndUpdate} calls) must be listed oldest first, matching the
+     * exact revision identities the head pointer moved through, with only the last one marked
+     * {@link Revision#current()}.
+     */
+    @Test
+    void historyListsEveryRevisionOldestFirstWithOnlyTheHeadMarkedCurrent() {
+        String firstRevision = headIri();
+
+        replaceViaCompareAndUpdate(requirementTitled("Login v2"));
+        String secondRevision = headIri();
+        replaceViaCompareAndUpdate(requirementTitled("Login v3"));
+        String thirdRevision = headIri();
+
+        List<Revision> history = storeReader.history(PROJECT, FR_1_IRI);
+
+        assertThat(history).extracting(Revision::iri)
+                .containsExactly(firstRevision, secondRevision, thirdRevision);
+        assertThat(history).extracting(Revision::current)
+                .containsExactly(false, false, true);
+    }
+
+    /**
+     * A resource the funnel has never written through - here, a store-first blank-node subject
+     * seeded straight into the store, the same fixture {@link
+     * #outgoingResolvesABlankNodeHandleToTheStatementsReadSnapshotGroupedUnderIt} uses - has no
+     * revision to report. Empty, not an error: {@code resource_history} tells this apart from
+     * "no such resource" itself, via {@link StoreReader#outgoing}/{@link StoreReader#incoming}.
+     */
+    @Test
+    void historyIsEmptyForAResourceNoWriteHasGoneThroughTheFunnelFor() {
+        String predicate = "https://w3id.org/arknet/requirements#usesTerm";
+        seedBlankNodeSubjectTriple(predicate);
+        String blankNodeHandle = snapshotTriples().stream()
+                .filter(triple -> triple.subject().startsWith("_:") && triple.predicate().equals(predicate))
+                .map(Triple::subject)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(storeReader.history(PROJECT, blankNodeHandle)).isEmpty();
+    }
 }

@@ -705,16 +705,19 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The two read-only store tools ({@code store_overview}, {@code resource_get}). Both read
-     * the project dataset through {@link StoreReader} - a single generic
-     * {@code SELECT ?s ?p ?o} - so no bounded context needs a read tool of its own. The agent's
-     * return value stays that domain-agnostic digest; the human-facing HTML additionally groups
-     * the model per bounded context through {@link ModelViews}, with the generic snapshot as its
-     * safety net. The HTML report is written into {@code arknet.report.dir} (default: the
-     * launched project root / working directory). {@code arknet.report.host-dir} is the
-     * host-reachable equivalent of that directory when it is a container-internal mount point
-     * the calling agent cannot reach directly; unset on the non-containerized path,
-     * where {@code fallbackReportDir} is already host-reachable.
+     * The three read-only store tools ({@code store_overview}, {@code resource_get},
+     * {@code resource_history}). {@code store_overview}/{@code resource_get} read the project
+     * dataset through {@link StoreReader} - a single generic {@code SELECT ?s ?p ?o} - so no
+     * bounded context needs a read tool of its own; {@code resource_history} (issue #251) reads
+     * the same {@link StoreReader}, but via its own, deliberately separate query over the
+     * provenance graph. The agent's return value stays that domain-agnostic digest; the
+     * human-facing HTML additionally groups the model per bounded context through
+     * {@link ModelViews}, with the generic snapshot as its safety net. The HTML report is
+     * written into {@code arknet.report.dir} (default: the launched project root / working
+     * directory). {@code arknet.report.host-dir} is the host-reachable equivalent of that
+     * directory when it is a container-internal mount point the calling agent cannot reach
+     * directly; unset on the non-containerized path, where {@code fallbackReportDir} is already
+     * host-reachable.
      *
      * <p>{@code projectService} is passed as {@link de.hauschel.arknet.prj.application.port.in.FindProject},
      * not {@link ProjectRegistry} directly: the digest and HTML headers name the resolved

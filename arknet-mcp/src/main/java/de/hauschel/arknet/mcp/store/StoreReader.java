@@ -58,6 +58,20 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * change signal - which is what {@code arkprov:head} means - would be misled. The head becomes
  * visible again when it stops lying, i.e. once those paths are resolved into the funnel; until
  * then the trail accumulates in the store without any generic reader surfacing it.</p>
+ *
+ * <p><strong>{@link #history} is the one deliberate exception</strong> (issue #251): unlike
+ * {@link #readSnapshot}/{@link #outgoing}/{@link #incoming}, it reads exactly
+ * {@link ArkprovVocabulary#PROVENANCE_GRAPH} on purpose - showing the trail, not the model, is
+ * its whole job. It marks a revision "current" by reading the resource's actual
+ * {@code arkprov:head} triple rather than assuming the newest timestamp is current, so it never
+ * asserts more than the store itself does about which revision a write path last moved the head
+ * to. That head test is folded into the very same {@code SELECT} that lists the revisions (one
+ * {@code EXISTS} per row) rather than run as a separate query beforehand: each {@code select()}
+ * call opens and closes its own {@code RepositoryConnection}
+ * ({@code io.kogn.rdf.rdf4j.dataset.SparqlQueryRdf4j}), so two sequential queries share no
+ * snapshot - a write moving the head between them would make the second query's row list disagree
+ * with the first query's now-stale head, mismarking the true current revision as historical (or
+ * vice versa). A single query cannot straddle such a write.</p>
  */
 public final class StoreReader {
 
@@ -204,6 +218,62 @@ public final class StoreReader {
                     .distinct()
                     .toList();
         }
+    }
+
+    /**
+     * Reads a resource's change history (issue #251): every {@code arkprov:Revision} the shared
+     * write funnel has recorded for it (ADR-013/ADR-014), oldest first, with the one matching
+     * the resource's current {@code arkprov:head} marked {@link Revision#current}.
+     *
+     * <p>A resource the funnel has never written through - written entirely store-first
+     * (ADR-005), or predating the funnel - has recorded no revision and yields an empty list,
+     * not an error; distinguishing that from "no such resource" is the caller's job (as
+     * {@code resource_get} already does for {@link #outgoing}/{@link #incoming} being empty).
+     * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list,
+     * checked explicitly up front rather than left to fall out of the query: the funnel only
+     * ever records a revision under a subject's own opaque IRI, never a blank node, so no
+     * revision can name one via {@code prov:specializationOf} - but a blank-node label is not a
+     * forbidden {@code IRIREF} character (see {@link SparqlTerms#isValidIriReference}), so
+     * without this guard the query below would silently run against the literal string
+     * {@code "<_:label>"} instead of being rejected or handled like {@link #outgoing}/
+     * {@link #incoming} do.</p>
+     *
+     * @param projectId the project to read
+     * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
+     * @return the revisions, oldest first
+     */
+    public List<Revision> history(ProjectId projectId, String iri) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return List.of();
+        }
+        String iriRef = SparqlTerms.iriRef(iri);
+        String query = "SELECT ?revision ?time (EXISTS { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + iriRef + " <" + ArkprovVocabulary.HEAD + "> ?revision } } AS ?isCurrent) WHERE { "
+                + "GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?revision <" + ArkprovVocabulary.SPECIALIZATION_OF + "> " + iriRef + " . "
+                + "?revision <" + ArkprovVocabulary.GENERATED_AT_TIME + "> ?time . "
+                + "} } ORDER BY ?time";
+        try (DatasetHandle handle = acquire(projectId)) {
+            return handle.sparqlQuery().select(query)
+                    .map(StoreReader::toRevision)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .toList();
+        }
+    }
+
+    private static Optional<Revision> toRevision(BindingSet row) {
+        RDFTerm revision = row.getValue("revision").orElse(null);
+        RDFTerm time = row.getValue("time").orElse(null);
+        RDFTerm isCurrent = row.getValue("isCurrent").orElse(null);
+        if (!(revision instanceof IRI revisionIri) || !(time instanceof Literal timeLiteral)
+                || !(isCurrent instanceof Literal currentLiteral)) {
+            return Optional.empty();
+        }
+        return Optional.of(new Revision(revisionIri.getIRIString(), timeLiteral.getLexicalForm(),
+                Boolean.parseBoolean(currentLiteral.getLexicalForm())));
     }
 
     /** Acquires the project's dataset - the one line every read method here shares. */
