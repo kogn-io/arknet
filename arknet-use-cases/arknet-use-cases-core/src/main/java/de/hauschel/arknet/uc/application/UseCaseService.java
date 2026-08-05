@@ -286,11 +286,30 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                         : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
                 extensionTextLanguageByPosition.put(position, extensionLanguage);
             }
+            // A position is only a stable identity across this call if it survives inside the
+            // longest leading prefix the old and new lists still share - beyond that prefix, a
+            // wholesale extensions replace may have inserted, removed or reordered items, and the
+            // position numbering no longer refers to "the same" extension on both sides. More than
+            // one position diverging past that prefix (on either side) is the signature of such a
+            // restructure, as opposed to a single in-place edit (a translation of the trailing
+            // position, or a plain tail append/truncate) - see compareAndUpdate's
+            // extensionsRestructured javadoc for why that distinction matters.
+            int commonExtensionPrefixLength = 0;
+            while (commonExtensionPrefixLength < currentExtensions.size()
+                    && commonExtensionPrefixLength < updatedExtensions.size()
+                    && currentExtensions.get(commonExtensionPrefixLength)
+                            .equals(updatedExtensions.get(commonExtensionPrefixLength))) {
+                commonExtensionPrefixLength++;
+            }
+            boolean extensionsRestructured =
+                    currentExtensions.size() - commonExtensionPrefixLength > 1
+                            || updatedExtensions.size() - commonExtensionPrefixLength > 1;
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated,
                         titleLanguage, goalLanguage, scopeLanguage, triggerLanguage,
                         preconditionLanguage, postconditionLanguage,
-                        stepTextLanguageByPosition, extensionTextLanguageByPosition, defaultLanguage);
+                        stepTextLanguageByPosition, extensionTextLanguageByPosition, defaultLanguage,
+                        extensionsRestructured);
                 return updated;
             } catch (UseCaseConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the use case between our read and our write -

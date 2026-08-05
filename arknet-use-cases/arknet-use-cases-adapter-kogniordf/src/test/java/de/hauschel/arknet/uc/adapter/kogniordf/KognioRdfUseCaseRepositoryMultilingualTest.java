@@ -134,7 +134,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
                 "Customer selects items");
         repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(), null);
+                Map.of(1, "en"), Map.of(), null, false);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -161,7 +161,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanStepText = useCase(created.id(), code, "Place order", "Order is placed",
                 "Kunde waehlt Artikel");
         repository.compareAndUpdate(PROJECT_A, head, withGermanStepText, "en", "en", null, null, null, null,
-                Map.of(1, "de"), Map.of(), null);
+                Map.of(1, "de"), Map.of(), null, false);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -194,7 +194,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new Step(3, "Customer confirms order", List.of()));
         UseCase updated = useCase(id, code, "Place order", "Order is placed", withGermanSecondStep);
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en", 2, "de", 3, "en"), Map.of(), null);
+                Map.of(1, "en", 2, "de", 3, "en"), Map.of(), null, false);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -229,7 +229,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 new Step(3, "Customer confirms order", List.of()));
         UseCase updated = useCase(id, code, "Place order", "Order is placed", withRewordedSecondStep);
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en", 2, "en", 3, "en"), Map.of(), null);
+                Map.of(1, "en", 2, "en", 3, "en"), Map.of(), null, false);
 
         assertEquals(1, countStepTextLiterals(id, 2));
     }
@@ -283,7 +283,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 List.of(new Step(1, "Customer selects items", List.of())),
                 List.of("2a. Payment declined -> abort"));
         repository.compareAndUpdate(PROJECT_A, head, withGermanTrigger, "en", "en", "en", "de", "en", "en",
-                Map.of(1, "en"), Map.of(1, "en"), null);
+                Map.of(1, "en"), Map.of(1, "en"), null, false);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -322,7 +322,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase updated = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
                 null, null, List.of(new Step(1, "Customer selects items", List.of())), withGermanSecondExtension);
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(1, "en", 2, "de", 3, "en"), null);
+                Map.of(1, "en"), Map.of(1, "en", 2, "de", 3, "en"), null, false);
 
         UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -332,6 +332,53 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         assertEquals("3a. Artikel nicht vorraetig -> Kunde benachrichtigen", asGerman.extensions().get(1));
         assertEquals("4a. Address invalid -> request correction", asEnglish.extensions().get(2));
         assertEquals("4a. Address invalid -> request correction", asGerman.extensions().get(2));
+    }
+
+    /**
+     * The insert/reorder regression this class's {@code extensionsRestructured} parameter exists to
+     * fix: once an extension is inserted ahead of a position that already carries an other-language
+     * variant, that position's meaning shifts, so the old variant must not be re-attached to
+     * whatever new content now sits there.
+     *
+     * <p>1) create with two extensions, English. 2) compareAndUpdate gives position 2 a German
+     * variant - a safe in-place translation ({@code extensionsRestructured=false}), so both the
+     * English and the German text now sit on position 2. 3) compareAndUpdate inserts a brand-new
+     * extension ahead of position 2 - three items where there were two, so the call is
+     * {@code extensionsRestructured=true}: position 2 now denotes the newly-inserted extension, not
+     * the one the German variant was ever a translation of. With the flag honoured, that German
+     * variant must not survive on the freshly-minted position-2 subject; before the fix it did,
+     * silently attaching to unrelated content.</p>
+     */
+    @Test
+    void compareAndUpdateWithAnInsertedExtensionDoesNotMisattachAPriorPositionsOtherLanguageVariant() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCaseId id = freshId();
+        List<String> originalExtensions = List.of("2a. A", "3a. B");
+        UseCase created = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions);
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken headAfterCreate = currentHead(code);
+
+        List<String> withGermanSecondExtension = List.of("2a. A", "3a. B (de)");
+        UseCase withGermanVariant = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER,
+                List.of(), null, null, List.of(new Step(1, "Customer selects items", List.of())),
+                withGermanSecondExtension);
+        repository.compareAndUpdate(PROJECT_A, headAfterCreate, withGermanVariant, "en", "en", null, null, null,
+                null, Map.of(1, "en"), Map.of(1, "en", 2, "de"), null, false);
+        RevisionToken headAfterTranslation = currentHead(code);
+
+        List<String> withInsertedExtension = List.of("2a. A", "2b. New", "3a. B");
+        UseCase withInsert = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension);
+        repository.compareAndUpdate(PROJECT_A, headAfterTranslation, withInsert, "en", "en", null, null, null, null,
+                Map.of(1, "en"), Map.of(1, "en", 2, "en", 3, "en"), null, true);
+
+        assertEquals(1, countExtensionTextLiterals(id, 2),
+                "the stale German variant of the superseded position-2 extension must not survive");
+        UseCase asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
+        UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals(List.of("2a. A", "2b. New", "3a. B"), asEnglish.extensions());
+        assertEquals(List.of("2a. A", "2b. New", "3a. B"), asGerman.extensions());
     }
 
     /**
@@ -358,7 +405,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase updated = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
                 null, null, List.of(new Step(1, "Customer selects items", List.of())), withRewordedSecondExtension);
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
-                Map.of(1, "en"), Map.of(1, "en", 2, "en"), null);
+                Map.of(1, "en"), Map.of(1, "en", 2, "en"), null, false);
 
         assertEquals(1, countExtensionTextLiterals(id, 2));
     }
@@ -380,7 +427,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de",
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de");
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de", false);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -403,7 +450,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr",
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de");
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), "de", false);
 
         assertEquals(2, countTitleLiterals(PROJECT_A, id));
         assertTrue(hasUntaggedTitle(PROJECT_A, id, "Place order"));
@@ -430,7 +477,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanStepText, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                Map.of(1, "de"), current.extensionTextLanguageByPosition(), "de");
+                Map.of(1, "de"), current.extensionTextLanguageByPosition(), "de", false);
 
         assertEquals(1, countStepTextLiterals(id, 1));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -454,7 +501,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchStepText, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                Map.of(1, "fr"), current.extensionTextLanguageByPosition(), "de");
+                Map.of(1, "fr"), current.extensionTextLanguageByPosition(), "de", false);
 
         assertEquals(2, countStepTextLiterals(id, 1));
         UseCase asFrench = repository.findByCode(PROJECT_A, code, "fr").orElseThrow();
@@ -482,7 +529,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanScope, current.titleLanguage(),
                 current.goalLanguage(), "de", current.triggerLanguage(), current.preconditionLanguage(),
                 current.postconditionLanguage(), current.stepTextLanguageByPosition(),
-                current.extensionTextLanguageByPosition(), "de");
+                current.extensionTextLanguageByPosition(), "de", false);
 
         assertEquals(1, countScopeLiterals(PROJECT_A, id));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -507,7 +554,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchScope, current.titleLanguage(),
                 current.goalLanguage(), "fr", current.triggerLanguage(), current.preconditionLanguage(),
                 current.postconditionLanguage(), current.stepTextLanguageByPosition(),
-                current.extensionTextLanguageByPosition(), "de");
+                current.extensionTextLanguageByPosition(), "de", false);
 
         assertEquals(2, countScopeLiterals(PROJECT_A, id));
         assertTrue(hasUntaggedScope(PROJECT_A, id, "Webshop"));
@@ -537,7 +584,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanExtension, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), Map.of(1, "de"), "de");
+                current.stepTextLanguageByPosition(), Map.of(1, "de"), "de", false);
 
         assertEquals(1, countExtensionTextLiterals(id, 1));
         UseCase reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -563,7 +610,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchExtension, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), Map.of(1, "fr"), "de");
+                current.stepTextLanguageByPosition(), Map.of(1, "fr"), "de", false);
 
         assertEquals(2, countExtensionTextLiterals(id, 1));
         UseCase asFrench = repository.findByCode(PROJECT_A, code, "fr").orElseThrow();
@@ -589,7 +636,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
                 current.titleLanguage(), current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null));
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, false));
 
         UseCase reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
         assertEquals("Place order", reloaded.title());
@@ -613,7 +660,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         repository.compareAndUpdate(PROJECT_A, current.head(), current.value(),
                 current.titleLanguage(), current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
                 current.preconditionLanguage(), current.postconditionLanguage(),
-                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null);
+                current.stepTextLanguageByPosition(), current.extensionTextLanguageByPosition(), null, false);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
     }

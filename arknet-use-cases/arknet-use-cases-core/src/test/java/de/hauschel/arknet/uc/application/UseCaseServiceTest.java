@@ -284,6 +284,46 @@ class UseCaseServiceTest {
         assertEquals(List.of("2a. Payment declined -> abort"), updated.extensions());
     }
 
+    /**
+     * {@code extensionsRestructured} (passed on to {@link UseCaseRepository#compareAndUpdate}, see
+     * its own javadoc) must stay {@code false} for an update that only edits content in place -
+     * here, translating the single position whose content changed. The real out-adapter relies on
+     * this to know a prior other-language variant at that position is still safe to preserve; the
+     * real out-adapter's {@code KognioRdfUseCaseRepositoryMultilingualTest
+     * #compareAndUpdateWithAnInsertedExtensionDoesNotMisattachAPriorPositionsOtherLanguageVariant}
+     * covers the store-level consequence, this covers the service's own computation of the flag.
+     */
+    @Test
+    void updateThatOnlyTranslatesTheTrailingExtensionIsNotFlaggedAsRestructured() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "3a. B"), null, null, null, DEFAULT_LANGUAGE);
+
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "3a. B (de)"), null, null, "de", DEFAULT_LANGUAGE);
+
+        assertFalse(repository.lastExtensionsRestructured());
+    }
+
+    /**
+     * Counterpart to {@link #updateThatOnlyTranslatesTheTrailingExtensionIsNotFlaggedAsRestructured}:
+     * inserting a new extension ahead of an existing position shifts everything after it, so more
+     * than one position diverges once the longest common leading prefix is factored out - the flag
+     * must come out {@code true}, telling the out-adapter position-based preservation is unsafe for
+     * this call.
+     */
+    @Test
+    void updateThatInsertsAnExtensionIsFlaggedAsRestructured() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "3a. B"), null, null, null, DEFAULT_LANGUAGE);
+
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("2a. A", "2b. New", "3a. B"), null, null, null, DEFAULT_LANGUAGE);
+
+        assertTrue(repository.lastExtensionsRestructured());
+    }
+
     @Test
     void updatePreservesPrimaryActorSupportingActorsAndSteps() {
         NewUseCase command = new NewUseCase("Place order", "Customer places an order", "Webshop",

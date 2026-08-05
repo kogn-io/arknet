@@ -47,6 +47,17 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
     private final Map<UseCaseId, String> postconditionLanguageByIdentity = new LinkedHashMap<>();
     private final Map<UseCaseId, Map<Integer, String>> stepTextLanguageByIdentity = new LinkedHashMap<>();
     private final Map<UseCaseId, Map<Integer, String>> extensionTextLanguageByIdentity = new LinkedHashMap<>();
+    private Boolean lastExtensionsRestructured;
+
+    /**
+     * The {@code extensionsRestructured} flag {@link UseCaseService} passed on the most recent
+     * {@link #compareAndUpdate} call - lets a test assert on the service's own safe-to-preserve
+     * computation without needing the real out-adapter's RDF store. {@code null} before any
+     * {@code compareAndUpdate} call.
+     */
+    Boolean lastExtensionsRestructured() {
+        return lastExtensionsRestructured;
+    }
 
     @Override
     public void create(ProjectId projectId, UseCase useCase, String language) {
@@ -82,11 +93,14 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
             String titleLanguage, String goalLanguage, String scopeLanguage, String triggerLanguage,
             String preconditionLanguage, String postconditionLanguage,
             Map<Integer, String> stepTextLanguageByPosition, Map<Integer, String> extensionTextLanguageByPosition,
-            String defaultLanguage) {
+            String defaultLanguage, boolean extensionsRestructured) {
         // This fake stores a single title/goal/scope/trigger/precondition/postcondition/step-text/
         // extension-text value per identity (no multi-valued literals), so there is nothing for it
         // to sweep - defaultLanguage only matters to the real out-adapter's language-variant
         // preservation, exercised by KognioRdfUseCaseRepositoryMultilingualTest instead.
+        // extensionsRestructured is recorded, not acted on, so UseCaseServiceTest can assert on the
+        // service's own computation of it (see lastExtensionsRestructured()).
+        lastExtensionsRestructured = extensionsRestructured;
         Map<UseCaseId, UseCase> useCases = byProject.getOrDefault(projectId, Map.of());
         UseCase current = useCases.get(updated.id());
         if (current == null) {
