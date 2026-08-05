@@ -229,9 +229,14 @@ public final class StoreReader {
      * (ADR-005), or predating the funnel - has recorded no revision and yields an empty list,
      * not an error; distinguishing that from "no such resource" is the caller's job (as
      * {@code resource_get} already does for {@link #outgoing}/{@link #incoming} being empty).
-     * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list:
-     * the funnel only ever records a revision under a subject's own opaque IRI, never a blank
-     * node, so no revision can name one via {@code prov:specializationOf}.</p>
+     * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list,
+     * checked explicitly up front rather than left to fall out of the query: the funnel only
+     * ever records a revision under a subject's own opaque IRI, never a blank node, so no
+     * revision can name one via {@code prov:specializationOf} - but a blank-node label is not a
+     * forbidden {@code IRIREF} character (see {@link SparqlTerms#isValidIriReference}), so
+     * without this guard the query below would silently run against the literal string
+     * {@code "<_:label>"} instead of being rejected or handled like {@link #outgoing}/
+     * {@link #incoming} do.</p>
      *
      * @param projectId the project to read
      * @param iri       the resource's IRI, exactly as {@link HandleResolver} resolves it
@@ -240,6 +245,9 @@ public final class StoreReader {
     public List<Revision> history(ProjectId projectId, String iri) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(iri, "iri");
+        if (isBlankNodeReference(iri)) {
+            return List.of();
+        }
         String iriRef = SparqlTerms.iriRef(iri);
         String query = "SELECT ?revision ?time (EXISTS { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + iriRef + " <" + ArkprovVocabulary.HEAD + "> ?revision } } AS ?isCurrent) WHERE { "
