@@ -319,15 +319,16 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language) {
+            ActorFacet actorFacet, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
         String tag = canonicalLanguageTag(language);
+        String defaultTag = canonicalLanguageTag(defaultLanguage);
         TermConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet, tag);
+                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet, tag, defaultTag);
             } catch (TermConcurrentlyModifiedException e) {
                 // A concurrent writer advanced the head between our read and our write - retry
                 // against the now-current state instead of surfacing a transient race.
@@ -363,7 +364,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * update" note on {@link #update}.</p>
      */
     private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language) {
+            ActorFacet actorFacet, String language, String defaultLanguage) {
         DatasetId dataset = new DatasetId(projectId.value());
         CurrentTerm currentTerm;
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
@@ -423,11 +424,11 @@ public class KognioRdfTermRepository implements TermRepository {
                 () -> new TermConcurrentlyModifiedException(projectId, code),
                 tx -> {
                     if (prefLabel != null) {
-                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, language));
+                        tx.update(deleteTriplesOfLanguage(subject, PREF_LABEL_PROPERTY, language, defaultLanguage));
                         tx.add(graphIri, singleTriple(subjectIri, PREF_LABEL_PROPERTY, literalOf(prefLabel, language)));
                     }
                     if (definition != null) {
-                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, language));
+                        tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, language, defaultLanguage));
                         tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, language)));
                     }
                     if (actorFacet != null) {
@@ -493,15 +494,41 @@ public class KognioRdfTermRepository implements TermRepository {
      * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
      * tag.</p>
      *
-     * @param language the BCP-47 tag of the literal being replaced, or {@code null} for untagged
+     * <p><strong>Widening the filter for a default-language write (issue #258).</strong> {@code
+     * language} is normally never {@code null} by the time a real {@code term_update} call reaches
+     * here - {@code TermService#update} already resolved it against the project's {@code
+     * defaultLanguage} (or rejected the call) before {@code prefLabel}/{@code definition} could be
+     * non-{@code null} - but this out-adapter's own port contract still permits a caller-supplied
+     * {@code null} directly (untagged write), so this method stays null-tolerant for that
+     * lower-level case. When {@code language} is non-{@code null} and (canonicalized) equals
+     * {@code defaultLanguage} (canonicalized), the literal about to be written <em>is</em>, by
+     * construction, what an omitted {@code language} argument would have resolved to - so an
+     * existing <em>untagged</em> literal on this predicate is no longer a genuine other-language
+     * variant, it is a stale duplicate of the value now being written under its proper tag. The
+     * filter widens from matching only {@code tag} to also matching the untagged slot ({@code
+     * lang(?o) = ""}) in exactly that case, sweeping the stale untagged literal away instead of
+     * leaving it stranded next to the newly-tagged one - a lazy, incremental normalisation
+     * triggered only by the next {@code term_update} that happens to touch this field, not a batch
+     * migration. {@code language == null} (an untagged write itself) never widens: the untagged
+     * slot is already exactly what is being replaced.</p>
+     *
+     * @param language        the BCP-47 tag of the literal being replaced, or {@code null} for
+     *                        untagged
+     * @param defaultLanguage the target project's configured default language, canonicalized, or
+     *                        {@code null} if it has none
      */
-    private static String deleteTriplesOfLanguage(String subject, String predicateIri, String language) {
+    private static String deleteTriplesOfLanguage(
+            String subject, String predicateIri, String language, String defaultLanguage) {
         // The DELETE WHERE {...} shorthand only accepts quad patterns, no FILTER - the general
         // DELETE {...} WHERE {...} form is required to scope the delete by language.
         String tag = language == null ? "" : SparqlTerms.escape(language);
+        String filter = "lang(?o) = \"" + tag + "\"";
+        if (language != null && language.equals(defaultLanguage)) {
+            filter += " || lang(?o) = \"\"";
+        }
         return "DELETE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } } "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o . "
-                + "FILTER(lang(?o) = \"" + tag + "\") } }";
+                + "FILTER(" + filter + ") } }";
     }
 
     /** Deletes {@code subject a <typeIri>} if present - a no-op if the subject does not carry it. */

@@ -19,14 +19,22 @@ public interface AddTerm {
     /**
      * Adds a new term to the project glossary.
      *
-     * @param projectId the project (architecture model) to add the term to
-     * @param command     the data describing the term to create
+     * @param projectId       the project (architecture model) to add the term to
+     * @param command         the data describing the term to create
+     * @param defaultLanguage the target project's configured default language (see
+     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        or {@code null} if it has none - the tag {@code prefLabel}/
+     *                        {@code definition} are written under when {@code command.language()}
+     *                        is {@code null} (see
+     *                        {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage})
      * @return the persisted term including its assigned identity
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code
+     *                        command.language()} and {@code defaultLanguage} are both {@code null}
      */
-    Term add(ProjectId projectId, NewTerm command);
+    Term add(ProjectId projectId, NewTerm command, String defaultLanguage);
 
     /**
-     * Input data for {@link #add(ProjectId, NewTerm)}.
+     * Input data for {@link #add(ProjectId, NewTerm, String)}.
      *
      * @param prefLabel  the preferred label, i.e. the term itself
      * @param definition the meaning of the term
@@ -34,9 +42,10 @@ public interface AddTerm {
      *                   skos:Concept is additionally an {@code arkproc:Actor}.
      *                   Optional (may be {@code null})
      * @param language   the BCP-47 language tag {@code prefLabel} and {@code definition} are
-     *                   written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
-     *                   literal - the same tag applies to both fields, since a term is normally
-     *                   registered in one language at a time
+     *                   written in (e.g. {@code "de"}), or {@code null} to fall back to the
+     *                   target project's configured default language - the same tag applies to
+     *                   both fields, since a term is normally registered in one language at a
+     *                   time
      */
     record NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language) {
     }

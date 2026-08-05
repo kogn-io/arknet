@@ -116,11 +116,12 @@ public final class UbiquitousLanguageMcpTools {
      * default project and no fallback to a server-side working directory (decision 3).
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default display language too, for the read tool
-     * ({@code term_get}'s {@code displayLocale} default) - see {@link #effectiveDisplayLocale}.
-     * The write tools ({@code term_add}/{@code term_update}) deliberately do <strong>not</strong>
-     * use it (see that method's javadoc for why), but still resolve the full project so both
-     * {@code term_add}/{@code term_update} and {@code term_get} share one resolution path.</p>
+     * needs the resolved project's configured default language for two, independent purposes -
+     * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code term_get}'s)
+     * {@code displayLocale} default, while {@code term_add}/{@code term_update} instead pass
+     * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the {@code
+     * defaultLanguage} a write falls back to when the caller omits {@code language} (issue #258) -
+     * two different consumers of the very same field, not one the write tools skip.</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -134,17 +135,14 @@ public final class UbiquitousLanguageMcpTools {
      * has none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s
      * own remaining fallback chain).
      *
-     * <p><strong>Read-only, deliberately.</strong> The project default language is a display
-     * preference, not a write instruction: {@code term_add}/{@code term_update} never call this
-     * method and pass their own {@code language} argument straight through, untouched, even when
-     * it is {@code null}. Folding the project default into an omitted write-time {@code language}
-     * would silently retag what is written - a caller who omits {@code language} on an update
-     * would then write a project-default-tagged literal while the field's existing value is very
-     * likely still untagged (the language-scoped delete only ever removes the literal carrying
-     * the <em>same</em> tag as what is being written), leaving the untagged original standing
-     * next to a newly retagged duplicate on the very next correction. Untouched write-time
-     * {@code null} therefore always means "write untagged", exactly as before this project
-     * default existed.</p>
+     * <p><strong>Independent of the write-side use of the same field.</strong> {@code
+     * term_add}/{@code term_update} do not call this method - they pass {@link
+     * ResolvedProject#defaultLanguage()} straight through to their in-port instead, as the {@code
+     * defaultLanguage} a write falls back to when the caller omits {@code language} (issue #258).
+     * Both are the very same field on {@link ResolvedProject}, merged differently for their
+     * respective purpose: this method merges it against an explicit {@code displayLocale} override
+     * for reading, the write tools hand it to the in-port unmerged for the in-port's own
+     * resolve-or-reject decision.</p>
      */
     private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
         if (explicit != null && !explicit.isBlank()) {
@@ -172,15 +170,16 @@ public final class UbiquitousLanguageMcpTools {
                     + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
             final String actorRole,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the label and definition "
-                    + "are written in, or omitted for a plain, untagged literal. NOT defaulted from the "
-                    + "project's configured default language - that default only affects how a term is "
-                    + "displayed (term_get), never what gets written.", required = false)
+                    + "are written in. Falls back to the project's configured default language "
+                    + "(project_update) if omitted; if the project has no default either, the call is "
+                    + "rejected rather than writing an untagged literal.", required = false)
             final String language,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final ActorFacet facet = parseActorFacet(actorKind, actorRole);
-        final Term created = addTerm.add(project.id(), new NewTerm(label, definition, facet, blankToNull(language)));
+        final Term created = addTerm.add(project.id(), new NewTerm(label, definition, facet, blankToNull(language)),
+                project.defaultLanguage());
         return format(created);
     }
 
@@ -239,18 +238,21 @@ public final class UbiquitousLanguageMcpTools {
                     required = false)
             final String actorRole,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the new label/definition "
-                    + "is written in, or omitted for a plain, untagged literal. NOT defaulted from the "
-                    + "project's configured default language (see term_add's same parameter); only the "
-                    + "existing literal carrying this same tag is replaced - every other language variant "
-                    + "of a field being corrected survives untouched.", required = false)
+                    + "is written in. Falls back to the project's configured default language (see "
+                    + "term_add's same parameter) if omitted; if the project has no default either, the "
+                    + "call is rejected rather than writing an untagged literal. Only the existing literal "
+                    + "carrying the tag actually written is replaced - every other language variant of a "
+                    + "field being corrected survives untouched, except a stale untagged one left over from "
+                    + "before a language was ever supplied, which is swept away when the resolved tag equals "
+                    + "the project's default.", required = false)
             final String language,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
         final ActorFacet facet = parseActorFacet(actorKind, actorRole);
-        final Term updated = updateTerm.update(
-                project.id(), code, blankToNull(label), blankToNull(definition), facet, blankToNull(language));
+        final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
+                facet, blankToNull(language), project.defaultLanguage());
         return format(updated);
     }
 

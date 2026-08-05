@@ -46,19 +46,30 @@ public interface UpdateTerm {
      * Updates the term identified by {@code code} within a project, leaving any {@code null}
      * argument unchanged.
      *
-     * @param projectId  the project (architecture model) the term lives in
-     * @param code       the term code, e.g. {@code TERM-1}
-     * @param prefLabel  the new preferred label, or {@code null} to leave it unchanged
-     * @param definition the new definition, or {@code null} to leave it unchanged
-     * @param actorFacet the new Actor facette, or {@code null} to leave an already-set one
-     *                   unchanged
-     * @param language   the BCP-47 language tag the new {@code prefLabel}/{@code definition} is
-     *                   written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
-     *                   literal. Only the existing literal carrying this same tag is replaced -
-     *                   every other language-tagged variant of a field being corrected survives
-     *                   untouched, exactly like every field this method does not touch at all
+     * @param projectId       the project (architecture model) the term lives in
+     * @param code            the term code, e.g. {@code TERM-1}
+     * @param prefLabel       the new preferred label, or {@code null} to leave it unchanged
+     * @param definition      the new definition, or {@code null} to leave it unchanged
+     * @param actorFacet      the new Actor facette, or {@code null} to leave an already-set one
+     *                        unchanged
+     * @param language        the BCP-47 language tag the new {@code prefLabel}/{@code definition}
+     *                        is written in (e.g. {@code "de"}), or {@code null} to fall back to
+     *                        {@code defaultLanguage} if either field is actually being corrected
+     *                        (issue #258). Only the existing literal carrying the tag actually
+     *                        written is replaced - every other language-tagged variant of a field
+     *                        being corrected survives untouched, exactly like every field this
+     *                        method does not touch at all, except an existing untagged one that a
+     *                        fallback to {@code defaultLanguage} sweeps away (see {@code
+     *                        TermRepository#update}'s own {@code defaultLanguage} parameter)
+     * @param defaultLanguage the target project's configured default language (see
+     *                        {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
+     *                        or {@code null} if it has none - only consulted when {@code
+     *                        prefLabel}/{@code definition} is actually non-{@code null} here
      * @return the updated term
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code prefLabel} or
+     *                        {@code definition} is non-{@code null}, {@code language} is
+     *                        {@code null} and {@code defaultLanguage} is {@code null} too
      */
     Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
-            String language);
+            String language, String defaultLanguage);
 }

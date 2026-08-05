@@ -142,7 +142,7 @@ class TermServiceRealStoreConcurrencyTest {
         Thread winnerThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Term result = winnerService.add(WS, newTerm());
+                Term result = winnerService.add(WS, newTerm(), "en");
                 winnerResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } finally {
@@ -153,7 +153,7 @@ class TermServiceRealStoreConcurrencyTest {
         Thread loserThread = new Thread(() -> {
             logEvent(timeline, testStartNanos, "started");
             try {
-                Term result = loserService.add(WS, newTerm());
+                Term result = loserService.add(WS, newTerm(), "en");
                 loserResult.set(result);
                 logEvent(timeline, testStartNanos, "commit succeeded, " + describe(result));
             } catch (RuntimeException e) {
@@ -224,7 +224,7 @@ class TermServiceRealStoreConcurrencyTest {
 
         Thread winnerThread = new Thread(() -> {
             try {
-                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, "de");
+                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, "de", null);
             } catch (Throwable t) {
                 winnerFailure.set(t);
             } finally {
@@ -233,7 +233,7 @@ class TermServiceRealStoreConcurrencyTest {
         }, "racer-A");
         Thread loserThread = new Thread(() -> {
             try {
-                loserRepository.update(WS, code, "Client", null, null, "fr");
+                loserRepository.update(WS, code, "Client", null, null, "fr", null);
             } catch (Throwable t) {
                 loserFailure.set(t);
             }

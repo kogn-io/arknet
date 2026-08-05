@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -63,6 +64,16 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * {@code null}-means-unchanged straight through to {@link TermRepository#update}, which resolves
  * the term and decides, per predicate, what to leave alone entirely at the triple level - the only
  * layer that can do so without first collapsing it through {@link Term}.</p>
+ *
+ * <p><strong>Language (issue #258).</strong> Because {@link #update} never reads the current term,
+ * it cannot compare a mutated value against what was read the way {@code RequirementService}/
+ * {@code UseCaseService} do to tell whether a language-tagged field is actually changing - it uses
+ * the simpler, equivalent test available here instead: {@code prefLabel}/{@code definition} are the
+ * only two language-tagged fields, so "the caller supplied at least one of them" is exactly "this
+ * call is changing a language-tagged field". Only then is a {@code null} {@code language} resolved
+ * against {@code defaultLanguage} (or rejected, see {@link
+ * de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}) - a call that touches neither field
+ * never reaches the resolver and can never throw for a missing default.</p>
  */
 public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm {
 
@@ -84,7 +95,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     }
 
     @Override
-    public Term add(ProjectId projectId, NewTerm command) {
+    public Term add(ProjectId projectId, NewTerm command, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Identity is opaque and stable, so it is minted once, outside the retry: only the
@@ -92,10 +103,13 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         // See CodeAssignment for why that race exists and why it must retry rather
         // than surface the out-adapter's uniqueness guard as a caller-visible failure.
         TermId id = new TermId(resourceIdFactory.newId());
+        // Resolved once, outside the retry, same as RequirementService#add: a missing default must
+        // reject the call before any code is even computed (issue #258).
+        String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
             TermCode code = nextCode(projectId);
             Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet());
-            repository.create(projectId, term, command.language());
+            repository.create(projectId, term, language);
             return term;
         });
     }
@@ -115,10 +129,23 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language) {
+            ActorFacet actorFacet, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.update(projectId, code, prefLabel, definition, actorFacet, language);
+        // Unlike RequirementService/UseCaseService, this method never reads the current term
+        // first (see the class-level "pure pass-through" note), so it cannot compare a mutated
+        // value against what was read to tell whether a language-tagged field is actually
+        // changing. The simpler, equivalent test available here: a field is being changed exactly
+        // when the caller supplied it non-null - prefLabel/definition are the only two
+        // language-tagged fields, so "either is non-null" is precisely "this call is changing a
+        // language-tagged field", the same condition that would gate the resolveWriteLanguage call
+        // if this method did read-then-compare. A no-op call (both null) never reaches the
+        // resolver, so it can never throw MissingDefaultLanguageException.
+        String effectiveLanguage = (prefLabel != null || definition != null)
+                ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                : language;
+        return repository.update(projectId, code, prefLabel, definition, actorFacet, effectiveLanguage,
+                defaultLanguage);
     }
 
     @Override

@@ -62,10 +62,10 @@ class TermServiceConcurrencyTest {
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newTerm()));
+                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newTerm(), "en"));
         TermService underTest = new TermService(racing, resourceIdFactory);
 
-        Term result = underTest.add(WS, newTerm());
+        Term result = underTest.add(WS, newTerm(), "en");
 
         assertEquals(new TermCode("TERM-2"), result.code());
         assertEquals(2, store.findAll(WS).size());
@@ -114,8 +114,8 @@ class TermServiceConcurrencyTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet, String language) {
-            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language);
+                ActorFacet actorFacet, String language, String defaultLanguage) {
+            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language, defaultLanguage);
         }
 
         @Override
