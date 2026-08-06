@@ -755,6 +755,24 @@ class RequirementServiceTest {
     }
 
     /**
+     * Same regression as {@link #updateRejectsALegacyRequirementWhenAcceptanceCriteriaAreLeftUnchanged},
+     * but with no {@code defaultLanguage} at all: the acceptance-criteria guard must still take
+     * precedence over {@link de.hauschel.arknet.kernel.MissingDefaultLanguageException}, which
+     * {@code title}'s own language resolution would otherwise throw first.
+     */
+    @Test
+    void updateRejectsALegacyRequirementBeforeComplainingAboutAMissingDefaultLanguage() {
+        RequirementCode code = givenLegacyRequirement();
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.update(WS, code, "New title", null, null, null, null, null, null));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals("legacy title", service.get(WS, code, null).orElseThrow().title());
+    }
+
+    /**
      * The escape hatch: a caller closing the gap by patching the placeholder's own position (the
      * only way {@code update} can touch an already-existing criterion, issue #266) with real text
      * must succeed - the guard only blocks a write that would carry the placeholder forward

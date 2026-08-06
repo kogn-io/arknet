@@ -351,7 +351,12 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * guard - the placeholder itself would still be persisted at position {@code 1} - only
      * {@link #update} patching that exact position with real text (via
      * {@link Requirement#withAcceptanceCriteriaTextPatches}) does. A no-op mutation never reaches
-     * this check, since it already returned above.</p>
+     * this check, since it already returned above. This guard runs <em>before</em> resolving a
+     * touched field's write language whenever {@code mutation} changed any text (title,
+     * description or an acceptance criterion) - a legacy requirement missing its acceptance
+     * criteria must surface {@link MissingAcceptanceCriteriaException} even when the call also
+     * lacks a {@code language}/{@code defaultLanguage} for that unrelated text change, rather than
+     * failing on the language gap first and hiding the more fundamental one.</p>
      *
      * @throws RequirementNotFoundException            if no requirement with {@code code} exists
      * @throws MissingAcceptanceCriteriaException      if the write would carry a legacy
@@ -374,6 +379,15 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(projectId, code)
                     .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
             Requirement updated = mutation.apply(current.value());
+            // A byte-for-byte-unchanged requirement might still not be a no-op (a touched field
+            // retagged to an explicit language without changing its text, issue #271) - the check
+            // below covers that. A changed one never is, and the guard must see it before any
+            // language resolution gets a chance to throw on an unrelated field (see the guard's
+            // own javadoc above).
+            boolean textUnchanged = updated.equals(current.value());
+            if (!textUnchanged) {
+                rejectAcceptanceCriteriaPlaceholderCarriedForward(current, updated, projectId, code);
+            }
             // title/description/each acceptance criterion's text each get their own language: a
             // field/position this call itself did not name (titleTouched/descriptionTouched/
             // touchedAcceptanceCriteriaPositions - see update()) round-trips under the exact tag it
@@ -401,23 +415,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             // equality (the pre-#271 check) missed a named field/position whose caller supplied a
             // different language for text that happens to already match - see the block comment
             // above.
-            if (updated.equals(current.value())
+            if (textUnchanged
                     && Objects.equals(titleLanguage, current.titleLanguage())
                     && Objects.equals(descriptionLanguage, current.descriptionLanguage())
                     && acceptanceCriteriaLanguageByPosition.equals(current.acceptanceCriteriaLanguageByPosition())) {
                 return current.value();
             }
-            if (current.acceptanceCriteriaIsSynthesized()) {
-                AcceptanceCriterion placeholder = current.value().acceptanceCriteria().get(0);
-                AcceptanceCriterion stillAtPlaceholderPosition = updated.acceptanceCriteria().stream()
-                        .filter(criterion -> criterion.position() == placeholder.position())
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalStateException(
-                                "acceptance criteria never lose an existing position (append/patch-only, "
-                                        + "issue #266)"));
-                if (stillAtPlaceholderPosition.text().equals(placeholder.text())) {
-                    throw new MissingAcceptanceCriteriaException(projectId, code);
-                }
+            if (textUnchanged) {
+                rejectAcceptanceCriteriaPlaceholderCarriedForward(current, updated, projectId, code);
             }
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage,
@@ -430,6 +435,29 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             }
         }
         throw lastConflict;
+    }
+
+    /**
+     * The guard body of {@link #updateWithOptimisticRetry}'s legacy-acceptance-criteria check
+     * (see that method's javadoc) - extracted so it can run both ahead of language resolution
+     * (when {@code mutation} changed some text) and just before the write (when it did not, but a
+     * touched field was still retagged to a new language, issue #271).
+     */
+    private static void rejectAcceptanceCriteriaPlaceholderCarriedForward(
+            RequirementRepository.CurrentRequirement current, Requirement updated, ProjectId projectId,
+            RequirementCode code) {
+        if (!current.acceptanceCriteriaIsSynthesized()) {
+            return;
+        }
+        AcceptanceCriterion placeholder = current.value().acceptanceCriteria().get(0);
+        AcceptanceCriterion stillAtPlaceholderPosition = updated.acceptanceCriteria().stream()
+                .filter(criterion -> criterion.position() == placeholder.position())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "acceptance criteria never lose an existing position (append/patch-only, issue #266)"));
+        if (stillAtPlaceholderPosition.text().equals(placeholder.text())) {
+            throw new MissingAcceptanceCriteriaException(projectId, code);
+        }
     }
 
     /**
