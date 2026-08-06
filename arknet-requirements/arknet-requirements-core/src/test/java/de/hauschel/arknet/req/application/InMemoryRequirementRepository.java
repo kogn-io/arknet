@@ -144,7 +144,9 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     }
 
     @Override
-    public List<Requirement> findAll(ProjectId projectId) {
+    public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
+        // Nothing multi-valued to select a language variant from in this plain in-memory fake -
+        // displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 

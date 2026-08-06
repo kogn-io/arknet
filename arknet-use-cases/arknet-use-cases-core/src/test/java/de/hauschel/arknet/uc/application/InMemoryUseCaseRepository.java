@@ -141,7 +141,9 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public List<UseCase> findAll(ProjectId projectId) {
+    public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
+        // Nothing multi-valued to select a language variant from in this plain in-memory fake -
+        // displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 }

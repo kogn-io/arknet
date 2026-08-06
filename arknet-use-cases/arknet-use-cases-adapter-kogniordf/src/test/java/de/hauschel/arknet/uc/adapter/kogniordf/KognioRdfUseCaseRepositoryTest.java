@@ -232,7 +232,7 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(new Step(1, "User requests a reset link", List.of())), List.of());
         repository.create(PROJECT_A, second, null);
 
-        List<UseCase> all = repository.findAll(PROJECT_A);
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
         assertEquals(2, all.size());
         assertTrue(all.stream().anyMatch(uc -> uc.code().equals(CODE_1)));
         assertTrue(all.stream().anyMatch(uc -> uc.code().equals(CODE_2)));
@@ -250,7 +250,7 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(new Step(1, "Customer selects items", List.of())), List.of());
         replaceViaCompareAndUpdate(PROJECT_A, revised);
 
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals("Place order (revised)", found.title());
         assertEquals(1, found.steps().size());
@@ -294,7 +294,7 @@ class KognioRdfUseCaseRepositoryTest {
                 () -> repository.create(PROJECT_A, placeOrder(ID_1, CODE_2), null));
 
         assertEquals(ID_1.value(), ex.id());
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
     }
 
     @Test
@@ -306,7 +306,7 @@ class KognioRdfUseCaseRepositoryTest {
                 () -> repository.create(PROJECT_A, placeOrder(ID_2, CODE_1), null));
 
         assertEquals(CODE_1, ex.code());
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
     }
 
     @Test
@@ -317,7 +317,7 @@ class KognioRdfUseCaseRepositoryTest {
                 () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, null, null, null, null,
                         java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE));
 
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
 
     // ---- compareAndUpdate: CAS guard against lost updates ----
@@ -371,7 +371,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertThrows(UseCaseNotFoundException.class,
                 () -> repository.compareAndUpdate(PROJECT_A, null, placeOrder(), null, null, null, null, null, null,
                         java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE));
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, CODE_1));
     }
 
@@ -385,7 +385,7 @@ class KognioRdfUseCaseRepositoryTest {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
-        assertTrue(repository.findAll(PROJECT_B).isEmpty());
+        assertTrue(repository.findAll(PROJECT_B, null).isEmpty());
     }
 
     /**
@@ -407,7 +407,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertTrue(byCode.isPresent(), "findByCode must still return the use case");
         assertEquals(CUSTOMER, byCode.orElseThrow().primaryActor());
 
-        List<UseCase> all = repository.findAll(PROJECT_A);
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
         assertEquals(1, all.size(), "findAll must not silently drop the use case");
         assertEquals(CUSTOMER, all.get(0).primaryActor());
     }
@@ -475,7 +475,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<https://w3id.org/arknet/requirements#primaryActor> _:orphanActor ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + orphanCode.value() + "\" .");
 
-        List<UseCase> all = repository.findAll(PROJECT_A);
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
@@ -506,7 +506,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<" + CUSTOMER.value().value() + "> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + noStepsCode.value() + "\" .");
 
-        List<UseCase> all = repository.findAll(PROJECT_A);
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
@@ -556,7 +556,7 @@ class KognioRdfUseCaseRepositoryTest {
                         + XSD.INTEGER + "> ; "
                         + "<https://w3id.org/arknet/requirements#stepText> \"Customer confirms and pays\" .");
 
-        List<UseCase> all = repository.findAll(PROJECT_A);
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
         assertEquals(1, all.size());
         assertEquals(CODE_1, all.get(0).code());
 
@@ -575,7 +575,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         assertThrows(WriteConstraintViolationException.class,
                 () -> repository.create(PROJECT_A, invalid, null));
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
 
     /**

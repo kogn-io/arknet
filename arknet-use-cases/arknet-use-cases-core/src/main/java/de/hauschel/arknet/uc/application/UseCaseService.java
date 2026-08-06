@@ -158,9 +158,9 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     }
 
     @Override
-    public List<UseCase> list(ProjectId projectId) {
+    public List<UseCase> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return repository.findAll(projectId);
+        return repository.findAll(projectId, displayLocale);
     }
 
     @Override
@@ -404,7 +404,10 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      * currently in use, plus one (starting at 1).
      */
     private UseCaseCode nextCode(ProjectId projectId) {
-        int next = repository.findAll(projectId).stream()
+        // Only each use case's UseCaseCode is read here, never a text field, so this call has no
+        // need for a display language override - null uses the repository's own configured
+        // preference, which has no bearing on this method's result either way.
+        int next = repository.findAll(projectId, null).stream()
                 .mapToInt(uc -> runningNumber(uc.code()))
                 .max()
                 .orElse(0) + 1;

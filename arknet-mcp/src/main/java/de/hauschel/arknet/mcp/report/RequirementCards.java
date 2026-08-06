@@ -50,13 +50,17 @@ public final class RequirementCards {
     }
 
     /**
-     * @param projectId the project to read
+     * @param projectId     the project to read
+     * @param displayLocale the resolved project's own configured default display language
+     *                      (BCP-47 tag), or {@code null} if it has none - passed straight through
+     *                      to {@code req_list}'s own port so the report honours the same project
+     *                      default {@code req_list}/{@code term_list} already do (issue #281)
      * @param glossary    the project's glossary, for labelling and marking up references
      * @return the requirements section, ordered by business code
      */
-    public ModelSection section(final ProjectId projectId, final Glossary glossary) {
+    public ModelSection section(final ProjectId projectId, final String displayLocale, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<ModelCard> cards = requirements.list(projectId).stream()
+        final List<ModelCard> cards = requirements.list(projectId, displayLocale).stream()
                 .sorted(Comparator.comparing(requirement -> requirement.code().value(), BusinessCodes.ORDER))
                 .map(requirement -> card(requirement, glossary))
                 .toList();

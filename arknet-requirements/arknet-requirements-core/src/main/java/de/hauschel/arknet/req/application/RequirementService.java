@@ -217,9 +217,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
-    public List<Requirement> list(ProjectId projectId) {
+    public List<Requirement> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        return repository.findAll(projectId);
+        return repository.findAll(projectId, displayLocale);
     }
 
     @Override
@@ -549,7 +549,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * running number currently used by that type, plus one (starting at 1).
      */
     private RequirementCode nextCode(ProjectId projectId, RequirementType type) {
-        int next = repository.findAll(projectId).stream()
+        // Only each requirement's RequirementCode is read here, never a title/description, so
+        // this call has no need for a display language override - null uses the repository's own
+        // configured preference, which has no bearing on this method's result either way.
+        int next = repository.findAll(projectId, null).stream()
                 .filter(r -> r.type() == type)
                 .mapToInt(r -> runningNumber(r.code()))
                 .max()

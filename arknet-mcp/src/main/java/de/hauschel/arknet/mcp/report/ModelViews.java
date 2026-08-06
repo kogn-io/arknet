@@ -92,8 +92,9 @@ public final class ModelViews {
         collect(sections, failures, BoundedContextCards.SECTION_TITLE,
                 () -> boundedContexts.section(projectId, glossary));
         collect(sections, failures, RequirementCards.SECTION_TITLE,
-                () -> requirements.section(projectId, glossary));
-        collect(sections, failures, UseCaseCards.SECTION_TITLE, () -> useCases.section(projectId, glossary));
+                () -> requirements.section(projectId, displayLocale, glossary));
+        collect(sections, failures, UseCaseCards.SECTION_TITLE,
+                () -> useCases.section(projectId, displayLocale, glossary));
         collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));
         collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
         return new Views(sections, failures);

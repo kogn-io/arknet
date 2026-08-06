@@ -48,10 +48,10 @@ class ModelViewsTest {
     void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
         final ModelViews views = new ModelViews(
                 (projectId, displayLocale) -> List.of(term()),
-                new UseCaseCards(projectId -> {
+                new UseCaseCards((projectId, displayLocale) -> {
                     throw new IllegalStateException("store closed");
                 }, (projectId, ids) -> List.of()),
-                new RequirementCards(projectId -> List.of()),
+                new RequirementCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards());
 
@@ -77,8 +77,8 @@ class ModelViewsTest {
                 (projectId, displayLocale) -> {
                     throw new IllegalStateException("glossary unreadable");
                 },
-                new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
-                new RequirementCards(projectId -> List.of(requirement())),
+                new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
+                new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 emptyAdrCards());
 
@@ -97,8 +97,8 @@ class ModelViewsTest {
     void leavesOutEmptySections() {
         final ModelViews views = new ModelViews(
                 (projectId, displayLocale) -> List.of(term()),
-                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
-                new RequirementCards(projectId -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
+                new RequirementCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards());
 
@@ -117,8 +117,8 @@ class ModelViewsTest {
     void ordersSectionsFromStrategicToDetailed() {
         final ModelViews views = new ModelViews(
                 (projectId, displayLocale) -> List.of(term()),
-                new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
-                new RequirementCards(projectId -> List.of(requirement())),
+                new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
+                new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 new AdrCards(projectId -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));

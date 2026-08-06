@@ -81,8 +81,8 @@ class UseCaseServiceConcurrencyTest {
         UseCase result = underTest.add(WS, newUseCase(), DEFAULT_LANGUAGE);
 
         assertEquals(new UseCaseCode("UC2"), result.code());
-        assertEquals(2, store.findAll(WS).size());
-        assertTrue(store.findAll(WS).stream()
+        assertEquals(2, store.findAll(WS, null).size());
+        assertTrue(store.findAll(WS, null).stream()
                 .map(UseCase::code)
                 .toList()
                 .containsAll(List.of(new UseCaseCode("UC1"), new UseCaseCode("UC2"))));
@@ -191,8 +191,8 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public List<UseCase> findAll(ProjectId projectId) {
-            List<UseCase> result = delegate.findAll(projectId);
+        public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
+            List<UseCase> result = delegate.findAll(projectId, displayLocale);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -252,8 +252,8 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public List<UseCase> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
         }
     }
 
@@ -300,8 +300,8 @@ class UseCaseServiceConcurrencyTest {
         }
 
         @Override
-        public List<UseCase> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
         }
     }
 }

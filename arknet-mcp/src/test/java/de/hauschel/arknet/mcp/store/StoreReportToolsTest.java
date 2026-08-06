@@ -152,9 +152,9 @@ class StoreReportToolsTest {
     private ModelViews modelViews() {
         return new ModelViews(
                 (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(term1) : List.of(),
-                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(
-                        projectId -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
+                        (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
     }
@@ -473,8 +473,8 @@ class StoreReportToolsTest {
                 ANCHOR.equals(anchor) ? new ResolvedProject(PROJECT, "de") : resolveTestAnchor(anchor);
         final ModelViews modelViewsWithRealTerms = new ModelViews(
                 termService,
-                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
-                new RequirementCards(projectId -> List.of()),
+                new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
+                new RequirementCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
         final StoreReportTools toolsWithGermanDefault = new StoreReportTools(

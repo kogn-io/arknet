@@ -193,7 +193,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<UseCase> stored = KognioRdfUseCaseRepositoryFactory.over(
-                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS);
+                realLifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(UseCase::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);

@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -250,6 +251,63 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         assertEquals(1, countAcceptanceCriterionTextLiterals(PROJECT_A, id));
         Requirement reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
         assertEquals("Anmeldung gelingt mit gueltigen Zugangsdaten", reloaded.acceptanceCriteria().get(0).text());
+    }
+
+    /**
+     * {@code req_list}'s own default-language resolution (issue #281): {@link
+     * RequirementRepository#findAll} must select a multilingual requirement's title/description in
+     * the reader's configured requested language, exactly as {@link RequirementRepository#findByCode}
+     * already does - mirrors {@code KognioRdfTermRepositoryTest#findAllPicksThePrefLabelInTheRequestedLanguage}.
+     */
+    @Test
+    void findAllPicksTheTitleInTheRequestedLanguage() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirement(freshId(), code, "Login", "The system shall authenticate a user.");
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken head = currentHead(code);
+        Requirement withGermanTitle = requirement(created.id(), code, "Anmeldung",
+                "The system shall authenticate a user.");
+        repository.compareAndUpdate(
+                PROJECT_A, head, withGermanTitle, "de", "en", noAcceptanceCriteriaLanguages(withGermanTitle), null);
+        RequirementRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        List<Requirement> all = germanReader.findAll(PROJECT_A, null);
+
+        assertEquals(1, all.size());
+        assertEquals("Anmeldung", all.get(0).title());
+    }
+
+    /**
+     * {@code req_list}'s own default-language resolution (issue #281): a per-call override wins
+     * over the repository's own constructor-configured display language for {@link
+     * RequirementRepository#findAll} too - {@code RequirementMcpTools#list} passes the calling
+     * project's own configured default language as this argument, not an explicit tool argument
+     * (unlike {@code req_get}'s {@code displayLocale}), but this repository method itself does not
+     * distinguish the two: whatever string it is handed simply overrides the configured {@code
+     * requested} tier for this one call. Mirrors
+     * {@code KognioRdfTermRepositoryTest#findAllDisplayLocaleArgumentOverridesTheConfiguredDefault}.
+     */
+    @Test
+    void findAllDisplayLocaleArgumentOverridesTheConfiguredDefault() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirement(freshId(), code, "Login", "The system shall authenticate a user.");
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken head = currentHead(code);
+        Requirement withGermanTitle = requirement(created.id(), code, "Anmeldung",
+                "The system shall authenticate a user.");
+        repository.compareAndUpdate(
+                PROJECT_A, head, withGermanTitle, "de", "en", noAcceptanceCriteriaLanguages(withGermanTitle), null);
+        RequirementRepository englishReader = readerFor(Locale.ENGLISH, Locale.ENGLISH);
+
+        List<Requirement> all = englishReader.findAll(PROJECT_A, "de");
+
+        assertEquals(1, all.size());
+        assertEquals("Anmeldung", all.get(0).title());
+    }
+
+    /** A requirement repository reading the shared store under an explicit display-language preference. */
+    private RequirementRepository readerFor(Locale requested, Locale systemDefault) {
+        return KognioRdfRequirementRepositoryFactory.over(lifecycle, new DisplayLocale(requested, systemDefault));
     }
 
     private static Requirement requirementWithCriteria(RequirementId id, RequirementCode code, String title,

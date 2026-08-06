@@ -150,14 +150,14 @@ class KognioRdfRequirementRepositoryTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
 
         repository.create(PROJECT_A, first, null);
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
 
         Requirement second = new Requirement(
                 freshId(), new RequirementCode("FR-2"), "Logout", "The system shall end a user session.",
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null, List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
         repository.create(PROJECT_A, second, null);
 
-        List<Requirement> all = repository.findAll(PROJECT_A);
+        List<Requirement> all = repository.findAll(PROJECT_A, null);
         assertEquals(2, all.size());
         assertTrue(all.contains(first));
         assertTrue(all.contains(second));
@@ -177,7 +177,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertThrows(ResourceAlreadyExistsException.class,
                 () -> repository.create(PROJECT_A, collidingId, null));
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertEquals(Optional.of(requirement), repository.findByCode(PROJECT_A, new RequirementCode("FR-1"), null));
     }
 
@@ -199,7 +199,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertThrows(DuplicateRequirementCodeException.class,
                 () -> repository.create(PROJECT_A, collidingCode, null));
-        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertEquals(Optional.of(first), repository.findByCode(PROJECT_A, code, null));
     }
 
@@ -216,8 +216,8 @@ class KognioRdfRequirementRepositoryTest {
         replaceViaCompareAndUpdate(PROJECT_A, accepted);
 
         assertEquals(Optional.of(accepted), repository.findByCode(PROJECT_A, code, null));
-        assertEquals(1, repository.findAll(PROJECT_A).size());
-        assertEquals(accepted, repository.findAll(PROJECT_A).get(0));
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
+        assertEquals(accepted, repository.findAll(PROJECT_A, null).get(0));
     }
 
     /** The opaque identity is preserved across an update - only the requirement's state changes. */
@@ -299,7 +299,7 @@ class KognioRdfRequirementRepositoryTest {
         assertThrows(RequirementNotFoundException.class,
                 () -> repository.compareAndUpdate(
                         PROJECT_A, null, neverCreated, null, null, noAcceptanceCriteriaLanguages(neverCreated), null));
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
         assertEquals(Optional.empty(), repository.findCurrentByCode(PROJECT_A, code));
     }
 
@@ -340,7 +340,7 @@ class KognioRdfRequirementRepositoryTest {
 
         repository.create(PROJECT_A, requirement, null);
 
-        assertTrue(repository.findAll(PROJECT_B).isEmpty());
+        assertTrue(repository.findAll(PROJECT_B, null).isEmpty());
     }
 
     @Test
@@ -372,7 +372,7 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(Priority.MUST_HAVE, found.orElseThrow().priority());
         assertEquals("https://w3id.org/arknet/model/goal/fast-ux", found.orElseThrow().motivatedBy());
         assertEquals("performance", found.orElseThrow().qualityCategory());
-        assertTrue(repository.findAll(PROJECT_A).contains(requirement));
+        assertTrue(repository.findAll(PROJECT_A, null).contains(requirement));
     }
 
     @Test
@@ -383,7 +383,7 @@ class KognioRdfRequirementRepositoryTest {
 
         repository.create(PROJECT_A, requirement, null);
         Optional<Requirement> found = repository.findByCode(PROJECT_A, new RequirementCode("FR-1"), null);
-        Requirement foundViaFindAll = repository.findAll(PROJECT_A).get(0);
+        Requirement foundViaFindAll = repository.findAll(PROJECT_A, null).get(0);
 
         assertEquals(Optional.of(requirement), found);
         assertEquals(requirement, foundViaFindAll);
@@ -407,7 +407,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertThrows(WriteConstraintViolationException.class,
                 () -> repository.create(PROJECT_A, tooShortDescription, null));
-        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
 
     /**
@@ -514,7 +514,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertEquals(criteria, repository.findByCode(PROJECT_A, new RequirementCode("FR-1"), null)
                 .orElseThrow().acceptanceCriteria());
-        assertEquals(requirement.acceptanceCriteria(), repository.findAll(PROJECT_A).get(0).acceptanceCriteria());
+        assertEquals(requirement.acceptanceCriteria(), repository.findAll(PROJECT_A, null).get(0).acceptanceCriteria());
     }
 
     /**
@@ -566,7 +566,7 @@ class KognioRdfRequirementRepositoryTest {
         RequirementId id = freshId();
         givenLegacyRequirementWithoutAcceptanceCriterion(PROJECT_A, id, "FR-1");
 
-        List<Requirement> all = repository.findAll(PROJECT_A);
+        List<Requirement> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(1, all.get(0).acceptanceCriteria().size());
@@ -672,7 +672,7 @@ class KognioRdfRequirementRepositoryTest {
         RequirementId id = freshId();
         givenRequirementWithABlankAcceptanceCriterionTextInTheMiddle(PROJECT_A, id, "FR-1");
 
-        List<Requirement> all = repository.findAll(PROJECT_A);
+        List<Requirement> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(1, all.get(0).acceptanceCriteria().size());
@@ -760,7 +760,7 @@ class KognioRdfRequirementRepositoryTest {
         RequirementId id = freshId();
         givenRequirementWithTwoPriorities(PROJECT_A, id, "FR-1");
 
-        List<Requirement> all = repository.findAll(PROJECT_A);
+        List<Requirement> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(1, all.size());
         assertEquals(new RequirementCode("FR-1"), all.get(0).code());
@@ -776,8 +776,8 @@ class KognioRdfRequirementRepositoryTest {
         RequirementId id = freshId();
         givenRequirementWithTwoPriorities(PROJECT_A, id, "FR-1");
 
-        Priority first = repository.findAll(PROJECT_A).get(0).priority();
-        Priority second = repository.findAll(PROJECT_A).get(0).priority();
+        Priority first = repository.findAll(PROJECT_A, null).get(0).priority();
+        Priority second = repository.findAll(PROJECT_A, null).get(0).priority();
 
         assertEquals(first, second);
     }
@@ -908,7 +908,7 @@ class KognioRdfRequirementRepositoryTest {
         givenRequirementWithStatus(PROJECT_A, freshId(), "FR-2", "https://w3id.org/arknet/requirements#Verified");
 
         UnsupportedRequirementStatusException thrown = assertThrows(
-                UnsupportedRequirementStatusException.class, () -> repository.findAll(PROJECT_A));
+                UnsupportedRequirementStatusException.class, () -> repository.findAll(PROJECT_A, null));
 
         assertEquals(new RequirementCode("FR-2"), thrown.requirementCode());
     }
@@ -998,7 +998,7 @@ class KognioRdfRequirementRepositoryTest {
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
         givenRequirementWithLiteralInsteadOfIri(PROJECT_A, freshId(), "FR-2", "priority", "not-an-iri");
 
-        List<Requirement> all = repository.findAll(PROJECT_A);
+        List<Requirement> all = repository.findAll(PROJECT_A, null);
 
         assertEquals(2, all.size());
         Requirement brokenPriority = all.stream()
@@ -1164,7 +1164,7 @@ class KognioRdfRequirementRepositoryTest {
         assertEquals(Optional.of(requirement),
                 repository.findByCode(PROJECT_A, new RequirementCode("FR-1"), null));
         assertEquals(List.of(termRef("TERM-1")),
-                repository.findAll(PROJECT_A).get(0).usesTerms());
+                repository.findAll(PROJECT_A, null).get(0).usesTerms());
     }
 
     @Test
@@ -1590,7 +1590,7 @@ class KognioRdfRequirementRepositoryTest {
 
         assertEquals(Optional.of(requirement),
                 repository.findByCode(PROJECT_A, new RequirementCode("FR-1"), null));
-        assertEquals(List.of(ref), repository.findAll(PROJECT_A).get(0).constrainedBy());
+        assertEquals(List.of(ref), repository.findAll(PROJECT_A, null).get(0).constrainedBy());
     }
 
     @Test

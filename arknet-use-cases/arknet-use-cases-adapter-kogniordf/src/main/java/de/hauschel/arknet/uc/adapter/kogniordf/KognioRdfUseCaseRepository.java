@@ -617,8 +617,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
-     * for one call, e.g. an explicit {@code uc_get} {@code displayLocale} argument or a project's
-     * own default language merged in by the caller. Mirrors
+     * for one call - shared by {@link #findByCode} and {@link #findAll}, e.g. an explicit
+     * {@code uc_get} {@code displayLocale} argument or a project's own default language merged in
+     * by the caller ({@code uc_list} has no explicit {@code displayLocale} tool argument of its
+     * own to merge against - before {@link #findAll} sees it, issue #281). Mirrors
      * {@code KognioRdfRequirementRepository#withRequestedOverride}/
      * {@code KognioRdfTermRepository#withRequestedOverride}.
      *
@@ -633,8 +635,9 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     @Override
-    public List<UseCase> findAll(ProjectId projectId) {
+    public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = withRequestedOverride(displayLocale);
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
@@ -644,7 +647,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     .toList();
             List<UseCase> result = new ArrayList<>();
             for (UseCaseRow row : rows) {
-                readBySubject(handle, row.subjectIri(), row.code(), displayLocale).ifPresent(result::add);
+                readBySubject(handle, row.subjectIri(), row.code(), effective).ifPresent(result::add);
             }
             return List.copyOf(result);
         }

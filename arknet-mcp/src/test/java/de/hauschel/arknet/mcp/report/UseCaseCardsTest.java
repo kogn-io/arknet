@@ -40,20 +40,20 @@ class UseCaseCardsTest {
 
     private static UseCaseCards cardsWithFr1Resolved() {
         return new UseCaseCards(
-                projectId -> List.of(useCase()),
+                (projectId, displayLocale) -> List.of(useCase()),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
     }
 
     @Test
     void sectionTitleIsUseCases() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
 
         assertThat(section.title()).isEqualTo("Use Cases");
     }
 
     @Test
     void cardCodeIsTheUseCasesBusinessCode() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
 
         assertThat(section.cards()).singleElement()
                 .satisfies(card -> assertThat(card.code()).isEqualTo("UC1"));
@@ -61,7 +61,7 @@ class UseCaseCardsTest {
 
     @Test
     void cardTitleIsTheUseCasesTitle() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
 
         assertThat(section.cards()).singleElement()
                 .satisfies(card -> assertThat(card.title()).isEqualTo("Bestellung aufgeben"));
@@ -69,7 +69,7 @@ class UseCaseCardsTest {
 
     @Test
     void cardStartsWithTheGoalAsProse() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
 
         assertThat(section.cards()).singleElement().satisfies(card ->
                 assertThat(card.blocks()).element(0)
@@ -78,7 +78,7 @@ class UseCaseCardsTest {
 
     @Test
     void buildsACockburnStyleCardWithTheFlowInOrder() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, GLOSSARY);
+        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
 
         assertThat(section.cards()).singleElement().satisfies(card ->
                 assertThat(card.blocks()).filteredOn(Block.Flow.class::isInstance)
@@ -98,9 +98,9 @@ class UseCaseCardsTest {
     @Test
     void showsAnActorByItsLabelWithTheCodeAsTooltip() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        assertThat(cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks()).contains(
+        assertThat(cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks()).contains(
                 new Block.Refs("Primary actor", List.of(new Ref("Kunde", "TERM-1", ACTOR.value()))));
     }
 
@@ -112,9 +112,9 @@ class UseCaseCardsTest {
     @Test
     void leavesGlossaryWordsInTheGoalUnmarked() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        final Block.Prose goal = (Block.Prose) cards.section(PROJECT, GLOSSARY)
+        final Block.Prose goal = (Block.Prose) cards.section(PROJECT, null, GLOSSARY)
                 .cards().getFirst().blocks().getFirst();
 
         assertThat(goal.text().spans()).containsExactly(new Span.Plain("Der Kunde bestellt Artikel."));
@@ -123,10 +123,10 @@ class UseCaseCardsTest {
     @Test
     void resolvesStepRequirementsToTheirBusinessCodes() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(useCase()),
+                (projectId, displayLocale) -> List.of(useCase()),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
-        final Block.Flow flow = flowOf(cards.section(PROJECT, GLOSSARY));
+        final Block.Flow flow = flowOf(cards.section(PROJECT, null, GLOSSARY));
 
         assertThat(flow.steps().get(0).realises()).containsExactly(Ref.of("FR-1", FR_1.value()));
     }
@@ -138,9 +138,9 @@ class UseCaseCardsTest {
     @Test
     void fallsBackToTheBareIriWhenAReferenceCannotBeResolved() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        final ModelSection section = cards.section(PROJECT, Glossary.empty());
+        final ModelSection section = cards.section(PROJECT, null, Glossary.empty());
 
         assertThat(section.cards().getFirst().blocks()).contains(
                 new Block.Refs("Primary actor", List.of(Ref.of(ACTOR.value(), ACTOR.value()))));
@@ -152,9 +152,9 @@ class UseCaseCardsTest {
     @Test
     void omitsAbsentOptionalFields() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(useCase()), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
 
-        final List<String> labels = cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
+        final List<String> labels = cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
 
         assertThat(labels).containsExactly("Goal", "Trigger", "Primary actor", "Postcondition", "Main flow");
@@ -167,22 +167,22 @@ class UseCaseCardsTest {
     @Test
     void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(
+                (projectId, displayLocale) -> List.of(
                         useCase("UC2", "https://w3id.org/arknet/id/uc-2"),
                         useCase("UC10", "https://w3id.org/arknet/id/uc-10"),
                         useCase("UC1", "https://w3id.org/arknet/id/uc-1")),
                 (projectId, ids) -> List.of());
 
-        assertThat(cards.section(PROJECT, GLOSSARY).cards())
+        assertThat(cards.section(PROJECT, null, GLOSSARY).cards())
                 .extracting(ModelCard::code).containsExactly("UC1", "UC2", "UC10");
     }
 
     @Test
     void sectionIsEmptyWhenThereAreNoUseCases() {
         final UseCaseCards cards = new UseCaseCards(
-                projectId -> List.of(), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of());
 
-        assertThat(cards.section(PROJECT, GLOSSARY).isEmpty()).isTrue();
+        assertThat(cards.section(PROJECT, null, GLOSSARY).isEmpty()).isTrue();
     }
 
     private static Block.Flow flowOf(final ModelSection section) {

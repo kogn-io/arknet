@@ -197,6 +197,26 @@ class UseCaseMcpToolsTest {
         assertEquals("de", stub.lastGetDisplayLocale);
     }
 
+    /**
+     * {@code uc_list} exposes no explicit {@code displayLocale} tool argument of its own (unlike
+     * {@code uc_get}) - issue #281 asks only that it fall back to the resolved project's own
+     * configured default language automatically, the same value {@code uc_add}/{@code uc_update}
+     * already pass to their in-ports. Before this fix, {@code UseCaseMcpTools#list} called {@code
+     * listUseCases.list(projectId)} without any locale at all, so every listed use case's text
+     * fields were read under whichever language the process-wide, per-daemon default happened to
+     * be - never the calling project's own, even for a project (like this test's) whose configured
+     * default differs from it.
+     */
+    @Test
+    void listPassesTheProjectsDefaultLanguageThrough() {
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms,
+                resolveRequirements, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.list(null, null);
+
+        assertEquals("de", stub.lastListDisplayLocale);
+    }
+
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
@@ -442,8 +462,11 @@ class UseCaseMcpToolsTest {
                     command.precondition(), command.postcondition(), steps, command.extensions());
         }
 
+        private String lastListDisplayLocale;
+
         @Override
-        public List<UseCase> list(ProjectId projectId) {
+        public List<UseCase> list(ProjectId projectId, String displayLocale) {
+            lastListDisplayLocale = displayLocale;
             return listResult;
         }
 

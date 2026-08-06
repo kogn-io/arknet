@@ -163,7 +163,7 @@ class CrossBoundedContextStoreWiringTest {
                             .hasMessageContaining("FR-1")
                             .hasMessageContaining("req_add");
 
-                    assertThat(useCases.list(PROJECT)).isEmpty();
+                    assertThat(useCases.list(PROJECT, null)).isEmpty();
                 });
     }
 
