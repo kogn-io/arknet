@@ -67,7 +67,7 @@ public final class UseCaseCards {
      * @param displayLocale the resolved project's own configured default display language
      *                      (BCP-47 tag), or {@code null} if it has none - passed straight through
      *                      to {@code uc_list}'s own port so the report honours the same project
-     *                      default {@code req_list}/{@code term_list} already do (issue #281)
+     *                      default {@code uc_list}/{@code term_list} already do (issue #281)
      * @param glossary    the project's glossary, for actor labels
      * @return the use-case section, ordered by business code
      */
