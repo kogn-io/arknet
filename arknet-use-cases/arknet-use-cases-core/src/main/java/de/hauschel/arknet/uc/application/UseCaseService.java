@@ -8,7 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.LanguageTag;
@@ -179,7 +181,19 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
         // requirement code must fail immediately and is not a code-collision race to retry on.
         Map<Integer, List<RequirementRef>> realisesByPosition = stepRealisesPatches == null
                 ? null : toRealisesByPosition(projectId, stepRealisesPatches);
-        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, current -> {
+        // Which step positions this call itself patches, and whether it touches extensions at
+        // all (issue #271): the signal updateWithOptimisticRetry resolves a fresh language
+        // against, instead of comparing the patched/replaced text to what is already stored - a
+        // caller correcting a typo back to the project's already-current wording is still an
+        // explicit write, not a no-op. `extensions` is a wholesale replace (not a per-position
+        // patch), so a non-null `extensions` touches every position in the replacement list.
+        Set<Integer> touchedStepPositions = stepTextPatches == null
+                ? Set.of()
+                : stepTextPatches.stream().map(StepTextPatch::position).collect(Collectors.toUnmodifiableSet());
+        boolean extensionsTouched = extensions != null;
+        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage,
+                title != null, goal != null, scope != null, trigger != null,
+                precondition != null, postcondition != null, touchedStepPositions, extensionsTouched, current -> {
             UseCase base = new UseCase(
                     current.id(), current.code(),
                     title != null ? title : current.title(),
@@ -224,54 +238,56 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the race across
      *                                                every retry attempt
-     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code mutation}
-     *                                                actually changes {@code title}, {@code goal},
-     *                                                {@code scope}, {@code trigger},
-     *                                                {@code precondition}, {@code postcondition},
-     *                                                any step's {@code text} or any extension's
-     *                                                text and neither {@code language} nor
-     *                                                {@code defaultLanguage} is given
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code titleTouched},
+     *                                                {@code goalTouched}, {@code scopeTouched},
+     *                                                {@code triggerTouched},
+     *                                                {@code preconditionTouched},
+     *                                                {@code postconditionTouched},
+     *                                                {@code touchedStepPositions} or
+     *                                                {@code extensionsTouched} marks a field, step
+     *                                                or extension as this call's own and neither
+     *                                                {@code language} nor {@code defaultLanguage}
+     *                                                is given
      */
     private UseCase updateWithOptimisticRetry(ProjectId projectId, UseCaseCode code, String language,
-            String defaultLanguage, UnaryOperator<UseCase> mutation) {
+            String defaultLanguage, boolean titleTouched, boolean goalTouched, boolean scopeTouched,
+            boolean triggerTouched, boolean preconditionTouched, boolean postconditionTouched,
+            Set<Integer> touchedStepPositions, boolean extensionsTouched, UnaryOperator<UseCase> mutation) {
         UseCaseConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(projectId, code)
                     .orElseThrow(() -> new UseCaseNotFoundException(projectId, code));
             UseCase updated = mutation.apply(current.value());
-            if (updated.equals(current.value())) {
-                return current.value();
-            }
             // title/goal/scope/trigger/precondition/postcondition/each step's text/each
-            // extension's text each get their own language: a field, step or extension this
-            // mutation left byte-for-byte unchanged must round-trip under the exact tag it was
-            // read under (a scoped no-op), never under `language`/`defaultLanguage` - those only
-            // ever apply to whatever this call is actually changing (mirrors RequirementService's
-            // identical per-field distinction). Resolving here, lazily, rather than eagerly in
-            // update(), means a malformed/missing language argument only ever throws when this
-            // call is actually changing a language-tagged field, step or extension under it
-            // (issue #258).
-            String titleLanguage = updated.title().equals(current.value().title())
-                    ? current.titleLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            String goalLanguage = updated.goal().equals(current.value().goal())
-                    ? current.goalLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            String scopeLanguage = Objects.equals(updated.scope(), current.value().scope())
-                    ? current.scopeLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            String triggerLanguage = Objects.equals(updated.trigger(), current.value().trigger())
-                    ? current.triggerLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            String preconditionLanguage = Objects.equals(updated.precondition(), current.value().precondition())
-                    ? current.preconditionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            String postconditionLanguage = Objects.equals(updated.postcondition(), current.value().postcondition())
-                    ? current.postconditionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            // extension's text each get their own language: a field, step or extension this call
+            // itself did not touch (the boolean/Set parameters above - see update()) round-trips
+            // under the exact tag it was read under (a scoped no-op), never under `language`/
+            // `defaultLanguage`. A touched field/step/extension always resolves a fresh write
+            // language, even when the text it supplies happens to equal what is already stored
+            // (issue #271, mirrors RequirementService's identical fix) - comparing text alone let
+            // a caller correcting an untagged/mistagged literal back to its own already-current
+            // wording round-trip under the old tag unchanged, silently discarding the caller's
+            // language argument and the sweep of a stale untagged sibling it was meant to trigger.
+            // Resolving here, lazily, rather than eagerly in update(), means a malformed/missing
+            // language argument only ever throws when this call actually touches a language-tagged
+            // field, step or extension (issue #258).
+            String titleLanguage = titleTouched
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.titleLanguage();
+            String goalLanguage = goalTouched
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.goalLanguage();
+            String scopeLanguage = scopeTouched
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.scopeLanguage();
+            String triggerLanguage = triggerTouched
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.triggerLanguage();
+            String preconditionLanguage = preconditionTouched
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.preconditionLanguage();
+            String postconditionLanguage = postconditionTouched
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.postconditionLanguage();
             Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
-            List<Step> currentSteps = current.value().steps();
-            List<Step> updatedSteps = updated.steps();
-            for (int i = 0; i < updatedSteps.size(); i++) {
-                Step updatedStep = updatedSteps.get(i);
-                Step currentStep = currentSteps.get(i);
-                String stepLanguage = updatedStep.text().equals(currentStep.text())
-                        ? current.stepTextLanguageByPosition().get(updatedStep.position())
-                        : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            for (Step updatedStep : updated.steps()) {
+                String stepLanguage = touchedStepPositions.contains(updatedStep.position())
+                        ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                        : current.stepTextLanguageByPosition().get(updatedStep.position());
                 stepTextLanguageByPosition.put(updatedStep.position(), stepLanguage);
             }
             Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
@@ -279,12 +295,25 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             List<String> updatedExtensions = updated.extensions();
             for (int i = 0; i < updatedExtensions.size(); i++) {
                 int position = i + 1;
-                boolean unchanged = i < currentExtensions.size()
-                        && updatedExtensions.get(i).equals(currentExtensions.get(i));
-                String extensionLanguage = unchanged
-                        ? current.extensionTextLanguageByPosition().get(position)
-                        : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+                String extensionLanguage = extensionsTouched
+                        ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                        : current.extensionTextLanguageByPosition().get(position);
                 extensionTextLanguageByPosition.put(position, extensionLanguage);
+            }
+            // A true no-op needs both content and language to already match what is stored:
+            // content-only equality (the pre-#271 check) missed a touched field/step/extension
+            // whose text happens to already match but whose language does not - see the block
+            // comment above.
+            if (updated.equals(current.value())
+                    && Objects.equals(titleLanguage, current.titleLanguage())
+                    && Objects.equals(goalLanguage, current.goalLanguage())
+                    && Objects.equals(scopeLanguage, current.scopeLanguage())
+                    && Objects.equals(triggerLanguage, current.triggerLanguage())
+                    && Objects.equals(preconditionLanguage, current.preconditionLanguage())
+                    && Objects.equals(postconditionLanguage, current.postconditionLanguage())
+                    && stepTextLanguageByPosition.equals(current.stepTextLanguageByPosition())
+                    && extensionTextLanguageByPosition.equals(current.extensionTextLanguageByPosition())) {
+                return current.value();
             }
             // A same-length extensions replace can only ever edit content in place - the model has
             // no separate move/reorder operation, only a wholesale list replace - so every position

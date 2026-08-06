@@ -171,6 +171,51 @@ class RequirementServiceTest {
         assertEquals("User can log in", service.get(WS, code, null).orElseThrow().title());
     }
 
+    /**
+     * Regression for issue #271: a caller writing {@code title} under a language it does not yet
+     * carry must actually retag it, even when the supplied text is byte-for-byte identical to
+     * what is already stored - text equality alone is not "no change" once a language is
+     * explicitly named, since the whole point of the call is to tag (and let the out-adapter
+     * sweep) an untagged/mis-tagged literal.
+     */
+    @Test
+    void updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, "User can log in", null, null, null, null, "de", null);
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+    }
+
+    /**
+     * The flip side of {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}:
+     * once text AND language both already match what is stored, the call is a genuine no-op and
+     * must not reach the repository at all - the revision token proves no write happened.
+     */
+    @Test
+    void updateWithIdenticalTitleTextAndLanguageIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        service.update(WS, code, "User can log in", null, null, null, null, DEFAULT_LANGUAGE, null);
+
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
+    /** Mirrors {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}, for an acceptance-criterion patch. */
+    @Test
+    void updateAcceptanceCriteriaPatchWithSameTextButANewLanguageStillWritesUnderThatLanguage() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Done when it works")), null, "de", null);
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.acceptanceCriteriaLanguageByPosition().get(1));
+    }
+
     @Test
     void addMintsAFreshOpaqueIdentityViaTheFactory() {
         Requirement first = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
