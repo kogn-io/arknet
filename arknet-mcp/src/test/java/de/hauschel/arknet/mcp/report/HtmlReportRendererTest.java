@@ -34,8 +34,7 @@ class HtmlReportRendererTest {
     private static final String FR_1 = ID + "fr-1";
     private static final String REVISION = ID + "revision-1";
 
-    private final HtmlReportRenderer renderer =
-            new HtmlReportRenderer(Prefixes.defaults(), DisplayLocale.DEFAULT);
+    private final HtmlReportRenderer renderer = new HtmlReportRenderer(Prefixes.defaults());
 
     /**
      * The whole point of the exercise: a use case reads as a use case - goal, actor, numbered
@@ -43,7 +42,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void rendersAUseCaseAsAFlowRatherThanAsItsTriples() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("id=\"sec-use-cases\"");
         assertThat(html).contains(">UC1<").contains(">Bestellung aufgeben<");
@@ -65,7 +64,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void linksThePrimaryActorAsAChipToItsOwnResource() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<span class=\"blabel\">Primary actor</span>");
         assertThat(html).contains("<a class=\"chip\" href=\"#r-" + anchorOf(ID + "actor-1")
@@ -79,7 +78,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void suppressesUseCaseStepsFromTheRawSection() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).doesNotContain("id=\"r-" + anchorOf(STEP_1) + "\"");
         assertThat(html).doesNotContain("id=\"r-" + anchorOf(STEP_2) + "\"");
@@ -92,7 +91,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void keepsEverythingNoSectionClaimedInTheRawSection() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("id=\"sec-other\"");
         assertThat(html).contains("id=\"r-" + anchorOf(REVISION) + "\"");
@@ -110,7 +109,7 @@ class HtmlReportRendererTest {
                 iri(orphan, RDF_TYPE, ARKREQ + "Step"),
                 literal(orphan, ARKREQ + "stepText", "Ein Schritt ohne Use Case")));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views());
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("id=\"r-" + anchorOf(orphan) + "\"");
     }
@@ -131,7 +130,7 @@ class HtmlReportRendererTest {
                 iri(dashed, RDF_TYPE, ARKREQ + "Step"),
                 literal(dashed, ARKREQ + "stepText", "Zweiter")));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views());
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(), DisplayLocale.DEFAULT);
 
         assertThat(anchorOf(dotted)).isNotEqualTo(anchorOf(dashed));
         assertThat(html).contains("id=\"r-" + anchorOf(dotted) + "\"");
@@ -141,7 +140,7 @@ class HtmlReportRendererTest {
     /** Every card keeps its raw triples one click away, so the model view never has to be trusted blindly. */
     @Test
     void hangsTheRawTriplesOffEveryCard() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<details class=\"raw\">");
         assertThat(html).contains("raw triples");
@@ -154,7 +153,7 @@ class HtmlReportRendererTest {
         final ModelViews.Views views = new ModelViews.Views(
                 List.of(), List.of("Use Cases: could not be read (IllegalStateException: store closed)"));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views);
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views, DisplayLocale.DEFAULT);
 
         assertThat(html).contains("Incomplete report").contains("store closed");
     }
@@ -170,7 +169,7 @@ class HtmlReportRendererTest {
         final ModelViews.Views views = new ModelViews.Views(
                 List.of(), List.of("Use Cases: could not be read (IllegalStateException: store closed)"));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views);
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views, DisplayLocale.DEFAULT);
 
         assertThat(html).contains("id=\"r-" + anchorOf(STEP_1) + "\"");
         assertThat(html).contains("id=\"r-" + anchorOf(STEP_2) + "\"");
@@ -185,7 +184,7 @@ class HtmlReportRendererTest {
                         List.of(new Block.Refs("Uses terms",
                                 List.of(new Ref("Lieferschein", "TERM-404", ID + "nowhere")))))));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(section));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains(
                 "<span class=\"chip dead\" title=\"TERM-404 - not in this project\">Lieferschein</span>");
@@ -207,7 +206,7 @@ class HtmlReportRendererTest {
                                 new Span.TermGap("Bestellung", ID + "term-2", "TERM-2"),
                                 new Span.Plain(" an."))))))));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(section));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<a class=\"term\" href=\"#r-" + anchorOf(ID + "actor-1")
                 + "\" title=\"TERM-1\">Kunde</a>");
@@ -222,7 +221,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void foldsEveryCardAndOffersBulkControls() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<details class=\"fold\">").doesNotContain("<details class=\"fold\" open>");
         assertThat(html).contains("<summary class=\"head\">");
@@ -233,7 +232,7 @@ class HtmlReportRendererTest {
     /** With nothing in the store at all, the report says so and names the way in. */
     @Test
     void tellsTheReaderWhereToStartWhenTheProjectIsEmpty() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), StoreSnapshot.of(List.of()), "digest", views());
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), StoreSnapshot.of(List.of()), "digest", views(), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("holds no model yet").contains("uc_add");
     }
@@ -241,7 +240,7 @@ class HtmlReportRendererTest {
     /** The report must stay openable from a file:// URL with no network. */
     @Test
     void staysSelfContained() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).doesNotContain("<script src").doesNotContain("<link rel=\"stylesheet\"")
                 .doesNotContain("http://cdn").doesNotContain("https://cdn");
@@ -254,7 +253,7 @@ class HtmlReportRendererTest {
                 new ModelCard("FR-1", "<script>alert(1)</script>", FR_1, List.of(),
                         List.of(Block.Prose.plain("Description", "a & b < c")))));
 
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(section));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).doesNotContain("<script>alert(1)</script>");
         assertThat(html).contains("&lt;script&gt;alert(1)&lt;/script&gt;").contains("a &amp; b &lt; c");
@@ -268,7 +267,7 @@ class HtmlReportRendererTest {
     void headerNamesTheRegisteredLabelAlongsideTheId() {
         final String html = renderer.render(
                 new ProjectId("ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8"), Optional.of("arknet-demo"),
-                Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+                Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains(
                 "<span class=\"ws\">project: arknet-demo (id: ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8)</span>");
@@ -280,7 +279,7 @@ class HtmlReportRendererTest {
      */
     @Test
     void headerFallsBackToTheRawIdWhenNoLabelIsAvailable() {
-        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<span class=\"ws\">project: report-test</span>");
     }
@@ -289,7 +288,7 @@ class HtmlReportRendererTest {
     @Test
     void headerShowsTheProjectDescriptionWhenPresent() {
         final String html = renderer.render(PROJECT, Optional.of("arknet-demo"),
-                Optional.of("A demo <project> for arknet."), snapshot(), "digest", views(useCaseSection()));
+                Optional.of("A demo <project> for arknet."), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<p class=\"project-desc\">A demo &lt;project&gt; for arknet.</p>");
     }
@@ -298,7 +297,7 @@ class HtmlReportRendererTest {
     @Test
     void headerOmitsTheDescriptionParagraphWhenAbsent() {
         final String html = renderer.render(PROJECT, Optional.of("arknet-demo"), Optional.empty(), snapshot(),
-                "digest", views(useCaseSection()));
+                "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).doesNotContain("<p class=\"project-desc\">");
     }
@@ -319,7 +318,7 @@ class HtmlReportRendererTest {
                 literalLang(FR_1, "http://purl.org/dc/terms/title", "Order", "en")));
 
         final String html = renderer.render(
-                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">");
         assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de\">Bestellen</span>");
@@ -337,7 +336,7 @@ class HtmlReportRendererTest {
                 literalLang(FR_1, "http://purl.org/dc/terms/description", "The customer orders.", "en")));
 
         final String html = renderer.render(
-                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">");
         assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de\">Der Kunde bestellt.</span>");
@@ -353,7 +352,7 @@ class HtmlReportRendererTest {
                 literalLang(FR_1, "http://purl.org/dc/terms/title", "Bestellen", "de")));
 
         final String html = renderer.render(
-                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<h3>Bestellen</h3>");
         assertThat(html).doesNotContain("<span class=\"lang-group\"");
@@ -374,7 +373,7 @@ class HtmlReportRendererTest {
                 literalLang(FR_1, "http://purl.org/dc/terms/title", "Kunde", "de")));
 
         final String html = renderer.render(
-                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"en\">");
         assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"en\">Customer</span>");
@@ -399,7 +398,7 @@ class HtmlReportRendererTest {
                 literalLang(FR_1, "http://purl.org/dc/terms/title", "Order", "en")));
 
         final String html = renderer.render(
-                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section));
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("<h3>Bestellen</h3>");
         assertThat(html).doesNotContain("<span class=\"lang-group\"");
@@ -409,7 +408,7 @@ class HtmlReportRendererTest {
     @Test
     void addsALanguageSwitchToTheToolbar() {
         final String html = renderer.render(
-                PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()));
+                PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest", views(useCaseSection()), DisplayLocale.DEFAULT);
 
         assertThat(html).contains("id=\"lang-switch\"").contains("<option value=\"\">Original</option>");
     }

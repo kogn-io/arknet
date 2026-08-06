@@ -53,32 +53,33 @@ public final class HtmlReportRenderer {
             "https://w3id.org/arknet/requirements#extensionStep");
 
     private final Prefixes prefixes;
-    private final DisplayLocale displayLocale;
 
     /**
-     * @param prefixes      the CURIE resolver used to shorten IRIs for display
-     * @param displayLocale the display language to select among a resource's language-tagged labels
+     * @param prefixes the CURIE resolver used to shorten IRIs for display
      */
-    public HtmlReportRenderer(final Prefixes prefixes, final DisplayLocale displayLocale) {
+    public HtmlReportRenderer(final Prefixes prefixes) {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
-        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     /**
      * Renders the complete HTML document.
      *
-     * @param projectId   the project the snapshot was read from
-     * @param label       the project's registered label, or {@link Optional#empty()}
-     *                    if {@code projectId} is not (or no longer) found in the registry - the
-     *                    header then falls back to the raw id, exactly as before this label was
-     *                    available
-     * @param description the project's optional free-text description (issue #110), already
-     *                    selected for {@link #displayLocale} if the project carries it in several
-     *                    languages, or {@link Optional#empty()} if it has none - shown in the
-     *                    header when present
-     * @param snapshot    the flat statement snapshot, used for raw triples and the leftovers
-     * @param digest      the agent digest text shown in the top panel
-     * @param views       the per-bounded-context sections that make up the report's body
+     * @param projectId     the project the snapshot was read from
+     * @param label         the project's registered label, or {@link Optional#empty()}
+     *                      if {@code projectId} is not (or no longer) found in the registry - the
+     *                      header then falls back to the raw id, exactly as before this label was
+     *                      available
+     * @param description   the project's optional free-text description (issue #110), already
+     *                      selected for {@code displayLocale} if the project carries it in several
+     *                      languages, or {@link Optional#empty()} if it has none - shown in the
+     *                      header when present
+     * @param snapshot      the flat statement snapshot, used for raw triples and the leftovers
+     * @param digest        the agent digest text shown in the top panel
+     * @param views         the per-bounded-context sections that make up the report's body
+     * @param displayLocale the display language to select among a resource's language-tagged
+     *                      labels, resolved per call rather than baked into this renderer, so the
+     *                      caller can merge in the target project's own default language first
+     *                      (issue #276)
      * @return the self-contained HTML document
      */
     public String render(
@@ -87,13 +88,15 @@ public final class HtmlReportRenderer {
             final Optional<String> description,
             final StoreSnapshot snapshot,
             final String digest,
-            final ModelViews.Views views) {
+            final ModelViews.Views views,
+            final DisplayLocale displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(digest, "digest");
         Objects.requireNonNull(views, "views");
+        Objects.requireNonNull(displayLocale, "displayLocale");
 
         final Set<String> subjects = snapshot.resources().stream()
                 .map(StoreResource::iri).collect(Collectors.toSet());
@@ -122,9 +125,9 @@ public final class HtmlReportRenderer {
         appendIndex(html, views.sections(), leftovers.size());
         html.append("    <main>\n");
         for (final ModelSection section : views.sections()) {
-            appendSection(html, section, carded, subjects, bySubject);
+            appendSection(html, section, carded, subjects, bySubject, displayLocale);
         }
-        appendLeftovers(html, leftovers, subjects);
+        appendLeftovers(html, leftovers, subjects, displayLocale);
         appendEmptyState(html, views.sections(), leftovers);
         html.append("    </main>\n  </div>\n");
 
@@ -240,7 +243,8 @@ public final class HtmlReportRenderer {
             final ModelSection section,
             final Set<String> carded,
             final Set<String> subjects,
-            final Map<String, StoreResource> bySubject) {
+            final Map<String, StoreResource> bySubject,
+            final DisplayLocale displayLocale) {
         html.append("      <section class=\"group\" id=\"sec-").append(escape(section.id())).append("\">\n")
                 .append("        <h2>").append(escape(section.title()))
                 .append(" <span class=\"of\">").append(section.cards().size()).append("</span></h2>\n");
@@ -249,13 +253,14 @@ public final class HtmlReportRenderer {
         }
         html.append("        <div class=\"cards\">\n");
         for (final ModelCard card : section.cards()) {
-            appendCard(html, card, carded, subjects, bySubject.get(card.iri()));
+            appendCard(html, card, carded, subjects, bySubject.get(card.iri()), displayLocale);
         }
         html.append("        </div>\n      </section>\n");
     }
 
     private void appendLeftovers(
-            final StringBuilder html, final List<StoreResource> leftovers, final Set<String> subjects) {
+            final StringBuilder html, final List<StoreResource> leftovers, final Set<String> subjects,
+            final DisplayLocale displayLocale) {
         if (leftovers.isEmpty()) {
             return;
         }
@@ -268,7 +273,7 @@ public final class HtmlReportRenderer {
                 .append("          <summary>show raw resources</summary>\n")
                 .append("          <div class=\"cards\">\n");
         for (final StoreResource resource : leftovers) {
-            appendRawCard(html, resource, subjects);
+            appendRawCard(html, resource, subjects, displayLocale);
         }
         html.append("          </div>\n        </details>\n      </section>\n");
     }
@@ -290,14 +295,15 @@ public final class HtmlReportRenderer {
             final ModelCard card,
             final Set<String> carded,
             final Set<String> subjects,
-            final StoreResource raw) {
+            final StoreResource raw,
+            final DisplayLocale displayLocale) {
         final String anchor = resourceAnchor(card.iri());
         html.append("          <article class=\"card\" id=\"").append(anchor).append("\">\n")
                 .append("            <details class=\"fold\">\n")
                 .append("              <summary class=\"head\">\n")
                 .append("                <span class=\"code\">").append(escape(card.code())).append("</span>\n")
                 .append("                <h3>")
-                .append(langSwitchable(escape(card.title()), languageVariants(raw, card.title())))
+                .append(langSwitchable(escape(card.title()), languageVariants(raw, card.title(), displayLocale)))
                 .append("</h3>\n");
         for (final Badge badge : card.badges()) {
             html.append("                ").append(badgePill(badge)).append('\n');
@@ -305,7 +311,7 @@ public final class HtmlReportRenderer {
         html.append("                <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
                 .append("              </summary>\n              <div class=\"body\">\n");
         for (final Block block : card.blocks()) {
-            appendBlock(html, block, carded, subjects, raw);
+            appendBlock(html, block, carded, subjects, raw, displayLocale);
         }
         html.append("              </div>\n");
         appendRawTriples(html, raw, subjects);
@@ -314,13 +320,14 @@ public final class HtmlReportRenderer {
 
     private void appendBlock(
             final StringBuilder html, final Block block, final Set<String> carded, final Set<String> subjects,
-            final StoreResource raw) {
+            final StoreResource raw, final DisplayLocale displayLocale) {
         html.append("              <div class=\"block\">\n                <span class=\"blabel\">")
                 .append(escape(block.label())).append("</span>\n");
         switch (block) {
             case Block.Prose prose -> {
                 final String rendered = renderText(prose.text(), carded, subjects);
-                final Optional<LangVariants> variants = languageVariants(raw, prose.text().text());
+                final Optional<LangVariants> variants =
+                        languageVariants(raw, prose.text().text(), displayLocale);
                 html.append("                <p class=\"prose\">")
                         .append(langSwitchable(rendered, variants)).append("</p>\n");
             }
@@ -348,8 +355,9 @@ public final class HtmlReportRenderer {
      * <p>An untagged literal (a store-first edit, or an older resource written before issue #258)
      * is a candidate variant too - {@link DisplayLocale#select} can return one per step 3 of its
      * fallback chain, so a switch built only from tagged literals would silently omit exactly
-     * that field. It is keyed by {@link #displayLocale}'s {@code systemDefault} language, the same
-     * language an untagged literal would be shown under if the store held no other candidate.</p>
+     * that field. It is keyed by the call's {@code displayLocale}'s {@code systemDefault} language,
+     * the same language an untagged literal would be shown under if the store held no other
+     * candidate.</p>
      *
      * <p>The match back from {@code displayed} to a predicate is by text equality alone - there is
      * no predicate available at the call sites to match on instead. If more than one predicate on
@@ -357,13 +365,16 @@ public final class HtmlReportRenderer {
      * this returns {@link Optional#empty()} rather than guessing and risking a switch that shows
      * an unrelated field's text once the reader picks another language.</p>
      *
-     * @param subject   the card's own raw resource, or {@code null} if the snapshot holds none
-     * @param displayed the text currently shown, already selected by {@link #displayLocale}
+     * @param subject       the card's own raw resource, or {@code null} if the snapshot holds none
+     * @param displayed     the text currently shown, already selected by {@code displayLocale}
+     * @param displayLocale the same locale {@code displayed} was selected under, used to key an
+     *                      untagged literal's variant by its system-default language
      * @return the active language together with every other language sharing {@code displayed}'s
      *         predicate, or {@link Optional#empty()} if {@code displayed} cannot be matched back
      *         to exactly one predicate, or only one language exists for it
      */
-    private Optional<LangVariants> languageVariants(final StoreResource subject, final String displayed) {
+    private Optional<LangVariants> languageVariants(
+            final StoreResource subject, final String displayed, final DisplayLocale displayLocale) {
         if (subject == null) {
             return Optional.empty();
         }
@@ -378,18 +389,18 @@ public final class HtmlReportRenderer {
         }
         final Map.Entry<String, RdfNode.Literal> match = matchByPredicate.entrySet().iterator().next();
         final String predicate = match.getKey();
-        final String activeLang = languageKey(match.getValue());
+        final String activeLang = languageKey(match.getValue(), displayLocale);
         final Map<String, String> byLang = new LinkedHashMap<>();
         for (final Triple triple : subject.outgoing()) {
             if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
-                byLang.putIfAbsent(languageKey(literal), literal.lexicalForm());
+                byLang.putIfAbsent(languageKey(literal, displayLocale), literal.lexicalForm());
             }
         }
         return byLang.size() > 1 ? Optional.of(new LangVariants(activeLang, byLang)) : Optional.empty();
     }
 
-    /** {@code literal}'s language tag, or {@link #displayLocale}'s system default if untagged. */
-    private String languageKey(final RdfNode.Literal literal) {
+    /** {@code literal}'s language tag, or {@code displayLocale}'s system default if untagged. */
+    private static String languageKey(final RdfNode.Literal literal, final DisplayLocale displayLocale) {
         return literal.languageTag() != null ? literal.languageTag() : displayLocale.systemDefault().toLanguageTag();
     }
 
@@ -421,8 +432,8 @@ public final class HtmlReportRenderer {
     }
 
     /**
-     * @param activeLang the language tag of the literal currently shown, selected by
-     *                    {@link #displayLocale}
+     * @param activeLang the language tag of the literal currently shown, selected by the call's
+     *                   {@code displayLocale}
      * @param byLang     every language sharing that literal's predicate, keyed by language tag
      */
     private record LangVariants(String activeLang, Map<String, String> byLang) {
@@ -519,7 +530,8 @@ public final class HtmlReportRenderer {
         html.append("            </details>\n");
     }
 
-    private void appendRawCard(final StringBuilder html, final StoreResource resource, final Set<String> subjects) {
+    private void appendRawCard(final StringBuilder html, final StoreResource resource, final Set<String> subjects,
+            final DisplayLocale displayLocale) {
         final String anchor = resourceAnchor(resource.iri());
         html.append("            <article class=\"card raw-card\" id=\"").append(anchor).append("\">\n")
                 .append("              <details class=\"fold\">\n")
