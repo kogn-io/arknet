@@ -192,6 +192,40 @@ class UseCaseServiceTest {
         assertEquals("de", current.extensionTextLanguageByPosition().get(1));
     }
 
+    /**
+     * A field named by the caller ({@code title != null}) but resent with its own
+     * already-current text, no {@code language} argument, and no project default must still be a
+     * genuine no-op - naming a field alone (as opposed to actually changing it) must not force a
+     * write-language resolution the project cannot satisfy. Complements {@link
+     * #updateWithoutLanguageAndWithoutAProjectDefaultIsRejected}, which covers the same missing-
+     * language/-default combination for an actually-changed title.
+     */
+    @Test
+    void updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        UseCase updated = service.update(
+                WS, code, "Place order", null, null, null, null, null, null, null, null, null, null);
+
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+        assertEquals("Place order", updated.title());
+    }
+
+    /** Mirrors {@link #updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite}, for a step-text patch. */
+    @Test
+    void updateResendingUnchangedStepTextWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        service.update(WS, code, null, null, null, null, null, null, null,
+                List.of(new StepTextPatch(1, "do something")), null, null, null);
+
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
     @Test
     void addMintsAFreshOpaqueIdentityViaTheFactory() {
         UseCase first = service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);

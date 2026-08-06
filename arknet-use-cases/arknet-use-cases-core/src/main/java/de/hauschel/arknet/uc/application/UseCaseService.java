@@ -260,34 +260,42 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             UseCase updated = mutation.apply(current.value());
             // title/goal/scope/trigger/precondition/postcondition/each step's text/each
             // extension's text each get their own language: a field, step or extension this call
-            // itself did not touch (the boolean/Set parameters above - see update()) round-trips
+            // itself did not name (the boolean/Set parameters above - see update()) round-trips
             // under the exact tag it was read under (a scoped no-op), never under `language`/
-            // `defaultLanguage`. A touched field/step/extension always resolves a fresh write
-            // language, even when the text it supplies happens to equal what is already stored
-            // (issue #271, mirrors RequirementService's identical fix) - comparing text alone let
-            // a caller correcting an untagged/mistagged literal back to its own already-current
-            // wording round-trip under the old tag unchanged, silently discarding the caller's
-            // language argument and the sweep of a stale untagged sibling it was meant to trigger.
-            // Resolving here, lazily, rather than eagerly in update(), means a malformed/missing
-            // language argument only ever throws when this call actually touches a language-tagged
-            // field, step or extension (issue #258).
-            String titleLanguage = titleTouched
-                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.titleLanguage();
-            String goalLanguage = goalTouched
-                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.goalLanguage();
-            String scopeLanguage = scopeTouched
-                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.scopeLanguage();
-            String triggerLanguage = triggerTouched
-                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.triggerLanguage();
-            String preconditionLanguage = preconditionTouched
-                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.preconditionLanguage();
-            String postconditionLanguage = postconditionTouched
-                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : current.postconditionLanguage();
+            // `defaultLanguage`. A named field/step/extension only resolves a fresh write language
+            // when the caller also supplied `language` explicitly or the text it supplies actually
+            // differs from what is stored (issue #271, mirrors RequirementService's identical fix,
+            // and its regression - a named field whose text happens to equal what is stored and
+            // whose caller did not name a language is still a no-op, exactly like an unnamed one,
+            // so that resending a field's already-current text as part of a full-state round trip
+            // never demands a `defaultLanguage` the project may not have; see
+            // resolveTouchedLanguage/resolveTouchedPositionLanguage below). Resolving here, lazily,
+            // rather than eagerly in update(), means a malformed/missing language argument only
+            // ever throws when this call actually touches a language-tagged field, step or
+            // extension (issue #258).
+            String titleLanguage = resolveTouchedLanguage(titleTouched, current.value().title(), updated.title(),
+                    current.titleLanguage(), language, defaultLanguage);
+            String goalLanguage = resolveTouchedLanguage(goalTouched, current.value().goal(), updated.goal(),
+                    current.goalLanguage(), language, defaultLanguage);
+            String scopeLanguage = resolveTouchedLanguage(scopeTouched, current.value().scope(), updated.scope(),
+                    current.scopeLanguage(), language, defaultLanguage);
+            String triggerLanguage = resolveTouchedLanguage(triggerTouched, current.value().trigger(),
+                    updated.trigger(), current.triggerLanguage(), language, defaultLanguage);
+            String preconditionLanguage = resolveTouchedLanguage(preconditionTouched,
+                    current.value().precondition(), updated.precondition(), current.preconditionLanguage(),
+                    language, defaultLanguage);
+            String postconditionLanguage = resolveTouchedLanguage(postconditionTouched,
+                    current.value().postcondition(), updated.postcondition(), current.postconditionLanguage(),
+                    language, defaultLanguage);
+            Map<Integer, String> currentStepTextByPosition = new LinkedHashMap<>();
+            for (Step currentStep : current.value().steps()) {
+                currentStepTextByPosition.put(currentStep.position(), currentStep.text());
+            }
             Map<Integer, String> stepTextLanguageByPosition = new LinkedHashMap<>();
             for (Step updatedStep : updated.steps()) {
-                String stepLanguage = touchedStepPositions.contains(updatedStep.position())
-                        ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
-                        : current.stepTextLanguageByPosition().get(updatedStep.position());
+                String stepLanguage = resolveTouchedLanguage(touchedStepPositions.contains(updatedStep.position()),
+                        currentStepTextByPosition.get(updatedStep.position()), updatedStep.text(),
+                        current.stepTextLanguageByPosition().get(updatedStep.position()), language, defaultLanguage);
                 stepTextLanguageByPosition.put(updatedStep.position(), stepLanguage);
             }
             Map<Integer, String> extensionTextLanguageByPosition = new LinkedHashMap<>();
@@ -295,15 +303,16 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             List<String> updatedExtensions = updated.extensions();
             for (int i = 0; i < updatedExtensions.size(); i++) {
                 int position = i + 1;
-                String extensionLanguage = extensionsTouched
-                        ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
-                        : current.extensionTextLanguageByPosition().get(position);
+                boolean isNewExtensionPosition = i >= currentExtensions.size();
+                String extensionLanguage = resolveTouchedPositionLanguage(isNewExtensionPosition, extensionsTouched,
+                        isNewExtensionPosition ? null : currentExtensions.get(i), updatedExtensions.get(i),
+                        current.extensionTextLanguageByPosition().get(position), language, defaultLanguage);
                 extensionTextLanguageByPosition.put(position, extensionLanguage);
             }
             // A true no-op needs both content and language to already match what is stored:
-            // content-only equality (the pre-#271 check) missed a touched field/step/extension
-            // whose text happens to already match but whose language does not - see the block
-            // comment above.
+            // content-only equality (the pre-#271 check) missed a named field/step/extension whose
+            // caller supplied a different language for text that happens to already match - see
+            // the block comment above.
             if (updated.equals(current.value())
                     && Objects.equals(titleLanguage, current.titleLanguage())
                     && Objects.equals(goalLanguage, current.goalLanguage())
@@ -354,6 +363,40 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             }
         }
         throw lastConflict;
+    }
+
+    /**
+     * The BCP-47 language tag a single scalar field ({@code title}/{@code goal}/{@code scope}/
+     * {@code trigger}/{@code precondition}/{@code postcondition}/a step's text) is written under:
+     * freshly resolved via {@link LanguageTag#resolveWriteLanguage} when {@code touched} and
+     * either the caller named {@code language} explicitly or {@code updatedText} actually differs
+     * from {@code currentText}; otherwise {@code currentLanguage} unchanged (a scoped no-op, not a
+     * retag). A field named by the caller but resent with its own already-current text and no
+     * {@code language} argument is therefore still a no-op (issue #271's regression - naming a
+     * field alone used to be enough to force a resolution that a project with no {@code
+     * defaultLanguage} could not satisfy). Mirrors {@code RequirementService}'s identical helper.
+     */
+    private static String resolveTouchedLanguage(boolean touched, String currentText, String updatedText,
+            String currentLanguage, String language, String defaultLanguage) {
+        boolean languageTouched = touched && (language != null || !Objects.equals(updatedText, currentText));
+        return languageTouched
+                ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                : currentLanguage;
+    }
+
+    /**
+     * {@link #resolveTouchedLanguage} extended with {@code isNewPosition}: a position with no
+     * prior text/tag at all (an extension beyond the current, shorter list) always resolves
+     * fresh, regardless of {@code touched} - there is nothing to compare its text against or fall
+     * back to.
+     */
+    private static String resolveTouchedPositionLanguage(boolean isNewPosition, boolean touched,
+            String currentText, String updatedText, String currentLanguage, String language,
+            String defaultLanguage) {
+        if (isNewPosition) {
+            return LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+        }
+        return resolveTouchedLanguage(touched, currentText, updatedText, currentLanguage, language, defaultLanguage);
     }
 
     /**

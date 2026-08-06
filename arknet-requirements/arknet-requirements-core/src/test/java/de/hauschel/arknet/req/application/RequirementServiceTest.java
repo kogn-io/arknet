@@ -172,6 +172,39 @@ class RequirementServiceTest {
     }
 
     /**
+     * A field named by the caller ({@code title != null}) but resent with its own
+     * already-current text, no {@code language} argument, and no project default must still be a
+     * genuine no-op - naming a field alone (as opposed to actually changing it) must not force a
+     * write-language resolution the project cannot satisfy. Complements {@link
+     * #updateWithoutLanguageAndWithoutAProjectDefaultIsRejected}, which covers the same missing-
+     * language/-default combination for an actually-changed title.
+     */
+    @Test
+    void updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        Requirement updated = service.update(WS, code, "User can log in", null, null, null, null, null, null);
+
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+        assertEquals("User can log in", updated.title());
+    }
+
+    /** Mirrors {@link #updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite}, for an acceptance-criterion patch. */
+    @Test
+    void updateResendingUnchangedAcceptanceCriterionTextWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        RequirementRepository.CurrentRequirement before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        service.update(WS, code, null, null, null,
+                List.of(new AcceptanceCriterionTextPatch(1, "Done when it works")), null, null, null);
+
+        RequirementRepository.CurrentRequirement after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
+    /**
      * Regression for issue #271: a caller writing {@code title} under a language it does not yet
      * carry must actually retag it, even when the supplied text is byte-for-byte identical to
      * what is already stored - text equality alone is not "no change" once a language is
