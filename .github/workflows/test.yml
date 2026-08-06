@@ -1,0 +1,32 @@
+name: Tests
+
+# PR-gated build: runs the full Maven multi-module reactor on every push and
+# every pull request against main, so a red build is visible before a merge
+# rather than only on the next docker.yml run on main (issue #278). No Docker
+# build, no deploy, no secrets needed -- verification only.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Build and test
+        run: mvn -B verify
