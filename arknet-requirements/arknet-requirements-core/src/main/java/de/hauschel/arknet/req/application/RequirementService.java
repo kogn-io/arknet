@@ -4,12 +4,15 @@
 package de.hauschel.arknet.req.application;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.LanguageTag;
@@ -98,11 +101,19 @@ import de.hauschel.arknet.req.domain.TermRef;
  *
  * <p><strong>Language.</strong> {@code title}/{@code description} may each legally carry several
  * language-tagged variants. {@link #updateWithOptimisticRetry} determines, per field, whether
- * {@code mutation} actually changed it (byte-for-byte against what was just read): a changed
- * field is written under {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}'s
- * resolution of {@code update}'s caller-supplied {@code language} against the target project's
- * {@code defaultLanguage} (issue #258 - a changed field with neither is rejected, never silently
- * written untagged); an unchanged field is written back under the exact tag {@link
+ * {@code update}'s caller named it ({@code title != null}/{@code description != null}) - but
+ * naming a field alone does not force a fresh {@link
+ * de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage} resolution of that field's language:
+ * a caller resending a field's already-current text as part of a full-state round trip, without
+ * itself naming a {@code language}, must stay a no-op even on a project with no {@code
+ * defaultLanguage} configured - exactly the case {@link #accept}/{@link #linkTerm} already rely on
+ * (see below). A field only resolves a fresh write language (issue #258 - rejected, never silently
+ * written untagged, if neither {@code language} nor {@code defaultLanguage} resolves it) when it
+ * is named <em>and</em> either the caller supplied {@code language} explicitly or the supplied
+ * text actually differs from what is stored (issue #271 - text equality alone used to also count
+ * as untouched, which let a caller correcting an untagged/mistagged literal back to its own
+ * already-current wording round-trip under the old tag, silently discarding the caller's {@code
+ * language} argument). Every other field is written back under the exact tag {@link
  * RequirementRepository.CurrentRequirement#titleLanguage()}/
  * {@link RequirementRepository.CurrentRequirement#descriptionLanguage()} already carried - a
  * scoped no-op at the store, not a retag. This is what keeps {@link #accept}/{@link #linkTerm}
@@ -227,7 +238,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // already read under, and never reach LanguageTag#resolveWriteLanguage - passing a null
         // defaultLanguage here is therefore safe even though this project may well have one
         // configured.
-        return updateWithOptimisticRetry(projectId, code, null, null, Requirement::accept);
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), Requirement::accept);
     }
 
     @Override
@@ -240,7 +251,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // the requirement untouched, exactly as before.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
         // linkTerm() never touches title/description either - same null/null rationale as accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, current -> {
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
@@ -268,7 +279,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         ConstraintRef ref = new ConstraintRef(constraint.id().value());
         // linkConstraint() never touches title/description either - same null/null rationale as
         // accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, current -> {
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
@@ -287,7 +298,18 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             Priority priority, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, current -> {
+        // Which positions this call itself patches (issue #271): the signal
+        // updateWithOptimisticRetry resolves a fresh language against, instead of comparing the
+        // patched text to what is already stored there - a caller correcting a typo back to the
+        // project's already-current wording is still an explicit write to that position, not a
+        // no-op.
+        Set<Integer> touchedAcceptanceCriteriaPositions = acceptanceCriteriaTextPatches == null
+                ? Set.of()
+                : acceptanceCriteriaTextPatches.stream()
+                        .map(AcceptanceCriterionTextPatch::position)
+                        .collect(Collectors.toUnmodifiableSet());
+        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, title != null,
+                description != null, touchedAcceptanceCriteriaPositions, current -> {
             Requirement base = new Requirement(current.id(), current.code(),
                     title != null ? title : current.title(),
                     description != null ? description : current.description(),
@@ -329,7 +351,12 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * guard - the placeholder itself would still be persisted at position {@code 1} - only
      * {@link #update} patching that exact position with real text (via
      * {@link Requirement#withAcceptanceCriteriaTextPatches}) does. A no-op mutation never reaches
-     * this check, since it already returned above.</p>
+     * this check, since it already returned above. This guard runs <em>before</em> resolving a
+     * touched field's write language whenever {@code mutation} changed any text (title,
+     * description or an acceptance criterion) - a legacy requirement missing its acceptance
+     * criteria must surface {@link MissingAcceptanceCriteriaException} even when the call also
+     * lacks a {@code language}/{@code defaultLanguage} for that unrelated text change, rather than
+     * failing on the language gap first and hiding the more fundamental one.</p>
      *
      * @throws RequirementNotFoundException            if no requirement with {@code code} exists
      * @throws MissingAcceptanceCriteriaException      if the write would carry a legacy
@@ -337,51 +364,66 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                                                  acceptance criterion
      * @throws RequirementConcurrentlyModifiedException if the write keeps losing the race across
      *                                                   every retry attempt
-     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code mutation}
-     *                                                   actually changes {@code title},
-     *                                                   {@code description} or any acceptance
-     *                                                   criterion's text and neither {@code
-     *                                                   language} nor {@code defaultLanguage} is
-     *                                                   given
+     * @throws de.hauschel.arknet.kernel.MissingDefaultLanguageException if {@code titleTouched},
+     *                                                   {@code descriptionTouched} or
+     *                                                   {@code touchedAcceptanceCriteriaPositions}
+     *                                                   marks a field/position as this call's own
+     *                                                   and neither {@code language} nor
+     *                                                   {@code defaultLanguage} is given
      */
     private Requirement updateWithOptimisticRetry(ProjectId projectId, RequirementCode code, String language,
-            String defaultLanguage, UnaryOperator<Requirement> mutation) {
+            String defaultLanguage, boolean titleTouched, boolean descriptionTouched,
+            Set<Integer> touchedAcceptanceCriteriaPositions, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(projectId, code)
                     .orElseThrow(() -> new RequirementNotFoundException(projectId, code));
             Requirement updated = mutation.apply(current.value());
-            if (updated.equals(current.value())) {
-                return current.value();
-            }
-            if (current.acceptanceCriteriaIsSynthesized()) {
-                AcceptanceCriterion placeholder = current.value().acceptanceCriteria().get(0);
-                AcceptanceCriterion stillAtPlaceholderPosition = updated.acceptanceCriteria().stream()
-                        .filter(criterion -> criterion.position() == placeholder.position())
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalStateException(
-                                "acceptance criteria never lose an existing position (append/patch-only, "
-                                        + "issue #266)"));
-                if (stillAtPlaceholderPosition.text().equals(placeholder.text())) {
-                    throw new MissingAcceptanceCriteriaException(projectId, code);
-                }
+            // A byte-for-byte-unchanged requirement might still not be a no-op (a touched field
+            // retagged to an explicit language without changing its text, issue #271) - the check
+            // below covers that. A changed one never is, and the guard must see it before any
+            // language resolution gets a chance to throw on an unrelated field (see the guard's
+            // own javadoc above).
+            boolean textUnchanged = updated.equals(current.value());
+            if (!textUnchanged) {
+                rejectAcceptanceCriteriaPlaceholderCarriedForward(current, updated, projectId, code);
             }
             // title/description/each acceptance criterion's text each get their own language: a
-            // field/position this mutation left byte-for-byte unchanged must round-trip under the
-            // exact tag it was read under (a scoped no-op), never under `language`/
-            // `defaultLanguage` - those only ever apply to a field/position this call is actually
-            // changing. Without this distinction, accept()/linkTerm() (which always call this with
-            // language == null and defaultLanguage == null and never touch either field) would
-            // retag or collapse whichever language variant findCurrentByCode happened to select.
-            // Resolving here, lazily, rather than eagerly in update(), means a malformed/missing
-            // language argument only ever throws when this call is actually changing a
-            // language-tagged field under it (issue #258).
-            String titleLanguage = updated.title().equals(current.value().title())
-                    ? current.titleLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            String descriptionLanguage = updated.description().equals(current.value().description())
-                    ? current.descriptionLanguage() : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
-            Map<Integer, String> acceptanceCriteriaLanguageByPosition =
-                    acceptanceCriteriaLanguageByPosition(current, updated, language, defaultLanguage);
+            // field/position this call itself did not name (titleTouched/descriptionTouched/
+            // touchedAcceptanceCriteriaPositions - see update()) round-trips under the exact tag it
+            // was read under (a scoped no-op), never under `language`/`defaultLanguage`. A named
+            // field/position only resolves a fresh write language when the caller also supplied
+            // `language` explicitly or the text it supplies actually differs from what is stored
+            // (issue #271) - a named field whose text happens to equal what is stored and whose
+            // caller did not name a language is still a no-op, exactly like an unnamed one, so that
+            // resending a field's already-current text as part of a full-state round trip never
+            // demands a `defaultLanguage` the project may not have (see
+            // resolveTouchedLanguage/resolveTouchedPositionLanguage below). Without the touched
+            // distinction at all, accept()/linkTerm() (which always call this with titleTouched ==
+            // false, descriptionTouched == false, an empty position set, and a null
+            // language/defaultLanguage) would retag or collapse whichever language variant
+            // findCurrentByCode happened to select. Resolving here, lazily, rather than eagerly in
+            // update(), means a malformed/missing language argument only ever throws when this call
+            // actually touches a language-tagged field/position (issue #258).
+            String titleLanguage = resolveTouchedLanguage(titleTouched, current.value().title(), updated.title(),
+                    current.titleLanguage(), language, defaultLanguage);
+            String descriptionLanguage = resolveTouchedLanguage(descriptionTouched, current.value().description(),
+                    updated.description(), current.descriptionLanguage(), language, defaultLanguage);
+            Map<Integer, String> acceptanceCriteriaLanguageByPosition = acceptanceCriteriaLanguageByPosition(
+                    current, updated, language, defaultLanguage, touchedAcceptanceCriteriaPositions);
+            // A true no-op needs both text and language to already match what is stored: text-only
+            // equality (the pre-#271 check) missed a named field/position whose caller supplied a
+            // different language for text that happens to already match - see the block comment
+            // above.
+            if (textUnchanged
+                    && Objects.equals(titleLanguage, current.titleLanguage())
+                    && Objects.equals(descriptionLanguage, current.descriptionLanguage())
+                    && acceptanceCriteriaLanguageByPosition.equals(current.acceptanceCriteriaLanguageByPosition())) {
+                return current.value();
+            }
+            if (textUnchanged) {
+                rejectAcceptanceCriteriaPlaceholderCarriedForward(current, updated, projectId, code);
+            }
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage,
                         acceptanceCriteriaLanguageByPosition, defaultLanguage);
@@ -396,33 +438,95 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     /**
+     * The guard body of {@link #updateWithOptimisticRetry}'s legacy-acceptance-criteria check
+     * (see that method's javadoc) - extracted so it can run both ahead of language resolution
+     * (when {@code mutation} changed some text) and just before the write (when it did not, but a
+     * touched field was still retagged to a new language, issue #271).
+     */
+    private static void rejectAcceptanceCriteriaPlaceholderCarriedForward(
+            RequirementRepository.CurrentRequirement current, Requirement updated, ProjectId projectId,
+            RequirementCode code) {
+        if (!current.acceptanceCriteriaIsSynthesized()) {
+            return;
+        }
+        AcceptanceCriterion placeholder = current.value().acceptanceCriteria().get(0);
+        AcceptanceCriterion stillAtPlaceholderPosition = updated.acceptanceCriteria().stream()
+                .filter(criterion -> criterion.position() == placeholder.position())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "acceptance criteria never lose an existing position (append/patch-only, issue #266)"));
+        if (stillAtPlaceholderPosition.text().equals(placeholder.text())) {
+            throw new MissingAcceptanceCriteriaException(projectId, code);
+        }
+    }
+
+    /**
      * The BCP-47 language tag each of {@code updated}'s acceptance-criterion positions is written
-     * under: a position whose {@code text} this mutation left byte-for-byte unchanged round-trips
-     * under the exact tag {@code current} carried for it (a scoped no-op - {@code current}'s map
-     * has no entry for a position that did not exist yet, but such a position is by construction
-     * always changed relative to {@code current}, so that branch is never taken for it); every
-     * other position (a patched existing one, or a newly appended one) is freshly resolved via
-     * {@link LanguageTag#resolveWriteLanguage}. Mirrors the {@code titleLanguage}/
-     * {@code descriptionLanguage} distinction directly above, once per position instead of once for
-     * the whole field - the same shape {@code UseCaseService#updateWithOptimisticRetry} already
-     * uses for {@code Step#text()} via {@code stepTextLanguageByPosition}.
+     * under: a position absent from {@code current} altogether (a newly appended position - it
+     * has no prior tag or text to compare against) is always freshly resolved via {@link
+     * LanguageTag#resolveWriteLanguage}; an existing position named in {@code touchedPositions}
+     * (this call's own {@code acceptanceCriteriaTextPatches}, see {@link #update}) resolves fresh
+     * only if the caller supplied {@code language} explicitly or the patched text actually differs
+     * from what is stored there (issue #271, and its regression - a named position whose patched
+     * text happens to equal what is stored and whose caller did not name a language is a no-op,
+     * not a forced retag). Every other position round-trips under the exact tag {@code current}
+     * carried for it (a scoped no-op). Mirrors the {@code titleTouched}/{@code descriptionTouched}
+     * distinction directly above via {@link #resolveTouchedPositionLanguage}, once per position
+     * instead of once for the whole field - the same shape {@code
+     * UseCaseService#updateWithOptimisticRetry} already uses for {@code Step#text()} via
+     * {@code stepTextLanguageByPosition}.
      */
     private static Map<Integer, String> acceptanceCriteriaLanguageByPosition(
             RequirementRepository.CurrentRequirement current, Requirement updated, String language,
-            String defaultLanguage) {
-        Map<Integer, String> currentTextByPosition = new LinkedHashMap<>();
+            String defaultLanguage, Set<Integer> touchedPositions) {
+        Map<Integer, String> currentTextByPosition = new HashMap<>();
         for (AcceptanceCriterion criterion : current.value().acceptanceCriteria()) {
             currentTextByPosition.put(criterion.position(), criterion.text());
         }
         Map<Integer, String> languageByPosition = new LinkedHashMap<>();
         for (AcceptanceCriterion criterion : updated.acceptanceCriteria()) {
-            String currentText = currentTextByPosition.get(criterion.position());
-            String resolved = criterion.text().equals(currentText)
-                    ? current.acceptanceCriteriaLanguageByPosition().get(criterion.position())
-                    : LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+            boolean isNewPosition = !currentTextByPosition.containsKey(criterion.position());
+            String resolved = resolveTouchedPositionLanguage(isNewPosition,
+                    touchedPositions.contains(criterion.position()),
+                    currentTextByPosition.get(criterion.position()), criterion.text(),
+                    current.acceptanceCriteriaLanguageByPosition().get(criterion.position()),
+                    language, defaultLanguage);
             languageByPosition.put(criterion.position(), resolved);
         }
         return languageByPosition;
+    }
+
+    /**
+     * The BCP-47 language tag a single scalar field ({@code title}/{@code description}) is
+     * written under: freshly resolved via {@link LanguageTag#resolveWriteLanguage} when {@code
+     * touched} and either the caller named {@code language} explicitly or {@code updatedText}
+     * actually differs from {@code currentText}; otherwise {@code currentLanguage} unchanged (a
+     * scoped no-op, not a retag). A field named by the caller but resent with its own
+     * already-current text and no {@code language} argument is therefore still a no-op (issue
+     * #271's regression - naming a field alone used to be enough to force a resolution that a
+     * project with no {@code defaultLanguage} could not satisfy).
+     */
+    private static String resolveTouchedLanguage(boolean touched, String currentText, String updatedText,
+            String currentLanguage, String language, String defaultLanguage) {
+        boolean languageTouched = touched && (language != null || !Objects.equals(updatedText, currentText));
+        return languageTouched
+                ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                : currentLanguage;
+    }
+
+    /**
+     * {@link #resolveTouchedLanguage} extended with {@code isNewPosition}: a position with no
+     * prior text/tag at all (a newly appended acceptance criterion) always resolves fresh,
+     * regardless of {@code touched} - there is nothing to compare its text against or fall back
+     * to.
+     */
+    private static String resolveTouchedPositionLanguage(boolean isNewPosition, boolean touched,
+            String currentText, String updatedText, String currentLanguage, String language,
+            String defaultLanguage) {
+        if (isNewPosition) {
+            return LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+        }
+        return resolveTouchedLanguage(touched, currentText, updatedText, currentLanguage, language, defaultLanguage);
     }
 
     @Override
