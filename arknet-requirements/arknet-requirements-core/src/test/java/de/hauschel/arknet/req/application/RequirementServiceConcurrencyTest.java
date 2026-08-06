@@ -181,8 +181,8 @@ class RequirementServiceConcurrencyTest {
         Requirement result = underTest.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
 
         assertEquals(new RequirementCode("FR-2"), result.code());
-        assertEquals(2, store.findAll(WS).size());
-        assertTrue(store.findAll(WS).stream()
+        assertEquals(2, store.findAll(WS, null).size());
+        assertTrue(store.findAll(WS, null).stream()
                 .map(Requirement::code)
                 .toList()
                 .containsAll(List.of(new RequirementCode("FR-1"), new RequirementCode("FR-2"))));
@@ -251,8 +251,8 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public List<Requirement> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
         }
 
         @Override
@@ -303,8 +303,8 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public List<Requirement> findAll(ProjectId projectId) {
-            List<Requirement> result = delegate.findAll(projectId);
+        public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
+            List<Requirement> result = delegate.findAll(projectId, displayLocale);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -362,8 +362,8 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
-        public List<Requirement> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
         }
 
         @Override

@@ -76,7 +76,7 @@ class RequirementReadRetryExhaustionTest {
 
         // when
         RequirementReadConflictException thrown = assertThrows(RequirementReadConflictException.class,
-                () -> repository.findAll(WS));
+                () -> repository.findAll(WS, null));
 
         // then - translated, not raw; every attempt actually ran; cause preserved.
         assertEquals(CodeAssignment.DEFAULT_MAX_ATTEMPTS, attempts.get());

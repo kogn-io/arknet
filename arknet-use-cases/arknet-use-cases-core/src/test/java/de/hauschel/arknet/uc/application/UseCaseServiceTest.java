@@ -107,7 +107,7 @@ class UseCaseServiceTest {
     void addWithoutLanguageAndWithoutAProjectDefaultIsRejected() {
         assertThrows(MissingDefaultLanguageException.class, () -> service.add(WS, newUseCase("Place order"), null));
 
-        assertEquals(List.of(), service.list(WS));
+        assertEquals(List.of(), service.list(WS, null));
     }
 
     /** Mirrors {@link #addWithoutLanguageFallsBackToTheProjectsDefaultLanguage}, for {@code update}. */
@@ -263,7 +263,7 @@ class UseCaseServiceTest {
                 List.of(), null, null, List.of(new NewStep(1, "do something", List.of())), List.of(), null);
 
         assertThrows(NoSuchElementException.class, () -> service.add(WS, command, DEFAULT_LANGUAGE));
-        assertTrue(service.list(WS).isEmpty());
+        assertTrue(service.list(WS, null).isEmpty());
     }
 
     @Test
@@ -273,7 +273,7 @@ class UseCaseServiceTest {
                 List.of(new NewStep(1, "do something", List.of("FR-UNKNOWN"))), List.of(), null);
 
         assertThrows(NoSuchElementException.class, () -> service.add(WS, command, DEFAULT_LANGUAGE));
-        assertTrue(service.list(WS).isEmpty());
+        assertTrue(service.list(WS, null).isEmpty());
     }
 
     @Test
@@ -291,8 +291,8 @@ class UseCaseServiceTest {
         UseCase inOther = service.add(other, newUseCase("b"), DEFAULT_LANGUAGE);
 
         assertEquals(new UseCaseCode("UC1"), inOther.code());
-        assertEquals(1, service.list(other).size());
-        assertEquals(1, service.list(WS).size());
+        assertEquals(1, service.list(other, null).size());
+        assertEquals(1, service.list(WS, null).size());
     }
 
     @Test
@@ -300,7 +300,7 @@ class UseCaseServiceTest {
         service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);
         service.add(WS, newUseCase("b"), DEFAULT_LANGUAGE);
 
-        List<UseCase> all = service.list(WS);
+        List<UseCase> all = service.list(WS, null);
 
         assertEquals(2, all.size());
         assertEquals("a", all.get(0).title());
@@ -327,7 +327,7 @@ class UseCaseServiceTest {
         UseCase fetched = service.get(WS, added.code(), null).orElseThrow();
 
         assertEquals(added, fetched);
-        assertTrue(service.list(WS).contains(added));
+        assertTrue(service.list(WS, null).contains(added));
     }
 
     @Test

@@ -158,12 +158,15 @@ public final class RequirementMcpTools {
      * default project and no fallback to a server-side working directory (decision 3).
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default language for two, independent purposes -
+     * needs the resolved project's configured default language for three, independent purposes -
      * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code req_get}'s)
-     * {@code displayLocale} default, while {@code req_add}/{@code req_update} instead pass
+     * {@code displayLocale} default; {@code req_add}/{@code req_update} instead pass
      * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
      * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
-     * (issue #258) - two different consumers of the very same field, not one the write tools skip.</p>
+     * (issue #258); and {@code req_list} - which, unlike {@code req_get}, exposes no explicit
+     * {@code displayLocale} tool argument to merge against - likewise passes it straight through
+     * as the display language every listed requirement's title/description is read in (issue
+     * #281). Three different consumers of the very same field, not one the other two skip.</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -243,8 +246,13 @@ public final class RequirementMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
-        final List<Requirement> all = listRequirements.list(projectId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final ProjectId projectId = project.id();
+        // No explicit displayLocale tool argument to merge against here, unlike req_get - every
+        // listed requirement's title/description is read straight under the resolved project's
+        // own configured default language (issue #281), the same value req_add/req_update already
+        // pass through for the write side.
+        final List<Requirement> all = listRequirements.list(projectId, project.defaultLanguage());
         if (all.isEmpty()) {
             return "(no requirements)";
         }

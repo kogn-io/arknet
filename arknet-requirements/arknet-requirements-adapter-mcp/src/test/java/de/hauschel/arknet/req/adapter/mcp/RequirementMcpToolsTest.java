@@ -238,6 +238,26 @@ class RequirementMcpToolsTest {
         assertEquals("de", stub.lastGetDisplayLocale);
     }
 
+    /**
+     * {@code req_list} exposes no explicit {@code displayLocale} tool argument of its own (unlike
+     * {@code req_get}) - issue #281 asks only that it fall back to the resolved project's own
+     * configured default language automatically, the same value {@code req_add}/{@code req_update}
+     * already pass to their in-ports. Before this fix, {@code RequirementMcpTools#list} called
+     * {@code listRequirements.list(projectId)} without any locale at all, so every listed
+     * requirement's title/description was read under whichever language the process-wide,
+     * per-daemon default happened to be - never the calling project's own, even for a project
+     * (like this test's) whose configured default differs from it.
+     */
+    @Test
+    void listPassesTheProjectsDefaultLanguageThrough() {
+        RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
+                stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+
+        adapterWithGermanDefault.list(null, null);
+
+        assertEquals("de", stub.lastListDisplayLocale);
+    }
+
     /** The one legal transition: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
     @Test
     void setStatusAcceptsARequirementWhenTargetStatusIsAccepted() {
@@ -521,6 +541,7 @@ class RequirementMcpToolsTest {
         private List<AcceptanceCriterionTextPatch> lastUpdateAcceptanceCriteriaTextPatches;
         private Priority lastUpdatePriority;
         private String lastUpdateLanguage;
+        private String lastListDisplayLocale;
 
         @Override
         public Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage) {
@@ -531,7 +552,8 @@ class RequirementMcpToolsTest {
         }
 
         @Override
-        public List<Requirement> list(ProjectId projectId) {
+        public List<Requirement> list(ProjectId projectId, String displayLocale) {
+            lastListDisplayLocale = displayLocale;
             return allRequirements;
         }
 

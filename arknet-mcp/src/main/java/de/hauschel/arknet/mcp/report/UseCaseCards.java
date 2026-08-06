@@ -63,13 +63,17 @@ public final class UseCaseCards {
     }
 
     /**
-     * @param projectId the project to read
+     * @param projectId     the project to read
+     * @param displayLocale the resolved project's own configured default display language
+     *                      (BCP-47 tag), or {@code null} if it has none - passed straight through
+     *                      to {@code uc_list}'s own port so the report honours the same project
+     *                      default {@code req_list}/{@code term_list} already do (issue #281)
      * @param glossary    the project's glossary, for actor labels
      * @return the use-case section, ordered by business code
      */
-    public ModelSection section(final ProjectId projectId, final Glossary glossary) {
+    public ModelSection section(final ProjectId projectId, final String displayLocale, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<UseCase> all = useCases.list(projectId);
+        final List<UseCase> all = useCases.list(projectId, displayLocale);
         final Map<ResourceId, ResolvedRequirement> reqs = resolveRequirements(projectId, all);
         final List<ModelCard> cards = all.stream()
                 .sorted(Comparator.comparing(uc -> uc.code().value(), BusinessCodes.ORDER))

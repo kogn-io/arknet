@@ -281,7 +281,12 @@ public interface RequirementRepository {
      * time, and a write landing through this port while this call is in flight cannot tear one
      * requirement against another either.
      *
-     * @param projectId the project (architecture model) to list requirements from
+     * @param projectId     the project (architecture model) to list requirements from
+     * @param displayLocale the BCP-47 language tag the caller wants each requirement's {@code
+     *                      title}/{@code description} shown in, overriding this repository's own
+     *                      configured display-language preference for this one call, or
+     *                      {@code null} to use that preference unchanged - the same per-call
+     *                      override {@link #findByCode} already accepts (issue #281)
      * @return all requirements, never {@code null}
      * @throws UnsupportedRequirementStatusException if any requirement's stored status is
      *                                                 SHACL-legal but not one of the MVP subset
@@ -295,7 +300,7 @@ public interface RequirementRepository {
      *                                            concurrent writers of this project's requirements
      *                                            (a pathological, sustained contention case)
      */
-    List<Requirement> findAll(ProjectId projectId);
+    List<Requirement> findAll(ProjectId projectId, String displayLocale);
 
     /**
      * Finds every requirement in a project whose identity is among {@code ids}, in one store

@@ -109,12 +109,12 @@ class RequirementCardsTest {
      */
     @Test
     void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
-        final RequirementCards cards = new RequirementCards(projectId -> List.of(
+        final RequirementCards cards = new RequirementCards((projectId, displayLocale) -> List.of(
                 requirement("FR-2", ID + "fr-2", "Zweite"),
                 requirement("FR-10", ID + "fr-10", "Zehnte"),
                 requirement("FR-1", ID + "fr-1", "Erste")));
 
-        assertThat(cards.section(PROJECT, GLOSSARY).cards())
+        assertThat(cards.section(PROJECT, null, GLOSSARY).cards())
                 .extracting(ModelCard::code).containsExactly("FR-1", "FR-2", "FR-10");
     }
 
@@ -132,18 +132,18 @@ class RequirementCardsTest {
     }
 
     private static Block block(final RequirementCards cards, final String label) {
-        return cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
+        return cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
                 .filter(b -> b.label().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("no block " + label + " in " + labels(cards)));
     }
 
     private static List<String> labels(final RequirementCards cards) {
-        return cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
+        return cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
     }
 
     private static RequirementCards cardsFor(final Requirement requirement) {
-        return new RequirementCards(projectId -> List.of(requirement));
+        return new RequirementCards((projectId, displayLocale) -> List.of(requirement));
     }
 
     private static Requirement requirement(

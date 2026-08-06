@@ -134,12 +134,15 @@ public final class UseCaseMcpTools {
      * default project and no fallback to a server-side working directory (decision 3).
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
-     * needs the resolved project's configured default language for two, independent purposes -
+     * needs the resolved project's configured default language for three, independent purposes -
      * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code uc_get}'s)
-     * {@code displayLocale} default, while {@code uc_add}/{@code uc_update} instead pass
+     * {@code displayLocale} default; {@code uc_add}/{@code uc_update} instead pass
      * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
      * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
-     * (issue #258) - two different consumers of the very same field, not one the write tools skip.</p>
+     * (issue #258); and {@code uc_list} - which, unlike {@code uc_get}, exposes no explicit
+     * {@code displayLocale} tool argument to merge against - likewise passes it straight through
+     * as the display language every listed use case's text fields are read in (issue #281). Three
+     * different consumers of the very same field, not one the other two skip.</p>
      */
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
@@ -282,8 +285,12 @@ public final class UseCaseMcpTools {
                     + "project. Must be an anchor already registered for the project; project_list "
                     + "shows what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor).id();
-        final List<UseCase> all = listUseCases.list(projectId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        // No explicit displayLocale tool argument to merge against here, unlike uc_get - every
+        // listed use case's text fields are read straight under the resolved project's own
+        // configured default language (issue #281), the same value uc_add/uc_update already pass
+        // through for the write side.
+        final List<UseCase> all = listUseCases.list(project.id(), project.defaultLanguage());
         return all.stream().map(UseCasePresenter::formatShort)
                 .reduce((a, b) -> a + "\n" + b).orElse("(no use cases)");
     }

@@ -243,8 +243,13 @@ public interface UseCaseRepository {
     /**
      * Returns all use cases stored in a project.
      *
-     * @param projectId the project (architecture model) to list use cases from
+     * @param projectId     the project (architecture model) to list use cases from
+     * @param displayLocale the BCP-47 language tag the caller wants each use case's text fields
+     *                      shown in, overriding this repository's own configured
+     *                      display-language preference for this one call, or {@code null} to use
+     *                      that preference unchanged - the same per-call override
+     *                      {@link #findByCode} already accepts (issue #281)
      * @return all use cases, never {@code null}
      */
-    List<UseCase> findAll(ProjectId projectId);
+    List<UseCase> findAll(ProjectId projectId, String displayLocale);
 }

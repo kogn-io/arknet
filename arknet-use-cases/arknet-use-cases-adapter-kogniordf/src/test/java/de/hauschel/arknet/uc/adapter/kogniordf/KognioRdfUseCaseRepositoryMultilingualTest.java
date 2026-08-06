@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -104,6 +105,64 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         return repository.findCurrentByCode(PROJECT_A, code)
                 .map(UseCaseRepository.CurrentUseCase::head)
                 .orElse(null);
+    }
+
+    /** A use-case repository reading the shared store under an explicit display-language preference. */
+    private UseCaseRepository readerFor(Locale requested, Locale systemDefault) {
+        return KognioRdfUseCaseRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), new DisplayLocale(requested, systemDefault));
+    }
+
+    /**
+     * {@code uc_list}'s own default-language resolution (issue #281): {@link
+     * UseCaseRepository#findAll} must select a multilingual use case's title in the reader's
+     * configured requested language, exactly as {@link UseCaseRepository#findByCode} already does -
+     * mirrors {@code KognioRdfTermRepositoryTest#findAllPicksThePrefLabelInTheRequestedLanguage}.
+     */
+    @Test
+    void findAllPicksTheTitleInTheRequestedLanguage() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCase created = useCase(freshId(), code, "Place order", "Order is placed", "Customer selects items");
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken head = currentHead(code);
+        UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
+                "Customer selects items");
+        repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null, null, null, null,
+                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE);
+        UseCaseRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
+
+        List<UseCase> all = germanReader.findAll(PROJECT_A, null);
+
+        assertEquals(1, all.size());
+        assertEquals("Bestellung aufgeben", all.get(0).title());
+    }
+
+    /**
+     * {@code uc_list}'s own default-language resolution (issue #281): a per-call override wins
+     * over the repository's own constructor-configured display language for {@link
+     * UseCaseRepository#findAll} too - {@code UseCaseMcpTools#list} passes the calling project's
+     * own configured default language as this argument, not an explicit tool argument (unlike
+     * {@code uc_get}'s {@code displayLocale}), but this repository method itself does not
+     * distinguish the two: whatever string it is handed simply overrides the configured {@code
+     * requested} tier for this one call. Mirrors
+     * {@code KognioRdfTermRepositoryTest#findAllDisplayLocaleArgumentOverridesTheConfiguredDefault}.
+     */
+    @Test
+    void findAllDisplayLocaleArgumentOverridesTheConfiguredDefault() {
+        UseCaseCode code = new UseCaseCode("UC1");
+        UseCase created = useCase(freshId(), code, "Place order", "Order is placed", "Customer selects items");
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken head = currentHead(code);
+        UseCase withGermanTitle = useCase(created.id(), code, "Bestellung aufgeben", "Order is placed",
+                "Customer selects items");
+        repository.compareAndUpdate(PROJECT_A, head, withGermanTitle, "de", "en", null, null, null, null,
+                Map.of(1, "en"), Map.of(), null, Integer.MAX_VALUE);
+        UseCaseRepository englishReader = readerFor(Locale.ENGLISH, Locale.ENGLISH);
+
+        List<UseCase> all = englishReader.findAll(PROJECT_A, "de");
+
+        assertEquals(1, all.size());
+        assertEquals("Bestellung aufgeben", all.get(0).title());
     }
 
     @Test

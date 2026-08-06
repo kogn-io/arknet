@@ -19,8 +19,16 @@ public interface ListUseCases {
      * <p>No ordering is guaranteed: the result reflects whatever order the underlying store
      * returns, not a sort on {@code UseCaseCode} or any other field.
      *
-     * @param projectId the project (architecture model) to list use cases from
+     * @param projectId     the project (architecture model) to list use cases from
+     * @param displayLocale the BCP-47 language tag the caller wants each use case's
+     *                      title/goal/scope/trigger/precondition/postcondition/step/extension
+     *                      text shown in (e.g. {@code "de"}), or {@code null} to fall back to the
+     *                      project's own configured default language, and from there to the
+     *                      process-wide default - the same fallback chain {@link GetUseCase#get}
+     *                      already applies, so a project whose default differs from this daemon's
+     *                      sees the same language variant of a multi-language use case whether it
+     *                      calls {@code uc_get} or {@code uc_list} (issue #281)
      * @return all use cases, never {@code null}
      */
-    List<UseCase> list(ProjectId projectId);
+    List<UseCase> list(ProjectId projectId, String displayLocale);
 }

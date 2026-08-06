@@ -1002,8 +1002,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
-     * for one call, e.g. an explicit {@code req_get} {@code displayLocale} argument or a project's
-     * own default language merged in by the caller. Mirrors {@code
+     * for one call - shared by {@link #findByCode} and {@link #findAll}, e.g. an explicit
+     * {@code req_get} {@code displayLocale} argument or a project's own default language merged in
+     * by the caller ({@code req_list} has no explicit {@code displayLocale} tool argument of its
+     * own to merge against - before {@link #findAll} sees it, issue #281). Mirrors {@code
      * KognioRdfTermRepository#withRequestedOverride}.
      *
      * @param requestedOverride a BCP-47 language tag, or {@code null}/blank to use the configured
@@ -1122,8 +1124,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * requirement a caller happened to ask for.</p>
      */
     @Override
-    public List<Requirement> findAll(ProjectId projectId) {
+    public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
+        DisplayLocale effective = withRequestedOverride(displayLocale);
 
         String query = "SELECT ?s ?identifier ?type ?status ?priority ?motivatedBy "
                 + "?qualityCategory WHERE { GRAPH <"
@@ -1154,8 +1157,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 return bySubject.entrySet().stream()
                         .map(entry -> {
                             Optional<LocalizedLiteral> title =
-                                    displayLocale.select(titlesBySubject.getOrDefault(entry.getKey(), List.of()));
-                            Optional<LocalizedLiteral> description = displayLocale.select(
+                                    effective.select(titlesBySubject.getOrDefault(entry.getKey(), List.of()));
+                            Optional<LocalizedLiteral> description = effective.select(
                                     descriptionsBySubject.getOrDefault(entry.getKey(), List.of()));
                             if (title.isEmpty() || description.isEmpty()) {
                                 // Requirement-title/Requirement-description carry sh:minCount 1
@@ -1169,7 +1172,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                                     termsBySubject.getOrDefault(entry.getKey(), List.of()),
                                     acceptanceCriteriaOrLegacyPlaceholder(toAcceptanceCriteria(
                                             criteriaAssembliesBySubject.getOrDefault(entry.getKey(), List.of()),
-                                            displayLocale)),
+                                            effective)),
                                     constraintsBySubject.getOrDefault(entry.getKey(), List.of()));
                         })
                         .filter(Objects::nonNull)

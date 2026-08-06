@@ -209,7 +209,7 @@ class RequirementServiceRealStoreConcurrencyTest {
         assertNotEquals(winnerResult.get().code(), loserResult.get().code(), diagnostics);
 
         List<Requirement> stored =
-                KognioRdfRequirementRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS);
+                KognioRdfRequirementRepositoryFactory.over(realLifecycle, DisplayLocale.DEFAULT).findAll(WS, null);
         assertEquals(2, stored.size(), diagnostics);
         assertTrue(stored.stream().map(Requirement::code).toList()
                 .containsAll(List.of(winnerResult.get().code(), loserResult.get().code())), diagnostics);

@@ -146,7 +146,7 @@ class RequirementServiceTest {
         assertThrows(MissingDefaultLanguageException.class,
                 () -> service.add(WS, newFunctionalRequirement(), null));
 
-        assertEquals(List.of(), service.list(WS));
+        assertEquals(List.of(), service.list(WS, null));
     }
 
     /** Mirrors {@link #addWithoutLanguageFallsBackToTheProjectsDefaultLanguage}, for {@code update}. */
@@ -302,8 +302,8 @@ class RequirementServiceTest {
                 new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
         assertEquals(new RequirementCode("FR-1"), inOther.code());
-        assertTrue(service.list(other).stream().allMatch(r -> r.title().equals("b")));
-        assertEquals(1, service.list(WS).size());
+        assertTrue(service.list(other, null).stream().allMatch(r -> r.title().equals("b")));
+        assertEquals(1, service.list(WS, null).size());
     }
 
     @Test
@@ -311,7 +311,7 @@ class RequirementServiceTest {
         service.add(WS, new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
         service.add(WS, new NewRequirement("b", "desc b", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE);
 
-        List<Requirement> all = service.list(WS);
+        List<Requirement> all = service.list(WS, null);
 
         assertEquals(2, all.size());
         assertEquals("a", all.get(0).title());
