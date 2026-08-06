@@ -74,9 +74,10 @@ public final class TraceabilityRenderer {
 
     /**
      * Renders {@code orphan_check}: requirements no use case realises, glossary terms never
-     * used (neither via {@code arkreq:usesTerm}/actor role nor as a bounded context's ubiquitous
-     * language), terms a requirement's or bounded context's prose names without the edge to
-     * back it up, and constraints no requirement is bound by (issue #223).
+     * used (neither via {@code arkreq:usesTerm}/actor role, as a bounded context's ubiquitous
+     * language, nor as another term's {@code skos:broader}, issue #252), terms a requirement's
+     * or bounded context's prose names without the edge to back it up, and constraints no
+     * requirement is bound by (issue #223).
      *
      * @param projectId the project the graph was read from
      * @param graph       the traceability graph to report on

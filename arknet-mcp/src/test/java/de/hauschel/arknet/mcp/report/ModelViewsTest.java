@@ -47,7 +47,7 @@ class ModelViewsTest {
     @Test
     void dropsASectionWhoseInPortThrowsAndKeepsTheRest() {
         final ModelViews views = new ModelViews(
-                projectId -> List.of(term()),
+                (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards(projectId -> {
                     throw new IllegalStateException("store closed");
                 }, (projectId, ids) -> List.of()),
@@ -55,7 +55,7 @@ class ModelViewsTest {
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards());
 
-        final ModelViews.Views result = views.of(PROJECT);
+        final ModelViews.Views result = views.of(PROJECT, null);
 
         assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
         assertThat(result.failures()).singleElement().asString()
@@ -74,7 +74,7 @@ class ModelViewsTest {
     @Test
     void survivesAnUnreadableGlossaryAndSaysSo() {
         final ModelViews views = new ModelViews(
-                projectId -> {
+                (projectId, displayLocale) -> {
                     throw new IllegalStateException("glossary unreadable");
                 },
                 new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
@@ -82,7 +82,7 @@ class ModelViewsTest {
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 emptyAdrCards());
 
-        final ModelViews.Views result = views.of(PROJECT);
+        final ModelViews.Views result = views.of(PROJECT, null);
 
         assertThat(result.sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Use Cases");
@@ -96,13 +96,13 @@ class ModelViewsTest {
     @Test
     void leavesOutEmptySections() {
         final ModelViews views = new ModelViews(
-                projectId -> List.of(term()),
+                (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards());
 
-        final ModelViews.Views result = views.of(PROJECT);
+        final ModelViews.Views result = views.of(PROJECT, null);
 
         assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
         assertThat(result.failures()).isEmpty();
@@ -116,14 +116,14 @@ class ModelViewsTest {
     @Test
     void ordersSectionsFromStrategicToDetailed() {
         final ModelViews views = new ModelViews(
-                projectId -> List.of(term()),
+                (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards(projectId -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards(projectId -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 new AdrCards(projectId -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
 
-        assertThat(views.of(PROJECT).sections()).extracting(ModelSection::title)
+        assertThat(views.of(PROJECT, null).sections()).extracting(ModelSection::title)
                 .containsExactly(
                         "Bounded Contexts", "Requirements", "Use Cases", "Architecture Decisions", "Glossary");
     }

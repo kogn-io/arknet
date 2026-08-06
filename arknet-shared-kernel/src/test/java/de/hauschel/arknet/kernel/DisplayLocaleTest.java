@@ -147,4 +147,21 @@ class DisplayLocaleTest {
     void rejectsNullCandidateCollection() {
         assertThrows(NullPointerException.class, () -> DE_THEN_EN.select(null));
     }
+
+    // ---- withRequestedOverride ---------------------------------------------------------
+
+    @Test
+    void withRequestedOverrideReplacesOnlyTheRequestedTier() {
+        DisplayLocale overridden = DE_THEN_EN.withRequestedOverride("fr");
+
+        assertEquals(Locale.FRENCH, overridden.requested());
+        assertEquals(Locale.ENGLISH, overridden.systemDefault());
+    }
+
+    @Test
+    void withRequestedOverrideLeavesTheInstanceUnchangedWhenGivenNullOrBlank() {
+        assertEquals(DE_THEN_EN, DE_THEN_EN.withRequestedOverride(null));
+        assertEquals(DE_THEN_EN, DE_THEN_EN.withRequestedOverride(""));
+        assertEquals(DE_THEN_EN, DE_THEN_EN.withRequestedOverride("   "));
+    }
 }

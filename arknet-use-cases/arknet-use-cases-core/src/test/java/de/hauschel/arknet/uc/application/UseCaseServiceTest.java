@@ -132,6 +132,100 @@ class UseCaseServiceTest {
         assertEquals("Place order", service.get(WS, code, null).orElseThrow().title());
     }
 
+    /**
+     * Regression for issue #271: a caller writing {@code title} under a language it does not yet
+     * carry must actually retag it, even when the supplied text is byte-for-byte identical to
+     * what is already stored - text equality alone is not "no change" once a language is
+     * explicitly named, since the whole point of the call is to tag (and let the out-adapter
+     * sweep) an untagged/mis-tagged literal.
+     */
+    @Test
+    void updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, "Place order", null, null, null, null, null, null, null, null, "de", null);
+
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.titleLanguage());
+    }
+
+    /**
+     * The flip side of {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}:
+     * once text AND language both already match what is stored, the call is a genuine no-op and
+     * must not reach the repository at all - the revision token proves no write happened.
+     */
+    @Test
+    void updateWithIdenticalTitleTextAndLanguageIsATrueNoOpAndDoesNotWrite() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        service.update(WS, code, "Place order", null, null, null, null, null, null, null, null,
+                DEFAULT_LANGUAGE, null);
+
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
+    /** Mirrors {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}, for a step-text patch. */
+    @Test
+    void updateStepTextPatchWithSameTextButANewLanguageStillWritesUnderThatLanguage() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        service.update(WS, code, null, null, null, null, null, null, null,
+                List.of(new StepTextPatch(1, "do something")), null, "de", null);
+
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.stepTextLanguageByPosition().get(1));
+    }
+
+    /** Mirrors {@link #updateWithSameTitleTextButANewLanguageStillWritesUnderThatLanguage}, for extensions. */
+    @Test
+    void updateExtensionsWithSameTextButANewLanguageStillWritesUnderThatLanguage() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("Payment declined"), null, null, DEFAULT_LANGUAGE, null);
+
+        service.update(WS, code, null, null, null, null, null, null,
+                List.of("Payment declined"), null, null, "de", null);
+
+        UseCaseRepository.CurrentUseCase current = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals("de", current.extensionTextLanguageByPosition().get(1));
+    }
+
+    /**
+     * A field named by the caller ({@code title != null}) but resent with its own
+     * already-current text, no {@code language} argument, and no project default must still be a
+     * genuine no-op - naming a field alone (as opposed to actually changing it) must not force a
+     * write-language resolution the project cannot satisfy. Complements {@link
+     * #updateWithoutLanguageAndWithoutAProjectDefaultIsRejected}, which covers the same missing-
+     * language/-default combination for an actually-changed title.
+     */
+    @Test
+    void updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        UseCase updated = service.update(
+                WS, code, "Place order", null, null, null, null, null, null, null, null, null, null);
+
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+        assertEquals("Place order", updated.title());
+    }
+
+    /** Mirrors {@link #updateResendingUnchangedTitleWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite}, for a step-text patch. */
+    @Test
+    void updateResendingUnchangedStepTextWithoutLanguageOrDefaultIsATrueNoOpAndDoesNotWrite() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        UseCaseRepository.CurrentUseCase before = repository.findCurrentByCode(WS, code).orElseThrow();
+
+        service.update(WS, code, null, null, null, null, null, null, null,
+                List.of(new StepTextPatch(1, "do something")), null, null, null);
+
+        UseCaseRepository.CurrentUseCase after = repository.findCurrentByCode(WS, code).orElseThrow();
+        assertEquals(before.head(), after.head());
+    }
+
     @Test
     void addMintsAFreshOpaqueIdentityViaTheFactory() {
         UseCase first = service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);

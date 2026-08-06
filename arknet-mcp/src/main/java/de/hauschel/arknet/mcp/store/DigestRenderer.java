@@ -38,37 +38,39 @@ import de.hauschel.arknet.kernel.ProjectId;
 public final class DigestRenderer {
 
     private final Prefixes prefixes;
-    private final DisplayLocale displayLocale;
 
     /**
-     * @param prefixes      the CURIE resolver used to shorten IRIs for display
-     * @param displayLocale the display language to select among a resource's language-tagged labels
+     * @param prefixes the CURIE resolver used to shorten IRIs for display
      */
-    public DigestRenderer(Prefixes prefixes, DisplayLocale displayLocale) {
+    public DigestRenderer(Prefixes prefixes) {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
-        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     /**
      * Renders the digest for a project snapshot.
      *
-     * @param projectId   the project the snapshot was read from
-     * @param label       the project's registered label, or {@link Optional#empty()}
-     *                    if {@code projectId} is not (or no longer) found in the registry - the
-     *                    header then falls back to the raw id, exactly as before this label was
-     *                    available
-     * @param description the project's optional free-text description (issue #110), already
-     *                    selected for {@link #displayLocale} if the project carries it in several
-     *                    languages, or {@link Optional#empty()} if it has none
-     * @param snapshot    the snapshot to render
+     * @param projectId     the project the snapshot was read from
+     * @param label         the project's registered label, or {@link Optional#empty()}
+     *                      if {@code projectId} is not (or no longer) found in the registry - the
+     *                      header then falls back to the raw id, exactly as before this label was
+     *                      available
+     * @param description   the project's optional free-text description (issue #110), already
+     *                      selected for {@code displayLocale} if the project carries it in several
+     *                      languages, or {@link Optional#empty()} if it has none
+     * @param snapshot      the snapshot to render
+     * @param displayLocale the display language to select among a resource's language-tagged
+     *                      labels, resolved per call rather than baked into this renderer, so the
+     *                      caller can merge in the target project's own default language first
+     *                      (issue #276)
      * @return the digest text
      */
     public String render(ProjectId projectId, Optional<String> label, Optional<String> description,
-            StoreSnapshot snapshot) {
+            StoreSnapshot snapshot, DisplayLocale displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(displayLocale, "displayLocale");
 
         StringBuilder out = new StringBuilder();
         out.append("# Project ").append(headerName(projectId, label))
@@ -85,7 +87,7 @@ public final class DigestRenderer {
         out.append('\n');
 
         final Set<String> ambiguousIdentifiers = ambiguousIdentifiers(snapshot);
-        appendResources(out, snapshot, ambiguousIdentifiers);
+        appendResources(out, snapshot, ambiguousIdentifiers, displayLocale);
 
         appendNextSteps(out);
         appendIntegrity(out, snapshot);
@@ -144,17 +146,19 @@ public final class DigestRenderer {
                 .append(displayType(type)).append('\n'));
     }
 
-    private void appendResources(StringBuilder out, StoreSnapshot snapshot, Set<String> ambiguousIdentifiers) {
+    private void appendResources(StringBuilder out, StoreSnapshot snapshot, Set<String> ambiguousIdentifiers,
+            DisplayLocale displayLocale) {
         snapshot.byPrimaryType().forEach((type, members) -> {
             out.append("## ").append(displayType(type)).append(" (").append(members.size()).append(")\n");
             for (StoreResource resource : members) {
-                out.append(renderResourceLine(resource, ambiguousIdentifiers)).append('\n');
+                out.append(renderResourceLine(resource, ambiguousIdentifiers, displayLocale)).append('\n');
             }
             out.append('\n');
         });
     }
 
-    private String renderResourceLine(StoreResource resource, Set<String> ambiguousIdentifiers) {
+    private String renderResourceLine(StoreResource resource, Set<String> ambiguousIdentifiers,
+            DisplayLocale displayLocale) {
         String handle = handleFor(resource, ambiguousIdentifiers);
         StringBuilder line = new StringBuilder(handle);
         String types = String.join(",", resource.types().stream().map(StoreResource::localName).toList());

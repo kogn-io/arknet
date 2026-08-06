@@ -28,7 +28,7 @@ class DigestRendererTest {
     private static final String TITLE = "http://purl.org/dc/terms/title";
     private static final String IDENTIFIER = "http://purl.org/dc/terms/identifier";
 
-    private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults(), DisplayLocale.DEFAULT);
+    private final DigestRenderer renderer = new DigestRenderer(Prefixes.defaults());
 
     @Test
     void rendersHeaderCountersPrefixLegendAndResourceLines() {
@@ -40,7 +40,7 @@ class DigestRendererTest {
                 iri(TERM + "login", RDF_TYPE, SKOS + "Concept"),
                 lit(TERM + "login", SKOS + "prefLabel", "Anmeldung")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).contains("# Project sample-project -- 2 resources, 6 triples, 2 types");
         assertThat(digest).contains("# Prefixes:");
@@ -69,7 +69,7 @@ class DigestRendererTest {
                 lit(opaqueIri, TITLE, "Login"),
                 lit(opaqueIri, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).doesNotContain(opaqueIri);
         assertThat(digest).contains("FR-1 [FunctionalRequirement] \"Login\"  -> resource_get(\"FR-1\")");
@@ -94,7 +94,7 @@ class DigestRendererTest {
                 lit(second, TITLE, "Logout"),
                 lit(second, IDENTIFIER, "FR-1")));
 
-        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("sample-project"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).contains("resource_get(\"" + first + "\")");
         assertThat(digest).contains("resource_get(\"" + second + "\")");
@@ -113,7 +113,7 @@ class DigestRendererTest {
                 lit(subject, TITLE, "Export"),
                 iri(subject, ARKREQ + "refinesTerm", danglingTarget)));
 
-        String digest = renderer.render(new ProjectId("ws"), Optional.empty(), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("ws"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).contains("dangling reference(s)");
         assertThat(digest).contains(subject).contains(danglingTarget).contains("(missing)");
@@ -130,7 +130,7 @@ class DigestRendererTest {
 
         String digest = renderer.render(
                 new ProjectId("ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8"), Optional.of("arknet-demo"),
-                Optional.empty(), snapshot);
+                Optional.empty(), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).contains("# Project arknet-demo (id: ff92cedd-a76a-4f1d-acc5-7aad9ccb1ac8) --");
     }
@@ -141,7 +141,7 @@ class DigestRendererTest {
         StoreSnapshot snapshot = StoreSnapshot.of(List.of());
 
         String digest = renderer.render(new ProjectId("p-1"), Optional.of("arknet-demo"),
-                Optional.of("A demo project for arknet."), snapshot);
+                Optional.of("A demo project for arknet."), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).contains("# Project arknet-demo (id: p-1) --")
                 .contains("# A demo project for arknet.");
@@ -153,7 +153,7 @@ class DigestRendererTest {
         StoreSnapshot snapshot = StoreSnapshot.of(List.of());
 
         String digest = renderer.render(new ProjectId("p-1"), Optional.of("arknet-demo"), Optional.empty(),
-                snapshot);
+                snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).doesNotContain("# A demo project");
     }
@@ -166,7 +166,7 @@ class DigestRendererTest {
     void headerFallsBackToTheRawIdWhenNoLabelIsAvailable() {
         StoreSnapshot snapshot = StoreSnapshot.of(List.of());
 
-        String digest = renderer.render(new ProjectId("chat-app-project"), Optional.empty(), Optional.empty(), snapshot);
+        String digest = renderer.render(new ProjectId("chat-app-project"), Optional.empty(), Optional.empty(), snapshot, DisplayLocale.DEFAULT);
 
         assertThat(digest).contains("# Project chat-app-project --");
     }

@@ -11,6 +11,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 
 /**
  * Resolves the project an MCP tool call targets from its anchor (ADR-016).
@@ -52,9 +53,28 @@ public final class AnchorContext {
      */
     public static ProjectId resolveProject(
             McpSyncRequestContext context, String projectAnchor, ProjectResolver projects) {
+        return resolveResolvedProject(context, projectAnchor, projects).id();
+    }
+
+    /**
+     * Same resolution as {@link #resolveProject}, but returns the full {@link ResolvedProject}
+     * rather than just its id - for a caller that also needs the resolved project's configured
+     * default display language (e.g. to merge into a {@link de.hauschel.arknet.kernel.DisplayLocale}
+     * override the way {@code term_get} already does, issue #274), instead of reading a resource's
+     * label under whichever language the process-wide default happens to be.
+     *
+     * @param context       the per-call request context, may itself be {@code null}
+     * @param projectAnchor the raw tool argument, may be {@code null} or blank
+     * @param projects      the resolver that maps an anchor to its project
+     * @return the resolved project
+     * @throws de.hauschel.arknet.kernel.UnresolvedProjectAnchorException if neither path yielded a
+     *                                                                   registered anchor
+     */
+    public static ResolvedProject resolveResolvedProject(
+            McpSyncRequestContext context, String projectAnchor, ProjectResolver projects) {
         Objects.requireNonNull(projects, "projects");
         final String explicit = (projectAnchor == null || projectAnchor.isBlank()) ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
     }
 
     /**

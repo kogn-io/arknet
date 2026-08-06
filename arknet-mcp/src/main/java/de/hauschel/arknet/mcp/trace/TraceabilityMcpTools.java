@@ -10,8 +10,8 @@ import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
-import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.mcp.store.AnchorContext;
 import de.hauschel.arknet.mcp.store.HandleResolver;
 import de.hauschel.arknet.mcp.store.Prefixes;
@@ -46,9 +46,13 @@ public final class TraceabilityMcpTools {
      * @param storeReader   the generic store read path
      * @param prefixes      the CURIE / IRI resolver
      * @param projects      resolves each call's target project from its anchor
-     * @param displayLocale the display language to select among a resource's language-tagged
-     *                      labels - shared with {@code store_overview}'s read path so the two
-     *                      never disagree about a term's label (issue #141)
+     * @param displayLocale the process-wide display-language fallback, shared with {@code
+     *                      store_overview}'s read path (issue #141) - this class merges the
+     *                      resolved project's own default language into it per call before
+     *                      reading labels ({@link #readGraph}, issue #274), so the two no longer
+     *                      necessarily agree on a term's label for a project whose configured
+     *                      default differs from this daemon's; {@code store_overview} does not yet
+     *                      apply the same per-project merge
      */
     public TraceabilityMcpTools(
             final StoreReader storeReader, final Prefixes prefixes, final ProjectResolver projects,
@@ -73,16 +77,17 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        return renderer.traceMatrix(projectId, readGraph(projectId));
+        final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        return renderer.traceMatrix(project.id(), readGraph(project));
     }
 
     @McpTool(name = "orphan_check",
             description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
-                    + " referenced (neither used by a requirement, playing an actor role in a use case, nor a"
-                    + " bounded context's ubiquitous language), terms a requirement's or bounded context's"
-                    + " text names without the usesTerm/ubiquitousLanguageTerm edge to back it up, and"
-                    + " constraints no requirement is bound by via constrainedBy. Reported as four lists.",
+                    + " referenced (neither used by a requirement, playing an actor role in a use case, a"
+                    + " bounded context's ubiquitous language, nor another term's skos:broader), terms a"
+                    + " requirement's or bounded context's text names without the"
+                    + " usesTerm/ubiquitousLanguageTerm edge to back it up, and constraints no requirement is"
+                    + " bound by via constrainedBy. Reported as four lists.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String orphanCheck(
             final McpSyncRequestContext context,
@@ -92,8 +97,8 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        return renderer.orphanCheck(projectId, readGraph(projectId));
+        final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        return renderer.orphanCheck(project.id(), readGraph(project));
     }
 
     @McpTool(name = "impact_analysis",
@@ -116,9 +121,9 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        final String targetIri = handleResolver.resolve(projectId, id);
-        return renderer.impactAnalysis(projectId, readGraph(projectId), targetIri);
+        final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        final String targetIri = handleResolver.resolve(project.id(), id);
+        return renderer.impactAnalysis(project.id(), readGraph(project), targetIri);
     }
 
     @McpTool(name = "actor_usecase_matrix",
@@ -135,8 +140,8 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        return renderer.actorUseCaseMatrix(projectId, readGraph(projectId));
+        final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        return renderer.actorUseCaseMatrix(project.id(), readGraph(project));
     }
 
     @McpTool(name = "term_cooccurrence",
@@ -153,12 +158,24 @@ public final class TraceabilityMcpTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
-        return renderer.termCooccurrence(projectId, readGraph(projectId));
+        final ResolvedProject project = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        return renderer.termCooccurrence(project.id(), readGraph(project));
     }
 
-    private TraceabilityGraph readGraph(final ProjectId projectId) {
-        return TraceabilityGraph.of(storeReader.readSnapshot(projectId), displayLocale);
+    /**
+     * Reads the graph for {@code project}, resolving labels under the requesting project's own
+     * configured default language rather than this class's process-wide, per-daemon {@link
+     * #displayLocale} - the same merge {@code term_get} already applies via {@code
+     * UbiquitousLanguageMcpTools#effectiveDisplayLocale} (issue #274). Without this, a project
+     * whose default language differs from the daemon's ({@code arknet.locale.requested}, "en"
+     * unless configured) would have its multi-language terms/requirements matched against the
+     * wrong language variant throughout {@code orphan_check}/{@code trace_matrix}/{@code
+     * term_cooccurrence} - a label mismatch, not a missing edge, silently read as "no mention
+     * here".
+     */
+    private TraceabilityGraph readGraph(final ResolvedProject project) {
+        final DisplayLocale effective = displayLocale.withRequestedOverride(project.defaultLanguage());
+        return TraceabilityGraph.of(storeReader.readSnapshot(project.id()), effective);
     }
 
 }

@@ -18,6 +18,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
@@ -61,6 +62,7 @@ public final class StoreReportTools {
     private final HistoryRenderer historyRenderer;
     private final HandleResolver handleResolver;
     private final Prefixes prefixes;
+    private final DisplayLocale displayLocale;
     private final ProjectResolver projects;
     private final FindProject findProject;
     private final Path fallbackReportDir;
@@ -69,8 +71,12 @@ public final class StoreReportTools {
     /**
      * @param storeReader       the generic store read path
      * @param prefixes          the CURIE / IRI resolver
-     * @param displayLocale     the display language to select among a resource's language-tagged
-     *                          labels, shared with the traceability tools' read path (issue #141)
+     * @param displayLocale     the process-wide display language to select among a resource's
+     *                          language-tagged labels, shared with the traceability tools' read
+     *                          path (issue #141) - merged per call with the resolved project's own
+     *                          default language (issue #274/#276), the same fallback chain
+     *                          {@code orphan_check}/{@code trace_matrix} already apply, so the two
+     *                          keep agreeing on the very same term's label
      * @param htmlRenderer      the self-contained HTML report renderer
      * @param modelViews        assembles the report's per-bounded-context sections; never fails the
      *                          tool - a context whose read path throws is reported as a warning in
@@ -100,10 +106,10 @@ public final class StoreReportTools {
             final Path reportHostDir) {
         this.storeReader = Objects.requireNonNull(storeReader, "storeReader");
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
-        Objects.requireNonNull(displayLocale, "displayLocale");
+        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
         this.htmlRenderer = Objects.requireNonNull(htmlRenderer, "htmlRenderer");
         this.modelViews = Objects.requireNonNull(modelViews, "modelViews");
-        this.digestRenderer = new DigestRenderer(prefixes, displayLocale);
+        this.digestRenderer = new DigestRenderer(prefixes);
         this.resourceRenderer = new ResourceRenderer(prefixes);
         this.historyRenderer = new HistoryRenderer(prefixes);
         this.handleResolver = new HandleResolver(storeReader, prefixes);
@@ -129,15 +135,17 @@ public final class StoreReportTools {
                     + "this. Must be an anchor already registered for the project; project_list shows "
                     + "what is registered.", required = false)
             final String projectAnchor) {
-        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
+        final ResolvedProject resolved = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        final ProjectId projectId = resolved.id();
+        final DisplayLocale effective = displayLocale.withRequestedOverride(resolved.defaultLanguage());
         final Optional<Project> project = findProject.findById(projectId);
         final Optional<String> label = project.map(Project::label);
         final Optional<String> description = project.map(Project::description).filter(Objects::nonNull);
 
         final StoreSnapshot snapshot = storeReader.readSnapshot(projectId);
-        final String digest = digestRenderer.render(projectId, label, description, snapshot);
+        final String digest = digestRenderer.render(projectId, label, description, snapshot, effective);
         final String html = htmlRenderer.render(projectId, label, description, snapshot, digest,
-                modelViews.of(projectId));
+                modelViews.of(projectId, resolved.defaultLanguage()), effective);
         return digest + "\n" + writeReportLine(html, projectId) + "\n";
     }
 

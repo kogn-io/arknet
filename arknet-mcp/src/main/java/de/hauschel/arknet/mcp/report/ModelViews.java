@@ -77,13 +77,18 @@ public final class ModelViews {
     /**
      * Reads every context and assembles its section.
      *
-     * @param projectId the project to read
+     * @param projectId     the project to read
+     * @param displayLocale the resolved project's own configured default display language (BCP-47
+     *                      tag), or {@code null} if it has none - passed straight through to
+     *                      {@code term_list}'s own port so the report's glossary section honours
+     *                      the same project default {@code orphan_check}/{@code trace_matrix}
+     *                      already do (issue #276), instead of always the process-wide default
      * @return the sections that could be read and carry at least one card, plus the failures
      */
-    public Views of(final ProjectId projectId) {
+    public Views of(final ProjectId projectId, final String displayLocale) {
         final List<ModelSection> sections = new ArrayList<>();
         final List<String> failures = new ArrayList<>();
-        final Glossary glossary = glossary(projectId, failures);
+        final Glossary glossary = glossary(projectId, displayLocale, failures);
         collect(sections, failures, BoundedContextCards.SECTION_TITLE,
                 () -> boundedContexts.section(projectId, glossary));
         collect(sections, failures, RequirementCards.SECTION_TITLE,
@@ -104,9 +109,9 @@ public final class ModelViews {
      * says so, because chips that suddenly read as IRIs would otherwise look like a modelling
      * mistake rather than a read error.</p>
      */
-    private Glossary glossary(final ProjectId projectId, final List<String> failures) {
+    private Glossary glossary(final ProjectId projectId, final String displayLocale, final List<String> failures) {
         try {
-            return Glossary.of(terms.list(projectId));
+            return Glossary.of(terms.list(projectId, displayLocale));
         } catch (final RuntimeException e) {
             failures.add("Glossary: could not be read (" + e.getClass().getSimpleName() + ": " + e.getMessage()
                     + ") - its terms appear under \"Other resources\" below, and references to them show as"

@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.mcp.report;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -52,32 +53,33 @@ public final class HtmlReportRenderer {
             "https://w3id.org/arknet/requirements#extensionStep");
 
     private final Prefixes prefixes;
-    private final DisplayLocale displayLocale;
 
     /**
-     * @param prefixes      the CURIE resolver used to shorten IRIs for display
-     * @param displayLocale the display language to select among a resource's language-tagged labels
+     * @param prefixes the CURIE resolver used to shorten IRIs for display
      */
-    public HtmlReportRenderer(final Prefixes prefixes, final DisplayLocale displayLocale) {
+    public HtmlReportRenderer(final Prefixes prefixes) {
         this.prefixes = Objects.requireNonNull(prefixes, "prefixes");
-        this.displayLocale = Objects.requireNonNull(displayLocale, "displayLocale");
     }
 
     /**
      * Renders the complete HTML document.
      *
-     * @param projectId   the project the snapshot was read from
-     * @param label       the project's registered label, or {@link Optional#empty()}
-     *                    if {@code projectId} is not (or no longer) found in the registry - the
-     *                    header then falls back to the raw id, exactly as before this label was
-     *                    available
-     * @param description the project's optional free-text description (issue #110), already
-     *                    selected for {@link #displayLocale} if the project carries it in several
-     *                    languages, or {@link Optional#empty()} if it has none - shown in the
-     *                    header when present
-     * @param snapshot    the flat statement snapshot, used for raw triples and the leftovers
-     * @param digest      the agent digest text shown in the top panel
-     * @param views       the per-bounded-context sections that make up the report's body
+     * @param projectId     the project the snapshot was read from
+     * @param label         the project's registered label, or {@link Optional#empty()}
+     *                      if {@code projectId} is not (or no longer) found in the registry - the
+     *                      header then falls back to the raw id, exactly as before this label was
+     *                      available
+     * @param description   the project's optional free-text description (issue #110), already
+     *                      selected for {@code displayLocale} if the project carries it in several
+     *                      languages, or {@link Optional#empty()} if it has none - shown in the
+     *                      header when present
+     * @param snapshot      the flat statement snapshot, used for raw triples and the leftovers
+     * @param digest        the agent digest text shown in the top panel
+     * @param views         the per-bounded-context sections that make up the report's body
+     * @param displayLocale the display language to select among a resource's language-tagged
+     *                      labels, resolved per call rather than baked into this renderer, so the
+     *                      caller can merge in the target project's own default language first
+     *                      (issue #276)
      * @return the self-contained HTML document
      */
     public String render(
@@ -86,13 +88,15 @@ public final class HtmlReportRenderer {
             final Optional<String> description,
             final StoreSnapshot snapshot,
             final String digest,
-            final ModelViews.Views views) {
+            final ModelViews.Views views,
+            final DisplayLocale displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(digest, "digest");
         Objects.requireNonNull(views, "views");
+        Objects.requireNonNull(displayLocale, "displayLocale");
 
         final Set<String> subjects = snapshot.resources().stream()
                 .map(StoreResource::iri).collect(Collectors.toSet());
@@ -121,9 +125,9 @@ public final class HtmlReportRenderer {
         appendIndex(html, views.sections(), leftovers.size());
         html.append("    <main>\n");
         for (final ModelSection section : views.sections()) {
-            appendSection(html, section, carded, subjects, bySubject);
+            appendSection(html, section, carded, subjects, bySubject, displayLocale);
         }
-        appendLeftovers(html, leftovers, subjects);
+        appendLeftovers(html, leftovers, subjects, displayLocale);
         appendEmptyState(html, views.sections(), leftovers);
         html.append("    </main>\n  </div>\n");
 
@@ -213,6 +217,9 @@ public final class HtmlReportRenderer {
                         + " actor or any word ...\" aria-label=\"Filter\" />\n")
                 .append("    <button type=\"button\" id=\"expand-all\">Expand all</button>\n")
                 .append("    <button type=\"button\" id=\"collapse-all\">Collapse all</button>\n")
+                .append("    <select id=\"lang-switch\" aria-label=\"Language\">\n")
+                .append("      <option value=\"\">Original</option>\n")
+                .append("    </select>\n")
                 .append("  </div>\n");
     }
 
@@ -236,7 +243,8 @@ public final class HtmlReportRenderer {
             final ModelSection section,
             final Set<String> carded,
             final Set<String> subjects,
-            final Map<String, StoreResource> bySubject) {
+            final Map<String, StoreResource> bySubject,
+            final DisplayLocale displayLocale) {
         html.append("      <section class=\"group\" id=\"sec-").append(escape(section.id())).append("\">\n")
                 .append("        <h2>").append(escape(section.title()))
                 .append(" <span class=\"of\">").append(section.cards().size()).append("</span></h2>\n");
@@ -245,13 +253,14 @@ public final class HtmlReportRenderer {
         }
         html.append("        <div class=\"cards\">\n");
         for (final ModelCard card : section.cards()) {
-            appendCard(html, card, carded, subjects, bySubject.get(card.iri()));
+            appendCard(html, card, carded, subjects, bySubject.get(card.iri()), displayLocale);
         }
         html.append("        </div>\n      </section>\n");
     }
 
     private void appendLeftovers(
-            final StringBuilder html, final List<StoreResource> leftovers, final Set<String> subjects) {
+            final StringBuilder html, final List<StoreResource> leftovers, final Set<String> subjects,
+            final DisplayLocale displayLocale) {
         if (leftovers.isEmpty()) {
             return;
         }
@@ -264,7 +273,7 @@ public final class HtmlReportRenderer {
                 .append("          <summary>show raw resources</summary>\n")
                 .append("          <div class=\"cards\">\n");
         for (final StoreResource resource : leftovers) {
-            appendRawCard(html, resource, subjects);
+            appendRawCard(html, resource, subjects, displayLocale);
         }
         html.append("          </div>\n        </details>\n      </section>\n");
     }
@@ -286,20 +295,23 @@ public final class HtmlReportRenderer {
             final ModelCard card,
             final Set<String> carded,
             final Set<String> subjects,
-            final StoreResource raw) {
+            final StoreResource raw,
+            final DisplayLocale displayLocale) {
         final String anchor = resourceAnchor(card.iri());
         html.append("          <article class=\"card\" id=\"").append(anchor).append("\">\n")
                 .append("            <details class=\"fold\">\n")
                 .append("              <summary class=\"head\">\n")
                 .append("                <span class=\"code\">").append(escape(card.code())).append("</span>\n")
-                .append("                <h3>").append(escape(card.title())).append("</h3>\n");
+                .append("                <h3>")
+                .append(langSwitchable(escape(card.title()), languageVariants(raw, card.title(), displayLocale)))
+                .append("</h3>\n");
         for (final Badge badge : card.badges()) {
             html.append("                ").append(badgePill(badge)).append('\n');
         }
         html.append("                <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
                 .append("              </summary>\n              <div class=\"body\">\n");
         for (final Block block : card.blocks()) {
-            appendBlock(html, block, carded, subjects);
+            appendBlock(html, block, carded, subjects, raw, displayLocale);
         }
         html.append("              </div>\n");
         appendRawTriples(html, raw, subjects);
@@ -307,12 +319,18 @@ public final class HtmlReportRenderer {
     }
 
     private void appendBlock(
-            final StringBuilder html, final Block block, final Set<String> carded, final Set<String> subjects) {
+            final StringBuilder html, final Block block, final Set<String> carded, final Set<String> subjects,
+            final StoreResource raw, final DisplayLocale displayLocale) {
         html.append("              <div class=\"block\">\n                <span class=\"blabel\">")
                 .append(escape(block.label())).append("</span>\n");
         switch (block) {
-            case Block.Prose prose -> html.append("                <p class=\"prose\">")
-                    .append(renderText(prose.text(), carded, subjects)).append("</p>\n");
+            case Block.Prose prose -> {
+                final String rendered = renderText(prose.text(), carded, subjects);
+                final Optional<LangVariants> variants =
+                        languageVariants(raw, prose.text().text(), displayLocale);
+                html.append("                <p class=\"prose\">")
+                        .append(langSwitchable(rendered, variants)).append("</p>\n");
+            }
             case Block.Bullets bullets -> {
                 html.append("                <ul class=\"bullets\">\n");
                 for (final RichText item : bullets.items()) {
@@ -325,6 +343,100 @@ public final class HtmlReportRenderer {
             case Block.Flow flow -> appendFlow(html, flow, carded, subjects);
         }
         html.append("              </div>\n");
+    }
+
+    /**
+     * The language variants of a card's title or a {@link Block.Prose} text - found among the
+     * same subject's own raw triples, which the raw view a level down already shows in full. No
+     * new store access and no domain/port plumbing: the store read already carried every
+     * literal, this only stops throwing the alternates away before the report can offer a
+     * client-side switch between them (issue #270, part 2 of #248).
+     *
+     * <p>An untagged literal (a store-first edit, or an older resource written before issue #258)
+     * is a candidate variant too - {@link DisplayLocale#select} can return one per step 3 of its
+     * fallback chain, so a switch built only from tagged literals would silently omit exactly
+     * that field. It is keyed by the call's {@code displayLocale}'s {@code systemDefault} language,
+     * the same language an untagged literal would be shown under if the store held no other
+     * candidate.</p>
+     *
+     * <p>The match back from {@code displayed} to a predicate is by text equality alone - there is
+     * no predicate available at the call sites to match on instead. If more than one predicate on
+     * {@code subject} carries a literal with that exact text, which one is meant is ambiguous;
+     * this returns {@link Optional#empty()} rather than guessing and risking a switch that shows
+     * an unrelated field's text once the reader picks another language.</p>
+     *
+     * @param subject       the card's own raw resource, or {@code null} if the snapshot holds none
+     * @param displayed     the text currently shown, already selected by {@code displayLocale}
+     * @param displayLocale the same locale {@code displayed} was selected under, used to key an
+     *                      untagged literal's variant by its system-default language
+     * @return the active language together with every other language sharing {@code displayed}'s
+     *         predicate, or {@link Optional#empty()} if {@code displayed} cannot be matched back
+     *         to exactly one predicate, or only one language exists for it
+     */
+    private Optional<LangVariants> languageVariants(
+            final StoreResource subject, final String displayed, final DisplayLocale displayLocale) {
+        if (subject == null) {
+            return Optional.empty();
+        }
+        final Map<String, RdfNode.Literal> matchByPredicate = new LinkedHashMap<>();
+        for (final Triple triple : subject.outgoing()) {
+            if (triple.object() instanceof RdfNode.Literal literal && literal.lexicalForm().equals(displayed)) {
+                matchByPredicate.putIfAbsent(triple.predicate(), literal);
+            }
+        }
+        if (matchByPredicate.size() != 1) {
+            return Optional.empty();
+        }
+        final Map.Entry<String, RdfNode.Literal> match = matchByPredicate.entrySet().iterator().next();
+        final String predicate = match.getKey();
+        final String activeLang = languageKey(match.getValue(), displayLocale);
+        final Map<String, String> byLang = new LinkedHashMap<>();
+        for (final Triple triple : subject.outgoing()) {
+            if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
+                byLang.putIfAbsent(languageKey(literal, displayLocale), literal.lexicalForm());
+            }
+        }
+        return byLang.size() > 1 ? Optional.of(new LangVariants(activeLang, byLang)) : Optional.empty();
+    }
+
+    /** {@code literal}'s language tag, or {@code displayLocale}'s system default if untagged. */
+    private static String languageKey(final RdfNode.Literal literal, final DisplayLocale displayLocale) {
+        return literal.languageTag() != null ? literal.languageTag() : displayLocale.systemDefault().toLanguageTag();
+    }
+
+    /**
+     * Wraps already-rendered HTML in the language-switch markup the report's script toggles,
+     * or returns it unchanged when there is nothing to switch between.
+     *
+     * <p>Only the active language carries {@code activeHtml} (which may itself hold glossary
+     * markup); every other language shows its own literal escaped as plain text - a description's
+     * German variant is not re-run through {@link Glossary#markUp}, since that would need that
+     * language's own term labels, a related but separate concern this issue does not cover.</p>
+     */
+    private static String langSwitchable(final String activeHtml, final Optional<LangVariants> variants) {
+        if (variants.isEmpty()) {
+            return activeHtml;
+        }
+        final LangVariants langVariants = variants.get();
+        final StringBuilder out = new StringBuilder("<span class=\"lang-group\" data-default-lang=\"")
+                .append(escape(langVariants.activeLang())).append("\">");
+        for (final Map.Entry<String, String> entry : langVariants.byLang().entrySet()) {
+            final boolean active = entry.getKey().equals(langVariants.activeLang());
+            out.append("<span class=\"lang-variant\" data-lang=\"").append(escape(entry.getKey())).append('"');
+            if (!active) {
+                out.append(" hidden");
+            }
+            out.append('>').append(active ? activeHtml : escape(entry.getValue())).append("</span>");
+        }
+        return out.append("</span>").toString();
+    }
+
+    /**
+     * @param activeLang the language tag of the literal currently shown, selected by the call's
+     *                   {@code displayLocale}
+     * @param byLang     every language sharing that literal's predicate, keyed by language tag
+     */
+    private record LangVariants(String activeLang, Map<String, String> byLang) {
     }
 
     private void appendFlow(
@@ -418,7 +530,8 @@ public final class HtmlReportRenderer {
         html.append("            </details>\n");
     }
 
-    private void appendRawCard(final StringBuilder html, final StoreResource resource, final Set<String> subjects) {
+    private void appendRawCard(final StringBuilder html, final StoreResource resource, final Set<String> subjects,
+            final DisplayLocale displayLocale) {
         final String anchor = resourceAnchor(resource.iri());
         html.append("            <article class=\"card raw-card\" id=\"").append(anchor).append("\">\n")
                 .append("              <details class=\"fold\">\n")
@@ -587,6 +700,11 @@ public final class HtmlReportRenderer {
               background:var(--surface);color:var(--ink-soft);font-family:var(--sans);font-size:12.5px;
               cursor:pointer;white-space:nowrap;}
             .toolbar button:hover{border-color:var(--accent);color:var(--accent);}
+            .toolbar select{padding:8px 13px;border:1px solid var(--border-strong);border-radius:7px;
+              background:var(--surface);color:var(--ink-soft);font-family:var(--sans);font-size:12.5px;
+              cursor:pointer;}
+            .toolbar select:hover{border-color:var(--accent);color:var(--accent);}
+            .lang-variant[hidden]{display:none;}
             .layout{display:grid;grid-template-columns:210px 1fr;gap:28px;align-items:start;}
             nav.index{position:sticky;top:20px;font-size:13px;}
             nav.index .lbl{text-transform:uppercase;letter-spacing:0.07em;font-size:10.5px;color:var(--ink-faint);
@@ -714,6 +832,45 @@ public final class HtmlReportRenderer {
               };
               window.addEventListener('hashchange', reveal);
               reveal();
+
+              // Language switch: every switchable field is a .lang-group of .lang-variant spans,
+              // one per language, only the active one visible. The languages on offer are
+              // whatever the document actually contains - discovered here, not hardcoded, since
+              // the report never knows in advance which projects hold which languages.
+              var langSelect = document.getElementById('lang-switch');
+              if(langSelect){
+                var langs = [];
+                document.querySelectorAll('.lang-variant[data-lang]').forEach(function(v){
+                  var lang = v.getAttribute('data-lang');
+                  if(langs.indexOf(lang) === -1){langs.push(lang);}
+                });
+                if(langs.length === 0){
+                  langSelect.style.display = 'none';
+                } else {
+                  langs.sort().forEach(function(lang){
+                    var opt = document.createElement('option');
+                    opt.value = lang;
+                    opt.textContent = lang;
+                    langSelect.appendChild(opt);
+                  });
+                  langSelect.addEventListener('change', function(){
+                    var chosen = langSelect.value;
+                    document.querySelectorAll('.lang-group').forEach(function(group){
+                      var fallback = group.getAttribute('data-default-lang');
+                      var wanted = chosen === '' ? fallback : chosen;
+                      var variants = group.querySelectorAll('.lang-variant');
+                      var hasWanted = false;
+                      variants.forEach(function(v){
+                        if(v.getAttribute('data-lang') === wanted){hasWanted = true;}
+                      });
+                      // No variant in the chosen language for this field: leave its own default
+                      // shown rather than hiding the field entirely.
+                      var target = hasWanted ? wanted : fallback;
+                      variants.forEach(function(v){v.hidden = v.getAttribute('data-lang') !== target;});
+                    });
+                  });
+                }
+              }
 
               var input = document.getElementById('filter');
               if(!input){return;}
