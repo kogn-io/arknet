@@ -71,7 +71,7 @@ Requirement-Status bleibt ohne Durchsetzung und ist in beide Richtungen setzbar.
 **Positiv:** Die Requirements-BC bleibt einfach -- kein Erzwingungsmechanismus, keine Vorwegnahme
 eines Change-Request-Apparats, den arknet nicht hat. Der Use Case "Requirement akzeptieren" laesst
 sich ehrlich beschreiben: er setzt das Statusfeld, sonst nichts, und eine verfrueht erteilte
-Akzeptanz ist zurueckzunehmen.
+Akzeptanz laesst sich zurueckziehen.
 
 **Negativ / bewusst deferred (YAGNI):** Der Status bleibt kosmetisch und kann falsche
 Verbindlichkeit suggerieren -- eine gruen gefaerbte Pille im Report sieht nach Freigabe aus, ist
