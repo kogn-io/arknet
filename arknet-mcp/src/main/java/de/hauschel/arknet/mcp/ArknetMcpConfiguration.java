@@ -735,7 +735,7 @@ public class ArknetMcpConfiguration {
             @Value("${arknet.report.dir:${user.dir}}") final Path fallbackReportDir,
             @Value("${arknet.report.host-dir:#{null}}") final Path reportHostDir) {
         return new StoreReportTools(
-                storeReader, prefixes, displayLocale, new HtmlReportRenderer(prefixes, displayLocale), modelViews,
+                storeReader, prefixes, displayLocale, new HtmlReportRenderer(prefixes), modelViews,
                 projectResolver, projectService, fallbackReportDir, reportHostDir);
     }
 

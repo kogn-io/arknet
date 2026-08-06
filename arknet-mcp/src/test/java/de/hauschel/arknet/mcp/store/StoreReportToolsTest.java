@@ -36,6 +36,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
@@ -56,6 +57,8 @@ import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
+import de.hauschel.arknet.ul.application.TermService;
+import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -112,7 +115,7 @@ class StoreReportToolsTest {
         // anchors, so these tests address two projects the way a real client does.
         ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         tools = new StoreReportTools(
-                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                 modelViews(), projects, NO_LABELS, reportDir, null);
     }
 
@@ -258,7 +261,7 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithBrokenFallback = new StoreReportTools(
-                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                 modelViews(), projects, NO_LABELS, blockedFallbackDir, null);
 
         final String result = toolsWithBrokenFallback.storeOverview(null, ANCHOR);
@@ -288,7 +291,7 @@ class StoreReportToolsTest {
             final ProjectResolver projects = anchor ->
                     unsafeAnchor.equals(anchor) ? new ResolvedProject(unsafeProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithUnsafeId = new StoreReportTools(
-                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                     modelViews(), projects, NO_LABELS, reportDir, null);
 
             final String result = toolsWithUnsafeId.storeOverview(null, unsafeAnchor);
@@ -324,7 +327,7 @@ class StoreReportToolsTest {
             final ProjectResolver projects = anchor ->
                     escapingAnchor.equals(anchor) ? new ResolvedProject(escapingProject, null) : resolveTestAnchor(anchor);
             final StoreReportTools toolsWithEscapingId = new StoreReportTools(
-                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                     modelViews(), projects, NO_LABELS, reportDir, null);
 
             final String result = toolsWithEscapingId.storeOverview(null, escapingAnchor);
@@ -375,7 +378,7 @@ class StoreReportToolsTest {
                 return resolveTestAnchor(anchor);
             };
             final StoreReportTools toolsWithCollidingIds = new StoreReportTools(
-                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                    reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                     modelViews(), projects, NO_LABELS, reportDir, null);
 
             toolsWithCollidingIds.storeOverview(null, slashAnchor);
@@ -407,7 +410,7 @@ class StoreReportToolsTest {
         final StoreReader reader = new StoreReader(lifecycle);
         final ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         final StoreReportTools toolsWithHostDir = new StoreReportTools(
-                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                 modelViews(), projects, NO_LABELS, reportDir, hostDir);
 
         final String result = toolsWithHostDir.storeOverview(null, ANCHOR);
@@ -433,7 +436,7 @@ class StoreReportToolsTest {
                 ? Optional.of(new Project(PROJECT, "arknet-demo", List.of(new Anchor(ANCHOR, AnchorType.PATH))))
                 : Optional.empty();
         final StoreReportTools toolsWithLabel = new StoreReportTools(
-                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes, DisplayLocale.DEFAULT),
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                 modelViews(), projects, withLabel, reportDir, null);
 
         final String result = toolsWithLabel.storeOverview(null, ANCHOR);
@@ -443,6 +446,51 @@ class StoreReportToolsTest {
         final Path html = reportDir.resolve(StoreReportTools.reportSegment(PROJECT)).resolve("store-report.html");
         assertThat(Files.readString(html)).contains(
                 "<span class=\"ws\">project: arknet-demo (id: sample-project)</span>");
+    }
+
+    /**
+     * Regression test for issue #276: {@code store_overview}'s glossary section (fed by
+     * {@code ListTerms} through {@link ModelViews}) must honour a project's own configured
+     * default language the same way {@code orphan_check}/{@code trace_matrix} already do (issue
+     * #274), rather than always this daemon's process-wide {@link DisplayLocale} bean (english,
+     * unless configured - see {@code ArknetMcpConfiguration#displayLocale}). The seeded term
+     * carries both a german and an english {@code skos:prefLabel}; a project configured with
+     * {@code defaultLanguage} {@code "de"} must see the german one, even though every collaborator
+     * below is otherwise built against {@link DisplayLocale#DEFAULT} (english).
+     */
+    @Test
+    void storeOverviewGlossaryHonorsTheProjectsOwnDefaultLanguageNotTheDaemons() throws Exception {
+        final TermRepository termRepository = KognioRdfTermRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        final TermService termService = new TermService(termRepository, new UuidResourceIdFactory());
+        final Term deTerm = termService.add(PROJECT,
+                new NewTerm("Anmeldung", "Der Nachweis der eigenen Identitaet.", null, null), "de");
+        termService.update(PROJECT, deTerm.code(), "Login", "The act of proving one's identity.",
+                null, "en", "de", null);
+
+        final Prefixes prefixes = Prefixes.defaults();
+        final StoreReader reader = new StoreReader(lifecycle);
+        final ProjectResolver germanDefaultProject = anchor ->
+                ANCHOR.equals(anchor) ? new ResolvedProject(PROJECT, "de") : resolveTestAnchor(anchor);
+        final ModelViews modelViewsWithRealTerms = new ModelViews(
+                termService,
+                new UseCaseCards(projectId -> List.of(), (projectId, ids) -> List.of()),
+                new RequirementCards(projectId -> List.of()),
+                new BoundedContextCards(projectId -> List.of()),
+                new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
+        final StoreReportTools toolsWithGermanDefault = new StoreReportTools(
+                reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
+                modelViewsWithRealTerms, germanDefaultProject, NO_LABELS, reportDir, null);
+
+        final String result = toolsWithGermanDefault.storeOverview(null, ANCHOR);
+
+        assertThat(result).doesNotContain("FAILED");
+        final Path html = reportDir.resolve(StoreReportTools.reportSegment(PROJECT)).resolve("store-report.html");
+        // Both languages ship for the client-side switch (issue #270); the active one - de, the
+        // project's own default, not this daemon's english - is the one shown, not hidden.
+        assertThat(Files.readString(html))
+                .contains("<span class=\"lang-group\" data-default-lang=\"de\">")
+                .contains("<span class=\"lang-variant\" data-lang=\"de\">Anmeldung</span>")
+                .contains("<span class=\"lang-variant\" data-lang=\"en\" hidden>Login</span>");
     }
 
     /**

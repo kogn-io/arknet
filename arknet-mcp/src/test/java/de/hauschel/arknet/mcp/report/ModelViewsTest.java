@@ -55,7 +55,7 @@ class ModelViewsTest {
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards());
 
-        final ModelViews.Views result = views.of(PROJECT);
+        final ModelViews.Views result = views.of(PROJECT, null);
 
         assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
         assertThat(result.failures()).singleElement().asString()
@@ -82,7 +82,7 @@ class ModelViewsTest {
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 emptyAdrCards());
 
-        final ModelViews.Views result = views.of(PROJECT);
+        final ModelViews.Views result = views.of(PROJECT, null);
 
         assertThat(result.sections()).extracting(ModelSection::title)
                 .containsExactly("Bounded Contexts", "Requirements", "Use Cases");
@@ -102,7 +102,7 @@ class ModelViewsTest {
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards());
 
-        final ModelViews.Views result = views.of(PROJECT);
+        final ModelViews.Views result = views.of(PROJECT, null);
 
         assertThat(result.sections()).extracting(ModelSection::title).containsExactly("Glossary");
         assertThat(result.failures()).isEmpty();
@@ -123,7 +123,7 @@ class ModelViewsTest {
                 new AdrCards(projectId -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
 
-        assertThat(views.of(PROJECT).sections()).extracting(ModelSection::title)
+        assertThat(views.of(PROJECT, null).sections()).extracting(ModelSection::title)
                 .containsExactly(
                         "Bounded Contexts", "Requirements", "Use Cases", "Architecture Decisions", "Glossary");
     }
