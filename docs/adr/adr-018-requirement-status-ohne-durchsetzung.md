@@ -1,6 +1,6 @@
 # ADR-018: Requirement-Status bleibt ohne Durchsetzung
 
-- Status: Accepted (2026-08-06)
+- Status: Superseded (2026-08-06), superseded by ADR-019
 
 ## Kontext
 
