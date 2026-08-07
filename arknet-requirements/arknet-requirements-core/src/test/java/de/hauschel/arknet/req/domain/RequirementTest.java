@@ -229,6 +229,33 @@ class RequirementTest {
         assertEquals(req, result);
     }
 
+    /**
+     * The reverse transition (issue #291 / ADR-019 point 4): an accepted requirement can be reset
+     * to {@code PROPOSED} - the status is an unbinding maturity signal, not a one-way freeze.
+     */
+    @Test
+    void proposeTransitionsAcceptedToProposed() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.ACCEPTED, null, null, null, null, CRITERIA, List.of());
+
+        Requirement proposed = req.propose();
+
+        assertEquals(RequirementStatus.PROPOSED, proposed.status());
+        assertEquals(req.title(), proposed.title());
+        assertEquals(req.acceptanceCriteria(), proposed.acceptanceCriteria());
+    }
+
+    /** Resetting an already-proposed requirement is a no-op, mirroring {@link #acceptOnAnAlreadyAcceptedRequirementIsANoOp}. */
+    @Test
+    void proposeOnAnAlreadyProposedRequirementIsANoOp() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        Requirement result = req.propose();
+
+        assertEquals(req, result);
+    }
+
     @Test
     void withAppendedAcceptanceCriteriaContinuesPositionsAfterExisting() {
         Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,

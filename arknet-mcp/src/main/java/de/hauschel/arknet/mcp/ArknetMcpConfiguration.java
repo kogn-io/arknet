@@ -355,7 +355,7 @@ public class ArknetMcpConfiguration {
             final RequirementService service, final ResolveTerms resolveTerms,
             final ConstraintService constraintService, final ProjectResolver projectResolver) {
         return new RequirementMcpTools(
-                service, service, service, service, service, service, service, service, resolveTerms,
+                service, service, service, service, service, service, service, service, service, resolveTerms,
                 constraintService, projectResolver);
     }
 

@@ -29,6 +29,7 @@ import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkConstraint;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ProposeRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
@@ -70,7 +71,7 @@ class RequirementMcpToolsTest {
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
     private final RequirementMcpTools adapter = new RequirementMcpTools(
-            stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS);
+            stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS);
 
     @Test
     void declaresTheEightRequirementTools() {
@@ -90,41 +91,54 @@ class RequirementMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        null, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        null, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, null, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, null, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, stub, null, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, stub, stub, null, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, stub, stub, stub, null, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, stub, stub, stub, stub, null, stub, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, null, stub, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, resolveConstraints, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, stub, null, stub, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, null, resolveConstraints, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, stub, stub, null, resolveTerms, resolveConstraints,
+                        PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, PROJECTS));
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, null, resolveConstraints, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new RequirementMcpTools(
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new RequirementMcpTools(
-                        stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints, null));
+                        stub, stub, stub, stub, stub, stub, stub, stub, stub, resolveTerms, resolveConstraints,
+                        null));
     }
 
     /**
@@ -220,7 +234,7 @@ class RequirementMcpToolsTest {
     @Test
     void getPassesAnExplicitDisplayLocaleThrough() {
         RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "FR-1", "en", null);
 
@@ -231,7 +245,7 @@ class RequirementMcpToolsTest {
     @Test
     void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
         RequirementMcpTools adapterWithDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub, stub,
-                stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "FR-1", null, null);
 
@@ -251,19 +265,32 @@ class RequirementMcpToolsTest {
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         RequirementMcpTools adapterWithGermanDefault = new RequirementMcpTools(stub, stub, stub, stub, stub, stub,
-                stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
+                stub, stub, stub, resolveTerms, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.list(null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
     }
 
-    /** The one legal transition: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
+    /** One of the two legal transitions: {@code ACCEPTED} reaches {@link AcceptRequirement}. */
     @Test
     void setStatusAcceptsARequirementWhenTargetStatusIsAccepted() {
         String rendered = adapter.accept(null, "FR-1", "ACCEPTED", null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastAcceptedRequirement);
+        assertTrue(rendered.contains("FR-1"), rendered);
+    }
+
+    /**
+     * The other legal transition (issue #291 / ADR-019 point 4): {@code PROPOSED} reaches
+     * {@link ProposeRequirement}, resetting an accepted requirement rather than being rejected as
+     * a dead-end target - the defect this fix closes.
+     */
+    @Test
+    void setStatusProposesARequirementWhenTargetStatusIsProposed() {
+        String rendered = adapter.accept(null, "FR-1", "PROPOSED", null);
+
+        assertEquals(new RequirementCode("FR-1"), stub.lastProposedRequirement);
         assertTrue(rendered.contains("FR-1"), rendered);
     }
 
@@ -280,17 +307,6 @@ class RequirementMcpToolsTest {
 
         assertTrue(exception.getMessage().contains("req_set_status"), exception.getMessage());
         assertTrue(exception.getMessage().contains("DOES_NOT_EXIST"), exception.getMessage());
-    }
-
-    /**
-     * {@code PROPOSED} is a real {@link RequirementStatus} value but not a legal target of this
-     * tool (a requirement starts there, it is never transitioned back into it) - it must be
-     * rejected the same way as a value the enum does not know at all.
-     */
-    @Test
-    void setStatusRejectsProposedAsANotLegalTransitionTarget() {
-        assertThrows(IllegalArgumentException.class,
-                () -> adapter.accept(null, "FR-1", "PROPOSED", null));
     }
 
     @Test
@@ -519,12 +535,13 @@ class RequirementMcpToolsTest {
                 RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms, DEFAULT_CRITERIA, List.of());
     }
 
-    /** Structural stub implementing the eight driving in-ports. */
+    /** Structural stub implementing the nine driving in-ports. */
     private static final class Stub
-            implements AddRequirement, ListRequirements, GetRequirement, AcceptRequirement, LinkTerm,
-            LinkConstraint, UpdateRequirement, GetRequirementSchema {
+            implements AddRequirement, ListRequirements, GetRequirement, AcceptRequirement, ProposeRequirement,
+            LinkTerm, LinkConstraint, UpdateRequirement, GetRequirementSchema {
 
         private RequirementCode lastAcceptedRequirement;
+        private RequirementCode lastProposedRequirement;
         private RequirementCode lastLinkedRequirement;
         private String lastLinkedTermCode;
         private ResourceId nextLinkedTermResourceId;
@@ -571,6 +588,13 @@ class RequirementMcpToolsTest {
         public Requirement accept(ProjectId projectId, RequirementCode code) {
             lastAcceptedRequirement = code;
             return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
+                    Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
+        }
+
+        @Override
+        public Requirement propose(ProjectId projectId, RequirementCode code) {
+            lastProposedRequirement = code;
+            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
         }
 

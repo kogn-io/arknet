@@ -10,10 +10,12 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 /**
  * Driving port: accept a proposed requirement.
  *
- * <p>Backs the MVP tool {@code req_set_status}. The requirements lifecycle permits exactly one
- * transition - {@code PROPOSED -> ACCEPTED} - so this port takes no target status; a
- * generic {@code RequirementStatus status} parameter would only ever legally resolve to {@code
- * ACCEPTED} and was itself the misleading surface this port replaces (formerly {@code
+ * <p>Backs the tool {@code req_set_status}'s {@code ACCEPTED} target. The legal transition is
+ * {@code PROPOSED -> ACCEPTED}, so this port takes no target status of its own; a generic
+ * {@code RequirementStatus status} parameter would only ever legally resolve to {@code ACCEPTED}
+ * here, since {@link ProposeRequirement} covers this lifecycle's other transition as its own,
+ * equally narrow port (issue #291, ADR-019 point 4 - the requirements context's original,
+ * one-way-only cut of this port was itself the misleading surface, formerly {@code
  * SetRequirementStatus}). The transition rule itself lives on {@link Requirement#accept()}, not
  * here or in the implementing application service.</p>
  */

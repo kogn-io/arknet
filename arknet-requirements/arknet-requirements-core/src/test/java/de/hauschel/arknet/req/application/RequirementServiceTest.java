@@ -376,6 +376,65 @@ class RequirementServiceTest {
         assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
     }
 
+    /**
+     * Issue #291 / ADR-019 point 4: the reverse transition. Before this fix, an accepted
+     * requirement could never be reset - the status was a one-way freeze rather than the
+     * unbinding maturity signal ADR-019 requires.
+     */
+    @Test
+    void proposeTransitionsAcceptedToProposed() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+        service.accept(WS, code);
+
+        Requirement proposed = service.propose(WS, code);
+
+        assertEquals(RequirementStatus.PROPOSED, proposed.status());
+        assertEquals("desc a", proposed.description());
+        assertEquals(RequirementStatus.PROPOSED, repository.findByCode(WS, code, null).orElseThrow().status());
+    }
+
+    @Test
+    void proposeIsIdempotentWhenAlreadyProposed() {
+        RequirementCode code = service.add(WS,
+                new NewRequirement("a", "desc a", RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null), DEFAULT_LANGUAGE).code();
+
+        Requirement result = service.propose(WS, code);
+
+        assertEquals(RequirementStatus.PROPOSED, result.status());
+    }
+
+    @Test
+    void proposeThrowsWhenRequirementUnknown() {
+        RequirementNotFoundException ex = assertThrows(RequirementNotFoundException.class,
+                () -> service.propose(WS, new RequirementCode("FR-42")));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new RequirementCode("FR-42"), ex.requirementCode());
+    }
+
+    /**
+     * Same replace-by-identity regression as {@link #acceptPreservesLinkedTerms}/
+     * {@link #acceptPreservesLinkedConstraints}/{@link #acceptPreservesAcceptanceCriteria}, for
+     * the reverse transition.
+     */
+    @Test
+    void proposePreservesLinkedTermsConstraintsAndAcceptanceCriteria() {
+        Constraint constraint = givenConstraint("EU data residency", "Personal data must stay in the EU.",
+                ConstraintType.REGULATORY);
+        RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, constraint.code().value());
+        service.linkTerm(WS, code, "TERM-1");
+        service.accept(WS, code);
+
+        Requirement proposed = service.propose(WS, code);
+
+        assertEquals(RequirementStatus.PROPOSED, proposed.status());
+        assertEquals(List.of(new ConstraintRef(constraint.id().value())), proposed.constrainedBy());
+        assertEquals(List.of(new TermRef(TERM_1)), proposed.usesTerms());
+        assertEquals(List.of(new AcceptanceCriterion(1, "Done when it works")), proposed.acceptanceCriteria());
+    }
+
     @Test
     void updateChangesTitleDescriptionAndAppendsANewAcceptanceCriterion() {
         RequirementCode code = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE).code();
@@ -722,6 +781,31 @@ class RequirementServiceTest {
         assertSame(WS, ex.projectId());
         assertEquals(code, ex.requirementCode());
         assertEquals(RequirementStatus.PROPOSED, service.get(WS, code, null).orElseThrow().status());
+    }
+
+    /**
+     * Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder},
+     * for the reverse transition: a legacy requirement accepted store-first (bypassing the
+     * mandatory acceptance-criterion invariant) must not silently persist the read-time
+     * placeholder when reset back to {@code PROPOSED} either.
+     */
+    @Test
+    void proposeRejectsALegacyRequirementInsteadOfPersistingThePlaceholder() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement legacyAccepted = new Requirement(
+                new RequirementId(resourceIdFactory.newId()), code, "legacy title",
+                "A requirement predating the acceptance-criterion invariant.", RequirementType.FUNCTIONAL,
+                RequirementStatus.ACCEPTED, null, null, null, List.of(),
+                List.of(new AcceptanceCriterion(1, "(legacy placeholder - no acceptance criterion on record)")),
+                List.of());
+        repository.createLegacy(WS, legacyAccepted);
+
+        MissingAcceptanceCriteriaException ex = assertThrows(MissingAcceptanceCriteriaException.class,
+                () -> service.propose(WS, code));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(code, ex.requirementCode());
+        assertEquals(RequirementStatus.ACCEPTED, service.get(WS, code, null).orElseThrow().status());
     }
 
     /** Same regression as {@link #acceptRejectsALegacyRequirementInsteadOfPersistingThePlaceholder}, via {@code linkTerm}. */
