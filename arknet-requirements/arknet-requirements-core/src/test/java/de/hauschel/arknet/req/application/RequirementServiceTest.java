@@ -84,7 +84,7 @@ class RequirementServiceTest {
 
     private Constraint givenConstraint(String title, String statement, ConstraintType type) {
         ConstraintService constraintService = new ConstraintService(constraintRepository, resourceIdFactory);
-        return constraintService.add(WS, new NewConstraint(title, statement, type));
+        return constraintService.add(WS, new NewConstraint(title, statement, type, DEFAULT_LANGUAGE), null);
     }
 
     @Test

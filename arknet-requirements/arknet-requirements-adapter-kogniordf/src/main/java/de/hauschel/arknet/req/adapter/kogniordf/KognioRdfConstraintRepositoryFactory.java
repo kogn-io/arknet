@@ -19,7 +19,8 @@ import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
  * reuses whatever {@link WriteFunnel} the caller already built via
  * {@link KognioRdfRequirementRepositoryFactory#buildFunnel}, since both {@code requirements-shapes.ttl}
  * and {@code arknet-requirements.ttl} already cover {@code Constraint}'s shapes and the
- * {@code oslc_rm:constrainedBy} edge.
+ * {@code oslc_rm:constrainedBy} edge - including, since issue #313, the {@code sh:uniqueLang}
+ * shapes that make {@code title}/{@code statement} multilingual.
  */
 public final class KognioRdfConstraintRepositoryFactory {
 
@@ -33,14 +34,21 @@ public final class KognioRdfConstraintRepositoryFactory {
      * sibling requirement repository, per this method's own contract that {@code funnel} is
      * shared rather than rebuilt.
      *
-     * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param funnel    the shared write funnel {@link KognioRdfConstraintRepository#create} runs
-     *                  through (see {@link KognioRdfRequirementRepositoryFactory#buildFunnel})
+     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param displayLocale the display-language preference the read paths select a multilingual
+     *                      constraint's {@code title}/{@code statement} with (issue #313) - the
+     *                      same value the composition root passes to the sibling requirement
+     *                      repository
+     * @param funnel        the shared write funnel both of
+     *                      {@link KognioRdfConstraintRepository}'s writes run through (see
+     *                      {@link KognioRdfRequirementRepositoryFactory#buildFunnel})
      * @return a ready-to-use {@link ConstraintRepository}
      */
-    public static ConstraintRepository over(DatasetLifecycle lifecycle, WriteFunnel funnel) {
+    public static ConstraintRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale,
+            WriteFunnel funnel) {
         Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(displayLocale, "displayLocale");
         Objects.requireNonNull(funnel, "funnel");
-        return new KognioRdfConstraintRepository(lifecycle, funnel);
+        return new KognioRdfConstraintRepository(lifecycle, displayLocale, funnel);
     }
 }

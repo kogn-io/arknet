@@ -51,7 +51,7 @@ Details: `arknet-persistence-support/CLAUDE.md`
 Details: `arknet-persistence-test-support/CLAUDE.md`
 - **arknet-architecture-tests**: Invarianten, die der Modulschnitt nicht erzwingen kann -- ArchUnit-Dependency-Regeln plus der beidseitige Abgleich von `ArkprovVocabulary`/`ArkprjVocabulary`/`ArkarchVocabulary` gegen die ausgelieferte Provenance-, Projekt- bzw. Architektur-Ontologie. Details: `arknet-architecture-tests/CLAUDE.md`
 - **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar, opake Identitaet, acceptanceCriterion.
-Traegt zusaetzlich Constraint als zweiten Ressourcentyp desselben Hexagons (`constraint_add`/`constraint_get`/`constraint_list`, `req_link_constraint` fuer die `oslc_rm:constrainedBy`-Kante) -- technische/geschaeftliche/regulatorische Randbedingungen, TCON-/BCON-/RCON-Codes, unveraenderlich nach Anlage.
+Traegt zusaetzlich Constraint als zweiten Ressourcentyp desselben Hexagons (`constraint_add`/`constraint_get`/`constraint_list`/`constraint_update`, `req_link_constraint` fuer die `oslc_rm:constrainedBy`-Kante) -- technische/geschaeftliche/regulatorische Randbedingungen, TCON-/BCON-/RCON-Codes; Typ und Code stehen mit der Anlage fest, Titel und Statement sind korrigierbar und mehrsprachig.
 Details: `arknet-requirements/CLAUDE.md`
 - **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools) mit optionaler Actor-Facette, opake Identitaet. Details: `arknet-ubiquitous-language/CLAUDE.md`
 - **arknet-use-cases**: dritte hexagonale BC -- Cockburn-Use-Cases (`uc_*`-Tools) mit opaken Step-VOs, Actor-/Requirement-Referenzen. Details: `arknet-use-cases/CLAUDE.md`
@@ -124,12 +124,13 @@ geschrieben wird, ist fuer die zentralen benannten/beschreibenden Felder nativ
 Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
 `description`/AcceptanceCriterion-`text` (`req_add`/`req_update`) und
 UseCase-`title`/`goal`/`scope`/`trigger`/`precondition`/`postcondition`/
-Step-`text`/Extension-`text` (`uc_add`/`uc_update`) tragen jeweils mehrere
-sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
+Step-`text`/Extension-`text` (`uc_add`/`uc_update`) sowie Constraint-`title`/
+`constraintStatement` (`constraint_add`/`constraint_update`) tragen jeweils
+mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
 `language`-Argument beim Schreiben gesetzt und beim Lesen ueber die
-`DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-Felder (z.B.
-Constraint-`constraintStatement`) bleiben einfache, ungetaggte Literale ohne
-diesen Mechanismus. Die ADRs unter `docs/adr/`
+`DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-Felder (z.B. die
+ADR-Textfelder, BoundedContext-`name`/`description`) bleiben einfache,
+ungetaggte Literale ohne diesen Mechanismus. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
 Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.
 

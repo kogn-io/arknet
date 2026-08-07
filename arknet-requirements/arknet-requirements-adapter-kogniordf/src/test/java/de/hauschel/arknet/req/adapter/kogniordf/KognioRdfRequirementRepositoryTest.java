@@ -93,7 +93,7 @@ class KognioRdfRequirementRepositoryTest {
         lifecycle = (DatasetLifecycleRdf4j) datasetLifecycle;
         repository = KognioRdfRequirementRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT);
         WriteFunnel funnel = KognioRdfRequirementRepositoryFactory.buildFunnel(datasetLifecycle, DisplayLocale.DEFAULT);
-        constraints = KognioRdfConstraintRepositoryFactory.over(datasetLifecycle, funnel);
+        constraints = KognioRdfConstraintRepositoryFactory.over(datasetLifecycle, DisplayLocale.DEFAULT, funnel);
     }
 
     @AfterEach
@@ -1674,7 +1674,7 @@ class KognioRdfRequirementRepositoryTest {
         Constraint constraint = new Constraint(
                 new ConstraintId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID())),
                 new ConstraintCode(code), "A constraint", "A real, SHACL-conforming constraint statement.", type);
-        constraints.create(projectId, constraint);
+        constraints.create(projectId, constraint, "en");
         return new ConstraintRef(constraint.id().value());
     }
 

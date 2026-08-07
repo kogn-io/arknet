@@ -13,11 +13,15 @@ import java.util.Objects;
  *
  * <p>Value object of the requirements component, mirroring {@link Requirement}'s own shape: all
  * invariants are enforced in the compact constructor; instances are immutable. Unlike
- * {@link Requirement}, a {@link Constraint} carries no lifecycle status and no update path in
- * this scope - once created it never changes (the ontology gives it no status field, and no
- * {@code constraint_update}/{@code constraint_set_status} tool exists). Every subtype is equally
- * supported; the type distinction lives only in {@link #type()} and the RDF type the out-adapter
- * writes for it, not in a class hierarchy.</p>
+ * {@link Requirement}, a {@link Constraint} carries no lifecycle status at all - the ontology
+ * gives it no status field, and no {@code constraint_set_status} tool exists. Its text, however,
+ * <em>is</em> correctable: {@code constraint_update} (issue #313) replaces {@link #title()}/
+ * {@link #statement()}, which is also the only way to state either in a second language, since a
+ * write carries exactly one language tag per call. What no write path can change is
+ * {@link #code()} and {@link #type()} - the type decides the code's prefix, and everything
+ * referring to a constraint refers to that code. Every subtype is equally supported; the type
+ * distinction lives only in {@link #type()} and the RDF type the out-adapter writes for it, not in
+ * a class hierarchy.</p>
  *
  * @param id        opaque, unchanging identity of this constraint (never a business label);
  *                  minted once by a {@link de.hauschel.arknet.kernel.ResourceIdFactory} and

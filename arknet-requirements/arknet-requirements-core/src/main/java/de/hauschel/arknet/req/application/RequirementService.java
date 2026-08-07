@@ -286,7 +286,10 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // direct, same-module read against ConstraintRepository rather than a cross-BC
         // TermLookup: Constraint lives inside this same bounded context.
         ConstraintCode parsedCode = new ConstraintCode(constraintCode);
-        Constraint constraint = constraintRepository.findByCode(projectId, parsedCode)
+        // No display language: this lookup only needs the constraint's opaque identity for the
+        // constrainedBy edge, never its title/statement text, so which language variant the
+        // out-adapter would surface is irrelevant here.
+        Constraint constraint = constraintRepository.findByCode(projectId, parsedCode, null)
                 .orElseThrow(() -> new ConstraintNotFoundException(projectId, parsedCode));
         ConstraintRef ref = new ConstraintRef(constraint.id().value());
         // linkConstraint() never touches title/description either - same null/null rationale as

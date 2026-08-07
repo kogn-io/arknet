@@ -215,9 +215,9 @@ arkreq:RegulatoryConstraint a owl:Class ;
 
 arkreq:constraintStatement a owl:DatatypeProperty ;
     rdfs:domain arkreq:Constraint ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "constraint statement"@en ;
-    rdfs:comment "Die Randbedingung in einem Satz."@de .
+    rdfs:comment "Die Randbedingung in einem Satz. Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:Constraint-statement je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 
 ##############################################################################
