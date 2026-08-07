@@ -26,6 +26,7 @@ import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkConstraint;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ProposeRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.domain.AcceptanceCriterionTextPatch;
@@ -86,6 +87,7 @@ public final class RequirementMcpTools {
     private final ListRequirements listRequirements;
     private final GetRequirement getRequirement;
     private final AcceptRequirement acceptRequirement;
+    private final ProposeRequirement proposeRequirement;
     private final LinkTerm linkTerm;
     private final LinkConstraint linkConstraint;
     private final UpdateRequirement updateRequirement;
@@ -94,14 +96,15 @@ public final class RequirementMcpTools {
     private final RequirementPresenter presenter;
 
     /**
-     * Creates the adapter with its eight driving in-ports, the borrowed ubiquitous-language and
+     * Creates the adapter with its nine driving in-ports, the borrowed ubiquitous-language and
      * (same-module) constraint display ports, and the resolver that maps each call's origin
      * directory to a project.
      *
      * @param addRequirement        in-port backing {@code req_add}
      * @param listRequirements      in-port backing {@code req_list}
      * @param getRequirement        in-port backing {@code req_get}
-     * @param acceptRequirement     in-port backing {@code req_set_status}
+     * @param acceptRequirement     in-port backing {@code req_set_status}'s {@code ACCEPTED} target
+     * @param proposeRequirement    in-port backing {@code req_set_status}'s {@code PROPOSED} target
      * @param linkTerm              in-port backing {@code req_link_term}
      * @param linkConstraint        in-port backing {@code req_link_constraint}
      * @param updateRequirement     in-port backing {@code req_update}
@@ -117,6 +120,7 @@ public final class RequirementMcpTools {
             final ListRequirements listRequirements,
             final GetRequirement getRequirement,
             final AcceptRequirement acceptRequirement,
+            final ProposeRequirement proposeRequirement,
             final LinkTerm linkTerm,
             final LinkConstraint linkConstraint,
             final UpdateRequirement updateRequirement,
@@ -128,6 +132,7 @@ public final class RequirementMcpTools {
         this.listRequirements = Objects.requireNonNull(listRequirements, "listRequirements");
         this.getRequirement = Objects.requireNonNull(getRequirement, "getRequirement");
         this.acceptRequirement = Objects.requireNonNull(acceptRequirement, "acceptRequirement");
+        this.proposeRequirement = Objects.requireNonNull(proposeRequirement, "proposeRequirement");
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.updateRequirement = Objects.requireNonNull(updateRequirement, "updateRequirement");
@@ -305,23 +310,25 @@ public final class RequirementMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor).id();
         final RequirementCode code = new RequirementCode(id);
-        // The requirements lifecycle permits exactly one transition: the tool's
-        // external "status" parameter is kept for API stability, but AcceptRequirement itself no
-        // longer takes a target status - only ACCEPTED can ever legally result from this call.
-        // RequirementStatus.valueOf is parsed defensively rather than let directly: PROPOSED is a
-        // real enum value that is simply not a legal target of this tool, and anything unparseable
-        // must reject with this method's own message, not the JDK's raw "No enum constant ...".
+        // Two narrow transition ports (AcceptRequirement/ProposeRequirement, issue #291, ADR-019
+        // point 4) back this tool, neither taking a target status of its own - the caller-visible
+        // dispatch happens only here, mirroring AdrMcpTools#setStatus's own three-way dispatch
+        // across AcceptAdr/RejectAdr/DeprecateAdr. RequirementStatus.valueOf is parsed defensively
+        // rather than let directly: anything unparseable must reject with this method's own
+        // message, not the JDK's raw "No enum constant ...".
         RequirementStatus requirementStatus;
         try {
             requirementStatus = RequirementStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             requirementStatus = null;
         }
-        if (requirementStatus != RequirementStatus.ACCEPTED) {
-            throw new IllegalArgumentException(
-                    "req_set_status only supports transitioning a requirement to ACCEPTED, not " + status);
-        }
-        final Requirement updated = acceptRequirement.accept(projectId, code);
+        final Requirement updated = switch (requirementStatus) {
+            case ACCEPTED -> acceptRequirement.accept(projectId, code);
+            case PROPOSED -> proposeRequirement.propose(projectId, code);
+            case null, default -> throw new IllegalArgumentException(
+                    "req_set_status only supports transitioning a requirement to PROPOSED or ACCEPTED, not "
+                            + status);
+        };
         return presenter.format(projectId, updated);
     }
 

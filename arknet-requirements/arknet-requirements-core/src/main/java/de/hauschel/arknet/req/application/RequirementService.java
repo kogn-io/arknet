@@ -26,6 +26,7 @@ import de.hauschel.arknet.req.application.port.in.GetRequirementSchema;
 import de.hauschel.arknet.req.application.port.in.LinkConstraint;
 import de.hauschel.arknet.req.application.port.in.LinkTerm;
 import de.hauschel.arknet.req.application.port.in.ListRequirements;
+import de.hauschel.arknet.req.application.port.in.ProposeRequirement;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.UpdateRequirement;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
@@ -63,9 +64,11 @@ import de.hauschel.arknet.req.domain.TermRef;
  * ({@link RequirementCode}, {@code FR-N}/{@code NFR-N}) is assigned independently, where
  * {@code N} is one above the highest running number currently used by that type in the target
  * project (numbering is independent per type and per project). New requirements start
- * {@link RequirementStatus#PROPOSED}. The only advancing status transition is
- * {@code PROPOSED -> ACCEPTED} - see {@link Requirement#accept()}, which owns that rule;
- * this service only threads it through the read-modify-write round trip. Linking a
+ * {@link RequirementStatus#PROPOSED}. The status is settable in both directions -
+ * {@code PROPOSED -> ACCEPTED} via {@link #accept} and {@code ACCEPTED -> PROPOSED} via
+ * {@link #propose} - see {@link Requirement#accept()}/{@link Requirement#propose()}, which own
+ * those rules; this service only threads each through the read-modify-write round trip (issue
+ * #291, ADR-019 point 4). Linking a
  * glossary term is idempotent and independent of the status lifecycle - terms may be linked to a
  * requirement in any status. {@link #linkConstraint} mirrors {@link #linkTerm} exactly for
  * {@code oslc_rm:constrainedBy}, resolving the human-typed {@link ConstraintCode} via the
@@ -74,11 +77,11 @@ import de.hauschel.arknet.req.domain.TermRef;
  *
  * <p><strong>Concurrency.</strong> {@link #add} retries its next-code computation
  * against a fresh read whenever a concurrent caller claims the same code first, and {@link
- * #accept}/{@link #linkTerm}/{@link #update} retry their whole read-modify-write round trip
- * via {@link RequirementRepository#compareAndUpdate} whenever a concurrent writer commits in
- * between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed
- * caller; only sustained, pathological contention on the very same requirement surfaces as
- * {@link RequirementConcurrentlyModifiedException}.</p>
+ * #accept}/{@link #propose}/{@link #linkTerm}/{@link #update} retry their whole read-modify-write
+ * round trip via {@link RequirementRepository#compareAndUpdate} whenever a concurrent writer
+ * commits in between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a
+ * well-formed caller; only sustained, pathological contention on the very same requirement
+ * surfaces as {@link RequirementConcurrentlyModifiedException}.</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a
  * requirement's title, description, acceptance criteria and/or MoSCoW priority after the fact -
@@ -123,7 +126,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  * other language variant regardless, but only if it is told the correct tag to leave alone.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
-        AcceptRequirement, LinkTerm, LinkConstraint, UpdateRequirement, ResolveRequirements, GetRequirementSchema {
+        AcceptRequirement, ProposeRequirement, LinkTerm, LinkConstraint, UpdateRequirement, ResolveRequirements,
+        GetRequirementSchema {
 
     /**
      * Bound on {@link #add}'s and {@link #updateWithOptimisticRetry}'s retry loops.
@@ -242,6 +246,14 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     @Override
+    public Requirement propose(ProjectId projectId, RequirementCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // propose() never touches title/description either - same null/null rationale as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), Requirement::propose);
+    }
+
+    @Override
     public Requirement linkTerm(ProjectId projectId, RequirementCode code, String termCode) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
@@ -325,7 +337,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     /**
-     * Read-modify-write helper shared by {@link #accept}, {@link #linkTerm} and {@link #update}: reads the
+     * Read-modify-write helper shared by {@link #accept}, {@link #propose}, {@link #linkTerm} and
+     * {@link #update}: reads the
      * current requirement and its concurrency token together via
      * {@link RequirementRepository#findCurrentByCode}, derives the next state via {@code mutation},
      * and writes it back via {@link RequirementRepository#compareAndUpdate} - retrying with a

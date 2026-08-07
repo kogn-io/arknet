@@ -115,13 +115,18 @@ public record Requirement(
     }
 
     /**
-     * Advances this requirement to {@link RequirementStatus#ACCEPTED} - the only status
-     * transition the requirements lifecycle permits. Calling this on a requirement
-     * that is already {@link RequirementStatus#ACCEPTED} is a no-op, returning {@code this}
-     * unchanged, so a caller never has to check the current status first; any other status -
-     * today only {@link RequirementStatus#PROPOSED} - transitions cleanly. This is the rule
-     * itself, not a generic setter: a richer lifecycle (rejected, deprecated, ...) would extend
-     * this method, not reintroduce a caller-supplied target status.
+     * Advances this requirement to {@link RequirementStatus#ACCEPTED}. Calling this on a
+     * requirement that is already {@link RequirementStatus#ACCEPTED} is a no-op, returning
+     * {@code this} unchanged, so a caller never has to check the current status first; any other
+     * status - today only {@link RequirementStatus#PROPOSED} - transitions cleanly. This is the
+     * rule itself, not a generic setter: a richer lifecycle (rejected, deprecated, ...) would
+     * extend this method, not reintroduce a caller-supplied target status.
+     *
+     * <p>Per ADR-019, the status is a non-binding maturity signal without enforcement, and is
+     * settable in both directions - {@link #propose} is this method's mirror image, resetting an
+     * accepted requirement back to {@link RequirementStatus#PROPOSED} (issue #291: an
+     * unconditional one-way transition made setting this signal irreversible, which is exactly
+     * what a non-binding signal must not be).</p>
      *
      * @return a new {@link Requirement} with status {@link RequirementStatus#ACCEPTED}, or
      *         {@code this} if already accepted
@@ -137,6 +142,32 @@ public record Requirement(
                     "illegal status transition " + status() + " -> " + RequirementStatus.ACCEPTED);
         }
         return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.ACCEPTED, priority(),
+                motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria(), constrainedBy());
+    }
+
+    /**
+     * Resets this requirement to {@link RequirementStatus#PROPOSED} - the mirror image of
+     * {@link #accept()}, closing the gap ADR-019 identifies as a defect (issue #291): an
+     * {@link RequirementStatus#ACCEPTED} requirement could be set but never unset, which made the
+     * status a one-way freeze rather than the unbinding maturity signal it is meant to be.
+     * Calling this on a requirement that is already {@link RequirementStatus#PROPOSED} is a
+     * no-op, returning {@code this} unchanged, exactly mirroring {@link #accept()}'s own
+     * idempotency.
+     *
+     * @return a new {@link Requirement} with status {@link RequirementStatus#PROPOSED}, or
+     *         {@code this} if already proposed
+     * @throws IllegalStateException if this requirement's status is neither
+     *         {@link RequirementStatus#ACCEPTED} nor already {@link RequirementStatus#PROPOSED}
+     */
+    public Requirement propose() {
+        if (status() == RequirementStatus.PROPOSED) {
+            return this;
+        }
+        if (status() != RequirementStatus.ACCEPTED) {
+            throw new IllegalStateException(
+                    "illegal status transition " + status() + " -> " + RequirementStatus.PROPOSED);
+        }
+        return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.PROPOSED, priority(),
                 motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria(), constrainedBy());
     }
 
