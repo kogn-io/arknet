@@ -19,9 +19,14 @@ public interface GetConstraint {
     /**
      * Looks up a constraint by its business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the constraint in
-     * @param code        the constraint code, e.g. {@code TCON-1}
+     * @param projectId     the project (architecture model) to look up the constraint in
+     * @param code          the constraint code, e.g. {@code TCON-1}
+     * @param displayLocale the BCP-47 language tag the caller wants {@code title}/
+     *                      {@code statement} shown in (issue #313), or {@code null} to leave the
+     *                      choice to the out-adapter's own configured display-language preference
+     *                      and its fallback chain - mirrors {@link GetRequirement}'s own
+     *                      {@code displayLocale}
      * @return the constraint if present, otherwise {@link Optional#empty()}
      */
-    Optional<Constraint> get(ProjectId projectId, ConstraintCode code);
+    Optional<Constraint> get(ProjectId projectId, ConstraintCode code, String displayLocale);
 }

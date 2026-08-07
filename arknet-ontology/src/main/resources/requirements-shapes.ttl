@@ -167,15 +167,25 @@ rshapes:Goal-statement
 rshapes:ConstraintShape
     a sh:NodeShape ;
     sh:targetClass arkreq:Constraint ;
+    sh:property rshapes:Constraint-title ;
     sh:property rshapes:Constraint-statement .
+
+rshapes:Constraint-title
+    a sh:PropertyShape ;
+    sh:path     dcterms:title ;
+    sh:minCount 1 ;
+    sh:minLength 2 ;
+    sh:uniqueLang true ;
+    sh:message  "A Constraint needs at least one dcterms:title. sh:uniqueLang allows at most one dcterms:title per non-empty language tag - two titles sharing the same tag (e.g. both @en) are not allowed, but DIFFERENT language tags are (a constraint may be titled in several languages)."@en , "Constraint braucht mindestens eine dcterms:title. sh:uniqueLang erlaubt hoechstens eine dcterms:title je nicht-leerem Sprach-Tag - zwei Titel mit demselben Tag (z.B. beide @en) sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Constraint darf mehrsprachig betitelt sein)."@de ;
+    sh:severity sh:Violation .
 
 rshapes:Constraint-statement
     a sh:PropertyShape ;
     sh:path     arkreq:constraintStatement ;
     sh:minCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "A Constraint needs an arkreq:constraintStatement (min. 5 characters)."@en , "Constraint braucht eine arkreq:constraintStatement (min. 5 Zeichen)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "A Constraint needs at least one arkreq:constraintStatement (min. 5 characters). sh:uniqueLang allows at most one arkreq:constraintStatement per non-empty language tag - two statements sharing the same tag are not allowed, but DIFFERENT language tags are (a constraint may be stated in several languages)."@en , "Constraint braucht mindestens eine arkreq:constraintStatement (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine arkreq:constraintStatement je nicht-leerem Sprach-Tag - zwei Statements mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (eine Constraint darf mehrsprachig formuliert sein)."@de ;
     sh:severity sh:Violation .
 
 

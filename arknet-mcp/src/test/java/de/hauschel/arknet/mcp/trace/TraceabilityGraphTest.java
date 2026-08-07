@@ -112,14 +112,15 @@ class TraceabilityGraphTest {
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         WriteFunnel requirementsFunnel = KognioRdfRequirementRepositoryFactory.buildFunnel(
                 lifecycle, DisplayLocale.DEFAULT);
-        ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(lifecycle, requirementsFunnel);
+        ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(
+                lifecycle, DisplayLocale.DEFAULT, requirementsFunnel);
 
         // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
         constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_1_IRI)),
-                new ConstraintCode("CON-1"), "JVM only", "Must run on the JVM.", ConstraintType.TECHNICAL));
+                new ConstraintCode("CON-1"), "JVM only", "Must run on the JVM.", ConstraintType.TECHNICAL), "en");
         constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_2_IRI)),
                 new ConstraintCode("CON-2"), "Budget cap", "Total spend must not exceed the approved budget.",
-                ConstraintType.BUSINESS));
+                ConstraintType.BUSINESS), "en");
 
         // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
         // referenced as UC1's primary actor - must NOT count as an orphan term.

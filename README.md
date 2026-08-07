@@ -254,13 +254,14 @@ Requirements BC (`arknet-requirements`) -- requirement lifecycle:
 | `req_update` | Correct a requirement's title, description and/or MoSCoW priority (each optional, unchanged if omitted); append new acceptance criteria and/or correct an existing one's text by position -- position is purely technical, so mid-list insert/delete/reorder is not supported. `language` scopes a non-omitted title/description/touched-criterion write to that one language's literal (falling back to the project's default language if omitted, rejecting the call if neither is set), leaving other language variants untouched -- except a stale untagged one, swept away once the resolved tag equals the project's default |
 | `req_schema` | The `arkreq:` vocabulary (RequirementType, RequirementStatus, Priority) as data -- definition + allowed values, so a client need not guess |
 
-The same hexagon also carries `arkreq:Constraint` -- a non-negotiable, externally-imposed boundary on the solution space (ISO 29148), not a bounded context of its own. A constraint is immutable once created (no update/status-change tool exists):
+The same hexagon also carries `arkreq:Constraint` -- a non-negotiable, externally-imposed boundary on the solution space (ISO 29148), not a bounded context of its own. A constraint's type and code are fixed at creation (there is no status to change either), but its text is correctable and natively multilingual:
 
 | Tool | Description |
 |------|-------------|
-| `constraint_add` | Register a new constraint: `TECHNICAL`, `BUSINESS` or `REGULATORY` (each subtype numbered independently: `TCON-N`/`BCON-N`/`RCON-N`) |
+| `constraint_add` | Register a new constraint: `TECHNICAL`, `BUSINESS` or `REGULATORY` (each subtype numbered independently: `TCON-N`/`BCON-N`/`RCON-N`). Title and statement are natively multilingual -- an optional `language` argument tags the literals being written (BCP-47, e.g. `"en"`); omitted, it falls back to the project's configured default language, and rejects the call if the project has none either |
+| `constraint_update` | Correct a constraint's title and/or statement, or state either of them in a further language, keeping its identity, code and type unchanged (each text argument optional, unchanged if omitted). `language` scopes the write to that one language's literal (falling back to the project's default language if omitted, rejecting the call if neither is set), leaving other language variants untouched -- except a stale untagged one, swept away once the resolved tag equals the project's default |
 | `constraint_list` | List all managed constraints |
-| `constraint_get` | Fetch a single constraint by identity (e.g. TCON-1, BCON-1, RCON-1) |
+| `constraint_get` | Fetch a single constraint by identity (e.g. TCON-1, BCON-1, RCON-1). An optional `displayLocale` argument picks which language variant of a multilingual title/statement to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
 
 Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 

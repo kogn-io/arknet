@@ -53,6 +53,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.out.ConstraintRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementRepository;
 import de.hauschel.arknet.req.application.port.out.RequirementSchemaSource;
+import de.hauschel.arknet.req.application.port.out.RevisionToken;
 import de.hauschel.arknet.req.application.port.out.TermLookup;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
 import de.hauschel.arknet.req.domain.Constraint;
@@ -138,17 +139,28 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
     /** Unused by this test: no constraint is ever linked or resolved. */
     private static final ConstraintRepository UNUSED_CONSTRAINT_REPOSITORY = new ConstraintRepository() {
         @Override
-        public void create(ProjectId projectId, Constraint constraint) {
+        public void create(ProjectId projectId, Constraint constraint, String language) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 
         @Override
-        public Optional<Constraint> findByCode(ProjectId projectId, ConstraintCode code) {
+        public Optional<Constraint> findByCode(ProjectId projectId, ConstraintCode code, String displayLocale) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 
         @Override
-        public List<Constraint> findAll(ProjectId projectId) {
+        public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Constraint updated,
+                String titleLanguage, String statementLanguage, String defaultLanguage) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
+        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
             throw new UnsupportedOperationException("not exercised by this test");
         }
 
