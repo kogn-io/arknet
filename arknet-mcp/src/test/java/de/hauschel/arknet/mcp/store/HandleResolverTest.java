@@ -115,4 +115,28 @@ class HandleResolverTest {
     void resolvesABlankNodeReferenceToItself() {
         assertThat(handleResolver.resolve(PROJECT, "_:b1")).isEqualTo("_:b1");
     }
+
+    /**
+     * Regression test for issue #305: a {@code urn:}/{@code mailto:}-style handle is a complete,
+     * self-authoritative IRI - its "prefix" is an RFC 3986 URI scheme, not a CURIE prefix - and
+     * must resolve to itself instead of being rejected as an unknown prefix (see
+     * {@code PrefixesTest#schemeShapedUnknownPrefixExpandsToItselfAsANonHierarchicalIri}).
+     */
+    @Test
+    void resolvesAUrnHandleToItself() {
+        String urn = "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+        assertThat(handleResolver.resolve(PROJECT, urn)).isEqualTo(urn);
+    }
+
+    /**
+     * A prefix that is neither known nor a syntactically valid URI scheme (it starts with a
+     * digit) still gets the didactic "unknown prefix" rejection rather than being guessed at as
+     * a bare business id.
+     */
+    @Test
+    void rejectsAHandleWithAPrefixThatIsNeitherKnownNorAValidUriScheme() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> handleResolver.resolve(PROJECT, "1nope:X"))
+                .withMessageContaining("Unknown prefix in handle '1nope:X'");
+    }
 }

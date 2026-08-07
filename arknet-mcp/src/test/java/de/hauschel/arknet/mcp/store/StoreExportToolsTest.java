@@ -96,7 +96,8 @@ class StoreExportToolsTest {
         Path file = written.get(0);
         assertThat(file.getParent().getFileName().toString())
                 .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d+");
-        assertThat(file.getFileName().toString()).isEqualTo("arknet__store-export-tools-test-1.trig");
+        assertThat(file.getFileName().toString())
+                .isEqualTo("arknet__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig");
         assertThat(contentOf(file)).contains(FR_1_IRI).contains("\"Login\"");
     }
 
@@ -136,14 +137,14 @@ class StoreExportToolsTest {
         List<Path> written = findTrigFiles(exportDir);
         assertThat(written).hasSize(1);
         assertThat(written.get(0).getFileName().toString())
-                .isEqualTo("arknet___dev__main___store-export-tools-test-1.trig");
+                .isEqualTo("arknet___dev__main___" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig");
     }
 
     /**
      * Two projects whose labels sanitize to the identical filesystem stem ("team/main" and
-     * "team main" both become "team_main") must not collide on disk - the project id is
-     * guaranteed unique and is appended to the filename precisely so one export can never
-     * silently overwrite the other.
+     * "team main" both become "team_main") must not collide on disk - the project id is unique
+     * and its {@link FileNameSanitizer#uniqueSegment} is appended to the filename precisely so
+     * one export can never silently overwrite the other.
      */
     @Test
     void exportOfTwoProjectsWithCollidingSanitizedLabelsWritesDistinctFiles() {
@@ -164,10 +165,49 @@ class StoreExportToolsTest {
             List<Path> written = findTrigFiles(exportDir);
             assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
                     .containsExactlyInAnyOrder(
-                            "team_main__store-export-tools-test-1.trig",
-                            "team_main__store-export-tools-test-2.trig");
+                            "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig",
+                            "team_main__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
+    }
+
+    /**
+     * Regression test for issue #300: the id part of the export filename used to be plain {@link
+     * FileNameSanitizer#sanitize}, which - just like the label - is not injective, so two distinct
+     * ids sanitizing to the identical stem (here {@code "team a"} and {@code "team!a"}, both
+     * {@code "team_a"}) collided on disk exactly the way #147 already fixed for the label. The
+     * comment above {@code exportOne} used to claim the id "rules out silently overwriting" a
+     * collision - true only once the id part also uses {@link FileNameSanitizer#uniqueSegment}.
+     */
+    @Test
+    void exportOfTwoProjectsWithCollidingSanitizedIdsWritesDistinctFiles() {
+        ProjectId idA = new ProjectId("team a");
+        ProjectId idB = new ProjectId("team!a");
+        try {
+            RequirementRepository requirements =
+                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            requirements.create(idA, requirementTitled("First"), null);
+            requirements.create(idB, requirementTitled("Second"), null);
+
+            assertThat(FileNameSanitizer.sanitize(idA.value())).isEqualTo(FileNameSanitizer.sanitize(idB.value()));
+
+            StoreExportTools tools = new StoreExportTools(
+                    listProjectsOf(
+                            new Project(idA, "team", List.of(pathAnchor("/x"))),
+                            new Project(idB, "team", List.of(pathAnchor("/y")))),
+                    new StoreExporter(lifecycle), exportDir, null);
+
+            tools.export();
+
+            List<Path> written = findTrigFiles(exportDir);
+            assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
+                    .containsExactlyInAnyOrder(
+                            "team__" + FileNameSanitizer.uniqueSegment(idA.value()) + ".trig",
+                            "team__" + FileNameSanitizer.uniqueSegment(idB.value()) + ".trig");
+        } finally {
+            lifecycle.close(new DatasetId(idA.value()));
+            lifecycle.close(new DatasetId(idB.value()));
         }
     }
 
@@ -247,7 +287,7 @@ class StoreExportToolsTest {
         try {
             Project working = new Project(PROJECT_1, "working", List.of(pathAnchor("/x")));
             Project broken = new Project(PROJECT_2, "broken", List.of(pathAnchor("/y")));
-            String brokenTmpFileName = "broken__" + PROJECT_2.value() + ".trig.tmp";
+            String brokenTmpFileName = "broken__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig.tmp";
 
             List<Project> workingThenBroken = new SecondElementTriggersSideEffect<>(
                     List.of(working, broken),
@@ -262,7 +302,7 @@ class StoreExportToolsTest {
             List<Path> written = findTrigFiles(root);
             assertThat(written).hasSize(1);
             assertThat(written.get(0).getFileName().toString())
-                    .isEqualTo("working__store-export-tools-test-1.trig");
+                    .isEqualTo("working__" + FileNameSanitizer.uniqueSegment(PROJECT_1.value()) + ".trig");
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
         }

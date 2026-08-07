@@ -136,6 +136,24 @@ class StoreReaderTest {
         assertThat(storeReader.findByIdentifier(PROJECT, "FR-1")).containsExactly(FR_1_IRI);
     }
 
+    /**
+     * Regression test for issue #299: a store-first resource with no minted IRI (ADR-005) is
+     * RDF-legally allowed to carry a {@code dcterms:identifier} on a blank-node subject just like
+     * an IRI subject can - {@code DigestRenderer} already prints such an identifier as a
+     * drill-down handle (see {@code StoreReaderTest#readSnapshotIncludesStatementsOnABlankNodeSubject}
+     * for the same shape). Before the fix, {@code findByIdentifier} filtered the query result down
+     * to {@link IRI} subjects only, so resolving that exact handle back always found nothing.
+     */
+    @Test
+    void findByIdentifierFindsABlankNodeSubject() {
+        seedBlankNodeSubjectWithIdentifier("BN-1");
+
+        List<String> matches = storeReader.findByIdentifier(PROJECT, "BN-1");
+
+        assertThat(matches).hasSize(1);
+        assertThat(matches.get(0)).startsWith("_:");
+    }
+
     @Test
     void outgoingStillReturnsTheStatementsOfAWellFormedIri() {
         List<Triple> outgoing = storeReader.outgoing(PROJECT, FR_1_IRI);
@@ -363,6 +381,25 @@ class StoreReaderTest {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.add(rdf.createIRI("https://w3id.org/arknet/id/store-reader-test-blank-node-graph"), graph);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Writes a single blank-node-subject {@code dcterms:identifier} triple straight into its own
+     * named graph - the shape {@link #findByIdentifierFindsABlankNodeSubject} needs, analogous to
+     * {@link #seedBlankNodeSubjectTriple} for the {@code outgoing}/{@code incoming} regressions.
+     */
+    private void seedBlankNodeSubjectWithIdentifier(String identifier) {
+        RDF rdf = new SimpleRdf();
+        Graph graph = rdf.createGraph();
+        BlankNode subject = rdf.createBlankNode();
+        graph.add(subject, rdf.createIRI("http://purl.org/dc/terms/identifier"), rdf.createLiteral(identifier));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.add(rdf.createIRI(
+                        "https://w3id.org/arknet/id/store-reader-test-blank-node-identifier-graph"), graph);
                 return null;
             });
         }

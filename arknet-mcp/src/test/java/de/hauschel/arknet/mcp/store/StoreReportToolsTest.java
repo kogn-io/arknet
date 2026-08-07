@@ -535,12 +535,33 @@ class StoreReportToolsTest {
         assertThat(viaIri).contains("# Outgoing").contains("# Incoming");
     }
 
+    /**
+     * "1nope" cannot be a syntactically valid RFC 3986 URI scheme (a scheme must start with a
+     * letter, not a digit), so this stays rejected as an unknown CURIE prefix. A scheme-shaped
+     * unknown prefix such as {@code urn} is a different case since issue #305 - see
+     * {@link #resourceGetResolvesAUrnHandleEvenThoughItIsNeverAKnownPrefix()}.
+     */
     @Test
     void resourceGetRejectsUnknownPrefixWithDidacticMessage() {
-        assertThatThrownBy(() -> tools.resourceGet(null, "nope:X", ANCHOR))
+        assertThatThrownBy(() -> tools.resourceGet(null, "1nope:X", ANCHOR))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown prefix")
                 .hasMessageContaining("Known prefixes");
+    }
+
+    /**
+     * Regression test for issue #305: a {@code urn:}/{@code mailto:}-style handle is a complete,
+     * self-authoritative IRI - its "prefix" is an RFC 3986 URI scheme, not a CURIE prefix - and
+     * must not be rejected as an unknown prefix. Nothing in the store carries this IRI, so
+     * {@code resourceGet} does not throw at all - it resolves the handle and then reports the
+     * ordinary not-found notice ({@link ResourceRenderer#notFoundMessage}), the same outcome a
+     * well-formed but absent full IRI already gets.
+     */
+    @Test
+    void resourceGetResolvesAUrnHandleEvenThoughItIsNeverAKnownPrefix() {
+        String urn = "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+        assertThat(tools.resourceGet(null, urn, ANCHOR))
+                .isEqualTo(ResourceRenderer.notFoundMessage(Prefixes.defaults(), urn));
     }
 
     @Test

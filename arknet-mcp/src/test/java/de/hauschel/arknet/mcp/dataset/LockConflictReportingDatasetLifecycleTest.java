@@ -7,10 +7,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
@@ -52,6 +59,15 @@ import de.hauschel.arknet.req.adapter.kogniordf.KognioRdfRequirementRepositoryFa
  * responsibility (issue #140): as {@link AutoCloseable}, {@code close()} must close every dataset
  * the delegate currently {@code list()}s, not just one, so a daemon shutdown releases the whole
  * store in an orderly way.</p>
+ *
+ * <p>Two regressions from the full review of 2026-08-06 get their own tests.
+ * {@link #closeDoesNotWarnWhenEveryAcquiredHandleWasClosed()} and
+ * {@link #closeWarnsAboutADatasetWhoseAcquiredHandleIsStillOpen()} pin down issue #294: {@link
+ * FakeLifecycle#list()} deliberately keeps returning a dataset id forever (mirroring the real
+ * {@code list()} contract, "known" not "open"), so before the fix the first test's {@code close()}
+ * would have warned about a dataset nothing ever left open. {@link
+ * #closeContinuesClosingRemainingDatasetsWhenOneThrows()} pins down issue #302: a failing {@code
+ * close(DatasetId)} for one dataset must not stop the loop from attempting the rest.</p>
  */
 class LockConflictReportingDatasetLifecycleTest {
 
@@ -84,14 +100,20 @@ class LockConflictReportingDatasetLifecycleTest {
     }
 
     @Test
-    void delegatesEveryOtherCallAndAnAcquireThatSucceedsUnchanged() {
+    void delegatesEveryOtherCallAndWrapsAnAcquireThatSucceeds() {
         final DatasetId id = new DatasetId("delegation-test");
-        final DatasetHandle handle = new StubHandle();
+        final StubHandle handle = new StubHandle();
         final FakeLifecycle delegate = new FakeLifecycle(handle);
         final LockConflictReportingDatasetLifecycle guarded =
                 new LockConflictReportingDatasetLifecycle(delegate, storageDir, e -> true);
 
-        assertThat(guarded.acquire(id)).isSameAs(handle);
+        // Not the same instance any more (issue #294): acquire() wraps the delegate's handle so
+        // closing it can update this decorator's own open-lease bookkeeping. Closing the wrapper
+        // must still reach the underlying handle.
+        final DatasetHandle acquired = guarded.acquire(id);
+        assertThat(acquired).isNotSameAs(handle);
+        acquired.close();
+        assertThat(handle.closed).isTrue();
 
         guarded.close(id);
         guarded.delete(id);
@@ -138,8 +160,100 @@ class LockConflictReportingDatasetLifecycleTest {
         assertThatThrownBy(() -> guarded.acquire(id)).isSameAs(original);
     }
 
-    /** Never actually opened - only ever compared by reference above. */
+    /**
+     * Regression test for issue #294: {@link FakeLifecycle#list()} keeps naming its dataset even
+     * after that dataset was cleanly closed (exactly what the real {@code list()} contract
+     * promises - "known", not "open"). Before the fix, {@code close()} re-checked {@code list()}
+     * for "still open" and would have warned about this dataset regardless. Closing the handle
+     * {@link #acquire} returned must be enough to keep {@code close()} quiet.
+     */
+    @Test
+    void closeDoesNotWarnWhenEveryAcquiredHandleWasClosed() {
+        final DatasetId id = new DatasetId("delegation-test");
+        final FakeLifecycle delegate = new FakeLifecycle(new StubHandle());
+        final LockConflictReportingDatasetLifecycle guarded =
+                new LockConflictReportingDatasetLifecycle(delegate, storageDir, e -> true);
+        guarded.acquire(id).close();
+
+        final ListAppender<ILoggingEvent> logs = attachLogAppender();
+        try {
+            guarded.close();
+
+            assertThat(logs.list).noneMatch(event -> event.getLevel() == Level.WARN
+                    && event.getFormattedMessage().contains("still open"));
+        } finally {
+            detachLogAppender(logs);
+        }
+    }
+
+    /**
+     * Regression test for issue #294's other half: a handle {@link #acquire} returned but that was
+     * never closed - the genuine "in-flight lease at shutdown time" case - must still be reported,
+     * naming exactly that dataset.
+     */
+    @Test
+    void closeWarnsAboutADatasetWhoseAcquiredHandleIsStillOpen() {
+        final DatasetId openId = new DatasetId("still-open-test");
+        final FakeLifecycle delegate = new FakeLifecycle(new StubHandle());
+        final LockConflictReportingDatasetLifecycle guarded =
+                new LockConflictReportingDatasetLifecycle(delegate, storageDir, e -> true);
+        guarded.acquire(openId); // deliberately never closed
+
+        final ListAppender<ILoggingEvent> logs = attachLogAppender();
+        try {
+            guarded.close();
+
+            assertThat(logs.list).anyMatch(event -> event.getLevel() == Level.WARN
+                    && event.getFormattedMessage().contains("still open")
+                    && event.getFormattedMessage().contains(openId.value()));
+        } finally {
+            detachLogAppender(logs);
+        }
+    }
+
+    /**
+     * Regression test for issue #302: {@code close(DatasetId)} throwing for one dataset must not
+     * abort the shutdown loop before the remaining datasets are even attempted.
+     */
+    @Test
+    void closeContinuesClosingRemainingDatasetsWhenOneThrows() {
+        final DatasetId failing = new DatasetId("failing-dataset");
+        final DatasetId healthy = new DatasetId("healthy-dataset");
+        final ThrowingOnCloseLifecycle delegate =
+                new ThrowingOnCloseLifecycle(List.of(failing, healthy), failing);
+        final LockConflictReportingDatasetLifecycle guarded =
+                new LockConflictReportingDatasetLifecycle(delegate, storageDir, e -> true);
+
+        guarded.close();
+
+        assertThat(delegate.closeAttempts).containsExactly(failing, healthy);
+    }
+
+    /**
+     * Attaches a fresh {@link ListAppender} to {@link LockConflictReportingDatasetLifecycle}'s
+     * logger so a test can assert a specific {@code WARN} was actually logged, not merely that the
+     * computed value happens to be right.
+     */
+    private static ListAppender<ILoggingEvent> attachLogAppender() {
+        final ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                LoggerFactory.getLogger(LockConflictReportingDatasetLifecycle.class);
+        final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachLogAppender(ListAppender<ILoggingEvent> appender) {
+        final ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                LoggerFactory.getLogger(LockConflictReportingDatasetLifecycle.class);
+        logger.detachAppender(appender);
+        appender.stop();
+    }
+
+    /** Never actually opened - records only whether {@link #close()} was called. */
     private static final class StubHandle implements DatasetHandle {
+
+        private boolean closed;
 
         @Override
         public io.kogn.rdf.dataset.GraphStore graphStore() {
@@ -168,7 +282,7 @@ class LockConflictReportingDatasetLifecycleTest {
 
         @Override
         public void close() {
-            // no-op: never opened
+            closed = true;
         }
     }
 
@@ -225,6 +339,47 @@ class LockConflictReportingDatasetLifecycleTest {
         @Override
         public Set<DatasetId> list() {
             return Set.of();
+        }
+    }
+
+    /**
+     * Lists exactly the given {@code known} ids (insertion order preserved) and throws when
+     * {@link #close(DatasetId)} is called for {@code failing} - used to prove the shutdown loop
+     * still attempts the remaining datasets (issue #302). Every attempted id, including the
+     * failing one, is recorded before the exception is thrown.
+     */
+    private static final class ThrowingOnCloseLifecycle implements DatasetLifecycle {
+
+        private final Set<DatasetId> known;
+        private final DatasetId failing;
+        private final List<DatasetId> closeAttempts = new java.util.ArrayList<>();
+
+        ThrowingOnCloseLifecycle(List<DatasetId> known, DatasetId failing) {
+            this.known = new LinkedHashSet<>(known);
+            this.failing = failing;
+        }
+
+        @Override
+        public DatasetHandle acquire(DatasetId id) {
+            throw new UnsupportedOperationException("unused in this test");
+        }
+
+        @Override
+        public void close(DatasetId id) {
+            closeAttempts.add(id);
+            if (id.equals(failing)) {
+                throw new RuntimeException("simulated close failure for " + id);
+            }
+        }
+
+        @Override
+        public void delete(DatasetId id) {
+            throw new UnsupportedOperationException("unused in this test");
+        }
+
+        @Override
+        public Set<DatasetId> list() {
+            return known;
         }
     }
 }

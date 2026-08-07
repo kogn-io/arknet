@@ -23,8 +23,11 @@ import de.hauschel.arknet.persistence.ArkprovVocabulary;
  * <ul>
  *   <li>a full IRI (contains {@code ://}) resolves to itself;</li>
  *   <li>{@code prefix:local} with a known prefix expands to {@code namespace + local};</li>
- *   <li>an unknown prefix, or a bare token without a colon, resolves to empty (the caller
- *       may then try a business-id lookup).</li>
+ *   <li>otherwise, if the part before the colon is a syntactically valid RFC 3986 URI scheme
+ *       (e.g. {@code urn}, {@code mailto}) the whole token resolves to itself - a non-hierarchical
+ *       IRI never contains {@code ://} but is still self-authoritative (issue #305);</li>
+ *   <li>an unknown, non-scheme-shaped prefix, or a bare token without a colon, resolves to empty
+ *       (the caller may then try a business-id lookup).</li>
  * </ul>
  */
 public final class Prefixes {
@@ -111,8 +114,8 @@ public final class Prefixes {
      * Expands a CURIE or full IRI to an absolute IRI.
      *
      * @param curieOrIri a full IRI, or a {@code prefix:local} CURIE
-     * @return the absolute IRI, or empty if the token is a bare id (no colon) or uses an
-     *         unknown prefix
+     * @return the absolute IRI, or empty if the token is a bare id (no colon) or uses a prefix
+     *         that is neither known nor a syntactically valid URI scheme
      */
     public Optional<String> toIri(String curieOrIri) {
         Objects.requireNonNull(curieOrIri, "curieOrIri");
@@ -129,10 +132,40 @@ public final class Prefixes {
         }
         String prefix = token.substring(0, colon);
         String local = token.substring(colon + 1);
-        return bindings.stream()
+        Optional<String> bound = bindings.stream()
                 .filter(b -> b.prefix().equals(prefix))
                 .findFirst()
                 .map(b -> b.namespace() + local);
+        if (bound.isPresent()) {
+            return bound;
+        }
+        // Not a known CURIE prefix. A non-hierarchical IRI such as urn:uuid:... or mailto:...
+        // never contains "://" but is still a complete, self-authoritative IRI - its "prefix" is
+        // an RFC 3986 URI scheme (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )), not a CURIE prefix
+        // to look up. Without this, such a token fell through to "unknown prefix" even though it
+        // was never meant to be one (issue #305).
+        if (isUriScheme(prefix)) {
+            return Optional.of(token);
+        }
+        return Optional.empty();
+    }
+
+    /** {@code true} if {@code candidate} is a syntactically valid RFC 3986 URI scheme. */
+    private static boolean isUriScheme(String candidate) {
+        if (candidate.isEmpty() || !isAsciiLetter(candidate.charAt(0))) {
+            return false;
+        }
+        for (int i = 1; i < candidate.length(); i++) {
+            char c = candidate.charAt(i);
+            if (!isAsciiLetter(c) && !Character.isDigit(c) && c != '+' && c != '-' && c != '.') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isAsciiLetter(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
     }
 
     /**

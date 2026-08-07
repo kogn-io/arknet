@@ -71,8 +71,10 @@ public final class HandleResolver {
             return resolved.get();
         }
 
-        // A colon that is not part of a scheme means a CURIE with an unknown prefix - do not
-        // guess, explain (the handle contract is CURIE/IRI first).
+        // A colon whose prefix is neither a known CURIE prefix nor a syntactically valid URI
+        // scheme (see Prefixes#toIri, issue #305 - urn:.../mailto:... resolve above, before this
+        // point is ever reached) means a CURIE with an unknown prefix - do not guess, explain
+        // (the handle contract is CURIE/IRI first).
         if (handle.contains(":") && !handle.contains("://")) {
             final String known = prefixes.bindings().stream()
                     .map(Prefixes.Prefix::prefix).sorted().reduce((a, b) -> a + ", " + b).orElse("");

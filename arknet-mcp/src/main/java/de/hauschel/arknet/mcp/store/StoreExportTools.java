@@ -100,10 +100,12 @@ public final class StoreExportTools {
     private String exportOne(final Project project, final String timestamp) {
         final Path targetDir = fallbackExportDir.resolve(timestamp);
         // The label alone can collide after sanitizing (e.g. "team/main" and "team main" both
-        // become "team_main"); the id is guaranteed unique, so appending it rules out silently
-        // overwriting one project's export with another's.
+        // become "team_main"). The id is unique, but plain sanitize() is not injective either
+        // (issue #300) - two different raw ids can sanitize to the identical segment just like two
+        // labels can - so the id part uses FileNameSanitizer#uniqueSegment, whose appended digest
+        // is what actually rules out silently overwriting one project's export with another's.
         final String fileName = FileNameSanitizer.sanitize(project.label()) + "__"
-                + FileNameSanitizer.sanitize(project.id().value()) + ".trig";
+                + FileNameSanitizer.uniqueSegment(project.id().value()) + ".trig";
         final Path target = targetDir.resolve(fileName);
         final Path tmp = targetDir.resolve(fileName + ".tmp");
 
