@@ -4,20 +4,24 @@
 package de.hauschel.arknet.persistence;
 
 /**
- * The absolute IRI of {@code arkddd:domainVision} - a BoundedContext's literal-valued vision
- * text - as a Java {@code String} constant, the single source of truth shared by the code that
- * <em>writes</em> it (the bounded-context out-adapter,
- * {@code de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository}) and the code
- * that <em>reads</em> it ({@code arknet-mcp}'s traceability read path,
- * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, which scans it for unlinked glossary
- * mentions).
+ * The absolute IRIs of the {@code arkddd:} predicates duplicated across modules - as Java
+ * {@code String} constants, the single source of truth shared by the code that <em>writes</em>
+ * them (the bounded-context out-adapters,
+ * {@code de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepository}/
+ * {@code KognioRdfContextRelationshipRepository}) and the code that <em>reads</em> them
+ * ({@code arknet-mcp}'s traceability read path, {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph},
+ * which scans {@link #DOMAIN_VISION} for unlinked glossary mentions and traverses {@link #UPSTREAM}/
+ * {@link #DOWNSTREAM} for {@code impact_analysis}, issue #293).
  *
- * <p>Same rationale as {@link ArkreqVocabulary}: before this class both places declared their own
- * private copy of the same IRI literal, which could drift silently. Scope is just as narrow -
- * this class holds only the one {@code arkddd:} predicate that is duplicated across those two
- * modules, not the whole {@code arkddd:} namespace (e.g. {@code arkddd:ubiquitousLanguageTerm}
- * and {@code arkddd:BoundedContext} are currently only used within
- * {@code TraceabilityGraph} itself and stay local there).</p>
+ * <p>Same rationale as {@link ArkreqVocabulary}: before this class each duplicated predicate was
+ * declared as a private copy of the same IRI literal in more than one place, which could drift
+ * silently. Scope is just as narrow - this class holds only the {@code arkddd:} predicates that
+ * are duplicated across modules, not the whole {@code arkddd:} namespace (e.g. {@code
+ * arkddd:ubiquitousLanguageTerm} and {@code arkddd:BoundedContext} are currently only used within
+ * {@code TraceabilityGraph} itself and stay local there; {@code arkddd:ContextRelationship}/
+ * {@code relationshipType} and the eight {@code arkddd:RelationshipType} individuals stay local to
+ * {@code KognioRdfContextRelationshipRepository} for the same reason - nothing outside that
+ * adapter reads them).</p>
  */
 public final class ArkdddVocabulary {
 
@@ -25,6 +29,18 @@ public final class ArkdddVocabulary {
 
     /** {@code arkddd:domainVision} - BoundedContext -&gt; its vision text. */
     public static final String DOMAIN_VISION = NAMESPACE + "domainVision";
+
+    /**
+     * {@code arkddd:upstream} - ContextRelationship -&gt; the BoundedContext whose model/protocol
+     * prevails (issue #293).
+     */
+    public static final String UPSTREAM = NAMESPACE + "upstream";
+
+    /**
+     * {@code arkddd:downstream} - ContextRelationship -&gt; the BoundedContext that consumes
+     * {@link #UPSTREAM}'s model/protocol (issue #293).
+     */
+    public static final String DOWNSTREAM = NAMESPACE + "downstream";
 
     private ArkdddVocabulary() {
     }

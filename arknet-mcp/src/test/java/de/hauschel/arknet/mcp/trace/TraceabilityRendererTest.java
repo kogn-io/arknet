@@ -299,6 +299,48 @@ class TraceabilityRendererTest {
         assertThat(report).doesNotContain("TERM-C");
     }
 
+    /**
+     * Regression test for issue #298: two terms sharing the exact same {@code skos:prefLabel}
+     * (a homonym) must break their matching tie the same way {@code orphan_check}'s {@link
+     * TraceabilityGraph#unlinkedMentions()} does - by business code ({@code
+     * dcterms:identifier}), not by term IRI. The fixture deliberately picks IRIs and codes whose
+     * sort orders disagree (the IRI-smaller term carries the code-larger, IRI-larger term carries
+     * the code-smaller): before the fix, {@code termCooccurrences} sorted by IRI and would have
+     * matched the mention to {@code TERM-HOMONYM-Z}; after the fix it must match the same
+     * code-smallest term ({@code TERM-HOMONYM-A}) {@code unlinkedMentions} would pick for the
+     * identical ambiguous mention.
+     */
+    @Test
+    void termCooccurrenceBreaksAHomonymTieByBusinessCodeNotByTermIri() {
+        String homonymIriSmaller = ID + "aaa-homonym";
+        String homonymIriLarger = ID + "zzz-homonym";
+        TraceabilityGraph graph = TraceabilityGraph.of(StoreSnapshot.of(List.of(
+                // IRI-smaller, but the code-*larger* of the two homonyms.
+                iri(homonymIriSmaller, RDF_TYPE, SKOS + "Concept"),
+                lit(homonymIriSmaller, PREF_LABEL, "Order"),
+                lit(homonymIriSmaller, IDENTIFIER, "TERM-HOMONYM-Z"),
+
+                // IRI-larger, but the code-*smaller* of the two homonyms - must win the tie.
+                iri(homonymIriLarger, RDF_TYPE, SKOS + "Concept"),
+                lit(homonymIriLarger, PREF_LABEL, "Order"),
+                lit(homonymIriLarger, IDENTIFIER, "TERM-HOMONYM-A"),
+
+                iri(TERM_C, RDF_TYPE, SKOS + "Concept"),
+                lit(TERM_C, PREF_LABEL, "Kunde"),
+                lit(TERM_C, IDENTIFIER, "TERM-C"),
+
+                iri(FR_10, RDF_TYPE, ARKREQ + "FunctionalRequirement"),
+                lit(FR_10, TITLE, "Bestellung"),
+                lit(FR_10, IDENTIFIER, "FR-10"),
+                lit(FR_10, DESCRIPTION, "Der Kunde platziert eine Order."))), DisplayLocale.DEFAULT);
+
+        String report = renderer.termCooccurrence(PROJECT, graph);
+
+        assertThat(report).contains("## Term pairs named together in the same text (1)");
+        assertThat(report).contains("TERM-C").contains("TERM-HOMONYM-A");
+        assertThat(report).doesNotContain("TERM-HOMONYM-Z");
+    }
+
     @Test
     void termCooccurrenceReportsNoneWhenNoTwoTermsShareAText() {
         TraceabilityGraph graph = TraceabilityGraph.of(fixtureSnapshot(), DisplayLocale.DEFAULT);

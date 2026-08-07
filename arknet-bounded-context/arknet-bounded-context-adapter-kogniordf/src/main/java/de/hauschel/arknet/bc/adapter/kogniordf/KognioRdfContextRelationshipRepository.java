@@ -17,6 +17,7 @@ import de.hauschel.arknet.bc.domain.ContextRelationship;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.WriteFunnel;
 
 /**
@@ -54,13 +55,16 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@code Subdomain} - same idiom, same reasoning: a compiler-checked, exhaustive mapping with no
  * risk of an enum constant silently mapping to nothing.</p>
  *
- * <p><strong>No {@code ArkdddVocabulary} additions (decision 7).</strong> {@code arkddd:ContextRelationship}/
- * {@code upstream}/{@code downstream}/{@code relationshipType} and the eight
- * {@code arkddd:RelationshipType} individual IRIs stay private local constants here, exactly like
- * {@code KognioRdfBoundedContextRepository} already keeps {@code PART_OF_PROPERTY}/
- * {@code SUBDOMAIN_TYPE_PROPERTY}: nothing here is read by a second module (this feature
- * deliberately does not touch {@code trace_matrix}/{@code impact_analysis}/{@code orphan_check}),
- * so there is nothing to share.</p>
+ * <p><strong>{@code upstream}/{@code downstream} are shared (issue #293), the rest stays
+ * local.</strong> {@code arkddd:upstream}/{@code downstream} now come from {@link ArkdddVocabulary},
+ * the same shared source {@code arknet-mcp}'s {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}
+ * traverses them from for {@code impact_analysis} - before issue #293 that traversal simply did not
+ * know about {@code ContextRelationship} at all, so the two sides never risked disagreeing on the
+ * IRI, but a future rename now cannot silently desync them either. {@code arkddd:ContextRelationship}/
+ * {@code relationshipType} and the eight {@code arkddd:RelationshipType} individual IRIs remain
+ * private local constants here, exactly like {@code KognioRdfBoundedContextRepository} already
+ * keeps {@code PART_OF_PROPERTY}/{@code SUBDOMAIN_TYPE_PROPERTY}: nothing outside this adapter
+ * reads them.</p>
  *
  * <p><strong>No read method (decision 5).</strong> This port and adapter expose no
  * {@code findAll}/{@code findByCode}: inspecting a created relationship goes through the generic
@@ -93,8 +97,8 @@ public class KognioRdfContextRelationshipRepository implements ContextRelationsh
     private static final String CONTEXT_RELATIONSHIP_TYPE = ARKDDD_NAMESPACE + "ContextRelationship";
     /** {@code shapes:ContextRelationship-upstream}/{@code -downstream}'s {@code sh:class} target. */
     private static final String BOUNDED_CONTEXT_TYPE = ARKDDD_NAMESPACE + "BoundedContext";
-    private static final String UPSTREAM_PROPERTY = ARKDDD_NAMESPACE + "upstream";
-    private static final String DOWNSTREAM_PROPERTY = ARKDDD_NAMESPACE + "downstream";
+    private static final String UPSTREAM_PROPERTY = ArkdddVocabulary.UPSTREAM;
+    private static final String DOWNSTREAM_PROPERTY = ArkdddVocabulary.DOWNSTREAM;
     private static final String RELATIONSHIP_TYPE_PROPERTY = ARKDDD_NAMESPACE + "relationshipType";
 
     private static final String PARTNERSHIP = ARKDDD_NAMESPACE + "Partnership";

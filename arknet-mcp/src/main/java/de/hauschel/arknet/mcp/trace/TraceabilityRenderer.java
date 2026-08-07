@@ -236,6 +236,15 @@ public final class TraceabilityRenderer {
      * unit of "co-occurrence" (issue #108), not the individual field: a requirement's description
      * naming one term and its acceptance criterion naming another still counts as that
      * requirement mentioning both.
+     *
+     * <p>Two same-length competing labels (a homonym, e.g. two terms sharing one
+     * {@code skos:prefLabel}) break their matching tie by business code ({@link
+     * TraceabilityGraph#identifierOf(String)}), not by term IRI - the identical key {@link
+     * TraceabilityGraph#unlinkedMentions()} already sorts by (issue #141) before handing terms to
+     * the same engine. Sorting by IRI here instead would let the two matching passes pick
+     * different terms for the same ambiguous mention, so {@code term_cooccurrence} and {@code
+     * orphan_check} could silently disagree about which homonym a text actually names
+     * (issue #298).</p>
      */
     private List<Cooccurrence> termCooccurrences(TraceabilityGraph graph) {
         Map<String, String> termLabels = graph.termLabels();
@@ -243,7 +252,10 @@ public final class TraceabilityRenderer {
             return List.of();
         }
         LabelMentions<String> matcher = LabelMentions.of(
-                termLabels.keySet().stream().sorted().toList(), termLabels::get);
+                termLabels.keySet().stream()
+                        .sorted(Comparator.comparing(iri -> graph.identifierOf(iri).orElse(iri)))
+                        .toList(),
+                termLabels::get);
 
         Map<TermPair, Set<String>> sourcesByPair = new LinkedHashMap<>();
         for (String requirementIri : graph.requirementIris()) {
