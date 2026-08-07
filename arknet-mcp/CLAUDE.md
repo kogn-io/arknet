@@ -60,9 +60,14 @@ Claude-Code-Session -- Grund: mehrere Sessions/Worktrees desselben Projekts teil
 kollidierten als eigene Subprozesse am NativeStore-Verzeichnis-Lock. Die Loopback-Grenze ist
 durchgesetzt, nicht nur behauptet: `AnchorHttpTransportConfiguration` setzt auf dem
 `WebMvcStreamableServerTransportProvider`-Bean einen `DefaultServerTransportSecurityValidator`
-mit einer Host-Allowlist aus `127.0.0.1:47331`/`localhost:47331` -- Spring AI MCPs Default waere
+mit einer Host-Allowlist aus `127.0.0.1:*`/`localhost:*` -- Spring AI MCPs Default waere
 sonst `ServerTransportSecurityValidator.NOOP`, der den Origin-/Host-Check aufruft, aber nichts
 prueft, und liesse einen per DNS-Rebinding same-origin gemachten Request durch (ADR-009 Punkt 4).
+Der Port bleibt in der Allowlist bewusst als Wildcard offen statt auf den `application.properties`-
+Default `47331` gepinnt: `server.port` ist ueber `arknet.mcp.port` selbst konfigurierbar, und eine
+auf den Default gepinnte Allowlist haette jeden Aufruf gegen einen ueberschriebenen Port mit einem
+421 abgelehnt, das weder Ursache noch Abhilfe nennt (issue #295) -- die DNS-Rebinding-Abwehr haengt
+am Hostnamen, nicht am Port, der Wildcard ist also sicherheitsaequivalent.
 
 Welches Projekt ein Aufruf trifft, entscheidet der **Anker**: eine opake Zeichenkette, die der
 Client mitschickt und die der Server ausschliesslich nachschlaegt (ADR-016). Sie kommt pro Aufruf
