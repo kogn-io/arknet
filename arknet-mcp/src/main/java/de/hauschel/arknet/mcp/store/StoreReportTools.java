@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -297,10 +298,40 @@ public final class StoreReportTools {
                 + ": " + failure.getMessage() + ") - digest above is unaffected.";
     }
 
+    /**
+     * Writes {@code html} to {@code targetDir}, atomically from a reader's point of view: the
+     * content lands in a fresh, uniquely named sibling file first, and only
+     * {@link Files#move(Path, Path, java.nio.file.CopyOption...)} - a single filesystem rename -
+     * ever touches {@link #REPORT_FILE_NAME} itself (issue #305 part 3, same
+     * write-to-temp-then-rename shape {@link StoreExportTools#exportOne} already uses, and for
+     * the same reason: a client reading the report mid-write must never see a truncated or
+     * interleaved file). {@link Files#createTempFile} - rather than a fixed {@code .tmp} name -
+     * matters here specifically because, unlike {@link StoreExportTools}'s per-call timestamped
+     * subdirectory, every {@code store_overview} call for the same project shares this exact
+     * {@code targetDir}: two overlapping calls (the ADR-009 normal case - several sessions of one
+     * project against the shared daemon) would otherwise both write through the identical fixed
+     * temp path at once, corrupting each other's content before either reached the rename.
+     */
     private Path writeReport(final String html, final Path targetDir) throws IOException {
         Files.createDirectories(targetDir);
         final Path target = targetDir.resolve(REPORT_FILE_NAME);
-        Files.writeString(target, html, StandardCharsets.UTF_8);
+        final Path tmp = Files.createTempFile(targetDir, REPORT_FILE_NAME, ".tmp");
+        try {
+            Files.writeString(tmp, html, StandardCharsets.UTF_8);
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (final IOException failure) {
+            deleteQuietly(tmp);
+            throw failure;
+        }
         return target.toAbsolutePath();
+    }
+
+    /** Best-effort cleanup of a temp file a failed write left behind; the original failure is what matters. */
+    private static void deleteQuietly(final Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (final IOException ignored) {
+            // best-effort cleanup of a partial write; the original failure already reports the real error
+        }
     }
 }

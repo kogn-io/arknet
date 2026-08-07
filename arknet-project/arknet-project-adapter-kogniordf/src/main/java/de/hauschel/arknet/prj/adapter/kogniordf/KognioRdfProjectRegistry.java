@@ -562,13 +562,14 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
             return handle.sparqlQuery().select(query)
                     .map(row -> {
                         String projectIriString = iriOf(row, "project").getIRIString();
+                        String defaultLanguage = defaultLanguagesByProject.get(projectIriString);
                         String description = selectDescription(
-                                descriptionsByProject.getOrDefault(projectIriString, List.of()));
+                                descriptionsByProject.getOrDefault(projectIriString, List.of()), defaultLanguage);
                         return new Project(ProjectGraphs.projectIdOf(projectIriString),
                                 literalOf(row, "label").getLexicalForm(),
                                 anchorsByProject.get(projectIriString),
                                 description,
-                                defaultLanguagesByProject.get(projectIriString));
+                                defaultLanguage);
                     })
                     .toList();
         }
@@ -602,8 +603,8 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
                 return Optional.empty();
             }
             String label = literalOf(rows.get(0), "label").getLexicalForm();
-            String description = selectDescription(descriptionCandidates(rows));
             String defaultLanguage = defaultLanguageOf(rows);
+            String description = selectDescription(descriptionCandidates(rows), defaultLanguage);
             List<Anchor> anchors = readAnchors(handle.sparqlQuery()::select, projectSubject);
             Project project = new Project(id, label, anchors, description, defaultLanguage);
             RevisionToken head = rows.stream()
@@ -630,8 +631,8 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
             return Optional.empty();
         }
         String label = literalOf(rows.get(0), "label").getLexicalForm();
-        String description = selectDescription(descriptionCandidates(rows));
         String defaultLanguage = defaultLanguageOf(rows);
+        String description = selectDescription(descriptionCandidates(rows), defaultLanguage);
         List<Anchor> anchors = readAnchors(handle.sparqlQuery()::select, projectSubject);
         return Optional.of(new Project(ProjectGraphs.projectIdOf(projectIriString), label, anchors,
                 description, defaultLanguage));
@@ -649,12 +650,30 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
 
     /**
      * Selects the description to surface from a set of candidates via the injected {@link
-     * #displayLocale}, or {@code null} if {@code candidates} is empty - unlike {@code
-     * skos:prefLabel}, {@code dcterms:description} is optional, so an absent description is a
-     * legal {@code null} value on {@link Project}, never a reason to drop the project itself.
+     * #displayLocale}, merged per call with {@code defaultLanguage} - the very same project's own
+     * registered {@code arkprj:defaultLanguage}, read from the same query as {@code candidates} -
+     * or {@code null} if {@code candidates} is empty - unlike {@code skos:prefLabel}, {@code
+     * dcterms:description} is optional, so an absent description is a legal {@code null} value on
+     * {@link Project}, never a reason to drop the project itself.
+     *
+     * <p>Without this merge, every reader of this class ({@code project_list}, and - borrowed via
+     * {@link de.hauschel.arknet.prj.application.port.in.FindProject}, ADR-008 - the
+     * {@code store_overview} digest/HTML headers) would show the description in the process-wide
+     * {@link #displayLocale}, while the very same page's body already merges in the project's own
+     * default language (issue #276) - a project whose default language differs from the daemon's
+     * could show its header in one language and its body in another. {@link
+     * DisplayLocale#withRequestedOverride} is a no-op for a {@code null}/blank
+     * {@code defaultLanguage}, so an unconfigured project degrades exactly as before this method
+     * existed (issue #296).</p>
+     *
+     * @param candidates      the language-tagged (and/or untagged) description literals found for
+     *                        one project
+     * @param defaultLanguage the same project's own {@code arkprj:defaultLanguage}, or
+     *                        {@code null} if it has none configured
      */
-    private String selectDescription(List<LocalizedLiteral> candidates) {
-        return displayLocale.select(candidates).map(LocalizedLiteral::value).orElse(null);
+    private String selectDescription(List<LocalizedLiteral> candidates, String defaultLanguage) {
+        return displayLocale.withRequestedOverride(defaultLanguage).select(candidates)
+                .map(LocalizedLiteral::value).orElse(null);
     }
 
     /**
