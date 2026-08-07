@@ -141,9 +141,18 @@ public interface ConstraintRepository {
     /**
      * Reads a constraint's current state together with its concurrency token, backing the read
      * side of the read-modify-write round trip whose write side {@link #compareAndUpdate} guards -
-     * mirrors {@link RequirementRepository#findCurrentByCode}, minus that method's
-     * multi-read caveat: a constraint has no follow-up reads (no linked terms, no positioned
-     * sub-resources), so its whole state and its token do come from one query.
+     * mirrors {@link RequirementRepository#findCurrentByCode}, multi-read caveat included.
+     *
+     * <p><strong>What "together" guarantees.</strong> The core fields (code, type) and the token
+     * itself (recorded by the last write through this port, ADR-014) come from one query call - one
+     * snapshot. {@code title} and {@code statement}, in contrast, are filled in by later,
+     * independent follow-up reads, because a language-tagged literal joined into the same clause
+     * would multiply one constraint into a row per title/statement combination; that is safe
+     * because a later read can only be fresher, never staler, than the token - a write through this
+     * port committing in between moves the token, so the subsequent {@link #compareAndUpdate} fails
+     * its comparison and the caller re-reads instead of overwriting state it never saw. The pairing
+     * is therefore conservative (state is never older than its paired token), not a guarantee that
+     * the whole constraint comes from a single read.</p>
      *
      * @param projectId the project (architecture model) to look up the constraint in
      * @param code      the constraint code (e.g. {@code TCON-1})

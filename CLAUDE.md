@@ -128,7 +128,9 @@ Step-`text`/Extension-`text` (`uc_add`/`uc_update`) sowie Constraint-`title`/
 `constraintStatement` (`constraint_add`/`constraint_update`) tragen jeweils
 mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
 `language`-Argument beim Schreiben gesetzt und beim Lesen ueber die
-`DisplayLocale`-Fallback-Kette aufgeloest. Die ADRs unter `docs/adr/`
+`DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-Felder (z.B. die
+ADR-Textfelder, BoundedContext-`name`/`description`) bleiben einfache,
+ungetaggte Literale ohne diesen Mechanismus. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
 Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.
 

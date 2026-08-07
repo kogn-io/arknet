@@ -3,6 +3,9 @@
 
 package de.hauschel.arknet.req.adapter.mcp;
 
+import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.blankToNull;
+import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.effectiveDisplayLocale;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -87,21 +90,6 @@ public final class ConstraintMcpTools {
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
         return projects.resolve(explicit != null ? explicit : contextAnchor(context));
-    }
-
-    /**
-     * {@code RequirementMcpTools#effectiveDisplayLocale} - identical, duplicated per adapter
-     * class: merges an explicit, caller-supplied {@code displayLocale} argument with
-     * {@code project}'s own configured default language for {@code constraint_get}. The write
-     * tools never call this - a write resolves its language through
-     * {@code LanguageTag#resolveWriteLanguage} in the application service instead, which rejects
-     * rather than degrades when neither is available.
-     */
-    private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
-        if (explicit != null && !explicit.isBlank()) {
-            return explicit;
-        }
-        return project.defaultLanguage();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -224,9 +212,5 @@ public final class ConstraintMcpTools {
         final Constraint updated = updateConstraint.update(project.id(), code, blankToNull(title),
                 blankToNull(statement), blankToNull(language), project.defaultLanguage());
         return presenter.format(updated);
-    }
-
-    private static String blankToNull(final String value) {
-        return (value == null || value.isBlank()) ? null : value;
     }
 }

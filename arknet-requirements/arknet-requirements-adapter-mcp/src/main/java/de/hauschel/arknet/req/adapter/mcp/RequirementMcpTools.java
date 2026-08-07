@@ -3,6 +3,9 @@
 
 package de.hauschel.arknet.req.adapter.mcp;
 
+import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.blankToNull;
+import static de.hauschel.arknet.req.adapter.mcp.ToolArguments.effectiveDisplayLocale;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -164,7 +167,8 @@ public final class RequirementMcpTools {
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
      * needs the resolved project's configured default language for three, independent purposes -
-     * {@link #effectiveDisplayLocale} merges it into the read tool's ({@code req_get}'s)
+     * {@link ToolArguments#effectiveDisplayLocale} merges it into the read tool's
+     * ({@code req_get}'s)
      * {@code displayLocale} default; {@code req_add}/{@code req_update} instead pass
      * {@link ResolvedProject#defaultLanguage()} straight through to their in-port as the
      * {@code defaultLanguage} a write falls back to when the caller omits {@code language}
@@ -176,21 +180,6 @@ public final class RequirementMcpTools {
     private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
         return projects.resolve(explicit != null ? explicit : contextAnchor(context));
-    }
-
-    /**
-     * Merges an explicit, caller-supplied {@code displayLocale} argument with {@code project}'s
-     * own configured default language for {@code req_get}: the explicit value wins if the caller
-     * gave a non-blank one, otherwise the project's default is used (or {@code null} if it has
-     * none, leaving the decision to {@link de.hauschel.arknet.kernel.DisplayLocale#select}'s own
-     * remaining fallback chain). Mirrors {@code UbiquitousLanguageMcpTools#effectiveDisplayLocale}
-     * - see that method's javadoc for why the write tools never call this.
-     */
-    private static String effectiveDisplayLocale(final ResolvedProject project, final String explicit) {
-        if (explicit != null && !explicit.isBlank()) {
-            return explicit;
-        }
-        return project.defaultLanguage();
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
@@ -466,9 +455,5 @@ public final class RequirementMcpTools {
                 .map(presenter::formatSchemaTerm)
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("");
-    }
-
-    private static String blankToNull(final String value) {
-        return (value == null || value.isBlank()) ? null : value;
     }
 }
