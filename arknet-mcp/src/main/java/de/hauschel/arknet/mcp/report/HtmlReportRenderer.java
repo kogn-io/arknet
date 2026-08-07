@@ -3,6 +3,10 @@
 
 package de.hauschel.arknet.mcp.report;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,7 +44,11 @@ import de.hauschel.arknet.mcp.store.Triple;
  * knows that {@code arkreq:Step} resources reached from a use case are already shown inside
  * that use case's flow, and suppresses them from the raw section so a five-step use case does
  * not also litter it with five opaque step cards. A step that no use case references is
- * <em>not</em> suppressed - an orphan is exactly what this report should surface.</p>
+ * <em>not</em> suppressed - an orphan is exactly what this report should surface. Since issue
+ * #297, {@code arkreq:AcceptanceCriterion} resources reached from a requirement's own
+ * {@code arkreq:acceptanceCriterion} edge get the same treatment, for the same reason: every
+ * requirement carries at least one, and {@link RequirementCards} already renders their text as
+ * bullets inside the requirement's own card.</p>
  */
 public final class HtmlReportRenderer {
 
@@ -51,6 +59,20 @@ public final class HtmlReportRenderer {
     private static final Set<String> STEP_EDGES = Set.of(
             "https://w3id.org/arknet/requirements#mainStep",
             "https://w3id.org/arknet/requirements#extensionStep");
+
+    /**
+     * {@code arkreq:AcceptanceCriterion} - inlined into its requirement's card instead of shown
+     * as a raw resource (issue #297). Every requirement has at least one by domain invariant, so
+     * without this suppression the "Other resources" section would fill with one opaque card per
+     * acceptance criterion in the store - exactly the "litters the report" problem {@link
+     * #STEP_TYPE}'s suppression already solves for use-case steps.
+     */
+    private static final String ACCEPTANCE_CRITERION_TYPE =
+            "https://w3id.org/arknet/requirements#AcceptanceCriterion";
+
+    /** The predicate by which a requirement reaches its acceptance criteria. */
+    private static final Set<String> ACCEPTANCE_CRITERION_EDGES = Set.of(
+            "https://w3id.org/arknet/requirements#acceptanceCriterion");
 
     private final Prefixes prefixes;
 
@@ -139,28 +161,43 @@ public final class HtmlReportRenderer {
     // --- structure -------------------------------------------------------------
 
     /**
-     * Every resource no card was built for, minus the use-case steps already shown inside their
-     * flow. Order stays the snapshot's own (primary type, then IRI), so the fallback keeps the
-     * shape the whole report used to have.
+     * Every resource no card was built for, minus the use-case steps and requirement acceptance
+     * criteria already shown inside their owning card. Order stays the snapshot's own (primary
+     * type, then IRI), so the fallback keeps the shape the whole report used to have.
      *
-     * <p>Only a <em>carded</em> use case's {@code mainStep}/{@code extensionStep} edges count as
-     * "already shown" - if the Use Cases section itself failed to build, no use case is carded,
-     * so its steps stay uninlined and fall through to this same leftovers list instead of
-     * disappearing from the whole document (issue #142).</p>
+     * <p>Only a <em>carded</em> use case's {@code mainStep}/{@code extensionStep} edges - or a
+     * <em>carded</em> requirement's {@code acceptanceCriterion} edge - count as "already shown" -
+     * if the owning section itself failed to build, no use case/requirement is carded, so its
+     * steps/acceptance criteria stay uninlined and fall through to this same leftovers list
+     * instead of disappearing from the whole document (issue #142, extended to acceptance
+     * criteria by issue #297).</p>
      */
     private static List<StoreResource> leftovers(final StoreSnapshot snapshot, final Set<String> carded) {
-        final Set<String> inlinedSteps = snapshot.resources().stream()
+        final Set<String> inlinedSteps = inlinedTargets(snapshot, carded, STEP_EDGES);
+        final Set<String> inlinedAcceptanceCriteria = inlinedTargets(snapshot, carded, ACCEPTANCE_CRITERION_EDGES);
+        return snapshot.resources().stream()
+                .filter(resource -> !carded.contains(resource.iri()))
+                .filter(resource -> !(resource.types().contains(STEP_TYPE) && inlinedSteps.contains(resource.iri())))
+                .filter(resource -> !(resource.types().contains(ACCEPTANCE_CRITERION_TYPE)
+                        && inlinedAcceptanceCriteria.contains(resource.iri())))
+                .toList();
+    }
+
+    /**
+     * The targets of {@code edges} reached from a <em>carded</em> resource - shared by {@link
+     * #leftovers}'s two suppressions (use-case steps, requirement acceptance criteria), which
+     * differ only in which edge predicates and which type they inline.
+     */
+    private static Set<String> inlinedTargets(
+            final StoreSnapshot snapshot, final Set<String> carded, final Set<String> edges) {
+        return snapshot.resources().stream()
                 .filter(resource -> carded.contains(resource.iri()))
                 .flatMap(resource -> resource.outgoing().stream())
-                .filter(triple -> STEP_EDGES.contains(triple.predicate()))
+                .filter(triple -> edges.contains(triple.predicate()))
                 .map(Triple::object)
                 .filter(RdfNode.Resource.class::isInstance)
                 .map(object -> ((RdfNode.Resource) object).iri())
                 .collect(Collectors.toSet());
-        return snapshot.resources().stream()
-                .filter(resource -> !carded.contains(resource.iri()))
-                .filter(resource -> !(resource.types().contains(STEP_TYPE) && inlinedSteps.contains(resource.iri())))
-                .toList();
     }
 
     private void appendHeader(
@@ -357,7 +394,12 @@ public final class HtmlReportRenderer {
      * fallback chain, so a switch built only from tagged literals would silently omit exactly
      * that field. It is keyed by the call's {@code displayLocale}'s {@code systemDefault} language,
      * the same language an untagged literal would be shown under if the store held no other
-     * candidate.</p>
+     * candidate - but only if no literal is genuinely tagged with that same language: a tagged
+     * literal always wins its key over an untagged one, mirroring {@link DisplayLocale#select}'s
+     * own precedence (step 2 before step 3). Without that precedence here, {@code subject}'s own
+     * triple order - not guaranteed stable by {@link StoreResource#types()}'s javadoc - would
+     * decide which of the two survives the switch, and the reachable, correctly tagged literal
+     * could lose to a stale untagged one (issue #301).</p>
      *
      * <p>The match back from {@code displayed} to a predicate is by text equality alone - there is
      * no predicate available at the call sites to match on instead. If more than one predicate on
@@ -391,9 +433,21 @@ public final class HtmlReportRenderer {
         final String predicate = match.getKey();
         final String activeLang = languageKey(match.getValue(), displayLocale);
         final Map<String, String> byLang = new LinkedHashMap<>();
+        // Tagged literals first, so a genuinely tagged systemDefault-language literal always
+        // claims its key - an untagged literal (added in the second pass below) only fills a key
+        // no tagged literal already holds. Splitting into two passes, rather than one pass that
+        // prefers tagged on a collision, keeps the same precedence regardless of subject.outgoing()'s
+        // encounter order, which StoreResource#types()' javadoc documents as not stable (issue #301).
         for (final Triple triple : subject.outgoing()) {
-            if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
-                byLang.putIfAbsent(languageKey(literal, displayLocale), literal.lexicalForm());
+            if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal
+                    && literal.languageTag() != null) {
+                byLang.putIfAbsent(literal.languageTag(), literal.lexicalForm());
+            }
+        }
+        for (final Triple triple : subject.outgoing()) {
+            if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal
+                    && literal.languageTag() == null) {
+                byLang.putIfAbsent(displayLocale.systemDefault().toLanguageTag(), literal.lexicalForm());
             }
         }
         return byLang.size() > 1 ? Optional.of(new LangVariants(activeLang, byLang)) : Optional.empty();
@@ -628,8 +682,14 @@ public final class HtmlReportRenderer {
      * {@code .../a.b} and {@code .../a-b} both become {@code a-b}). Model resources are
      * UUID-minted and never collide this way, but the "Other resources" section renders
      * arbitrary store IRIs by design (issue #150) - appending a short hash of the untouched,
-     * full IRI is what makes the anchor injective regardless, while the sanitized CURIE in front
-     * keeps it readable in a browser's address bar.</p>
+     * full IRI is what makes two sanitized-collapsed IRIs diverge again with overwhelming
+     * probability, while the sanitized CURIE in front keeps it readable in a browser's address
+     * bar. {@link #shortHash} is a SHA-256 digest, not merely {@link String#hashCode()}
+     * (issue #305 part 2): a 32-bit {@code hashCode} is trivially collidable by construction, so
+     * it never actually delivered the injectivity this method used to claim - the same collision
+     * risk {@link de.hauschel.arknet.mcp.store.FileNameSanitizer#uniqueSegment} closes for
+     * on-disk path segments with the identical SHA-256-suffix design, only duplicated here rather
+     * than shared because {@code FileNameSanitizer} is package-private to {@code mcp.store}.</p>
      */
     private String resourceAnchor(final String iri) {
         return "r-" + sanitize(prefixes.toCurie(iri)) + "-" + shortHash(iri);
@@ -642,10 +702,17 @@ public final class HtmlReportRenderer {
     /**
      * @param iri the full, unsanitized IRI - never the CURIE, so two IRIs that collapse to the
      *            same sanitized text still hash differently
-     * @return an 8-hex-digit, deterministic digest of {@code iri}
+     * @return a 16-hex-digit prefix of {@code iri}'s SHA-256 digest, deterministic across calls
      */
     private static String shortHash(final String iri) {
-        return String.format("%08x", iri.hashCode());
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (final NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is a JDK-mandated algorithm", impossible);
+        }
+        final byte[] hashed = digest.digest(iri.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hashed, 0, 8);
     }
 
     static String escape(final String value) {

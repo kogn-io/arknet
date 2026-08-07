@@ -379,6 +379,78 @@ class KognioRdfProjectRegistryTest {
         }
     }
 
+    // ---- description locale merge (issue #296) -----------------------------------------------
+
+    /**
+     * Regression test for issue #296: {@code selectDescription} used to select purely via the
+     * injected, process-wide {@link DisplayLocale} ({@code setUp()} wires {@link
+     * DisplayLocale#DEFAULT}, requested English) - not merged with the very project's own
+     * registered {@code arkprj:defaultLanguage}, even though both are read from the same query.
+     * A project configured with German as its default language, but carrying both a German and
+     * an English description, must surface the German one - the same merge {@code store_overview}
+     * already applies to the report body (issue #276), which this read path feeds via {@code
+     * FindProject} for the report's header.
+     */
+    @Test
+    void findByIdSelectsTheDescriptionInTheProjectsOwnDefaultLanguageNotTheProcessWideLocale() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet-de-default", List.of(pathAnchor("/home/dev/arknet-de-default")));
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de");
+        ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+
+        Project found = registry.findById(id).orElseThrow();
+
+        assertEquals("Architekturmodelle, die Maschinen verstehen.", found.description());
+    }
+
+    /** {@link #findAll()} must apply the same per-project merge, not just the single-project reads. */
+    @Test
+    void findAllSelectsEachProjectsDescriptionInItsOwnDefaultLanguage() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet-de-default-2", List.of(pathAnchor("/home/dev/arknet-de-default-2")));
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de");
+        ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+
+        Project found = registry.findAll().stream()
+                .filter(candidate -> candidate.id().equals(id)).findFirst().orElseThrow();
+
+        assertEquals("Architekturmodelle, die Maschinen verstehen.", found.description());
+    }
+
+    /** {@link #findCurrentById} feeds {@code project_update}'s read-modify-write path and must merge too. */
+    @Test
+    void findCurrentByIdSelectsTheDescriptionInTheProjectsOwnDefaultLanguage() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet-de-default-3", List.of(pathAnchor("/home/dev/arknet-de-default-3")));
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", "de");
+        ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+
+        ProjectRegistry.CurrentProject reread = registry.findCurrentById(id).orElseThrow();
+
+        assertEquals("Architekturmodelle, die Maschinen verstehen.", reread.project().description());
+    }
+
+    /**
+     * A project without a configured default language must keep degrading exactly as before this
+     * merge existed: {@link DisplayLocale#withRequestedOverride} is a no-op for a {@code null}
+     * override, so the process-wide {@link DisplayLocale} decides alone.
+     */
+    @Test
+    void findByIdFallsBackToTheProcessWideLocaleWhenTheProjectHasNoDefaultLanguage() {
+        ProjectId id = freshId();
+        Project project = new Project(id, "arknet-no-default", List.of(pathAnchor("/home/dev/arknet-no-default")));
+        registry.register(project, "Architekturmodelle, die Maschinen verstehen.", "de", null);
+        ProjectRegistry.CurrentProject current = registry.findCurrentById(id).orElseThrow();
+        registry.updateAttributes(id, current.head(), "Architecture models machines understand.", "en", null);
+
+        Project found = registry.findById(id).orElseThrow();
+
+        assertEquals("Architecture models machines understand.", found.description());
+    }
+
     // ---- self-description -------------------------------------------------------------------
 
     @Test

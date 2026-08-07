@@ -10,10 +10,16 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -421,6 +427,51 @@ class StoreReportToolsTest {
         assertThat(result)
                 .contains("# HTML report: " + hostDir.resolve(segment).resolve("store-report.html"))
                 .doesNotContain(reportDir.toString());
+    }
+
+    /**
+     * Regression test for issue #305 part 3: two overlapping {@code store_overview} calls for the
+     * SAME project - the ADR-009 normal case, several sessions of one project against the shared
+     * daemon - used to both write straight onto {@code store-report.html} via {@code
+     * Files.writeString}, risking a reader observing a truncated or interleaved file mid-write.
+     * Each call now writes through its own uniquely named temp file and only the final {@link
+     * Files#move} touches the report's real name, so every writer that finishes leaves a whole,
+     * valid document behind and no temp file lingers once every writer is done.
+     */
+    @Test
+    void storeOverviewNeverLeavesATruncatedReportUnderConcurrentCalls() throws Exception {
+        final int callers = 8;
+        final ExecutorService pool = Executors.newFixedThreadPool(callers);
+        try {
+            final CountDownLatch ready = new CountDownLatch(callers);
+            final CountDownLatch go = new CountDownLatch(1);
+            final List<Future<String>> futures = new ArrayList<>();
+            for (int i = 0; i < callers; i++) {
+                futures.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return tools.storeOverview(null, ANCHOR);
+                }));
+            }
+            ready.await();
+            go.countDown();
+            for (final Future<String> future : futures) {
+                assertThat(future.get()).doesNotContain("FAILED");
+            }
+        } finally {
+            pool.shutdown();
+        }
+
+        final Path targetDir = reportDir.resolve(StoreReportTools.reportSegment(PROJECT));
+        final Path html = targetDir.resolve("store-report.html");
+        assertThat(html).exists();
+        final String content = Files.readString(html);
+        assertThat(content).startsWith("<!doctype html>").endsWith("</html>\n");
+        try (Stream<Path> files = Files.list(targetDir)) {
+            assertThat(files.map(Path::getFileName).map(Path::toString))
+                    .as("no leftover temp file once every concurrent writer finished")
+                    .noneMatch(name -> name.endsWith(".tmp"));
+        }
     }
 
     /**

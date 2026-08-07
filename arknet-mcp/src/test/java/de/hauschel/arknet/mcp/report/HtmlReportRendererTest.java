@@ -5,7 +5,12 @@ package de.hauschel.arknet.mcp.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -99,6 +104,53 @@ class HtmlReportRendererTest {
     }
 
     /**
+     * Issue #297: since #266 every acceptance criterion is its own {@code
+     * arkreq:AcceptanceCriterion} resource, already rendered as a bullet inside its requirement's
+     * card ({@link RequirementCards}). Without this suppression it also showed up as its own raw
+     * card in "Other resources" - the exact "litters the report" problem the step suppression
+     * above already solves for use-case steps, just for a resource every requirement carries by
+     * domain invariant.
+     */
+    @Test
+    void suppressesAcceptanceCriteriaFromTheRawSectionWhenTheirRequirementIsCarded() {
+        final String ac = ID + "ac-1";
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(FR_1, RDF_TYPE, ARKREQ + "Requirement"),
+                iri(FR_1, ARKREQ + "acceptanceCriterion", ac),
+                iri(ac, RDF_TYPE, ARKREQ + "AcceptanceCriterion"),
+                literal(ac, ARKREQ + "criterionText", "Bestellung ist abgeschlossen")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).doesNotContain("id=\"r-" + anchorOf(ac) + "\"");
+    }
+
+    /**
+     * Counterpart to {@link #suppressesAcceptanceCriteriaFromTheRawSectionWhenTheirRequirementIsCarded()},
+     * mirroring the #142 protection already in place for use-case steps: if the Requirements
+     * section itself failed to build, no requirement is carded, so its acceptance criteria must
+     * not be swallowed as if a requirement card had already shown them.
+     */
+    @Test
+    void keepsAcceptanceCriteriaInOtherResourcesWhenTheRequirementsSectionItselfFailed() {
+        final String ac = ID + "ac-1";
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(FR_1, RDF_TYPE, ARKREQ + "Requirement"),
+                iri(FR_1, ARKREQ + "acceptanceCriterion", ac),
+                iri(ac, RDF_TYPE, ARKREQ + "AcceptanceCriterion"),
+                literal(ac, ARKREQ + "criterionText", "Bestellung ist abgeschlossen")));
+        final ModelViews.Views views = new ModelViews.Views(
+                List.of(), List.of("Requirements: could not be read (IllegalStateException: store closed)"));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views, DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("id=\"r-" + anchorOf(ac) + "\"");
+    }
+
+    /**
      * An orphan step belongs to no flow, so suppressing it would make it invisible - exactly the
      * kind of leftover this report exists to surface.
      */
@@ -135,6 +187,32 @@ class HtmlReportRendererTest {
         assertThat(anchorOf(dotted)).isNotEqualTo(anchorOf(dashed));
         assertThat(html).contains("id=\"r-" + anchorOf(dotted) + "\"");
         assertThat(html).contains("id=\"r-" + anchorOf(dashed) + "\"");
+    }
+
+    /**
+     * Issue #305 part 2: {@link String#hashCode()} is a 32-bit hash, trivially collidable by
+     * construction - unlike the {@code .}-vs-{@code -} pair above (which merely collapse to the
+     * same *sanitized text*), these two IRIs are chosen to also collide under raw
+     * {@code String#hashCode()} ({@code "a.!b".hashCode() == "a-@b".hashCode()}), so the previous
+     * {@code shortHash} gave them the identical anchor too. A SHA-256-based hash must still tell
+     * them apart.
+     */
+    @Test
+    void givesTwoIrisThatCollideUnderRaw32BitHashCodeDifferentAnchors() {
+        final String first = ID + "a.!b";
+        final String second = ID + "a-@b";
+        assertThat(first.hashCode()).isEqualTo(second.hashCode());
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(first, RDF_TYPE, ARKREQ + "Step"),
+                literal(first, ARKREQ + "stepText", "Erster"),
+                iri(second, RDF_TYPE, ARKREQ + "Step"),
+                literal(second, ARKREQ + "stepText", "Zweiter")));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(), DisplayLocale.DEFAULT);
+
+        assertThat(anchorOf(first)).isNotEqualTo(anchorOf(second));
+        assertThat(html).contains("id=\"r-" + anchorOf(first) + "\"");
+        assertThat(html).contains("id=\"r-" + anchorOf(second) + "\"");
     }
 
     /** Every card keeps its raw triples one click away, so the model view never has to be trusted blindly. */
@@ -404,6 +482,36 @@ class HtmlReportRendererTest {
         assertThat(html).doesNotContain("<span class=\"lang-group\"");
     }
 
+    /**
+     * Issue #301: a predicate can carry both an untagged legacy literal (pre-#258) and a
+     * genuinely {@code systemDefault}-tagged literal at the same time. The untagged one must not
+     * win the {@code systemDefault} key just because {@code StoreResource#outgoing()}'s encounter
+     * order happened to see it first - a tagged literal always wins its own key, mirroring
+     * {@link DisplayLocale#select}'s own precedence (a tagged match beats an untagged one).
+     */
+    @Test
+    void prefersATaggedSystemDefaultLiteralOverAnUntaggedLegacyOneInTheLanguageSwitch() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Hallo", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literal(FR_1, "http://purl.org/dc/terms/title", "Legacy title"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Hello", "en"),
+                literalLang(FR_1, "http://purl.org/dc/terms/title", "Hallo", "de")));
+        final DisplayLocale displayLocale = new DisplayLocale(Locale.GERMAN, Locale.ENGLISH);
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), displayLocale);
+
+        // Exactly two variants - the tagged "en" one, never the untagged legacy literal - and the
+        // active "de" one selected by displayLocale.requested().
+        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>Hello</span>"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Hallo</span></span>");
+        // The untagged literal is still visible in the card's own raw-triples view (its safety
+        // net, never hidden) - just not smuggled into the language switch under the "en" key.
+        assertThat(html).contains("<span class=\"lit str\">\"Legacy title\"</span>");
+    }
+
     /** The toolbar always offers the control; the script hides it when no field has variants. */
     @Test
     void addsALanguageSwitchToTheToolbar() {
@@ -452,7 +560,19 @@ class HtmlReportRendererTest {
     /** Mirrors {@code HtmlReportRenderer#resourceAnchor} for a namespace with no CURIE binding. */
     private static String anchorOf(final String iri) {
         final String sanitized = iri.replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-|-$", "");
-        return sanitized + "-" + String.format("%08x", iri.hashCode());
+        return sanitized + "-" + shortHash(iri);
+    }
+
+    /** Mirrors {@code HtmlReportRenderer#shortHash} (issue #305 part 2: SHA-256, not {@code String#hashCode()}). */
+    private static String shortHash(final String iri) {
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (final NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        final byte[] hashed = digest.digest(iri.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hashed, 0, 8);
     }
 
     private static Triple iri(final String subject, final String predicate, final String object) {
