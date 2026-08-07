@@ -33,7 +33,9 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * cross-bounded-context edges the traceability tools traverse:
  * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
  * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
- * (BoundedContext -&gt; Term), the three ADR edges
+ * (BoundedContext -&gt; Term), {@code arkddd:upstream}/{@code arkddd:downstream} (ContextRelationship
+ * -&gt; BoundedContext, issue #293), {@code oslc_rm:constrainedBy} (Requirement -&gt; Constraint,
+ * issue #223), the three ADR edges
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
  * (ADR -&gt; BoundedContext) and {@code arkarch:supersedes} (ADR -&gt; ADR, issue #69), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
@@ -83,6 +85,14 @@ public final class TraceabilityGraph {
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
+
+    /**
+     * {@code arkddd:upstream}/{@code arkddd:downstream} - ContextRelationship -&gt; BoundedContext
+     * (issue #293), the same shared constants {@code KognioRdfContextRelationshipRepository}
+     * serialises them with.
+     */
+    private static final String UPSTREAM = ArkdddVocabulary.UPSTREAM;
+    private static final String DOWNSTREAM = ArkdddVocabulary.DOWNSTREAM;
 
     /** {@code skos:broader} - Term -&gt; its broader (superordinate) Term (issue #252). */
     private static final String BROADER = ArkreqVocabulary.BROADER;
@@ -150,11 +160,23 @@ public final class TraceabilityGraph {
      * would make every related decision reachable from every other one and turn an impact report
      * into a cluster dump. {@code oslc_rm:constrainedBy} (Requirement -&gt; Constraint, issue #223)
      * joins the set for the same reason as {@code usesTerm}: a changed or removed Constraint should
-     * surface the requirements bound by it in {@code impact_analysis}.
+     * surface the requirements bound by it in {@code impact_analysis}. {@code arkddd:upstream}/
+     * {@code arkddd:downstream} (ContextRelationship -&gt; BoundedContext, issue #293) join for the
+     * same reason as the three {@code arkarch:} edges: a recorded context-map relationship is
+     * exactly the kind of artifact whose classification needs re-checking when either bounded
+     * context it names changes, so both directions are listed here - a ContextRelationship is
+     * reported as affected whichever of its two bounded contexts changed, unlike {@code
+     * arkreq:Step}, it is never filtered out below, since it is (unlike a Step) a first-class
+     * resource of its own (see the bounded-context module's CLAUDE.md). Deliberately <em>not</em>
+     * traversed further from there: the partner bounded context on the relationship's other end is
+     * not itself reached (it carries no backward-pointing edge to the relationship) - doing so
+     * would need a two-hop traversal analogous to {@code mainStep}/{@code stepRealises}, left for a
+     * follow-up if ever needed.
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
-            UBIQUITOUS_LANGUAGE_TERM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT, SUPERSEDES, CONSTRAINED_BY);
+            UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT, SUPERSEDES,
+            CONSTRAINED_BY);
 
     private final Map<String, List<Triple>> outgoingBySubject;
     private final Map<String, List<Triple>> incomingByObject;

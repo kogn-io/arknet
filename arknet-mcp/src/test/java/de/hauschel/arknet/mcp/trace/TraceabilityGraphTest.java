@@ -24,10 +24,15 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
+import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
+import de.hauschel.arknet.bc.application.port.out.ContextRelationshipRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
+import de.hauschel.arknet.bc.domain.ContextRelationship;
+import de.hauschel.arknet.bc.domain.ContextRelationshipId;
+import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
@@ -498,6 +503,38 @@ class TraceabilityGraphTest {
     @Test
     void dependentsOfTheOrphanTermIsEmpty() {
         assertThat(graph.dependents(TERM_2_IRI)).isEmpty();
+    }
+
+    /**
+     * Regression test for issue #293: a {@code bc_link_context}-created {@code
+     * arkddd:ContextRelationship} must show up in {@code impact_analysis} on either of the two
+     * bounded contexts it names - before the fix, {@code arkddd:upstream}/{@code arkddd:downstream}
+     * were missing from {@link TraceabilityGraph}'s {@code DEPENDENT_EDGE_PREDICATES}, so a
+     * recorded context-map relationship was invisible to a changed bounded context's impact
+     * report. Both directions are checked: the relationship is reported as affected whichever of
+     * its two bounded contexts changes.
+     */
+    @Test
+    void dependentsOfEitherBoundedContextReachesTheirContextRelationship() {
+        String bc2Iri = "https://w3id.org/arknet/id/trace-test-bc-2";
+        String relationshipIri = "https://w3id.org/arknet/id/trace-test-context-relationship";
+        BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        boundedContexts.create(PROJECT, new BoundedContext(
+                new BoundedContextId(ResourceId.of(bc2Iri)), new BoundedContextCode("BC-2"), "Billing",
+                "Wir stellen Rechnungen.", null, null, List.of()));
+        ContextRelationshipRepository contextRelationships =
+                KognioRdfContextRelationshipRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        contextRelationships.create(PROJECT, new ContextRelationship(
+                new ContextRelationshipId(ResourceId.of(relationshipIri)),
+                new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextId(ResourceId.of(bc2Iri)),
+                RelationshipType.CUSTOMER_SUPPLIER));
+
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.dependents(BC_1_IRI)).contains(relationshipIri);
+        assertThat(freshGraph.dependents(bc2Iri)).contains(relationshipIri);
     }
 
     @Test
