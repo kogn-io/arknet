@@ -27,5 +27,6 @@ Sicht.** Weichen beide voneinander ab, gewinnt der Record, und diese Tabelle wir
 | 017 | [ISO/IEC/IEEE 15288 als Scope-Orientierung](adr-017-iso-15288-als-scope-orientierung.md) | Proposed | 2026-08-02 | Der Ontologie-Scope orientiert sich an 15288s Technical-Process-Gruppe als Rahmen, nicht als Implementierungsziel. |
 | 018 | [Requirement-Status bleibt ohne Durchsetzung](adr-018-requirement-status-ohne-durchsetzung.md) | Superseded by ADR-019 | 2026-08-06 | Requirement-Status bleibt ein unverbindliches Reifegrad-Signal ohne Durchsetzung; Ausbau ist zurueckgestellt. |
 | 019 | [Requirement-Status bleibt ohne Durchsetzung, ist aber beidseitig setzbar](adr-019-requirement-status-beidseitig-setzbar.md) | Accepted | 2026-08-06 | Requirement-Status bleibt ein unverbindliches Reifegrad-Signal ohne Durchsetzung, ist aber in beide Richtungen setzbar. |
+| 020 | [Constraint-Text ist korrigierbar, Klassifikation und Code nicht](adr-020-constraint-text-korrigierbar.md) | Accepted | 2026-08-07 | Titel und Statement eines Constraints sind nachtraeglich korrigierbar und mehrsprachig; Klassifikation und Business-Code stehen mit der Anlage endgueltig fest. |
 
 ADR-002 existiert nicht -- keine Luecke im Index, die Nummer wurde nie vergeben.
