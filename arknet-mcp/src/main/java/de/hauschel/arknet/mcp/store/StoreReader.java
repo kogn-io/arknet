@@ -201,9 +201,24 @@ public final class StoreReader {
      * business id, e.g. {@code FR-1}). Returns all matches so the caller can reject an
      * ambiguous id spanning bounded contexts instead of guessing.
      *
+     * <p>A subject may be a blank node - a store-first resource with no minted IRI (ADR-005) is
+     * RDF-legal and does carry a {@code dcterms:identifier} like any other resource - so a match
+     * is mapped through {@link #subjectReference} rather than filtered down to {@link IRI}
+     * subjects only; a blank-node match comes back as the same {@code "_:" + reference} handle
+     * {@link #toNode}/{@link #outgoing}/{@link #incoming} already use for one (issue #299). Before
+     * this, such a subject was silently dropped: {@link DigestRenderer} still printed its
+     * identifier as a drill-down handle, but resolving that handle here found nothing.
+     *
+     * <p>Deliberately not run through {@link #excludingInfrastructure} like the other three read
+     * methods: neither the shared write funnel nor the project self-description currently write
+     * {@code dcterms:identifier} into a {@link #HIDDEN_GRAPHS} graph, so the gap is harmless today
+     * - but it is real, and this method would start returning ids that live in a hidden graph the
+     * moment something starts writing one there.
+     *
      * @param projectId the project to read
      * @param identifier  the {@code dcterms:identifier} lexical value
-     * @return the matching subject IRIs (distinct)
+     * @return the matching subject references (distinct) - absolute IRIs, or blank-node
+     *         references as rendered by {@link #toNode}
      */
     public List<String> findByIdentifier(ProjectId projectId, String identifier) {
         Objects.requireNonNull(projectId, "projectId");
@@ -213,8 +228,8 @@ public final class StoreReader {
         try (DatasetHandle handle = acquire(projectId)) {
             return handle.sparqlQuery().select(query)
                     .map(row -> row.getValue("s").orElse(null))
-                    .filter(IRI.class::isInstance)
-                    .map(term -> ((IRI) term).getIRIString())
+                    .map(StoreReader::subjectReference)
+                    .filter(Objects::nonNull)
                     .distinct()
                     .toList();
         }
