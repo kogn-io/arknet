@@ -26,10 +26,11 @@ final class UnmentionedTerms {
      * @param glossary          the project's glossary
      * @param texts             the prose already scanned for mentions (e.g. description and
      *                          acceptance criteria, or a domain vision)
-     * @param sectionTitle      the block title when no linked term is named in {@code texts} at
-     *                          all (e.g. {@code "Uses terms"})
-     * @param unmentionedSuffix appended in parentheses when some, but not all, linked terms are
-     *                          named (e.g. {@code "not named in the text"})
+     * @param sectionTitle      the block title when {@code texts} names no glossary term at all -
+     *                          linked or not (e.g. {@code "Uses terms"})
+     * @param unmentionedSuffix appended in parentheses as soon as {@code texts} names at least one
+     *                          glossary term, even one {@code linked} does not itself point at
+     *                          (e.g. {@code "not named in the text"})
      */
     static void addTo(
             final List<Block> blocks,
