@@ -150,11 +150,11 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@link AdrMcpTools} (ADR-008). Its third relation, {@code supersedes}, is self-referential
  *       and therefore resolved inside {@link AdrService} - no port is borrowed for it.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
- *       RDF-persisted registry) - the five project tools ({@code project_add}/
+ *       RDF-persisted registry) - the project tools ({@code project_add}/
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
- *       {@code project_list}), assembled
+ *       {@code project_update}/{@code project_list}), assembled
  *       through {@link KognioRdfProjectRepositoryFactory}. This one is shaped differently from the
- *       four above and deliberately so (ADR-016): it manages identity rather than model, its
+ *       model hexagons above and deliberately so (ADR-016): it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
  *       hexagon here wired <em>without</em> a {@link ProjectResolver} - it reads the caller's
  *       anchor raw and looks it up, which is the substance of ADR-016 rather than an omission.
@@ -162,7 +162,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
- * {@code arknet.rdf.storage}, no competing locks); the five model hexagons additionally share the
+ * {@code arknet.rdf.storage}, no competing locks); the model hexagons additionally share the
  * single {@link ProjectResolver} bean. Every tool call resolves its {@link ProjectId} per request
  * by looking up the anchor the caller sent - in the request header (see
  * {@link AnchorHttpTransportConfiguration}) or as an explicit tool parameter - so requirements,
@@ -330,9 +330,9 @@ public class ArknetMcpConfiguration {
      * single project fixed at boot; the anchor arrives per call in the request header (see
      * {@link AnchorHttpTransportConfiguration}) or as a tool parameter.
      *
-     * <p>This bean is where the four model hexagons meet the project hexagon: it adapts the
+     * <p>This bean is where the model hexagons meet the project hexagon: it adapts the
      * kernel's {@link ProjectResolver} port onto {@link ProjectService}'s {@code ResolveProject}
-     * in-port, so those four depend on the neutral port and never on {@code arknet-project} - see
+     * in-port, so the model hexagons depend on the neutral port and never on {@code arknet-project} - see
      * {@link RegisteredAnchorProjectResolver}. It takes no configuration at all, which is the
      * point: {@code arknet.workspace.id}, the working-directory fallback and the git derivation
      * they fed are gone, not made optional (ADR-016 decision 9).</p>
@@ -374,7 +374,8 @@ public class ArknetMcpConfiguration {
 
     /**
      * The display language this server instance reads labels in - a consumer-supplied context,
-     * exactly like {@link ProjectId}: one value per process, injected into the bounded context
+     * injected once per process as this single bean (unlike {@link ProjectId}, which arknet-mcp
+     * resolves per call from the caller's anchor rather than fixing at boot, ADR-009).
      * A glossary concept may carry {@code skos:prefLabel} in several languages;
      * {@link DisplayLocale#select} then chooses which one the read paths surface, degrading
      * through a fixed fallback chain (requested language, {@code arknet.locale.requested} -> system
@@ -647,8 +648,8 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The five project tools ({@code project_add}, {@code project_attach_anchor},
-     * {@code project_rename}, {@code project_list}, {@code project_adopt}).
+     * The project tools ({@code project_add}, {@code project_attach_anchor},
+     * {@code project_rename}, {@code project_update}, {@code project_list}, {@code project_adopt}).
      *
      * <p>Note what is <em>not</em> injected: no {@link ProjectResolver}. Every other
      * {@code *McpTools} bean gets one to turn a call's anchor into a {@link ProjectId}

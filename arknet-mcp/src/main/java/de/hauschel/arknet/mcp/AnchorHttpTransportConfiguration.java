@@ -58,15 +58,25 @@ class AnchorHttpTransportConfiguration {
     static final String ANCHOR_HEADER = "X-Arknet-Project-Anchor";
 
     /**
-     * The daemon's fixed loopback host:port (ADR-009), in both the numeric and the {@code
-     * localhost} spelling a browser's Host header may carry. Anything else is rejected by the
-     * {@link #webMvcStreamableServerTransportProvider security validator} below, which is what
-     * closes the DNS-rebinding gap: without it, Spring AI MCP's default {@code
+     * The daemon's fixed loopback host, in both the numeric and the {@code localhost} spelling a
+     * browser's Host header may carry - port left as a {@code :*} wildcard rather than pinned to the
+     * {@code application.properties} default of {@value #DEFAULT_PORT},
+     * because {@code server.port} is itself overridable via {@code arknet.mcp.port} and a validator
+     * pinned to the default port would reject every request against an overridden one with a 421
+     * that names neither cause nor remedy (issue #295). The wildcard is security-equivalent to a
+     * pinned port: {@link DefaultServerTransportSecurityValidator}'s DNS-rebinding defense keys on
+     * the host name, not the port, so any port on {@code 127.0.0.1}/{@code localhost} is still only
+     * reachable from this machine. Anything else is rejected by the {@link
+     * #webMvcStreamableServerTransportProvider security validator} below, which is what closes the
+     * DNS-rebinding gap: without it, Spring AI MCP's default {@code
      * ServerTransportSecurityValidator.NOOP} calls the Origin/Host check but enforces nothing, so a
      * malicious page that rebinds a hostname to {@code 127.0.0.1} becomes same-origin with the
      * daemon and can drive any tool.
      */
-    private static final List<String> ALLOWED_HOSTS = List.of("127.0.0.1:47331", "localhost:47331");
+    private static final List<String> ALLOWED_HOSTS = List.of("127.0.0.1:*", "localhost:*");
+
+    /** The port {@code application.properties} falls back to when {@code arknet.mcp.port} is unset. */
+    private static final String DEFAULT_PORT = "47331";
 
     /**
      * Overrides the auto-configured Streamable-HTTP transport provider with one that extracts the
