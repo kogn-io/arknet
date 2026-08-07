@@ -81,7 +81,9 @@ eine explizite Ordnungsrelation der Statuswerte entsteht und -- sofern eine Ruec
 gewuenscht ist -- ein Change-Request-Apparat (Versionierung, eigene Ressource, genehmigende Rolle).
 Diese Vorarbeit ist in #289 festgehalten und hier bewusst nicht geleistet.
 
-Bis #291 umgesetzt ist, weicht die Implementierung von Punkt 4 dieser Entscheidung ab.
+Mit dem Fix aus #291 setzt die Implementierung Punkt 4 dieser Entscheidung vollstaendig um:
+`req_set_status` erreicht sowohl `Proposed` als auch `Accepted`, die zuvor bestehende
+Ruecksprungsperre ist behoben.
 
 ## Alternativen
 
