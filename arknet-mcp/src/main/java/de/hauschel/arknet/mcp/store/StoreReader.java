@@ -27,11 +27,12 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  * the kognio-rdf substrate, spanning the default and all named graphs.
  *
  * <p>Domain-agnostic by construction - it never mentions a requirement, term or any type,
- * so it feeds the store report for every bounded context alike. It is also the only store
- * class here that touches the kognio-rdf dataset API; every result term is mapped onto the
- * neutral {@link Triple} / {@link RdfNode} model so the snapshot and renderers stay free of
- * backend types. This class depends solely on the technology-neutral kognio-rdf ports, never
- * on RDF4J.</p>
+ * so it feeds the store report for every bounded context alike. It is also the only class on
+ * this model read path that touches the kognio-rdf dataset API ({@link StoreExporter} touches
+ * it too, but for the backup/export path, not for reading the model); every result term is
+ * mapped onto the neutral {@link Triple} / {@link RdfNode} model so the snapshot and renderers
+ * stay free of backend types. This class depends solely on the technology-neutral kognio-rdf
+ * ports, never on RDF4J.</p>
  *
  * <p><strong>The infrastructure graphs are invisible here.</strong> Two named graphs inside a
  * project's dataset carry no model at all, and all three read methods exclude both through the
@@ -49,15 +50,14 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  *       call ever addresses; only the self-description sits inside the dataset being read.</li>
  * </ul>
  *
- * <p><strong>Why the head pointer is excluded too</strong>, even though exactly one
- * {@code arkprov:head} per resource would be bounded and cheap to show: the head only moves on
- * writes <em>through the write funnel</em>, and four user-reachable write paths still bypass it
- * ({@code req_update}, {@code req_set_status}, {@code req_link_term}, {@code term_update}; see
- * {@code WriteFunnel} and ADR-014 decision 4). A head rendered by {@code resource_get} would
- * therefore stand still while the resource changes, and a client reading it as a version or
- * change signal - which is what {@code arkprov:head} means - would be misled. The head becomes
- * visible again when it stops lying, i.e. once those paths are resolved into the funnel; until
- * then the trail accumulates in the store without any generic reader surfacing it.</p>
+ * <p><strong>Why the head pointer is excluded too</strong>, even though it is bounded (exactly
+ * one {@code arkprov:head} per resource) and, since ADR-014 decision 4, a usable concurrency
+ * token now that every user-reachable write path moves it through {@code WriteFunnel
+ * #compareAndUpdate}: showing it here would mix the model with its change history the moment a
+ * client read it as a version or change signal. That trail belongs to {@link #history}
+ * (issue #251), not to this read path - {@code store_overview}/{@code resource_get} stay blind
+ * to {@link ArkprovVocabulary#PROVENANCE_GRAPH} on purpose, showing the model and never its
+ * provenance.</p>
  *
  * <p><strong>{@link #history} is the one deliberate exception</strong> (issue #251): unlike
  * {@link #readSnapshot}/{@link #outgoing}/{@link #incoming}, it reads exactly
@@ -289,8 +289,10 @@ public final class StoreReader {
      * <p>Two branches, because the plain pattern may already span every context on some backends
      * (see the {@code DISTINCT} note in {@code StoreReaderTest}): the {@code GRAPH} branch is
      * guarded by graph IRI, the plain branch by "this triple lives <em>only</em> in hidden
-     * graphs". A triple that also exists in a model graph therefore survives via the
-     * {@code GRAPH} branch, and {@code DISTINCT} collapses the overlap.</p>
+     * graphs". A triple that also exists in a <em>named</em> model graph therefore survives via
+     * the {@code GRAPH} branch, and {@code DISTINCT} collapses the overlap - a triple living only
+     * in the default graph plus a hidden graph would not survive either branch, but every BC
+     * adapter writes named graphs, so that case is constructed rather than reachable today.</p>
      *
      * @param pattern a triple pattern; must bind neither {@code ?g} nor anything named like it
      * @return the pattern as a {@code UNION} group excluding every {@link #HIDDEN_GRAPHS} entry

@@ -31,9 +31,10 @@ import de.hauschel.arknet.ul.domain.Term;
  * One store round trip fewer than before, not one more.</p>
  *
  * <p>A mention is a term's {@code skos:prefLabel} found in prose; the matching rules themselves
- * (case-insensitive, word-boundary, longest-label-first) are not repeated here - they live once,
- * for every caller, at {@link LabelMentions}. A {@link Term} holds exactly one label and no
- * synonyms, so there is nothing else to match against.</p>
+ * (case-insensitive, word-boundary, left-to-right greedy over each match's start position - the
+ * longer of two same-start matches wins) are not repeated here - they live once, for every
+ * caller, at {@link LabelMentions}. A {@link Term} holds exactly one label and no synonyms, so
+ * there is nothing else to match against.</p>
  */
 public final class Glossary {
 
