@@ -34,11 +34,13 @@ class RequirementTest {
     private static final List<AcceptanceCriterion> CRITERIA =
             List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials"));
     private static final String CRITERION_2_TEXT = "Login is rejected with invalid credentials";
+    private static final String RATIONALE =
+            "so that a returning user does not have to re-enter their details on every visit";
 
     @Test
     void holdsItsFields() {
         Requirement req = new Requirement(ID, CODE, "User can log in",
-                "The system shall let a registered user authenticate with email and password.",
+                "The system shall let a registered user authenticate with email and password.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
                 "https://w3id.org/arknet/model/goal/secure-login", null, List.of(TERM_1), CRITERIA, List.of());
 
@@ -58,17 +60,65 @@ class RequirementTest {
 
     @Test
     void optionalFieldsMayBeNull() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         assertNull(req.priority());
         assertNull(req.motivatedBy());
         assertNull(req.qualityCategory());
+        assertNull(req.rationale());
+    }
+
+    /** Issue #321: the reason a requirement exists is carried on the requirement itself. */
+    @Test
+    void holdsItsRationale() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RATIONALE, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        assertEquals(RATIONALE, req.rationale());
+    }
+
+    /**
+     * Optional means absent, never present-but-empty (issue #321) - a blank rationale would claim a
+     * reason was recorded while carrying none, and SHACL's own {@code sh:minLength} would reject
+     * the resulting literal anyway.
+     */
+    @Test
+    void rejectsBlankRationale() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Requirement(ID, CODE, "t", "d", "   ", RequirementType.FUNCTIONAL,
+                        RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of()));
+    }
+
+    /**
+     * The status transitions carry the rationale forward: {@code req_set_status} knows nothing
+     * about it and must not drop it (issue #321).
+     */
+    @Test
+    void acceptAndProposeKeepTheRationale() {
+        Requirement proposed = new Requirement(ID, CODE, "t", "d", RATIONALE, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        Requirement accepted = proposed.accept();
+
+        assertEquals(RATIONALE, accepted.rationale());
+        assertEquals(RATIONALE, accepted.propose().rationale());
+    }
+
+    /** Both acceptance-criteria mechanisms leave the rationale untouched (issue #321). */
+    @Test
+    void acceptanceCriteriaMechanismsKeepTheRationale() {
+        Requirement req = new Requirement(ID, CODE, "t", "d", RATIONALE, RequirementType.FUNCTIONAL,
+                RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
+
+        assertEquals(RATIONALE, req.withAppendedAcceptanceCriteria(List.of(CRITERION_2_TEXT)).rationale());
+        assertEquals(RATIONALE, req.withAcceptanceCriteriaTextPatches(PROJECT_ID,
+                List.of(new AcceptanceCriterionTextPatch(1, "Login still succeeds"))).rationale());
     }
 
     @Test
     void nullUsesTermsIsNormalisedToAnEmptyList() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         assertEquals(List.of(), req.usesTerms());
@@ -77,7 +127,7 @@ class RequirementTest {
     @Test
     void usesTermsAreDefensivelyCopied() {
         List<TermRef> terms = new ArrayList<>(List.of(TERM_1));
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, terms, CRITERIA, List.of());
 
         terms.add(TERM_2);
@@ -89,7 +139,7 @@ class RequirementTest {
     @Test
     void acceptanceCriteriaAreDefensivelyCopied() {
         List<AcceptanceCriterion> criteria = new ArrayList<>(CRITERIA);
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, criteria, List.of());
 
         criteria.add(new AcceptanceCriterion(2, CRITERION_2_TEXT));
@@ -102,14 +152,14 @@ class RequirementTest {
     @Test
     void rejectsNullAcceptanceCriteria() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, null, List.of()));
     }
 
     @Test
     void rejectsEmptyAcceptanceCriteria() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, List.of(), List.of()));
     }
 
@@ -126,7 +176,7 @@ class RequirementTest {
     @Test
     void rejectsAcceptanceCriteriaWithGapInPositions() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null,
                         List.of(new AcceptanceCriterion(1, "Login succeeds"), new AcceptanceCriterion(3, "Gap")),
                         List.of()));
@@ -135,7 +185,7 @@ class RequirementTest {
     @Test
     void rejectsDuplicateAcceptanceCriteriaText() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null,
                         List.of(new AcceptanceCriterion(1, "Login succeeds"),
                                 new AcceptanceCriterion(2, "Login succeeds")),
@@ -145,13 +195,13 @@ class RequirementTest {
     @Test
     void rejectsDuplicateUsesTerms() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, List.of(TERM_1, TERM_1), CRITERIA, List.of()));
     }
 
     @Test
     void allowsQualityCategoryOnNonFunctionalRequirement() {
-        Requirement req = new Requirement(ID, new RequirementCode("NFR-1"), "t", "d",
+        Requirement req = new Requirement(ID, new RequirementCode("NFR-1"), "t", "d", null,
                 RequirementType.NON_FUNCTIONAL, RequirementStatus.PROPOSED, null, null, "performance", null,
                 CRITERIA, List.of());
 
@@ -161,37 +211,37 @@ class RequirementTest {
     @Test
     void rejectsQualityCategoryOnFunctionalRequirement() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, "performance", null, CRITERIA, List.of()));
     }
 
     @Test
     void rejectsNullFields() {
         assertThrows(NullPointerException.class,
-                () -> new Requirement(null, CODE, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(null, CODE, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, CRITERIA, List.of()));
         assertThrows(NullPointerException.class,
-                () -> new Requirement(ID, null, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, null, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, CRITERIA, List.of()));
         assertThrows(NullPointerException.class,
-                () -> new Requirement(ID, CODE, null, "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, null, "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, CRITERIA, List.of()));
         assertThrows(NullPointerException.class,
-                () -> new Requirement(ID, CODE, "t", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", null, null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, CRITERIA, List.of()));
     }
 
     @Test
     void rejectsBlankTitle() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "  ", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "  ", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, CRITERIA, List.of()));
     }
 
     @Test
     void rejectsBlankDescription() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Requirement(ID, CODE, "t", "  ", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                () -> new Requirement(ID, CODE, "t", "  ", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                         null, null, null, null, CRITERIA, List.of()));
     }
 
@@ -208,7 +258,7 @@ class RequirementTest {
     /** The transition rule itself lives on {@link Requirement#accept()}. */
     @Test
     void acceptTransitionsProposedToAccepted() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         Requirement accepted = req.accept();
@@ -221,7 +271,7 @@ class RequirementTest {
     /** Accepting an already-accepted requirement is a no-op, not a rejection. */
     @Test
     void acceptOnAnAlreadyAcceptedRequirementIsANoOp() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.ACCEPTED, null, null, null, null, CRITERIA, List.of());
 
         Requirement result = req.accept();
@@ -235,7 +285,7 @@ class RequirementTest {
      */
     @Test
     void proposeTransitionsAcceptedToProposed() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.ACCEPTED, null, null, null, null, CRITERIA, List.of());
 
         Requirement proposed = req.propose();
@@ -248,7 +298,7 @@ class RequirementTest {
     /** Resetting an already-proposed requirement is a no-op, mirroring {@link #acceptOnAnAlreadyAcceptedRequirementIsANoOp}. */
     @Test
     void proposeOnAnAlreadyProposedRequirementIsANoOp() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         Requirement result = req.propose();
@@ -258,7 +308,7 @@ class RequirementTest {
 
     @Test
     void withAppendedAcceptanceCriteriaContinuesPositionsAfterExisting() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         Requirement appended = req.withAppendedAcceptanceCriteria(List.of(CRITERION_2_TEXT, "Third criterion"));
@@ -270,7 +320,7 @@ class RequirementTest {
 
     @Test
     void withAppendedAcceptanceCriteriaIsANoOpForNullOrEmpty() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         assertEquals(req, req.withAppendedAcceptanceCriteria(null));
@@ -282,7 +332,7 @@ class RequirementTest {
         List<AcceptanceCriterion> twoCriteria = List.of(
                 new AcceptanceCriterion(1, "Login succeeds with valid credentials"),
                 new AcceptanceCriterion(2, CRITERION_2_TEXT));
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, twoCriteria, List.of());
 
         Requirement patched = req.withAcceptanceCriteriaTextPatches(
@@ -294,7 +344,7 @@ class RequirementTest {
 
     @Test
     void withAcceptanceCriteriaTextPatchesRejectsUnknownPosition() {
-        Requirement req = new Requirement(ID, CODE, "t", "d", RequirementType.FUNCTIONAL,
+        Requirement req = new Requirement(ID, CODE, "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, CRITERIA, List.of());
 
         AcceptanceCriterionPositionNotFoundException exception = assertThrows(

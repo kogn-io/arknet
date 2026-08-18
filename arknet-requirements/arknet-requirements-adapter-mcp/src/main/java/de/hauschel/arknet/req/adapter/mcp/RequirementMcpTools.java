@@ -190,6 +190,12 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Short human-readable summary of the requirement") final String title,
             @McpToolParam(description = "The normative statement, e.g. 'The system shall ...'")
             final String description,
+            @McpToolParam(description = "Why this requirement exists - the reason behind it, not a restatement "
+                    + "of what it does (optional, e.g. 'so that a caller can undo a mistaken order without "
+                    + "calling support'). This is the knowledge that is lost first when people move on, and "
+                    + "what stops a later reader from deleting a requirement whose purpose nobody remembers.",
+                    required = false)
+            final String rationale,
             @McpToolParam(description = "Classification: FUNCTIONAL or NON_FUNCTIONAL") final String type,
             @McpToolParam(description = "Testable 'Done when ...' criteria (at least one) that make this "
                     + "requirement's completion checkable")
@@ -203,8 +209,8 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "Free-text quality category (optional, e.g. performance, security, "
                     + "reliability); only meaningful for NON_FUNCTIONAL requirements", required = false)
             final String qualityCategory,
-            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title and description "
-                    + "are written in. Falls back to the project's configured default language "
+            @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') the title, description and "
+                    + "rationale are written in. Falls back to the project's configured default language "
                     + "(project_update) if omitted; if the project has no default either, the call is "
                     + "rejected rather than writing an untagged literal.", required = false)
             final String language,
@@ -221,7 +227,8 @@ public final class RequirementMcpTools {
                 ? null
                 : Priority.valueOf(priority.trim());
         final Requirement created = addRequirement.add(project.id(),
-                new NewRequirement(title, description, requirementType, requirementPriority,
+                new NewRequirement(title, description, blankToNull(rationale), requirementType,
+                        requirementPriority,
                         blankToNull(motivatedBy), blankToNull(qualityCategory),
                         acceptanceCriteria == null ? List.of() : List.copyOf(acceptanceCriteria),
                         blankToNull(language)),
@@ -368,9 +375,10 @@ public final class RequirementMcpTools {
     }
 
     @McpTool(name = "req_update",
-            description = "Correct an already-created requirement's title, description, acceptance "
-                    + "criteria and/or MoSCoW priority. Every argument is optional - an omitted one leaves "
-                    + "that field unchanged; an omitted priority never removes an already-set one. "
+            description = "Correct an already-created requirement's title, description, rationale, "
+                    + "acceptance criteria and/or MoSCoW priority. Every argument is optional - an omitted "
+                    + "one leaves that field unchanged; an omitted priority or rationale never removes an "
+                    + "already-set one. "
                     + "newAcceptanceCriteria appends new criteria after the existing ones; "
                     + "acceptanceCriteriaTextPatches corrects the wording of one or more existing criteria "
                     + "by position - neither can insert mid-list, delete or reorder a criterion. "
@@ -384,6 +392,11 @@ public final class RequirementMcpTools {
             @McpToolParam(description = "New normative statement, e.g. 'The system shall ...' (optional, "
                     + "unchanged if omitted)", required = false)
             final String description,
+            @McpToolParam(description = "New reason this requirement exists (optional, unchanged if omitted - "
+                    + "omitting it cannot clear a rationale that is already recorded). This is also how a "
+                    + "requirement registered without one gets its reason recorded after the fact.",
+                    required = false)
+            final String rationale,
             @McpToolParam(description = "New testable 'Done when ...' criteria to append after the existing "
                     + "ones (optional, none appended if omitted)", required = false)
             final List<String> newAcceptanceCriteria,
@@ -398,7 +411,8 @@ public final class RequirementMcpTools {
                     + "that is already set)", required = false)
             final String priority,
             @McpToolParam(description = "Optional: BCP-47 language tag (e.g. 'de') a non-omitted title/"
-                    + "description/touched acceptance criterion is written in. Falls back to the project's "
+                    + "description/rationale/touched acceptance criterion is written in. Falls back to the "
+                    + "project's "
                     + "configured default language (see req_add's same parameter) if omitted; if the project "
                     + "has no default either, the call is rejected rather than writing an untagged literal. "
                     + "Only the existing literal carrying the tag actually written is replaced - every other "
@@ -419,7 +433,7 @@ public final class RequirementMcpTools {
                 ? null
                 : Priority.valueOf(priority.trim());
         final Requirement updated = updateRequirement.update(project.id(), code, blankToNull(title),
-                blankToNull(description),
+                blankToNull(description), blankToNull(rationale),
                 newAcceptanceCriteria == null ? null : List.copyOf(newAcceptanceCriteria),
                 toAcceptanceCriteriaTextPatches(acceptanceCriteriaTextPatches),
                 requirementPriority, blankToNull(language), project.defaultLanguage());

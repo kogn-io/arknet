@@ -39,9 +39,10 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * correction to an already-created requirement goes through the compare-and-set guard, so a
  * guarded write path can never be bypassed by accident.</p>
  *
- * <p><strong>Language, and why a full replace needs two, not one.</strong>
- * {@code title}/{@code description} may each legally carry several language-tagged variants
- * (SKOS-S14-style {@code sh:uniqueLang}), exactly like {@code TermRepository}'s
+ * <p><strong>Language, and why a full replace needs one tag per field, not one shared.</strong>
+ * {@code title}/{@code description}/{@code rationale} may each legally carry several
+ * language-tagged variants (SKOS-S14-style {@code sh:uniqueLang}), exactly like
+ * {@code TermRepository}'s
  * {@code prefLabel}/{@code definition}. Unlike {@code TermRepository#update} (a targeted
  * per-predicate patch), {@link #compareAndUpdate} replaces a requirement's triples wholesale by
  * identity - so preserving every language variant the caller did not touch cannot rely on simply
@@ -52,7 +53,10 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * fields can legitimately end up carrying <em>different</em> single-call-scoped language tags at
  * different times - {@link #compareAndUpdate} therefore takes one language argument per field,
  * not one shared argument the way {@link #create}/{@code TermRepository#create} do for a
- * brand-new resource written whole in one call.</p>
+ * brand-new resource written whole in one call. {@code rationale} (issue #321) is the third such
+ * field and follows the same rule, with one wrinkle the other two do not have: it is optional, so
+ * a requirement may carry no {@code arkreq:rationale} literal at all, and its language argument is
+ * then simply unused rather than naming a tag nothing is written under.</p>
  */
 public interface RequirementRepository {
 
@@ -62,7 +66,8 @@ public interface RequirementRepository {
      * @param projectId the project (architecture model) to store the requirement in
      * @param requirement the requirement to create
      * @param language    the BCP-47 language tag {@code requirement.title()}/
-     *                    {@code requirement.description()}/every
+     *                    {@code requirement.description()}/a non-{@code null}
+     *                    {@code requirement.rationale()}/every
      *                    {@code requirement.acceptanceCriteria()} entry's {@code text} are written
      *                    in (e.g. {@code "de"}), or {@code null} for a plain, untagged literal -
      *                    the same tag applies to all of them, since a freshly created requirement
@@ -119,6 +124,14 @@ public interface RequirementRepository {
      *                      case) - independent of {@code titleLanguage}, since {@code title} and
      *                      {@code description} may have been corrected under different tags on
      *                      different calls
+     * @param rationaleLanguage the same as {@code titleLanguage}, for {@code updated.rationale()}
+     *                      (see {@link CurrentRequirement#rationaleLanguage()} for the
+     *                      pass-through case) - independent of the other two for the same reason.
+     *                      Ignored when {@code updated.rationale()} is {@code null}: there is then
+     *                      no literal to write under any tag, and every existing
+     *                      {@code arkreq:rationale} variant is preserved untouched rather than
+     *                      swept - {@code null} means "leave it alone" at every port above this
+     *                      one, never "remove the recorded reason"
      * @param acceptanceCriteriaLanguageByPosition the BCP-47 language tag each
      *                      {@code updated.acceptanceCriteria()} entry's {@code text} is written in,
      *                      keyed by {@link de.hauschel.arknet.req.domain.AcceptanceCriterion#position()}
@@ -135,10 +148,12 @@ public interface RequirementRepository {
      * @param defaultLanguage the target project's configured default language (see
      *                      {@link de.hauschel.arknet.kernel.ResolvedProject#defaultLanguage()}),
      *                      or {@code null} if it has none. Used only to decide whether an
-     *                      existing <em>untagged</em> literal on {@code title}/{@code description}
-     *                      should be swept away rather than preserved as an "other" language
-     *                      variant: when {@code titleLanguage}/{@code descriptionLanguage}
-     *                      (canonicalized) equals {@code defaultLanguage} (canonicalized), the
+     *                      existing <em>untagged</em> literal on {@code title}/
+     *                      {@code description}/{@code rationale} should be swept away rather than
+     *                      preserved as an "other" language
+     *                      variant: when {@code titleLanguage}/{@code descriptionLanguage}/
+     *                      {@code rationaleLanguage} (canonicalized) equals
+     *                      {@code defaultLanguage} (canonicalized), the
      *                      literal being written is - by construction - the very literal an
      *                      omitted {@code language} argument would have resolved to, so a
      *                      still-untagged sibling of the same predicate is a stale duplicate of it,
@@ -158,7 +173,7 @@ public interface RequirementRepository {
      *                          {@code arknet-requirements-core} must not depend on.
      */
     void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage,
+            String titleLanguage, String descriptionLanguage, String rationaleLanguage,
             Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage);
 
     /**
@@ -174,7 +189,8 @@ public interface RequirementRepository {
      * @param projectId     the project (architecture model) to look up the requirement in
      * @param code          the requirement code (e.g. {@code FR-1})
      * @param displayLocale the BCP-47 language tag the caller wants {@code title}/
-     *                      {@code description} shown in, overriding this repository's own
+     *                      {@code description}/{@code rationale} shown in, overriding this
+     *                      repository's own
      *                      configured display-language preference for this one call, or
      *                      {@code null} to use that preference unchanged
      * @return the requirement if present, otherwise {@link Optional#empty()}
@@ -195,7 +211,7 @@ public interface RequirementRepository {
      * side of the read-modify-write round trip whose write side {@link #compareAndUpdate} guards.
      *
      * <p><strong>What "together" guarantees.</strong> The core fields (type, title, description,
-     * status, priority, motivatedBy, qualityCategory) and the token itself (recorded by the last
+     * rationale, status, priority, motivatedBy, qualityCategory) and the token itself (recorded by the last
      * write through this port, ADR-014) come from one query call - one snapshot.
      * {@code usesTerms} and {@code acceptanceCriteria}, in contrast, are filled in by later,
      * independent follow-up reads; that is safe because a later read can only be fresher, never
@@ -252,6 +268,12 @@ public interface RequirementRepository {
      *                                        carry
      * @param descriptionLanguage             the same as {@code titleLanguage}, for
      *                                        {@code value.description()}
+     * @param rationaleLanguage               the same as {@code titleLanguage}, for
+     *                                        {@code value.rationale()} - {@code null} both when
+     *                                        the selected literal is untagged and when the
+     *                                        requirement carries no rationale at all, which a
+     *                                        caller tells apart by {@code value.rationale()}
+     *                                        itself rather than by this tag
      * @param acceptanceCriteriaLanguageByPosition the BCP-47 language tag each
      *                                        {@code value.acceptanceCriteria()} entry's currently
      *                                        selected {@code text} candidate carries, keyed by
@@ -267,7 +289,7 @@ public interface RequirementRepository {
      *                                        that criterion may carry
      */
     record CurrentRequirement(Requirement value, RevisionToken head, boolean acceptanceCriteriaIsSynthesized,
-            String titleLanguage, String descriptionLanguage,
+            String titleLanguage, String descriptionLanguage, String rationaleLanguage,
             Map<Integer, String> acceptanceCriteriaLanguageByPosition) {
     }
 
@@ -283,7 +305,8 @@ public interface RequirementRepository {
      *
      * @param projectId     the project (architecture model) to list requirements from
      * @param displayLocale the BCP-47 language tag the caller wants each requirement's {@code
-     *                      title}/{@code description} shown in, overriding this repository's own
+     *                      title}/{@code description}/{@code rationale} shown in, overriding this
+     *                      repository's own
      *                      configured display-language preference for this one call, or
      *                      {@code null} to use that preference unchanged - the same per-call
      *                      override {@link #findByCode} already accepts (issue #281)

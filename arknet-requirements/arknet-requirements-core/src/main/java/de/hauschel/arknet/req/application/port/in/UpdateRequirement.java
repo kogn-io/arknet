@@ -13,9 +13,9 @@ import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
- * Driving port: correct the title, description, acceptance criteria and/or MoSCoW priority of an
- * already-created requirement, leaving {@code status} and {@code usesTerms} to their own ports
- * ({@code req_set_status}, {@code req_link_term}).
+ * Driving port: correct the title, description, rationale, acceptance criteria and/or MoSCoW
+ * priority of an already-created requirement, leaving {@code status} and {@code usesTerms} to their
+ * own ports ({@code req_set_status}, {@code req_link_term}).
  *
  * <p>Every field is optional: {@code null} leaves that field unchanged, so a caller can correct
  * only the description without restating the title. A non-{@code null} value must still satisfy
@@ -38,24 +38,33 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * one); a patch naming a position with no matching criterion is rejected rather than silently
  * ignored.</p>
  *
- * <p><strong>Language.</strong> {@code title}/{@code description}/each acceptance criterion's
- * {@code text} may each legally carry several language-tagged variants (SKOS-S14-style
- * {@code sh:uniqueLang}, mirroring {@code UpdateTerm}'s {@code prefLabel}/{@code definition}).
+ * <p><strong>Language.</strong> {@code title}/{@code description}/{@code rationale}/each
+ * acceptance criterion's {@code text} may each legally carry several language-tagged variants
+ * (SKOS-S14-style {@code sh:uniqueLang}, mirroring {@code UpdateTerm}'s
+ * {@code prefLabel}/{@code definition}).
  * {@code language} names the BCP-47 tag every language-tagged field <em>this call actually
- * touches</em> is written in - whichever of {@code title}/{@code description} is non-{@code null},
- * and every criterion named in {@code newAcceptanceCriteria}/{@code acceptanceCriteriaTextPatches}
+ * touches</em> is written in - whichever of {@code title}/{@code description}/{@code rationale}
+ * is non-{@code null}, and every criterion named in
+ * {@code newAcceptanceCriteria}/{@code acceptanceCriteriaTextPatches}
  * - mirroring {@code UpdateUseCase}'s single shared {@code language} covering whichever of
  * {@code title}/{@code goal}/a patched step's text it touches. A field (or criterion) this call
  * does not touch keeps every language variant it already had, untouched, exactly as before this
  * parameter existed. A field/criterion that <em>is</em> being changed but ships no
  * {@code language} falls back to {@code defaultLanguage} (see
- * {@link #update(ProjectId, RequirementCode, String, String, java.util.List, java.util.List,
- * Priority, String, String)}'s {@code defaultLanguage} parameter) rather than staying untagged
- * (issue #258) - and if a changed field/criterion's existing value already carries an untagged
+ * {@link #update(ProjectId, RequirementCode, String, String, String, java.util.List,
+ * java.util.List, Priority, String, String)}'s {@code defaultLanguage} parameter) rather than
+ * staying untagged (issue #258) - and if a changed field/criterion's existing value already
+ * carries an untagged
  * literal under the same predicate, writing it under a tag equal to {@code defaultLanguage} sweeps
  * the untagged one away instead of preserving it as a spurious "other" variant (see
  * {@code RequirementRepository#compareAndUpdate}'s {@code defaultLanguage} parameter for the
  * out-adapter side of this).</p>
+ *
+ * <p><strong>Rationale (issue #321).</strong> {@code rationale} joins this port for the same
+ * reason {@code title}/{@code description} are here at all: the reason a requirement exists is
+ * refined during elicitation like any other prose, and {@code req_add}'s one-shot capture is
+ * rarely where a "so that ..." reaches its final wording. Since it is optional at creation, this
+ * is also the port that records a reason for a requirement registered without one.</p>
  *
  * <p><strong>Background.</strong> Backs the MVP tool {@code req_update}: requirements
  * elicited during an interview are sometimes sharpened afterwards, and until this port existed the
@@ -77,6 +86,12 @@ public interface UpdateRequirement {
      * @param code                the requirement code, e.g. {@code FR-1}
      * @param title               the new title, or {@code null} to leave it unchanged
      * @param description         the new normative statement, or {@code null} to leave it unchanged
+     * @param rationale           the new reason this requirement exists (issue #321), or
+     *                            {@code null} to leave it unchanged. {@code null} is never a
+     *                            request to remove an already-recorded rationale - the same rule
+     *                            {@code priority} follows, since {@code null} is already this
+     *                            port's "leave alone" sentinel for every field; un-setting one
+     *                            would need its own distinct signal
      * @param newAcceptanceCriteria new, non-blank criterion texts to append after the existing
      *                            ones, or {@code null}/empty to append none
      * @param acceptanceCriteriaTextPatches text corrections for individual existing acceptance
@@ -85,8 +100,9 @@ public interface UpdateRequirement {
      * @param priority            the new MoSCoW priority, or {@code null} to leave an already-set
      *                            one unchanged (never a request to remove it)
      * @param language            the BCP-47 language tag a non-{@code null} {@code title}/
-     *                            {@code description}/every touched acceptance criterion is written
-     *                            in, or {@code null} to fall back to {@code defaultLanguage}. Only
+     *                            {@code description}/{@code rationale}/every touched acceptance
+     *                            criterion is written in, or {@code null} to fall back to
+     *                            {@code defaultLanguage}. Only
      *                            the existing literal carrying the tag actually written is
      *                            replaced - every other language-tagged variant of a field/
      *                            criterion being corrected survives untouched, except an existing
@@ -105,6 +121,7 @@ public interface UpdateRequirement {
      *                            {@code null} too
      */
     Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> newAcceptanceCriteria, List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+            String rationale, List<String> newAcceptanceCriteria,
+            List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
             Priority priority, String language, String defaultLanguage);
 }

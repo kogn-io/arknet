@@ -77,10 +77,13 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * (identifier, type, title, description, status) plus one or more mandatory
  * {@code arkreq:acceptanceCriterion} edges ({@code 1..n}, testable "Done when ..." criteria) to
  * own, positioned {@code arkreq:AcceptanceCriterion} resources (issue #266, mirroring
- * {@code arkreq:mainStep}/{@code arkreq:Step}) plus up to three optional triples for {@code priority},
+ * {@code arkreq:mainStep}/{@code arkreq:Step}) plus up to four optional triples for
+ * {@code rationale}, {@code priority},
  * {@code motivatedBy} and {@code qualityCategory} - written only when the corresponding field is
- * non-{@code null} and read back via {@code OPTIONAL} SPARQL clauses so that requirements without
- * them still match. The {@code dcterms:identifier} triple carries the
+ * non-{@code null} and read back so that requirements without them still match
+ * ({@code priority}/{@code motivatedBy}/{@code qualityCategory} via {@code OPTIONAL} SPARQL
+ * clauses; {@code rationale} via its own follow-up query, since it is language-tagged and would
+ * multiply rows the way {@code title}/{@code description} would - see {@link #readRationales}). The {@code dcterms:identifier} triple carries the
  * human-readable {@link RequirementCode} ({@code FR-1}) - identity and label are deliberately
  * different triples on the same subject. This class depends only on the neutral kognio-rdf
  * ports ({@code terms} + {@code dataset}) and {@link SimpleRdf} - it never imports RDF4J or any
@@ -199,6 +202,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private static final String ACCEPTED_STATUS = ARKREQ_NAMESPACE + "Accepted";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
     private static final String DESCRIPTION_PROPERTY = VocabDct.NAMESPACE + "description";
+    private static final String RATIONALE_PROPERTY = ARKREQ_NAMESPACE + "rationale";
     private static final String PRIORITY_PROPERTY = ARKREQ_NAMESPACE + "priority";
     private static final String MOTIVATED_BY_PROPERTY = ARKREQ_NAMESPACE + "motivatedBy";
     private static final String QUALITY_CATEGORY_PROPERTY = ARKREQ_NAMESPACE + "qualityCategory";
@@ -274,7 +278,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *                          scheme {@code KognioRdfUseCaseRepository} uses to mint its own
      *                          derived step resources
      * @param displayLocale     the display-language preference selecting which {@code
-     *                          dcterms:title}/{@code dcterms:description}/each acceptance
+     *                          dcterms:title}/{@code dcterms:description}/
+     *                          {@code arkreq:rationale}/each acceptance
      *                          criterion's {@code arkreq:criterionText} the read paths surface for
      *                          a multilingual requirement (must not be {@code null})
      * @param funnel        the shared write funnel (ADR-013) every write runs through - both
@@ -322,8 +327,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         //    this adapter no longer re-verifies it. constrainedBy is different (see
         //    #constraintAssertedContext): its target's own ConstraintShape lives in this same
         //    shapes file, so a bare type assertion is not enough to satisfy it.
-        RequirementCandidate candidate =
-                buildCandidateGraph(subjectIri, requirement, termIris, constraintIris, tag, tag, criteriaTags);
+        RequirementCandidate candidate = buildCandidateGraph(
+                subjectIri, requirement, termIris, constraintIris, tag, tag, tag, criteriaTags);
         Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
@@ -350,13 +355,14 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      */
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage,
+            String titleLanguage, String descriptionLanguage, String rationaleLanguage,
             Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(updated, "updated");
         Objects.requireNonNull(acceptanceCriteriaLanguageByPosition, "acceptanceCriteriaLanguageByPosition");
         String titleTag = canonicalizeLenient(titleLanguage);
         String descriptionTag = canonicalizeLenient(descriptionLanguage);
+        String rationaleTag = canonicalizeLenient(rationaleLanguage);
         String defaultTag = canonicalizeLenient(defaultLanguage);
         Map<Integer, String> criteriaTags = new LinkedHashMap<>();
         acceptanceCriteriaLanguageByPosition.forEach((position, tag) -> criteriaTags.put(position, canonicalizeLenient(tag)));
@@ -372,7 +378,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 .map(this::constraintIriFor)
                 .toList();
         RequirementCandidate candidate = buildCandidateGraph(
-                subjectIri, updated, termIris, constraintIris, titleTag, descriptionTag, criteriaTags);
+                subjectIri, updated, termIris, constraintIris, titleTag, descriptionTag, rationaleTag,
+                criteriaTags);
         Graph graph = candidate.graph();
         Graph assertedContext = rdf.createGraph();
         for (IRI termIri : termIris) {
@@ -386,7 +393,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 () -> new RequirementNotFoundException(projectId, updated.code()),
                 () -> new RequirementConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriplesForUpdate(tx, graphIri, subjectIri, subject, graph, titleTag, descriptionTag,
-                        criteriaTags, defaultTag, candidate.criterionIriByPosition()));
+                        rationaleTag, updated.rationale() != null, criteriaTags, defaultTag,
+                        candidate.criterionIriByPosition()));
     }
 
     /**
@@ -405,20 +413,23 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * (identifier, type, title, description, status), one or more mandatory
      * {@code arkreq:acceptanceCriterion} edges to freshly minted {@code arkreq:AcceptanceCriterion}
      * resources (issue #266; own {@code arkreq:position}/{@code arkreq:criterionText} triples each,
-     * mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), up to three optional triples
-     * ({@code priority}, {@code motivatedBy}, {@code qualityCategory}), zero or more
+     * mirroring {@code arkreq:mainStep}/{@code arkreq:Step}), up to four optional triples
+     * ({@code rationale}, {@code priority}, {@code motivatedBy}, {@code qualityCategory}), zero or
+     * more
      * {@code arkreq:usesTerm} edges to {@code termIris}, and zero or more
      * {@code oslc_rm:constrainedBy} edges to {@code constraintIris}. Shared by {@link #create} and
      * {@link #compareAndUpdate} so both write paths serialise a {@link Requirement} identically.
-     * {@code title}/{@code description}/each criterion's text are written as the language-tagged
+     * {@code title}/{@code description}/a non-{@code null} {@code rationale}/each criterion's text
+     * are written as the language-tagged
      * (or, for a {@code null} tag, plain untagged) literal named by {@code titleTag}/
-     * {@code descriptionTag}/{@code criteriaTagByPosition} - never more than one each, since
+     * {@code descriptionTag}/{@code rationaleTag}/{@code criteriaTagByPosition} - never more than
+     * one each, since
      * preserving every other language variant a store-first (ADR-005) or earlier {@code req_update}
      * may have left is {@link #replaceTriplesForUpdate}'s job, run after this candidate has already
      * passed the gate.
      */
     private RequirementCandidate buildCandidateGraph(IRI subjectIri, Requirement requirement, List<IRI> termIris,
-            List<IRI> constraintIris, String titleTag, String descriptionTag,
+            List<IRI> constraintIris, String titleTag, String descriptionTag, String rationaleTag,
             Map<Integer, String> criteriaTagByPosition) {
         Graph graph = rdf.createGraph();
         graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(typeIriFor(requirement.type())));
@@ -427,6 +438,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         graph.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY),
                 literalOf(requirement.description(), descriptionTag));
         graph.add(subjectIri, rdf.createIRI(STATUS_PROPERTY), rdf.createIRI(statusIriFor(requirement.status())));
+        if (requirement.rationale() != null) {
+            graph.add(subjectIri, rdf.createIRI(RATIONALE_PROPERTY),
+                    literalOf(requirement.rationale(), rationaleTag));
+        }
         if (requirement.priority() != null) {
             graph.add(subjectIri, rdf.createIRI(PRIORITY_PROPERTY),
                     rdf.createIRI(priorityIriFor(requirement.priority())));
@@ -494,17 +509,29 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * may legally point at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
      * cannot represent. The preservation query below finds exactly those.</p>
      *
-     * <p><strong>Same preservation, for {@code title}/{@code description}'s other language
-     * variants.</strong> {@code title}/{@code description} may each legally carry several
-     * language-tagged literals (SKOS-S14-style {@code sh:uniqueLang}); {@code graph} (from
+     * <p><strong>Same preservation, for {@code title}/{@code description}/{@code rationale}'s
+     * other language variants.</strong> They may each legally carry several language-tagged
+     * literals (SKOS-S14-style {@code sh:uniqueLang}); {@code graph} (from
      * {@link #buildCandidateGraph}) carries exactly one of each, tagged {@code titleTag}/
-     * {@code descriptionTag}. Every <em>other</em> existing language variant is captured here,
+     * {@code descriptionTag}/{@code rationaleTag}. Every <em>other</em> existing language variant
+     * is captured here,
      * before {@code deleteExisting} would otherwise wipe it along with everything else on this
      * subject, and re-attached afterwards - the identical capture/delete/reattach shape
      * {@code unjoinableUsesTerms} already uses, just scoped by language tag instead of by
-     * IRI-ness. A variant already carrying {@code titleTag}/{@code descriptionTag} is
-     * <em>not</em> re-attached: it is exactly the one {@code graph} is about to (re)write, so
+     * IRI-ness. A variant already carrying {@code titleTag}/{@code descriptionTag}/
+     * {@code rationaleTag} is <em>not</em> re-attached: it is exactly the one {@code graph} is
+     * about to (re)write, so
      * re-attaching it too would duplicate it.</p>
+     *
+     * <p><strong>{@code rationale} is optional, so its preservation has a second mode (issue
+     * #321).</strong> {@code rationaleWritten} says whether {@code graph} carries an
+     * {@code arkreq:rationale} literal at all. When it does, the rule above applies unchanged.
+     * When it does not - the caller passed a {@code null} rationale, which every port above means
+     * as "leave it alone", never as "remove the recorded reason" - <em>every</em> existing
+     * variant is preserved, including one under {@code rationaleTag} and including an untagged
+     * one: with nothing being written under any tag, no existing literal is a stale duplicate of
+     * a fresh write, and the issue #258 sweep below would otherwise silently delete a reason
+     * nobody asked to remove.</p>
      *
      * <p><strong>Sweeping a stale untagged sibling of a default-language write (issue #258).</strong>
      * {@code defaultTag} is the target project's configured default language, canonicalized. When
@@ -540,7 +567,8 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code Requirement#withAppendedAcceptanceCriteria}/{@code #withAcceptanceCriteriaTextPatches}).
      */
     private void replaceTriplesForUpdate(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
-            String titleTag, String descriptionTag, Map<Integer, String> criteriaTagByPosition, String defaultTag,
+            String titleTag, String descriptionTag, String rationaleTag, boolean rationaleWritten,
+            Map<Integer, String> criteriaTagByPosition, String defaultTag,
             Map<Integer, IRI> newCriterionIriByPosition) {
         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
@@ -578,6 +606,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         List<Literal> preservedTitles = otherLanguageLiterals(tx, subject, TITLE_PROPERTY, titleTag, defaultTag);
         List<Literal> preservedDescriptions =
                 otherLanguageLiterals(tx, subject, DESCRIPTION_PROPERTY, descriptionTag, defaultTag);
+        // An unwritten rationale preserves every variant, not just the other-language ones - see
+        // this method's "rationale is optional" note above.
+        List<Literal> preservedRationales = rationaleWritten
+                ? otherLanguageLiterals(tx, subject, RATIONALE_PROPERTY, rationaleTag, defaultTag)
+                : allLiterals(tx, subject, RATIONALE_PROPERTY);
         Map<Integer, List<Literal>> preservedCriteriaTextsByPosition =
                 otherLanguageAcceptanceCriterionTexts(tx, subject, criteriaTagByPosition, defaultTag);
         tx.update(deleteExisting);
@@ -609,7 +642,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
             tx.add(graphIri, preservedEdges);
         }
-        if (!preservedTitles.isEmpty() || !preservedDescriptions.isEmpty()
+        if (!preservedTitles.isEmpty() || !preservedDescriptions.isEmpty() || !preservedRationales.isEmpty()
                 || !preservedCriteriaTextsByPosition.isEmpty()) {
             Graph preservedLanguageVariants = rdf.createGraph();
             for (Literal title : preservedTitles) {
@@ -617,6 +650,9 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
             for (Literal description : preservedDescriptions) {
                 preservedLanguageVariants.add(subjectIri, rdf.createIRI(DESCRIPTION_PROPERTY), description);
+            }
+            for (Literal rationale : preservedRationales) {
+                preservedLanguageVariants.add(subjectIri, rdf.createIRI(RATIONALE_PROPERTY), rationale);
             }
             // A preserved criterion-text variant re-attaches to the FRESHLY minted criterion IRI at
             // the same position (newCriterionIriByPosition) - the old criterion subject no longer
@@ -632,6 +668,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             });
             tx.add(graphIri, preservedLanguageVariants);
         }
+    }
+
+    /**
+     * Every existing literal of {@code subject} on {@code predicateIri}, captured inside the live
+     * write transaction before {@code deleteExisting} wipes the subject - {@link
+     * #otherLanguageLiterals} without any exclusion. Used for the one predicate this adapter may
+     * legitimately write nothing at all for on an update ({@code arkreq:rationale}, issue #321):
+     * with no literal being written, no existing one is the variant being replaced and none is a
+     * stale untagged duplicate, so all of them are carried forward verbatim.
+     */
+    private List<Literal> allLiterals(DatasetTx tx, String subject, String predicateIri) {
+        String query = "SELECT ?o WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + subject + " <" + predicateIri + "> ?o } }";
+        return tx.select(query).map(row -> literalOf(row, "o")).toList();
     }
 
     /**
@@ -767,15 +817,20 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * {@code WHERE} wrapping and, in {@link #findCurrentByCode}'s case, the additional
      * provenance-graph join - only the WHERE body itself is common.
      *
-     * <p><strong>{@code title}/{@code description} are read separately, not joined here.</strong>
-     * Both may now legally carry several language-tagged literals each (SKOS-S14-style
+     * <p><strong>{@code title}/{@code description}/{@code rationale} are read separately, not
+     * joined here.</strong> They may each legally carry several language-tagged literals
+     * (SKOS-S14-style
      * {@code sh:uniqueLang}), so joining them into this single-row scalar clause would multiply a
      * subject into a row per title/description candidate combination - exactly the row
      * multiplication {@code priority}/{@code qualityCategory} already cause, but for two
      * <em>mandatory</em> fields every caller of this clause currently assumes are single-valued
-     * per row. {@link #readTitles}/{@link #readDescriptions} read them as their own follow-up
+     * per row. {@link #readTitles}/{@link #readDescriptions}/{@link #readRationales} read them as
+     * their own follow-up
      * queries instead, the same way {@link #readAcceptanceCriterionAssemblies} already does for
-     * {@code arkreq:acceptanceCriterion}.</p>
+     * {@code arkreq:acceptanceCriterion}. {@code rationale} joins them for the same reason plus a
+     * second one: being optional, an {@code OPTIONAL} join would bind {@code null} for a
+     * requirement that carries none, which no caller of this clause distinguishes from a missing
+     * language candidate (issue #321).</p>
      */
     private static String requirementWhereClause(String identifierClause) {
         return "?s a ?type . "
@@ -800,15 +855,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Builds one {@link Requirement} from a row of {@link #requirementByCodeWhereClause}'s
      * projection ({@code ?s ?type ?status ?priority ?motivatedBy ?qualityCategory}), including
-     * the follow-up reads {@link #readTitles}/{@link #readDescriptions}/{@link #readUsesTerms}
+     * the follow-up reads {@link #readTitles}/{@link #readDescriptions}/{@link #readRationales}/
+     * {@link #readUsesTerms}
      * (via {@code query}) and the legacy-placeholder substitution ({@link
      * #acceptanceCriteriaOrLegacyPlaceholder}) for {@code acceptanceCriteria}. Shared by
      * {@link #findByCode} and {@link #findCurrentByCode} so both single-requirement read paths
      * build a {@link Requirement} the same way - drift between near-identical read paths in this
      * class was a real bug twice before (the {@link #findAll} row-grouping fix).
      *
-     * <p>{@code displayLocale} selects one {@code title}/{@code description} candidate out of
-     * however many language-tagged variants {@link #readTitles}/{@link #readDescriptions} find;
+     * <p>{@code displayLocale} selects one {@code title}/{@code description}/{@code rationale}
+     * candidate out of however many language-tagged variants {@link #readTitles}/
+     * {@link #readDescriptions}/{@link #readRationales} find;
      * {@link #findByCode} passes its per-call override, {@link #findCurrentByCode} passes this
      * adapter's own configured {@link #displayLocale} (an internal read-modify-write round trip
      * has no per-call display preference of its own to honour - see that method's javadoc).</p>
@@ -859,6 +916,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 code,
                 selection.title().value(),
                 selection.description().value(),
+                selectRationale(query::select, subject, locale).map(LocalizedLiteral::value).orElse(null),
                 typeFromIri(iriOf(row, "type").getIRIString()),
                 statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                 priorityOf(row),
@@ -910,6 +968,31 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         return selectFn.apply(query).map(row -> localizedLiteralOf(row, "o")).toList();
     }
 
+    /**
+     * {@link #readTitles} for the optional {@code arkreq:rationale} (issue #321). An empty result
+     * is the ordinary case for a requirement whose reason nobody recorded, not the
+     * store-first anomaly an empty {@link #readTitles}/{@link #readDescriptions} signals - which
+     * is why {@link #selectRationale} maps it to a {@code null} field rather than to a skipped
+     * requirement.
+     */
+    private List<LocalizedLiteral> readRationales(Function<String, Stream<BindingSet>> selectFn, String subject) {
+        String query = "SELECT ?o WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + subject + " <" + RATIONALE_PROPERTY + "> ?o } }";
+        return selectFn.apply(query).map(row -> localizedLiteralOf(row, "o")).toList();
+    }
+
+    /**
+     * Selects one {@code arkreq:rationale} candidate via {@code locale}, or {@link Optional#empty()}
+     * if this requirement carries none at all. Deliberately <em>not</em> folded into
+     * {@link #selectTitleDescription}: an absent rationale is legal and must leave the requirement
+     * readable, whereas an absent title/description is the store-first anomaly that method skips
+     * the whole requirement for.
+     */
+    private Optional<LocalizedLiteral> selectRationale(
+            Function<String, Stream<BindingSet>> selectFn, String subject, DisplayLocale locale) {
+        return locale.select(readRationales(selectFn, subject));
+    }
+
     /** Bulk variant of {@link #readTitles}: every requirement's title candidates in one query. */
     private Map<String, List<LocalizedLiteral>> readTitlesBySubject(SparqlQuery query) {
         return literalsBySubject(query, TITLE_PROPERTY);
@@ -918,6 +1001,11 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /** Bulk variant of {@link #readDescriptions}: every requirement's description candidates in one query. */
     private Map<String, List<LocalizedLiteral>> readDescriptionsBySubject(SparqlQuery query) {
         return literalsBySubject(query, DESCRIPTION_PROPERTY);
+    }
+
+    /** Bulk variant of {@link #readRationales}: every requirement's rationale candidates in one query. */
+    private Map<String, List<LocalizedLiteral>> readRationalesBySubject(SparqlQuery query) {
+        return literalsBySubject(query, RATIONALE_PROPERTY);
     }
 
     private Map<String, List<LocalizedLiteral>> literalsBySubject(SparqlQuery query, String predicateIri) {
@@ -1087,11 +1175,17 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                     ? Map.of()
                     : toAcceptanceCriteriaLanguages(criterionAssemblies, displayLocale);
             TitleDescriptionSelection selection = titleAndDescription.get();
+            // Optional, so unlike title/description an empty selection is a null field rather than
+            // a skipped requirement - and its tag is null both for an untagged literal and for no
+            // literal at all, which the service tells apart by the value itself (issue #321).
+            Optional<LocalizedLiteral> rationale =
+                    selectRationale(handle.sparqlQuery()::select, subject, displayLocale);
             Requirement requirement = new Requirement(
                     new RequirementId(ResourceId.of(subjectIriString)),
                     code,
                     selection.title().value(),
                     selection.description().value(),
+                    rationale.map(LocalizedLiteral::value).orElse(null),
                     typeFromIri(iriOf(row, "type").getIRIString()),
                     statusFromIri(projectId, code, iriOf(row, "status").getIRIString()),
                     priorityOf(row),
@@ -1107,6 +1201,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             return Optional.of(new RequirementRepository.CurrentRequirement(
                     requirement, head, acceptanceCriteriaIsSynthesized,
                     selection.title().languageTag(), selection.description().languageTag(),
+                    rationale.map(LocalizedLiteral::languageTag).orElse(null),
                     acceptanceCriteriaLanguageByPosition));
         }
     }
@@ -1142,6 +1237,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                         readAcceptanceCriterionAssembliesBySubject(tx);
                 Map<String, List<LocalizedLiteral>> titlesBySubject = readTitlesBySubject(tx);
                 Map<String, List<LocalizedLiteral>> descriptionsBySubject = readDescriptionsBySubject(tx);
+                Map<String, List<LocalizedLiteral>> rationalesBySubject = readRationalesBySubject(tx);
                 // Grouped by subject (see the class-level note above): priority/
                 // qualityCategory are OPTIONAL joins without an enforced sh:maxCount, so a
                 // store-first requirement with two triples on either predicate binds a
@@ -1168,7 +1264,14 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                                 // KognioRdfUseCaseRepository's zero-main-step skip.
                                 return null;
                             }
+                            // Absent rationale is ordinary, not the store-first anomaly the
+                            // title/description skip above guards against (issue #321).
+                            String rationale = effective
+                                    .select(rationalesBySubject.getOrDefault(entry.getKey(), List.of()))
+                                    .map(LocalizedLiteral::value)
+                                    .orElse(null);
                             return entry.getValue().toRequirement(title.get().value(), description.get().value(),
+                                    rationale,
                                     termsBySubject.getOrDefault(entry.getKey(), List.of()),
                                     acceptanceCriteriaOrLegacyPlaceholder(toAcceptanceCriteria(
                                             criteriaAssembliesBySubject.getOrDefault(entry.getKey(), List.of()),
@@ -1191,9 +1294,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * row of a subject; every row contributes its {@code priority}/{@code qualityCategory} binding
      * (if present) as a candidate via {@link RequirementAssembly#addPriorityCandidate}/
      * {@link RequirementAssembly#addQualityCategoryCandidate}, called by {@link #findAll} once per
-     * row. {@code title}/{@code description} are not part of this assembly at all - {@link
-     * #findAll} selects them separately, once per subject, from {@link #readTitlesBySubject}/
-     * {@link #readDescriptionsBySubject}'s candidate maps.
+     * row. {@code title}/{@code description}/{@code rationale} are not part of this assembly at
+     * all - {@link #findAll} selects them separately, once per subject, from
+     * {@link #readTitlesBySubject}/
+     * {@link #readDescriptionsBySubject}/{@link #readRationalesBySubject}'s candidate maps.
      *
      * @throws UnsupportedRequirementStatusException see {@link #statusFromIri}
      */
@@ -1246,9 +1350,10 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
             }
         }
 
-        private Requirement toRequirement(String title, String description, List<TermRef> usesTerms,
-                List<AcceptanceCriterion> acceptanceCriteria, List<ConstraintRef> constrainedBy) {
-            return new Requirement(id, code, title, description, type, status,
+        private Requirement toRequirement(String title, String description, String rationale,
+                List<TermRef> usesTerms, List<AcceptanceCriterion> acceptanceCriteria,
+                List<ConstraintRef> constrainedBy) {
+            return new Requirement(id, code, title, description, rationale, type, status,
                     firstDistinct(priorities, "priority"), motivatedBy,
                     firstDistinct(qualityCategories, "qualityCategory"), usesTerms, acceptanceCriteria,
                     constrainedBy);

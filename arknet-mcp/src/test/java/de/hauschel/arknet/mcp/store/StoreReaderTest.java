@@ -89,7 +89,7 @@ class StoreReaderTest {
     private static Requirement requirementTitled(String title) {
         return new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), title,
-                "The system shall authenticate a user.",
+                "The system shall authenticate a user.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
     }
@@ -99,7 +99,7 @@ class StoreReaderTest {
         RevisionToken head = requirements.findCurrentByCode(PROJECT, updated.code())
                 .map(RequirementRepository.CurrentRequirement::head)
                 .orElse(null);
-        requirements.compareAndUpdate(PROJECT, head, updated, null, null, noAcceptanceCriteriaLanguages(updated), null);
+        requirements.compareAndUpdate(PROJECT, head, updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null);
     }
 
     /** An untagged (all-{@code null}) map, covering every position {@code updated} carries. */

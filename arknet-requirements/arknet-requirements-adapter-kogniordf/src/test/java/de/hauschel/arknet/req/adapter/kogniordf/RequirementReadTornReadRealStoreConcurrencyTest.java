@@ -201,7 +201,7 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
                 plainRepository, new UuidResourceIdFactory(), UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_REPOSITORY,
                 UNUSED_SCHEMA_SOURCE);
         RequirementCode code = plainService.add(WS, new NewRequirement(OLD_TITLE,
-                "A requirement whose fields change mid-read.", RequirementType.FUNCTIONAL, null, null, null,
+                "A requirement whose fields change mid-read.", null, RequirementType.FUNCTIONAL, null, null, null,
                 List.of(OLD_CRITERION), null), "en").code();
 
         CyclicBarrier readerPastMainQuery = new CyclicBarrier(2);
@@ -223,7 +223,7 @@ class RequirementReadTornReadRealStoreConcurrencyTest {
         Thread writerThread = new Thread(() -> {
             awaitBarrier(readerPastMainQuery);
             try {
-                plainService.update(WS, code, NEW_TITLE, null, List.of(NEW_CRITERION), null, null, null, "en");
+                plainService.update(WS, code, NEW_TITLE, null, null, List.of(NEW_CRITERION), null, null, null, "en");
             } finally {
                 writerCommitted.countDown();
             }

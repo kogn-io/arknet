@@ -30,6 +30,7 @@ rshapes:RequirementShape
     sh:property rshapes:Requirement-identifier ;
     sh:property rshapes:Requirement-title ;
     sh:property rshapes:Requirement-description ;
+    sh:property rshapes:Requirement-rationale ;
     sh:property rshapes:Requirement-priority ;
     sh:property rshapes:Requirement-status ;
     sh:property rshapes:Requirement-motivatedBy ;
@@ -65,6 +66,14 @@ rshapes:Requirement-description
     sh:minLength 5 ;
     sh:uniqueLang true ;
     sh:message  "A Requirement needs at least one dcterms:description (the normative statement, min. 5 characters). sh:uniqueLang allows at most one dcterms:description per non-empty language tag - two descriptions sharing the same tag are not allowed, but DIFFERENT language tags are (the normative statement may be given in several languages)."@en , "Requirement braucht mindestens eine dcterms:description (die normative Aussage, min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine dcterms:description je nicht-leerem Sprach-Tag - zwei Beschreibungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die normative Aussage darf mehrsprachig vorliegen)."@de ;
+    sh:severity sh:Violation .
+
+rshapes:Requirement-rationale
+    a sh:PropertyShape ;
+    sh:path     arkreq:rationale ;
+    sh:minLength 5 ;
+    sh:uniqueLang true ;
+    sh:message  "A Requirement may carry arkreq:rationale (WHY it exists, min. 5 characters). Deliberately optional - unlike dcterms:description it has no sh:minCount, so a requirement without a recorded reason stays legal (issue #321). sh:uniqueLang allows at most one arkreq:rationale per non-empty language tag - two rationales sharing the same tag are not allowed, but DIFFERENT language tags are (the reason may be given in several languages)."@en , "Requirement darf eine arkreq:rationale tragen (das WARUM, min. 5 Zeichen). Bewusst optional - anders als dcterms:description ohne sh:minCount, ein Requirement ohne festgehaltene Begruendung bleibt also legal (issue #321). sh:uniqueLang erlaubt hoechstens eine arkreq:rationale je nicht-leerem Sprach-Tag - zwei Begruendungen mit demselben Tag sind nicht erlaubt, VERSCHIEDENE Sprach-Tags dagegen schon (die Begruendung darf mehrsprachig vorliegen)."@de ;
     sh:severity sh:Violation .
 
 rshapes:Requirement-priority

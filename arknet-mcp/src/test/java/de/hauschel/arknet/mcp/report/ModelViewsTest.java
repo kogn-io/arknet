@@ -140,7 +140,7 @@ class ModelViewsTest {
     private static Requirement requirement() {
         return new Requirement(
                 new RequirementId(ResourceId.of("https://w3id.org/arknet/id/fr-1")),
-                new RequirementCode("FR-1"), "Anmeldung", "Das System muss Nutzer authentifizieren.",
+                new RequirementCode("FR-1"), "Anmeldung", "Das System muss Nutzer authentifizieren.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(), List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten")),
                 List.of());

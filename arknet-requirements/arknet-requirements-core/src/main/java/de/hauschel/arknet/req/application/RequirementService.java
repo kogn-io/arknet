@@ -84,8 +84,8 @@ import de.hauschel.arknet.req.domain.TermRef;
  * surfaces as {@link RequirementConcurrentlyModifiedException}.</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a
- * requirement's title, description, acceptance criteria and/or MoSCoW priority after the fact -
- * e.g. once an interview sharpens a domain fact the original wording missed, or once a
+ * requirement's title, description, rationale, acceptance criteria and/or MoSCoW priority after
+ * the fact - e.g. once an interview sharpens a domain fact the original wording missed, or once a
  * prioritisation review finds a whole register sitting on {@code MUST_HAVE}. Every argument is
  * optional ({@code null} leaves that field unchanged, priority included - it is never a request
  * to remove one); a non-{@code null} value still has to satisfy {@link Requirement}'s own
@@ -102,10 +102,11 @@ import de.hauschel.arknet.req.domain.TermRef;
  * {@link #updateWithOptimisticRetry}. Passing real criteria to {@code update} is exactly how a
  * caller closes that gap.</p>
  *
- * <p><strong>Language.</strong> {@code title}/{@code description} may each legally carry several
- * language-tagged variants. {@link #updateWithOptimisticRetry} determines, per field, whether
- * {@code update}'s caller named it ({@code title != null}/{@code description != null}) - but
- * naming a field alone does not force a fresh {@link
+ * <p><strong>Language.</strong> {@code title}/{@code description}/{@code rationale} may each
+ * legally carry several language-tagged variants. {@link #updateWithOptimisticRetry} determines,
+ * per field, whether {@code update}'s caller named it ({@code title != null}/
+ * {@code description != null}/{@code rationale != null}) - but naming a field alone does not force
+ * a fresh {@link
  * de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage} resolution of that field's language:
  * a caller resending a field's already-current text as part of a full-state round trip, without
  * itself naming a {@code language}, must stay a no-op even on a project with no {@code
@@ -118,12 +119,22 @@ import de.hauschel.arknet.req.domain.TermRef;
  * already-current wording round-trip under the old tag, silently discarding the caller's {@code
  * language} argument). Every other field is written back under the exact tag {@link
  * RequirementRepository.CurrentRequirement#titleLanguage()}/
- * {@link RequirementRepository.CurrentRequirement#descriptionLanguage()} already carried - a
+ * {@link RequirementRepository.CurrentRequirement#descriptionLanguage()}/
+ * {@link RequirementRepository.CurrentRequirement#rationaleLanguage()} already carried - a
  * scoped no-op at the store, not a retag. This is what keeps {@link #accept}/{@link #linkTerm}
  * (which never touch either field and always call the helper with a {@code null} language and a
  * {@code null} defaultLanguage) from collapsing a multilingual title/description down to one
  * variant just because they do not know or care about language - the out-adapter preserves every
  * other language variant regardless, but only if it is told the correct tag to leave alone.</p>
+ *
+ * <p><strong>Rationale is optional, which the language machinery handles without a special case
+ * (issue #321).</strong> A requirement carrying no {@code arkreq:rationale} at all reads back as
+ * {@code null} with a {@code null}
+ * {@link RequirementRepository.CurrentRequirement#rationaleLanguage()}, so an untouched
+ * {@code rationale} round-trips {@code null}/{@code null} exactly the way an untouched
+ * {@code title} round-trips its own tag - nothing is written, nothing is swept. The first
+ * {@code update} that names one resolves a fresh write language like any other named field,
+ * because {@code null} differs from the incoming text.</p>
  */
 public class RequirementService implements AddRequirement, ListRequirements, GetRequirement,
         AcceptRequirement, ProposeRequirement, LinkTerm, LinkConstraint, UpdateRequirement, ResolveRequirements,
@@ -198,9 +209,9 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                 DuplicateRequirementCodeException.class, () -> {
                     RequirementCode code = nextCode(projectId, command.type());
                     Requirement requirement = new Requirement(id, code, command.title(),
-                            command.description(), command.type(), RequirementStatus.PROPOSED,
-                            command.priority(), command.motivatedBy(), command.qualityCategory(),
-                            List.of(), acceptanceCriteria, List.of());
+                            command.description(), command.rationale(), command.type(),
+                            RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
+                            command.qualityCategory(), List.of(), acceptanceCriteria, List.of());
                     repository.create(projectId, requirement, language);
                     return requirement;
                 });
@@ -237,20 +248,22 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     public Requirement accept(ProjectId projectId, RequirementCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        // accept() never touches title/description, so no call-scoped language applies - the
-        // ternaries in updateWithOptimisticRetry always fall back to the language each field was
-        // already read under, and never reach LanguageTag#resolveWriteLanguage - passing a null
+        // accept() never touches title/description/rationale, so no call-scoped language applies -
+        // the ternaries in updateWithOptimisticRetry always fall back to the language each field
+        // was already read under, and never reach LanguageTag#resolveWriteLanguage - passing a null
         // defaultLanguage here is therefore safe even though this project may well have one
         // configured.
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), Requirement::accept);
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(),
+                Requirement::accept);
     }
 
     @Override
     public Requirement propose(ProjectId projectId, RequirementCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        // propose() never touches title/description either - same null/null rationale as accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), Requirement::propose);
+        // propose() never touches any text field either - same null/null reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(),
+                Requirement::propose);
     }
 
     @Override
@@ -262,17 +275,17 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         // outside the retry loop below - a lookup failure must propagate immediately and leave
         // the requirement untouched, exactly as before.
         TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
-        // linkTerm() never touches title/description either - same null/null rationale as accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), current -> {
+        // linkTerm() never touches any text field either - same null/null reasoning as accept().
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(), current -> {
             if (current.usesTerms().contains(term)) {
                 return current;
             }
             List<TermRef> linked = new ArrayList<>(current.usesTerms());
             linked.add(term);
             return new Requirement(current.id(), current.code(), current.title(),
-                    current.description(), current.type(), current.status(), current.priority(),
-                    current.motivatedBy(), current.qualityCategory(), linked, current.acceptanceCriteria(),
-                    current.constrainedBy());
+                    current.description(), current.rationale(), current.type(), current.status(),
+                    current.priority(), current.motivatedBy(), current.qualityCategory(), linked,
+                    current.acceptanceCriteria(), current.constrainedBy());
         });
     }
 
@@ -292,24 +305,25 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
         Constraint constraint = constraintRepository.findByCode(projectId, parsedCode, null)
                 .orElseThrow(() -> new ConstraintNotFoundException(projectId, parsedCode));
         ConstraintRef ref = new ConstraintRef(constraint.id().value());
-        // linkConstraint() never touches title/description either - same null/null rationale as
+        // linkConstraint() never touches any text field either - same null/null reasoning as
         // accept().
-        return updateWithOptimisticRetry(projectId, code, null, null, false, false, Set.of(), current -> {
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, Set.of(), current -> {
             if (current.constrainedBy().contains(ref)) {
                 return current;
             }
             List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
             linked.add(ref);
             return new Requirement(current.id(), current.code(), current.title(),
-                    current.description(), current.type(), current.status(), current.priority(),
-                    current.motivatedBy(), current.qualityCategory(), current.usesTerms(),
-                    current.acceptanceCriteria(), linked);
+                    current.description(), current.rationale(), current.type(), current.status(),
+                    current.priority(), current.motivatedBy(), current.qualityCategory(),
+                    current.usesTerms(), current.acceptanceCriteria(), linked);
         });
     }
 
     @Override
     public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-            List<String> newAcceptanceCriteria, List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+            String rationale, List<String> newAcceptanceCriteria,
+            List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
             Priority priority, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
@@ -324,10 +338,11 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                         .map(AcceptanceCriterionTextPatch::position)
                         .collect(Collectors.toUnmodifiableSet());
         return updateWithOptimisticRetry(projectId, code, language, defaultLanguage, title != null,
-                description != null, touchedAcceptanceCriteriaPositions, current -> {
+                description != null, rationale != null, touchedAcceptanceCriteriaPositions, current -> {
             Requirement base = new Requirement(current.id(), current.code(),
                     title != null ? title : current.title(),
                     description != null ? description : current.description(),
+                    rationale != null ? rationale : current.rationale(),
                     current.type(), current.status(),
                     priority != null ? priority : current.priority(), current.motivatedBy(),
                     current.qualityCategory(), current.usesTerms(), current.acceptanceCriteria(),
@@ -369,7 +384,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * {@link Requirement#withAcceptanceCriteriaTextPatches}) does. A no-op mutation never reaches
      * this check, since it already returned above. This guard runs <em>before</em> resolving a
      * touched field's write language whenever {@code mutation} changed any text (title,
-     * description or an acceptance criterion) - a legacy requirement missing its acceptance
+     * description, rationale or an acceptance criterion) - a legacy requirement missing its
+     * acceptance
      * criteria must surface {@link MissingAcceptanceCriteriaException} even when the call also
      * lacks a {@code language}/{@code defaultLanguage} for that unrelated text change, rather than
      * failing on the language gap first and hiding the more fundamental one.</p>
@@ -388,7 +404,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *                                                   {@code defaultLanguage} is given
      */
     private Requirement updateWithOptimisticRetry(ProjectId projectId, RequirementCode code, String language,
-            String defaultLanguage, boolean titleTouched, boolean descriptionTouched,
+            String defaultLanguage, boolean titleTouched, boolean descriptionTouched, boolean rationaleTouched,
             Set<Integer> touchedAcceptanceCriteriaPositions, UnaryOperator<Requirement> mutation) {
         RequirementConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
@@ -425,6 +441,12 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
                     current.titleLanguage(), language, defaultLanguage);
             String descriptionLanguage = resolveTouchedLanguage(descriptionTouched, current.value().description(),
                     updated.description(), current.descriptionLanguage(), language, defaultLanguage);
+            // Same rule for the optional rationale: a requirement that carries none reads back
+            // null/null here, so an untouched one resolves to the null tag it was read under and
+            // the out-adapter writes no arkreq:rationale triple at all - the very first update()
+            // that names one is a text change against that null and therefore resolves freshly.
+            String rationaleLanguage = resolveTouchedLanguage(rationaleTouched, current.value().rationale(),
+                    updated.rationale(), current.rationaleLanguage(), language, defaultLanguage);
             Map<Integer, String> acceptanceCriteriaLanguageByPosition = acceptanceCriteriaLanguageByPosition(
                     current, updated, language, defaultLanguage, touchedAcceptanceCriteriaPositions);
             // A true no-op needs both text and language to already match what is stored: text-only
@@ -434,6 +456,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             if (textUnchanged
                     && Objects.equals(titleLanguage, current.titleLanguage())
                     && Objects.equals(descriptionLanguage, current.descriptionLanguage())
+                    && Objects.equals(rationaleLanguage, current.rationaleLanguage())
                     && acceptanceCriteriaLanguageByPosition.equals(current.acceptanceCriteriaLanguageByPosition())) {
                 return current.value();
             }
@@ -442,7 +465,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
             }
             try {
                 repository.compareAndUpdate(projectId, current.head(), updated, titleLanguage, descriptionLanguage,
-                        acceptanceCriteriaLanguageByPosition, defaultLanguage);
+                        rationaleLanguage, acceptanceCriteriaLanguageByPosition, defaultLanguage);
                 return updated;
             } catch (RequirementConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the requirement between our read and our write -
@@ -513,7 +536,8 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
     }
 
     /**
-     * The BCP-47 language tag a single scalar field ({@code title}/{@code description}) is
+     * The BCP-47 language tag a single scalar field ({@code title}/{@code description}/
+     * {@code rationale}) is
      * written under: freshly resolved via {@link LanguageTag#resolveWriteLanguage} when {@code
      * touched} and either the caller named {@code language} explicitly or {@code updatedText}
      * actually differs from {@code currentText}; otherwise {@code currentLanguage} unchanged (a
