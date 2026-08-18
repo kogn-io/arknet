@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.mcp.report;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -54,23 +55,50 @@ public sealed interface Block {
     /**
      * An unordered list of text items: acceptance criteria, extension flows.
      *
+     * <p>The items carry their 1-based position rather than arriving as bare texts, so a
+     * renderer can pair an item with the store sub-resource it came from - see {@link
+     * BulletItem}. {@link Flow} has carried the same number all along.</p>
+     *
      * @param label the block heading
-     * @param items the items; never {@code null}
+     * @param items the items, in ascending position order; never {@code null}
      */
-    record Bullets(String label, List<RichText> items) implements Block {
+    record Bullets(String label, List<BulletItem> items) implements Block {
         public Bullets {
             Objects.requireNonNull(label, "label");
             items = items == null ? List.of() : List.copyOf(items);
         }
 
         /**
+         * Numbers {@code texts} by their order, which is what a caller whose own items have no
+         * position of their own can say truthfully: the n-th text is the n-th item.
+         *
          * @param label the block heading
-         * @param items texts with nothing marked up
+         * @param texts texts with nothing marked up, in ascending position order
          * @return the block
          */
-        public static Bullets plain(final String label, final List<String> items) {
-            return new Bullets(label, items == null ? List.of()
-                    : items.stream().map(RichText::plain).toList());
+        public static Bullets plain(final String label, final List<String> texts) {
+            return numberedByOrder(label, texts == null ? List.of() : texts.stream().map(RichText::plain).toList());
+        }
+
+        /**
+         * Numbers {@code texts} 1..n by their list order. Named after where the number comes
+         * from, because that is the distinction this whole block turns on: a caller whose items
+         * carry a position of their own in the model passes it through the canonical constructor
+         * instead, so that a renderer can pair the item with the store resource behind it.
+         *
+         * @param label the block heading
+         * @param texts the texts, in ascending position order
+         * @return the block
+         */
+        private static Bullets numberedByOrder(final String label, final List<RichText> texts) {
+            if (texts == null) {
+                return new Bullets(label, List.of());
+            }
+            final List<BulletItem> items = new ArrayList<>(texts.size());
+            for (int index = 0; index < texts.size(); index++) {
+                items.add(new BulletItem(index + 1, texts.get(index)));
+            }
+            return new Bullets(label, items);
         }
     }
 

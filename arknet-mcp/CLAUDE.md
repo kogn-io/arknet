@@ -102,20 +102,12 @@ Betrieb ist es der einzige erreichbare Ort, weil das Verzeichnis des Clients im 
 existiert. Der projekt-scoped Unterordner ist damit das einzige, was zwei Projekte im
 gemeinsamen Report-Verzeichnis auseinanderhaelt.
 
-Die kompakte Kartenansicht zeigte bis issue #270 (Teil 2 von #248) nur die zum Report-Zeitpunkt
-per `DisplayLocale` aufgeloeste Sprache eines mehrsprachigen Feldes, obwohl jede Sprachvariante
-schon in der Rohtripel-Ansicht der eigenen Karte lag. `HtmlReportRenderer#languageVariants`
-schliesst diese Luecke rein client-seitig, ohne neue Domain-/Port-Plumbing: sie matcht den
-gerade angezeigten Text eines Kartentitels oder `Block.Prose`-Feldes per Text-Gleichheit gegen
-die Literale der Karten-eigenen `raw`-`StoreResource` zurueck auf ein Praedikat -- traegt
-`subject` mehr als ein Praedikat mit demselben Text, gilt der Rueckmatch als mehrdeutig und
-bleibt ohne Switch, statt am falschen Feld zu raten. Ein ungetaggtes Literal (Altbestand vor
-issue #258, oder `DisplayLocale`s Fallback-Stufe 3) zaehlt als Kandidat unter
-`displayLocale.systemDefault()`. Gefundene Varianten rendert `langSwitchable` als
-`.lang-variant`-Spans in einer `.lang-group`-Huelle (nur die aktive Sprache sichtbar), ein
-Toolbar-`<select>` plus IIFE-Script scannt die `data-lang`-Attribute des Dokuments und schaltet
-um, mit Fallback auf die Default-Sprache eines Feldes, falls die gewaehlte Sprache dort keine
-Variante hat. Bewusst ausgespart: `Block.Bullets`/`Block.Flow` (Use-Case-Extensions,
-Flow-Step-Text) -- die haengen an eigenen opaken `arkreq:Step`-Sub-Ressourcen statt an der
-Karten-eigenen `raw`-Tabelle und brauchten dafuer zusaetzliches Threading, das dieses Issue nicht
-umfasste.
+Die kompakte Kartenansicht zeigte bis issue #270 (Teil 2 von #248) nur die zum Report-Zeitpunkt per `DisplayLocale` aufgeloeste Sprache eines mehrsprachigen Feldes, obwohl jede Sprachvariante schon in der Rohtripel-Ansicht der eigenen Karte lag.
+`HtmlReportRenderer#languageVariants` schliesst diese Luecke rein client-seitig, ohne neue Domain-/Port-Plumbing: sie matcht den gerade angezeigten Text eines Kartentitels oder `Block.Prose`-Feldes per Text-Gleichheit gegen die Literale der Karten-eigenen `raw`-`StoreResource` zurueck auf ein Praedikat -- traegt `subject` mehr als ein Praedikat mit demselben Text, gilt der Rueckmatch als mehrdeutig und bleibt ohne Switch, statt am falschen Feld zu raten.
+Ein ungetaggtes Literal (Altbestand vor issue #258, oder `DisplayLocale`s Fallback-Stufe 3) zaehlt als Kandidat unter `displayLocale.systemDefault()`.
+Gefundene Varianten rendert `langSwitchable` als `.lang-variant`-Spans in einer `.lang-group`-Huelle (nur die aktive Sprache sichtbar), ein Toolbar-`<select>` plus IIFE-Script scannt die `data-lang`-Attribute des Dokuments und schaltet um, mit Fallback auf die Default-Sprache eines Feldes, falls die gewaehlte Sprache dort keine Variante hat.
+Seit issue #319 gilt derselbe Switch auch fuer die positionierten Karten-Items: Flow-Schritte, Use-Case-Extensions und Requirement-Akzeptanzkriterien.
+Die haengen an eigenen `arkreq:Step`-/`arkreq:AcceptanceCriterion`-Sub-Ressourcen statt an der Karten-eigenen `raw`-Tabelle -- `langSources` sammelt sie je Karte aus derselben Snapshot-Tabelle ueber die `mainStep`/`extensionStep`/`acceptanceCriterion`-Kanten, ohne zusaetzlichen Store-Zugriff.
+Gepaart wird ueber `arkreq:position` gegen `FlowStep#position`/`BulletItem#position` statt ueber Text-Gleichheit: zwei woertlich gleiche Schritte sind realistisch und machten den Text-Rueckmatch mehrdeutig, die Position ist es nie.
+Der Text kommt darum mit explizitem Praedikat (`arkreq:stepText` bzw. `arkreq:criterionText`); Extensions und Akzeptanzkriterien teilen sich eine Positionstabelle, weil keine Ressource beide Kanten traegt -- der Renderer muss den Kartentyp nicht kennen, und `Block` bleibt shape-generisch.
+Beansprucht mehr als eine Sub-Ressource dieselbe Position, bleibt das Item ohne Switch -- dieselbe "lieber gar nicht als falsch"-Regel wie beim mehrdeutigen Text-Rueckmatch.
