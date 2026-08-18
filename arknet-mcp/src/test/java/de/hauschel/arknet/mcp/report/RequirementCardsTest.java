@@ -75,7 +75,7 @@ class RequirementCardsTest {
 
         final Block.Bullets criteria = (Block.Bullets) block(cards, "Acceptance criteria");
 
-        assertThat(criteria.items().getFirst().spans()).contains(
+        assertThat(criteria.items().getFirst().text().spans()).contains(
                 new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
     }
 

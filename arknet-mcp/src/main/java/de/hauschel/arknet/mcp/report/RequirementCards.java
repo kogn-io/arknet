@@ -86,7 +86,7 @@ public final class RequirementCards {
         final List<Block> blocks = new ArrayList<>();
         blocks.add(new Block.Prose("Description", glossary.markUp(requirement.description(), linked)));
         blocks.add(new Block.Bullets("Acceptance criteria", requirement.acceptanceCriteria().stream()
-                .map(criterion -> glossary.markUp(criterion.text(), linked))
+                .map(criterion -> new BulletItem(criterion.position(), glossary.markUp(criterion.text(), linked)))
                 .toList()));
         if (requirement.qualityCategory() != null) {
             blocks.add(Block.Prose.plain("Quality category", requirement.qualityCategory()));

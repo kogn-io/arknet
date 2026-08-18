@@ -37,6 +37,7 @@ class HtmlReportRendererTest {
     private static final String STEP_1 = ID + "step-1";
     private static final String STEP_2 = ID + "step-2";
     private static final String FR_1 = ID + "fr-1";
+    private static final String CRITERION_1 = ID + "criterion-1";
     private static final String REVISION = ID + "revision-1";
 
     private final HtmlReportRenderer renderer = new HtmlReportRenderer(Prefixes.defaults());
@@ -510,6 +511,150 @@ class HtmlReportRendererTest {
         // The untagged literal is still visible in the card's own raw-triples view (its safety
         // net, never hidden) - just not smuggled into the language switch under the "en" key.
         assertThat(html).contains("<span class=\"lit str\">\"Legacy title\"</span>");
+    }
+
+    /**
+     * Issue #319: a use case's flow steps are sub-resources of their own, so the text-match path
+     * above never saw their literals - the switch stopped at the card's title and prose while the
+     * flow stayed in whatever language the render picked. The step's own {@code arkreq:position},
+     * which the report model already carries on {@link FlowStep}, is what pairs the two up.
+     */
+    @Test
+    void offersEveryLanguageVariantOfAFlowStep() {
+        final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
+                new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
+                        new Block.Flow("Main flow", List.of(
+                                new FlowStep(1, "Der Kunde legt Artikel in den Warenkorb.", List.of())))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(UC_1, ARKREQ + "mainStep", STEP_1),
+                iri(STEP_1, RDF_TYPE, ARKREQ + "Step"),
+                literal(STEP_1, ARKREQ + "position", "1"),
+                literalLang(STEP_1, ARKREQ + "stepText", "Der Kunde legt Artikel in den Warenkorb.", "de"),
+                literalLang(STEP_1, ARKREQ + "stepText", "The customer adds items to the cart.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Der Kunde legt Artikel in den Warenkorb.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The customer adds items to the cart.</span>"
+                + "</span>");
+    }
+
+    /**
+     * Two steps of one flow may read exactly the same - "Der Caller beendet seinen Zugriff." is a
+     * realistic sentence to repeat. Matching a step back to its resource by text would have to
+     * give up here (or, worse, pair both with the first one's translations); the position is
+     * unambiguous by construction, so each step keeps its own variants (issue #319).
+     */
+    @Test
+    void keepsTwoIdenticallyWordedStepsApartInTheLanguageSwitch() {
+        final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
+                new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
+                        new Block.Flow("Main flow", List.of(
+                                new FlowStep(1, "Der Caller beendet seinen Zugriff.", List.of()),
+                                new FlowStep(2, "Der Caller beendet seinen Zugriff.", List.of())))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(UC_1, ARKREQ + "mainStep", STEP_1),
+                iri(UC_1, ARKREQ + "mainStep", STEP_2),
+                literal(STEP_1, ARKREQ + "position", "1"),
+                literalLang(STEP_1, ARKREQ + "stepText", "Der Caller beendet seinen Zugriff.", "de"),
+                literalLang(STEP_1, ARKREQ + "stepText", "The caller closes its access.", "en"),
+                literal(STEP_2, ARKREQ + "position", "2"),
+                literalLang(STEP_2, ARKREQ + "stepText", "Der Caller beendet seinen Zugriff.", "de"),
+                literalLang(STEP_2, ARKREQ + "stepText", "The caller ends its access.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<span class=\"num\">1</span><div class=\"step\"><p>"
+                + "<span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Der Caller beendet seinen Zugriff.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The caller closes its access.</span>"
+                + "</span>");
+        assertThat(html).contains("<span class=\"num\">2</span><div class=\"step\"><p>"
+                + "<span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Der Caller beendet seinen Zugriff.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The caller ends its access.</span>"
+                + "</span>");
+    }
+
+    /** An extension bullet reaches its {@code arkreq:extensionStep} resource the same way. */
+    @Test
+    void offersEveryLanguageVariantOfAnExtensionBullet() {
+        final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
+                new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
+                        Block.Bullets.plain("Extensions", List.of("Der Kunde bricht ab."))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(UC_1, ARKREQ + "extensionStep", STEP_1),
+                literal(STEP_1, ARKREQ + "position", "1"),
+                literalLang(STEP_1, ARKREQ + "stepText", "Der Kunde bricht ab.", "de"),
+                literalLang(STEP_1, ARKREQ + "stepText", "The customer cancels.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<li><span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Der Kunde bricht ab.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The customer cancels.</span>"
+                + "</span></li>");
+    }
+
+    /**
+     * The same bullet path serves a requirement's acceptance criteria - reached by another edge
+     * ({@code arkreq:acceptanceCriterion}) and carrying their text under another predicate
+     * ({@code arkreq:criterionText}). Which of the two a bullet list shows follows from the
+     * card resource's own edges, so the renderer never has to know it is looking at a
+     * requirement rather than a use case.
+     */
+    @Test
+    void offersEveryLanguageVariantOfAnAcceptanceCriterion() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of(
+                        new Block.Bullets("Acceptance criteria",
+                                List.of(new BulletItem(1, RichText.plain("Die Bestellung ist gespeichert."))))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(FR_1, ARKREQ + "acceptanceCriterion", CRITERION_1),
+                literal(CRITERION_1, ARKREQ + "position", "1"),
+                literalLang(CRITERION_1, ARKREQ + "criterionText", "Die Bestellung ist gespeichert.", "de"),
+                literalLang(CRITERION_1, ARKREQ + "criterionText", "The order is stored.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<li><span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Die Bestellung ist gespeichert.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The order is stored.</span>"
+                + "</span></li>");
+    }
+
+    /**
+     * Two sub-resources claiming the same position leave the store unable to say which one an
+     * item shows. The item then renders exactly as it did before this issue rather than being
+     * switched to a guess - the same "empty rather than wrong" rule the text match follows when
+     * two predicates share a text.
+     */
+    @Test
+    void leavesAStepUnwrappedWhenTwoSubResourcesShareItsPosition() {
+        final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
+                new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
+                        new Block.Flow("Main flow", List.of(
+                                new FlowStep(1, "Der Kunde bestellt.", List.of())))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(UC_1, ARKREQ + "mainStep", STEP_1),
+                iri(UC_1, ARKREQ + "mainStep", STEP_2),
+                literal(STEP_1, ARKREQ + "position", "1"),
+                literalLang(STEP_1, ARKREQ + "stepText", "Der Kunde bestellt.", "de"),
+                literalLang(STEP_1, ARKREQ + "stepText", "The customer orders.", "en"),
+                literal(STEP_2, ARKREQ + "position", "1"),
+                literalLang(STEP_2, ARKREQ + "stepText", "Der Kunde bestellt.", "de"),
+                literalLang(STEP_2, ARKREQ + "stepText", "The customer buys.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<div class=\"step\"><p>Der Kunde bestellt.</p>");
+        assertThat(html).doesNotContain("<span class=\"lang-group\"");
     }
 
     /** The toolbar always offers the control; the script hides it when no field has variants. */

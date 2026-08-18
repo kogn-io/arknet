@@ -6,6 +6,7 @@ package de.hauschel.arknet.mcp.report;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -55,10 +56,23 @@ public final class HtmlReportRenderer {
     /** {@code arkreq:Step} - inlined into its use case's flow instead of shown as a resource. */
     private static final String STEP_TYPE = "https://w3id.org/arknet/requirements#Step";
 
+    /** {@code arkreq:mainStep} - a use case's edge to one numbered step of its main flow. */
+    private static final String MAIN_STEP_EDGE = "https://w3id.org/arknet/requirements#mainStep";
+
+    /** {@code arkreq:extensionStep} - a use case's edge to one of its extension flows. */
+    private static final String EXTENSION_STEP_EDGE = "https://w3id.org/arknet/requirements#extensionStep";
+
     /** The two predicates by which a use case reaches its steps. */
-    private static final Set<String> STEP_EDGES = Set.of(
-            "https://w3id.org/arknet/requirements#mainStep",
-            "https://w3id.org/arknet/requirements#extensionStep");
+    private static final Set<String> STEP_EDGES = Set.of(MAIN_STEP_EDGE, EXTENSION_STEP_EDGE);
+
+    /** {@code arkreq:stepText} - the text of a main-flow step or of an extension. */
+    private static final String STEP_TEXT = "https://w3id.org/arknet/requirements#stepText";
+
+    /**
+     * {@code arkreq:position} - the 1-based number a step or acceptance criterion carries, and
+     * the key by which {@link #langSources} pairs one with the card item that shows it.
+     */
+    private static final String POSITION = "https://w3id.org/arknet/requirements#position";
 
     /**
      * {@code arkreq:AcceptanceCriterion} - inlined into its requirement's card instead of shown
@@ -70,9 +84,15 @@ public final class HtmlReportRenderer {
     private static final String ACCEPTANCE_CRITERION_TYPE =
             "https://w3id.org/arknet/requirements#AcceptanceCriterion";
 
+    /** {@code arkreq:acceptanceCriterion} - a requirement's edge to one of its criteria. */
+    private static final String ACCEPTANCE_CRITERION_EDGE =
+            "https://w3id.org/arknet/requirements#acceptanceCriterion";
+
     /** The predicate by which a requirement reaches its acceptance criteria. */
-    private static final Set<String> ACCEPTANCE_CRITERION_EDGES = Set.of(
-            "https://w3id.org/arknet/requirements#acceptanceCriterion");
+    private static final Set<String> ACCEPTANCE_CRITERION_EDGES = Set.of(ACCEPTANCE_CRITERION_EDGE);
+
+    /** {@code arkreq:criterionText} - the text of one acceptance criterion. */
+    private static final String CRITERION_TEXT = "https://w3id.org/arknet/requirements#criterionText";
 
     private final Prefixes prefixes;
 
@@ -290,7 +310,7 @@ public final class HtmlReportRenderer {
         }
         html.append("        <div class=\"cards\">\n");
         for (final ModelCard card : section.cards()) {
-            appendCard(html, card, carded, subjects, bySubject.get(card.iri()), displayLocale);
+            appendCard(html, card, carded, subjects, bySubject, displayLocale);
         }
         html.append("        </div>\n      </section>\n");
     }
@@ -332,8 +352,10 @@ public final class HtmlReportRenderer {
             final ModelCard card,
             final Set<String> carded,
             final Set<String> subjects,
-            final StoreResource raw,
+            final Map<String, StoreResource> bySubject,
             final DisplayLocale displayLocale) {
+        final StoreResource raw = bySubject.get(card.iri());
+        final LangSources sources = langSources(raw, bySubject);
         final String anchor = resourceAnchor(card.iri());
         html.append("          <article class=\"card\" id=\"").append(anchor).append("\">\n")
                 .append("            <details class=\"fold\">\n")
@@ -348,7 +370,7 @@ public final class HtmlReportRenderer {
         html.append("                <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
                 .append("              </summary>\n              <div class=\"body\">\n");
         for (final Block block : card.blocks()) {
-            appendBlock(html, block, carded, subjects, raw, displayLocale);
+            appendBlock(html, block, carded, subjects, raw, sources, displayLocale);
         }
         html.append("              </div>\n");
         appendRawTriples(html, raw, subjects);
@@ -357,7 +379,7 @@ public final class HtmlReportRenderer {
 
     private void appendBlock(
             final StringBuilder html, final Block block, final Set<String> carded, final Set<String> subjects,
-            final StoreResource raw, final DisplayLocale displayLocale) {
+            final StoreResource raw, final LangSources sources, final DisplayLocale displayLocale) {
         html.append("              <div class=\"block\">\n                <span class=\"blabel\">")
                 .append(escape(block.label())).append("</span>\n");
         switch (block) {
@@ -370,14 +392,17 @@ public final class HtmlReportRenderer {
             }
             case Block.Bullets bullets -> {
                 html.append("                <ul class=\"bullets\">\n");
-                for (final RichText item : bullets.items()) {
-                    html.append("                  <li>").append(renderText(item, carded, subjects))
+                for (final BulletItem item : bullets.items()) {
+                    final String rendered = renderText(item.text(), carded, subjects);
+                    final Optional<LangVariants> variants = itemVariants(
+                            sources.bullets().get(item.position()), item.text().text(), displayLocale);
+                    html.append("                  <li>").append(langSwitchable(rendered, variants))
                             .append("</li>\n");
                 }
                 html.append("                </ul>\n");
             }
             case Block.Refs refs -> appendChips(html, refs.refs(), carded, subjects);
-            case Block.Flow flow -> appendFlow(html, flow, carded, subjects);
+            case Block.Flow flow -> appendFlow(html, flow, carded, subjects, sources, displayLocale);
         }
         html.append("              </div>\n");
     }
@@ -389,23 +414,13 @@ public final class HtmlReportRenderer {
      * literal, this only stops throwing the alternates away before the report can offer a
      * client-side switch between them (issue #270, part 2 of #248).
      *
-     * <p>An untagged literal (a store-first edit, or an older resource written before issue #258)
-     * is a candidate variant too - {@link DisplayLocale#select} can return one per step 3 of its
-     * fallback chain, so a switch built only from tagged literals would silently omit exactly
-     * that field. It is keyed by the call's {@code displayLocale}'s {@code systemDefault} language,
-     * the same language an untagged literal would be shown under if the store held no other
-     * candidate - but only if no literal is genuinely tagged with that same language: a tagged
-     * literal always wins its key over an untagged one, mirroring {@link DisplayLocale#select}'s
-     * own precedence (step 2 before step 3). Without that precedence here, {@code subject}'s own
-     * triple order - not guaranteed stable by {@link StoreResource#types()}'s javadoc - would
-     * decide which of the two survives the switch, and the reachable, correctly tagged literal
-     * could lose to a stale untagged one (issue #301).</p>
-     *
-     * <p>The match back from {@code displayed} to a predicate is by text equality alone - there is
-     * no predicate available at the call sites to match on instead. If more than one predicate on
-     * {@code subject} carries a literal with that exact text, which one is meant is ambiguous;
-     * this returns {@link Optional#empty()} rather than guessing and risking a switch that shows
-     * an unrelated field's text once the reader picks another language.</p>
+     * <p>The match back from {@code displayed} to a predicate is by text equality alone - a card's
+     * title and its prose fields are plain strings by the time they reach the renderer, with no
+     * predicate alongside them. If more than one predicate on {@code subject} carries a literal
+     * with that exact text, which one is meant is ambiguous; this returns {@link Optional#empty()}
+     * rather than guessing and risking a switch that shows an unrelated field's text once the
+     * reader picks another language. A positioned item does not take this path: it reaches its own
+     * sub-resource through the model's edges and names its predicate outright (issue #319).</p>
      *
      * @param subject       the card's own raw resource, or {@code null} if the snapshot holds none
      * @param displayed     the text currently shown, already selected by {@code displayLocale}
@@ -420,18 +435,52 @@ public final class HtmlReportRenderer {
         if (subject == null) {
             return Optional.empty();
         }
-        final Map<String, RdfNode.Literal> matchByPredicate = new LinkedHashMap<>();
+        final Set<String> matchingPredicates = new LinkedHashSet<>();
         for (final Triple triple : subject.outgoing()) {
             if (triple.object() instanceof RdfNode.Literal literal && literal.lexicalForm().equals(displayed)) {
-                matchByPredicate.putIfAbsent(triple.predicate(), literal);
+                matchingPredicates.add(triple.predicate());
             }
         }
-        if (matchByPredicate.size() != 1) {
+        if (matchingPredicates.size() != 1) {
             return Optional.empty();
         }
-        final Map.Entry<String, RdfNode.Literal> match = matchByPredicate.entrySet().iterator().next();
-        final String predicate = match.getKey();
-        final String activeLang = languageKey(match.getValue(), displayLocale);
+        return languageVariants(subject, matchingPredicates.iterator().next(), displayed, displayLocale);
+    }
+
+    /**
+     * {@link #languageVariants(StoreResource, String, DisplayLocale)} for a caller that knows
+     * which predicate carries the text, so nothing has to be guessed back from what is displayed
+     * (issue #319). This is the path a positioned item takes: a step's text is
+     * {@code arkreq:stepText} on the {@code arkreq:Step} the flow's position points at, a
+     * criterion's is {@code arkreq:criterionText} on its {@code arkreq:AcceptanceCriterion} -
+     * both facts the caller establishes from the model's own edges rather than from text
+     * equality, which two identically worded steps would make ambiguous.
+     *
+     * <p>An untagged literal (a store-first edit, or an older resource written before issue #258)
+     * is a candidate variant too - {@link DisplayLocale#select} can return one per step 3 of its
+     * fallback chain, so a switch built only from tagged literals would silently omit exactly
+     * that field. It is keyed by the call's {@code displayLocale}'s {@code systemDefault} language,
+     * the same language an untagged literal would be shown under if the store held no other
+     * candidate - but only if no literal is genuinely tagged with that same language: a tagged
+     * literal always wins its key over an untagged one, mirroring {@link DisplayLocale#select}'s
+     * own precedence (step 2 before step 3). Without that precedence here, {@code subject}'s own
+     * triple order - not guaranteed stable by {@link StoreResource#types()}'s javadoc - would
+     * decide which of the two survives the switch, and the reachable, correctly tagged literal
+     * could lose to a stale untagged one (issue #301).</p>
+     *
+     * @param subject       the resource carrying the text - a card's own resource, or one of its
+     *                      positioned sub-resources
+     * @param predicate     the predicate whose literals are the variants of one another
+     * @param displayed     the text currently shown, already selected by {@code displayLocale}
+     * @param displayLocale the same locale {@code displayed} was selected under
+     * @return the active language together with every other language under {@code predicate}, or
+     *         {@link Optional#empty()} if {@code displayed} is not one of that predicate's
+     *         literals, or only one language exists for it
+     */
+    private Optional<LangVariants> languageVariants(
+            final StoreResource subject, final String predicate, final String displayed,
+            final DisplayLocale displayLocale) {
+        String activeLang = null;
         final Map<String, String> byLang = new LinkedHashMap<>();
         // Tagged literals first, so a genuinely tagged systemDefault-language literal always
         // claims its key - an untagged literal (added in the second pass below) only fills a key
@@ -441,21 +490,32 @@ public final class HtmlReportRenderer {
         for (final Triple triple : subject.outgoing()) {
             if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal
                     && literal.languageTag() != null) {
+                if (activeLang == null && literal.lexicalForm().equals(displayed)) {
+                    activeLang = literal.languageTag();
+                }
                 byLang.putIfAbsent(literal.languageTag(), literal.lexicalForm());
             }
         }
         for (final Triple triple : subject.outgoing()) {
             if (predicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal
                     && literal.languageTag() == null) {
+                if (activeLang == null && literal.lexicalForm().equals(displayed)) {
+                    activeLang = displayLocale.systemDefault().toLanguageTag();
+                }
                 byLang.putIfAbsent(displayLocale.systemDefault().toLanguageTag(), literal.lexicalForm());
             }
         }
-        return byLang.size() > 1 ? Optional.of(new LangVariants(activeLang, byLang)) : Optional.empty();
+        return activeLang != null && byLang.size() > 1
+                ? Optional.of(new LangVariants(activeLang, byLang))
+                : Optional.empty();
     }
 
-    /** {@code literal}'s language tag, or {@code displayLocale}'s system default if untagged. */
-    private static String languageKey(final RdfNode.Literal literal, final DisplayLocale displayLocale) {
-        return literal.languageTag() != null ? literal.languageTag() : displayLocale.systemDefault().toLanguageTag();
+    /** {@link #languageVariants} for a positioned item, or empty if no source was found for it. */
+    private Optional<LangVariants> itemVariants(
+            final SubResource source, final String displayed, final DisplayLocale displayLocale) {
+        return source == null
+                ? Optional.empty()
+                : languageVariants(source.resource(), source.textPredicate(), displayed, displayLocale);
     }
 
     /**
@@ -493,12 +553,113 @@ public final class HtmlReportRenderer {
     private record LangVariants(String activeLang, Map<String, String> byLang) {
     }
 
+    /**
+     * The store sub-resources behind a card's positioned items, keyed by that position: the
+     * {@code arkreq:Step}s of a use case's main flow, and - sharing one map, because no resource
+     * carries both edges - the extensions of a use case or the acceptance criteria of a
+     * requirement, whichever the card holds.
+     *
+     * <p>Sharing the bullet map is what keeps the card's own type out of the renderer: which
+     * kind of sub-resource a bullet list shows follows from the edges the card's resource
+     * actually has, not from knowing that this card is a use case and that one a requirement -
+     * exactly the domain knowledge {@link Block}'s shape-only vocabulary exists to keep out
+     * (issue #319).</p>
+     *
+     * @param flow    main-flow steps by their 1-based position
+     * @param bullets extensions or acceptance criteria by their 1-based position
+     */
+    private record LangSources(Map<Integer, SubResource> flow, Map<Integer, SubResource> bullets) {
+
+        /** For a card the snapshot holds no resource for, or one with no positioned items. */
+        private static final LangSources NONE = new LangSources(Map.of(), Map.of());
+    }
+
+    /**
+     * @param resource      the sub-resource carrying one item's text
+     * @param textPredicate the predicate its text lives under
+     */
+    private record SubResource(StoreResource resource, String textPredicate) {
+    }
+
+    /**
+     * Collects {@code card}'s positioned sub-resources from the snapshot it was rendered
+     * alongside. No extra store access: {@code bySubject} already holds every resource the
+     * overview read, sub-resources included, and the edges are the same ones {@link #leftovers}
+     * follows to suppress those resources from the raw section.
+     */
+    private static LangSources langSources(final StoreResource card, final Map<String, StoreResource> bySubject) {
+        if (card == null) {
+            return LangSources.NONE;
+        }
+        final Map<Integer, List<SubResource>> flow = new LinkedHashMap<>();
+        collectPositioned(card, bySubject, MAIN_STEP_EDGE, STEP_TEXT, flow);
+        final Map<Integer, List<SubResource>> bullets = new LinkedHashMap<>();
+        collectPositioned(card, bySubject, EXTENSION_STEP_EDGE, STEP_TEXT, bullets);
+        collectPositioned(card, bySubject, ACCEPTANCE_CRITERION_EDGE, CRITERION_TEXT, bullets);
+        return new LangSources(unambiguous(flow), unambiguous(bullets));
+    }
+
+    /** Adds every sub-resource {@code card} reaches through {@code edge} under its own position. */
+    private static void collectPositioned(
+            final StoreResource card,
+            final Map<String, StoreResource> bySubject,
+            final String edge,
+            final String textPredicate,
+            final Map<Integer, List<SubResource>> collected) {
+        for (final Triple triple : card.outgoing()) {
+            if (!edge.equals(triple.predicate()) || !(triple.object() instanceof RdfNode.Resource target)) {
+                continue;
+            }
+            final StoreResource sub = bySubject.get(target.iri());
+            if (sub == null) {
+                continue;
+            }
+            position(sub).ifPresent(position -> collected
+                    .computeIfAbsent(position, key -> new ArrayList<>())
+                    .add(new SubResource(sub, textPredicate)));
+        }
+    }
+
+    /** {@code sub}'s {@code arkreq:position}, or empty if it carries none or an unparsable one. */
+    private static Optional<Integer> position(final StoreResource sub) {
+        for (final Triple triple : sub.outgoing()) {
+            if (POSITION.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
+                try {
+                    return Optional.of(Integer.valueOf(literal.lexicalForm().trim()));
+                } catch (final NumberFormatException notANumber) {
+                    return Optional.empty();
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Keeps only the positions exactly one sub-resource claims. Two resources under the same
+     * position mean the store cannot say which one an item shows, and a language switch built on
+     * a guess would show the reader another item's text - the same "empty rather than wrong"
+     * rule the text match a few lines up already follows.
+     */
+    private static Map<Integer, SubResource> unambiguous(final Map<Integer, List<SubResource>> collected) {
+        final Map<Integer, SubResource> sources = new LinkedHashMap<>();
+        collected.forEach((position, candidates) -> {
+            if (candidates.size() == 1) {
+                sources.put(position, candidates.getFirst());
+            }
+        });
+        return sources;
+    }
+
     private void appendFlow(
-            final StringBuilder html, final Block.Flow flow, final Set<String> carded, final Set<String> subjects) {
+            final StringBuilder html, final Block.Flow flow, final Set<String> carded, final Set<String> subjects,
+            final LangSources sources, final DisplayLocale displayLocale) {
         html.append("                <ol class=\"flow\">\n");
         for (final FlowStep step : flow.steps()) {
+            final Optional<LangVariants> variants =
+                    itemVariants(sources.flow().get(step.position()), step.text(), displayLocale);
             html.append("                  <li><span class=\"num\">").append(step.position())
-                    .append("</span><div class=\"step\"><p>").append(escape(step.text())).append("</p>\n");
+                    .append("</span><div class=\"step\"><p>")
+                    .append(langSwitchable(escape(step.text()), variants)).append("</p>\n");
             if (!step.realises().isEmpty()) {
                 html.append("                  <span class=\"realises\">realises</span>\n");
                 appendChips(html, step.realises(), carded, subjects);
