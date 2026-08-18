@@ -1,6 +1,7 @@
 # ADR-020: Stakeholder-Herkunftsverankerung im Requirements-Hexagon
 
-- Status: Accepted (2026-08-18)
+- Status: Proposed (2026-08-18) -- wird Accepted, sobald der Traeger des Partei-Begriffs
+  entschieden ist (eigene Stakeholder-Ressource vs. allgemeiner Actor-Begriff mit Rollen)
 - Related: ADR-017
 
 ## Kontext
@@ -27,6 +28,12 @@ bejahten Prozessgruppe.
 Gegen einen eigenen Bounded Context spricht der offene, mit Belegen unterlegte Verdacht,
 dass der bestehende Sechs-BC-Schnitt bereits zu fein ist -- einen siebten anzulegen,
 waehrend das ungeklaert ist, wuerde die Lage verschaerfen.
+
+Offen ist der Traeger des Partei-Begriffs: statt einer eigenen Stakeholder-Ressource
+steht ein allgemeiner Actor-Begriff (Partei-Typologie, UC-Actor und Stakeholder als
+Rollen derselben Partei) zur Pruefung, der die Doppel-Existenz einer Partei als
+Actor-Facette und Stakeholder an der Wurzel vermeiden wuerde. Bis diese Pruefung
+entschieden ist, bleibt dieser Record Proposed.
 
 ## Entscheidung
 

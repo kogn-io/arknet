@@ -27,7 +27,7 @@ Sicht.** Weichen beide voneinander ab, gewinnt der Record, und diese Tabelle wir
 | 017 | [ISO/IEC/IEEE 15288 als Scope-Orientierung](adr-017-iso-15288-als-scope-orientierung.md) | Proposed | 2026-08-02 | Der Ontologie-Scope orientiert sich an 15288s Technical-Process-Gruppe als Rahmen, nicht als Implementierungsziel. |
 | 018 | [Requirement-Status bleibt ohne Durchsetzung](adr-018-requirement-status-ohne-durchsetzung.md) | Superseded by ADR-019 | 2026-08-06 | Requirement-Status bleibt ein unverbindliches Reifegrad-Signal ohne Durchsetzung; Ausbau ist zurueckgestellt. |
 | 019 | [Requirement-Status bleibt ohne Durchsetzung, ist aber beidseitig setzbar](adr-019-requirement-status-beidseitig-setzbar.md) | Accepted | 2026-08-06 | Requirement-Status bleibt ein unverbindliches Reifegrad-Signal ohne Durchsetzung, ist aber in beide Richtungen setzbar. |
-| 020 | [Stakeholder-Herkunftsverankerung im Requirements-Hexagon](adr-020-stakeholder-herkunftsverankerung.md) | Accepted | 2026-08-18 | Stakeholder wird eigene Ressource im Requirements-Hexagon mit direkter Herkunftskante vom Requirement; kein Verhandlungs-/Konfliktmodell. |
+| 020 | [Stakeholder-Herkunftsverankerung im Requirements-Hexagon](adr-020-stakeholder-herkunftsverankerung.md) | Proposed | 2026-08-18 | Stakeholder wird eigene Ressource im Requirements-Hexagon mit direkter Herkunftskante vom Requirement; kein Verhandlungs-/Konfliktmodell. |
 | 021 | [arkreq:Goal wird ersatzlos entfernt](adr-021-goal-ersatzlos-entfernt.md) | Accepted | 2026-08-18 | `arkreq:Goal` samt Properties und `motivatedBy` wird ersatzlos entfernt; eine spaetere Ziel-Ebene entstuende als eigener Schnitt. |
 
 ADR-002 existiert nicht -- keine Luecke im Index, die Nummer wurde nie vergeben.
