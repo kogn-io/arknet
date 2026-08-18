@@ -2,7 +2,7 @@
 
 Erste hexagonale BC -- arknet-requirements-core (Domaene/In-/Out-Ports) + arknet-requirements-adapter-kogniordf (Out) + arknet-requirements-adapter-mcp (In, Spring AI `@McpTool`).
 Requirement-Lifecycle.
-Ein Requirement traegt `arkreq:usesTerm`-Kanten auf Glossar-Begriffe (`req_link_term`): die Kante gehoert bewusst der requirements-BC (Domain `arkreq:Requirement`), damit die Abhaengigkeit requirements -> ubiquitous-language zeigt und nicht umgekehrt.
+Ein Requirement traegt `arkreq:usesTerm`-Kanten auf Glossar-Begriffe (`req_link_term`): die Kante gehoert bewusst der requirements-BC, damit die Abhaengigkeit requirements -> ubiquitous-language zeigt und nicht umgekehrt -- seit Issue #329 ist ihre `rdfs:domain` eine Union aus `arkreq:Requirement` und `arkreq:UseCase` (letzteres wohnt im selben `arkreq`-Namespace), sodass auch die use-cases-BC (`uc_link_term`) dieselbe Kante schreibt, ohne dass sie die BC wechselt.
 Sie steckt **im** `Requirement`-Record, nicht daneben -- der Out-Adapter schreibt replace-by-identity, eine Kante ausserhalb des Aggregats wuerde der naechste `req_set_status` still loeschen.
 `TermRef` haelt die Subject-`ResourceId` des Ziels (keinen Business-Code); die Aufloesung Code -> Identitaet sitzt im `RequirementService` hinter einem eigenen Out-Port `TermLookup` (Impl `KognioRdfTermLookup`), didaktische Ablehnung bei Unbekanntem/Mehrdeutigem ueber `UnresolvedReferenceException`.
 Opake Identitaet statt schema-on-subjects: `RequirementId` wrapt eine vom Kernel gemintete `ResourceId` (Subject-IRI, unveraenderlich), `RequirementCode` traegt die `FR-N`/`NFR-N`-Semantik als reines Business-Label (`dcterms:identifier`) -- der MCP-Nutzer tippt weiterhin den Code, nie die IRI.

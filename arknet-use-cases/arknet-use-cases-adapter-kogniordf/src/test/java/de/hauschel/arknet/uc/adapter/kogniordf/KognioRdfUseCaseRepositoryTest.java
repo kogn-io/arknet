@@ -42,10 +42,12 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
@@ -81,6 +83,7 @@ class KognioRdfUseCaseRepositoryTest {
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
 
     private static final UseCaseId ID_1 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
     private static final UseCaseId ID_2 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-2"));
@@ -92,6 +95,10 @@ class KognioRdfUseCaseRepositoryTest {
     private static final ActorRef PAYMENT_PROVIDER =
             new ActorRef(ResourceId.of("https://w3id.org/arknet/model/term/payment-provider"));
     private static final RequirementRef FR_1_REF = new RequirementRef(FR_1);
+    private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/model/term/term-1");
+    private static final TermRef TERM_1_REF = new TermRef(TERM_1);
+    private static final ResourceId TCON_1 = ResourceId.of("https://w3id.org/arknet/model/constraint/tcon-1");
+    private static final ConstraintRef TCON_1_REF = new ConstraintRef(TCON_1);
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -179,6 +186,21 @@ class KognioRdfUseCaseRepositoryTest {
         seedSystemActor(project, "payment-provider", "PaymentProvider");
     }
 
+    private void seedTerm(ProjectId project, String slug, String prefLabel) {
+        seed(project, TERMS_GRAPH,
+                "<https://w3id.org/arknet/model/term/" + slug + "> "
+                        + "a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                        + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
+    }
+
+    private void seedConstraint(ProjectId project, String slug) {
+        seed(project, CONSTRAINTS_GRAPH,
+                "<https://w3id.org/arknet/model/constraint/" + slug + "> "
+                        + "a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
+                        + "<http://purl.org/dc/terms/title> \"" + slug + "\" ; "
+                        + "<https://w3id.org/arknet/requirements#constraintStatement> \"Must hold.\" .");
+    }
+
     private static UseCase placeOrder() {
         return placeOrder(ID_1, CODE_1);
     }
@@ -191,7 +213,7 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(
                         new Step(1, "Customer selects items", List.of(FR_1_REF)),
                         new Step(2, "Customer confirms and pays", List.of())),
-                List.of("2a. Payment declined -> use case ends in failure"));
+                List.of("2a. Payment declined -> use case ends in failure"), List.of(), List.of());
     }
 
     @Test
@@ -229,7 +251,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         UseCase second = new UseCase(ID_2, CODE_2, "Reset password", "User resets password",
                 null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "User requests a reset link", List.of())), List.of());
+                List.of(new Step(1, "User requests a reset link", List.of())), List.of(), List.of(), List.of());
         repository.create(PROJECT_A, second, null);
 
         List<UseCase> all = repository.findAll(PROJECT_A, null);
@@ -247,7 +269,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+                List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
         replaceViaCompareAndUpdate(PROJECT_A, revised);
 
         assertEquals(1, repository.findAll(PROJECT_A, null).size());
@@ -277,7 +299,7 @@ class KognioRdfUseCaseRepositoryTest {
                 List.of(
                         new Step(1, "Customer selects items", List.of()),
                         new Step(2, "Customer confirms and pays", List.of(FR_1_REF))),
-                List.of("2a. Payment declined -> use case ends in failure"));
+                List.of("2a. Payment declined -> use case ends in failure"), List.of(), List.of());
         replaceViaCompareAndUpdate(PROJECT_A, revised);
 
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
@@ -330,7 +352,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+                List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, revised, null, null, null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE);
 
@@ -351,12 +373,12 @@ class KognioRdfUseCaseRepositoryTest {
         // Simulates a concurrent writer that already committed a change since staleHead was read.
         UseCase concurrentlyRevised = new UseCase(ID_1, CODE_1, "Place order (concurrently revised)",
                 "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+                List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
         replaceViaCompareAndUpdate(PROJECT_A, concurrentlyRevised);
 
         UseCase staleAttempt = new UseCase(ID_1, CODE_1, "Place order (stale attempt)",
                 "Customer places an order", null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+                List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
                 () -> repository.compareAndUpdate(PROJECT_A, staleHead, staleAttempt, null, null, null, null, null, null,
@@ -571,7 +593,7 @@ class KognioRdfUseCaseRepositoryTest {
         // stepText "ok" is non-blank (valid domain) but below the shape's minLength of 3.
         UseCase invalid = new UseCase(ID_1, CODE_1, "Bad", "Some goal", null, null,
                 CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "ok", List.of(FR_1_REF))), List.of());
+                List.of(new Step(1, "ok", List.of(FR_1_REF))), List.of(), List.of(), List.of());
 
         assertThrows(WriteConstraintViolationException.class,
                 () -> repository.create(PROJECT_A, invalid, null));
@@ -767,7 +789,7 @@ class KognioRdfUseCaseRepositoryTest {
 
         UseCase revised = new UseCase(ID_1, CODE_1, "Place order (revised)", "Customer places an order",
                 null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, "Customer selects items", List.of())), List.of());
+                List.of(new Step(1, "Customer selects items", List.of())), List.of(), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, revised, null, null, null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), null, Integer.MAX_VALUE);
 
@@ -793,5 +815,129 @@ class KognioRdfUseCaseRepositoryTest {
                     .map(row -> ((io.kogn.rdf.terms.IRI) row.getValue("v").orElseThrow()).getIRIString())
                     .toList();
         }
+    }
+
+    // ---- usesTerm / constrainedBy (issue #329) -------------------------------------------
+
+    private static UseCase placeOrderWithTermAndConstraint() {
+        UseCase base = placeOrder();
+        return new UseCase(base.id(), base.code(), base.title(), base.goal(), base.scope(), base.trigger(),
+                base.primaryActor(), base.supportingActors(), base.precondition(), base.postcondition(),
+                base.steps(), base.extensions(), List.of(TERM_1_REF), List.of(TCON_1_REF));
+    }
+
+    @Test
+    void createsAndFindsUseCaseWithUsesTermAndConstrainedByEdges() {
+        seedReferences(PROJECT_A);
+        seedTerm(PROJECT_A, "term-1", "Cart");
+        seedConstraint(PROJECT_A, "tcon-1");
+
+        repository.create(PROJECT_A, placeOrderWithTermAndConstraint(), null);
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+
+        assertEquals(List.of(TERM_1_REF), found.usesTerms());
+        assertEquals(List.of(TCON_1_REF), found.constrainedBy());
+    }
+
+    /**
+     * {@code compareAndUpdate} rebuilds the whole subject by identity - {@code usesTerms}/
+     * {@code constrainedBy} must survive an update that does not itself touch them, the same way
+     * {@code KognioRdfRequirementRepositoryTest} pins for {@code usesTerm}/{@code constrainedBy}.
+     */
+    @Test
+    void usesTermAndConstrainedByEdgesSurviveAnUnrelatedUpdate() {
+        seedReferences(PROJECT_A);
+        seedTerm(PROJECT_A, "term-1", "Cart");
+        seedConstraint(PROJECT_A, "tcon-1");
+        repository.create(PROJECT_A, placeOrderWithTermAndConstraint(), null);
+        UseCase current = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+
+        UseCase revised = new UseCase(current.id(), current.code(), "Place order (revised)", current.goal(),
+                current.scope(), current.trigger(), current.primaryActor(), current.supportingActors(),
+                current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                current.usesTerms(), current.constrainedBy());
+        replaceViaCompareAndUpdate(PROJECT_A, revised);
+
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals("Place order (revised)", found.title());
+        assertEquals(List.of(TERM_1_REF), found.usesTerms());
+        assertEquals(List.of(TCON_1_REF), found.constrainedBy());
+    }
+
+    /**
+     * A blank-node {@code usesTerm}/{@code constrainedBy} target is store-first-only (ADR-005;
+     * neither property carries {@code sh:nodeKind sh:IRI} on {@code usesTerm}, and {@code
+     * constrainedBy}'s {@code sh:nodeKind} only guards this adapter's own writes) - {@link
+     * UseCase#usesTerms()}/{@link UseCase#constrainedBy()} can never carry it, so an update that
+     * never reads it back must still not silently drop it from the store, mirroring
+     * {@code KognioRdfRequirementRepositoryTest}'s identical regression test.
+     */
+    @Test
+    void updatePreservesABlankNodeUsesTermAndConstrainedByTargetItCannotReadBack() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        seed(PROJECT_A, USE_CASES_GRAPH,
+                "<" + ID_1.value().value() + "> "
+                        + "<https://w3id.org/arknet/requirements#usesTerm> _:blankTerm ; "
+                        + "<http://open-services.net/ns/rm#constrainedBy> _:blankConstraint .");
+        UseCase current = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertTrue(current.usesTerms().isEmpty(), "a blank-node target is never read back into the domain type");
+        assertTrue(current.constrainedBy().isEmpty());
+
+        UseCase revised = new UseCase(current.id(), current.code(), "Place order (revised)", current.goal(),
+                current.scope(), current.trigger(), current.primaryActor(), current.supportingActors(),
+                current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                current.usesTerms(), current.constrainedBy());
+        replaceViaCompareAndUpdate(PROJECT_A, revised);
+
+        assertEquals(1, countBlankUsesTermEdges(PROJECT_A), "the blank-node usesTerm edge must survive the update");
+        assertEquals(1, countBlankConstrainedByEdges(PROJECT_A),
+                "the blank-node constrainedBy edge must survive the update");
+    }
+
+    private long countBlankUsesTermEdges(ProjectId project) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
+            return handle.sparqlQuery().select("SELECT ?term WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "<" + ID_1.value().value() + "> <https://w3id.org/arknet/requirements#usesTerm> ?term . "
+                    + "FILTER(!isIRI(?term)) } }").count();
+        }
+    }
+
+    private long countBlankConstrainedByEdges(ProjectId project) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
+            return handle.sparqlQuery().select("SELECT ?constraint WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "<" + ID_1.value().value() + "> <http://open-services.net/ns/rm#constrainedBy> ?constraint . "
+                    + "FILTER(!isIRI(?constraint)) } }").count();
+        }
+    }
+
+    /**
+     * A referenced constraint carrying no triples at all in {@code CONSTRAINTS_GRAPH} (a dangling
+     * identity) is accepted here, unlike the sibling requirements bounded context's
+     * {@code KognioRdfRequirementRepository}, which re-verifies a {@code constrainedBy} target by
+     * copying its real triples into the SHACL gate's asserted context - {@code rshapes:ConstraintShape}
+     * is active in that adapter's (unfiltered) gate and would otherwise fail a bare type assertion.
+     * This adapter's gate ({@link KognioRdfUseCaseRepositoryFactory#buildGate}) loads the same
+     * shapes file filtered down to only {@code arkreq:UseCase}/{@code arkreq:Step} node shapes -
+     * {@code ConstraintShape} loses its target in that filtering and never fires here regardless of
+     * what the asserted context carries, so a bare {@code rdf:type arkreq:Constraint} assertion is
+     * (and remains) sufficient; unreachable via the MCP tools all the same, since
+     * {@code uc_link_constraint} always resolves an existing constraint first via
+     * {@code ConstraintLookup}.
+     */
+    @Test
+    void createAcceptsAConstrainedByEdgeToADanglingConstraintIdentity() {
+        seedReferences(PROJECT_A);
+        ResourceId danglingConstraint = ResourceId.of("https://w3id.org/arknet/model/constraint/does-not-exist");
+        UseCase base = placeOrder();
+        UseCase withDanglingConstraint = new UseCase(base.id(), base.code(), base.title(), base.goal(),
+                base.scope(), base.trigger(), base.primaryActor(), base.supportingActors(), base.precondition(),
+                base.postcondition(), base.steps(), base.extensions(), List.of(),
+                List.of(new ConstraintRef(danglingConstraint)));
+
+        repository.create(PROJECT_A, withDanglingConstraint, null);
+
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals(List.of(new ConstraintRef(danglingConstraint)), found.constrainedBy());
     }
 }

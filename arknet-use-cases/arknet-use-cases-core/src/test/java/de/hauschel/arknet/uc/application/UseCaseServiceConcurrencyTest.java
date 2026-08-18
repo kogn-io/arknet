@@ -22,6 +22,7 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
@@ -47,6 +48,7 @@ class UseCaseServiceConcurrencyTest {
     /** These races are orthogonal to issue #258's default-language resolution - always given explicitly. */
     private static final String DEFAULT_LANGUAGE = "en";
     private static final ResourceId CUSTOMER_ID = ResourceId.of("https://w3id.org/arknet/id/actor-customer");
+    private static final ResourceId TERM_1_ID = ResourceId.of("https://w3id.org/arknet/id/term-1");
 
     private InMemoryUseCaseRepository store;
     /**
@@ -58,6 +60,8 @@ class UseCaseServiceConcurrencyTest {
     private SequentialResourceIdFactory resourceIdFactory;
     private InMemoryActorLookup actorLookup;
     private InMemoryRequirementLookup requirementLookup;
+    private InMemoryTermLookup termLookup;
+    private InMemoryConstraintLookup constraintLookup;
     /** Represents the concurrent "other" caller; always writes straight through to {@code store}. */
     private UseCaseService otherCaller;
 
@@ -68,15 +72,19 @@ class UseCaseServiceConcurrencyTest {
         actorLookup = new InMemoryActorLookup();
         actorLookup.register("Customer", CUSTOMER_ID);
         requirementLookup = new InMemoryRequirementLookup();
-        otherCaller = new UseCaseService(store, resourceIdFactory, requirementLookup, actorLookup);
+        termLookup = new InMemoryTermLookup();
+        termLookup.register("TERM-1", TERM_1_ID);
+        constraintLookup = new InMemoryConstraintLookup();
+        otherCaller = new UseCaseService(
+                store, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
     }
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllRepository racing =
                 new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE));
-        UseCaseService underTest =
-                new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
+        UseCaseService underTest = new UseCaseService(
+                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
         UseCase result = underTest.add(WS, newUseCase(), DEFAULT_LANGUAGE);
 
@@ -100,7 +108,8 @@ class UseCaseServiceConcurrencyTest {
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger",
                         null, null, null, null, null, null, DEFAULT_LANGUAGE));
-        UseCaseService underTest = new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
+        UseCaseService underTest = new UseCaseService(
+                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
         UseCase result = underTest.update(WS, code, null, null, null, null,
                 "Racing precondition", null, null, null, null, null, DEFAULT_LANGUAGE);
@@ -113,6 +122,30 @@ class UseCaseServiceConcurrencyTest {
     }
 
     /**
+     * Regression test for {@code updateWithOptimisticRetry}, exercised via {@code linkTerm}
+     * (issue #329) rather than {@code update}: a concurrent writer that commits a different field
+     * between this caller's read and its own write must cost neither caller their own change.
+     * Mirrors {@code RequirementServiceConcurrencyTest#updateSurvivesAConcurrentLinkTermBetweenReadAndWrite}.
+     */
+    @Test
+    void updateSurvivesAConcurrentLinkTermBetweenReadAndWrite() {
+        UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
+        RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
+                () -> otherCaller.linkTerm(WS, code, "TERM-1"));
+        UseCaseService underTest = new UseCaseService(
+                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
+
+        UseCase result = underTest.update(WS, code, null, null, null, "Concurrent trigger",
+                null, null, null, null, null, null, DEFAULT_LANGUAGE);
+
+        assertEquals("Concurrent trigger", result.trigger());
+        assertEquals(List.of(new TermRef(TERM_1_ID)), result.usesTerms());
+        UseCase stored = store.findByCode(WS, code, null).orElseThrow();
+        assertEquals("Concurrent trigger", stored.trigger());
+        assertEquals(List.of(new TermRef(TERM_1_ID)), stored.usesTerms());
+    }
+
+    /**
      * A read-modify-write that keeps losing the race on every single attempt (a repository whose
      * {@code compareAndUpdate} always reports a conflict) must fail loudly with {@link
      * UseCaseConcurrentlyModifiedException} instead of looping forever.
@@ -121,8 +154,8 @@ class UseCaseServiceConcurrencyTest {
     void updateGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
         UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         AlwaysConflictingRepository racing = new AlwaysConflictingRepository(store);
-        UseCaseService underTest =
-                new UseCaseService(racing, resourceIdFactory, requirementLookup, actorLookup);
+        UseCaseService underTest = new UseCaseService(
+                racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
                 () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null,

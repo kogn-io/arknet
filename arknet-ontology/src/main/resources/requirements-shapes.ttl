@@ -206,7 +206,9 @@ rshapes:UseCaseShape
     sh:property rshapes:UseCase-postcondition-uniqueLang ;
     sh:property rshapes:UseCase-primaryActor ;
     sh:property rshapes:UseCase-satisfies ;
-    sh:property rshapes:UseCase-mainStep .
+    sh:property rshapes:UseCase-mainStep ;
+    sh:property rshapes:UseCase-usesTerm ;
+    sh:property rshapes:UseCase-constrainedBy .
 
 rshapes:UseCase-identifier
     a sh:PropertyShape ;
@@ -293,6 +295,22 @@ rshapes:UseCase-mainStep
     sh:class    arkreq:Step ;
     sh:message  "A Use Case should have a main flow of arkreq:mainStep steps."@en , "Use Case sollte einen Hauptablauf aus arkreq:mainStep-Schritten haben."@de ;
     sh:severity sh:Warning .
+
+rshapes:UseCase-usesTerm
+    a sh:PropertyShape ;
+    sh:path     arkreq:usesTerm ;
+    sh:nodeKind sh:IRI ;
+    sh:class    skos:Concept ;
+    sh:message  "arkreq:usesTerm must reference a glossary term (skos:Concept, IRI) -- create it first with term_add and link it with uc_link_term."@en , "arkreq:usesTerm muss auf einen Glossar-Begriff (skos:Concept, IRI) verweisen -- lege ihn zuerst mit term_add an und verknuepfe ihn mit uc_link_term."@de ;
+    sh:severity sh:Violation .
+
+rshapes:UseCase-constrainedBy
+    a sh:PropertyShape ;
+    sh:path     oslc_rm:constrainedBy ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkreq:Constraint ;
+    sh:message  "oslc_rm:constrainedBy must reference a constraint (arkreq:Constraint, IRI) -- create it first with constraint_add and link it with uc_link_constraint."@en , "oslc_rm:constrainedBy muss auf eine Randbedingung (arkreq:Constraint, IRI) verweisen -- lege sie zuerst mit constraint_add an und verknuepfe sie mit uc_link_constraint."@de ;
+    sh:severity sh:Violation .
 
 
 ##############################################################################

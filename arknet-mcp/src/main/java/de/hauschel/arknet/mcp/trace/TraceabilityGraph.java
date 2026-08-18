@@ -31,11 +31,11 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
 /**
  * An in-memory directed multigraph over one project's statements, purpose-built for the
  * cross-bounded-context edges the traceability tools traverse:
- * {@code arkreq:usesTerm} (Requirement -&gt; Term), {@code arkreq:primaryActor}/
+ * {@code arkreq:usesTerm} (Requirement/UseCase -&gt; Term, issue #329), {@code arkreq:primaryActor}/
  * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
  * (BoundedContext -&gt; Term), {@code arkddd:upstream}/{@code arkddd:downstream} (ContextRelationship
- * -&gt; BoundedContext, issue #293), {@code oslc_rm:constrainedBy} (Requirement -&gt; Constraint,
- * issue #223), the three ADR edges
+ * -&gt; BoundedContext, issue #293), {@code oslc_rm:constrainedBy} (Requirement/UseCase -&gt;
+ * Constraint, issue #223/#329), the three ADR edges
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
  * (ADR -&gt; BoundedContext) and {@code arkarch:supersedes} (ADR -&gt; ADR, issue #69), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
@@ -104,7 +104,7 @@ public final class TraceabilityGraph {
      */
     private static final String DEFINITION = ArkreqVocabulary.DEFINITION;
 
-    /** {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint (issue #223). */
+    /** {@code oslc_rm:constrainedBy} - Requirement/UseCase -&gt; Constraint (issue #223/#329). */
     private static final String CONSTRAINED_BY = ArkreqVocabulary.CONSTRAINED_BY;
 
     // The three arkarch: edges an architecture decision owns (issue #69). Unlike ArkreqVocabulary/
@@ -158,9 +158,10 @@ public final class TraceabilityGraph {
      * one is never asserted as a triple, so listing it would traverse an edge no writer produces
      * (issue #69). {@code arkarch:relatedTo} stays out on purpose: a symmetric "see also" cross-link
      * would make every related decision reachable from every other one and turn an impact report
-     * into a cluster dump. {@code oslc_rm:constrainedBy} (Requirement -&gt; Constraint, issue #223)
-     * joins the set for the same reason as {@code usesTerm}: a changed or removed Constraint should
-     * surface the requirements bound by it in {@code impact_analysis}. {@code arkddd:upstream}/
+     * into a cluster dump. {@code oslc_rm:constrainedBy} (Requirement/UseCase -&gt; Constraint,
+     * issue #223/#329) joins the set for the same reason as {@code usesTerm}: a changed or removed
+     * Constraint should surface the requirements/use cases bound by it in
+     * {@code impact_analysis}. {@code arkddd:upstream}/
      * {@code arkddd:downstream} (ContextRelationship -&gt; BoundedContext, issue #293) join for the
      * same reason as the three {@code arkarch:} edges: a recorded context-map relationship is
      * exactly the kind of artifact whose classification needs re-checking when either bounded
@@ -254,7 +255,10 @@ public final class TraceabilityGraph {
         return subjectsOfType(TECHNICAL_CONSTRAINT_TYPE, BUSINESS_CONSTRAINT_TYPE, REGULATORY_CONSTRAINT_TYPE);
     }
 
-    /** @return the term IRIs a requirement uses via {@code arkreq:usesTerm}, sorted. */
+    /**
+     * @return the term IRIs a requirement or a use case uses via {@code arkreq:usesTerm}, sorted
+     *         (issue #329 widened the edge's subject beyond Requirement).
+     */
     public List<String> usedTerms(String requirementIri) {
         Objects.requireNonNull(requirementIri, "requirementIri");
         return outgoingBySubject.getOrDefault(requirementIri, List.of()).stream()
@@ -347,12 +351,12 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return {@code true} if a term is used by a requirement ({@code arkreq:usesTerm}), plays
-     *         an actor role in a use case ({@code arkreq:primaryActor}/
-     *         {@code arkreq:supportingActor}), is a bounded context's ubiquitous language
-     *         ({@code arkddd:ubiquitousLanguageTerm}), or is another term's broader (superordinate)
-     *         term ({@code skos:broader}, issue #252) - an interior/root taxonomy term stops
-     *         being reported as an orphan once something is hung under it
+     * @return {@code true} if a term is used by a requirement or a use case
+     *         ({@code arkreq:usesTerm}, issue #329), plays an actor role in a use case
+     *         ({@code arkreq:primaryActor}/{@code arkreq:supportingActor}), is a bounded context's
+     *         ubiquitous language ({@code arkddd:ubiquitousLanguageTerm}), or is another term's
+     *         broader (superordinate) term ({@code skos:broader}, issue #252) - an interior/root
+     *         taxonomy term stops being reported as an orphan once something is hung under it
      */
     public boolean isReferencedTerm(String termIri) {
         Objects.requireNonNull(termIri, "termIri");
@@ -378,9 +382,9 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return {@code true} if a constraint is bound to at least one requirement via
+     * @return {@code true} if a constraint is bound to at least one requirement or use case via
      *         {@code oslc_rm:constrainedBy} - mirrors {@link #isReferencedTerm(String)}
-     *         (issue #223).
+     *         (issue #223/#329).
      */
     public boolean isConstraintReferenced(String constraintIri) {
         Objects.requireNonNull(constraintIri, "constraintIri");

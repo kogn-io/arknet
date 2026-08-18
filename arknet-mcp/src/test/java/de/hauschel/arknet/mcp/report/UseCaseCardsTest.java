@@ -18,6 +18,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
@@ -34,9 +35,12 @@ class UseCaseCardsTest {
     private static final ProjectId PROJECT = new ProjectId("cards-test");
     private static final ResourceId ACTOR = ResourceId.of("https://w3id.org/arknet/id/actor-1");
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
+    private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
 
-    private static final Glossary GLOSSARY = Glossary.of(List.of(new Term(
-            new TermId(ACTOR), new TermCode("TERM-1"), "Kunde", "Wer bestellt.", null)));
+    private static final Glossary GLOSSARY = Glossary.of(List.of(
+            new Term(new TermId(ACTOR), new TermCode("TERM-1"), "Kunde", "Wer bestellt.", null),
+            new Term(new TermId(TERM_1), new TermCode("TERM-2"), "Warenkorb", "Wohin Artikel gelegt werden.",
+                    null)));
 
     private static UseCaseCards cardsWithFr1Resolved() {
         return new UseCaseCards(
@@ -105,7 +109,20 @@ class UseCaseCardsTest {
     }
 
     /**
-     * A use case has no {@code usesTerm} edge - only actor roles - so a glossary word in its goal
+     * A use case's {@code usesTerm} edge (issue #329) is a plain chip list, mirroring
+     * {@code Primary actor} - not marked-up prose, since a use case's goal/step text carries no
+     * comparable "this text is about that term" fact.
+     */
+    @Test
+    void showsUsedTermsAsAChipList() {
+        final UseCaseCards cards = new UseCaseCards(
+                (projectId, displayLocale) -> List.of(useCaseWithUsedTerm()), (projectId, ids) -> List.of());
+
+        assertThat(cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks()).contains(
+                new Block.Refs("Uses terms", List.of(new Ref("Warenkorb", "TERM-2", TERM_1.value()))));
+    }
+
+    /** A use case has no {@code usesTerm} edge - only actor roles - so a glossary word in its goal
      * has no edge that could be pleaded missing. Marking it up would demand a link the model has
      * nowhere to put, which is why only requirement and bounded-context prose is analysed.
      */
@@ -206,13 +223,21 @@ class UseCaseCardsTest {
                 List.of(
                         new Step(1, "Artikel in den Warenkorb legen", List.of(new RequirementRef(FR_1))),
                         new Step(2, "Bestellung bestaetigen", List.of())),
-                List.of());
+                List.of(), List.of(), List.of());
+    }
+
+    /** {@link #useCase()}, linked to the glossary term {@code TERM-2} via {@code arkreq:usesTerm}. */
+    private static UseCase useCaseWithUsedTerm() {
+        final UseCase base = useCase();
+        return new UseCase(base.id(), base.code(), base.title(), base.goal(), base.scope(), base.trigger(),
+                base.primaryActor(), base.supportingActors(), base.precondition(), base.postcondition(),
+                base.steps(), base.extensions(), List.of(new TermRef(TERM_1)), List.of());
     }
 
     private static UseCase useCase(final String code, final String iri) {
         return new UseCase(
                 new UseCaseId(ResourceId.of(iri)), new UseCaseCode(code), "Titel", "Ziel.", null, "Trigger",
                 new ActorRef(ACTOR), List.of(), null, "Postcondition.",
-                List.of(new Step(1, "Ein Schritt", List.of())), List.of());
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(), List.of());
     }
 }

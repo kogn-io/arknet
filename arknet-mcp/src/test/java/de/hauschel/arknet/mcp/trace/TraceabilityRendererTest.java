@@ -101,7 +101,7 @@ class TraceabilityRendererTest {
         assertThat(report).contains("## Terms never referenced (0)");
         assertThat(report).contains("- none");
         assertThat(report).contains("## Mentioned in text but not linked (0)");
-        assertThat(report).contains("## Constraints not attached to any requirement (0)");
+        assertThat(report).contains("## Constraints not attached to any requirement or use case (0)");
     }
 
     /**
@@ -114,7 +114,7 @@ class TraceabilityRendererTest {
 
         String report = renderer.orphanCheck(PROJECT, graph);
 
-        assertThat(report).contains("## Constraints not attached to any requirement (1)");
+        assertThat(report).contains("## Constraints not attached to any requirement or use case (1)");
         assertThat(report).contains("CON-2");
         assertThat(report).doesNotContain("CON-1");
     }

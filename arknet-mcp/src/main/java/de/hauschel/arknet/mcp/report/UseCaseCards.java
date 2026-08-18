@@ -18,6 +18,7 @@ import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 
 /**
@@ -41,9 +42,21 @@ import de.hauschel.arknet.uc.domain.UseCase;
  *
  * <p><strong>No marked-up prose here.</strong> A requirement's text is marked up against the
  * glossary because {@code arkreq:usesTerm} makes "this text is about that term" a fact the
- * model can hold. A use case has no such edge - only actor roles - so a glossary word in its
- * goal or a step would have no edge that could ever be pleaded missing. Showing it as a gap
+ * model can hold. A use case's own {@code arkreq:usesTerm} edges (issue #329) are therefore
+ * rendered as a plain chip list, mirroring {@code Primary actor}/{@code Supporting actors} -
+ * <em>not</em> {@link RequirementCards}' prose-markup treatment of the same edge: a use case's
+ * goal/step text carries no comparable "this text is about that term" fact the model can hold
+ * (a glossary word in its goal or a step would have no edge that could ever be pleaded missing),
+ * so there is nothing to mark up against, only the edge itself to list. Showing a marked-up gap
  * would demand a link the model has no place for; see {@link Span.TermGap}.</p>
+ *
+ * <p><strong>{@code constrainedBy} (issue #329) is deliberately not rendered here.</strong> No
+ * resource type's {@code oslc_rm:constrainedBy} edge is rendered in this report today - not even
+ * the sibling requirements bounded context's own {@code constrainedBy} (see
+ * {@link RequirementCards}, which has no constraint block at all) - so there is no existing
+ * pattern to mirror; adding one would mean inventing a new cross-cutting mechanism (a constraint
+ * business-code lookup, a new report section or block kind) rather than reusing an established
+ * one, left for a follow-up that covers both resource types together.</p>
  */
 public final class UseCaseCards {
 
@@ -103,6 +116,12 @@ public final class UseCaseCards {
         blocks.add(new Block.Flow("Main flow", uc.steps().stream().map(step -> flowStep(step, reqs)).toList()));
         if (!uc.extensions().isEmpty()) {
             blocks.add(Block.Bullets.plain("Extensions", uc.extensions()));
+        }
+        if (!uc.usesTerms().isEmpty()) {
+            blocks.add(new Block.Refs("Uses terms", uc.usesTerms().stream()
+                    .map(TermRef::value)
+                    .map(glossary::ref)
+                    .toList()));
         }
         return new ModelCard(uc.code().value(), uc.title(), uc.id().value().value(), List.of(), blocks);
     }

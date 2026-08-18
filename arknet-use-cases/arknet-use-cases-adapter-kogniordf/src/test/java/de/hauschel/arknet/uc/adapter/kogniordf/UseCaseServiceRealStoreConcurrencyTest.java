@@ -48,7 +48,9 @@ import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
+import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
+import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -96,6 +98,14 @@ class UseCaseServiceRealStoreConcurrencyTest {
     };
     /** Unused by this race: no step realises a requirement. */
     private static final RequirementLookup UNUSED_REQUIREMENT_LOOKUP = (projectId, requirementCode) -> {
+        throw new UnsupportedOperationException("not exercised by this test");
+    };
+    /** Unused by this race: neither racer links a glossary term (issue #329). */
+    private static final TermLookup UNUSED_TERM_LOOKUP = (projectId, termCode) -> {
+        throw new UnsupportedOperationException("not exercised by this test");
+    };
+    /** Unused by this race: neither racer links a constraint (issue #329). */
+    private static final ConstraintLookup UNUSED_CONSTRAINT_LOOKUP = (projectId, constraintCode) -> {
         throw new UnsupportedOperationException("not exercised by this test");
     };
 
@@ -352,7 +362,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
                 guarded, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
-                CUSTOMER_ACTOR_LOOKUP);
+                CUSTOMER_ACTOR_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
 
     /**
@@ -364,7 +374,7 @@ class UseCaseServiceRealStoreConcurrencyTest {
         UseCaseRepository repository = KognioRdfUseCaseRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         return new UseCaseService(repository, new UuidResourceIdFactory(), UNUSED_REQUIREMENT_LOOKUP,
-                CUSTOMER_ACTOR_LOOKUP);
+                CUSTOMER_ACTOR_LOOKUP, UNUSED_TERM_LOOKUP, UNUSED_CONSTRAINT_LOOKUP);
     }
 
     /**

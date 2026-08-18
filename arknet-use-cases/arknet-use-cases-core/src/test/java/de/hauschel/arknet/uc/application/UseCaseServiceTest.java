@@ -26,9 +26,11 @@ import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.StepRealisesPatch;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
@@ -52,11 +54,16 @@ class UseCaseServiceTest {
     private static final ResourceId PAYMENT_PROVIDER_ID =
             ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider");
     private static final ResourceId FR5_ID = ResourceId.of("https://w3id.org/arknet/id/req-fr5");
+    private static final ResourceId TERM_1_ID = ResourceId.of("https://w3id.org/arknet/id/term-1");
+    private static final ResourceId TERM_2_ID = ResourceId.of("https://w3id.org/arknet/id/term-2");
+    private static final ResourceId TCON_1_ID = ResourceId.of("https://w3id.org/arknet/id/constraint-1");
 
     private InMemoryUseCaseRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
     private InMemoryRequirementLookup requirementLookup;
     private InMemoryActorLookup actorLookup;
+    private InMemoryTermLookup termLookup;
+    private InMemoryConstraintLookup constraintLookup;
     private UseCaseService service;
 
     @BeforeEach
@@ -65,10 +72,16 @@ class UseCaseServiceTest {
         resourceIdFactory = new FakeResourceIdFactory();
         requirementLookup = new InMemoryRequirementLookup();
         actorLookup = new InMemoryActorLookup();
+        termLookup = new InMemoryTermLookup();
+        constraintLookup = new InMemoryConstraintLookup();
         actorLookup.register("Customer", CUSTOMER_ID);
         actorLookup.register("PaymentProvider", PAYMENT_PROVIDER_ID);
         requirementLookup.register("FR5", FR5_ID);
-        service = new UseCaseService(repository, resourceIdFactory, requirementLookup, actorLookup);
+        termLookup.register("TERM-1", TERM_1_ID);
+        termLookup.register("TERM-2", TERM_2_ID);
+        constraintLookup.register("TCON-1", TCON_1_ID);
+        service = new UseCaseService(
+                repository, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
     }
 
     private static NewUseCase newUseCase(String title) {
@@ -598,6 +611,109 @@ class UseCaseServiceTest {
         assertEquals(List.of(new RequirementRef(fr7Id)), updated.steps().get(0).realises());
         assertEquals("confirm and pay", updated.steps().get(1).text());
         assertEquals(List.of(), updated.steps().get(1).realises());
+    }
+
+    @Test
+    void addStartsWithoutLinkedTermsOrConstraints() {
+        UseCase added = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE);
+
+        assertEquals(List.of(), added.usesTerms());
+        assertEquals(List.of(), added.constrainedBy());
+    }
+
+    @Test
+    void linkTermAddsTheTermToTheUseCase() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        UseCase linked = service.linkTerm(WS, code, "TERM-1");
+
+        assertEquals(List.of(new TermRef(TERM_1_ID)), linked.usesTerms());
+        assertEquals(List.of(new TermRef(TERM_1_ID)), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    @Test
+    void linkTermAppendsToAlreadyLinkedTerms() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        UseCase linked = service.linkTerm(WS, code, "TERM-2");
+
+        assertEquals(List.of(new TermRef(TERM_1_ID), new TermRef(TERM_2_ID)), linked.usesTerms());
+    }
+
+    @Test
+    void linkingTheSameTermTwiceIsANoOp() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkTerm(WS, code, "TERM-1");
+
+        UseCase linked = service.linkTerm(WS, code, "TERM-1");
+
+        assertEquals(List.of(new TermRef(TERM_1_ID)), linked.usesTerms());
+    }
+
+    @Test
+    void linkTermThrowsWhenUseCaseUnknown() {
+        UseCaseNotFoundException ex = assertThrows(UseCaseNotFoundException.class,
+                () -> service.linkTerm(WS, new UseCaseCode("UC99"), "TERM-1"));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
+    }
+
+    /**
+     * Resolution of the human-typed term code happens here, via {@link InMemoryTermLookup} - a
+     * lookup failure must propagate unchanged and leave the use case untouched.
+     */
+    @Test
+    void linkTermPropagatesTheLookupFailureForAnUnknownTermCodeAndLinksNothing() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        assertThrows(NoSuchElementException.class, () -> service.linkTerm(WS, code, "TERM-99"));
+
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().usesTerms());
+    }
+
+    @Test
+    void linkConstraintAddsTheConstraintToTheUseCase() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        UseCase linked = service.linkConstraint(WS, code, "TCON-1");
+
+        assertEquals(List.of(new ConstraintRef(TCON_1_ID)), linked.constrainedBy());
+        assertEquals(List.of(new ConstraintRef(TCON_1_ID)), service.get(WS, code, null).orElseThrow().constrainedBy());
+    }
+
+    @Test
+    void linkingTheSameConstraintTwiceIsANoOp() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+        service.linkConstraint(WS, code, "TCON-1");
+
+        UseCase linked = service.linkConstraint(WS, code, "TCON-1");
+
+        assertEquals(List.of(new ConstraintRef(TCON_1_ID)), linked.constrainedBy());
+    }
+
+    @Test
+    void linkConstraintThrowsWhenUseCaseUnknown() {
+        UseCaseNotFoundException ex = assertThrows(UseCaseNotFoundException.class,
+                () -> service.linkConstraint(WS, new UseCaseCode("UC99"), "TCON-1"));
+
+        assertSame(WS, ex.projectId());
+        assertEquals(new UseCaseCode("UC99"), ex.useCaseCode());
+    }
+
+    /**
+     * Resolution of the human-typed constraint code happens here, via
+     * {@link InMemoryConstraintLookup} - a lookup failure must propagate unchanged and leave the
+     * use case untouched.
+     */
+    @Test
+    void linkConstraintPropagatesTheLookupFailureForAnUnknownConstraintCodeAndLinksNothing() {
+        UseCaseCode code = service.add(WS, newUseCase("Place order"), DEFAULT_LANGUAGE).code();
+
+        assertThrows(NoSuchElementException.class, () -> service.linkConstraint(WS, code, "TCON-99"));
+
+        assertEquals(List.of(), service.get(WS, code, null).orElseThrow().constrainedBy());
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

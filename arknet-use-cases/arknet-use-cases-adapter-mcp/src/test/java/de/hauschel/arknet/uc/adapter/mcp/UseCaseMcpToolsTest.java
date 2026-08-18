@@ -21,20 +21,27 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
+import de.hauschel.arknet.req.domain.ConstraintCode;
 import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.uc.adapter.mcp.UseCaseMcpTools.StepInput;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
+import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.StepPositionNotFoundException;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
@@ -68,19 +75,21 @@ class UseCaseMcpToolsTest {
     private final Stub stub = new Stub();
     private final RecordingResolveTerms resolveTerms = new RecordingResolveTerms();
     private final RecordingResolveRequirements resolveRequirements = new RecordingResolveRequirements();
-    private final UseCaseMcpTools adapter =
-            new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms, resolveRequirements, PROJECTS);
+    private final RecordingResolveConstraints resolveConstraints = new RecordingResolveConstraints();
+    private final UseCaseMcpTools adapter = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms,
+            resolveRequirements, resolveConstraints, PROJECTS);
 
     @Test
-    void declaresTheFourUseCaseTools() {
+    void declaresTheSixUseCaseTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(4, names.size());
-        assertTrue(names.containsAll(List.of("uc_add", "uc_list", "uc_get", "uc_update")));
+        assertEquals(6, names.size());
+        assertTrue(names.containsAll(List.of(
+                "uc_add", "uc_list", "uc_get", "uc_update", "uc_link_term", "uc_link_constraint")));
     }
 
     @Test
@@ -89,28 +98,37 @@ class UseCaseMcpToolsTest {
         assertTrue(readOnly("get"));
         assertFalse(readOnly("add"));
         assertFalse(readOnly("update"));
+        assertFalse(readOnly("linkTerm"));
+        assertFalse(readOnly("linkConstraint"));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(null, stub, stub, stub, resolveTerms, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(null, stub, stub, stub, stub, stub, resolveTerms, resolveRequirements,
+                        resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, null, stub, stub, resolveTerms, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(stub, null, stub, stub, stub, stub, resolveTerms, resolveRequirements,
+                        resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, null, stub, resolveTerms, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(stub, stub, null, stub, stub, stub, resolveTerms, resolveRequirements,
+                        resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, null, resolveTerms, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(stub, stub, stub, null, stub, stub, resolveTerms, resolveRequirements,
+                        resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, resolveRequirements, PROJECTS));
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, null, stub, resolveTerms, resolveRequirements,
+                        resolveConstraints, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms, null, PROJECTS));
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, null, resolveTerms, resolveRequirements,
+                        resolveConstraints, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms, resolveRequirements, null));
+                () -> new UseCaseMcpTools(stub, stub, stub, stub, stub, stub, resolveTerms, resolveRequirements,
+                        resolveConstraints, null));
     }
 
     @Test
@@ -174,9 +192,9 @@ class UseCaseMcpToolsTest {
     void getPassesAnExplicitDisplayLocaleThrough() {
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
                 null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
-                null, null, List.of(new Step(1, "select items", List.of())), List.of()));
-        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms,
-                resolveRequirements, anchor -> new ResolvedProject(PROJECT, "de"));
+                null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
+        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+                resolveTerms, resolveRequirements, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "UC1", "en", null);
 
@@ -188,9 +206,9 @@ class UseCaseMcpToolsTest {
     void getFallsBackToTheProjectsDefaultLanguageWhenDisplayLocaleIsOmitted() {
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order", "goal",
                 null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer")), List.of(),
-                null, null, List.of(new Step(1, "select items", List.of())), List.of()));
-        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms,
-                resolveRequirements, anchor -> new ResolvedProject(PROJECT, "de"));
+                null, null, List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()));
+        UseCaseMcpTools adapterWithDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+                resolveTerms, resolveRequirements, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithDefault.get(null, "UC1", null, null);
 
@@ -209,8 +227,8 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
-        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, resolveTerms,
-                resolveRequirements, anchor -> new ResolvedProject(PROJECT, "de"));
+        UseCaseMcpTools adapterWithGermanDefault = new UseCaseMcpTools(stub, stub, stub, stub, stub, stub,
+                resolveTerms, resolveRequirements, resolveConstraints, anchor -> new ResolvedProject(PROJECT, "de"));
 
         adapterWithGermanDefault.list(null, null);
 
@@ -230,16 +248,20 @@ class UseCaseMcpToolsTest {
         ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
         ActorRef supportingActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-payment-provider"));
         RequirementRef fr1 = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/req-fr1"));
+        TermRef term1 = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+        ConstraintRef tcon1 = new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-1"));
         resolveTerms.register(primaryActor.value(), new TermCode("Customer"));
         resolveTerms.register(supportingActor.value(), new TermCode("PaymentProvider"));
+        resolveTerms.register(term1.value(), new TermCode("TERM-1"));
         resolveRequirements.register(fr1.value(), new RequirementCode("FR-1"));
+        resolveConstraints.register(tcon1.value(), new ConstraintCode("TCON-1"));
 
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                 "Customer places an order", "Webshop", "Customer opens the cart", primaryActor,
                 List.of(supportingActor), "Customer is logged in", "Order is recorded",
                 List.of(new Step(1, "Customer selects items", List.of(fr1)),
                         new Step(2, "Customer confirms and pays", List.of())),
-                List.of("2a. Payment declined -> use case ends in failure")));
+                List.of("2a. Payment declined -> use case ends in failure"), List.of(term1), List.of(tcon1)));
 
         String rendered = adapter.get(null, "UC1", null, null);
 
@@ -249,6 +271,26 @@ class UseCaseMcpToolsTest {
         assertTrue(rendered.contains("1. Customer selects items -> realises FR-1"));
         assertTrue(rendered.contains("2. Customer confirms and pays"));
         assertTrue(rendered.contains("2a. Payment declined -> use case ends in failure"));
+        assertTrue(rendered.contains("usesTerms: TERM-1"), rendered);
+        assertTrue(rendered.contains("constrainedBy: TCON-1"), rendered);
+    }
+
+    @Test
+    void ucLinkTermDelegatesToTheInPortAndRendersTheResult() {
+        String rendered = adapter.linkTerm(null, "UC1", "TERM-1", null);
+
+        assertEquals(new UseCaseCode("UC1"), stub.lastLinkTermUseCase);
+        assertEquals("TERM-1", stub.lastLinkedTermCode);
+        assertTrue(rendered.contains("UC1"), rendered);
+    }
+
+    @Test
+    void ucLinkConstraintDelegatesToTheInPortAndRendersTheResult() {
+        String rendered = adapter.linkConstraint(null, "UC1", "TCON-1", null);
+
+        assertEquals(new UseCaseCode("UC1"), stub.lastLinkConstraintUseCase);
+        assertEquals("TCON-1", stub.lastLinkedConstraintCode);
+        assertTrue(rendered.contains("UC1"), rendered);
     }
 
     /**
@@ -265,7 +307,7 @@ class UseCaseMcpToolsTest {
 
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                 "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
-                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of()));
+                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of(), List.of(), List.of()));
 
         String rendered = adapter.get(null, "UC1", null, null);
 
@@ -286,11 +328,11 @@ class UseCaseMcpToolsTest {
                 new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                         "Customer places an order", null, null,
                         customer, List.of(), null, null,
-                        List.of(new Step(1, "select items", List.of())), List.of()),
+                        List.of(new Step(1, "select items", List.of())), List.of(), List.of(), List.of()),
                 new UseCase(opaqueId("uc-2"), new UseCaseCode("UC2"), "Reset password",
                         "User resets password", null, null,
                         customer, List.of(), null, null,
-                        List.of(new Step(1, "request link", List.of())), List.of()));
+                        List.of(new Step(1, "request link", List.of())), List.of(), List.of(), List.of()));
 
         String rendered = adapter.list(null, null);
 
@@ -420,14 +462,19 @@ class UseCaseMcpToolsTest {
                 .annotations().readOnlyHint();
     }
 
-    /** Structural stub implementing the four driving in-ports. */
-    private static final class Stub implements AddUseCase, ListUseCases, GetUseCase, UpdateUseCase {
+    /** Structural stub implementing the six driving in-ports. */
+    private static final class Stub
+            implements AddUseCase, ListUseCases, GetUseCase, UpdateUseCase, LinkTerm, LinkConstraint {
 
         private AddUseCase.NewUseCase lastCommand;
         private RuntimeException addFailure;
         private List<UseCase> listResult = List.of();
         private Optional<UseCase> getResult = Optional.empty();
         private UseCaseCode lastUpdatedUseCase;
+        private UseCaseCode lastLinkTermUseCase;
+        private String lastLinkedTermCode;
+        private UseCaseCode lastLinkConstraintUseCase;
+        private String lastLinkedConstraintCode;
         private String lastUpdateTitle;
         private String lastUpdateGoal;
         private String lastUpdateScope;
@@ -459,7 +506,7 @@ class UseCaseMcpToolsTest {
                     .toList();
             return new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), command.title(), command.goal(),
                     command.scope(), command.trigger(), primaryActor, supportingActors,
-                    command.precondition(), command.postcondition(), steps, command.extensions());
+                    command.precondition(), command.postcondition(), steps, command.extensions(), List.of(), List.of());
         }
 
         private String lastListDisplayLocale;
@@ -503,7 +550,28 @@ class UseCaseMcpToolsTest {
             return new UseCase(opaqueId("uc-1"), code, title != null ? title : "t",
                     goal != null ? goal : "goal", scope, trigger, primaryActor, List.of(), precondition,
                     postcondition, List.of(new Step(1, "do something", List.of())),
-                    extensions != null ? extensions : List.of());
+                    extensions != null ? extensions : List.of(), List.of(), List.of());
+        }
+
+        @Override
+        public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode) {
+            lastLinkTermUseCase = code;
+            lastLinkedTermCode = termCode;
+            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+            TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-" + termCode));
+            return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryActor, List.of(), null, null,
+                    List.of(new Step(1, "do something", List.of())), List.of(), List.of(term), List.of());
+        }
+
+        @Override
+        public UseCase linkConstraint(ProjectId projectId, UseCaseCode code, String constraintCode) {
+            lastLinkConstraintUseCase = code;
+            lastLinkedConstraintCode = constraintCode;
+            ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
+            ConstraintRef constraint =
+                    new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-" + constraintCode));
+            return new UseCase(opaqueId("uc-1"), code, "t", "goal", null, null, primaryActor, List.of(), null, null,
+                    List.of(new Step(1, "do something", List.of())), List.of(), List.of(), List.of(constraint));
         }
     }
 
@@ -542,6 +610,25 @@ class UseCaseMcpToolsTest {
         public List<ResolvedRequirement> resolveExisting(ProjectId projectId, ResourceId... ids) {
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(r -> wanted.contains(r.id())).toList();
+        }
+    }
+
+    /**
+     * Fake {@link ResolveConstraints}: resolves only what was {@link #register} registered - like
+     * the real port, never throws for an id it cannot resolve.
+     */
+    private static final class RecordingResolveConstraints implements ResolveConstraints {
+
+        private final List<ResolvedConstraint> known = new ArrayList<>();
+
+        void register(ResourceId id, ConstraintCode code) {
+            known.add(new ResolvedConstraint(id, code));
+        }
+
+        @Override
+        public List<ResolvedConstraint> resolveExisting(ProjectId projectId, ResourceId... ids) {
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(c -> wanted.contains(c.id())).toList();
         }
     }
 }
