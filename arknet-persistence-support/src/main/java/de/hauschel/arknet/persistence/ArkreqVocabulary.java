@@ -5,13 +5,14 @@ package de.hauschel.arknet.persistence;
 
 /**
  * The absolute IRIs of the {@code arkreq:} object properties that carry cross-resource edges in
- * the store, plus the one literal-valued property ({@code arkreq:criterionText}, issue #266 -
- * reached one hop past the object property {@code arkreq:acceptanceCriterion}) whose text
- * the same reader scans, plus the type IRIs the traceability traversal tests those edges'
- * endpoints against, as Java {@code String} constants - the single source of truth shared by the
- * code that <em>writes</em> them (the {@code *-adapter-kogniordf} out-adapters) and the code that
- * <em>reads</em> them ({@code arknet-mcp}'s traceability read path,
- * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}).
+ * the store, plus the literal-valued properties reached one hop past such an edge
+ * ({@code arkreq:criterionText}, {@code arkreq:stepText}, {@code arkreq:position}) that the same
+ * readers scan on the resource at its far end, plus the type IRIs the traceability traversal
+ * tests those edges' endpoints against, as Java {@code String} constants - the single source of
+ * truth shared by the code that <em>writes</em> them (the {@code *-adapter-kogniordf}
+ * out-adapters) and the code that <em>reads</em> them ({@code arknet-mcp}'s traceability read
+ * path, {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, and its report renderer,
+ * {@code de.hauschel.arknet.mcp.report.HtmlReportRenderer}).
  *
  * <p><strong>Why here, and why this is technology, not domain vocabulary.</strong> These are RDF
  * serialization constants: the literal IRI form of ontology predicates and classes. The
@@ -32,9 +33,9 @@ package de.hauschel.arknet.persistence;
  * "orphans"). Naming each IRI once here removes that failure mode - a rename now touches one Java
  * constant (plus the {@code .ttl}).</p>
  *
- * <p>Scope is deliberately narrow: only the predicates and type IRIs the traceability graph
- * traverses, reads or tests - whether traversed as an edge or merely read as a literal - live
- * here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
+ * <p>Scope is deliberately narrow: only the predicates and type IRIs an {@code arknet-mcp} read
+ * path traverses, reads or tests - whether traversed as an edge or merely read as a literal -
+ * live here. Single-adapter predicates ({@code arkreq:status}, {@code arkreq:priority}, ...) are not
  * cross-module-duplicated in the same way and stay with their one owner.</p>
  */
 public final class ArkreqVocabulary {
@@ -62,6 +63,14 @@ public final class ArkreqVocabulary {
     public static final String STEP_REALISES = NAMESPACE + "stepRealises";
 
     /**
+     * {@code arkreq:stepText} - the text of a main-flow Step or of an extension, reached one hop
+     * past {@link #MAIN_STEP} or {@link #EXTENSION_STEP}. Shared here since issue #319, when the
+     * HTML report became a reader of it: it builds a step's language switch from the literals
+     * under this predicate, the same way it does for {@link #CRITERION_TEXT}.
+     */
+    public static final String STEP_TEXT = NAMESPACE + "stepText";
+
+    /**
      * {@code arkreq:acceptanceCriterion} - Requirement -&gt; one positioned, testable
      * {@code arkreq:AcceptanceCriterion} resource (issue #266; formerly a literal-valued
      * {@code xsd:string} property, now an object property mirroring {@code arkreq:mainStep}).
@@ -70,12 +79,19 @@ public final class ArkreqVocabulary {
 
     /**
      * {@code arkreq:criterionText} - AcceptanceCriterion -&gt; its testable "Done when ..." text
-     * (issue #266). Shared here (rather than kept adapter-private the way {@code arkreq:stepText}
-     * is) because {@code arknet-mcp}'s traceability read path needs it too, to scan a
-     * requirement's acceptance-criteria prose for unlinked glossary mentions - the same reason
-     * {@link #ACCEPTANCE_CRITERION} itself is already shared.
+     * (issue #266). Shared here because {@code arknet-mcp}'s traceability read path needs it too,
+     * to scan a requirement's acceptance-criteria prose for unlinked glossary mentions - the same
+     * reason {@link #ACCEPTANCE_CRITERION} itself is already shared.
      */
     public static final String CRITERION_TEXT = NAMESPACE + "criterionText";
+
+    /**
+     * {@code arkreq:position} - the 1-based number a Step or an AcceptanceCriterion carries.
+     * Shared here since issue #319, when it became the key by which the HTML report pairs a
+     * rendered flow step or bullet with the sub-resource it came from - text equality cannot,
+     * because two identically worded steps are realistic.
+     */
+    public static final String POSITION = NAMESPACE + "position";
 
     /**
      * {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint. Reused from OSLC RM (not an

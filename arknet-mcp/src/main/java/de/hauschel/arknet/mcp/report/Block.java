@@ -77,17 +77,20 @@ public sealed interface Block {
          * @return the block
          */
         public static Bullets plain(final String label, final List<String> texts) {
-            return positioned(label, texts == null ? List.of() : texts.stream().map(RichText::plain).toList());
+            return numberedByOrder(label, texts == null ? List.of() : texts.stream().map(RichText::plain).toList());
         }
 
         /**
-         * {@link #plain} for texts that already carry markup.
+         * Numbers {@code texts} 1..n by their list order. Named after where the number comes
+         * from, because that is the distinction this whole block turns on: a caller whose items
+         * carry a position of their own in the model passes it through the canonical constructor
+         * instead, so that a renderer can pair the item with the store resource behind it.
          *
          * @param label the block heading
          * @param texts the texts, in ascending position order
          * @return the block
          */
-        public static Bullets positioned(final String label, final List<RichText> texts) {
+        private static Bullets numberedByOrder(final String label, final List<RichText> texts) {
             if (texts == null) {
                 return new Bullets(label, List.of());
             }

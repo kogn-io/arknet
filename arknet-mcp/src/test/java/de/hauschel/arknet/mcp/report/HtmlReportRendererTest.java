@@ -657,6 +657,31 @@ class HtmlReportRendererTest {
         assertThat(html).doesNotContain("<span class=\"lang-group\"");
     }
 
+    /**
+     * A position pairs an item with a sub-resource, but it does not prove the two show the same
+     * text: an extension bullet is numbered by its list order, not from the store, so a store
+     * whose positions do not run 1..n hands the renderer a resource that belongs to another item.
+     * The switch then has no active language to anchor on and the item stays unwrapped, rather
+     * than offering the reader a foreign item's translation under the label of this one.
+     */
+    @Test
+    void leavesABulletUnwrappedWhenItsPositionPointsAtAnotherItemsText() {
+        final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
+                new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
+                        Block.Bullets.plain("Extensions", List.of("Der Kunde bricht ab."))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(UC_1, ARKREQ + "extensionStep", STEP_1),
+                literal(STEP_1, ARKREQ + "position", "1"),
+                literalLang(STEP_1, ARKREQ + "stepText", "Die Zahlung schlaegt fehl.", "de"),
+                literalLang(STEP_1, ARKREQ + "stepText", "The payment fails.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<li>Der Kunde bricht ab.</li>");
+        assertThat(html).doesNotContain("<span class=\"lang-group\"");
+    }
+
     /** The toolbar always offers the control; the script hides it when no field has variants. */
     @Test
     void addsALanguageSwitchToTheToolbar() {

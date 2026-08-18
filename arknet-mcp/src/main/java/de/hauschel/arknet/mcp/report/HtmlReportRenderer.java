@@ -26,6 +26,7 @@ import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
  * Renders the self-contained human HTML report for {@code store_overview}: a single file with
@@ -56,23 +57,31 @@ public final class HtmlReportRenderer {
     /** {@code arkreq:Step} - inlined into its use case's flow instead of shown as a resource. */
     private static final String STEP_TYPE = "https://w3id.org/arknet/requirements#Step";
 
+    // The edges this renderer follows from a card to its positioned sub-resources, and the two
+    // predicates carrying those sub-resources' text and position, come from the single shared
+    // source of truth (arknet-persistence-support) - the very same constants the requirements and
+    // use-cases out-adapters serialize them with, and the same ones the traceability read path
+    // (de.hauschel.arknet.mcp.trace.TraceabilityGraph) traverses. A rename in
+    // arknet-requirements.ttl therefore cannot leave this renderer compiling while the language
+    // switch silently disappears from the report.
+
     /** {@code arkreq:mainStep} - a use case's edge to one numbered step of its main flow. */
-    private static final String MAIN_STEP_EDGE = "https://w3id.org/arknet/requirements#mainStep";
+    private static final String MAIN_STEP_EDGE = ArkreqVocabulary.MAIN_STEP;
 
     /** {@code arkreq:extensionStep} - a use case's edge to one of its extension flows. */
-    private static final String EXTENSION_STEP_EDGE = "https://w3id.org/arknet/requirements#extensionStep";
+    private static final String EXTENSION_STEP_EDGE = ArkreqVocabulary.EXTENSION_STEP;
 
     /** The two predicates by which a use case reaches its steps. */
     private static final Set<String> STEP_EDGES = Set.of(MAIN_STEP_EDGE, EXTENSION_STEP_EDGE);
 
     /** {@code arkreq:stepText} - the text of a main-flow step or of an extension. */
-    private static final String STEP_TEXT = "https://w3id.org/arknet/requirements#stepText";
+    private static final String STEP_TEXT = ArkreqVocabulary.STEP_TEXT;
 
     /**
      * {@code arkreq:position} - the 1-based number a step or acceptance criterion carries, and
      * the key by which {@link #langSources} pairs one with the card item that shows it.
      */
-    private static final String POSITION = "https://w3id.org/arknet/requirements#position";
+    private static final String POSITION = ArkreqVocabulary.POSITION;
 
     /**
      * {@code arkreq:AcceptanceCriterion} - inlined into its requirement's card instead of shown
@@ -85,14 +94,13 @@ public final class HtmlReportRenderer {
             "https://w3id.org/arknet/requirements#AcceptanceCriterion";
 
     /** {@code arkreq:acceptanceCriterion} - a requirement's edge to one of its criteria. */
-    private static final String ACCEPTANCE_CRITERION_EDGE =
-            "https://w3id.org/arknet/requirements#acceptanceCriterion";
+    private static final String ACCEPTANCE_CRITERION_EDGE = ArkreqVocabulary.ACCEPTANCE_CRITERION;
 
     /** The predicate by which a requirement reaches its acceptance criteria. */
     private static final Set<String> ACCEPTANCE_CRITERION_EDGES = Set.of(ACCEPTANCE_CRITERION_EDGE);
 
     /** {@code arkreq:criterionText} - the text of one acceptance criterion. */
-    private static final String CRITERION_TEXT = "https://w3id.org/arknet/requirements#criterionText";
+    private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
 
     private final Prefixes prefixes;
 
@@ -564,6 +572,11 @@ public final class HtmlReportRenderer {
      * actually has, not from knowing that this card is a use case and that one a requirement -
      * exactly the domain knowledge {@link Block}'s shape-only vocabulary exists to keep out
      * (issue #319).</p>
+     *
+     * <p>Both maps are per card, not per block: {@code bullets} assumes a card shows at most one
+     * {@link Block.Bullets} list, which is what {@link RequirementCards} and {@link UseCaseCards}
+     * emit today. A card with a second bullet list would match both against this one table, and
+     * only the text comparison in {@link #languageVariants} would still tell them apart.</p>
      *
      * @param flow    main-flow steps by their 1-based position
      * @param bullets extensions or acceptance criteria by their 1-based position
