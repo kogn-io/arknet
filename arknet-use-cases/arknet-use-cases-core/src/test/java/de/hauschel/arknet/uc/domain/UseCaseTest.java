@@ -40,16 +40,19 @@ class UseCaseTest {
 
     private static UseCase useCaseWithSteps(List<Step> steps) {
         return new UseCase(ID, CODE, "Place order", "Customer places an order",
-                null, null, CUSTOMER, List.of(), null, null, steps, List.of());
+                null, null, CUSTOMER, List.of(), null, null, steps, List.of(), List.of(), List.of());
     }
 
     @Test
     void holdsItsFields() {
         Step s1 = new Step(1, "Customer selects items", List.of(FR5));
+        TermRef termRef = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+        ConstraintRef constraintRef = new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-1"));
         UseCase uc = new UseCase(ID, CODE, "Place order", "Customer places an order",
                 "Webshop", "Customer opens the cart", CUSTOMER,
                 List.of(PAYMENT_PROVIDER), "Customer is logged in",
-                "Order is recorded", List.of(s1), List.of("2a. Payment declined -> abort"));
+                "Order is recorded", List.of(s1), List.of("2a. Payment declined -> abort"),
+                List.of(termRef), List.of(constraintRef));
 
         assertEquals(ID, uc.id());
         assertEquals(CODE, uc.code());
@@ -64,44 +67,48 @@ class UseCaseTest {
         assertEquals(List.of(s1), uc.steps());
         assertEquals(List.of("2a. Payment declined -> abort"), uc.extensions());
         assertEquals(List.of(FR5), uc.steps().get(0).realises());
+        assertEquals(List.of(termRef), uc.usesTerms());
+        assertEquals(List.of(constraintRef), uc.constrainedBy());
     }
 
     @Test
     void optionalFieldsMayBeNullAndCollectionsDefaultToEmpty() {
         UseCase uc = new UseCase(ID, CODE, "t", "g", null, null,
-                ACTOR_A, null, null, null, List.of(step(1, "do")), null);
+                ACTOR_A, null, null, null, List.of(step(1, "do")), null, null, null);
 
         assertTrue(uc.supportingActors().isEmpty());
         assertTrue(uc.extensions().isEmpty());
+        assertTrue(uc.usesTerms().isEmpty());
+        assertTrue(uc.constrainedBy().isEmpty());
     }
 
     @Test
     void rejectsNullMandatoryFields() {
         List<Step> steps = List.of(step(1, "do"));
         assertThrows(NullPointerException.class, () -> new UseCase(null, CODE, "t", "g", null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of()));
+                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, null, "t", "g", null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of()));
+                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, null, "g", null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of()));
+                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", null, null, null,
-                ACTOR_A, List.of(), null, null, steps, List.of()));
+                ACTOR_A, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
-                null, List.of(), null, null, steps, List.of()));
+                null, List.of(), null, null, steps, List.of(), List.of(), List.of()));
         assertThrows(NullPointerException.class, () -> new UseCase(ID, CODE, "t", "g", null, null,
-                ACTOR_A, List.of(), null, null, null, List.of()));
+                ACTOR_A, List.of(), null, null, null, List.of(), List.of(), List.of()));
     }
 
     @Test
     void rejectsBlankTitle() {
         assertThrows(IllegalArgumentException.class, () -> new UseCase(ID, CODE, "  ", "g",
-                null, null, ACTOR_A, List.of(), null, null, List.of(step(1, "do")), List.of()));
+                null, null, ACTOR_A, List.of(), null, null, List.of(step(1, "do")), List.of(), List.of(), List.of()));
     }
 
     @Test
     void rejectsBlankGoal() {
         assertThrows(IllegalArgumentException.class, () -> new UseCase(ID, CODE, "t", "  ",
-                null, null, ACTOR_A, List.of(), null, null, List.of(step(1, "do")), List.of()));
+                null, null, ACTOR_A, List.of(), null, null, List.of(step(1, "do")), List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -255,5 +262,37 @@ class UseCaseTest {
     @Test
     void rejectsNullActorRefIdentity() {
         assertThrows(NullPointerException.class, () -> new ActorRef(null));
+    }
+
+    @Test
+    void rejectsNullTermRefIdentity() {
+        assertThrows(NullPointerException.class, () -> new TermRef(null));
+    }
+
+    @Test
+    void rejectsNullConstraintRefIdentity() {
+        assertThrows(NullPointerException.class, () -> new ConstraintRef(null));
+    }
+
+    /**
+     * {@link UseCase#withStepTextPatches}/{@link UseCase#withStepRealisesPatches} touch only
+     * steps - {@code usesTerms}/{@code constrainedBy} (issue #329) must survive both untouched,
+     * the same way {@code title}/{@code code} already do.
+     */
+    @Test
+    void withStepTextPatchesAndWithStepRealisesPatchesLeaveUsesTermsAndConstrainedByUntouched() {
+        TermRef termRef = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+        ConstraintRef constraintRef = new ConstraintRef(ResourceId.of("https://w3id.org/arknet/id/constraint-1"));
+        UseCase uc = new UseCase(ID, CODE, "Place order", "Customer places an order",
+                null, null, CUSTOMER, List.of(), null, null, List.of(step(1, "select items")), List.of(),
+                List.of(termRef), List.of(constraintRef));
+
+        UseCase textPatched = uc.withStepTextPatches(PROJECT, List.of(new StepTextPatch(1, "pick items")));
+        UseCase realisesPatched = uc.withStepRealisesPatches(PROJECT, Map.of(1, List.of(FR5)));
+
+        assertEquals(List.of(termRef), textPatched.usesTerms());
+        assertEquals(List.of(constraintRef), textPatched.constrainedBy());
+        assertEquals(List.of(termRef), realisesPatched.usesTerms());
+        assertEquals(List.of(constraintRef), realisesPatched.constrainedBy());
     }
 }

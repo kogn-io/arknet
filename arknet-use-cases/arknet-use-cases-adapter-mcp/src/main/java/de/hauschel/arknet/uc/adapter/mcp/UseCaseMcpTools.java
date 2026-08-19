@@ -15,11 +15,14 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
+import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
@@ -29,8 +32,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 
 /**
  * Driving (in) adapter of the use-cases component: exposes the use-case use-cases as MCP
- * tools ({@code uc_add}, {@code uc_list}, {@code uc_get}, {@code uc_update}) and delegates each
- * tool call to the corresponding in-port.
+ * tools ({@code uc_add}, {@code uc_list}, {@code uc_get}, {@code uc_update}, {@code uc_link_term},
+ * {@code uc_link_constraint}) and delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the use-cases hexagon (symmetric to the out-adapter
  * {@code arknet-use-cases-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -69,9 +72,9 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  *
  * <p><strong>Rendering.</strong> This class only dispatches tool calls to their in-port and
  * turns the result into the returned string via {@link UseCasePresenter} - it holds no
- * rendering logic of its own (issue #96). See {@link UseCasePresenter} for the actor/requirement
- * display resolution that borrows {@link ResolveTerms}/{@link ResolveRequirements}
- * purely for display.</p>
+ * rendering logic of its own (issue #96). See {@link UseCasePresenter} for the actor/requirement/
+ * term/constraint display resolution that borrows {@link ResolveTerms}/{@link ResolveRequirements}/
+ * {@link ResolveConstraints} purely for display.</p>
  */
 public final class UseCaseMcpTools {
 
@@ -79,21 +82,28 @@ public final class UseCaseMcpTools {
     private final ListUseCases listUseCases;
     private final GetUseCase getUseCase;
     private final UpdateUseCase updateUseCase;
+    private final LinkTerm linkTerm;
+    private final LinkConstraint linkConstraint;
     private final ProjectResolver projects;
     private final UseCasePresenter presenter;
 
     /**
-     * Creates the adapter with its four driving in-ports, the two borrowed sibling-hexagon
+     * Creates the adapter with its six driving in-ports, the three borrowed sibling-hexagon
      * display ports and the resolver that maps each call's origin anchor to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
      * @param listUseCases        in-port backing {@code uc_list}
      * @param getUseCase          in-port backing {@code uc_get}
      * @param updateUseCase       in-port backing {@code uc_update}
+     * @param linkTerm            in-port backing {@code uc_link_term}
+     * @param linkConstraint      in-port backing {@code uc_link_constraint}
      * @param resolveTerms        ubiquitous-language driving port used only to render a
-     *                            referenced actor's business name instead of its bare IRI
+     *                            referenced actor's business name and a linked glossary term's
+     *                            business code instead of their bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
      *                            requirement's business code instead of its bare IRI
+     * @param resolveConstraints  requirements driving port used only to render a linked
+     *                            constraint's business code instead of its bare IRI
      * @param projects          resolves each call's target project from its origin directory
      */
     public UseCaseMcpTools(
@@ -101,15 +111,20 @@ public final class UseCaseMcpTools {
             final ListUseCases listUseCases,
             final GetUseCase getUseCase,
             final UpdateUseCase updateUseCase,
+            final LinkTerm linkTerm,
+            final LinkConstraint linkConstraint,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
+            final ResolveConstraints resolveConstraints,
             final ProjectResolver projects) {
         this.addUseCase = Objects.requireNonNull(addUseCase, "addUseCase");
         this.listUseCases = Objects.requireNonNull(listUseCases, "listUseCases");
         this.getUseCase = Objects.requireNonNull(getUseCase, "getUseCase");
         this.updateUseCase = Objects.requireNonNull(updateUseCase, "updateUseCase");
+        this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
+        this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.projects = Objects.requireNonNull(projects, "projects");
-        this.presenter = new UseCasePresenter(resolveTerms, resolveRequirements);
+        this.presenter = new UseCasePresenter(resolveTerms, resolveRequirements, resolveConstraints);
     }
 
     /**
@@ -397,6 +412,49 @@ public final class UseCaseMcpTools {
                 extensions == null ? null : List.copyOf(extensions), toStepTextPatches(stepTextPatches),
                 toStepRealisesPatches(stepRealisesPatches), blankToNull(language), project.defaultLanguage());
         return presenter.formatFull(project.id(), updated);
+    }
+
+    @McpTool(name = "uc_link_term",
+            description = "Link a use case to a glossary term of the ubiquitous language it uses. The term "
+                    + "must already exist (create it with term_add first). Linking the same term twice is a "
+                    + "no-op.")
+    public String linkTerm(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Term code, e.g. TERM-1 (the term's business code, resolved "
+                    + "against the glossary - not its skos:prefLabel or its store IRI)")
+            final String termId,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final UseCase updated = linkTerm.linkTerm(projectId, new UseCaseCode(id), termId);
+        return presenter.formatFull(projectId, updated);
+    }
+
+    @McpTool(name = "uc_link_constraint",
+            description = "Link a use case to a constraint it is bound by. The constraint must already exist "
+                    + "(create it first with constraint_add). Linking the same constraint twice is a no-op.")
+    public String linkConstraint(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
+            @McpToolParam(description = "Constraint code, e.g. TCON-1, BCON-1 or RCON-1 (the constraint's "
+                    + "business code, not its store IRI)")
+            final String constraintId,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor).id();
+        final UseCase updated = linkConstraint.linkConstraint(projectId, new UseCaseCode(id), constraintId);
+        return presenter.formatFull(projectId, updated);
     }
 
     // --- mapping helpers -------------------------------------------------------

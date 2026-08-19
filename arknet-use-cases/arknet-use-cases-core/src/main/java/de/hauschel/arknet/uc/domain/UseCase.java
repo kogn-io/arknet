@@ -51,6 +51,17 @@ import de.hauschel.arknet.kernel.ProjectId;
  * @param extensions        alternative/exception flows as free text; {@code 0..n}
  *                          (never {@code null}; a {@code null} argument is
  *                          normalised to an empty list)
+ * @param usesTerms         glossary terms of the ubiquitous language this use case uses
+ *                          (issue #329), each carried as the term's opaque subject identity -
+ *                          not a business label; {@code 0..n} (never {@code null}; a
+ *                          {@code null} argument is normalised to an empty list). Trails the
+ *                          longer-standing fields as the most recently added ones, mirroring
+ *                          {@code Requirement}'s own {@code constrainedBy} having been appended
+ *                          last historically
+ * @param constrainedBy     constraints this use case is bound by (issue #329), each carried as
+ *                          the constraint's opaque subject identity - not a business label;
+ *                          {@code 0..n} (never {@code null}; a {@code null} argument is
+ *                          normalised to an empty list)
  */
 public record UseCase(
         UseCaseId id,
@@ -64,7 +75,9 @@ public record UseCase(
         String precondition,
         String postcondition,
         List<Step> steps,
-        List<String> extensions) {
+        List<String> extensions,
+        List<TermRef> usesTerms,
+        List<ConstraintRef> constrainedBy) {
 
     public UseCase {
         Objects.requireNonNull(id, "id");
@@ -81,6 +94,8 @@ public record UseCase(
         }
         supportingActors = supportingActors == null ? List.of() : List.copyOf(supportingActors);
         extensions = extensions == null ? List.of() : List.copyOf(extensions);
+        usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
+        constrainedBy = constrainedBy == null ? List.of() : List.copyOf(constrainedBy);
         steps = List.copyOf(steps);
         if (steps.isEmpty()) {
             throw new IllegalArgumentException("a use case must have at least one step");
@@ -123,7 +138,7 @@ public record UseCase(
             throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
         }
         return new UseCase(id, code, title, goal, scope, trigger, primaryActor, supportingActors,
-                precondition, postcondition, patched, extensions);
+                precondition, postcondition, patched, extensions, usesTerms, constrainedBy);
     }
 
     /**
@@ -163,7 +178,7 @@ public record UseCase(
             throw new StepPositionNotFoundException(projectId, code, unmatchedPosition);
         }
         return new UseCase(id, code, title, goal, scope, trigger, primaryActor, supportingActors,
-                precondition, postcondition, patched, extensions);
+                precondition, postcondition, patched, extensions, usesTerms, constrainedBy);
     }
 
     /**

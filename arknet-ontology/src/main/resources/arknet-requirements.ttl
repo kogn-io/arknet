@@ -146,7 +146,7 @@ arkreq:qualityCategory a owl:DatatypeProperty ;
 
 # -- Requirement Relationships -----------------------------------------------
 #    Reused from OSLC RM:
-#      oslc_rm:constrainedBy  (Requirement -> Constraint)
+#      oslc_rm:constrainedBy  (Requirement -> Constraint; auch UseCase -> Constraint, Issue #329)
 #      oslc_rm:satisfiedBy    (Requirement -> UseCase)   inverse: oslc_rm:satisfies
 #      oslc_rm:decomposedBy   (Requirement -> Requirement) inverse: oslc_rm:decomposes
 #    arkreq adds only what OSLC lacks:
@@ -178,10 +178,10 @@ arkreq:scopedTo a owl:ObjectProperty ;
     rdfs:comment "Der Bounded Context, in dem diese Anforderung realisiert wird."@de .
 
 arkreq:usesTerm a owl:ObjectProperty ;
-    rdfs:domain arkreq:Requirement ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( arkreq:Requirement arkreq:UseCase ) ] ;
     rdfs:range  skos:Concept ;
     rdfs:label  "uses term"@en ;
-    rdfs:comment "Diese Anforderung verwendet einen Begriff der Ubiquitous Language (skos:Concept aus dem Glossar). Kann mehrfach vorkommen -- ein Triple pro Begriff. Zeigt auf die Term-Identitaet (dcterms:identifier, z.B. TERM-1), nicht auf das skos:prefLabel: die Kante bleibt damit stabil, wenn der Begriff umbenannt wird. Die Kante gehoert der requirements-BC (Domain ist arkreq:Requirement), damit die Ubiquitous-Language-BC nicht von requirements abhaengt."@de .
+    rdfs:comment "Ein Requirement oder ein UseCase verwendet einen Begriff der Ubiquitous Language (skos:Concept aus dem Glossar). Kann mehrfach vorkommen -- ein Triple pro Begriff. Zeigt auf die Term-Identitaet (dcterms:identifier, z.B. TERM-1), nicht auf das skos:prefLabel: die Kante bleibt damit stabil, wenn der Begriff umbenannt wird. Die Kante gehoert weiterhin der requirements-BC (UseCase wohnt im selben arkreq-Namespace), damit die Ubiquitous-Language-BC unabhaengig bleibt (Issue #329)."@de .
 
 
 ##############################################################################
@@ -191,7 +191,7 @@ arkreq:usesTerm a owl:ObjectProperty ;
 
 arkreq:Constraint a owl:Class ;
     rdfs:label   "Constraint"@en , "Randbedingung"@de ;
-    rdfs:comment "Eine einschraenkende Vorgabe, die den Loesungsraum begrenzt (ISO 29148). Nicht verhandelbar. Wird ueber oslc_rm:constrainedBy an Requirements gehaengt."@de .
+    rdfs:comment "Eine einschraenkende Vorgabe, die den Loesungsraum begrenzt (ISO 29148). Nicht verhandelbar. Wird ueber oslc_rm:constrainedBy an Requirements oder UseCases gehaengt (Issue #329)."@de .
 
 arkreq:TechnicalConstraint a owl:Class ;
     rdfs:subClassOf arkreq:Constraint ;

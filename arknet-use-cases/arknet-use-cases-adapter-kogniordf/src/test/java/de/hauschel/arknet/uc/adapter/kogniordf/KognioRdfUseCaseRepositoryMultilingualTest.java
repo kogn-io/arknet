@@ -94,11 +94,11 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
 
     private static UseCase useCase(UseCaseId id, UseCaseCode code, String title, String goal, String stepText) {
         return new UseCase(id, code, title, goal, null, null, CUSTOMER, List.of(), null, null,
-                List.of(new Step(1, stepText, List.of())), List.of());
+                List.of(new Step(1, stepText, List.of())), List.of(), List.of(), List.of());
     }
 
     private static UseCase useCase(UseCaseId id, UseCaseCode code, String title, String goal, List<Step> steps) {
-        return new UseCase(id, code, title, goal, null, null, CUSTOMER, List.of(), null, null, steps, List.of());
+        return new UseCase(id, code, title, goal, null, null, CUSTOMER, List.of(), null, null, steps, List.of(), List.of(), List.of());
     }
 
     private RevisionToken currentHead(UseCaseCode code) {
@@ -307,7 +307,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "Webshop", "Kunde oeffnet den Warenkorb", CUSTOMER, List.of(),
                 "Kunde ist eingeloggt", "Bestellung ist erfasst",
                 List.of(new Step(1, "Kunde waehlt Artikel", List.of())),
-                List.of("2a. Zahlung abgelehnt -> Abbruch"));
+                List.of("2a. Zahlung abgelehnt -> Abbruch"), List.of(), List.of());
         repository.create(PROJECT_A, created, "de");
 
         UseCase asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -332,7 +332,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "Webshop", "Customer opens the cart", CUSTOMER, List.of(),
                 "Customer is logged in", "Order is recorded",
                 List.of(new Step(1, "Customer selects items", List.of())),
-                List.of("2a. Payment declined -> abort"));
+                List.of("2a. Payment declined -> abort"), List.of(), List.of());
         repository.create(PROJECT_A, created, "en");
         RevisionToken head = currentHead(code);
 
@@ -340,7 +340,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "Webshop", "Kunde oeffnet den Warenkorb", CUSTOMER, List.of(),
                 "Customer is logged in", "Order is recorded",
                 List.of(new Step(1, "Customer selects items", List.of())),
-                List.of("2a. Payment declined -> abort"));
+                List.of("2a. Payment declined -> abort"), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, withGermanTrigger, "en", "en", "en", "de", "en", "en",
                 Map.of(1, "en"), Map.of(1, "en"), null, Integer.MAX_VALUE);
 
@@ -370,7 +370,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "3a. Item out of stock -> notify customer",
                 "4a. Address invalid -> request correction");
         UseCase created = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions, List.of(), List.of());
         repository.create(PROJECT_A, created, "en");
         RevisionToken head = currentHead(code);
 
@@ -379,7 +379,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "3a. Artikel nicht vorraetig -> Kunde benachrichtigen",
                 "4a. Address invalid -> request correction");
         UseCase updated = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), withGermanSecondExtension);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), withGermanSecondExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
                 Map.of(1, "en"), Map.of(1, "en", 2, "de", 3, "en"), null, Integer.MAX_VALUE);
 
@@ -414,21 +414,21 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         List<String> originalExtensions = List.of("2a. A", "3a. B");
         UseCase created = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions, List.of(), List.of());
         repository.create(PROJECT_A, created, "en");
         RevisionToken headAfterCreate = currentHead(code);
 
         List<String> withGermanSecondExtension = List.of("2a. A", "3a. B (de)");
         UseCase withGermanVariant = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER,
                 List.of(), null, null, List.of(new Step(1, "Customer selects items", List.of())),
-                withGermanSecondExtension);
+                withGermanSecondExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, withGermanVariant, "en", "en", null, null, null,
                 null, Map.of(1, "en"), Map.of(1, "en", 2, "de"), null, Integer.MAX_VALUE);
         RevisionToken headAfterTranslation = currentHead(code);
 
         List<String> withInsertedExtension = List.of("2a. A", "2b. New", "3a. B");
         UseCase withInsert = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterTranslation, withInsert, "en", "en", null, null, null, null,
                 Map.of(1, "en"), Map.of(1, "en", 2, "en", 3, "en"), null, 1);
 
@@ -465,21 +465,21 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCaseId id = freshId();
         List<String> originalExtensions = List.of("2a. A", "3a. B", "4a. C");
         UseCase created = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions, List.of(), List.of());
         repository.create(PROJECT_A, created, "en");
         RevisionToken headAfterCreate = currentHead(code);
 
         List<String> withGermanFirstExtension = List.of("2a. A (de)", "3a. B", "4a. C");
         UseCase withGermanVariant = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER,
                 List.of(), null, null, List.of(new Step(1, "Customer selects items", List.of())),
-                withGermanFirstExtension);
+                withGermanFirstExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterCreate, withGermanVariant, "en", "en", null, null, null,
                 null, Map.of(1, "en"), Map.of(1, "de", 2, "en", 3, "en"), null, Integer.MAX_VALUE);
         RevisionToken headAfterTranslation = currentHead(code);
 
         List<String> withInsertedExtension = List.of("2a. A (de)", "3a. B", "2c. New", "4a. C");
         UseCase withInsert = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), withInsertedExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, headAfterTranslation, withInsert, "en", "en", null, null, null, null,
                 Map.of(1, "en"), Map.of(1, "de", 2, "en", 3, "en", 4, "en"), null, 2);
 
@@ -505,7 +505,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "2a. Payment declined -> abort",
                 "3a. Item out of stock -> notify customer");
         UseCase created = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), originalExtensions, List.of(), List.of());
         repository.create(PROJECT_A, created, "en");
         RevisionToken head = currentHead(code);
 
@@ -513,7 +513,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
                 "2a. Payment declined -> abort",
                 "3a. Item out of stock -> notify customer immediately");
         UseCase updated = new UseCase(id, code, "Place order", "Order is placed", null, null, CUSTOMER, List.of(),
-                null, null, List.of(new Step(1, "Customer selects items", List.of())), withRewordedSecondExtension);
+                null, null, List.of(new Step(1, "Customer selects items", List.of())), withRewordedSecondExtension, List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, head, updated, "en", "en", null, null, null, null,
                 Map.of(1, "en"), Map.of(1, "en", 2, "en"), null, Integer.MAX_VALUE);
 
@@ -634,7 +634,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanScope = new UseCase(id, code, current.value().title(), current.value().goal(),
                 "Webshop (deutsch)", current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
-                current.value().extensions());
+                current.value().extensions(), List.of(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanScope, current.titleLanguage(),
                 current.goalLanguage(), "de", current.triggerLanguage(), current.preconditionLanguage(),
@@ -659,7 +659,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withFrenchScope = new UseCase(id, code, current.value().title(), current.value().goal(),
                 "Boutique en ligne", current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
-                current.value().extensions());
+                current.value().extensions(), List.of(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchScope, current.titleLanguage(),
                 current.goalLanguage(), "fr", current.triggerLanguage(), current.preconditionLanguage(),
@@ -689,7 +689,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withGermanExtension = new UseCase(id, code, current.value().title(), current.value().goal(),
                 current.value().scope(), current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
-                List.of("2a. Zahlung abgelehnt -> Abbruch"));
+                List.of("2a. Zahlung abgelehnt -> Abbruch"), List.of(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanExtension, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),
@@ -715,7 +715,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
         UseCase withFrenchExtension = new UseCase(id, code, current.value().title(), current.value().goal(),
                 current.value().scope(), current.value().trigger(), CUSTOMER, List.of(),
                 current.value().precondition(), current.value().postcondition(), current.value().steps(),
-                List.of("2a. Paiement refuse -> annulation"));
+                List.of("2a. Paiement refuse -> annulation"), List.of(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchExtension, current.titleLanguage(),
                 current.goalLanguage(), current.scopeLanguage(), current.triggerLanguage(),

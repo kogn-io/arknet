@@ -10,11 +10,15 @@ import java.util.stream.Stream;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints;
+import de.hauschel.arknet.req.application.port.in.ResolveConstraints.ResolvedConstraint;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
@@ -39,21 +43,37 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * rendering, batched across every {@link ActorRef}/{@link RequirementRef} involved; an id either
  * port could not resolve simply falls back to the bare IRI - rendering never throws and never
  * drops a reference.</p>
+ *
+ * <p><strong>Term/constraint display resolution (issue #329).</strong> {@link TermRef}/
+ * {@link ConstraintRef} carry a glossary term's/constraint's opaque subject identity, mirroring
+ * the requirements bounded context's own {@code RequirementPresenter} exactly. {@code usesTerms}
+ * batches through the same {@link ResolveTerms} port already borrowed for actor display (a
+ * second, independent batch call - actor identities and glossary-term identities never overlap in
+ * a well-formed project, but nothing here relies on that); {@code constrainedBy} batches through
+ * {@link ResolveConstraints}, a second, genuinely cross-bounded-context port from the requirements
+ * hexagon (not this same module's own port the way the sibling {@code RequirementPresenter}'s
+ * {@code ResolveConstraints} is - {@code Constraint} lives in requirements, not use-cases).</p>
  */
 final class UseCasePresenter {
 
     private final ResolveTerms resolveTerms;
     private final ResolveRequirements resolveRequirements;
+    private final ResolveConstraints resolveConstraints;
 
     /**
-     * @param resolveTerms        ubiquitous-language driving port used only to render a
-     *                             referenced actor's business name instead of its bare IRI
+     * @param resolveTerms        ubiquitous-language driving port used to render a referenced
+     *                             actor's business name and a linked glossary term's business
+     *                             code instead of their bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
      *                             requirement's business code instead of its bare IRI
+     * @param resolveConstraints  requirements driving port used only to render a linked
+     *                             constraint's business code instead of its bare IRI
      */
-    UseCasePresenter(final ResolveTerms resolveTerms, final ResolveRequirements resolveRequirements) {
+    UseCasePresenter(final ResolveTerms resolveTerms, final ResolveRequirements resolveRequirements,
+            final ResolveConstraints resolveConstraints) {
         this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
+        this.resolveConstraints = Objects.requireNonNull(resolveConstraints, "resolveConstraints");
     }
 
     static String formatShort(final UseCase uc) {
@@ -63,6 +83,8 @@ final class UseCasePresenter {
     String formatFull(final ProjectId projectId, final UseCase uc) {
         final Map<ResourceId, ResolvedTerm> actorsById = resolveActorsFor(projectId, uc);
         final Map<ResourceId, ResolvedRequirement> requirementsById = resolveRequirementsFor(projectId, uc);
+        final Map<ResourceId, ResolvedTerm> usesTermsById = resolveUsesTermsFor(projectId, uc);
+        final Map<ResourceId, ResolvedConstraint> constraintsById = resolveConstraintsFor(projectId, uc);
 
         final StringBuilder sb = new StringBuilder();
         sb.append(uc.code().value()).append(' ').append(uc.title()).append('\n');
@@ -93,6 +115,18 @@ final class UseCasePresenter {
             for (final String extension : uc.extensions()) {
                 sb.append("    - ").append(extension).append('\n');
             }
+        }
+        if (!uc.usesTerms().isEmpty()) {
+            sb.append("  usesTerms: ")
+                    .append(uc.usesTerms().stream().map(ref -> renderTerm(ref, usesTermsById))
+                            .reduce((a, b) -> a + ", " + b).orElse(""))
+                    .append('\n');
+        }
+        if (!uc.constrainedBy().isEmpty()) {
+            sb.append("  constrainedBy: ")
+                    .append(uc.constrainedBy().stream().map(ref -> renderConstraint(ref, constraintsById))
+                            .reduce((a, b) -> a + ", " + b).orElse(""))
+                    .append('\n');
         }
         return sb.toString().stripTrailing();
     }
@@ -158,6 +192,57 @@ final class UseCasePresenter {
         }
         return resolveRequirements.resolveExisting(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
+    }
+
+    /** Renders one term reference: its resolved business code, or its bare IRI as a fallback. */
+    private static String renderTerm(final TermRef ref, final Map<ResourceId, ResolvedTerm> termsById) {
+        final ResolvedTerm term = termsById.get(ref.value());
+        return term != null ? term.code().value() : ref.value().value();
+    }
+
+    /** {@link #renderTerm}, for an already-resolved {@link ConstraintRef}. */
+    private static String renderConstraint(
+            final ConstraintRef ref, final Map<ResourceId, ResolvedConstraint> constraintsById) {
+        final ResolvedConstraint constraint = constraintsById.get(ref.value());
+        return constraint != null ? constraint.code().value() : ref.value().value();
+    }
+
+    /**
+     * Batch-resolves every glossary term {@code uc} uses ({@code usesTerms}, issue #329) in
+     * exactly one call to {@link ResolveTerms#resolve} - independent of
+     * {@link #resolveActorsFor}'s own batch call, since {@code primaryActor}/{@code
+     * supportingActors} and {@code usesTerms} are disjoint sets of {@link ResourceId}s in a
+     * well-formed project. Same duplicate-key-tolerant merge reasoning as
+     * {@link #resolveActorsFor}.
+     */
+    private Map<ResourceId, ResolvedTerm> resolveUsesTermsFor(final ProjectId projectId, final UseCase uc) {
+        final ResourceId[] ids = uc.usesTerms().stream()
+                .map(TermRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveTerms.resolve(projectId, ids).stream()
+                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
+    }
+
+    /**
+     * Batch-resolves every constraint {@code uc} is bound by ({@code constrainedBy}, issue #329)
+     * in exactly one call to {@link ResolveConstraints#resolveExisting}. Same duplicate-key-
+     * tolerant merge reasoning as {@link #resolveActorsFor}, mirroring
+     * {@code RequirementPresenter#resolveConstraintsFor}.
+     */
+    private Map<ResourceId, ResolvedConstraint> resolveConstraintsFor(final ProjectId projectId, final UseCase uc) {
+        final ResourceId[] ids = uc.constrainedBy().stream()
+                .map(ConstraintRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveConstraints.resolveExisting(projectId, ids).stream()
+                .collect(Collectors.toMap(ResolvedConstraint::id, c -> c, (first, second) -> first));
     }
 
     private static void appendOptional(final StringBuilder sb, final String field, final String value) {

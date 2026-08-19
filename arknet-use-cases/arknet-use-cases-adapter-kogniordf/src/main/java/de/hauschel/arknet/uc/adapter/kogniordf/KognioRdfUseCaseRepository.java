@@ -21,6 +21,7 @@ import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
+import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -42,10 +43,12 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.uc.domain.Step;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
@@ -111,7 +114,33 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * than failing the whole result. This is unreachable via the MCP tools, which always resolve to
  * a subject IRI before writing.</p>
  *
- * <p><strong>A use case with zero main steps is handled the same way.</strong>
+ * <p><strong>{@code usesTerm}/{@code constrainedBy} (issue #329).</strong> {@link TermRef}/
+ * {@link ConstraintRef} carry the referenced term's/constraint's opaque subject identity
+ * directly, arriving pre-resolved from {@code KognioRdfTermLookup}/{@code KognioRdfConstraintLookup}
+ * the same way {@link RequirementRef}/{@link ActorRef} do - {@link #write} therefore neither
+ * queries the sibling terms/constraints graphs to resolve them nor re-verifies that a referenced
+ * subject still denotes a term/constraint on every write; it trusts the identity it was handed.
+ * It still asserts each referenced term's type ({@code skos:Concept}) in the SHACL write-gate's
+ * validation-only context, mirroring {@code KognioRdfRequirementRepository#create}'s own
+ * {@code usesTerm} handling exactly.</p>
+ *
+ * <p><strong>Deliberately NOT mirroring {@code KognioRdfRequirementRepository}'s
+ * {@code constraintAssertedContext} (copying a referenced constraint's real triples into the gate
+ * context).</strong> That mechanism exists there because the requirements out-adapter's SHACL
+ * gate loads the <em>entire</em>, unfiltered {@code requirements-shapes.ttl}
+ * ({@code KognioRdfRequirementRepositoryFactory#buildGate}), so {@code rshapes:ConstraintShape}
+ * (targeting {@code arkreq:Constraint}) is itself active and would fire - and fail - against a
+ * referenced constraint asserted only as a bare, triple-less {@code arkreq:Constraint} node. This
+ * adapter's gate ({@link KognioRdfUseCaseRepositoryFactory#buildGate}) instead loads the same file
+ * filtered down to only the {@code arkreq:UseCase}/{@code arkreq:Step} node shapes
+ * ({@code loadUseCaseShapes}) - {@code ConstraintShape} loses its {@code sh:targetClass} triple in
+ * that filtering and becomes untargeted, i.e. inert: a SHACL shape with no target validates
+ * nothing, regardless of what triples the gate's merged data graph carries for a node satisfying
+ * it. A bare {@code rdf:type arkreq:Constraint} assertion is therefore already sufficient here,
+ * exactly like the {@code skos:Concept} assertion above - copying the constraint's real triples
+ * would add complexity without changing what actually gets validated.</p>
+ *
+ * <p>A use case with zero main steps is handled the same way.
  * {@code arkreq:mainStep} is only {@code sh:Warning} severity at {@code sh:minCount 1} (not
  * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case
  * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
@@ -160,6 +189,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "Requirement";
     private static final String ACTOR_TYPE = ARKPROC_NAMESPACE + "Actor";
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
+    private static final String CONSTRAINT_TYPE = ARKREQ_NAMESPACE + "Constraint";
     private static final String USE_CASE_GOAL_PROPERTY = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DESIGN_SCOPE_PROPERTY = ARKREQ_NAMESPACE + "designScope";
     private static final String TRIGGER_PROPERTY = ARKREQ_NAMESPACE + "trigger";
@@ -175,6 +206,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String SATISFIES_PROPERTY = OSLC_RM_NAMESPACE + "satisfies";
     private static final String TITLE_PROPERTY = VocabDct.NAMESPACE + "title";
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
+    private static final String USES_TERM_PROPERTY = ArkreqVocabulary.USES_TERM;
+    private static final String CONSTRAINED_BY_PROPERTY = ArkreqVocabulary.CONSTRAINED_BY;
 
     private final DatasetLifecycle lifecycle;
     private final ResourceIdFactory resourceIdFactory;
@@ -337,15 +370,30 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
             extensionPosition++;
         }
 
-        // 5. The shapes carry sh:class constraints on primaryActor (arkproc:Actor) and
-        //    stepRealises (arkreq:Requirement). The type triples for those referenced nodes
-        //    live in the sibling requirements/terms graphs, not in this candidate graph.
+        // 5. usesTerm/constrainedBy (issue #329): both reference resolved identities the same way
+        //    primaryActor/supportingActor/stepRealises do (class-level note) - one edge per
+        //    reference, no re-resolution here.
+        List<IRI> termIris = useCase.usesTerms().stream().map(this::termIriFor).toList();
+        for (IRI termIri : termIris) {
+            graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termIri);
+        }
+        List<IRI> constraintIris = useCase.constrainedBy().stream().map(this::constraintIriFor).toList();
+        for (IRI constraintIri : constraintIris) {
+            graph.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintIri);
+        }
+
+        // 6. The shapes carry sh:class constraints on primaryActor (arkproc:Actor),
+        //    stepRealises (arkreq:Requirement), usesTerm (skos:Concept) and constrainedBy
+        //    (arkreq:Constraint). The type triples for those referenced nodes live in the
+        //    sibling requirements/terms/constraints graphs, not in this candidate graph.
         //    They are handed to the funnel's gate as a validation-only asserted context (never
         //    persisted here). This is safe: the reference was already proven to exist and be
         //    of the right kind at the moment it was resolved (KognioRdfRequirementLookup /
-        //    KognioRdfActorLookup, called once from the application service) - the lookup,
-        //    not the shape, is what keeps the edge non-dangling; this adapter no longer
-        //    re-verifies it.
+        //    KognioRdfActorLookup / KognioRdfTermLookup / KognioRdfConstraintLookup, called once
+        //    from the application service) - the lookup, not the shape, is what keeps the edge
+        //    non-dangling; this adapter no longer re-verifies it. A bare arkreq:Constraint type
+        //    assertion is enough for constrainedBy here (class-level note on why this
+        //    deliberately does not mirror KognioRdfRequirementRepository#constraintAssertedContext).
         Graph assertedContext = rdf.createGraph();
         assertedContext.add(primaryActorIri, VocabRdf.TYPE, rdf.createIRI(ACTOR_TYPE));
         for (IRI supporting : supportingActorIris) {
@@ -353,6 +401,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         }
         for (IRI reqIri : satisfies.values()) {
             assertedContext.add(reqIri, VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
+        }
+        for (IRI termIri : termIris) {
+            assertedContext.add(termIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+        }
+        for (IRI constraintIri : constraintIris) {
+            assertedContext.add(constraintIri, VocabRdf.TYPE, rdf.createIRI(CONSTRAINT_TYPE));
         }
 
         // The step IRIs are opaque and not under the use-case IRI, so the old
@@ -379,6 +433,26 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     () -> new UseCaseNotFoundException(projectId, useCase.code()),
                     () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
                     tx -> {
+                        // Capture usesTerm/constrainedBy edges deleteExisting is about to wipe but
+                        // that UseCase#usesTerms()/#constrainedBy() (and therefore graph, built
+                        // from useCase.usesTerms()/constrainedBy() above) could never have carried
+                        // in the first place: both shapes carry sh:nodeKind sh:IRI, but that only
+                        // guards this adapter's own writes - a store-first (ADR-005) edge may
+                        // still target a blank node, which ResourceId cannot represent - read()
+                        // below excludes it the same way (FILTER(isIRI(...))). Mirrors
+                        // KognioRdfRequirementRepository#replaceTriplesForUpdate's
+                        // unjoinableUsesTerms/unjoinableConstrainedBy capture exactly.
+                        String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
+                                + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY
+                                + "> ?term } FILTER(!isIRI(?term)) }";
+                        String selectUnjoinableConstrainedBy = "SELECT ?constraint WHERE { "
+                                + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
+                                + "> ?constraint } FILTER(!isIRI(?constraint)) }";
+                        List<RDFTerm> unjoinableUsesTerms =
+                                tx.select(selectUnjoinableUsesTerms).map(row -> termOf(row, "term")).toList();
+                        List<RDFTerm> unjoinableConstrainedBy = tx.select(selectUnjoinableConstrainedBy)
+                                .map(row -> termOf(row, "constraint"))
+                                .toList();
                         // Capture what deleteExisting is about to wipe but graph is not itself
                         // rewriting: every title/goal/scope/trigger/precondition/postcondition
                         // literal whose language tag differs from its own *Tag parameter, and
@@ -419,6 +493,27 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
                         tx.update(deleteExisting);
                         tx.add(graphIri, graph);
+
+                        // Re-attach the unjoinable usesTerm/constrainedBy edges only after the gate
+                        // has already run and the rewritten graph is committed - a blank-node
+                        // target cannot appear in assertedContext (built from useCase.usesTerms()/
+                        // constrainedBy() only, which are always IRIs by construction), so feeding
+                        // it there would fail the shape's sh:class constraint and block every
+                        // future update of this use case. Appending it here instead is safe
+                        // precisely because nothing new is introduced - the edge already existed in
+                        // the store and is carried forward untouched, keeping its identity across
+                        // this delete-and-readd cycle (deleteExisting only removes triples whose
+                        // subject is the use case, never the target node's own triples).
+                        if (!unjoinableUsesTerms.isEmpty() || !unjoinableConstrainedBy.isEmpty()) {
+                            Graph preservedEdges = rdf.createGraph();
+                            for (RDFTerm termNode : unjoinableUsesTerms) {
+                                preservedEdges.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), termNode);
+                            }
+                            for (RDFTerm constraintNode : unjoinableConstrainedBy) {
+                                preservedEdges.add(subjectIri, rdf.createIRI(CONSTRAINED_BY_PROPERTY), constraintNode);
+                            }
+                            tx.add(graphIri, preservedEdges);
+                        }
 
                         // Re-attach only after the gate has already run and the rewritten graph is
                         // committed - the preserved literals are not new assertions, they already
@@ -894,7 +989,47 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                 precondition,
                 postcondition,
                 steps,
-                extensions));
+                extensions,
+                readUsesTerms(handle, subject),
+                readConstrainedBy(handle, subject)));
+    }
+
+    // ---- usesTerm/constrainedBy reading (issue #329) ------------------------------------
+
+    /**
+     * Reads the {@code arkreq:usesTerm} edges of one use case back as term references, ordered by
+     * target IRI (RDF has no intrinsic statement order, and {@link UseCase} compares its
+     * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
+     * {@code usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but that only guards this
+     * adapter's own writes, so a store-first (ADR-005) edge may still target a blank node, which
+     * {@link ResourceId} cannot represent; such an edge never appears in
+     * {@link UseCase#usesTerms()} but survives a later update via the unjoinable-edge
+     * preservation in {@link #write}. Mirrors
+     * {@code KognioRdfRequirementRepository#readUsesTerms}.
+     */
+    private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {
+        String query = "SELECT ?term WHERE { "
+                + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + USES_TERM_PROPERTY + "> ?term } "
+                + "FILTER(isIRI(?term)) } ORDER BY ?term";
+        return handle.sparqlQuery().select(query)
+                .map(row -> new TermRef(ResourceId.of(iriOf(row, "term").getIRIString())))
+                .toList();
+    }
+
+    /**
+     * Reads the {@code oslc_rm:constrainedBy} edges of one use case back as constraint
+     * references, ordered by target IRI - mirrors {@link #readUsesTerms} exactly, including the
+     * IRI-only filter: {@code constrainedBy}'s shape carries {@code sh:nodeKind sh:IRI}, but that
+     * only guards this adapter's own writes, not a store-first (ADR-005) edge, so the filter still
+     * matters here.
+     */
+    private List<ConstraintRef> readConstrainedBy(DatasetHandle handle, String subject) {
+        String query = "SELECT ?constraint WHERE { "
+                + "GRAPH <" + USE_CASES_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
+                + "> ?constraint } FILTER(isIRI(?constraint)) } ORDER BY ?constraint";
+        return handle.sparqlQuery().select(query)
+                .map(row -> new ConstraintRef(ResourceId.of(iriOf(row, "constraint").getIRIString())))
+                .toList();
     }
 
     /**
@@ -1090,6 +1225,22 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         return rdf.createIRI(ref.value().value());
     }
 
+    /**
+     * Converts an already-resolved {@link TermRef} to an {@link IRI} for writing (issue #329).
+     * Mirrors {@link #requirementIriFor}; see there for the IRIREF-safety rationale.
+     */
+    private IRI termIriFor(TermRef term) {
+        return rdf.createIRI(term.value().value());
+    }
+
+    /**
+     * Converts an already-resolved {@link ConstraintRef} to an {@link IRI} for writing
+     * (issue #329). Mirrors {@link #requirementIriFor}; see there for the IRIREF-safety rationale.
+     */
+    private IRI constraintIriFor(ConstraintRef constraint) {
+        return rdf.createIRI(constraint.value().value());
+    }
+
     // ---- helpers -----------------------------------------------------------------------
 
     /**
@@ -1123,6 +1274,18 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     private static Literal literalOf(BindingSet row, String name) {
         return (Literal) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
+    }
+
+    /**
+     * Reads a bound value as the bare, technology-neutral {@link RDFTerm} - not cast to
+     * {@link IRI}, since this backs {@code selectUnjoinableUsesTerms}/
+     * {@code selectUnjoinableConstrainedBy}'s reads, whose whole point is a target that is
+     * <em>not</em> an IRI (a store-first blank node). Mirrors
+     * {@code KognioRdfRequirementRepository#termOf}.
+     */
+    private static RDFTerm termOf(BindingSet row, String name) {
+        return row.getValue(name)
                 .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
     }
 

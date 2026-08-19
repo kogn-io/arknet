@@ -134,7 +134,7 @@ class ModelViewsTest {
                 new UseCaseCode("UC1"), "Bestellung aufgeben", "Der Kunde bestellt Artikel.",
                 null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-1")),
                 List.of(), null, null,
-                List.of(new Step(1, "Artikel in den Warenkorb legen", List.of())), List.of());
+                List.of(new Step(1, "Artikel in den Warenkorb legen", List.of())), List.of(), List.of(), List.of());
     }
 
     private static Requirement requirement() {

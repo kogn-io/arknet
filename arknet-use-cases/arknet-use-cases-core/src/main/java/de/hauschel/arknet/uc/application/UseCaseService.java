@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.uc.application;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,16 +20,22 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.GetUseCase;
+import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
+import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
+import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
+import de.hauschel.arknet.uc.application.port.out.TermLookup;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.ActorRef;
+import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.DuplicateUseCaseCodeException;
 import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.Step;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
+import de.hauschel.arknet.uc.domain.TermRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseConcurrentlyModifiedException;
@@ -59,10 +66,10 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * fresh read whenever a concurrent {@code uc_add} claims the same {@code UCn} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
  * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
- * multi-writer concern (ADR-001). {@link #update} shares that same concern: read-modify-write
- * round trips retry via {@link UseCaseRepository#compareAndUpdate} whenever a concurrent writer
- * commits in between - see {@link #updateWithOptimisticRetry} (mirrors
- * {@code RequirementService}).</p>
+ * multi-writer concern (ADR-001). {@link #update}/{@link #linkTerm}/{@link #linkConstraint} share
+ * that same concern: read-modify-write round trips retry via
+ * {@link UseCaseRepository#compareAndUpdate} whenever a concurrent writer commits in between -
+ * see {@link #updateWithOptimisticRetry} (mirrors {@code RequirementService}).</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a use case's
  * goal-level fields and/or an individual step's text and/or realises references after the fact,
@@ -74,9 +81,14 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * step's {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
  * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor},
  * {@code supportingActors} and full step-list restructuring stay out of this port's scope - see
- * {@link UpdateUseCase}.</p>
+ * {@link UpdateUseCase}. Linking a glossary term or a constraint is idempotent, independent of
+ * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
+ * exactly (issue #329) - {@link #linkConstraint} resolves the human-typed constraint code via the
+ * constructor-injected {@link ConstraintLookup} cross-BC port rather than a same-module
+ * repository, since unlike the sibling requirements bounded context, {@code Constraint} does not
+ * live in this bounded context.</p>
  */
-public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, UpdateUseCase {
+public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, UpdateUseCase, LinkTerm, LinkConstraint {
 
     private static final String CODE_PREFIX = "UC";
 
@@ -92,6 +104,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     private final ResourceIdFactory resourceIdFactory;
     private final RequirementLookup requirementLookup;
     private final ActorLookup actorLookup;
+    private final TermLookup termLookup;
+    private final ConstraintLookup constraintLookup;
 
     /**
      * Creates the service.
@@ -103,13 +117,23 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      *                          (must not be {@code null})
      * @param actorLookup       resolves a human-typed actor name to its opaque identity (must
      *                          not be {@code null})
+     * @param termLookup        resolves a human-typed glossary term code to its opaque identity,
+     *                          for {@link #linkTerm} (must not be {@code null})
+     * @param constraintLookup  resolves a human-typed constraint code to its opaque identity, for
+     *                          {@link #linkConstraint} - a cross-BC lookup port rather than a
+     *                          same-module repository, since {@code Constraint} lives in the
+     *                          neighbouring requirements bounded context (must not be
+     *                          {@code null})
      */
     public UseCaseService(UseCaseRepository repository, ResourceIdFactory resourceIdFactory,
-            RequirementLookup requirementLookup, ActorLookup actorLookup) {
+            RequirementLookup requirementLookup, ActorLookup actorLookup, TermLookup termLookup,
+            ConstraintLookup constraintLookup) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.requirementLookup = Objects.requireNonNull(requirementLookup, "requirementLookup");
         this.actorLookup = Objects.requireNonNull(actorLookup, "actorLookup");
+        this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
+        this.constraintLookup = Objects.requireNonNull(constraintLookup, "constraintLookup");
     }
 
     @Override
@@ -142,7 +166,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
             UseCase useCase = new UseCase(id, code, command.title(), command.goal(), command.scope(),
                     command.trigger(), primaryActor, supportingActors,
                     command.precondition(), command.postcondition(), steps,
-                    command.extensions());
+                    command.extensions(), List.of(), List.of());
             repository.create(projectId, useCase, language);
             return useCase;
         });
@@ -204,9 +228,59 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                     precondition != null ? precondition : current.precondition(),
                     postcondition != null ? postcondition : current.postcondition(),
                     current.steps(),
-                    extensions != null ? List.copyOf(extensions) : current.extensions());
+                    extensions != null ? List.copyOf(extensions) : current.extensions(),
+                    current.usesTerms(), current.constrainedBy());
             base = stepTextPatches != null ? base.withStepTextPatches(projectId, stepTextPatches) : base;
             return realisesByPosition != null ? base.withStepRealisesPatches(projectId, realisesByPosition) : base;
+        });
+    }
+
+    @Override
+    public UseCase linkTerm(ProjectId projectId, UseCaseCode code, String termCode) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(termCode, "termCode");
+        // Resolution does not depend on the use case's current state, so it happens once, outside
+        // the retry loop below - a lookup failure must propagate immediately and leave the use
+        // case untouched, exactly as RequirementService#linkTerm.
+        TermRef term = new TermRef(termLookup.resolveByCode(projectId, termCode));
+        // linkTerm() touches no language-tagged field - same null/null/all-untouched call shape as
+        // update() would use for a call that names nothing.
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, false, false, false,
+                Set.of(), false, current -> {
+            if (current.usesTerms().contains(term)) {
+                return current;
+            }
+            List<TermRef> linked = new ArrayList<>(current.usesTerms());
+            linked.add(term);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryActor(), current.supportingActors(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    linked, current.constrainedBy());
+        });
+    }
+
+    @Override
+    public UseCase linkConstraint(ProjectId projectId, UseCaseCode code, String constraintCode) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(constraintCode, "constraintCode");
+        // Resolution does not depend on the use case's current state, so it happens once, outside
+        // the retry loop below - mirrors linkTerm() exactly, except the lookup crosses into the
+        // neighbouring requirements bounded context via ConstraintLookup rather than a
+        // same-module repository (see the class-level note).
+        ConstraintRef ref = new ConstraintRef(constraintLookup.resolveByCode(projectId, constraintCode));
+        return updateWithOptimisticRetry(projectId, code, null, null, false, false, false, false, false, false,
+                Set.of(), false, current -> {
+            if (current.constrainedBy().contains(ref)) {
+                return current;
+            }
+            List<ConstraintRef> linked = new ArrayList<>(current.constrainedBy());
+            linked.add(ref);
+            return new UseCase(current.id(), current.code(), current.title(), current.goal(), current.scope(),
+                    current.trigger(), current.primaryActor(), current.supportingActors(),
+                    current.precondition(), current.postcondition(), current.steps(), current.extensions(),
+                    current.usesTerms(), linked);
         });
     }
 

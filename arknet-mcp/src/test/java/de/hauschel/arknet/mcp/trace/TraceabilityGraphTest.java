@@ -85,6 +85,7 @@ class TraceabilityGraphTest {
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/trace-test-term-1";
     private static final String TERM_2_IRI = "https://w3id.org/arknet/id/trace-test-term-2";
     private static final String TERM_4_IRI = "https://w3id.org/arknet/id/trace-test-term-4";
+    private static final String TERM_5_IRI = "https://w3id.org/arknet/id/trace-test-term-5";
     private static final String ACTOR_IRI = "https://w3id.org/arknet/id/trace-test-actor";
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/trace-test-fr-1";
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/trace-test-fr-2";
@@ -92,6 +93,7 @@ class TraceabilityGraphTest {
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-test-bc-1";
     private static final String CON_1_IRI = "https://w3id.org/arknet/id/trace-test-con-1";
     private static final String CON_2_IRI = "https://w3id.org/arknet/id/trace-test-con-2";
+    private static final String CON_3_IRI = "https://w3id.org/arknet/id/trace-test-con-3";
 
     private static final String RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     private static final String DCTERMS_DESCRIPTION = "http://purl.org/dc/terms/description";
@@ -116,11 +118,15 @@ class TraceabilityGraphTest {
                 lifecycle, DisplayLocale.DEFAULT, requirementsFunnel);
 
         // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
+        // CON-3: bound ONLY to UC1 via constrainedBy (issue #329) - never to any requirement.
         constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_1_IRI)),
                 new ConstraintCode("CON-1"), "JVM only", "Must run on the JVM.", ConstraintType.TECHNICAL), "en");
         constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_2_IRI)),
                 new ConstraintCode("CON-2"), "Budget cap", "Total spend must not exceed the approved budget.",
                 ConstraintType.BUSINESS), "en");
+        constraints.create(PROJECT, new Constraint(new ConstraintId(ResourceId.of(CON_3_IRI)),
+                new ConstraintCode("CON-3"), "Accessibility", "Must meet WCAG AA.", ConstraintType.REGULATORY),
+                "en");
 
         // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
         // referenced as UC1's primary actor - must NOT count as an orphan term.
@@ -138,6 +144,11 @@ class TraceabilityGraphTest {
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_4_IRI)), new TermCode("TERM-4"), "Vertrag",
                 "A binding agreement.", null), null);
+        // TERM-5: used ONLY by UC1's own arkreq:usesTerm edge (issue #329) - never by a
+        // requirement - must NOT count as an orphan term either.
+        terms.create(PROJECT, new Term(
+                new TermId(ResourceId.of(TERM_5_IRI)), new TermCode("TERM-5"), "Warenkorb",
+                "Where selected items are held before checkout.", null), null);
 
         // FR-1: uses TERM-1, realised by UC1. FR-2: uses nothing, realised by nothing (orphan).
         requirements.create(PROJECT, new Requirement(
@@ -153,13 +164,18 @@ class TraceabilityGraphTest {
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(), List.of(new AcceptanceCriterion(1, "Logout succeeds")), List.of()), null);
 
+        // UC1 additionally uses TERM-5 and is bound by CON-3 (issue #329) - neither edge exists
+        // on any requirement, so isReferencedTerm(TERM-5)/isConstraintReferenced(CON-3) are only
+        // true if the predicate-based traversal is genuinely subject-agnostic.
         useCases.create(PROJECT, new UseCase(
                 new UseCaseId(ResourceId.of(UC_1_IRI)), new UseCaseCode("UC1"), "Log in",
                 "Customer authenticates", null, null,
                 new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
                 List.of(new Step(1, "Customer enters credentials",
                         List.of(new RequirementRef(ResourceId.of(FR_1_IRI))))),
-                List.of()), null);
+                List.of(),
+                List.of(new de.hauschel.arknet.uc.domain.TermRef(ResourceId.of(TERM_5_IRI))),
+                List.of(new de.hauschel.arknet.uc.domain.ConstraintRef(ResourceId.of(CON_3_IRI)))), null);
 
         // BC-1: links TERM-4 via ubiquitousLanguageTerm, its own vision text does not name it -
         // graph-level accessors are what is under test here, text-mention matching is a
@@ -186,8 +202,31 @@ class TraceabilityGraphTest {
     }
 
     @Test
-    void termIrisContainsAllFourConceptsIncludingTheActorFacetted() {
-        assertThat(graph.termIris()).containsExactlyInAnyOrder(TERM_1_IRI, TERM_2_IRI, ACTOR_IRI, TERM_4_IRI);
+    void termIrisContainsAllFiveConceptsIncludingTheActorFacetted() {
+        assertThat(graph.termIris())
+                .containsExactlyInAnyOrder(TERM_1_IRI, TERM_2_IRI, ACTOR_IRI, TERM_4_IRI, TERM_5_IRI);
+    }
+
+    /**
+     * {@code arkreq:usesTerm}'s domain was widened from {@code arkreq:Requirement} alone to a
+     * union with {@code arkreq:UseCase} (issue #329) - the predicate-based traversal
+     * {@link TraceabilityGraph#isReferencedTerm(String)} already ignores the subject's own type,
+     * so a term used only by a use case must already count as referenced without any traversal
+     * change.
+     */
+    @Test
+    void isReferencedTermIsTrueForATermUsedOnlyByAUseCase() {
+        assertThat(graph.isReferencedTerm(TERM_5_IRI)).isTrue();
+    }
+
+    @Test
+    void usedTermsOfUc1ContainsTerm5() {
+        assertThat(graph.usedTerms(UC_1_IRI)).containsExactly(TERM_5_IRI);
+    }
+
+    @Test
+    void dependentsOfTerm5ReachesUc1Directly() {
+        assertThat(graph.dependents(TERM_5_IRI)).containsExactly(UC_1_IRI);
     }
 
     @Test
@@ -331,7 +370,8 @@ class TraceabilityGraphTest {
     @Test
     void termLabelsMapsEveryTermIriToItsPrefLabel() {
         assertThat(graph.termLabels()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                TERM_1_IRI, "Anmeldung", TERM_2_IRI, "Passwort", ACTOR_IRI, "Customer", TERM_4_IRI, "Vertrag"));
+                TERM_1_IRI, "Anmeldung", TERM_2_IRI, "Passwort", ACTOR_IRI, "Customer", TERM_4_IRI, "Vertrag",
+                TERM_5_IRI, "Warenkorb"));
     }
 
     /**
@@ -539,8 +579,25 @@ class TraceabilityGraphTest {
     }
 
     @Test
-    void constraintIrisContainsBothConstraints() {
-        assertThat(graph.constraintIris()).containsExactlyInAnyOrder(CON_1_IRI, CON_2_IRI);
+    void constraintIrisContainsAllThreeConstraints() {
+        assertThat(graph.constraintIris()).containsExactlyInAnyOrder(CON_1_IRI, CON_2_IRI, CON_3_IRI);
+    }
+
+    /**
+     * {@code oslc_rm:constrainedBy}'s subject was never restricted to {@code arkreq:Requirement}
+     * at the ontology level (no {@code rdfs:domain} at all) - {@code uc_link_constraint}
+     * (issue #329) is the first writer to actually use a {@code UseCase} subject. The
+     * predicate-based traversal already ignores the subject's own type, so a constraint bound
+     * only by a use case must already count as referenced without any traversal change.
+     */
+    @Test
+    void isConstraintReferencedIsTrueForAConstraintBoundOnlyByAUseCase() {
+        assertThat(graph.isConstraintReferenced(CON_3_IRI)).isTrue();
+    }
+
+    @Test
+    void dependentsOfCon3ReachesUc1Directly() {
+        assertThat(graph.dependents(CON_3_IRI)).containsExactly(UC_1_IRI);
     }
 
     @Test
