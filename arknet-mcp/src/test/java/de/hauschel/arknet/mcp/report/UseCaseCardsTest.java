@@ -110,8 +110,10 @@ class UseCaseCardsTest {
 
     /**
      * A use case's {@code usesTerm} edge (issue #329) is a plain chip list, mirroring
-     * {@code Primary actor} - not marked-up prose, since a use case's goal/step text carries no
-     * comparable "this text is about that term" fact.
+     * {@code Primary actor} - not marked-up prose. The mention scan that would back that markup
+     * ({@code TraceabilityGraph#unlinkedMentions()}) covers requirement, bounded-context and
+     * term-definition text only; widening it to use-case goal/step prose is a deliberately
+     * separate change (follow-up: issue #333).
      */
     @Test
     void showsUsedTermsAsAChipList() {
@@ -122,9 +124,11 @@ class UseCaseCardsTest {
                 new Block.Refs("Uses terms", List.of(new Ref("Warenkorb", "TERM-2", TERM_1.value()))));
     }
 
-    /** A use case has no {@code usesTerm} edge - only actor roles - so a glossary word in its goal
-     * has no edge that could be pleaded missing. Marking it up would demand a link the model has
-     * nowhere to put, which is why only requirement and bounded-context prose is analysed.
+    /**
+     * The mention scan behind the prose markup covers requirement, bounded-context and
+     * term-definition text only ({@code TraceabilityGraph#unlinkedMentions()}); use-case
+     * goal/step prose is out of scope until issue #333, so a glossary word in a use case's
+     * goal stays unmarked even though {@code usesTerm} (issue #329) could now back it.
      */
     @Test
     void leavesGlossaryWordsInTheGoalUnmarked() {

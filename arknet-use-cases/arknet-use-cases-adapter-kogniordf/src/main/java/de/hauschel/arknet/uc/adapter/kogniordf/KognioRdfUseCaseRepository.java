@@ -182,7 +182,6 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String ARKREQ_NAMESPACE = "https://w3id.org/arknet/requirements#";
     private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
     private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
-    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
 
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
 
@@ -190,7 +189,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String STEP_TYPE = ArkreqVocabulary.STEP_TYPE;
     private static final String REQUIREMENT_TYPE = ARKREQ_NAMESPACE + "Requirement";
     private static final String ACTOR_TYPE = ARKPROC_NAMESPACE + "Actor";
-    private static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String CONSTRAINT_TYPE = ARKREQ_NAMESPACE + "Constraint";
     private static final String USE_CASE_GOAL_PROPERTY = ArkreqVocabulary.USE_CASE_GOAL;
     private static final String DESIGN_SCOPE_PROPERTY = ARKREQ_NAMESPACE + "designScope";

@@ -44,7 +44,7 @@ public final class ArkreqVocabulary {
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String OSLC_RM_NAMESPACE = "http://open-services.net/ns/rm#";
 
-    /** {@code arkreq:usesTerm} - Requirement -&gt; glossary Term. */
+    /** {@code arkreq:usesTerm} - Requirement/UseCase -&gt; glossary Term (issue #329). */
     public static final String USES_TERM = NAMESPACE + "usesTerm";
 
     /** {@code arkreq:primaryActor} - UseCase -&gt; its primary actor (an actor-facetted Term). */
@@ -94,10 +94,10 @@ public final class ArkreqVocabulary {
     public static final String POSITION = NAMESPACE + "position";
 
     /**
-     * {@code oslc_rm:constrainedBy} - Requirement -&gt; Constraint. Reused from OSLC RM (not an
-     * {@code arkreq:}-namespaced predicate), same as {@code oslc_rm:satisfies}/
-     * {@code decomposedBy} the requirements ontology reuses without a local declaration - see
-     * {@code arknet-requirements.ttl}'s own comment on that convention.
+     * {@code oslc_rm:constrainedBy} - Requirement/UseCase -&gt; Constraint (issue #329). Reused
+     * from OSLC RM (not an {@code arkreq:}-namespaced predicate), same as
+     * {@code oslc_rm:satisfies}/{@code decomposedBy} the requirements ontology reuses without a
+     * local declaration - see {@code arknet-requirements.ttl}'s own comment on that convention.
      */
     public static final String CONSTRAINED_BY = OSLC_RM_NAMESPACE + "constrainedBy";
 
