@@ -40,15 +40,17 @@ import de.hauschel.arknet.uc.domain.UseCase;
  * every use case, and an identity neither resolves falls back to its IRI rather than being
  * dropped.</p>
  *
- * <p><strong>No marked-up prose here.</strong> A requirement's text is marked up against the
- * glossary because {@code arkreq:usesTerm} makes "this text is about that term" a fact the
- * model can hold. A use case's own {@code arkreq:usesTerm} edges (issue #329) are therefore
- * rendered as a plain chip list, mirroring {@code Primary actor}/{@code Supporting actors} -
- * <em>not</em> {@link RequirementCards}' prose-markup treatment of the same edge: a use case's
- * goal/step text carries no comparable "this text is about that term" fact the model can hold
- * (a glossary word in its goal or a step would have no edge that could ever be pleaded missing),
- * so there is nothing to mark up against, only the edge itself to list. Showing a marked-up gap
- * would demand a link the model has no place for; see {@link Span.TermGap}.</p>
+ * <p><strong>No marked-up prose here.</strong> A use case's own {@code arkreq:usesTerm} edges
+ * (issue #329) are rendered as a plain chip list, mirroring {@code Primary actor}/{@code
+ * Supporting actors} - <em>not</em> {@link RequirementCards}' prose-markup treatment of the same
+ * edge. Since issue #329 a glossary word in a goal or a step text <em>does</em> have an edge
+ * that could be pleaded missing, so the {@link Span.TermGap} argument that once ruled it out no
+ * longer holds; what rules it out here is scope: the mention scan that would produce those
+ * gaps ({@code TraceabilityGraph#unlinkedMentions()}, behind {@code orphan_check}'s "mentioned
+ * in text but not linked" list) covers requirement, bounded-context and term-definition text
+ * only, and widening it to use-case goal/step prose is a change of its own, deliberately left
+ * outside issue #329 (follow-up: issue #333). Until then this section lists the edge and
+ * never claims a gap it has not scanned for.</p>
  *
  * <p><strong>{@code constrainedBy} (issue #329) is deliberately not rendered here.</strong> No
  * resource type's {@code oslc_rm:constrainedBy} edge is rendered in this report today - not even

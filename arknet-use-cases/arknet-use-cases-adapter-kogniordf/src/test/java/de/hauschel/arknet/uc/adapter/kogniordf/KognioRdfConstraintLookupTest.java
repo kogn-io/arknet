@@ -96,6 +96,35 @@ class KognioRdfConstraintLookupTest {
     }
 
     /**
+     * The join is typed, not "whatever in this graph carries a {@code dcterms:identifier}": that
+     * the constraints graph holds constraint subjects only is an invariant of the sibling
+     * requirements bounded context, which this adapter can neither know nor enforce. Seeds a
+     * foreign identified resource beside the constraint and pins that it stays invisible - an
+     * untyped join would report the code as ambiguous instead of resolving it.
+     */
+    @Test
+    void ignoresAForeignIdentifiedResourceInTheSameGraph() {
+        String constraintIri = givenConstraint(PROJECT_A, "TCON-1");
+        seedForeignIdentifiedResource(PROJECT_A, "https://w3id.org/arknet/model/foreign/1", "TCON-1");
+
+        ResourceId resolved = constraintLookup.resolveByCode(PROJECT_A, "TCON-1");
+
+        assertEquals(ResourceId.of(constraintIri), resolved);
+    }
+
+    /** A business and a regulatory constraint resolve as well - the join lists all three types. */
+    @Test
+    void resolvesBusinessAndRegulatoryConstraintsToo() {
+        String business = "https://w3id.org/arknet/model/constraint/BCON-1";
+        String regulatory = "https://w3id.org/arknet/model/constraint/RCON-1";
+        givenTypedConstraint(PROJECT_A, business, "BCON-1", "BusinessConstraint");
+        givenTypedConstraint(PROJECT_A, regulatory, "RCON-1", "RegulatoryConstraint");
+
+        assertEquals(ResourceId.of(business), constraintLookup.resolveByCode(PROJECT_A, "BCON-1"));
+        assertEquals(ResourceId.of(regulatory), constraintLookup.resolveByCode(PROJECT_A, "RCON-1"));
+    }
+
+    /**
      * Writes a constraint straight into the requirements bounded context's constraints graph of
      * the shared project dataset - deliberately via raw SPARQL rather than
      * {@code KognioRdfConstraintRepository}, so this test does not couple the two bounded
@@ -108,12 +137,30 @@ class KognioRdfConstraintLookupTest {
     }
 
     private void givenConstraintAtIri(ProjectId projectId, String constraintIri, String identifier) {
-        String insert = "INSERT DATA { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
-                + "<" + constraintIri + "> a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
-                + "<http://purl.org/dc/terms/identifier> \"" + identifier + "\" } }";
+        givenTypedConstraint(projectId, constraintIri, identifier, "TechnicalConstraint");
+    }
+
+    private void givenTypedConstraint(ProjectId projectId, String constraintIri, String identifier,
+            String localTypeName) {
+        insert("<" + constraintIri + "> a <https://w3id.org/arknet/requirements#" + localTypeName + "> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + identifier + "\"", projectId);
+    }
+
+    /**
+     * Seeds a resource that is not a constraint but shares the graph and carries a
+     * {@code dcterms:identifier} - the shape issue #266's {@code arkreq:AcceptanceCriterion} took
+     * in the requirements graph.
+     */
+    private void seedForeignIdentifiedResource(ProjectId projectId, String iri, String identifier) {
+        insert("<" + iri + "> a <https://w3id.org/arknet/requirements#AcceptanceCriterion> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + identifier + "\"", projectId);
+    }
+
+    private void insert(String triples, ProjectId projectId) {
+        String update = "INSERT DATA { GRAPH <" + CONSTRAINTS_GRAPH + "> { " + triples + " } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update(insert);
+                tx.update(update);
                 return null;
             });
         }

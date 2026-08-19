@@ -435,12 +435,12 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                     () -> new UseCaseConcurrentlyModifiedException(projectId, useCase.code()),
                     tx -> {
                         // Capture usesTerm/constrainedBy edges deleteExisting is about to wipe but
-                        // that Requirement#usesTerms()/#constrainedBy() (and therefore graph, built
+                        // that UseCase#usesTerms()/#constrainedBy() (and therefore graph, built
                         // from useCase.usesTerms()/constrainedBy() above) could never have carried
-                        // in the first place: neither property carries an sh:nodeKind constraint,
-                        // so a store-first (ADR-005) edge may legally target a blank node, which
-                        // ResourceId cannot represent - read() below excludes it the same way
-                        // (FILTER(isIRI(...))). Mirrors
+                        // in the first place: both shapes carry sh:nodeKind sh:IRI, but that only
+                        // guards this adapter's own writes - a store-first (ADR-005) edge may
+                        // still target a blank node, which ResourceId cannot represent - read()
+                        // below excludes it the same way (FILTER(isIRI(...))). Mirrors
                         // KognioRdfRequirementRepository#replaceTriplesForUpdate's
                         // unjoinableUsesTerms/unjoinableConstrainedBy capture exactly.
                         String selectUnjoinableUsesTerms = "SELECT ?term WHERE { "
@@ -1001,10 +1001,11 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Reads the {@code arkreq:usesTerm} edges of one use case back as term references, ordered by
      * target IRI (RDF has no intrinsic statement order, and {@link UseCase} compares its
      * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
-     * {@code arkreq:usesTerm} carries no {@code sh:nodeKind} constraint, so a store-first
-     * (ADR-005) edge may legally target a blank node, which {@link ResourceId} cannot represent;
-     * such an edge never appears in {@link UseCase#usesTerms()} but survives a later update via
-     * the unjoinable-edge preservation in {@link #write}. Mirrors
+     * {@code usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but that only guards this
+     * adapter's own writes, so a store-first (ADR-005) edge may still target a blank node, which
+     * {@link ResourceId} cannot represent; such an edge never appears in
+     * {@link UseCase#usesTerms()} but survives a later update via the unjoinable-edge
+     * preservation in {@link #write}. Mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}.
      */
     private List<TermRef> readUsesTerms(DatasetHandle handle, String subject) {

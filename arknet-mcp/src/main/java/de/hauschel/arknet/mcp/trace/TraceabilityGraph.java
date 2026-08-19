@@ -259,9 +259,9 @@ public final class TraceabilityGraph {
      * @return the term IRIs a requirement or a use case uses via {@code arkreq:usesTerm}, sorted
      *         (issue #329 widened the edge's subject beyond Requirement).
      */
-    public List<String> usedTerms(String requirementIri) {
-        Objects.requireNonNull(requirementIri, "requirementIri");
-        return outgoingBySubject.getOrDefault(requirementIri, List.of()).stream()
+    public List<String> usedTerms(String subjectIri) {
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        return outgoingBySubject.getOrDefault(subjectIri, List.of()).stream()
                 .filter(t -> USES_TERM.equals(t.predicate()))
                 .map(Triple::object)
                 .filter(RdfNode.Resource.class::isInstance)

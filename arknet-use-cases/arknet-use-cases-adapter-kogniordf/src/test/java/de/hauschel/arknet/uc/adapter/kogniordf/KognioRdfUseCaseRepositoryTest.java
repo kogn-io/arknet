@@ -866,8 +866,8 @@ class KognioRdfUseCaseRepositoryTest {
 
     /**
      * A blank-node {@code usesTerm}/{@code constrainedBy} target is store-first-only (ADR-005;
-     * neither property carries {@code sh:nodeKind sh:IRI} on {@code usesTerm}, and {@code
-     * constrainedBy}'s {@code sh:nodeKind} only guards this adapter's own writes) - {@link
+     * both shapes carry {@code sh:nodeKind sh:IRI}, but that only guards this adapter's own
+     * writes, not what a store-first write already put there) - {@link
      * UseCase#usesTerms()}/{@link UseCase#constrainedBy()} can never carry it, so an update that
      * never reads it back must still not silently drop it from the store, mirroring
      * {@code KognioRdfRequirementRepositoryTest}'s identical regression test.

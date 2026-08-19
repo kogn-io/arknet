@@ -15,6 +15,7 @@ import io.kogn.rdf.terms.vocab.VocabDct;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
 import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
@@ -35,12 +36,19 @@ import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
  * {@code KognioRdfConstraintRepository}: ADR-008 forbids cross-BC adapter imports, only an
  * In-Adapter may consume a neighbour's In-Port.</p>
  *
- * <p><strong>No type filter.</strong> A constraint is typed one of
+ * <p><strong>Typed join.</strong> A constraint is typed one of
  * {@code arkreq:TechnicalConstraint}/{@code arkreq:BusinessConstraint}/
- * {@code arkreq:RegulatoryConstraint}; a type filter here would either need all three
- * alternatives (no benefit - {@code dcterms:identifier} within {@code CONSTRAINTS_GRAPH} already
- * scopes the join to constraint subjects) or would arbitrarily exclude two types, mirroring
- * {@code KognioRdfRequirementLookup}'s identical reasoning.</p>
+ * {@code arkreq:RegulatoryConstraint}, and the query joins on all three - deliberately not on
+ * {@code dcterms:identifier} within {@code CONSTRAINTS_GRAPH} alone. That the graph holds
+ * constraint subjects only is an invariant of the sibling requirements bounded context, which
+ * this adapter can neither know nor enforce: the day that context puts a second identified
+ * resource type there (the way issue #266 added {@code arkreq:AcceptanceCriterion} to the
+ * requirements graph), an untyped join would silently resolve it as a constraint, and the
+ * {@code sh:class} check would not catch it because this adapter writes the asserted type into
+ * the validation-only context itself. The requirements bounded context's own read path in the
+ * same graph filters on type for the same reason
+ * ({@code KognioRdfConstraintRepository#constraintWhereClause}), as does the sibling
+ * {@link KognioRdfTermLookup} ({@code ?term a skos:Concept}).</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) -
  * it never imports RDF4J or any other backend-specific type. The backend
@@ -50,6 +58,9 @@ import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 public final class KognioRdfConstraintLookup implements ConstraintLookup {
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
+    private static final String TECHNICAL_CONSTRAINT_TYPE = ArkreqVocabulary.TECHNICAL_CONSTRAINT_TYPE;
+    private static final String BUSINESS_CONSTRAINT_TYPE = ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE;
+    private static final String REGULATORY_CONSTRAINT_TYPE = ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE;
     // Mirrors the graph IRI the requirements bounded context's constraint out-adapter
     // (KognioRdfConstraintRepository) writes into. The bounded contexts share one project
     // dataset; resolving a constraint means reading across into that sibling graph.
@@ -73,7 +84,10 @@ public final class KognioRdfConstraintLookup implements ConstraintLookup {
         Objects.requireNonNull(constraintCode, "constraintCode");
 
         String query = "SELECT ?constraint WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
-                + "?constraint <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(constraintCode) + "\" } }";
+                + "VALUES ?type { <" + TECHNICAL_CONSTRAINT_TYPE + "> <" + BUSINESS_CONSTRAINT_TYPE
+                + "> <" + REGULATORY_CONSTRAINT_TYPE + "> } "
+                + "?constraint a ?type ; "
+                + "<" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(constraintCode) + "\" } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)

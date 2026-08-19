@@ -178,7 +178,7 @@ arkreq:scopedTo a owl:ObjectProperty ;
     rdfs:comment "Der Bounded Context, in dem diese Anforderung realisiert wird."@de .
 
 arkreq:usesTerm a owl:ObjectProperty ;
-    rdfs:domain [ owl:unionOf (arkreq:Requirement arkreq:UseCase) ] ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( arkreq:Requirement arkreq:UseCase ) ] ;
     rdfs:range  skos:Concept ;
     rdfs:label  "uses term"@en ;
     rdfs:comment "Ein Requirement oder ein UseCase verwendet einen Begriff der Ubiquitous Language (skos:Concept aus dem Glossar). Kann mehrfach vorkommen -- ein Triple pro Begriff. Zeigt auf die Term-Identitaet (dcterms:identifier, z.B. TERM-1), nicht auf das skos:prefLabel: die Kante bleibt damit stabil, wenn der Begriff umbenannt wird. Die Kante gehoert weiterhin der requirements-BC (UseCase wohnt im selben arkreq-Namespace), damit die Ubiquitous-Language-BC unabhaengig bleibt (Issue #329)."@de .
