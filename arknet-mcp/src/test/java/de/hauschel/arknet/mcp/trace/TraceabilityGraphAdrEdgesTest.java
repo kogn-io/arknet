@@ -81,7 +81,7 @@ class TraceabilityGraphAdrEdgesTest {
 
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
-                "The system shall authenticate a user.",
+                "The system shall authenticate a user.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(), List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
         boundedContexts.create(PROJECT, new BoundedContext(

@@ -56,6 +56,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     private final Set<RequirementId> legacyAcceptanceCriteria = new HashSet<>();
     private final Map<RequirementId, String> titleLanguageByIdentity = new LinkedHashMap<>();
     private final Map<RequirementId, String> descriptionLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<RequirementId, String> rationaleLanguageByIdentity = new LinkedHashMap<>();
     private final Map<RequirementId, Map<Integer, String>> acceptanceCriteriaLanguageByIdentity =
             new LinkedHashMap<>();
 
@@ -78,6 +79,9 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         headByIdentity.put(requirement.id(), new RevisionToken(UUID.randomUUID().toString()));
         titleLanguageByIdentity.put(requirement.id(), language);
         descriptionLanguageByIdentity.put(requirement.id(), language);
+        // Null tag for a requirement created without a rationale: there is no literal to tag, and
+        // findCurrentByCode must report the same null the real adapter reports for it (issue #321).
+        rationaleLanguageByIdentity.put(requirement.id(), requirement.rationale() == null ? null : language);
         Map<Integer, String> criteriaLanguages = new LinkedHashMap<>();
         requirement.acceptanceCriteria().forEach(criterion -> criteriaLanguages.put(criterion.position(), language));
         acceptanceCriteriaLanguageByIdentity.put(requirement.id(), criteriaLanguages);
@@ -85,7 +89,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
 
     @Override
     public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-            String titleLanguage, String descriptionLanguage,
+            String titleLanguage, String descriptionLanguage, String rationaleLanguage,
             Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
         // This fake stores a single title/description value per identity (no multi-valued
         // literals), so there is nothing for it to sweep - defaultLanguage only matters to the
@@ -103,6 +107,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         headByIdentity.put(updated.id(), new RevisionToken(UUID.randomUUID().toString()));
         titleLanguageByIdentity.put(updated.id(), titleLanguage);
         descriptionLanguageByIdentity.put(updated.id(), descriptionLanguage);
+        rationaleLanguageByIdentity.put(updated.id(), updated.rationale() == null ? null : rationaleLanguage);
         acceptanceCriteriaLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(acceptanceCriteriaLanguageByPosition));
         // Mirrors the real adapter's replace-by-identity write: whatever acceptanceCriteria
         // `updated` carries is written as real triples, so the identity is never legacy again
@@ -126,6 +131,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
                         legacyAcceptanceCriteria.contains(requirement.id()),
                         titleLanguageByIdentity.get(requirement.id()),
                         descriptionLanguageByIdentity.get(requirement.id()),
+                        rationaleLanguageByIdentity.get(requirement.id()),
                         acceptanceCriteriaLanguageByIdentity.getOrDefault(requirement.id(), Map.of())));
     }
 

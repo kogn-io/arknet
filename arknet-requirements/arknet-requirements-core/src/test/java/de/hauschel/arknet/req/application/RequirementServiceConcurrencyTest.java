@@ -133,7 +133,7 @@ class RequirementServiceConcurrencyTest {
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
 
-        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null, null, DEFAULT_LANGUAGE);
+        Requirement result = underTest.update(WS, code, null, "Corrected description", null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Corrected description", result.description());
         assertEquals(List.of(new TermRef(TERM_1)), result.usesTerms());
@@ -189,7 +189,7 @@ class RequirementServiceConcurrencyTest {
     }
 
     private static NewRequirement newFunctionalRequirement() {
-        return new NewRequirement("User can log in", "The system shall let a registered user authenticate.",
+        return new NewRequirement("User can log in", "The system shall let a registered user authenticate.", null,
                 RequirementType.FUNCTIONAL, null, null, null, List.of("Done when it works"), null);
     }
 
@@ -229,9 +229,10 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-                String titleLanguage, String descriptionLanguage,
+                String titleLanguage, String descriptionLanguage, String rationaleLanguage,
                 java.util.Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, descriptionLanguage,
+                    rationaleLanguage,
                     acceptanceCriteriaLanguageByPosition, defaultLanguage);
         }
 
@@ -286,9 +287,10 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-                String titleLanguage, String descriptionLanguage,
+                String titleLanguage, String descriptionLanguage, String rationaleLanguage,
                 java.util.Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
             delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, descriptionLanguage,
+                    rationaleLanguage,
                     acceptanceCriteriaLanguageByPosition, defaultLanguage);
         }
 
@@ -340,7 +342,7 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Requirement updated,
-                String titleLanguage, String descriptionLanguage,
+                String titleLanguage, String descriptionLanguage, String rationaleLanguage,
                 java.util.Map<Integer, String> acceptanceCriteriaLanguageByPosition, String defaultLanguage) {
             compareAndUpdateAttempts++;
             // Still enforce "must exist", same as the real contract - only ever report a conflict.

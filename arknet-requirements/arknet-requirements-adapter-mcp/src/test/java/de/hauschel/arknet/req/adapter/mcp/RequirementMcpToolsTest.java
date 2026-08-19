@@ -4,6 +4,7 @@
 package de.hauschel.arknet.req.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,6 +61,9 @@ class RequirementMcpToolsTest {
 
     private static final RequirementId ID =
             new RequirementId(ResourceId.of("https://w3id.org/arknet/id/11111111-1111-1111-1111-111111111111"));
+
+    private static final String RATIONALE =
+            "so that support stops resetting passwords by hand for every locked-out user";
 
     /** Fake resolver: every call routes to the same fixed project, ignoring the origin. */
     private static final ProjectId PROJECT = new ProjectId("test-project");
@@ -176,7 +180,7 @@ class RequirementMcpToolsTest {
     void addPassesAcceptanceCriteriaThroughAndRendersThem() {
         List<String> criteria = List.of("Login succeeds with valid credentials", "Login is rate-limited");
 
-        String rendered = adapter.add(null, "t", "d", "FUNCTIONAL", criteria, null, null, null, null, null);
+        String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", criteria, null, null, null, null, null);
 
         assertEquals(criteria, stub.lastAddCommand.acceptanceCriteria());
         assertTrue(rendered.contains("[done when: Login succeeds with valid credentials; Login is rate-limited]"),
@@ -190,7 +194,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void addRendersTheNormativeDescriptionAlongsideTheTitle() {
-        String rendered = adapter.add(null, "Login", "The system shall authenticate users via OAuth2",
+        String rendered = adapter.add(null, "Login", "The system shall authenticate users via OAuth2", null,
                 "FUNCTIONAL", List.of("Done when it works"), null, null, null, null, null);
 
         assertTrue(rendered.contains("The system shall authenticate users via OAuth2"), rendered);
@@ -204,7 +208,53 @@ class RequirementMcpToolsTest {
     @Test
     void addWithoutAcceptanceCriteriaIsRejectedByTheDomainInvariant() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "t", "d", "FUNCTIONAL", null, null, null, null, null, null));
+                () -> adapter.add(null, "t", "d", null, "FUNCTIONAL", null, null, null, null, null, null));
+    }
+
+    // --- rationale (issue #321) --------------------------------------------------------------
+
+    /** {@code req_add}'s optional rationale reaches {@link AddRequirement} and is rendered. */
+    @Test
+    void addPassesTheRationaleThroughAndRendersIt() {
+        String rendered = adapter.add(null, "t", "d", RATIONALE, "FUNCTIONAL", List.of("Done when it works"),
+                null, null, null, null, null);
+
+        assertEquals(RATIONALE, stub.lastAddCommand.rationale());
+        assertTrue(rendered.contains("[why: " + RATIONALE + "]"), rendered);
+    }
+
+    /** A requirement without a recorded reason renders no {@code [why: ]} block at all. */
+    @Test
+    void addWithoutARationaleRendersNoWhyBlock() {
+        String rendered = adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"),
+                null, null, null, null, null);
+
+        assertNull(stub.lastAddCommand.rationale());
+        assertFalse(rendered.contains("[why:"), rendered);
+    }
+
+    /** A blank rationale is treated as omitted, mirroring every other optional string field. */
+    @Test
+    void addTreatsABlankRationaleAsOmitted() {
+        adapter.add(null, "t", "d", "   ", "FUNCTIONAL", List.of("Done when it works"), null, null, null, null, null);
+
+        assertNull(stub.lastAddCommand.rationale());
+    }
+
+    /** {@code req_update} carries the rationale down to {@link UpdateRequirement}. */
+    @Test
+    void updatePassesTheRationaleThrough() {
+        adapter.update(null, "FR-1", null, null, RATIONALE, null, null, null, null, null);
+
+        assertEquals(RATIONALE, stub.lastUpdateRationale);
+    }
+
+    /** An omitted rationale reaches the port as {@code null} - "leave it alone", never "remove it". */
+    @Test
+    void updateWithoutARationalePassesNullThrough() {
+        adapter.update(null, "FR-1", "New title", null, null, null, null, null, null, null);
+
+        assertNull(stub.lastUpdateRationale);
     }
 
     /**
@@ -217,7 +267,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void addPassesTheLanguageThrough() {
-        adapter.add(null, "t", "d", "FUNCTIONAL", List.of("Done when it works"), null, null, null, "de", null);
+        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, null, "de", null);
 
         assertEquals("de", stub.lastAddCommand.language());
     }
@@ -225,7 +275,7 @@ class RequirementMcpToolsTest {
     /** A blank {@code language} is treated as omitted (untagged), mirroring every other optional field. */
     @Test
     void addTreatsABlankLanguageAsOmitted() {
-        adapter.add(null, "t", "d", "FUNCTIONAL", List.of("Done when it works"), null, null, null, "  ", null);
+        adapter.add(null, "t", "d", null, "FUNCTIONAL", List.of("Done when it works"), null, null, null, "  ", null);
 
         assertEquals(null, stub.lastAddCommand.language());
     }
@@ -350,7 +400,7 @@ class RequirementMcpToolsTest {
     void updatePassesAllGivenFieldsThroughToTheInPort() {
         List<String> criteria = List.of("Bundesueberweisung braucht eine Kopfzahl");
 
-        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", criteria, null,
+        String rendered = adapter.update(null, "FR-1", "Neuer Titel", "Neue Beschreibung", null, criteria, null,
                 "SHOULD_HAVE", null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
@@ -364,7 +414,7 @@ class RequirementMcpToolsTest {
     /** {@code req_update}'s {@code acceptanceCriteriaTextPatches} reach {@link UpdateRequirement} unchanged. */
     @Test
     void updatePassesAcceptanceCriteriaTextPatchesThroughToTheInPort() {
-        adapter.update(null, "FR-1", null, null, null,
+        adapter.update(null, "FR-1", null, null, null, null,
                 List.of(new RequirementMcpTools.AcceptanceCriterionPatchInput(1, "Korrigierter Text")), null, null,
                 null);
 
@@ -379,7 +429,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "FR-1", null, null, null, null, null, null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, null, null, null);
 
         assertEquals(new RequirementCode("FR-1"), stub.lastUpdatedRequirement);
         assertEquals(null, stub.lastUpdateTitle);
@@ -397,7 +447,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateCanCorrectOnlyThePriority() {
-        String rendered = adapter.update(null, "FR-1", null, null, null, null, "SHOULD_HAVE", null, null);
+        String rendered = adapter.update(null, "FR-1", null, null, null, null, null, "SHOULD_HAVE", null, null);
 
         assertEquals(Priority.SHOULD_HAVE, stub.lastUpdatePriority);
         assertEquals(null, stub.lastUpdateTitle);
@@ -413,7 +463,7 @@ class RequirementMcpToolsTest {
      */
     @Test
     void updateTreatsABlankPriorityAsOmitted() {
-        adapter.update(null, "FR-1", null, null, null, null, "  ", null, null);
+        adapter.update(null, "FR-1", null, null, null, null, null, "  ", null, null);
 
         assertEquals(null, stub.lastUpdatePriority);
     }
@@ -422,13 +472,13 @@ class RequirementMcpToolsTest {
     @Test
     void updateRejectsAnUnknownPriority() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "FR-1", null, null, null, null, "NICE_TO_HAVE", null, null));
+                () -> adapter.update(null, "FR-1", null, null, null, null, null, "NICE_TO_HAVE", null, null));
     }
 
     /** {@code req_update}'s {@code language} argument reaches {@link UpdateRequirement} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, "de", null);
+        adapter.update(null, "FR-1", "Neuer Titel", null, null, null, null, null, "de", null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -531,7 +581,7 @@ class RequirementMcpToolsTest {
 
     private static Requirement requirementWithTerms(String code, ResourceId... termIds) {
         List<TermRef> terms = Arrays.stream(termIds).map(TermRef::new).toList();
-        return new Requirement(ID, new RequirementCode(code), "t", "d", RequirementType.FUNCTIONAL,
+        return new Requirement(ID, new RequirementCode(code), "t", "d", null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, terms, DEFAULT_CRITERIA, List.of());
     }
 
@@ -554,6 +604,7 @@ class RequirementMcpToolsTest {
         private RequirementCode lastUpdatedRequirement;
         private String lastUpdateTitle;
         private String lastUpdateDescription;
+        private String lastUpdateRationale;
         private List<String> lastUpdateNewAcceptanceCriteria;
         private List<AcceptanceCriterionTextPatch> lastUpdateAcceptanceCriteriaTextPatches;
         private Priority lastUpdatePriority;
@@ -564,6 +615,7 @@ class RequirementMcpToolsTest {
         public Requirement add(ProjectId projectId, NewRequirement command, String defaultLanguage) {
             lastAddCommand = command;
             return new Requirement(ID, new RequirementCode("FR-1"), command.title(), command.description(),
+                    command.rationale(),
                     command.type(), RequirementStatus.PROPOSED, command.priority(), command.motivatedBy(),
                     command.qualityCategory(), List.of(), toCriteria(command.acceptanceCriteria()), List.of());
         }
@@ -579,7 +631,7 @@ class RequirementMcpToolsTest {
         @Override
         public Optional<Requirement> get(ProjectId projectId, RequirementCode code, String displayLocale) {
             lastGetDisplayLocale = displayLocale;
-            return Optional.of(new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL,
+            return Optional.of(new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL,
                     RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA,
                     List.of()));
         }
@@ -587,14 +639,14 @@ class RequirementMcpToolsTest {
         @Override
         public Requirement accept(ProjectId projectId, RequirementCode code) {
             lastAcceptedRequirement = code;
-            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.ACCEPTED,
                     Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
         }
 
         @Override
         public Requirement propose(ProjectId projectId, RequirementCode code) {
             lastProposedRequirement = code;
-            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of());
         }
 
@@ -610,7 +662,7 @@ class RequirementMcpToolsTest {
                 ids.add(ResourceId.of("https://w3id.org/arknet/id/" + termCode));
             }
             List<TermRef> terms = ids.stream().map(TermRef::new).toList();
-            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, terms, DEFAULT_CRITERIA, List.of());
         }
 
@@ -621,7 +673,7 @@ class RequirementMcpToolsTest {
             ResourceId id = nextLinkedConstraintResourceId != null
                     ? nextLinkedConstraintResourceId
                     : ResourceId.of("https://w3id.org/arknet/id/" + constraintCode);
-            return new Requirement(ID, code, "t", "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+            return new Requirement(ID, code, "t", "d", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
                     Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA, List.of(new ConstraintRef(id)));
         }
 
@@ -633,17 +685,20 @@ class RequirementMcpToolsTest {
 
         @Override
         public Requirement update(ProjectId projectId, RequirementCode code, String title, String description,
-                List<String> newAcceptanceCriteria, List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
+                String rationale, List<String> newAcceptanceCriteria,
+                List<AcceptanceCriterionTextPatch> acceptanceCriteriaTextPatches,
                 Priority priority, String language, String defaultLanguage) {
             lastUpdatedRequirement = code;
             lastUpdateTitle = title;
             lastUpdateDescription = description;
+            lastUpdateRationale = rationale;
             lastUpdateNewAcceptanceCriteria = newAcceptanceCriteria;
             lastUpdateAcceptanceCriteriaTextPatches = acceptanceCriteriaTextPatches;
             lastUpdatePriority = priority;
             lastUpdateLanguage = language;
             Requirement base = new Requirement(ID, code, title != null ? title : "t",
-                    description != null ? description : "d", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED,
+                    description != null ? description : "d", rationale, RequirementType.FUNCTIONAL,
+                    RequirementStatus.PROPOSED,
                     priority != null ? priority : Priority.MUST_HAVE, null, null, List.of(), DEFAULT_CRITERIA,
                     List.of());
             base = base.withAppendedAcceptanceCriteria(newAcceptanceCriteria);

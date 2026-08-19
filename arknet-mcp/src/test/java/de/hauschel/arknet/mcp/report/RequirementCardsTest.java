@@ -104,6 +104,43 @@ class RequirementCardsTest {
     }
 
     /**
+     * The recorded reason gets its own block, right after the statement it explains - and it is
+     * prose like any other, so the glossary marks it up too (issue #321).
+     */
+    @Test
+    void rendersTheRationaleAsItsOwnGlossaryMarkedBlock() {
+        final RequirementCards cards = cardsFor(requirement(
+                "Etwas ganz anderes.", "Damit der Kunde nicht abspringt.", List.of(KUNDE), List.of()));
+
+        final Block.Prose rationale = (Block.Prose) block(cards, "Rationale");
+
+        assertThat(rationale.text().spans()).contains(new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
+    }
+
+    /**
+     * The field is optional (issue #321), so a requirement whose reason nobody recorded gets no
+     * block at all - an empty "Rationale" heading would read as a recorded blank.
+     */
+    @Test
+    void omitsTheRationaleBlockEntirelyWhenNoneIsRecorded() {
+        final RequirementCards cards = cardsFor(requirement("Etwas ganz anderes.", List.of(), List.of()));
+
+        assertThat(labels(cards)).doesNotContain("Rationale");
+    }
+
+    /**
+     * A term named only in the rationale counts as named: the unlinked-mention sweep scans it
+     * alongside the description and the criteria, so it must not also appear as a chip.
+     */
+    @Test
+    void countsTermsNamedOnlyInTheRationaleAsNamedInTheText() {
+        final RequirementCards cards = cardsFor(requirement(
+                "Etwas ganz anderes.", "Damit die Lieferadresse stimmt.", List.of(LIEFERADRESSE), List.of()));
+
+        assertThat(labels(cards)).doesNotContain("Uses terms (not named in the text)");
+    }
+
+    /**
      * Regression test for issue #143: sorting {@code String} codes naturally puts {@code FR-10}
      * before {@code FR-2} once a project passes ten requirements.
      */
@@ -148,9 +185,15 @@ class RequirementCardsTest {
 
     private static Requirement requirement(
             final String description, final List<ResourceId> linked, final List<String> criteria) {
+        return requirement(description, null, linked, criteria);
+    }
+
+    /** {@link #requirement(String, List, List)} carrying a rationale (issue #321). */
+    private static Requirement requirement(final String description, final String rationale,
+            final List<ResourceId> linked, final List<String> criteria) {
         return new Requirement(
                 new RequirementId(ResourceId.of(ID + "fr-1")),
-                new RequirementCode("FR-1"), "Bestellen", description,
+                new RequirementCode("FR-1"), "Bestellen", description, rationale,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 linked.stream().map(TermRef::new).toList(),
                 toCriteria(criteria.isEmpty() ? List.of("Es funktioniert.") : criteria), List.of());
@@ -159,7 +202,7 @@ class RequirementCardsTest {
     private static Requirement requirement(final String code, final String iri, final String title) {
         return new Requirement(
                 new RequirementId(ResourceId.of(iri)), new RequirementCode(code), title,
-                "Beschreibung.", RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
+                "Beschreibung.", null, RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE,
                 null, null, List.of(), toCriteria(List.of("Es funktioniert.")), List.of());
     }
 

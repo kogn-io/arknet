@@ -105,7 +105,7 @@ class StoreReportToolsTest {
 
         fr1 = new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
-                "The system shall authenticate a user.",
+                "The system shall authenticate a user.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
         term1 = new Term(
@@ -368,7 +368,7 @@ class StoreReportToolsTest {
             requirements.create(underscoreProject, new Requirement(
                     new RequirementId(ResourceId.of("https://w3id.org/arknet/id/store-report-test-fr-collide")),
                     new RequirementCode("FR-1"), "Zweitprojekt",
-                    "The system shall authenticate a second user.",
+                    "The system shall authenticate a second user.", null,
                     RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
                     List.of(new AcceptanceCriterion(1, "Zweitprojekt succeeds")), List.of()), null);
 
@@ -641,7 +641,7 @@ class StoreReportToolsTest {
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         requirements.create(OTHER_PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(otherFr1Iri)), new RequirementCode("FR-1"), "Andere Anmeldung",
-                "The system shall authenticate a user in the other project.",
+                "The system shall authenticate a user in the other project.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of()), null);
 
@@ -687,10 +687,10 @@ class StoreReportToolsTest {
         RequirementRepository.CurrentRequirement current =
                 requirements.findCurrentByCode(PROJECT, fr1.code()).orElseThrow();
         Requirement updated = new Requirement(
-                fr1.id(), fr1.code(), "Login v2", fr1.description(), fr1.type(), fr1.status(), fr1.priority(),
+                fr1.id(), fr1.code(), "Login v2", fr1.description(), null, fr1.type(), fr1.status(), fr1.priority(),
                 null, null, null, fr1.acceptanceCriteria(), List.of());
         requirements.compareAndUpdate(
-                PROJECT, current.head(), updated, null, null, noAcceptanceCriteriaLanguages(updated), null);
+                PROJECT, current.head(), updated, null, null, null, noAcceptanceCriteriaLanguages(updated), null);
 
         String result = tools.resourceHistory(null, "FR-1", ANCHOR);
 

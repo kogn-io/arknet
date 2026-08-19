@@ -80,6 +80,9 @@ final class RequirementPresenter {
     String format(final Requirement r, final Map<ResourceId, ResolvedTerm> termsById,
             final Map<ResourceId, ResolvedConstraint> constraintsById) {
         final String priority = r.priority() == null ? "" : " {" + r.priority() + "}";
+        // Rendered right after the normative statement it explains, and omitted entirely when no
+        // reason was recorded (issue #321) - an empty "[why: ]" would read as a recorded blank.
+        final String rationale = r.rationale() == null ? "" : " [why: " + r.rationale() + "]";
         final String terms = r.usesTerms().isEmpty()
                 ? ""
                 : " [terms: " + r.usesTerms().stream().map(ref -> renderTerm(ref, termsById))
@@ -91,9 +94,9 @@ final class RequirementPresenter {
         final String criteria = " [done when: " + r.acceptanceCriteria().stream()
                 .map(AcceptanceCriterion::text)
                 .collect(Collectors.joining("; ")) + "]";
-        return "%s [%s] %s (%s)%s: %s%s%s%s".formatted(
-                r.code().value(), r.type(), r.title(), r.status(), priority, r.description(), terms, constraints,
-                criteria);
+        return "%s [%s] %s (%s)%s: %s%s%s%s%s".formatted(
+                r.code().value(), r.type(), r.title(), r.status(), priority, r.description(), rationale, terms,
+                constraints, criteria);
     }
 
     /** Renders one schema term as {@code term: definition (values: A, B, ...)}. */

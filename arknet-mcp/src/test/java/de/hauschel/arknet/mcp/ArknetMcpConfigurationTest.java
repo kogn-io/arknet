@@ -78,7 +78,7 @@ class ArknetMcpConfigurationTest {
                     RequirementService service = context.getBean(RequirementService.class);
                     Requirement created = service.add(PROJECT,
                             new NewRequirement("Wired via composition root",
-                                    "The composition root shall wire the requirements hexagon.",
+                                    "The composition root shall wire the requirements hexagon.", null,
                                     RequirementType.FUNCTIONAL, null, null, null,
                                     List.of("The requirement round-trips through the store"), null), "en");
 
@@ -235,7 +235,7 @@ class ArknetMcpConfigurationTest {
                     RequirementService requirements = context.getBean(RequirementService.class);
                     Requirement before = requirements.add(legacy,
                             new NewRequirement("Written before ADR-016",
-                                    "The system shall keep data written under a derived id reachable.",
+                                    "The system shall keep data written under a derived id reachable.", null,
                                     RequirementType.FUNCTIONAL, null, null, null,
                                     List.of("The requirement survives adoption"), null), "en");
 

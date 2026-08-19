@@ -101,7 +101,7 @@ class CrossBoundedContextStoreWiringTest {
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
-                            "The system shall let a customer place an order.",
+                            "The system shall let a customer place an order.", null,
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
                     terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
@@ -183,7 +183,7 @@ class CrossBoundedContextStoreWiringTest {
                     TermService terms = context.getBean(TermService.class);
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
-                            "The system shall let a customer place an order.",
+                            "The system shall let a customer place an order.", null,
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
                     Term order = terms.add(PROJECT, new NewTerm("Order", "A customer's request to buy.", null, null), "en");
@@ -209,7 +209,7 @@ class CrossBoundedContextStoreWiringTest {
                     RequirementService requirements = context.getBean(RequirementService.class);
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
-                            "The system shall let a customer place an order.",
+                            "The system shall let a customer place an order.", null,
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
 

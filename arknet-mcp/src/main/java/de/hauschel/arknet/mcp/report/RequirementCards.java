@@ -81,10 +81,20 @@ public final class RequirementCards {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         final List<String> texts = new ArrayList<>();
         texts.add(requirement.description());
+        if (requirement.rationale() != null) {
+            texts.add(requirement.rationale());
+        }
         requirement.acceptanceCriteria().stream().map(AcceptanceCriterion::text).forEach(texts::add);
 
         final List<Block> blocks = new ArrayList<>();
         blocks.add(new Block.Prose("Description", glossary.markUp(requirement.description(), linked)));
+        if (requirement.rationale() != null) {
+            // Right after the statement it explains, and glossary-marked like every other prose
+            // block - a reason names the same domain terms the requirement itself does (issue
+            // #321). Absent for a requirement whose reason nobody recorded: the field is
+            // optional, so no block beats an empty one.
+            blocks.add(new Block.Prose("Rationale", glossary.markUp(requirement.rationale(), linked)));
+        }
         blocks.add(new Block.Bullets("Acceptance criteria", requirement.acceptanceCriteria().stream()
                 .map(criterion -> new BulletItem(criterion.position(), glossary.markUp(criterion.text(), linked)))
                 .toList()));

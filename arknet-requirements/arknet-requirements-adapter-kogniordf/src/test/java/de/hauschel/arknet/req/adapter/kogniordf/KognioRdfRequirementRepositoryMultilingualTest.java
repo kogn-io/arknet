@@ -5,6 +5,7 @@ package de.hauschel.arknet.req.adapter.kogniordf;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,7 +81,13 @@ class KognioRdfRequirementRepositoryMultilingualTest {
 
     private static Requirement requirement(RequirementId id, RequirementCode code, String title,
             String description) {
-        return new Requirement(id, code, title, description, RequirementType.FUNCTIONAL,
+        return requirement(id, code, title, description, null);
+    }
+
+    /** {@link #requirement(RequirementId, RequirementCode, String, String)} carrying a rationale. */
+    private static Requirement requirement(RequirementId id, RequirementCode code, String title,
+            String description, String rationale) {
+        return new Requirement(id, code, title, description, rationale, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null,
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
     }
@@ -111,7 +118,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement withGermanTitle = requirement(created.id(), code, "Anmeldung",
                 "The system shall authenticate a user.");
         repository.compareAndUpdate(
-                PROJECT_A, head, withGermanTitle, "de", "en", noAcceptanceCriteriaLanguages(withGermanTitle), null);
+                PROJECT_A, head, withGermanTitle, "de", "en", null, noAcceptanceCriteriaLanguages(withGermanTitle), null);
 
         Requirement asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -136,11 +143,11 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         repository.create(PROJECT_A, created, "en");
         RevisionToken head = currentHead(code);
 
-        Requirement statusChangeOnly = new Requirement(created.id(), code, created.title(), created.description(),
+        Requirement statusChangeOnly = new Requirement(created.id(), code, created.title(), created.description(), null,
                 created.type(), RequirementStatus.ACCEPTED, created.priority(), created.motivatedBy(),
                 created.qualityCategory(), created.usesTerms(), created.acceptanceCriteria(), List.of());
         repository.compareAndUpdate(
-                PROJECT_A, head, statusChangeOnly, "en", "en", noAcceptanceCriteriaLanguages(statusChangeOnly), null);
+                PROJECT_A, head, statusChangeOnly, "en", "en", null, noAcceptanceCriteriaLanguages(statusChangeOnly), null);
 
         Requirement reloaded = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         assertEquals("Login", reloaded.title());
@@ -158,7 +165,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
 
         Requirement withGermanDescription = requirement(created.id(), code, "Login",
                 "Das System soll einen Benutzer authentifizieren.");
-        repository.compareAndUpdate(PROJECT_A, head, withGermanDescription, "en", "de",
+        repository.compareAndUpdate(PROJECT_A, head, withGermanDescription, "en", "de", null,
                 noAcceptanceCriteriaLanguages(withGermanDescription), null);
 
         Requirement asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
@@ -207,13 +214,13 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"),
                 created.acceptanceCriteria().get(1));
         Requirement withGermanFirstCriterion = new Requirement(created.id(), code, created.title(),
-                created.description(), created.type(), created.status(), created.priority(),
+                created.description(), null, created.type(), created.status(), created.priority(),
                 created.motivatedBy(), created.qualityCategory(), created.usesTerms(), updatedCriteria,
                 created.constrainedBy());
         Map<Integer, String> languages = new LinkedHashMap<>();
         languages.put(1, "de");
         languages.put(2, "en");
-        repository.compareAndUpdate(PROJECT_A, head, withGermanFirstCriterion, "en", "en", languages, null);
+        repository.compareAndUpdate(PROJECT_A, head, withGermanFirstCriterion, "en", "en", null, languages, null);
 
         Requirement asEnglish = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
         Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -241,12 +248,12 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         List<AcceptanceCriterion> updatedCriteria =
                 List.of(new AcceptanceCriterion(1, "Anmeldung gelingt mit gueltigen Zugangsdaten"));
         Requirement withGermanCriterion = new Requirement(current.value().id(), code, current.value().title(),
-                current.value().description(), current.value().type(), current.value().status(),
+                current.value().description(), null, current.value().type(), current.value().status(),
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
                 current.value().usesTerms(), updatedCriteria, current.value().constrainedBy());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), withGermanCriterion, current.titleLanguage(),
-                current.descriptionLanguage(), Map.of(1, "de"), "de");
+                current.descriptionLanguage(), null, Map.of(1, "de"), "de");
 
         assertEquals(1, countAcceptanceCriterionTextLiterals(PROJECT_A, id));
         Requirement reloaded = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
@@ -268,7 +275,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement withGermanTitle = requirement(created.id(), code, "Anmeldung",
                 "The system shall authenticate a user.");
         repository.compareAndUpdate(
-                PROJECT_A, head, withGermanTitle, "de", "en", noAcceptanceCriteriaLanguages(withGermanTitle), null);
+                PROJECT_A, head, withGermanTitle, "de", "en", null, noAcceptanceCriteriaLanguages(withGermanTitle), null);
         RequirementRepository germanReader = readerFor(Locale.GERMAN, Locale.ENGLISH);
 
         List<Requirement> all = germanReader.findAll(PROJECT_A, null);
@@ -296,7 +303,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         Requirement withGermanTitle = requirement(created.id(), code, "Anmeldung",
                 "The system shall authenticate a user.");
         repository.compareAndUpdate(
-                PROJECT_A, head, withGermanTitle, "de", "en", noAcceptanceCriteriaLanguages(withGermanTitle), null);
+                PROJECT_A, head, withGermanTitle, "de", "en", null, noAcceptanceCriteriaLanguages(withGermanTitle), null);
         RequirementRepository englishReader = readerFor(Locale.ENGLISH, Locale.ENGLISH);
 
         List<Requirement> all = englishReader.findAll(PROJECT_A, "de");
@@ -317,7 +324,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         for (String text : criteriaTexts) {
             criteria.add(new AcceptanceCriterion(position++, text));
         }
-        return new Requirement(id, code, title, description, RequirementType.FUNCTIONAL,
+        return new Requirement(id, code, title, description, null, RequirementType.FUNCTIONAL,
                 RequirementStatus.PROPOSED, null, null, null, null, criteria, List.of());
     }
 
@@ -372,11 +379,11 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
                 .orElseThrow();
         Requirement withGermanTitle = new Requirement(current.value().id(), code, "Anmeldung",
-                current.value().description(), current.value().type(), current.value().status(),
+                current.value().description(), null, current.value().type(), current.value().status(),
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
-        repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de", current.descriptionLanguage(),
+        repository.compareAndUpdate(PROJECT_A, current.head(), withGermanTitle, "de", current.descriptionLanguage(), null,
                 noAcceptanceCriteriaLanguages(withGermanTitle), "de");
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
@@ -398,11 +405,11 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
                 .orElseThrow();
         Requirement withFrenchTitle = new Requirement(current.value().id(), code, "Connexion",
-                current.value().description(), current.value().type(), current.value().status(),
+                current.value().description(), null, current.value().type(), current.value().status(),
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
-        repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr", current.descriptionLanguage(),
+        repository.compareAndUpdate(PROJECT_A, current.head(), withFrenchTitle, "fr", current.descriptionLanguage(), null,
                 noAcceptanceCriteriaLanguages(withFrenchTitle), "de");
 
         assertEquals(2, countTitleLiterals(PROJECT_A, id));
@@ -441,12 +448,12 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
                 .orElseThrow();
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
-                current.value().description(), current.value().type(), RequirementStatus.ACCEPTED,
+                current.value().description(), null, current.value().type(), RequirementStatus.ACCEPTED,
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         assertDoesNotThrow(() -> repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
-                current.titleLanguage(), current.descriptionLanguage(),
+                current.titleLanguage(), current.descriptionLanguage(), null,
                 noAcceptanceCriteriaLanguages(statusChangeOnly), null));
 
         Requirement reloaded = repository.findByCode(PROJECT_A, code, null).orElseThrow();
@@ -472,12 +479,12 @@ class KognioRdfRequirementRepositoryMultilingualTest {
         RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code)
                 .orElseThrow();
         Requirement statusChangeOnly = new Requirement(current.value().id(), code, current.value().title(),
-                current.value().description(), current.value().type(), RequirementStatus.ACCEPTED,
+                current.value().description(), null, current.value().type(), RequirementStatus.ACCEPTED,
                 current.value().priority(), current.value().motivatedBy(), current.value().qualityCategory(),
                 current.value().usesTerms(), current.value().acceptanceCriteria(), List.of());
 
         repository.compareAndUpdate(PROJECT_A, current.head(), statusChangeOnly,
-                current.titleLanguage(), current.descriptionLanguage(),
+                current.titleLanguage(), current.descriptionLanguage(), null,
                 noAcceptanceCriteriaLanguages(statusChangeOnly), null);
 
         assertEquals(1, countTitleLiterals(PROJECT_A, id));
@@ -546,6 +553,167 @@ class KognioRdfRequirementRepositoryMultilingualTest {
                 + "<" + id.value().value() + "> <http://purl.org/dc/terms/title> \"" + text + "\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    // --- rationale (issue #321) --------------------------------------------------------------
+
+    /** {@code arkreq:rationale} is written language-tagged and selected by {@link DisplayLocale}. */
+    @Test
+    void createWritesATaggedRationaleSelectableViaDisplayLocale() {
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(PROJECT_A, requirement(freshId(), code, "Anmeldung", "Das System soll authentifizieren.",
+                "damit der Support kein Passwort mehr von Hand zuruecksetzt"), "de");
+
+        Requirement asGerman = repository.findByCode(PROJECT_A, code, "de").orElseThrow();
+        assertEquals("damit der Support kein Passwort mehr von Hand zuruecksetzt", asGerman.rationale());
+    }
+
+    /**
+     * Optional at the store too: no {@code arkreq:rationale} triple is written for a {@code null}
+     * rationale, and the requirement stays perfectly readable - unlike an absent title/description,
+     * an absent rationale is the ordinary case, not the store-first anomaly {@code findByCode}
+     * skips a requirement for.
+     */
+    @Test
+    void createWithoutARationaleWritesNoTripleAndStaysReadable() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(PROJECT_A, requirement(id, code, "Login", "The system shall authenticate a user."), "en");
+
+        assertEquals(0, countRationaleLiterals(PROJECT_A, id));
+        Requirement reloaded = repository.findByCode(PROJECT_A, code, "en").orElseThrow();
+        assertNull(reloaded.rationale());
+        assertEquals("Login", reloaded.title());
+        assertNull(repository.findAll(PROJECT_A, "en").getFirst().rationale());
+    }
+
+    /** Mirrors the title case: correcting the rationale under a new tag keeps the old variant. */
+    @Test
+    void compareAndUpdateWithANewLanguageForRationalePreservesTheOriginalLanguageVariant() {
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirement(freshId(), code, "Login", "The system shall authenticate a user.",
+                "so that support stops resetting passwords by hand");
+        repository.create(PROJECT_A, created, "en");
+        RevisionToken head = currentHead(code);
+
+        Requirement withGermanRationale = requirement(created.id(), code, created.title(), created.description(),
+                "damit der Support kein Passwort mehr von Hand zuruecksetzt");
+        repository.compareAndUpdate(PROJECT_A, head, withGermanRationale, "en", "en", "de",
+                noAcceptanceCriteriaLanguages(withGermanRationale), null);
+
+        assertEquals("so that support stops resetting passwords by hand",
+                repository.findByCode(PROJECT_A, code, "en").orElseThrow().rationale());
+        assertEquals("damit der Support kein Passwort mehr von Hand zuruecksetzt",
+                repository.findByCode(PROJECT_A, code, "de").orElseThrow().rationale());
+    }
+
+    /**
+     * The one thing {@code rationale} does that {@code title}/{@code description} cannot: a write
+     * may legitimately carry no literal for it. Since {@code null} means "leave it alone" at every
+     * port above this one and never "remove the recorded reason", such a write must preserve
+     * <em>every</em> existing variant - not just the other-language ones, and not sweep an
+     * untagged one either (issue #321). A {@code req_set_status} on a requirement whose rationale
+     * this adapter's own read did not carry forward is exactly this shape.
+     */
+    @Test
+    void compareAndUpdateWithoutARationalePreservesEveryExistingVariant() {
+        RequirementId id = freshId();
+        RequirementCode code = new RequirementCode("FR-1");
+        Requirement created = requirement(id, code, "Login", "The system shall authenticate a user.",
+                "so that support stops resetting passwords by hand");
+        repository.create(PROJECT_A, created, "en");
+        Requirement withGermanRationale = requirement(id, code, created.title(), created.description(),
+                "damit der Support kein Passwort mehr von Hand zuruecksetzt");
+        repository.compareAndUpdate(PROJECT_A, currentHead(code), withGermanRationale, "en", "en", "de",
+                noAcceptanceCriteriaLanguages(withGermanRationale), null);
+
+        Requirement statusChangeOnly = new Requirement(id, code, created.title(), created.description(), null,
+                created.type(), RequirementStatus.ACCEPTED, null, null, null, null, created.acceptanceCriteria(),
+                List.of());
+        repository.compareAndUpdate(PROJECT_A, currentHead(code), statusChangeOnly, "en", "en", "en",
+                noAcceptanceCriteriaLanguages(statusChangeOnly), "en");
+
+        assertEquals(2, countRationaleLiterals(PROJECT_A, id));
+        assertEquals("so that support stops resetting passwords by hand",
+                repository.findByCode(PROJECT_A, code, "en").orElseThrow().rationale());
+        assertEquals("damit der Support kein Passwort mehr von Hand zuruecksetzt",
+                repository.findByCode(PROJECT_A, code, "de").orElseThrow().rationale());
+        assertEquals(RequirementStatus.ACCEPTED, repository.findByCode(PROJECT_A, code, "en").orElseThrow().status());
+    }
+
+    /**
+     * Issue #258's sweep applies to this predicate too - but only when a rationale is actually
+     * being written. Complements {@link #compareAndUpdateWithoutARationalePreservesEveryExistingVariant},
+     * which covers the case where nothing is written and the untagged literal therefore survives.
+     */
+    @Test
+    void compareAndUpdateSweepsAnUntaggedRationaleWhenTheWrittenTagEqualsTheProjectDefault() {
+        RequirementId id = freshId();
+        givenLegacyRequirementWithUntaggedRationale(PROJECT_A, id, "FR-1");
+        RequirementCode code = new RequirementCode("FR-1");
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        Requirement withGermanRationale = requirement(id, code, current.value().title(),
+                current.value().description(), "damit der Support kein Passwort mehr von Hand zuruecksetzt");
+
+        repository.compareAndUpdate(PROJECT_A, current.head(), withGermanRationale, current.titleLanguage(),
+                current.descriptionLanguage(), "de", noAcceptanceCriteriaLanguages(withGermanRationale), "de");
+
+        assertEquals(1, countRationaleLiterals(PROJECT_A, id));
+        assertEquals("damit der Support kein Passwort mehr von Hand zuruecksetzt",
+                repository.findByCode(PROJECT_A, code, "de").orElseThrow().rationale());
+    }
+
+    /** {@code findCurrentByCode} hands the read tag back for the pass-through round trip. */
+    @Test
+    void findCurrentByCodeCarriesTheRationalesLanguageTag() {
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(PROJECT_A, requirement(freshId(), code, "Anmeldung", "Das System soll authentifizieren.",
+                "damit der Support kein Passwort mehr von Hand zuruecksetzt"), "de");
+
+        assertEquals("de", repository.findCurrentByCode(PROJECT_A, code).orElseThrow().rationaleLanguage());
+    }
+
+    /** No rationale, no tag - and the requirement still reads back with its head (issue #321). */
+    @Test
+    void findCurrentByCodeReportsANullRationaleLanguageWhenNoneIsRecorded() {
+        RequirementCode code = new RequirementCode("FR-1");
+        repository.create(PROJECT_A, requirement(freshId(), code, "Login", "The system shall authenticate a user."),
+                "en");
+
+        RequirementRepository.CurrentRequirement current = repository.findCurrentByCode(PROJECT_A, code).orElseThrow();
+        assertNull(current.rationaleLanguage());
+        assertNull(current.value().rationale());
+    }
+
+    /**
+     * A store-first {@code arkreq:rationale} carrying no language tag at all - the state issue
+     * #258's sweep normalises lazily, mirroring {@link #givenLegacyRequirementWithUntaggedTitle}.
+     */
+    private void givenLegacyRequirementWithUntaggedRationale(ProjectId projectId, RequirementId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Login\"@en ; "
+                + "<http://purl.org/dc/terms/description> \"The system shall authenticate a user.\"@en ; "
+                + "<https://w3id.org/arknet/requirements#rationale> \"so that support stops resetting passwords\" ; "
+                + "<https://w3id.org/arknet/requirements#status> <https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<https://w3id.org/arknet/requirements#acceptanceCriterion> "
+                + "\"Login succeeds with valid credentials\" "
+                + "} }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    private long countRationaleLiterals(ProjectId projectId, RequirementId id) {
+        String query = "SELECT ?o WHERE { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> <https://w3id.org/arknet/requirements#rationale> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query).count();
         }
     }
 

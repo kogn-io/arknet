@@ -153,14 +153,14 @@ class TraceabilityGraphTest {
         // FR-1: uses TERM-1, realised by UC1. FR-2: uses nothing, realised by nothing (orphan).
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
-                "The system shall authenticate a user.",
+                "The system shall authenticate a user.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(new TermRef(ResourceId.of(TERM_1_IRI))),
                 List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")),
                 List.of(new ConstraintRef(ResourceId.of(CON_1_IRI)))), null);
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_2_IRI)), new RequirementCode("FR-2"), "Logout",
-                "The system shall let a user log out.",
+                "The system shall let a user log out.", null,
                 RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, Priority.MUST_HAVE, null, null,
                 List.of(), List.of(new AcceptanceCriterion(1, "Logout succeeds")), List.of()), null);
 

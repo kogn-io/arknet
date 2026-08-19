@@ -28,6 +28,18 @@ import de.hauschel.arknet.kernel.ProjectId;
  * @param description      the normative statement ("The system shall ..."); maps to
  *                         {@code dcterms:description} and is required by the requirements
  *                         SHACL shape
+ * @param rationale        why this requirement exists at all - the "so that ..." a user story
+ *                         carries in its core, and the knowledge that is lost first when people
+ *                         move on (issue #321); maps to {@code arkreq:rationale}. Optional (may
+ *                         be {@code null}, but never blank when present): unlike
+ *                         {@code acceptanceCriteria} this carries no {@code sh:minCount}, so a
+ *                         requirement whose reason nobody recorded stays legal rather than
+ *                         becoming unwritable - a second mandatory field beside the existing
+ *                         acceptance-criteria one would raise the bar for creating a requirement
+ *                         far more than a recorded reason is worth, and every already-stored
+ *                         requirement would need migrating. Language-tagged like
+ *                         {@code title}/{@code description}, being the same family of describing
+ *                         fields
  * @param type             functional vs. non-functional classification
  * @param status           current lifecycle state
  * @param priority         MoSCoW priority; maps to {@code arkreq:priority}. Optional (may be
@@ -70,6 +82,7 @@ public record Requirement(
         RequirementCode code,
         String title,
         String description,
+        String rationale,
         RequirementType type,
         RequirementStatus status,
         Priority priority,
@@ -94,6 +107,12 @@ public record Requirement(
         }
         if (description.isBlank()) {
             throw new IllegalArgumentException("description must not be blank");
+        }
+        if (rationale != null && rationale.isBlank()) {
+            // Optional means absent (null), never present-but-empty: a blank rationale would
+            // claim a reason was recorded while carrying none, and SHACL would reject the
+            // resulting literal against sh:minLength anyway.
+            throw new IllegalArgumentException("rationale must not be blank");
         }
         if (acceptanceCriteria.isEmpty()) {
             throw new IllegalArgumentException("acceptanceCriteria must not be empty");
@@ -141,8 +160,9 @@ public record Requirement(
             throw new IllegalStateException(
                     "illegal status transition " + status() + " -> " + RequirementStatus.ACCEPTED);
         }
-        return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.ACCEPTED, priority(),
-                motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria(), constrainedBy());
+        return new Requirement(id(), code(), title(), description(), rationale(), type(),
+                RequirementStatus.ACCEPTED, priority(), motivatedBy(), qualityCategory(), usesTerms(),
+                acceptanceCriteria(), constrainedBy());
     }
 
     /**
@@ -167,8 +187,9 @@ public record Requirement(
             throw new IllegalStateException(
                     "illegal status transition " + status() + " -> " + RequirementStatus.PROPOSED);
         }
-        return new Requirement(id(), code(), title(), description(), type(), RequirementStatus.PROPOSED, priority(),
-                motivatedBy(), qualityCategory(), usesTerms(), acceptanceCriteria(), constrainedBy());
+        return new Requirement(id(), code(), title(), description(), rationale(), type(),
+                RequirementStatus.PROPOSED, priority(), motivatedBy(), qualityCategory(), usesTerms(),
+                acceptanceCriteria(), constrainedBy());
     }
 
     /**
@@ -192,8 +213,8 @@ public record Requirement(
         for (String text : newCriteriaTexts) {
             appended.add(new AcceptanceCriterion(nextPosition++, text));
         }
-        return new Requirement(id, code, title, description, type, status, priority, motivatedBy,
-                qualityCategory, usesTerms, appended, constrainedBy);
+        return new Requirement(id, code, title, description, rationale, type, status, priority,
+                motivatedBy, qualityCategory, usesTerms, appended, constrainedBy);
     }
 
     /**
@@ -235,8 +256,8 @@ public record Requirement(
             int unmatchedPosition = textByPosition.keySet().iterator().next();
             throw new AcceptanceCriterionPositionNotFoundException(projectId, code, unmatchedPosition);
         }
-        return new Requirement(id, code, title, description, type, status, priority, motivatedBy,
-                qualityCategory, usesTerms, patched, constrainedBy);
+        return new Requirement(id, code, title, description, rationale, type, status, priority,
+                motivatedBy, qualityCategory, usesTerms, patched, constrainedBy);
     }
 
     /**

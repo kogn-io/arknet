@@ -118,9 +118,9 @@ arkreq:NonFunctionalRequirement a owl:Class ;
 
 arkreq:rationale a owl:DatatypeProperty ;
     rdfs:domain arkreq:Requirement ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "rationale"@en ;
-    rdfs:comment "Begruendung, warum diese Anforderung existiert."@de .
+    rdfs:comment "Begruendung, warum diese Anforderung existiert -- das WARUM, das verlorengeht, wenn Personen wechseln (issue #321). Optional: anders als dcterms:description traegt rshapes:Requirement-rationale kein sh:minCount. Mehrsprachig: rdfs:Literal statt xsd:string, weil rshapes:Requirement-rationale je Sprach-Tag ein eigenes (dann rdf:langString-) Literal erlaubt (sh:uniqueLang)."@de .
 
 arkreq:acceptanceCriterion a owl:ObjectProperty ;
     rdfs:domain arkreq:Requirement ;
