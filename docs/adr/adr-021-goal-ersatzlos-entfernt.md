@@ -1,7 +1,7 @@
 # ADR-021: arkreq:Goal wird ersatzlos entfernt
 
 - Status: Accepted (2026-08-18)
-- Related: ADR-020
+- Related: ADR-023
 
 ## Kontext
 
@@ -12,8 +12,8 @@ die auf keinem Weg entstehen kann. Am Requirement existiert `motivatedBy` nur al
 unaufgeloester IRI-Verweis (#322). Beides zusammen ist ein irrefuehrendes API: die
 Tool-Oberflaeche nimmt einen Verweis auf eine Ressource entgegen, die es nie geben kann.
 
-Mit ADR-020 laeuft die Herkunftsverankerung eines Requirements als direkte Kante zum
-Stakeholder; eine Goal-Zwischenebene ist dafuer keine Voraussetzung.
+Mit ADR-023 laeuft die Herkunftsverankerung eines Requirements als direkte Kante zum
+Actor; eine Goal-Zwischenebene ist dafuer keine Voraussetzung.
 
 Das Entfernen ist formal ein Breaking Change auf zwei Flaechen -- der Tool-Oberflaeche und
 dem publizierten Vokabular. Praktisch faellt er in die billigste Phase, die es je geben
@@ -35,8 +35,8 @@ Parameters dokumentiert ihn lediglich als optional.
 ## Konsequenzen
 
 **Positiv:** Ontologie und Tool-Oberflaeche behaupten nichts mehr, was nicht entstehen
-kann. Die Traceability-Argumentation haengt kuenftig an der Stakeholder-Verankerung
-(ADR-020) statt an einer nie erreichbaren Zwischenebene.
+kann. Die Traceability-Argumentation haengt kuenftig an der Herkunftsverankerung
+(ADR-023) statt an einer nie erreichbaren Zwischenebene.
 
 **Negativ / bewusst deferred (YAGNI):** Das Metamodell verliert seine explizite
 WARUM-Ebene oberhalb des Requirements; ein uebergeordnetes Geschaeftsziel laesst sich nicht
@@ -48,7 +48,7 @@ Bruch, der pre-1.0 in Kauf genommen wird.
 
 ## Alternativen
 
-- **Goal zum Aggregat ausbauen (Kette Stakeholder -> Goal -> Requirement).** Verworfen --
+- **Goal zum Aggregat ausbauen (Kette Actor -> Goal -> Requirement).** Verworfen --
   deutlicher Aufwand fuer einen bisher rein hypothetischen Nutzen; seit der Deklaration hat
   kein Anwendungsfall eine Goal-Ressource verlangt.
 - **Halbzustand behalten.** Verworfen -- eine Klasse ohne Entstehungsweg und ein Feld ohne
