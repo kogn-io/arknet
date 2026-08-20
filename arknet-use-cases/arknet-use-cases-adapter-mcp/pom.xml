@@ -23,9 +23,14 @@
              dessen Core - eine Abhaengigkeit hierher auf andere BCs' In-Ports verletzt die
              Invariante "kein *-core* haengt an einem anderen BC" nicht (die gilt fuer die
              *-core-Module, siehe arknet-architecture-tests in CLAUDE.md). Genutzt nur fuer die
-             read-only Anzeige-Aufloesung ResourceId -> Actor-Name/FR-Code in
+             read-only Anzeige-Aufloesung ResourceId -> ACTOR-N/TERM-N/FR-Code in
              UseCaseMcpTools#formatFull; uc_add selbst bleibt entkoppelt (ActorLookup/
              RequirementLookup). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-ubiquitous-language-core</artifactId>
