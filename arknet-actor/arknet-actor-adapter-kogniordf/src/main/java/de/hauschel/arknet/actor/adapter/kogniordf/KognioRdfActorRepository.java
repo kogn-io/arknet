@@ -281,8 +281,7 @@ public class KognioRdfActorRepository implements ActorRepository {
         String subjectIriString;
         try (DatasetHandle handle = lifecycle.acquire(dataset)) {
             String query = "SELECT ?s WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
-                    + "?s a ?type . " + actorTypeFilter()
-                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" } }";
+                    + actorByCodeWhereClause(code) + "} }";
             subjectIriString = handle.sparqlQuery().select(query).findFirst()
                     .map(row -> iriOf(row, "s").getIRIString())
                     .orElseThrow(() -> new ActorNotFoundException(projectId, code));

@@ -485,6 +485,121 @@ class WriteFunnelTest {
         assertEquals(List.of(revision), objectIris(provenance, SUBJECT_IRI, ArkprovVocabulary.HEAD));
     }
 
+    // ---- delete (issue #335) --------------------------------------------------------------
+
+    @Test
+    void deleteRunsBodyWhenSubjectExists() {
+        Fixture fixture = new Fixture(List.of(true));
+
+        List<DatasetTx> bodyCalls = new ArrayList<>();
+        fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, bodyCalls::add);
+
+        assertEquals(1, fixture.tx.containsCalls.size());
+        assertSubjectExistenceCheck(fixture.tx.containsCalls.get(0), GRAPH_IRI, SUBJECT_IRI);
+        assertEquals(1, bodyCalls.size());
+        assertSame(fixture.tx, bodyCalls.get(0), "body must run on the live transaction");
+        assertTrue(fixture.handle.closed, "handle must be released");
+    }
+
+    @Test
+    void deleteRejectsMissingSubjectWithNotFoundSignal() {
+        Fixture fixture = new Fixture(List.of(false));
+        RuntimeException signal = new RuntimeException("not found");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, () -> signal,
+                        Signals.noBody()));
+
+        assertSame(signal, thrown);
+        assertFalse(fixture.bodyRan);
+        assertTrue(fixture.handle.closed);
+    }
+
+    /**
+     * The tombstone contract (issue #335): a subject that already had a head has that revision
+     * marked {@code prov:invalidatedAtTime} and the {@code arkprov:head} triple removed - no new
+     * revision is minted, unlike {@link #create}/{@link #update}/{@link #compareAndUpdate}.
+     */
+    @Test
+    void deleteInvalidatesThePreviousRevisionAndRemovesTheHead() {
+        Fixture fixture = new Fixture(List.of(true));
+        String previous = "https://w3id.org/arknet/revision/previous";
+        fixture.tx.headAnswers.add(previous);
+
+        fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, tx -> { });
+
+        assertEquals(1, fixture.tx.updates.size(), "the head triple must be deleted");
+        String deleteHead = fixture.tx.updates.get(0);
+        assertTrue(deleteHead.contains("<" + ArkprovVocabulary.PROVENANCE_GRAPH + ">")
+                && deleteHead.contains("<" + SUBJECT_IRI + ">")
+                && deleteHead.contains("<" + ArkprovVocabulary.HEAD + ">"),
+                "head delete must target this subject's head in the provenance graph, got: " + deleteHead);
+
+        List<Triple> provenance = fixture.tx.provenanceStatements();
+        assertFalse(provenance.isEmpty(), "the previous revision must be tombstoned");
+        assertTrue(provenance.stream().allMatch(triple -> triple.getSubject() instanceof IRI iri
+                        && iri.getIRIString().equals(previous)),
+                "only the previous revision may be touched, no new revision minted");
+        List<Literal> instants = provenance.stream()
+                .filter(triple -> triple.getPredicate().getIRIString()
+                        .equals(ArkprovVocabulary.INVALIDATED_AT_TIME))
+                .map(triple -> (Literal) triple.getObject())
+                .toList();
+        assertEquals(1, instants.size(), "exactly one invalidation instant");
+        assertEquals(VocabXsd.DATETIME.getIRIString(), instants.get(0).getDatatype().getIRIString(),
+                "the invalidation instant must be typed xsd:dateTime");
+    }
+
+    /** A subject that predates the funnel's revision recording has no head to tombstone. */
+    @Test
+    void deleteWithNoPriorHeadLeavesProvenanceUntouched() {
+        Fixture fixture = new Fixture(List.of(true));
+
+        fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, tx -> { });
+
+        assertTrue(fixture.tx.updates.isEmpty(), "nothing to tombstone without a prior head");
+        assertTrue(fixture.tx.provenanceStatements().isEmpty());
+    }
+
+    /**
+     * A caller's own pre-delete check (e.g. a "still referenced" guard) runs as the first thing
+     * {@code body} does; a failing body must abort before the tombstone runs, exactly like a
+     * failing body aborts before {@link #recordRevision} for the other three methods.
+     */
+    @Test
+    void deleteFailingBodyLeavesTheRevisionUntouched() {
+        Fixture fixture = new Fixture(List.of(true));
+        fixture.tx.headAnswers.add("https://w3id.org/arknet/revision/previous");
+        RuntimeException stillReferenced = new RuntimeException("still referenced");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected,
+                        tx -> {
+                            throw stillReferenced;
+                        }));
+
+        assertSame(stillReferenced, thrown);
+        assertTrue(fixture.tx.updates.isEmpty(), "a failed delete must not tombstone the revision");
+        assertTrue(fixture.tx.provenanceStatements().isEmpty());
+    }
+
+    @Test
+    void deleteRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+
+        assertThrows(NullPointerException.class,
+                () -> funnel.delete(null, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.delete(fixture.dataset, null, SUBJECT_IRI, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.delete(fixture.dataset, GRAPH_IRI, null, Signals::unexpected, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, null, Signals.noBody()));
+        assertThrows(NullPointerException.class,
+                () -> funnel.delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, null));
+    }
+
     // ---- revision recording (ADR-014, revision basis) -----------------------------------
 
     /**

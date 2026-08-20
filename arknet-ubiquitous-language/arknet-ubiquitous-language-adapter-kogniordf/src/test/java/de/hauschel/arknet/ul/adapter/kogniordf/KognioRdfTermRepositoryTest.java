@@ -49,6 +49,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
@@ -63,6 +64,7 @@ import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermReferencedException;
 
 /**
  * Integration test for {@link KognioRdfTermRepository} against an in-memory
@@ -73,6 +75,7 @@ class KognioRdfTermRepositoryTest {
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
     private static final String SKOS_CONCEPT = "http://www.w3.org/2004/02/skos/core#Concept";
+    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -1787,6 +1790,107 @@ class KognioRdfTermRepositoryTest {
         public void close() {
             delegate.close();
         }
+    }
+
+    // ---- delete (issue #335) ----------------------------------------------------------------
+
+    @Test
+    void deleteRemovesTheTermAndItsTriples() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
+
+        repository.delete(PROJECT_A, code);
+
+        assertTrue(repository.findByCode(PROJECT_A, code, null).isEmpty());
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + TERMS_GRAPH + "> { <"
+                    + id.value().value() + "> ?p ?o } }"), "no triple of the deleted term may remain");
+        }
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(TermNotFoundException.class, () -> repository.delete(PROJECT_A, new TermCode("TERM-99")));
+    }
+
+    /**
+     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
+     * the {@code arkprov:head} pointer is removed and the last revision is marked
+     * {@code prov:invalidatedAtTime} rather than erased.
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
+        String lastRevision = headsOf(id).get(0);
+
+        repository.delete(PROJECT_A, code);
+
+        assertTrue(headsOf(id).isEmpty(), "the head pointer must be removed");
+        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
+                    "the last revision must be tombstoned, not erased");
+        }
+    }
+
+    /**
+     * {@link TermReferencedException} blocks the delete while a requirement's
+     * {@code arkreq:usesTerm} still points at the term - {@code rejectIfReferenced} searches across
+     * every named graph, so a reference living outside {@link #TERMS_GRAPH} (as a requirement edge
+     * would) must still be found.
+     */
+    @Test
+    void deleteRejectsATermStillReferencedViaUsesTerm() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
+        String reference = "INSERT DATA { GRAPH <https://example.org/req> { <https://example.org/req/1> <"
+                + ArkreqVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(TermReferencedException.class, () -> repository.delete(PROJECT_A, code));
+        assertTrue(repository.findByCode(PROJECT_A, code, null).isPresent(),
+                "a rejected delete must leave the term untouched");
+    }
+
+    /**
+     * The same-graph counterpart: a term still named as another term's {@code skos:broader}
+     * target must block the delete too, even though the referencing edge lives in this adapter's
+     * own {@link #TERMS_GRAPH} rather than a sibling BC's.
+     */
+    @Test
+    void deleteRejectsATermStillReferencedAsABroaderTarget() {
+        TermId broaderId = freshId();
+        TermCode broaderCode = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(broaderId, broaderCode, "Zahlungsverkehr", "Oberbegriff.", null), null);
+        repository.create(PROJECT_A, new Term(freshId(), new TermCode("TERM-2"), "Gutschrift",
+                "Eine Erstattung.", null), null);
+        repository.update(PROJECT_A, new TermCode("TERM-2"), null, null, null, null, null,
+                Optional.of(broaderCode));
+
+        assertThrows(TermReferencedException.class, () -> repository.delete(PROJECT_A, broaderCode));
+        assertTrue(repository.findByCode(PROJECT_A, broaderCode, null).isPresent(),
+                "a rejected delete must leave the broader term untouched");
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
+
+        assertThrows(TermNotFoundException.class, () -> repository.delete(PROJECT_B, code));
+        assertTrue(repository.findByCode(PROJECT_A, code, null).isPresent(),
+                "a delete in another project must not touch this project's term");
     }
 
     private List<String> revisionsOf(TermId id) {
