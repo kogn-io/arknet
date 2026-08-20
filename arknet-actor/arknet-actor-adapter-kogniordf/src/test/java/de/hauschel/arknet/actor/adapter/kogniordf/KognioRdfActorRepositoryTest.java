@@ -35,6 +35,7 @@ import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -401,6 +402,33 @@ class KognioRdfActorRepositoryTest {
 
         assertFalse(repository.findByCode(PROJECT_B, new ActorCode("ACTOR-1")).isPresent());
         assertTrue(repository.findAll(PROJECT_B).isEmpty());
+    }
+
+    // ---- findByIds: the batch lookup ResolveActors/uc_get/uc_list drive -------------------
+
+    /**
+     * The batch shape {@link ResolveActors} needs: known ids resolve, an id absent from the
+     * project is simply missing from the result rather than an error.
+     */
+    @Test
+    void findByIdsResolvesOnlyTheIdentitiesTheProjectHolds() {
+        Actor first = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        Actor second = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
+        repository.create(PROJECT_A, first);
+        repository.create(PROJECT_A, second);
+        ResourceId unknown = ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID());
+
+        List<ResolveActors.ResolvedActor> resolved = repository.findByIds(
+                PROJECT_A, List.of(first.id().value(), second.id().value(), unknown));
+
+        assertEquals(2, resolved.size());
+        assertTrue(resolved.contains(new ResolveActors.ResolvedActor(first.id().value(), first.code())));
+        assertTrue(resolved.contains(new ResolveActors.ResolvedActor(second.id().value(), second.code())));
+    }
+
+    @Test
+    void findByIdsOfAnEmptyListQueriesNothing() {
+        assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
     }
 
     // ---- revision trail (ADR-014): one revision per write, head queryable ------------------
