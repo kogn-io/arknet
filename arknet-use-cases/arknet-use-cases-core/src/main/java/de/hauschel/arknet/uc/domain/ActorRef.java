@@ -12,11 +12,11 @@ import de.hauschel.arknet.kernel.ResourceId;
  * term's opaque subject identity - not as a business label and not as a value derived from
  * any other predicate on the term.
  *
- * <p><strong>Deliberately not a link to the ubiquitous-language bounded context.</strong> Actors
- * are modelled there (as a facet on glossary terms); the use-cases component must not depend on
- * {@code arknet-ubiquitous-language-core}. This value object therefore holds only the
- * shared-kernel {@link ResourceId}, never a {@code ul}-specific {@code TermId} or
- * {@code TermCode}. Resolving a human-typed actor name (e.g. {@code Customer}) to this identity -
+ * <p><strong>Deliberately not a link to the actor bounded context.</strong> Actors are modelled
+ * there, as their own resource type in {@code arknet-actor}'s register; the use-cases component
+ * must not depend on {@code arknet-actor-core}. This value object therefore holds only the
+ * shared-kernel {@link ResourceId}, never an {@code actor}-specific {@code ActorId} or
+ * {@code ActorCode}. Resolving a human-typed actor name (e.g. {@code Customer}) to this identity -
  * and rejecting an unknown or ambiguous name - is the job of a driven lookup port against the
  * shared store, not of this pure domain type.</p>
  *

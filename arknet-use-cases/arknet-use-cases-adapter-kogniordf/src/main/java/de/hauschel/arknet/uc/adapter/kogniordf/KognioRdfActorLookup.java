@@ -20,46 +20,48 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 
 /**
  * Out-adapter: {@link ActorLookup} backed by the kognio-rdf substrate, resolving an actor's
- * human-typed {@code skos:prefLabel} (e.g. {@code Customer}) to its opaque subject
- * {@link ResourceId} within the shared project store.
+ * human-typed name (e.g. {@code Customer}) to its opaque subject {@link ResourceId} within the
+ * shared project store.
  *
- * <p><strong>Strict cross-BC actor resolution.</strong> Use-cases and
- * ubiquitous-language actors share one per-project store. This adapter looks up a name by
- * {@code skos:prefLabel} among concepts carrying an actor type
- * ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code arkproc:LegalActor}); an unknown
- * or ambiguous name aborts with a didactic {@link UnresolvedReferenceException}. This is called
- * once, from the application service, at the moment a use case is written -
+ * <p><strong>Register-backed cross-BC actor resolution.</strong> Since issue #336, actors are no
+ * longer a facet on glossary terms; they live in {@code arknet-actor}'s own register, one
+ * ungoverned resource type in its own named graph. This adapter looks a name up by the untagged
+ * {@code arknet:name} literal among the four concrete actor types
+ * ({@code arkproc:HumanActor}/{@code SystemActor}/{@code LegalActor}/{@code GroupActor}); an
+ * unknown or ambiguous name aborts with a didactic {@link UnresolvedReferenceException}. This is
+ * called once, from the application service, at the moment a use case is written -
  * {@code KognioRdfUseCaseRepository} no longer performs this lookup itself; it just persists the
  * {@link ResourceId} it is handed.</p>
  *
  * <p>This class depends only on the neutral kognio-rdf ports ({@code terms} + {@code dataset}) -
- * it never imports RDF4J or any other backend-specific type. The backend
+ * it never imports RDF4J or any other backend-specific type, and it does not depend on
+ * {@code arknet-actor-core}: the use-cases component must not depend on a neighbour BC's domain
+ * module (see {@link ActorLookup}), so this remains a plain SPARQL read against the shared store,
+ * scoped to the graph and predicates the actor out-adapter is known to write. The backend
  * ({@link DatasetLifecycle} implementation) is supplied by the composition root, the same shared
  * lifecycle {@code KognioRdfUseCaseRepository} acquires datasets from.</p>
  *
- * <p><strong>Language-tag-blind match.</strong> {@code ulshapes:Term-prefLabel} carries no
- * {@code sh:maxCount}, so a store-first (ADR-005) actor concept can legally carry
- * {@code skos:prefLabel} only as a language-tagged literal (e.g. {@code "Kundin"@de}, no untagged
- * form at all) - {@code KognioRdfTermRepository} documents and handles the identical multiplicity
- * for its own display path via {@link de.hauschel.arknet.kernel.DisplayLocale}. This lookup is not
- * a display selection, though: {@code actorName} is what a human typed at the MCP boundary
- * ({@code uc_add}), which never carries a language tag of its own. The query therefore matches on
- * the lexical form ({@code STR(?prefLabel)}) rather than the full RDF term, so the language tag (if
- * any) never blocks the match - {@code distinct()} on the bound {@code ?actor} still collapses an
- * actor whose several language-tagged labels happen to share the same lexical form into one
- * match.</p>
+ * <p><strong>Untagged literal, exact match.</strong> Unlike the {@code skos:prefLabel} this
+ * adapter used to match against - which a store-first (ADR-005) actor concept could legally carry
+ * only as a language-tagged literal, forcing a lexical-form comparison - {@code arknet:name} is
+ * always written untagged (see {@code KognioRdfActorRepository}). {@code actorName} is likewise
+ * what a human typed at the MCP boundary ({@code uc_add}), which never carries a language tag of
+ * its own, so a plain RDF-term match on the escaped literal is sufficient; there is no tag-blind
+ * comparison to reason about here.</p>
  */
 public final class KognioRdfActorLookup implements ActorLookup {
 
-    private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
-    private static final String PREF_LABEL_PROPERTY = SKOS_NAMESPACE + "prefLabel";
+    private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
+    private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
     private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
     private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
     private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
-    // Mirrors the graph IRI the ubiquitous-language out-adapter writes into. The bounded contexts
-    // share one project dataset; resolving an actor means reading across into that sibling graph.
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String GROUP_ACTOR_TYPE = ARKPROC_NAMESPACE + "GroupActor";
+    // Mirrors the graph IRI the actor out-adapter writes into (KognioRdfActorRepository's
+    // ACTOR_GRAPH). The bounded contexts share one project dataset; resolving an actor means
+    // reading across into that sibling graph.
+    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
 
     private final DatasetLifecycle lifecycle;
 
@@ -78,11 +80,11 @@ public final class KognioRdfActorLookup implements ActorLookup {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(actorName, "actorName");
 
-        String query = "SELECT ?actor WHERE { GRAPH <" + TERMS_GRAPH + "> { "
-                + "?actor <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
-                + "FILTER(STR(?prefLabel) = \"" + SparqlTerms.escape(actorName) + "\") "
-                + "{ ?actor a <" + HUMAN_ACTOR_TYPE + "> } UNION { ?actor a <" + SYSTEM_ACTOR_TYPE + "> } "
-                + "UNION { ?actor a <" + LEGAL_ACTOR_TYPE + "> } } }";
+        String query = "SELECT ?actor WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "?actor a ?type . "
+                + "FILTER(?type = <" + HUMAN_ACTOR_TYPE + "> || ?type = <" + SYSTEM_ACTOR_TYPE + "> "
+                + "|| ?type = <" + LEGAL_ACTOR_TYPE + "> || ?type = <" + GROUP_ACTOR_TYPE + ">) "
+                + "?actor <" + NAME_PROPERTY + "> \"" + SparqlTerms.escape(actorName) + "\" } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<IRI> matches = handle.sparqlQuery().select(query)
@@ -92,13 +94,13 @@ public final class KognioRdfActorLookup implements ActorLookup {
             if (matches.isEmpty()) {
                 throw new UnresolvedReferenceException("Actor '" + actorName
                         + "' does not exist in project '" + projectId.value()
-                        + "'. Create it first with term_add (actorKind human|system|legal) before a use case "
+                        + "'. Create it first with actor_add (type human|system|legal|group) before a use case "
                         + "references it.");
             }
             if (matches.size() > 1) {
-                throw new UnresolvedReferenceException("Actor label '" + actorName
+                throw new UnresolvedReferenceException("Actor name '" + actorName
                         + "' is ambiguous in project '" + projectId.value() + "' (" + matches.size()
-                        + " matches). Give the actor term a unique skos:prefLabel.");
+                        + " matches). Give the actor a unique name.");
             }
             return ResourceId.of(matches.get(0).getIRIString());
         }
