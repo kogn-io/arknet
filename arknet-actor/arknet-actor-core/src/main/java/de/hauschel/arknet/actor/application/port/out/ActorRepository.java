@@ -6,6 +6,7 @@ package de.hauschel.arknet.actor.application.port.out;
 import java.util.List;
 import java.util.Optional;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
@@ -14,6 +15,7 @@ import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * Driven port: persistence capability the component needs from the outside.
@@ -143,4 +145,19 @@ public interface ActorRepository {
      * @throws ActorReferencedException if anything else in the project still references the actor
      */
     void delete(ProjectId projectId, ActorCode code);
+
+    /**
+     * Finds every actor in a project whose identity is among {@code ids}, in one store
+     * round-trip - backs {@link ResolveActors}. This is a batch lookup, not a per-id existence
+     * check: an id absent from the project is simply absent from the result, never an error.
+     *
+     * <p>Returns the slim {@link ResolveActors.ResolvedActor} projection, not the full
+     * {@link Actor} aggregate: the only consumer of this method is {@link ResolveActors}, which
+     * exists purely to answer "what code names this identity" for display.</p>
+     *
+     * @param projectId the project (architecture model) to look up actors in
+     * @param ids       the opaque identities to resolve; an empty list yields an empty result
+     * @return the resolved actors found, in no particular order, never {@code null}
+     */
+    List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids);
 }

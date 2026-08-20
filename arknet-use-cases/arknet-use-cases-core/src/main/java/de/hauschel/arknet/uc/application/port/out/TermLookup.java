@@ -23,11 +23,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  * propagate as a didactic rejection of the write, not to handle a missing term as a normal
  * case.</p>
  *
- * <p><strong>Not the same port as {@code ActorLookup}.</strong> An actor is a term carrying an
- * actor facet ({@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code arkproc:LegalActor}),
- * resolved by {@code skos:prefLabel} constrained to that facet; a glossary term used via {@code
- * arkreq:usesTerm} carries no such constraint and is resolved by {@code dcterms:identifier}
- * instead - the same distinction {@code KognioRdfTermLookup} (requirements) already draws against
+ * <p><strong>Not the same port as {@code ActorLookup}.</strong> Since issue #336 an actor is its
+ * own resource type in {@code arknet-actor}'s register, resolved by its untagged {@code
+ * arknet:name} constrained to the four concrete actor types - a different graph, a different
+ * property and a different identity space than a glossary term used via {@code arkreq:usesTerm},
+ * which carries no such constraint and is resolved by {@code dcterms:identifier} instead - the
+ * same distinction {@code KognioRdfTermLookup} (requirements) already draws against
  * {@code KognioRdfActorLookup} (use-cases).</p>
  */
 public interface TermLookup {

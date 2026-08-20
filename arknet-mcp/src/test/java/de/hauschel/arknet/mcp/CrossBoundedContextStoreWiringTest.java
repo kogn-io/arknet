@@ -16,6 +16,9 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
+import de.hauschel.arknet.actor.application.ActorService;
+import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
+import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.persistence.UnresolvedReferenceException;
@@ -32,19 +35,17 @@ import de.hauschel.arknet.uc.domain.RequirementRef;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.ul.application.TermService;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
-import de.hauschel.arknet.ul.domain.ActorFacet;
-import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 
 /**
- * The regression proof: three bounded contexts (requirements,
- * ubiquitous-language, use-cases) wired by {@link ArknetMcpConfiguration} must share the
+ * The regression proof: four bounded contexts (requirements,
+ * ubiquitous-language, use-cases, actor) wired by {@link ArknetMcpConfiguration} must share the
  * <em>single</em> {@link DatasetLifecycle} bean, so a use case can strictly resolve its
- * requirement/actor label references against the very resources the other two contexts wrote.
+ * requirement/actor references against the very resources the other contexts wrote.
  *
  * <p>Every earlier adapter test ran each context on its own in-memory lifecycle, which is
  * exactly what hid the store-lock/isolation bug: cross-context lookup was never exercised over
- * a shared store. Here all three services are obtained from one Spring context - hence one
+ * a shared store. Here all services are obtained from one Spring context - hence one
  * shared lifecycle bean - and the real out-adapters (not fakes) are used end to end.</p>
  */
 class CrossBoundedContextStoreWiringTest {
@@ -80,7 +81,7 @@ class CrossBoundedContextStoreWiringTest {
 
     /**
      * Shared setup for the domain-resolution assertions below: {@code req_add} (FR) and {@code
-     * term_add} (actor) into the same shared project store, then {@code uc_add} referencing that
+     * actor_add} (actor) into the same shared project store, then {@code uc_add} referencing that
      * FR (by its code) and that actor (by name) - the service resolves both raw strings to opaque
      * identities via ActorLookup/RequirementLookup before the real UseCase is constructed. {@code
      * uc_get} reads the resolved cross-context edges back (looked up by code), so the resolved
@@ -97,15 +98,14 @@ class CrossBoundedContextStoreWiringTest {
                     assertThat(context).hasNotFailed();
 
                     RequirementService requirements = context.getBean(RequirementService.class);
-                    TermService terms = context.getBean(TermService.class);
+                    ActorService actors = context.getBean(ActorService.class);
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
                     Requirement fr = requirements.add(PROJECT, new NewRequirement("Customer can order",
                             "The system shall let a customer place an order.", null,
                             RequirementType.FUNCTIONAL, null, null, null,
                             List.of("An order is placed and confirmed"), null), "en");
-                    terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
-                            new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
+                    actors.add(PROJECT, new NewActor(ActorType.HUMAN, "Customer", null));
 
                     UseCase created = useCases.add(PROJECT, new NewUseCase("Place order",
                             "Customer places an order", null, null, "Customer",
@@ -144,14 +144,13 @@ class CrossBoundedContextStoreWiringTest {
                         "arknet.rdf.storage=" + storageDir)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    TermService terms = context.getBean(TermService.class);
+                    ActorService actors = context.getBean(ActorService.class);
                     UseCaseService useCases = context.getBean(UseCaseService.class);
 
                     // The actor exists, but the referenced requirement FR-1 was never created:
                     // strict step-realises resolution must abort on the unknown FR (order in the
                     // out-adapter resolves the primary actor first, hence seed it).
-                    terms.add(PROJECT, new NewTerm("Customer", "A person placing an order.",
-                            new ActorFacet(ActorKind.HUMAN, "orderer"), null), "en");
+                    actors.add(PROJECT, new NewActor(ActorType.HUMAN, "Customer", null));
 
                     NewUseCase danglingFr = new NewUseCase("Broken", "Unresolvable requirement",
                             null, null, "Customer", List.of(), null, null,

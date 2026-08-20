@@ -23,56 +23,47 @@ class TermTest {
 
     @Test
     void holdsItsValues() {
-        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null);
+        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.");
 
         assertEquals(ID, term.id());
         assertEquals(CODE, term.code());
         assertEquals("Gutschrift", term.prefLabel());
         assertEquals("Rueckerstattung eines Betrags.", term.definition());
-        assertNull(term.actorFacet());
     }
 
     @Test
     void rejectsNullId() {
-        assertThrows(NullPointerException.class, () -> new Term(null, CODE, "Gutschrift", "def", null));
+        assertThrows(NullPointerException.class, () -> new Term(null, CODE, "Gutschrift", "def"));
     }
 
     @Test
     void rejectsNullCode() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, null, "Gutschrift", "def", null));
+        assertThrows(NullPointerException.class, () -> new Term(ID, null, "Gutschrift", "def"));
     }
 
     @Test
     void rejectsNullPrefLabel() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, null, "def", null));
+        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, null, "def"));
     }
 
     @Test
     void rejectsBlankPrefLabel() {
-        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, " ", "def", null));
+        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, " ", "def"));
     }
 
     @Test
     void rejectsNullDefinition() {
-        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, "Gutschrift", null, null));
+        assertThrows(NullPointerException.class, () -> new Term(ID, CODE, "Gutschrift", null));
     }
 
     @Test
     void rejectsBlankDefinition() {
-        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, "Gutschrift", " ", null));
-    }
-
-    @Test
-    void holdsActorFacetWhenPresent() {
-        ActorFacet facet = new ActorFacet(ActorKind.HUMAN, "Sachbearbeiter");
-        Term term = new Term(ID, CODE, "Kunde", "Person, die eine Bestellung aufgibt.", facet);
-
-        assertEquals(facet, term.actorFacet());
+        assertThrows(IllegalArgumentException.class, () -> new Term(ID, CODE, "Gutschrift", " "));
     }
 
     @Test
     void holdsNoBroaderByDefault() {
-        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null);
+        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.");
 
         assertNull(term.broader());
     }
@@ -80,7 +71,7 @@ class TermTest {
     @Test
     void holdsBroaderWhenPresent() {
         TermCode broader = new TermCode("TERM-2");
-        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", null, broader);
+        Term term = new Term(ID, CODE, "Gutschrift", "Rueckerstattung eines Betrags.", broader);
 
         assertEquals(broader, term.broader());
     }
@@ -89,6 +80,6 @@ class TermTest {
     @Test
     void rejectsItsOwnCodeAsBroader() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Term(ID, CODE, "Gutschrift", "def", null, CODE));
+                () -> new Term(ID, CODE, "Gutschrift", "def", CODE));
     }
 }

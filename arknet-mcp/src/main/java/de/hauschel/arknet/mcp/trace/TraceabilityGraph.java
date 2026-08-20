@@ -144,13 +144,14 @@ public final class TraceabilityGraph {
     private static final String BUSINESS_CONSTRAINT_TYPE = ArkreqVocabulary.BUSINESS_CONSTRAINT_TYPE;
     private static final String REGULATORY_CONSTRAINT_TYPE = ArkreqVocabulary.REGULATORY_CONSTRAINT_TYPE;
 
-    // arkproc:HumanActor/SystemActor/LegalActor below are, like UBIQUITOUS_LANGUAGE_TERM above,
-    // used only within this class and duplicated rather than shared - the same three type IRIs
-    // are already duplicated as adapter-private constants in the ul/uc kogniordf out-adapters, and
-    // this class stays free of any dependency on either adapter (see the class javadoc).
+    // arkproc:HumanActor/SystemActor/LegalActor/GroupActor below are, like UBIQUITOUS_LANGUAGE_TERM
+    // above, used only within this class and duplicated rather than shared - the same four type
+    // IRIs are already duplicated as adapter-private constants in arknet-actor's kogniordf
+    // out-adapter, and this class stays free of any dependency on it (see the class javadoc).
     private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
     private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
     private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
+    private static final String GROUP_ACTOR_TYPE = ARKPROC_NAMESPACE + "GroupActor";
 
     /**
      * The predicates {@link #dependents(String)} follows backwards ("who references this").
@@ -248,8 +249,11 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return the IRIs of every {@code skos:Concept} (glossary terms, including actor-facetted
-     *         ones - an actor remains a {@code skos:Concept}), sorted.
+     * @return the IRIs of every {@code skos:Concept} (glossary terms), sorted. Since issue #336 a
+     *         term is a plain {@code skos:Concept} again - it no longer carries an actor facet -
+     *         so this list and {@link #actorIris()} are disjoint unless a resource happens to be
+     *         both a registered actor and a separately registered glossary term (multi-typing is
+     *         still legal, just no longer the only way to be an actor).
      */
     public List<String> termIris() {
         return subjectsOfType(CONCEPT_TYPE);
@@ -311,15 +315,21 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return the IRIs of every {@code arkproc:HumanActor}/{@code SystemActor}/{@code LegalActor}
-     *         in the project, sorted - independent of whether any use case references it via
-     *         {@code arkreq:primaryActor}/{@code supportingActor}. {@code actor_usecase_matrix}'s
-     *         "Actors" section unions this with {@link #actorsOf(String)}'s results so an actor
-     *         nobody's use case references yet still appears, instead of silently disappearing
-     *         from a matrix whose own tool description promises "for every actor" (issue #147).
+     * @return the IRIs of every {@code arkproc:HumanActor}/{@code SystemActor}/{@code LegalActor}/
+     *         {@code GroupActor} in the project, sorted - independent of whether any use case
+     *         references it via {@code arkreq:primaryActor}/{@code supportingActor}, and
+     *         independent of which named graph it lives in: since issue #336 an actor lives in
+     *         {@code arknet-actor}'s own register graph rather than the ubiquitous-language
+     *         graph, but this traversal is graph-agnostic (it indexes {@link
+     *         StoreSnapshot}'s resources by type, never by graph), so it finds the register's
+     *         actors the same way it always found the old term-facetted ones.
+     *         {@code actor_usecase_matrix}'s "Actors" section unions this with
+     *         {@link #actorsOf(String)}'s results so an actor nobody's use case references yet
+     *         still appears, instead of silently disappearing from a matrix whose own tool
+     *         description promises "for every actor" (issue #147).
      */
     public List<String> actorIris() {
-        return subjectsOfType(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE, LEGAL_ACTOR_TYPE);
+        return subjectsOfType(HUMAN_ACTOR_TYPE, SYSTEM_ACTOR_TYPE, LEGAL_ACTOR_TYPE, GROUP_ACTOR_TYPE);
     }
 
     /**

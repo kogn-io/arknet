@@ -24,9 +24,6 @@ import java.util.Objects;
  * @param prefLabel  the preferred label, i.e. the term itself; maps to
  *                   {@code skos:prefLabel}
  * @param definition the meaning of the term; maps to {@code skos:definition}
- * @param actorFacet optional Actor facette: if set, the same
- *                   skos:Concept is additionally an {@code arkproc:Actor}.
- *                   Optional (may be {@code null})
  * @param broader    optional {@code skos:broader} reference to the term it specializes
  *                   (its superordinate, single-valued term); maps to {@code skos:broader}.
  *                   Optional (may be {@code null}). Only this forward direction is ever
@@ -34,8 +31,7 @@ import java.util.Objects;
  *                   written a second time by hand, mirroring the ADR bounded context's
  *                   {@code supersedes}/{@code supersededBy} pair
  */
-public record Term(TermId id, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
-        TermCode broader) {
+public record Term(TermId id, TermCode code, String prefLabel, String definition, TermCode broader) {
 
     public Term {
         Objects.requireNonNull(id, "id");
@@ -58,7 +54,7 @@ public record Term(TermId id, TermCode code, String prefLabel, String definition
      * passing {@code null} for {@link #broader} explicitly. Kept so the many call sites that
      * predate {@code broader} (issue #252) do not all have to restate a trailing {@code null}.
      */
-    public Term(TermId id, TermCode code, String prefLabel, String definition, ActorFacet actorFacet) {
-        this(id, code, prefLabel, definition, actorFacet, null);
+    public Term(TermId id, TermCode code, String prefLabel, String definition) {
+        this(id, code, prefLabel, definition, null);
     }
 }

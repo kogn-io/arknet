@@ -12,6 +12,7 @@ import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
@@ -73,8 +74,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  * <p><strong>Rendering.</strong> This class only dispatches tool calls to their in-port and
  * turns the result into the returned string via {@link UseCasePresenter} - it holds no
  * rendering logic of its own (issue #96). See {@link UseCasePresenter} for the actor/requirement/
- * term/constraint display resolution that borrows {@link ResolveTerms}/{@link ResolveRequirements}/
- * {@link ResolveConstraints} purely for display.</p>
+ * term/constraint display resolution that borrows {@link ResolveActors}/{@link ResolveTerms}/
+ * {@link ResolveRequirements}/{@link ResolveConstraints} purely for display.</p>
  */
 public final class UseCaseMcpTools {
 
@@ -88,7 +89,7 @@ public final class UseCaseMcpTools {
     private final UseCasePresenter presenter;
 
     /**
-     * Creates the adapter with its six driving in-ports, the three borrowed sibling-hexagon
+     * Creates the adapter with its six driving in-ports, the four borrowed sibling-hexagon
      * display ports and the resolver that maps each call's origin anchor to a project.
      *
      * @param addUseCase          in-port backing {@code uc_add}
@@ -97,9 +98,11 @@ public final class UseCaseMcpTools {
      * @param updateUseCase       in-port backing {@code uc_update}
      * @param linkTerm            in-port backing {@code uc_link_term}
      * @param linkConstraint      in-port backing {@code uc_link_constraint}
-     * @param resolveTerms        ubiquitous-language driving port used only to render a
-     *                            referenced actor's business name and a linked glossary term's
-     *                            business code instead of their bare IRI
+     * @param resolveActors       the actor register's driving port used only to render a
+     *                            referenced actor's business code instead of its bare IRI
+     *                            (issue #336)
+     * @param resolveTerms        ubiquitous-language driving port used only to render a linked
+     *                            glossary term's business code instead of its bare IRI
      * @param resolveRequirements requirements driving port used only to render a referenced
      *                            requirement's business code instead of its bare IRI
      * @param resolveConstraints  requirements driving port used only to render a linked
@@ -113,6 +116,7 @@ public final class UseCaseMcpTools {
             final UpdateUseCase updateUseCase,
             final LinkTerm linkTerm,
             final LinkConstraint linkConstraint,
+            final ResolveActors resolveActors,
             final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements,
             final ResolveConstraints resolveConstraints,
@@ -124,7 +128,7 @@ public final class UseCaseMcpTools {
         this.linkTerm = Objects.requireNonNull(linkTerm, "linkTerm");
         this.linkConstraint = Objects.requireNonNull(linkConstraint, "linkConstraint");
         this.projects = Objects.requireNonNull(projects, "projects");
-        this.presenter = new UseCasePresenter(resolveTerms, resolveRequirements, resolveConstraints);
+        this.presenter = new UseCasePresenter(resolveActors, resolveTerms, resolveRequirements, resolveConstraints);
     }
 
     /**
@@ -229,7 +233,7 @@ public final class UseCaseMcpTools {
             description = "Register a complete use case (Cockburn-style, goal + ordered main flow) in a "
                     + "single call. Requirement and actor references are given as bare labels that must "
                     + "already exist in this project (create requirements with req_add, actors with "
-                    + "term_add using actorKind first).")
+                    + "actor_add first).")
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Short human-readable name of the use case, e.g. 'Place order'")
@@ -241,10 +245,10 @@ public final class UseCaseMcpTools {
             @McpToolParam(description = "Optional: the event that triggers the use case", required = false)
             final String trigger,
             @McpToolParam(description = "Label of the primary actor whose goal this use case serves, e.g. "
-                    + "'Customer'. Must be an existing actor term (term_add with actorKind).")
+                    + "'Customer'. Must be an existing actor (actor_add).")
             final String primaryActor,
             @McpToolParam(description = "Optional: labels of supporting (secondary) actors; each must be an "
-                    + "existing actor term", required = false)
+                    + "existing actor", required = false)
             final List<String> supportingActors,
             @McpToolParam(description = "Optional: state that must hold before the use case runs",
                     required = false)

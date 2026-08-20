@@ -9,20 +9,21 @@
 #  GroupActor and actorRole - used to identify who or what acts in, or holds
 #  an interest in, the system under description.
 #
-#  An Actor exists in two shapes, and both are supported side by side:
-#    - as a facet of a glossary term: an arkproc:*Actor type set on an
-#      existing skos:Concept by the ubiquitous-language context
-#      (term_add/term_update's actorKind/actorRole). Unchanged.
-#    - as a resource of its own: minted store-first through the arknet-actor
-#      bounded context (actor_add/actor_get/actor_list/actor_update), with
-#      its own dcterms:identifier (ACTOR-N) and its own SHACL shapes in
-#      actor-shapes.ttl - no skos:Concept, and therefore no glossary
-#      obligations, required. A resource may still be both.
+#  An Actor is a resource of its own: minted store-first through the
+#  arknet-actor bounded context (actor_add/actor_get/actor_list/
+#  actor_update), with its own dcterms:identifier (ACTOR-N) and its own
+#  SHACL shapes in actor-shapes.ttl - no skos:Concept, and therefore no
+#  glossary obligations, required. A resource may still separately be
+#  registered as a glossary term (term_add) - the two identities are
+#  independent since issue #336, when the glossary's own actor facet
+#  (arkproc:*Actor set on a skos:Concept, term_add/term_update's former
+#  actorKind/actorRole) was removed without replacement.
 #
 #  Namespace note: this module lives under process#, not actor#, because
-#  arkproc:HumanActor/arkproc:SystemActor are already used as types on
-#  existing skos:Concept individuals - changing the namespace would require
-#  a data migration.
+#  arkproc:HumanActor/arkproc:SystemActor were originally introduced as
+#  types on existing skos:Concept individuals - changing the namespace
+#  would still require a data migration for any store-first resource
+#  minted under the old facet.
 #
 #  NOT included here (separate module):
 #    - Process, Step, State Machine, BusinessRule, Outcome → parked/arknet-process.ttl

@@ -9,7 +9,6 @@ import java.util.Optional;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
-import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -90,7 +89,7 @@ public interface TermRepository {
      * discarded. Only once every retry attempt keeps losing the race does
      * {@link TermConcurrentlyModifiedException} reach the caller.</p>
      *
-     * <p>A call with {@code prefLabel}, {@code definition} and {@code actorFacet} all {@code null}
+     * <p>A call with {@code prefLabel} and {@code definition} both {@code null}
      * is a no-op: nothing is written, no revision is recorded, and the revision head does not
      * move.</p>
      *
@@ -102,10 +101,6 @@ public interface TermRepository {
      *                    preferred label untouched
      * @param definition  the new definition, or {@code null} to leave every existing
      *                    definition untouched
-     * @param actorFacet  the new Actor facette, or {@code null} to leave an already-set facette
-     *                    (its type and role) untouched. Within a non-{@code null} facette,
-     *                    a {@code null} {@link ActorFacet#role()} likewise leaves an already-set
-     *                    role untouched - only the type is always replaced
      * @param language    the BCP-47 language tag the new {@code prefLabel}/{@code definition} is
      *                    written in (e.g. {@code "de"}), or {@code null} for a plain, untagged
      *                    literal (the caller, {@code TermService#update}, has already resolved a
@@ -144,7 +139,7 @@ public interface TermRepository {
      *                          lives in {@code arknet-persistence-support}, a module
      *                          {@code arknet-ubiquitous-language-core} must not depend on.
      */
-    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition, ActorFacet actorFacet,
+    Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
             String language, String defaultLanguage, Optional<TermCode> broader);
 
     /**

@@ -29,15 +29,17 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  * Integration test for {@link KognioRdfActorLookup} against an in-memory RDF4J-backed
  * kognio-rdf store.
  *
- * <p>This carries the strict, prefLabel-based cross-BC resolution behaviour that used to be
- * pinned inside {@code KognioRdfUseCaseRepositoryTest} - extracted here because the resolution
- * moved out of the use-case repository's write path into this dedicated port/adapter.</p>
+ * <p>This carries the strict, name-based cross-BC resolution behaviour that used to be pinned
+ * inside {@code KognioRdfUseCaseRepositoryTest} - extracted here because the resolution moved out
+ * of the use-case repository's write path into this dedicated port/adapter. Since issue #336 this
+ * resolves against {@code arknet-actor}'s own register graph rather than the (now removed)
+ * ubiquitous-language actor facet.</p>
  */
 class KognioRdfActorLookupTest {
 
     private static final ProjectId PROJECT_A = new ProjectId("a");
     private static final ProjectId PROJECT_B = new ProjectId("b");
-    private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
 
     /**
      * The store's on-disk home, managed by JUnit rather than {@code Files.createTempDirectory},
@@ -66,7 +68,7 @@ class KognioRdfActorLookupTest {
 
     @Test
     void resolvesAKnownHumanActorNameToItsSubjectIdentity() {
-        String actorIri = givenHumanActor(PROJECT_A, "customer", "Customer");
+        String actorIri = givenActor(PROJECT_A, "customer", "HumanActor", "Customer");
 
         ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Customer");
 
@@ -75,7 +77,7 @@ class KognioRdfActorLookupTest {
 
     @Test
     void resolvesAKnownSystemActorNameToItsSubjectIdentity() {
-        String actorIri = givenSystemActor(PROJECT_A, "payment-provider", "PaymentProvider");
+        String actorIri = givenActor(PROJECT_A, "payment-provider", "SystemActor", "PaymentProvider");
 
         ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "PaymentProvider");
 
@@ -84,21 +86,30 @@ class KognioRdfActorLookupTest {
 
     @Test
     void resolvesAKnownLegalActorNameToItsSubjectIdentity() {
-        String actorIri = givenLegalActor(PROJECT_A, "kunde-gmbh", "Kunde GmbH");
+        String actorIri = givenActor(PROJECT_A, "kunde-gmbh", "LegalActor", "Kunde GmbH");
 
         ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Kunde GmbH");
 
         assertEquals(ResourceId.of(actorIri), resolved);
     }
 
+    @Test
+    void resolvesAKnownGroupActorNameToItsSubjectIdentity() {
+        String actorIri = givenActor(PROJECT_A, "compliance-team", "GroupActor", "Compliance Team");
+
+        ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Compliance Team");
+
+        assertEquals(ResourceId.of(actorIri), resolved);
+    }
+
     /**
-     * The type-union constraint (human, system or legal actor) must actually matter: a plain
-     * glossary concept sharing the same {@code skos:prefLabel} but carrying no actor type must not
-     * satisfy the reference.
+     * The type-union constraint (human, system, legal or group actor) must actually matter: a
+     * resource sharing the same {@code arknet:name} but carrying no actor type must not satisfy
+     * the reference.
      */
     @Test
-    void aNonActorConceptWithTheSameLabelDoesNotSatisfyTheReference() {
-        givenNonActorConcept(PROJECT_A, "order", "Order");
+    void aNonActorResourceWithTheSameNameDoesNotSatisfyTheReference() {
+        givenNonActorResource(PROJECT_A, "order", "Order");
 
         assertThrows(UnresolvedReferenceException.class,
                 () -> actorLookup.resolveByName(PROJECT_A, "Order"));
@@ -106,19 +117,19 @@ class KognioRdfActorLookupTest {
 
     @Test
     void rejectsAnUnknownActorName() {
-        givenHumanActor(PROJECT_A, "customer", "Customer");
+        givenActor(PROJECT_A, "customer", "HumanActor", "Customer");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
                 () -> actorLookup.resolveByName(PROJECT_A, "Unknown"));
 
         assertTrue(ex.getMessage().contains("Unknown"), ex.getMessage());
-        assertTrue(ex.getMessage().contains("term_add"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("actor_add"), ex.getMessage());
     }
 
     @Test
     void rejectsAnAmbiguousActorName() {
-        givenHumanActor(PROJECT_A, "customer-1", "Customer");
-        givenHumanActor(PROJECT_A, "customer-2", "Customer");
+        givenActor(PROJECT_A, "customer-1", "HumanActor", "Customer");
+        givenActor(PROJECT_A, "customer-2", "HumanActor", "Customer");
 
         UnresolvedReferenceException ex = assertThrows(UnresolvedReferenceException.class,
                 () -> actorLookup.resolveByName(PROJECT_A, "Customer"));
@@ -129,76 +140,27 @@ class KognioRdfActorLookupTest {
     /** An actor of another project must not satisfy this project's reference. */
     @Test
     void anActorOfAnotherProjectDoesNotSatisfyThisProjectsReference() {
-        givenHumanActor(PROJECT_B, "customer", "Customer");
+        givenActor(PROJECT_B, "customer", "HumanActor", "Customer");
 
         assertThrows(UnresolvedReferenceException.class,
                 () -> actorLookup.resolveByName(PROJECT_A, "Customer"));
     }
 
-    /**
-     * A store-first (ADR-005) actor concept can legally carry {@code skos:prefLabel} only as a
-     * language-tagged literal (e.g. {@code "Kundin"@de}, no untagged form at all) - the
-     * {@code uc_add} caller types the name without a language tag regardless. Regression for
-     * issue #156: an exact RDF-term match rejected this as unresolved even though the actor
-     * exists and its label is otherwise a lexical match.
-     */
-    @Test
-    void resolvesAKnownActorWhoseOnlyPrefLabelIsLanguageTagged() {
-        String actorIri = givenHumanActorWithLanguageTaggedLabel(PROJECT_A, "customer", "Kundin", "de");
-
-        ResourceId resolved = actorLookup.resolveByName(PROJECT_A, "Kundin");
-
-        assertEquals(ResourceId.of(actorIri), resolved);
-    }
-
-    private String givenHumanActor(ProjectId projectId, String slug, String prefLabel) {
-        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
-        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
-                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                + "<https://w3id.org/arknet/process#HumanActor> ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+    private String givenActor(ProjectId projectId, String slug, String actorTypeLocalName, String name) {
+        String actorIri = "https://w3id.org/arknet/model/actor/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "<" + actorIri + "> a <https://w3id.org/arknet/process#" + actorTypeLocalName + "> ; "
+                + "<https://w3id.org/arknet/core#name> \"" + name + "\" } }";
         write(projectId, insert);
         return actorIri;
     }
 
-    private String givenSystemActor(ProjectId projectId, String slug, String prefLabel) {
-        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
-        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
-                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                + "<https://w3id.org/arknet/process#SystemActor> ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
+    private String givenNonActorResource(ProjectId projectId, String slug, String name) {
+        String resourceIri = "https://w3id.org/arknet/model/term/" + slug;
+        String insert = "INSERT DATA { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "<" + resourceIri + "> <https://w3id.org/arknet/core#name> \"" + name + "\" } }";
         write(projectId, insert);
-        return actorIri;
-    }
-
-    private String givenLegalActor(ProjectId projectId, String slug, String prefLabel) {
-        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
-        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
-                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                + "<https://w3id.org/arknet/process#LegalActor> ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
-        write(projectId, insert);
-        return actorIri;
-    }
-
-    private String givenHumanActorWithLanguageTaggedLabel(ProjectId projectId, String slug, String prefLabel,
-            String languageTag) {
-        String actorIri = "https://w3id.org/arknet/model/term/" + slug;
-        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
-                + "<" + actorIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                + "<https://w3id.org/arknet/process#HumanActor> ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\"@" + languageTag + " } }";
-        write(projectId, insert);
-        return actorIri;
-    }
-
-    private String givenNonActorConcept(ProjectId projectId, String slug, String prefLabel) {
-        String conceptIri = "https://w3id.org/arknet/model/term/" + slug;
-        String insert = "INSERT DATA { GRAPH <" + TERMS_GRAPH + "> { "
-                + "<" + conceptIri + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" } }";
-        write(projectId, insert);
-        return conceptIri;
+        return resourceIri;
     }
 
     private void write(ProjectId projectId, String insert) {

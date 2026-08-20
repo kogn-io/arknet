@@ -78,11 +78,10 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
     private void seedCustomerActor() {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             handle.transactor().inTransaction(tx -> {
-                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                tx.update("INSERT DATA { GRAPH <https://w3id.org/arknet/model/actors> { "
                         + "<https://w3id.org/arknet/model/term/customer> "
-                        + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                        + "<https://w3id.org/arknet/process#HumanActor> ; "
-                        + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Customer\" . } }");
+                        + "a <https://w3id.org/arknet/process#HumanActor> ; "
+                        + "<https://w3id.org/arknet/core#name> \"Customer\" . } }");
                 return null;
             });
         }

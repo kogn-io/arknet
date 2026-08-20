@@ -19,7 +19,6 @@ import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
@@ -47,7 +46,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * multi-writer concern (ADR-001).</p>
  *
  * <p><strong>Correction.</strong> {@link #update} lets a caller correct a term's
- * preferred label, definition and/or Actor facette after the fact, keeping its identity (and thus
+ * preferred label and/or definition after the fact, keeping its identity (and thus
  * every existing link into it) unchanged. Unlike {@link #add}, {@link #update} does not need
  * {@link #add}'s {@code CodeAssignment} retry apparatus - that only guards the code's
  * <em>assignment</em>, and a correction never changes the code.</p>
@@ -58,7 +57,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * before handing that merged object to the repository - which, because {@code findByCode} itself
  * has to collapse a possibly multi-valued {@code skos:prefLabel}/{@code skos:definition}
  * down to a single value for the {@link Term} projection, meant an update that only
- * touched {@code actorKind} silently rewrote {@code prefLabel}/{@code definition} down to
+ * touched one field silently rewrote {@code prefLabel}/{@code definition} down to
  * whichever one value the read happened to pick - destroying every other language-tagged label or
  * duplicate definition a store-first term legally carried, even though the caller never asked to
  * change either field. {@link #update} therefore no longer reads or merges anything: it passes
@@ -109,8 +108,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
         return CodeAssignment.createRetryingOnCodeCollision(DuplicateTermCodeException.class, () -> {
             TermCode code = nextCode(projectId);
-            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.actorFacet(),
-                    command.broader());
+            Term term = new Term(id, code, command.prefLabel(), command.definition(), command.broader());
             repository.create(projectId, term, language);
             return term;
         });
@@ -131,7 +129,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
+            String language, String defaultLanguage, Optional<TermCode> broader) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         // Unlike RequirementService/UseCaseService, this method never reads the current term
@@ -146,7 +144,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
         String effectiveLanguage = (prefLabel != null || definition != null)
                 ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
                 : language;
-        return repository.update(projectId, code, prefLabel, definition, actorFacet, effectiveLanguage,
+        return repository.update(projectId, code, prefLabel, definition, effectiveLanguage,
                 defaultLanguage, broader);
     }
 

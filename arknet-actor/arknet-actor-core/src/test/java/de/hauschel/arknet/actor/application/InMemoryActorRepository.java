@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -20,6 +22,7 @@ import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * In-memory test double for {@link ActorRepository}.
@@ -107,5 +110,14 @@ final class InMemoryActorRepository implements ActorRepository {
                 .orElseThrow(() -> new ActorNotFoundException(projectId, code));
         actors.remove(id);
         headByIdentity.remove(id);
+    }
+
+    @Override
+    public List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids) {
+        Set<ResourceId> wanted = Set.copyOf(ids);
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(actor -> wanted.contains(actor.id().value()))
+                .map(actor -> new ResolveActors.ResolvedActor(actor.id().value(), actor.code()))
+                .toList();
     }
 }

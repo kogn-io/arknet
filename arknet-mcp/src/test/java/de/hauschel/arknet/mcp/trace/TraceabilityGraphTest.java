@@ -23,6 +23,12 @@ import io.kogn.rdf.terms.IRI;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 
+import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
+import de.hauschel.arknet.actor.application.port.out.ActorRepository;
+import de.hauschel.arknet.actor.domain.Actor;
+import de.hauschel.arknet.actor.domain.ActorCode;
+import de.hauschel.arknet.actor.domain.ActorId;
+import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfContextRelationshipRepositoryFactory;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
@@ -67,8 +73,6 @@ import de.hauschel.arknet.uc.domain.UseCaseCode;
 import de.hauschel.arknet.uc.domain.UseCaseId;
 import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.ul.domain.ActorFacet;
-import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
@@ -117,6 +121,7 @@ class TraceabilityGraphTest {
                 lifecycle, DisplayLocale.DEFAULT);
         ConstraintRepository constraints = KognioRdfConstraintRepositoryFactory.over(
                 lifecycle, DisplayLocale.DEFAULT, requirementsFunnel);
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
 
         // CON-1: bound to FR-1 via constrainedBy. CON-2: never referenced (orphan, issue #223).
         // CON-3: bound ONLY to UC1 via constrainedBy (issue #329) - never to any requirement.
@@ -129,17 +134,18 @@ class TraceabilityGraphTest {
                 new ConstraintCode("CON-3"), "Accessibility", "Must meet WCAG AA.", ConstraintType.REGULATORY),
                 "en");
 
-        // TERM-1: used by FR-1. TERM-2: never referenced (orphan). Actor: never usesTerm'd but
-        // referenced as UC1's primary actor - must NOT count as an orphan term.
+        // TERM-1: used by FR-1. TERM-2: never referenced (orphan).
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"), "Anmeldung",
                 "The act of proving one's identity.", null), null);
         terms.create(PROJECT, new Term(
                 new TermId(ResourceId.of(TERM_2_IRI)), new TermCode("TERM-2"), "Passwort",
                 "A secret credential.", null), null);
-        terms.create(PROJECT, new Term(
-                new TermId(ResourceId.of(ACTOR_IRI)), new TermCode("TERM-3"), "Customer",
-                "A person placing an order.", new ActorFacet(ActorKind.HUMAN, "orderer")), null);
+        // Actor (since issue #336, its own resource type in arknet-actor's register, no longer a
+        // glossary term): never usesTerm'd but referenced as UC1's primary actor - must show up
+        // in actorIris() independent of that reference (issue #147).
+        actors.create(PROJECT, new Actor(
+                new ActorId(ResourceId.of(ACTOR_IRI)), new ActorCode("ACTOR-1"), ActorType.HUMAN, "Customer", null));
         // TERM-4: never usesTerm'd, referenced only through BC-1's ubiquitousLanguageTerm edge -
         // must NOT count as an orphan term either.
         terms.create(PROJECT, new Term(
@@ -202,10 +208,14 @@ class TraceabilityGraphTest {
         assertThat(graph.requirementIris()).containsExactlyInAnyOrder(FR_1_IRI, FR_2_IRI);
     }
 
+    /**
+     * Since issue #336 an actor is no longer a glossary term - {@link #ACTOR_IRI} therefore does
+     * not appear here any more, unlike before the facet was removed.
+     */
     @Test
-    void termIrisContainsAllFiveConceptsIncludingTheActorFacetted() {
+    void termIrisContainsAllFourConcepts() {
         assertThat(graph.termIris())
-                .containsExactlyInAnyOrder(TERM_1_IRI, TERM_2_IRI, ACTOR_IRI, TERM_4_IRI, TERM_5_IRI);
+                .containsExactlyInAnyOrder(TERM_1_IRI, TERM_2_IRI, TERM_4_IRI, TERM_5_IRI);
     }
 
     /**
@@ -335,6 +345,11 @@ class TraceabilityGraphTest {
      */
     @Test
     void unlinkedMentionsFlagsATermsMentionOfAnotherTermThatIsNotItsBroaderTerm() {
+        // Since issue #336 the actor is no longer a term itself, so this regression needs its own,
+        // unrelated glossary term to be mentioned - it used to reuse ACTOR_IRI's old "Customer"
+        // term facet for that.
+        String otherTermIri = "https://w3id.org/arknet/id/trace-test-unrelated-customer-term";
+        seedTermWithBroader(otherTermIri, "TERM-MU-0", "Customer", "Someone who buys.", null);
         String mentioningIri = "https://w3id.org/arknet/id/trace-test-mention-unlinked";
         seedTermWithBroader(mentioningIri, "TERM-MU-1", "Regular Customer",
                 "A Customer who orders repeatedly.", null);
@@ -344,7 +359,7 @@ class TraceabilityGraphTest {
         assertThat(freshGraph.unlinkedMentions())
                 .filteredOn(mention -> mention.sourceIri().equals(mentioningIri))
                 .extracting(TraceabilityGraph.UnlinkedMention::termIri, TraceabilityGraph.UnlinkedMention::edgeLocalName)
-                .containsExactly(org.assertj.core.api.Assertions.tuple(ACTOR_IRI, "broader"));
+                .containsExactly(org.assertj.core.api.Assertions.tuple(otherTermIri, "broader"));
     }
 
     @Test
@@ -370,8 +385,10 @@ class TraceabilityGraphTest {
 
     @Test
     void termLabelsMapsEveryTermIriToItsPrefLabel() {
+        // ACTOR_IRI is deliberately absent: since issue #336 it is registered in arknet-actor's
+        // own register, no longer a glossary term.
         assertThat(graph.termLabels()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                TERM_1_IRI, "Anmeldung", TERM_2_IRI, "Passwort", ACTOR_IRI, "Customer", TERM_4_IRI, "Vertrag",
+                TERM_1_IRI, "Anmeldung", TERM_2_IRI, "Passwort", TERM_4_IRI, "Vertrag",
                 TERM_5_IRI, "Warenkorb"));
     }
 
@@ -471,39 +488,13 @@ class TraceabilityGraphTest {
     }
 
     /**
-     * Writes a fresh {@code skos:Concept}, additionally typed {@code arkproc:HumanActor}, with no
+     * Registers a fresh actor of {@code type} via the real {@link ActorRepository}, with no
      * {@code primaryActor}/{@code supportingActor} edge from any use case - for {@link
-     * #actorIrisIncludesAnActorNoUseCaseReferencesYet()}.
+     * #actorIrisIncludesAnActorNoUseCaseReferencesYet()} and its GROUP/LEGAL siblings.
      */
-    private void seedActorConcept(String actorIri, String label) {
-        RDF rdf = new SimpleRdf();
-        Graph graph = rdf.createGraph();
-        IRI actor = rdf.createIRI(actorIri);
-        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
-        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("https://w3id.org/arknet/process#HumanActor"));
-        graph.add(actor, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"), rdf.createLiteral(label));
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unreferenced-actor-graph"), graph);
-                return null;
-            });
-        }
-    }
-
-    /** Same as {@link #seedActorConcept(String, String)}, but typed {@code arkproc:LegalActor}. */
-    private void seedLegalActorConcept(String actorIri, String label) {
-        RDF rdf = new SimpleRdf();
-        Graph graph = rdf.createGraph();
-        IRI actor = rdf.createIRI(actorIri);
-        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
-        graph.add(actor, rdf.createIRI(RDF_TYPE), rdf.createIRI("https://w3id.org/arknet/process#LegalActor"));
-        graph.add(actor, rdf.createIRI("http://www.w3.org/2004/02/skos/core#prefLabel"), rdf.createLiteral(label));
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.add(rdf.createIRI("https://w3id.org/arknet/id/trace-test-unreferenced-legal-actor-graph"), graph);
-                return null;
-            });
-        }
+    private void seedActor(String actorIri, ActorCode code, ActorType type, String name) {
+        ActorRepository actors = KognioRdfActorRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        actors.create(PROJECT, new Actor(new ActorId(ResourceId.of(actorIri)), code, type, name, null));
     }
 
     /** Overwrites a requirement's {@code dcterms:description} with raw prose, for prose-matching tests. */
@@ -631,8 +622,13 @@ class TraceabilityGraphTest {
         assertThat(graph.useCaseIris()).containsExactly(UC_1_IRI);
     }
 
+    /**
+     * Since issue #336 {@link #ACTOR_IRI} is registered in {@code arknet-actor}'s own register
+     * rather than written as a term - {@link TraceabilityGraph#actorIris()} is graph-agnostic, so
+     * it finds it there exactly as it used to find the old term-facetted actor.
+     */
     @Test
-    void actorIrisContainsTheActorFacettedTerm() {
+    void actorIrisContainsTheRegisteredActor() {
         assertThat(graph.actorIris()).containsExactly(ACTOR_IRI);
     }
 
@@ -644,7 +640,7 @@ class TraceabilityGraphTest {
     @Test
     void actorIrisIncludesAnActorNoUseCaseReferencesYet() {
         String unreferencedActorIri = "https://w3id.org/arknet/id/trace-test-actor-unreferenced";
-        seedActorConcept(unreferencedActorIri, "Auditor");
+        seedActor(unreferencedActorIri, new ActorCode("ACTOR-2"), ActorType.HUMAN, "Auditor");
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
 
         TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
@@ -657,12 +653,29 @@ class TraceabilityGraphTest {
     @Test
     void actorIrisIncludesALegalActorNoUseCaseReferencesYet() {
         String legalActorIri = "https://w3id.org/arknet/id/trace-test-legal-actor-unreferenced";
-        seedLegalActorConcept(legalActorIri, "Kunde GmbH");
+        seedActor(legalActorIri, new ActorCode("ACTOR-3"), ActorType.LEGAL, "Kunde GmbH");
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
 
         TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
 
         assertThat(freshGraph.actorIris()).containsExactlyInAnyOrder(ACTOR_IRI, legalActorIri);
+    }
+
+    /**
+     * Same regression as {@link #actorIrisIncludesAnActorNoUseCaseReferencesYet()}, for the
+     * fourth actor kind ({@code GROUP}, issue #336) - {@code arkproc:GroupActor} was missing from
+     * {@link TraceabilityGraph#actorIris()}'s type filter before this fix, since it did not exist
+     * yet when #147 first pinned the human/system/legal cases.
+     */
+    @Test
+    void actorIrisIncludesAGroupActorNoUseCaseReferencesYet() {
+        String groupActorIri = "https://w3id.org/arknet/id/trace-test-group-actor-unreferenced";
+        seedActor(groupActorIri, new ActorCode("ACTOR-4"), ActorType.GROUP, "Compliance Team");
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.actorIris()).containsExactlyInAnyOrder(ACTOR_IRI, groupActorIri);
     }
 
     @Test
@@ -736,9 +749,12 @@ class TraceabilityGraphTest {
 
     /**
      * UC1's goal names its own primary actor ("Customer authenticates" mentions {@code Customer},
-     * the actor {@link #ACTOR_IRI} is registered under, issue #333) - that relationship is
-     * already recorded via {@code arkreq:primaryActor}, so it must not be reported as an
-     * unlinked {@code usesTerm} mention.
+     * the actor {@link #ACTOR_IRI} is registered under). Since issue #336 an actor is no longer a
+     * glossary term by default, so {@code Customer} is not even a mention candidate here any
+     * more - this now holds vacuously rather than by the {@code actorsOf(useCaseIri)} suppression
+     * {@link TraceabilityGraph#unlinkedMentions()} still applies. That suppression remains live
+     * for the (still legal) case of a resource that is both a registered actor and a separately
+     * registered glossary term sharing the same label - not pinned by this test.
      */
     @Test
     void unlinkedMentionsDoesNotFlagAUseCasesOwnPrimaryActorMentionInItsGoal() {

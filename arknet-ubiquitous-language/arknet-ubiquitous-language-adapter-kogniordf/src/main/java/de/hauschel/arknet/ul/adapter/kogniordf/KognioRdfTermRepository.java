@@ -46,8 +46,6 @@ import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.ul.domain.ActorFacet;
-import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
@@ -172,14 +170,12 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * candidates exactly like {@code prefLabel} and let {@link TermAssembly#toTerm} select from both
  * with one shared {@link DisplayLocale} instance.</p>
  *
- * <p><strong>Row multiplication on {@code arkproc:actorRole}.</strong> Neither {@code ulshapes}
- * nor {@code arknet-actor.ttl} constrain {@code arkproc:actorRole} with {@code sh:maxCount}
- * either, so a store-first (ADR-005) actor-facetted concept with two role literals is just as
- * SHACL-legal as a two-valued {@code definition} and multiplies a subject into two rows the same
- * way. {@link #findByCode}/{@link #findAll} therefore collect {@code actorRole} candidates across
- * a subject's rows exactly like {@code definition} and resolve them with the same first-seen
- * value plus single {@code WARN}-on-collision policy, not a silent {@code computeIfAbsent} pick
- * of whatever the first row happened to bind.</p>
+ * <p><strong>No actor facet (since issue #336).</strong> A term used to be optionally
+ * double-typed as an {@code arkproc:Actor} subtype ({@code HumanActor}/{@code SystemActor}/
+ * {@code LegalActor}) with an optional {@code arkproc:actorRole} literal - that facet has been
+ * removed without replacement. Actors now live in {@code arknet-actor}'s own register, one
+ * ungoverned resource type in its own named graph; a glossary term is a {@code skos:Concept}
+ * and nothing more.</p>
  */
 public class KognioRdfTermRepository implements TermRepository {
 
@@ -188,7 +184,6 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String SKOS_NAMESPACE = "http://www.w3.org/2004/02/skos/core#";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
     private static final String GLOSSARY_SCHEME = "https://w3id.org/arknet/model/glossary";
-    private static final String ARKPROC_NAMESPACE = "https://w3id.org/arknet/process#";
 
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String CONCEPT_SCHEME_TYPE = SKOS_NAMESPACE + "ConceptScheme";
@@ -197,10 +192,6 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String DEFINITION_PROPERTY = ArkreqVocabulary.DEFINITION;
     private static final String BROADER_PROPERTY = ArkreqVocabulary.BROADER;
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
-    private static final String HUMAN_ACTOR_TYPE = ARKPROC_NAMESPACE + "HumanActor";
-    private static final String SYSTEM_ACTOR_TYPE = ARKPROC_NAMESPACE + "SystemActor";
-    private static final String LEGAL_ACTOR_TYPE = ARKPROC_NAMESPACE + "LegalActor";
-    private static final String ACTOR_ROLE_PROPERTY = ARKPROC_NAMESPACE + "actorRole";
 
     /**
      * Bound on {@link #update}'s CAS retry loop (same bound and rationale as {@code
@@ -264,16 +255,6 @@ public class KognioRdfTermRepository implements TermRepository {
         // The per-project glossary itself, typed once (idempotent - RDF set semantics).
         graph.add(schemeIri, VocabRdf.TYPE, rdf.createIRI(CONCEPT_SCHEME_TYPE));
 
-        // Optional actor facet: the same skos:Concept is additionally typed as an
-        // arkproc:Actor. Added before the gate so the facet is validated too. The facet
-        // hangs off the subject, so it moves with the now-opaque identity for free.
-        ActorFacet actorFacet = term.actorFacet();
-        if (actorFacet != null) {
-            graph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorTypeOf(actorFacet.kind())));
-            if (actorFacet.role() != null) {
-                graph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY), rdf.createLiteral(actorFacet.role()));
-            }
-        }
         if (broaderTargetIri != null) {
             graph.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(broaderTargetIri));
         }
@@ -442,7 +423,7 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p><strong>No-op update.</strong> Every field the
      * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
-     * method with {@code prefLabel}, {@code definition} and {@code actorFacet} all {@code null}.
+     * method with {@code prefLabel} and {@code definition} both {@code null}.
      * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
      * comparison. A revision documents a model change (ADR-011/ADR-014); recording one for an
      * empty patch would grow the immutable provenance trail without cause and would move the head,
@@ -454,7 +435,7 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
+            String language, String defaultLanguage, Optional<TermCode> broader) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
 
@@ -463,7 +444,7 @@ public class KognioRdfTermRepository implements TermRepository {
         TermConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
-                return attemptUpdate(projectId, code, prefLabel, definition, actorFacet, tag, defaultTag, broader);
+                return attemptUpdate(projectId, code, prefLabel, definition, tag, defaultTag, broader);
             } catch (TermConcurrentlyModifiedException e) {
                 // A concurrent writer advanced the head between our read and our write - retry
                 // against the now-current state instead of surfacing a transient race.
@@ -572,8 +553,8 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p><strong>No-op short-circuit.</strong> Once {@code current}/{@code currentHead} are read,
      * this method returns immediately (still throwing {@link TermNotFoundException} for an unknown
-     * code first) if all four field arguments ({@code prefLabel}, {@code definition}, {@code
-     * actorFacet}, {@code broader}) are {@code null} - see the class-level "No-op update" note on
+     * code first) if all three field arguments ({@code prefLabel}, {@code definition}, {@code
+     * broader}) are {@code null} - see the class-level "No-op update" note on
      * {@link #update}.</p>
      *
      * <p><strong>Broader (issue #252).</strong> A non-{@code null} {@code broader} is resolved and
@@ -583,7 +564,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * see one consistent snapshot. {@code broader.isPresent()} sets/replaces the triple;
      * {@code broader.isEmpty()} (an explicit clear) removes it without asserting a replacement;
      * {@code broader == null} (unchanged) re-asserts {@code current}'s own existing target for
-     * the gate, mirroring the {@code prefLabel}/{@code actorRole} "untouched" branches below. This
+     * the gate, mirroring the {@code prefLabel} "untouched" branch below. This
      * pre-transaction check alone only catches a concurrent change that had already fully
      * committed by the time it ran; {@link #assertNoCycle} runs a second time, against {@code
      * tx::select}, inside the write body handed to {@link WriteFunnel#compareAndUpdate} - see that
@@ -591,7 +572,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * re-check, not just this one.</p>
      */
     private Term attemptUpdate(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
+            String language, String defaultLanguage, Optional<TermCode> broader) {
         DatasetId dataset = new DatasetId(projectId.value());
         CurrentTerm currentTerm;
         String broaderTargetIri = null;
@@ -622,11 +603,11 @@ public class KognioRdfTermRepository implements TermRepository {
         TermAssembly current = currentTerm.assembly();
         String currentHead = currentTerm.head();
 
-        if (prefLabel == null && definition == null && actorFacet == null && broader == null) {
+        if (prefLabel == null && definition == null && broader == null) {
             // No field to patch - a true no-op: the funnel is never
             // consulted, so no revision is recorded and the head does not move (see class-level
             // "No-op update" note).
-            return resultingTerm(current, null, null, null, null);
+            return resultingTerm(current, null, null, null);
         }
 
         String subjectIriString = current.id.value().value();
@@ -650,18 +631,6 @@ public class KognioRdfTermRepository implements TermRepository {
                 assertedContext.add(subjectIri, rdf.createIRI(PREF_LABEL_PROPERTY), toLiteral(existing));
             }
         }
-        if (actorFacet != null) {
-            writeCandidate.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorTypeOf(actorFacet.kind())));
-            if (actorFacet.role() != null) {
-                writeCandidate.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
-                        rdf.createLiteral(actorFacet.role()));
-            } else if (current.actorFacet() != null && current.actorFacet().role() != null) {
-                // A null role is "unchanged", not "cleared" (same contract as every other field
-                // here) - assert the untouched existing role for the gate only.
-                assertedContext.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
-                        rdf.createLiteral(current.actorFacet().role()));
-            }
-        }
         // skos:definition's shape carries sh:uniqueLang but no sh:minCount - nothing to assert
         // for the gate to still pass when it is left untouched.
         if (broader != null) {
@@ -671,8 +640,7 @@ public class KognioRdfTermRepository implements TermRepository {
             // broader.isEmpty() (explicit clear): nothing to assert - ulshapes:Term-broader
             // carries sh:minCount 0, so an absent skos:broader never fails the gate.
         } else if (current.broaderSubjectIri != null) {
-            // Untouched: assert the existing target for the gate only, mirroring prefLabel/
-            // actorRole above.
+            // Untouched: assert the existing target for the gate only, mirroring prefLabel above.
             assertedContext.add(subjectIri, rdf.createIRI(BROADER_PROPERTY), rdf.createIRI(current.broaderSubjectIri));
         }
         // The target's own shape-legal-reference state (type + one prefLabel, see
@@ -718,22 +686,6 @@ public class KognioRdfTermRepository implements TermRepository {
                         tx.update(deleteTriplesOfLanguage(subject, DEFINITION_PROPERTY, language, defaultLanguage));
                         tx.add(graphIri, singleTriple(subjectIri, DEFINITION_PROPERTY, literalOf(definition, language)));
                     }
-                    if (actorFacet != null) {
-                        tx.update(deleteType(subject, HUMAN_ACTOR_TYPE));
-                        tx.update(deleteType(subject, SYSTEM_ACTOR_TYPE));
-                        tx.update(deleteType(subject, LEGAL_ACTOR_TYPE));
-                        Graph actorGraph = rdf.createGraph();
-                        actorGraph.add(subjectIri, VocabRdf.TYPE, rdf.createIRI(actorTypeOf(actorFacet.kind())));
-                        // A null role leaves the existing arkproc:actorRole triple (if any) alone,
-                        // instead of deleting it - correcting only the kind must not silently wipe
-                        // an already-set role the caller never mentioned.
-                        if (actorFacet.role() != null) {
-                            tx.update(deleteAllTriplesOf(subject, ACTOR_ROLE_PROPERTY));
-                            actorGraph.add(subjectIri, rdf.createIRI(ACTOR_ROLE_PROPERTY),
-                                    rdf.createLiteral(actorFacet.role()));
-                        }
-                        tx.add(graphIri, actorGraph);
-                    }
                     if (broader != null) {
                         // Both "set/replace" and "explicit clear" start by removing the existing
                         // triple (if any); only "set/replace" reinserts one.
@@ -745,15 +697,7 @@ public class KognioRdfTermRepository implements TermRepository {
                     }
                 });
 
-        return resultingTerm(current, prefLabel, definition, actorFacet, broader);
-    }
-
-    private static String actorTypeOf(ActorKind kind) {
-        return switch (kind) {
-            case HUMAN -> HUMAN_ACTOR_TYPE;
-            case SYSTEM -> SYSTEM_ACTOR_TYPE;
-            case LEGAL -> LEGAL_ACTOR_TYPE;
-        };
+        return resultingTerm(current, prefLabel, definition, broader);
     }
 
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
@@ -835,11 +779,6 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "FILTER(" + filter + ") } }";
     }
 
-    /** Deletes {@code subject a <typeIri>} if present - a no-op if the subject does not carry it. */
-    private static String deleteType(String subject, String typeIri) {
-        return "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " a <" + typeIri + "> } }";
-    }
-
     /** A one-triple graph, for the common "insert exactly one new value" case in {@link #update}. */
     private Graph singleTriple(IRI subject, String predicateIri, RDFTerm object) {
         Graph graph = rdf.createGraph();
@@ -865,13 +804,12 @@ public class KognioRdfTermRepository implements TermRepository {
      * caller sees exactly the state {@link #update} just wrote, without a second read.
      */
     private Term resultingTerm(TermAssembly current, String newPrefLabel, String newDefinition,
-            ActorFacet newActorFacet, Optional<TermCode> newBroader) {
+            Optional<TermCode> newBroader) {
         Term currentProjection = current.toTerm(displayLocale);
         String prefLabel = newPrefLabel != null ? newPrefLabel : currentProjection.prefLabel();
         String definition = newDefinition != null ? newDefinition : currentProjection.definition();
-        ActorFacet actorFacet = resultingActorFacet(current.actorFacet(), newActorFacet);
         TermCode broader = resultingBroader(current.broaderCode, newBroader);
-        return new Term(current.id, current.code, prefLabel, definition, actorFacet, broader);
+        return new Term(current.id, current.code, prefLabel, definition, broader);
     }
 
     /**
@@ -884,23 +822,6 @@ public class KognioRdfTermRepository implements TermRepository {
             return current;
         }
         return newBroader.orElse(null);
-    }
-
-    /**
-     * Merges the caller's {@code newActorFacet} onto {@code current}: a {@code null} facet leaves
-     * {@code current} entirely unchanged; a non-{@code null} facet always replaces the kind, but a
-     * {@code null} role within it keeps {@code current}'s own role rather than reporting it as
-     * cleared - matching what {@link #update} actually persists.
-     */
-    private static ActorFacet resultingActorFacet(ActorFacet current, ActorFacet newActorFacet) {
-        if (newActorFacet == null) {
-            return current;
-        }
-        if (newActorFacet.role() != null) {
-            return newActorFacet;
-        }
-        String preservedRole = current != null ? current.role() : null;
-        return new ActorFacet(newActorFacet.kind(), preservedRole);
     }
 
     @Override
@@ -940,9 +861,8 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * Builds the WHERE-clause body (inside {@code GRAPH <TERMS_GRAPH>}) shared by
      * {@link #readAssemblyByCode} and {@link #readCurrentByCode}: the mandatory joins (type,
-     * identifier, prefLabel, definition) plus the blank-node subject guard and the three optional
-     * actor-facet joins that scope a single-term read to one {@code code}, plus the optional
-     * {@code skos:broader} join (issue #252): binding the target's raw subject
+     * identifier, prefLabel, definition) plus the blank-node subject guard, scoped to one
+     * {@code code}, plus the optional {@code skos:broader} join (issue #252): binding the target's raw subject
      * ({@code ?broaderSubject}, needed to re-assert the untouched triple during
      * {@link #attemptUpdate}'s gate check) in its own {@code OPTIONAL}, and its business code
      * ({@code ?broaderCode}, needed to project {@link Term#broader()}) in a second, nested
@@ -963,10 +883,6 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "<" + PREF_LABEL_PROPERTY + "> ?prefLabel ; "
                 + "<" + DEFINITION_PROPERTY + "> ?definition . "
                 + "FILTER(isIRI(?s)) "
-                + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
-                + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
-                + "OPTIONAL { ?s a <" + LEGAL_ACTOR_TYPE + "> . BIND(true AS ?isLegal) } "
-                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } "
                 + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . FILTER(isIRI(?broaderSubject)) "
                 + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } ";
     }
@@ -978,7 +894,7 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     private Optional<TermAssembly> readAssemblyByCode(
             Function<String, Stream<BindingSet>> selectFn, TermCode code) {
-        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole "
+        String query = "SELECT ?s ?prefLabel ?definition "
                 + "?broaderSubject ?broaderCode WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
                 + termByCodeWhereClause(code)
@@ -989,7 +905,6 @@ public class KognioRdfTermRepository implements TermRepository {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
             assembly.addDefinition(literalOf(row, "definition"));
-            assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
         });
         return bySubject.values().stream().findFirst();
     }
@@ -1038,7 +953,7 @@ public class KognioRdfTermRepository implements TermRepository {
      */
     private Optional<CurrentTerm> readCurrentByCode(
             Function<String, Stream<BindingSet>> selectFn, TermCode code) {
-        String query = "SELECT ?s ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole "
+        String query = "SELECT ?s ?prefLabel ?definition "
                 + "?broaderSubject ?broaderCode ?head WHERE { GRAPH <"
                 + TERMS_GRAPH + "> { "
                 + termByCodeWhereClause(code)
@@ -1052,7 +967,6 @@ public class KognioRdfTermRepository implements TermRepository {
             TermAssembly assembly = assemblyFor(bySubject, row, code);
             assembly.addPrefLabel(literalOf(row, "prefLabel"));
             assembly.addDefinition(literalOf(row, "definition"));
-            assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             String head = headOf(row);
             if (head != null) {
                 headBySubject.putIfAbsent(assembly.id.value().value(), head);
@@ -1075,7 +989,7 @@ public class KognioRdfTermRepository implements TermRepository {
         Objects.requireNonNull(projectId, "projectId");
 
         DisplayLocale effective = withRequestedOverride(displayLocale);
-        String query = "SELECT ?s ?identifier ?prefLabel ?definition ?isHuman ?isSystem ?isLegal ?actorRole "
+        String query = "SELECT ?s ?identifier ?prefLabel ?definition "
                 + "?broaderSubject ?broaderCode "
                 + "WHERE { GRAPH <" + TERMS_GRAPH + "> { "
                 + "?s a <" + CONCEPT_TYPE + "> . "
@@ -1083,10 +997,6 @@ public class KognioRdfTermRepository implements TermRepository {
                 + "?s <" + PREF_LABEL_PROPERTY + "> ?prefLabel . "
                 + "?s <" + DEFINITION_PROPERTY + "> ?definition . "
                 + "FILTER(isIRI(?s)) "
-                + "OPTIONAL { ?s a <" + HUMAN_ACTOR_TYPE + "> . BIND(true AS ?isHuman) } "
-                + "OPTIONAL { ?s a <" + SYSTEM_ACTOR_TYPE + "> . BIND(true AS ?isSystem) } "
-                + "OPTIONAL { ?s a <" + LEGAL_ACTOR_TYPE + "> . BIND(true AS ?isLegal) } "
-                + "OPTIONAL { ?s <" + ACTOR_ROLE_PROPERTY + "> ?actorRole } "
                 + "OPTIONAL { ?s <" + BROADER_PROPERTY + "> ?broaderSubject . FILTER(isIRI(?broaderSubject)) "
                 + "OPTIONAL { ?broaderSubject <" + IDENTIFIER_PROPERTY + "> ?broaderCode } } } }";
 
@@ -1096,7 +1006,6 @@ public class KognioRdfTermRepository implements TermRepository {
                 TermAssembly assembly = assemblyFor(bySubject, row, null);
                 assembly.addPrefLabel(literalOf(row, "prefLabel"));
                 assembly.addDefinition(literalOf(row, "definition"));
-                assembly.addActorRole(optionalLiteralOf(row, "actorRole"));
             });
             return bySubject.values().stream().map(assembly -> assembly.toTerm(effective)).toList();
         }
@@ -1106,20 +1015,14 @@ public class KognioRdfTermRepository implements TermRepository {
      * Groups the (potentially several) rows of one concept - a mandatory but now
      * <em>multi-valued</em> {@code skos:prefLabel}/{@code skos:definition} join multiplies a
      * concept into one row per candidate value - into a single
-     * {@link TermAssembly}, keyed by subject IRI. The remaining scalar fields (identity, code,
-     * actor facet) are read once from the first row of a subject; every row contributes its
+     * {@link TermAssembly}, keyed by subject IRI. The remaining scalar fields (identity, code)
+     * are read once from the first row of a subject; every row contributes its
      * {@code prefLabel}/{@code definition} literal as a candidate via
      * {@link TermAssembly#addPrefLabel}/{@link TermAssembly#addDefinition}, called by the two
      * callers ({@link #findByCode}/{@link #findAll}) once per row.
      *
      * <p>{@code identifier} stays a single-valued read - it is already narrowed by the
-     * {@code knownCode}/query filter to the code being looked up. {@code actorRole} is
-     * <em>not</em> single-valued (see the class-level "Row multiplication on
-     * {@code arkproc:actorRole}" note): only the actor <em>kind</em> ({@code isHuman}/
-     * {@code isSystem}, single-valued in practice) is read once here, at construction; every row's
-     * {@code actorRole} candidate is instead collected separately via
-     * {@link TermAssembly#addActorRole}, called by the same three callers that call
-     * {@link TermAssembly#addPrefLabel}/{@link TermAssembly#addDefinition}. Keeping {@code prefLabel}
+     * {@code knownCode}/query filter to the code being looked up. Keeping {@code prefLabel}
      * a <em>required</em> (non-optional) join means a store-first concept carrying no
      * {@code prefLabel} at all still binds nothing and is omitted exactly as before - it never
      * reaches the {@link Term} constructor, whose non-blank {@code prefLabel} invariant stays
@@ -1133,44 +1036,36 @@ public class KognioRdfTermRepository implements TermRepository {
         return bySubject.computeIfAbsent(subjectIri, iri -> new TermAssembly(
                 new TermId(ResourceId.of(iri)),
                 knownCode != null ? knownCode : new TermCode(literalOf(row, "identifier").getLexicalForm()),
-                actorKindOf(row), broaderSubjectIriOf(row), broaderCodeOf(row)));
+                broaderSubjectIriOf(row), broaderCodeOf(row)));
     }
 
     /**
-     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel},
-     * {@code skos:definition} and {@code arkproc:actorRole} candidates across rows, then choosing
-     * one of each when the concept is finally materialised into a {@link Term}: {@code prefLabel}
-     * and {@code definition} both via the very same {@link DisplayLocale} fallback chain, applied
-     * to that one {@link DisplayLocale} instance passed into {@link #toTerm} - a card rendering
-     * both fields for one resource therefore always sees them resolved for the same language
-     * (issue #248). {@code actorRole} is not (yet) language-tagged at write time (see
-     * {@link #create}/{@link #attemptUpdate}), so it keeps its own, narrower first-seen policy,
-     * logging a {@code WARN} if more than one distinct value was collected.
+     * Mutable per-subject accumulator collecting a concept's {@code skos:prefLabel} and
+     * {@code skos:definition} candidates across rows, then choosing one of each when the concept
+     * is finally materialised into a {@link Term}: {@code prefLabel} and {@code definition} both
+     * via the very same {@link DisplayLocale} fallback chain, applied to that one
+     * {@link DisplayLocale} instance passed into {@link #toTerm} - a card rendering both fields
+     * for one resource therefore always sees them resolved for the same language (issue #248).
      */
     private static final class TermAssembly {
 
         private final TermId id;
         private final TermCode code;
-        private final ActorKind actorKind;
         /**
-         * The subject's own {@code skos:broader} target, captured once at construction like
-         * {@link #actorKind} (issue #252's shape is {@code sh:maxCount 1}, so unlike {@code
-         * prefLabel}/{@code definition}/{@code actorRole} there is nothing genuinely multi-valued
-         * to accumulate here). {@code broaderSubjectIri} is what {@link #attemptUpdate} needs to
-         * re-assert the untouched triple for the gate; {@code broaderCode} is what {@link #toTerm}
-         * projects into {@link Term#broader()}.
+         * The subject's own {@code skos:broader} target, captured once at construction (issue
+         * #252's shape is {@code sh:maxCount 1}, so unlike {@code prefLabel}/{@code definition}
+         * there is nothing genuinely multi-valued to accumulate here). {@code broaderSubjectIri}
+         * is what {@link #attemptUpdate} needs to re-assert the untouched triple for the gate;
+         * {@code broaderCode} is what {@link #toTerm} projects into {@link Term#broader()}.
          */
         private final String broaderSubjectIri;
         private final TermCode broaderCode;
         private final List<LocalizedLiteral> prefLabels = new ArrayList<>();
         private final List<LocalizedLiteral> definitions = new ArrayList<>();
-        private final List<String> actorRoles = new ArrayList<>();
 
-        private TermAssembly(TermId id, TermCode code, ActorKind actorKind, String broaderSubjectIri,
-                TermCode broaderCode) {
+        private TermAssembly(TermId id, TermCode code, String broaderSubjectIri, TermCode broaderCode) {
             this.id = id;
             this.code = code;
-            this.actorKind = actorKind;
             this.broaderSubjectIri = broaderSubjectIri;
             this.broaderCode = broaderCode;
         }
@@ -1181,13 +1076,6 @@ public class KognioRdfTermRepository implements TermRepository {
 
         private void addDefinition(Literal literal) {
             definitions.add(new LocalizedLiteral(literal.getLexicalForm(), literal.getLanguageTag().orElse(null)));
-        }
-
-        /** Collects one row's {@code arkproc:actorRole} candidate, or does nothing if the row bound none. */
-        private void addActorRole(String actorRole) {
-            if (actorRole != null) {
-                actorRoles.add(actorRole);
-            }
         }
 
         /**
@@ -1207,38 +1095,7 @@ public class KognioRdfTermRepository implements TermRepository {
                     .map(LocalizedLiteral::value)
                     .orElseThrow(() -> new IllegalStateException(
                             "definition is a required join, so at least one candidate must exist"));
-            return new Term(id, code, prefLabel, definition, actorFacet(), broaderCode);
-        }
-
-        /**
-         * Rebuilds the {@link ActorFacet} from {@link #actorKind} (single-valued, read once at
-         * construction) and {@link #firstDistinctActorRole()} - {@code null} if the subject
-         * carries none of {@code arkproc:HumanActor}/{@code arkproc:SystemActor}/
-         * {@code arkproc:LegalActor}.
-         */
-        private ActorFacet actorFacet() {
-            if (actorKind == null) {
-                return null;
-            }
-            return new ActorFacet(actorKind, firstDistinctActorRole());
-        }
-
-        /**
-         * Returns the first-seen {@code arkproc:actorRole} candidate, or {@code null} if the
-         * subject carried none at all (the join is {@code OPTIONAL}), logging a single
-         * {@code WARN} when more than one distinct value was collected - a "stille Luege" this
-         * makes visible instead of silently swallowing.
-         */
-        private String firstDistinctActorRole() {
-            if (actorRoles.isEmpty()) {
-                return null;
-            }
-            long distinctCount = actorRoles.stream().distinct().count();
-            if (distinctCount > 1) {
-                LOG.warn("Term {}: field 'actorRole' had {} distinct values, returning the first",
-                        id.value().value(), distinctCount);
-            }
-            return actorRoles.get(0);
+            return new Term(id, code, prefLabel, definition, broaderCode);
         }
     }
 
@@ -1308,29 +1165,6 @@ public class KognioRdfTermRepository implements TermRepository {
     private static Literal literalOf(BindingSet row, String name) {
         return (Literal) row.getValue(name)
                 .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
-    }
-
-    /**
-     * Reconstructs the {@link ActorKind} of a term row, or {@code null} if the subject carries none
-     * of {@code arkproc:HumanActor}/{@code arkproc:SystemActor}/{@code arkproc:LegalActor}. The role
-     * itself is deliberately not read here - see {@link TermAssembly#addActorRole} for why it is
-     * collected per row instead of once at construction.
-     */
-    private static ActorKind actorKindOf(BindingSet row) {
-        if (row.hasBinding("isHuman")) {
-            return ActorKind.HUMAN;
-        }
-        if (row.hasBinding("isSystem")) {
-            return ActorKind.SYSTEM;
-        }
-        if (row.hasBinding("isLegal")) {
-            return ActorKind.LEGAL;
-        }
-        return null;
-    }
-
-    private static String optionalLiteralOf(BindingSet row, String name) {
-        return row.getValue(name).map(value -> ((Literal) value).getLexicalForm()).orElse(null);
     }
 
     /**

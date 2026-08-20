@@ -47,10 +47,10 @@ public final class ArkreqVocabulary {
     /** {@code arkreq:usesTerm} - Requirement/UseCase -&gt; glossary Term (issue #329). */
     public static final String USES_TERM = NAMESPACE + "usesTerm";
 
-    /** {@code arkreq:primaryActor} - UseCase -&gt; its primary actor (an actor-facetted Term). */
+    /** {@code arkreq:primaryActor} - UseCase -&gt; its primary actor (an {@code arkproc:Actor}). */
     public static final String PRIMARY_ACTOR = NAMESPACE + "primaryActor";
 
-    /** {@code arkreq:supportingActor} - UseCase -&gt; a supporting actor (an actor-facetted Term). */
+    /** {@code arkreq:supportingActor} - UseCase -&gt; a supporting actor (an {@code arkproc:Actor}). */
     public static final String SUPPORTING_ACTOR = NAMESPACE + "supportingActor";
 
     /** {@code arkreq:mainStep} - UseCase -&gt; a main-flow Step. */

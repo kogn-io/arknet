@@ -57,9 +57,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
 /**
  * Integration test for {@link KognioRdfUseCaseRepository} against an in-memory RDF4J-backed
  * kognio-rdf store. Requirement and actor resources referenced by a use case are seeded
- * directly into the same project graphs (as the requirements / ubiquitous-language adapters
- * would write them), so the write path can be exercised without a cross-bounded-context test
- * dependency.
+ * directly into the same project graphs (as the requirements / actor adapters would write
+ * them), so the write path can be exercised without a cross-bounded-context test dependency.
  *
  * <p>Identity is opaque: the use-case subject IRI is minted above the store and
  * carried on the {@link UseCase}; the human-readable {@link UseCaseCode} ({@code UC1}) is a
@@ -83,6 +82,7 @@ class KognioRdfUseCaseRepositoryTest {
     private static final String USE_CASES_GRAPH = "https://w3id.org/arknet/model/use-cases";
     private static final String REQUIREMENTS_GRAPH = "https://w3id.org/arknet/model/requirements";
     private static final String TERMS_GRAPH = "https://w3id.org/arknet/model/ubiquitous-language";
+    private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
     private static final String CONSTRAINTS_GRAPH = "https://w3id.org/arknet/model/constraints";
 
     private static final UseCaseId ID_1 = new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1"));
@@ -164,20 +164,18 @@ class KognioRdfUseCaseRepositoryTest {
                         + "<http://purl.org/dc/terms/identifier> \"" + label + "\" .");
     }
 
-    private void seedHumanActor(ProjectId project, String slug, String prefLabel) {
-        seed(project, TERMS_GRAPH,
+    private void seedHumanActor(ProjectId project, String slug, String name) {
+        seed(project, ACTOR_GRAPH,
                 "<https://w3id.org/arknet/model/term/" + slug + "> "
-                        + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                        + "<https://w3id.org/arknet/process#HumanActor> ; "
-                        + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
+                        + "a <https://w3id.org/arknet/process#HumanActor> ; "
+                        + "<https://w3id.org/arknet/core#name> \"" + name + "\" .");
     }
 
-    private void seedSystemActor(ProjectId project, String slug, String prefLabel) {
-        seed(project, TERMS_GRAPH,
+    private void seedSystemActor(ProjectId project, String slug, String name) {
+        seed(project, ACTOR_GRAPH,
                 "<https://w3id.org/arknet/model/term/" + slug + "> "
-                        + "a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                        + "<https://w3id.org/arknet/process#SystemActor> ; "
-                        + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"" + prefLabel + "\" .");
+                        + "a <https://w3id.org/arknet/process#SystemActor> ; "
+                        + "<https://w3id.org/arknet/core#name> \"" + name + "\" .");
     }
 
     private void seedReferences(ProjectId project) {
@@ -412,18 +410,18 @@ class KognioRdfUseCaseRepositoryTest {
 
     /**
      * Regression test: a use case whose primary
-     * actor's {@code skos:prefLabel} is deleted after creation must still be readable in full -
-     * the reference no longer depends on the label at all, unlike the old read path, which
-     * mandatorily joined into the terms graph on {@code skos:prefLabel} and silently dropped the
-     * whole use case ({@code findByCode} returned empty, {@code findAll} dropped it via
-     * {@code Optional::ifPresent}) the moment that join failed to bind.
+     * actor's {@code arknet:name} is deleted after creation must still be readable in full -
+     * the reference no longer depends on the name at all, unlike the old read path (pre-#336),
+     * which mandatorily joined into the terms graph on {@code skos:prefLabel} and silently
+     * dropped the whole use case ({@code findByCode} returned empty, {@code findAll} dropped it
+     * via {@code Optional::ifPresent}) the moment that join failed to bind.
      */
     @Test
-    void useCaseSurvivesItsPrimaryActorsPrefLabelBeingDeleted() {
+    void useCaseSurvivesItsPrimaryActorsNameBeingDeleted() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
-        deletePrefLabel(PROJECT_A, CUSTOMER.value());
+        deleteName(PROJECT_A, CUSTOMER.value());
 
         Optional<UseCase> byCode = repository.findByCode(PROJECT_A, CODE_1, null);
         assertTrue(byCode.isPresent(), "findByCode must still return the use case");
@@ -435,24 +433,24 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * Same regression, but for a rename rather than a deletion: relabelling the actor after the
+     * Same regression, but for a rename rather than a deletion: renaming the actor after the
      * use case was created must not affect the reference, since the edge's target IRI - not the
-     * label - is the {@link ActorRef}.
+     * name - is the {@link ActorRef}.
      */
     @Test
     void useCaseSurvivesItsPrimaryActorBeingRenamed() {
         seedReferences(PROJECT_A);
         repository.create(PROJECT_A, placeOrder(), null);
 
-        renamePrefLabel(PROJECT_A, CUSTOMER.value(), "Customer", "Kunde");
+        renameActor(PROJECT_A, CUSTOMER.value(), "Customer", "Kunde");
 
         UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
         assertEquals(CUSTOMER, found.primaryActor());
     }
 
-    private void deletePrefLabel(ProjectId project, ResourceId subject) {
-        String delete = "DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { "
-                + "<" + subject.value() + "> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label } }";
+    private void deleteName(ProjectId project, ResourceId subject) {
+        String delete = "DELETE WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "<" + subject.value() + "> <https://w3id.org/arknet/core#name> ?name } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(delete);
@@ -461,11 +459,11 @@ class KognioRdfUseCaseRepositoryTest {
         }
     }
 
-    private void renamePrefLabel(ProjectId project, ResourceId subject, String oldLabel, String newLabel) {
-        String update = "DELETE { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
-                + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + oldLabel + "\" } } "
-                + "INSERT { GRAPH <" + TERMS_GRAPH + "> { <" + subject.value()
-                + "> <http://www.w3.org/2004/02/skos/core#prefLabel> \"" + newLabel + "\" } } WHERE {}";
+    private void renameActor(ProjectId project, ResourceId subject, String oldName, String newName) {
+        String update = "DELETE { GRAPH <" + ACTOR_GRAPH + "> { <" + subject.value()
+                + "> <https://w3id.org/arknet/core#name> \"" + oldName + "\" } } "
+                + "INSERT { GRAPH <" + ACTOR_GRAPH + "> { <" + subject.value()
+                + "> <https://w3id.org/arknet/core#name> \"" + newName + "\" } } WHERE {}";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(update);

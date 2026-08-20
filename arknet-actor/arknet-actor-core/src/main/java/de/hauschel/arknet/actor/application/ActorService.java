@@ -11,6 +11,7 @@ import de.hauschel.arknet.actor.application.port.in.AddActor;
 import de.hauschel.arknet.actor.application.port.in.DeleteActor;
 import de.hauschel.arknet.actor.application.port.in.GetActor;
 import de.hauschel.arknet.actor.application.port.in.ListActors;
+import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.in.UpdateActor;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -21,6 +22,7 @@ import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 
 /**
@@ -49,7 +51,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * user against one local store are the normal case, not a remote/multi-writer concern
  * (ADR-001).</p>
  */
-public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor {
+public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor, ResolveActors {
 
     private static final String CODE_PREFIX = "ACTOR";
 
@@ -106,6 +108,16 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return repository.findByCode(projectId, code);
+    }
+
+    @Override
+    public List<ResolvedActor> resolveExisting(ProjectId projectId, ResourceId... ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.length == 0) {
+            return List.of();
+        }
+        return repository.findByIds(projectId, List.of(ids));
     }
 
     @Override
