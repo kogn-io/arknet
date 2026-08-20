@@ -53,7 +53,7 @@ Details: `arknet-persistence-test-support/CLAUDE.md`
 - **arknet-requirements**: erste hexagonale BC -- Requirement-Lifecycle (`req_*`-Tools), usesTerm-Kante ins Glossar (`arkreq:usesTerm`, seit Issue #329 auch von UseCase aus setzbar, die Kante bleibt aber requirements-BC-eigen), opake Identitaet, acceptanceCriterion.
 Traegt zusaetzlich Constraint als zweiten Ressourcentyp desselben Hexagons (`constraint_add`/`constraint_get`/`constraint_list`/`constraint_update`, `req_link_constraint` fuer die `oslc_rm:constrainedBy`-Kante) -- technische/geschaeftliche/regulatorische Randbedingungen, TCON-/BCON-/RCON-Codes; Typ und Code stehen mit der Anlage fest, Titel und Statement sind korrigierbar und mehrsprachig.
 Details: `arknet-requirements/CLAUDE.md`
-- **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools) mit optionaler Actor-Facette, opake Identitaet. Details: `arknet-ubiquitous-language/CLAUDE.md`
+- **arknet-ubiquitous-language**: zweite hexagonale BC -- SKOS-Glossar (`term_*`-Tools), opake Identitaet. Traegt seit Issue #336 keine Actor-Facette mehr; Akteure leben ausschliesslich im Actor-Register (arknet-actor). Details: `arknet-ubiquitous-language/CLAUDE.md`
 - **arknet-use-cases**: dritte hexagonale BC -- Cockburn-Use-Cases (`uc_*`-Tools) mit opaken Step-VOs, Actor-/Requirement-Referenzen.
 Traegt seit Issue #329 zusaetzlich `usesTerm`-Kanten ins Glossar (`uc_link_term`) und `constrainedBy`-Kanten zu Constraints der requirements-BC (`uc_link_constraint`), damit ein rein use-case-gefuehrtes Projekt (Requirement optional, Issue #327) strukturell vernetzt bleibt.
 Details: `arknet-use-cases/CLAUDE.md`
@@ -67,7 +67,7 @@ Der store-first-Lebenszyklus fuer ADRs (ADR-005) steht neben den handgepflegten 
 Details: `arknet-adr/CLAUDE.md`
 - **arknet-actor**: siebte hexagonale BC -- Actor-Lifecycle (`actor_*`-Tools), `ACTOR-N`-Codes aus einem Zaehler fuer alle vier Typen (`HUMAN`/`SYSTEM`/`LEGAL`/`GROUP`; Typ und Code stehen mit der Anlage fest, Name und Beschreibung sind korrigierbar), opake Identitaet.
 Macht `arkproc:Actor` zu einer eigenstaendigen Ressource statt zu einer Facette am Glossarbegriff: ein Akteur braucht weder Definition noch `TERM-N`-Code, darf aber zusaetzlich Glossarbegriff sein.
-Name und Beschreibung sind bewusst ungetaggte Literale ohne Mehrsprachigkeits-Mechanismus, und der Hexagon traegt keine Cross-BC-Kante -- die Actor-Facette der ubiquitous-language-BC laeuft unveraendert weiter, und in diesem Schnitt zeigt noch kein Konsument hierher.
+Name und Beschreibung sind bewusst ungetaggte Literale ohne Mehrsprachigkeits-Mechanismus, und der Hexagon traegt keine Cross-BC-Kante. Seit Issue #336 loest arknet-use-cases Akteurnamen gegen dieses Register auf (`ActorLookup`/`ResolveActors`) statt gegen die entfernte ubiquitous-language-Actor-Facette.
 Details: `arknet-actor/CLAUDE.md`
 
 ## Ontologie-Namespaces
@@ -75,7 +75,7 @@ Details: `arknet-actor/CLAUDE.md`
 - **Basis:** `https://w3id.org/arknet/`
 - `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — generisches Utility-Vokabular (name, description, ...), wiederverwendbar in jedem Modul
 - `https://w3id.org/arknet/ddd#` (Prefix: `arkddd:`) — BoundedContext, Domain, Subdomain, ContextRelationship, RelationshipType (Live, `arknet-ddd.ttl`, von arknet-bounded-context genutzt); ContextMap sowie das taktische DDD (Aggregate, Entity, ValueObject, Command, DomainEvent, ...) bleiben geparkt (`parked/arknet-ddd_parked.ttl`, kein BC), teilen sich aber den Namespace
-- `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Actor (Unterklasse von `prov:Agent`)/HumanActor/SystemActor/LegalActor/GroupActor/actorRole (Live, `arknet-actor.ttl`, von arknet-actor als eigenstaendige Ressource geschrieben und von arknet-use-cases/arknet-ubiquitous-language als Term-Facette genutzt); Process, Step, StateTransition, BusinessRule, Outcome bleiben geparkt (`parked/arknet-process.ttl`, kein BC)
+- `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Actor (Unterklasse von `prov:Agent`)/HumanActor/SystemActor/LegalActor/GroupActor (Live, `arknet-actor.ttl`, von arknet-actor als eigenstaendige Ressource geschrieben und von arknet-use-cases zur Aufloesung von `primaryActor`/`supportingActor` gelesen, seit Issue #336 nicht mehr von arknet-ubiquitous-language); Process, Step, StateTransition, BusinessRule, Outcome bleiben geparkt (`parked/arknet-process.ttl`, kein BC)
 - `https://w3id.org/arknet/requirements#` (Prefix: `arkreq:`) — Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release (OSLC-RM-aligned, doap:Version)
 - `https://w3id.org/arknet/architecture#` (Prefix: `arkarch:`) — ArchitectureDecisionRecord samt Textfeldern, Relationen (`supersedes`/`supersededBy`, `relatedTo`, `addressesRequirement`, `affectsContext`) und den fuenf ADRStatus-Individuen (Live, `arknet-architecture.ttl`, von arknet-adr genutzt); die uebrige ISO-42010-Architekturbeschreibung (Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint, View) bleibt geparkt (`parked/arknet-architecture_parked.ttl`, kein BC), teilt sich aber den Namespace
 - `https://w3id.org/arknet/tech#` (Prefix: `arktech:`) — Service, Container, API, Database, MessageBroker
