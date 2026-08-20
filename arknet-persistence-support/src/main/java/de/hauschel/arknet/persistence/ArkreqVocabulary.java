@@ -103,10 +103,35 @@ public final class ArkreqVocabulary {
 
     /**
      * {@code arkreq:useCaseGoal} - the goal a use case's primary actor pursues; the closest thing
-     * a use case has to a description, so this is what the term-co-occurrence read path
-     * (issue #108) scans as its use-case prose text.
+     * a use case has to a description, so this is one of the fields the term-co-occurrence read
+     * path (issue #108) and the unlinked-mention scan (issue #333) treat as use-case prose text.
      */
     public static final String USE_CASE_GOAL = NAMESPACE + "useCaseGoal";
+
+    /**
+     * {@code arkreq:designScope} - the system/boundary under design a use case is scoped to;
+     * optional. Shared here since issue #333, when {@code TraceabilityGraph#useCaseProseTexts}
+     * became a second reader beyond the use-cases out-adapter.
+     */
+    public static final String DESIGN_SCOPE = NAMESPACE + "designScope";
+
+    /**
+     * {@code arkreq:trigger} - the event that starts a use case; optional. Shared here since
+     * issue #333, for the same reason as {@link #DESIGN_SCOPE}.
+     */
+    public static final String TRIGGER = NAMESPACE + "trigger";
+
+    /**
+     * {@code arkreq:useCasePrecondition} - what must hold before a use case runs; optional.
+     * Shared here since issue #333, for the same reason as {@link #DESIGN_SCOPE}.
+     */
+    public static final String USE_CASE_PRECONDITION = NAMESPACE + "useCasePrecondition";
+
+    /**
+     * {@code arkreq:useCasePostcondition} - what holds after a successful use-case run;
+     * optional. Shared here since issue #333, for the same reason as {@link #DESIGN_SCOPE}.
+     */
+    public static final String USE_CASE_POSTCONDITION = NAMESPACE + "useCasePostcondition";
 
     /** {@code arkreq:FunctionalRequirement} - the type of a functional requirement. */
     public static final String FUNCTIONAL_REQUIREMENT_TYPE = NAMESPACE + "FunctionalRequirement";

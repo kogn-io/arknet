@@ -39,9 +39,10 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
  * (ADR -&gt; BoundedContext) and {@code arkarch:supersedes} (ADR -&gt; ADR, issue #69), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
- * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/bounded-context prose
- * ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}/{@code arkddd:domainVision}) that
- * {@code orphan_check}'s unlinked-mention check scans for a glossary term nothing links to.
+ * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context
+ * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
+ * #useCaseProseTexts(String)}, {@code arkddd:domainVision}) that {@code orphan_check}'s
+ * unlinked-mention check scans for a glossary term nothing links to.
  * {@code actor_usecase_matrix} needs the {@code primaryActor}/{@code
  * supportingActor} edges in the <em>forward</em> direction too ({@link #actorsOf(String)}/{@link
  * #useCasesOf(String)}), and {@code term_cooccurrence} reuses the same prose-scanning idea for a
@@ -84,6 +85,11 @@ public final class TraceabilityGraph {
     private static final String ACCEPTANCE_CRITERION = ArkreqVocabulary.ACCEPTANCE_CRITERION;
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
     private static final String USE_CASE_GOAL = ArkreqVocabulary.USE_CASE_GOAL;
+    private static final String DESIGN_SCOPE = ArkreqVocabulary.DESIGN_SCOPE;
+    private static final String TRIGGER = ArkreqVocabulary.TRIGGER;
+    private static final String USE_CASE_PRECONDITION = ArkreqVocabulary.USE_CASE_PRECONDITION;
+    private static final String USE_CASE_POSTCONDITION = ArkreqVocabulary.USE_CASE_POSTCONDITION;
+    private static final String STEP_TEXT = ArkreqVocabulary.STEP_TEXT;
     private static final String DOMAIN_VISION = ArkdddVocabulary.DOMAIN_VISION;
 
     /**
@@ -436,12 +442,30 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * @return the {@code arkreq:useCaseGoal} text of a use case - the closest thing a use case
-     *         has to a description - for {@code term_cooccurrence} to scan alongside a
-     *         requirement's prose (issue #108)
+     * @return every text field of a use case that can carry ubiquitous-language prose: its
+     *         {@code arkreq:useCaseGoal}/{@code designScope}/{@code trigger}/{@code
+     *         useCasePrecondition}/{@code useCasePostcondition} literals, plus the {@code
+     *         arkreq:stepText} of every main-flow and extension step reached via {@code
+     *         arkreq:mainStep}/{@code extensionStep} - the same two-hop read {@link
+     *         #requirementProseTexts(String)} already does for an acceptance criterion's text.
+     *         Used by both {@code term_cooccurrence} (issue #108, originally just the goal) and
+     *         {@link #unlinkedMentions()} (issue #333); an optional field simply contributes no
+     *         literal when unset
      */
     public List<String> useCaseProseTexts(String useCaseIri) {
-        return literals(Objects.requireNonNull(useCaseIri, "useCaseIri"), USE_CASE_GOAL);
+        Objects.requireNonNull(useCaseIri, "useCaseIri");
+        List<String> texts = new ArrayList<>(literals(useCaseIri, USE_CASE_GOAL));
+        texts.addAll(literals(useCaseIri, DESIGN_SCOPE));
+        texts.addAll(literals(useCaseIri, TRIGGER));
+        texts.addAll(literals(useCaseIri, USE_CASE_PRECONDITION));
+        texts.addAll(literals(useCaseIri, USE_CASE_POSTCONDITION));
+        for (String stepIri : resourceObjects(useCaseIri, MAIN_STEP)) {
+            texts.addAll(literals(stepIri, STEP_TEXT));
+        }
+        for (String stepIri : resourceObjects(useCaseIri, EXTENSION_STEP)) {
+            texts.addAll(literals(stepIri, STEP_TEXT));
+        }
+        return texts;
     }
 
     /**
@@ -462,9 +486,13 @@ public final class TraceabilityGraph {
     }
 
     /**
-     * Every requirement/bounded-context prose mention of a glossary term the source does not
-     * link to: a requirement's {@code dcterms:description}/{@code
-     * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, and a
+     * Every requirement/use-case/bounded-context prose mention of a glossary term the source does
+     * not link to: a requirement's {@code dcterms:description}/{@code
+     * arkreq:acceptanceCriterion} checked against its {@code arkreq:usesTerm} edges, a use case's
+     * {@link #useCaseProseTexts(String)} checked against its own {@code arkreq:usesTerm} edges
+     * plus its {@code arkreq:primaryActor}/{@code supportingActor} edges (issue #333 - a goal or
+     * step naming the use case's own actor is not an unlinked mention, since that relationship is
+     * already recorded, just under a different predicate than {@code usesTerm}), and a
      * bounded context's {@code arkddd:domainVision} checked against its {@code
      * arkddd:ubiquitousLanguageTerm} edges. Reuses the very matching rules the HTML report
      * already applies inline ({@code de.hauschel.arknet.mcp.report.Glossary}), via the shared
@@ -502,6 +530,15 @@ public final class TraceabilityGraph {
             for (String termIri : matcher.mentionedIn(requirementProseTexts(requirementIri))) {
                 if (!linked.contains(termIri)) {
                     found.add(new UnlinkedMention(requirementIri, termIri, termLabels.get(termIri), "usesTerm"));
+                }
+            }
+        }
+        for (String useCaseIri : useCaseIris()) {
+            Set<String> linked = new HashSet<>(usedTerms(useCaseIri));
+            linked.addAll(actorsOf(useCaseIri));
+            for (String termIri : matcher.mentionedIn(useCaseProseTexts(useCaseIri))) {
+                if (!linked.contains(termIri)) {
+                    found.add(new UnlinkedMention(useCaseIri, termIri, termLabels.get(termIri), "usesTerm"));
                 }
             }
         }

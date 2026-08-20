@@ -90,6 +90,7 @@ class TraceabilityGraphTest {
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/trace-test-fr-1";
     private static final String FR_2_IRI = "https://w3id.org/arknet/id/trace-test-fr-2";
     private static final String UC_1_IRI = "https://w3id.org/arknet/id/trace-test-uc-1";
+    private static final String UC_2_IRI = "https://w3id.org/arknet/id/trace-test-uc-2";
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-test-bc-1";
     private static final String CON_1_IRI = "https://w3id.org/arknet/id/trace-test-con-1";
     private static final String CON_2_IRI = "https://w3id.org/arknet/id/trace-test-con-2";
@@ -679,9 +680,71 @@ class TraceabilityGraphTest {
         assertThat(graph.useCasesOf(TERM_1_IRI)).isEmpty();
     }
 
+    /**
+     * UC1's only populated prose fields are the goal and its single main-flow step (issue #333
+     * widened {@link TraceabilityGraph#useCaseProseTexts(String)} beyond just the goal).
+     */
     @Test
-    void useCaseProseTextsOfUc1ContainsItsGoal() {
-        assertThat(graph.useCaseProseTexts(UC_1_IRI)).containsExactly("Customer authenticates");
+    void useCaseProseTextsOfUc1ContainsItsGoalAndStepText() {
+        assertThat(graph.useCaseProseTexts(UC_1_IRI))
+                .containsExactlyInAnyOrder("Customer authenticates", "Customer enters credentials");
+    }
+
+    /**
+     * Every optional prose field, every main-flow step and every extension - not just the goal
+     * (issue #333).
+     */
+    @Test
+    void useCaseProseTextsCoversEveryOptionalFieldAndEveryStepAndExtension() {
+        UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        useCases.create(PROJECT, new UseCase(
+                new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Manage cart",
+                "Customer manages the cart", "Checkout subsystem", "Customer opens the cart",
+                new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), "Cart is empty", "Cart is saved",
+                List.of(new Step(1, "Customer adds an item", List.of())),
+                List.of("Customer cancels"), List.of(), List.of()), null);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.useCaseProseTexts(UC_2_IRI)).containsExactlyInAnyOrder(
+                "Customer manages the cart", "Checkout subsystem", "Customer opens the cart",
+                "Cart is empty", "Cart is saved", "Customer adds an item", "Customer cancels");
+    }
+
+    /**
+     * The exact symptom issue #333 exists for: a use-case goal names a glossary term nothing
+     * links to.
+     */
+    @Test
+    void unlinkedMentionsFlagsAUseCaseGoalMentionWithNoUsesTermEdge() {
+        UseCaseRepository useCases = KognioRdfUseCaseRepositoryFactory.over(
+                lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        useCases.create(PROJECT, new UseCase(
+                new UseCaseId(ResourceId.of(UC_2_IRI)), new UseCaseCode("UC2"), "Reset",
+                "Customer resets their Passwort", null, null,
+                new ActorRef(ResourceId.of(ACTOR_IRI)), List.of(), null, null,
+                List.of(new Step(1, "Customer confirms", List.of())), List.of(), List.of(), List.of()), null);
+        StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
+        TraceabilityGraph freshGraph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
+
+        assertThat(freshGraph.unlinkedMentions())
+                .filteredOn(mention -> mention.sourceIri().equals(UC_2_IRI))
+                .extracting(TraceabilityGraph.UnlinkedMention::termIri, TraceabilityGraph.UnlinkedMention::edgeLocalName)
+                .containsExactly(org.assertj.core.api.Assertions.tuple(TERM_2_IRI, "usesTerm"));
+    }
+
+    /**
+     * UC1's goal names its own primary actor ("Customer authenticates" mentions {@code Customer},
+     * the actor {@link #ACTOR_IRI} is registered under, issue #333) - that relationship is
+     * already recorded via {@code arkreq:primaryActor}, so it must not be reported as an
+     * unlinked {@code usesTerm} mention.
+     */
+    @Test
+    void unlinkedMentionsDoesNotFlagAUseCasesOwnPrimaryActorMentionInItsGoal() {
+        assertThat(graph.unlinkedMentions())
+                .filteredOn(mention -> mention.sourceIri().equals(UC_1_IRI))
+                .isEmpty();
     }
 
     @Test
