@@ -668,11 +668,12 @@ public final class HtmlReportRenderer {
             final LangSources sources, final DisplayLocale displayLocale) {
         html.append("                <ol class=\"flow\">\n");
         for (final FlowStep step : flow.steps()) {
+            final String rendered = renderText(step.text(), carded, subjects);
             final Optional<LangVariants> variants =
-                    itemVariants(sources.flow().get(step.position()), step.text(), displayLocale);
+                    itemVariants(sources.flow().get(step.position()), step.text().text(), displayLocale);
             html.append("                  <li><span class=\"num\">").append(step.position())
                     .append("</span><div class=\"step\"><p>")
-                    .append(langSwitchable(escape(step.text()), variants)).append("</p>\n");
+                    .append(langSwitchable(rendered, variants)).append("</p>\n");
             if (!step.realises().isEmpty()) {
                 html.append("                  <span class=\"realises\">realises</span>\n");
                 appendChips(html, step.realises(), carded, subjects);

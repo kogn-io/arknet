@@ -192,10 +192,10 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
     private static final String CONSTRAINT_TYPE = ARKREQ_NAMESPACE + "Constraint";
     private static final String USE_CASE_GOAL_PROPERTY = ArkreqVocabulary.USE_CASE_GOAL;
-    private static final String DESIGN_SCOPE_PROPERTY = ARKREQ_NAMESPACE + "designScope";
-    private static final String TRIGGER_PROPERTY = ARKREQ_NAMESPACE + "trigger";
-    private static final String PRECONDITION_PROPERTY = ARKREQ_NAMESPACE + "useCasePrecondition";
-    private static final String POSTCONDITION_PROPERTY = ARKREQ_NAMESPACE + "useCasePostcondition";
+    private static final String DESIGN_SCOPE_PROPERTY = ArkreqVocabulary.DESIGN_SCOPE;
+    private static final String TRIGGER_PROPERTY = ArkreqVocabulary.TRIGGER;
+    private static final String PRECONDITION_PROPERTY = ArkreqVocabulary.USE_CASE_PRECONDITION;
+    private static final String POSTCONDITION_PROPERTY = ArkreqVocabulary.USE_CASE_POSTCONDITION;
     private static final String PRIMARY_ACTOR_PROPERTY = ArkreqVocabulary.PRIMARY_ACTOR;
     private static final String SUPPORTING_ACTOR_PROPERTY = ArkreqVocabulary.SUPPORTING_ACTOR;
     private static final String MAIN_STEP_PROPERTY = ArkreqVocabulary.MAIN_STEP;

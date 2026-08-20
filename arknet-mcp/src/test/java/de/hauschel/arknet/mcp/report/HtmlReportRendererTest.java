@@ -524,7 +524,7 @@ class HtmlReportRendererTest {
         final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
                 new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
                         new Block.Flow("Main flow", List.of(
-                                new FlowStep(1, "Der Kunde legt Artikel in den Warenkorb.", List.of())))))));
+                                new FlowStep(1, RichText.plain("Der Kunde legt Artikel in den Warenkorb."), List.of())))))));
         final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
                 iri(UC_1, ARKREQ + "mainStep", STEP_1),
                 iri(STEP_1, RDF_TYPE, ARKREQ + "Step"),
@@ -552,8 +552,8 @@ class HtmlReportRendererTest {
         final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
                 new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
                         new Block.Flow("Main flow", List.of(
-                                new FlowStep(1, "Der Caller beendet seinen Zugriff.", List.of()),
-                                new FlowStep(2, "Der Caller beendet seinen Zugriff.", List.of())))))));
+                                new FlowStep(1, RichText.plain("Der Caller beendet seinen Zugriff."), List.of()),
+                                new FlowStep(2, RichText.plain("Der Caller beendet seinen Zugriff."), List.of())))))));
         final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
                 iri(UC_1, ARKREQ + "mainStep", STEP_1),
                 iri(UC_1, ARKREQ + "mainStep", STEP_2),
@@ -639,7 +639,7 @@ class HtmlReportRendererTest {
         final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
                 new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
                         new Block.Flow("Main flow", List.of(
-                                new FlowStep(1, "Der Kunde bestellt.", List.of())))))));
+                                new FlowStep(1, RichText.plain("Der Kunde bestellt."), List.of())))))));
         final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
                 iri(UC_1, ARKREQ + "mainStep", STEP_1),
                 iri(UC_1, ARKREQ + "mainStep", STEP_2),
@@ -704,9 +704,9 @@ class HtmlReportRendererTest {
                         new Block.Refs("Primary actor",
                                 List.of(new Ref("Kunde", "TERM-1", ID + "actor-1"))),
                         new Block.Flow("Main flow", List.of(
-                                new FlowStep(1, "Kunde legt Artikel in den Warenkorb",
+                                new FlowStep(1, RichText.plain("Kunde legt Artikel in den Warenkorb"),
                                         List.of(Ref.of("FR-1", FR_1))),
-                                new FlowStep(2, "System bestaetigt die Bestellung", List.of())))))));
+                                new FlowStep(2, RichText.plain("System bestaetigt die Bestellung"), List.of())))))));
     }
 
     /** A use case with two steps, one requirement, one actor and one unclaimed resource. */

@@ -5,13 +5,16 @@ package de.hauschel.arknet.mcp.report;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.mcp.trace.TraceabilityGraph;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
@@ -40,17 +43,20 @@ import de.hauschel.arknet.uc.domain.UseCase;
  * every use case, and an identity neither resolves falls back to its IRI rather than being
  * dropped.</p>
  *
- * <p><strong>No marked-up prose here.</strong> A use case's own {@code arkreq:usesTerm} edges
- * (issue #329) are rendered as a plain chip list, mirroring {@code Primary actor}/{@code
- * Supporting actors} - <em>not</em> {@link RequirementCards}' prose-markup treatment of the same
- * edge. Since issue #329 a glossary word in a goal or a step text <em>does</em> have an edge
- * that could be pleaded missing, so the {@link Span.TermGap} argument that once ruled it out no
- * longer holds; what rules it out here is scope: the mention scan that would produce those
- * gaps ({@code TraceabilityGraph#unlinkedMentions()}, behind {@code orphan_check}'s "mentioned
- * in text but not linked" list) covers requirement, bounded-context and term-definition text
- * only, and widening it to use-case goal/step prose is a change of its own, deliberately left
- * outside issue #329 (follow-up: issue #333). Until then this section lists the edge and
- * never claims a gap it has not scanned for.</p>
+ * <p><strong>The glossary in the sentence, not beside it (issue #333).</strong> Since issue #329
+ * a use case's goal/scope/trigger/precondition/postcondition and its step/extension texts can
+ * mention the ubiquitous language while the model records it as {@code arkreq:usesTerm}
+ * (glossary) or {@code arkreq:primaryActor}/{@code supportingActor} (the use case's own actors)
+ * edges - the same gap {@link RequirementCards} closed for requirement prose. Every one of those
+ * fields is therefore marked up through {@link Glossary}, mirroring {@link
+ * TraceabilityGraph#useCaseProseTexts(String)} (the mention scan behind {@code orphan_check}'s
+ * "mentioned in text but not linked" list, which now covers the same fields): a mention backed
+ * by a {@code usesTerm} edge, or naming the use case's own primary/supporting actor, is a link,
+ * any other mention a gap. The {@code Uses terms} chip list survives only for edges whose term
+ * no field's text names, exactly as {@link RequirementCards} already does for its own {@code
+ * usesTerm} edges. {@code Primary actor}/{@code Supporting actors} stay full chip lists
+ * regardless of mention - they are the use case's cast, always shown, not a "not named in the
+ * text" residue.</p>
  *
  * <p><strong>{@code constrainedBy} (issue #329) is deliberately not rendered here.</strong> No
  * resource type's {@code oslc_rm:constrainedBy} edge is rendered in this report today - not even
@@ -102,10 +108,32 @@ public final class UseCaseCards {
             final UseCase uc,
             final Glossary glossary,
             final Map<ResourceId, ResolvedRequirement> reqs) {
+        final Set<ResourceId> usesTerms = uc.usesTerms().stream()
+                .map(TermRef::value)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        // For markup, a mention of the use case's own primary/supporting actor is not an
+        // unlinked mention either - that relationship is already recorded, just under
+        // primaryActor/supportingActor rather than usesTerm (issue #333, mirrors
+        // TraceabilityGraph#unlinkedMentions()'s use-case sweep). The narrower usesTerms alone
+        // stays the "linked" set for the Uses-terms chip reduction below, since an actor is
+        // already shown in its own Primary/Supporting actor block.
+        final Set<ResourceId> linked = new LinkedHashSet<>(usesTerms);
+        linked.add(uc.primaryActor().value());
+        uc.supportingActors().stream().map(ActorRef::value).forEach(linked::add);
+
+        final List<String> texts = new ArrayList<>();
+        texts.add(uc.goal());
+        addIfNotBlank(texts, uc.scope());
+        addIfNotBlank(texts, uc.trigger());
+        addIfNotBlank(texts, uc.precondition());
+        addIfNotBlank(texts, uc.postcondition());
+        uc.steps().forEach(step -> texts.add(step.text()));
+        texts.addAll(uc.extensions());
+
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(Block.Prose.plain("Goal", uc.goal()));
-        addIfPresent(blocks, "Scope", uc.scope());
-        addIfPresent(blocks, "Trigger", uc.trigger());
+        blocks.add(new Block.Prose("Goal", glossary.markUp(uc.goal(), linked)));
+        addIfPresent(blocks, "Scope", uc.scope(), glossary, linked);
+        addIfPresent(blocks, "Trigger", uc.trigger(), glossary, linked);
         blocks.add(new Block.Refs("Primary actor", List.of(glossary.ref(uc.primaryActor().value()))));
         if (!uc.supportingActors().isEmpty()) {
             blocks.add(new Block.Refs("Supporting actors", uc.supportingActors().stream()
@@ -113,23 +141,25 @@ public final class UseCaseCards {
                     .map(glossary::ref)
                     .toList()));
         }
-        addIfPresent(blocks, "Precondition", uc.precondition());
-        addIfPresent(blocks, "Postcondition", uc.postcondition());
-        blocks.add(new Block.Flow("Main flow", uc.steps().stream().map(step -> flowStep(step, reqs)).toList()));
+        addIfPresent(blocks, "Precondition", uc.precondition(), glossary, linked);
+        addIfPresent(blocks, "Postcondition", uc.postcondition(), glossary, linked);
+        blocks.add(new Block.Flow("Main flow",
+                uc.steps().stream().map(step -> flowStep(step, reqs, glossary, linked)).toList()));
         if (!uc.extensions().isEmpty()) {
-            blocks.add(Block.Bullets.plain("Extensions", uc.extensions()));
+            final List<BulletItem> items = new ArrayList<>(uc.extensions().size());
+            for (int index = 0; index < uc.extensions().size(); index++) {
+                items.add(new BulletItem(index + 1, glossary.markUp(uc.extensions().get(index), linked)));
+            }
+            blocks.add(new Block.Bullets("Extensions", items));
         }
-        if (!uc.usesTerms().isEmpty()) {
-            blocks.add(new Block.Refs("Uses terms", uc.usesTerms().stream()
-                    .map(TermRef::value)
-                    .map(glossary::ref)
-                    .toList()));
-        }
+        UnmentionedTerms.addTo(blocks, usesTerms, glossary, texts, "Uses terms", "not named in the text");
         return new ModelCard(uc.code().value(), uc.title(), uc.id().value().value(), List.of(), blocks);
     }
 
-    private static FlowStep flowStep(final Step step, final Map<ResourceId, ResolvedRequirement> reqs) {
-        return new FlowStep(step.position(), step.text(),
+    private static FlowStep flowStep(
+            final Step step, final Map<ResourceId, ResolvedRequirement> reqs,
+            final Glossary glossary, final Set<ResourceId> linked) {
+        return new FlowStep(step.position(), glossary.markUp(step.text(), linked),
                 step.realises().stream().map(ref -> requirementRef(ref, reqs)).toList());
     }
 
@@ -138,9 +168,17 @@ public final class UseCaseCards {
         return Ref.of(resolved != null ? resolved.code().value() : ref.value().value(), ref.value().value());
     }
 
-    private static void addIfPresent(final List<Block> blocks, final String label, final String value) {
+    private static void addIfPresent(
+            final List<Block> blocks, final String label, final String value,
+            final Glossary glossary, final Set<ResourceId> linked) {
         if (value != null && !value.isBlank()) {
-            blocks.add(Block.Prose.plain(label, value));
+            blocks.add(new Block.Prose(label, glossary.markUp(value, linked)));
+        }
+    }
+
+    private static void addIfNotBlank(final List<String> texts, final String value) {
+        if (value != null && !value.isBlank()) {
+            texts.add(value);
         }
     }
 

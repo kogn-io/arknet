@@ -7,7 +7,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 
@@ -29,35 +28,40 @@ import de.hauschel.arknet.ul.domain.TermId;
 /**
  * The use-case card is the report's answer to "a use case is unreadable as triples": it must
  * carry the flow in order and the references as something a human recognises.
+ *
+ * <p>Since issue #333 a use case's relationship to the ubiquitous language lives in the same two
+ * places a requirement's does (see {@link RequirementCardsTest}): in its prose, and in its
+ * {@code arkreq:usesTerm}/{@code primaryActor}/{@code supportingActor} edges. The markup tests
+ * here mirror {@code RequirementCardsTest}'s, with one addition a requirement does not have: a
+ * use case's own primary/supporting actor counts as linked even without a {@code usesTerm} edge,
+ * since that relationship is already recorded under a different predicate.</p>
  */
 class UseCaseCardsTest {
 
     private static final ProjectId PROJECT = new ProjectId("cards-test");
-    private static final ResourceId ACTOR = ResourceId.of("https://w3id.org/arknet/id/actor-1");
-    private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
-    private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
+    private static final String ID = "https://w3id.org/arknet/id/";
+    private static final ResourceId ACTOR = ResourceId.of(ID + "actor-1");
+    private static final ResourceId LIEFERANT = ResourceId.of(ID + "actor-2");
+    private static final ResourceId FR_1 = ResourceId.of(ID + "fr-1");
+    private static final ResourceId WARENKORB = ResourceId.of(ID + "term-warenkorb");
+    private static final ResourceId LIEFERADRESSE = ResourceId.of(ID + "term-lieferadresse");
 
     private static final Glossary GLOSSARY = Glossary.of(List.of(
-            new Term(new TermId(ACTOR), new TermCode("TERM-1"), "Kunde", "Wer bestellt.", null),
-            new Term(new TermId(TERM_1), new TermCode("TERM-2"), "Warenkorb", "Wohin Artikel gelegt werden.",
-                    null)));
-
-    private static UseCaseCards cardsWithFr1Resolved() {
-        return new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCase()),
-                (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
-    }
+            term(ACTOR, "TERM-1", "Kunde"),
+            term(WARENKORB, "TERM-2", "Warenkorb"),
+            term(LIEFERADRESSE, "TERM-3", "Lieferadresse"),
+            term(LIEFERANT, "TERM-4", "Lieferant")));
 
     @Test
     void sectionTitleIsUseCases() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
+        final ModelSection section = cardsFor(useCase("Ziel.", List.of())).section(PROJECT, null, GLOSSARY);
 
         assertThat(section.title()).isEqualTo("Use Cases");
     }
 
     @Test
     void cardCodeIsTheUseCasesBusinessCode() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
+        final ModelSection section = cardsFor(useCase("Ziel.", List.of())).section(PROJECT, null, GLOSSARY);
 
         assertThat(section.cards()).singleElement()
                 .satisfies(card -> assertThat(card.code()).isEqualTo("UC1"));
@@ -65,34 +69,117 @@ class UseCaseCardsTest {
 
     @Test
     void cardTitleIsTheUseCasesTitle() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
+        final ModelSection section = cardsFor(useCase("Ziel.", List.of())).section(PROJECT, null, GLOSSARY);
 
         assertThat(section.cards()).singleElement()
                 .satisfies(card -> assertThat(card.title()).isEqualTo("Bestellung aufgeben"));
     }
 
+    /**
+     * A use case's own primary actor is not just referenced via {@code arkreq:primaryActor} - it
+     * is also the subject of its goal, and that mention counts as linked even though no {@code
+     * usesTerm} edge backs it (issue #333).
+     */
     @Test
-    void cardStartsWithTheGoalAsProse() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
+    void marksTheUseCasesOwnPrimaryActorMentionInTheGoalAsALink() {
+        final UseCaseCards cards = cardsFor(useCase("Der Kunde bestellt Artikel.", List.of()));
 
-        assertThat(section.cards()).singleElement().satisfies(card ->
-                assertThat(card.blocks()).element(0)
-                        .isEqualTo(new Block.Prose("Goal", RichText.plain("Der Kunde bestellt Artikel."))));
+        assertThat(goal(cards).spans()).contains(new Span.TermLink("Kunde", ACTOR.value(), "TERM-1"));
+    }
+
+    /**
+     * The drift this whole feature exists for: the goal names a glossary term, the model holds
+     * no edge to it (issue #333, mirrors {@code RequirementCardsTest}).
+     */
+    @Test
+    void marksAGlossaryWordWithNoEdgeAsAGapInTheGoal() {
+        final UseCaseCards cards = cardsFor(useCase("Der Kunde legt Artikel in den Warenkorb.", List.of()));
+
+        assertThat(goal(cards).spans()).contains(new Span.TermGap("Warenkorb", WARENKORB.value(), "TERM-2"));
     }
 
     @Test
-    void buildsACockburnStyleCardWithTheFlowInOrder() {
-        final ModelSection section = cardsWithFr1Resolved().section(PROJECT, null, GLOSSARY);
+    void marksALinkedUsesTermInTheGoal() {
+        final UseCaseCards cards = cardsFor(
+                useCase("Der Kunde legt Artikel in den Warenkorb.", List.of(WARENKORB)));
 
-        assertThat(section.cards()).singleElement().satisfies(card ->
-                assertThat(card.blocks()).filteredOn(Block.Flow.class::isInstance)
-                        .singleElement()
-                        .asInstanceOf(InstanceOfAssertFactories.type(Block.Flow.class))
-                        .satisfies(flow -> assertThat(flow.steps())
-                                .extracting(FlowStep::position, FlowStep::text)
-                                .containsExactly(
-                                        Tuple.tuple(1, "Artikel in den Warenkorb legen"),
-                                        Tuple.tuple(2, "Bestellung bestaetigen"))));
+        assertThat(goal(cards).spans()).contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
+    }
+
+    @Test
+    void marksATermInTheScope() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Ziel.", "Der Kunde verwaltet seinen Warenkorb.", null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
+
+        assertThat(((Block.Prose) block(cards, "Scope")).text().spans())
+                .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
+    }
+
+    @Test
+    void marksATermInTheTrigger() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Ziel.", null, "Der Kunde oeffnet den Warenkorb.", ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
+
+        assertThat(((Block.Prose) block(cards, "Trigger")).text().spans())
+                .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
+    }
+
+    @Test
+    void marksATermInThePrecondition() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Ziel.", null, null, ACTOR, List.of(), "Der Warenkorb des Kunden ist leer.", null,
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
+
+        assertThat(((Block.Prose) block(cards, "Precondition")).text().spans())
+                .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
+    }
+
+    @Test
+    void marksATermInThePostcondition() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Ziel.", null, null, ACTOR, List.of(), null, "Der Warenkorb des Kunden ist leer.",
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
+
+        assertThat(((Block.Prose) block(cards, "Postcondition")).text().spans())
+                .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
+    }
+
+    @Test
+    void marksATermInAMainFlowStep() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Ziel.", null, null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Der Kunde legt Artikel in den Warenkorb.", List.of())), List.of(),
+                List.of(WARENKORB)));
+
+        final Block.Flow flow = flowOf(cards.section(PROJECT, null, GLOSSARY));
+
+        assertThat(flow.steps().getFirst().text().spans()).contains(
+                new Span.TermLink("Kunde", ACTOR.value(), "TERM-1"),
+                new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
+    }
+
+    @Test
+    void marksATermInAnExtension() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Ziel.", null, null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of("Der Kunde bricht ab."), List.of()));
+
+        final Block.Bullets extensions = (Block.Bullets) block(cards, "Extensions");
+
+        assertThat(extensions.items().getFirst().text().spans())
+                .contains(new Span.TermLink("Kunde", ACTOR.value(), "TERM-1"));
+    }
+
+    /** A supporting actor's mention is linked exactly like the primary actor's (issue #333). */
+    @Test
+    void marksASupportingActorMentionAsALink() {
+        final UseCaseCards cards = cardsFor(useCase(
+                "Der Lieferant liefert die Bestellung aus.", null, null, ACTOR, List.of(LIEFERANT), null, null,
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of()));
+
+        assertThat(goal(cards).spans()).contains(new Span.TermLink("Lieferant", LIEFERANT.value(), "TERM-4"));
     }
 
     /**
@@ -101,50 +188,70 @@ class UseCaseCardsTest {
      */
     @Test
     void showsAnActorByItsLabelWithTheCodeAsTooltip() {
-        final UseCaseCards cards = new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
+        final UseCaseCards cards = cardsFor(useCase("Ziel.", List.of()));
 
         assertThat(cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks()).contains(
                 new Block.Refs("Primary actor", List.of(new Ref("Kunde", "TERM-1", ACTOR.value()))));
     }
 
     /**
-     * A use case's {@code usesTerm} edge (issue #329) is a plain chip list, mirroring
-     * {@code Primary actor} - not marked-up prose. The mention scan that would back that markup
-     * ({@code TraceabilityGraph#unlinkedMentions()}) covers requirement, bounded-context and
-     * term-definition text only; widening it to use-case goal/step prose is a deliberately
-     * separate change (follow-up: issue #333).
+     * A term the prose already shows as a link needs no chip repeating it; only an edge no field's
+     * text names has to be listed (mirrors {@code RequirementCardsTest}).
      */
     @Test
-    void showsUsedTermsAsAChipList() {
-        final UseCaseCards cards = new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCaseWithUsedTerm()), (projectId, ids) -> List.of());
+    void listsOnlyLinkedTermsTheTextDoesNotName() {
+        final UseCaseCards cards = cardsFor(
+                useCase("Der Kunde legt Artikel in den Warenkorb.", List.of(WARENKORB, LIEFERADRESSE)));
 
-        assertThat(cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks()).contains(
-                new Block.Refs("Uses terms", List.of(new Ref("Warenkorb", "TERM-2", TERM_1.value()))));
+        final Block.Refs refs = (Block.Refs) block(cards, "Uses terms (not named in the text)");
+
+        assertThat(refs.refs()).containsExactly(new Ref("Lieferadresse", "TERM-3", LIEFERADRESSE.value()));
     }
 
-    /**
-     * The mention scan behind the prose markup covers requirement, bounded-context and
-     * term-definition text only ({@code TraceabilityGraph#unlinkedMentions()}); use-case
-     * goal/step prose is out of scope until issue #333, so a glossary word in a use case's
-     * goal stays unmarked even though {@code usesTerm} (issue #329) could now back it.
-     */
+    /** With nothing found in the text the block keeps its plain old heading. */
     @Test
-    void leavesGlossaryWordsInTheGoalUnmarked() {
+    void keepsThePlainHeadingWhenTheTextNamesNoTermAtAll() {
+        final UseCaseCards cards = cardsFor(useCase("Ganz andere Worte.", List.of(LIEFERADRESSE)));
+
+        assertThat(block(cards, "Uses terms")).isNotNull();
+    }
+
+    /** Every linked term appears in the goal, so the chip list would be pure repetition. */
+    @Test
+    void dropsTheChipListEntirelyWhenTheTextNamesEveryLinkedTerm() {
+        final UseCaseCards cards = cardsFor(
+                useCase("Der Kunde legt Artikel in den Warenkorb.", List.of(WARENKORB)));
+
+        assertThat(labels(cards)).doesNotContain("Uses terms", "Uses terms (not named in the text)");
+    }
+
+    @Test
+    void buildsACockburnStyleCardWithTheFlowInOrder() {
+        final UseCase uc = useCase(
+                "Ziel.", null, null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Artikel auswaehlen", List.of(new RequirementRef(FR_1))),
+                        new Step(2, "Bestellung bestaetigen", List.of())),
+                List.of(), List.of());
         final UseCaseCards cards = new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(uc),
+                (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
-        final Block.Prose goal = (Block.Prose) cards.section(PROJECT, null, GLOSSARY)
-                .cards().getFirst().blocks().getFirst();
+        final Block.Flow flow = flowOf(cards.section(PROJECT, null, GLOSSARY));
 
-        assertThat(goal.text().spans()).containsExactly(new Span.Plain("Der Kunde bestellt Artikel."));
+        assertThat(flow.steps())
+                .extracting(FlowStep::position, step -> step.text().text())
+                .containsExactly(
+                        Tuple.tuple(1, "Artikel auswaehlen"),
+                        Tuple.tuple(2, "Bestellung bestaetigen"));
     }
 
     @Test
     void resolvesStepRequirementsToTheirBusinessCodes() {
+        final UseCase uc = useCase(
+                "Ziel.", null, null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Schritt.", List.of(new RequirementRef(FR_1)))), List.of(), List.of());
         final UseCaseCards cards = new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCase()),
+                (projectId, displayLocale) -> List.of(uc),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))));
 
         final Block.Flow flow = flowOf(cards.section(PROJECT, null, GLOSSARY));
@@ -158,8 +265,11 @@ class UseCaseCardsTest {
      */
     @Test
     void fallsBackToTheBareIriWhenAReferenceCannotBeResolved() {
+        final UseCase uc = useCase(
+                "Ziel.", null, null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Schritt.", List.of(new RequirementRef(FR_1)))), List.of(), List.of());
         final UseCaseCards cards = new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
+                (projectId, displayLocale) -> List.of(uc), (projectId, ids) -> List.of());
 
         final ModelSection section = cards.section(PROJECT, null, Glossary.empty());
 
@@ -172,11 +282,11 @@ class UseCaseCardsTest {
     /** Optional fields that are absent are left out rather than rendered as empty blocks. */
     @Test
     void omitsAbsentOptionalFields() {
-        final UseCaseCards cards = new UseCaseCards(
-                (projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of());
+        final UseCase uc = useCase(
+                "Ziel.", null, "Trigger.", ACTOR, List.of(), null, "Nachbedingung.",
+                List.of(new Step(1, "Schritt.", List.of())), List.of(), List.of());
 
-        final List<String> labels = cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
-                .map(Block::label).toList();
+        final List<String> labels = labels(cardsFor(uc));
 
         assertThat(labels).containsExactly("Goal", "Trigger", "Primary actor", "Postcondition", "Main flow");
     }
@@ -189,9 +299,9 @@ class UseCaseCardsTest {
     void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
         final UseCaseCards cards = new UseCaseCards(
                 (projectId, displayLocale) -> List.of(
-                        useCase("UC2", "https://w3id.org/arknet/id/uc-2"),
-                        useCase("UC10", "https://w3id.org/arknet/id/uc-10"),
-                        useCase("UC1", "https://w3id.org/arknet/id/uc-1")),
+                        useCase("UC2", ID + "uc-2"),
+                        useCase("UC10", ID + "uc-10"),
+                        useCase("UC1", ID + "uc-1")),
                 (projectId, ids) -> List.of());
 
         assertThat(cards.section(PROJECT, null, GLOSSARY).cards())
@@ -206,42 +316,57 @@ class UseCaseCardsTest {
         assertThat(cards.section(PROJECT, null, GLOSSARY).isEmpty()).isTrue();
     }
 
+    private static RichText goal(final UseCaseCards cards) {
+        return ((Block.Prose) block(cards, "Goal")).text();
+    }
+
+    private static Block block(final UseCaseCards cards, final String label) {
+        return cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
+                .filter(b -> b.label().equals(label))
+                .findFirst().orElseThrow(() -> new AssertionError("no block " + label + " in " + labels(cards)));
+    }
+
+    private static List<String> labels(final UseCaseCards cards) {
+        return cards.section(PROJECT, null, GLOSSARY).cards().getFirst().blocks().stream()
+                .map(Block::label).toList();
+    }
+
     private static Block.Flow flowOf(final ModelSection section) {
         return (Block.Flow) section.cards().getFirst().blocks().stream()
                 .filter(Block.Flow.class::isInstance).findFirst().orElseThrow();
     }
 
-    /** A use case with a trigger and a postcondition, but no scope, precondition or extensions. */
-    private static UseCase useCase() {
-        return new UseCase(
-                new UseCaseId(ResourceId.of("https://w3id.org/arknet/id/uc-1")),
-                new UseCaseCode("UC1"),
-                "Bestellung aufgeben",
-                "Der Kunde bestellt Artikel.",
-                null,
-                "Kunde oeffnet den Warenkorb",
-                new ActorRef(ACTOR),
-                List.of(),
-                null,
-                "Die Bestellung ist erfasst.",
-                List.of(
-                        new Step(1, "Artikel in den Warenkorb legen", List.of(new RequirementRef(FR_1))),
-                        new Step(2, "Bestellung bestaetigen", List.of())),
-                List.of(), List.of(), List.of());
+    private static UseCaseCards cardsFor(final UseCase useCase) {
+        return new UseCaseCards((projectId, displayLocale) -> List.of(useCase), (projectId, ids) -> List.of());
     }
 
-    /** {@link #useCase()}, linked to the glossary term {@code TERM-2} via {@code arkreq:usesTerm}. */
-    private static UseCase useCaseWithUsedTerm() {
-        final UseCase base = useCase();
-        return new UseCase(base.id(), base.code(), base.title(), base.goal(), base.scope(), base.trigger(),
-                base.primaryActor(), base.supportingActors(), base.precondition(), base.postcondition(),
-                base.steps(), base.extensions(), List.of(new TermRef(TERM_1)), List.of());
+    /** A use case with just a goal and its usesTerm edges - the shape most markup tests need. */
+    private static UseCase useCase(final String goal, final List<ResourceId> usesTerms) {
+        return useCase(goal, null, null, ACTOR, List.of(), null, null,
+                List.of(new Step(1, "Ein Schritt", List.of())), List.of(), usesTerms);
+    }
+
+    private static UseCase useCase(
+            final String goal, final String scope, final String trigger,
+            final ResourceId primaryActor, final List<ResourceId> supportingActors,
+            final String precondition, final String postcondition,
+            final List<Step> steps, final List<String> extensions, final List<ResourceId> usesTerms) {
+        return new UseCase(
+                new UseCaseId(ResourceId.of(ID + "uc-1")), new UseCaseCode("UC1"), "Bestellung aufgeben",
+                goal, scope, trigger, new ActorRef(primaryActor),
+                supportingActors.stream().map(ActorRef::new).toList(),
+                precondition, postcondition, steps, extensions,
+                usesTerms.stream().map(TermRef::new).toList(), List.of());
     }
 
     private static UseCase useCase(final String code, final String iri) {
         return new UseCase(
-                new UseCaseId(ResourceId.of(iri)), new UseCaseCode(code), "Titel", "Ziel.", null, "Trigger",
-                new ActorRef(ACTOR), List.of(), null, "Postcondition.",
+                new UseCaseId(ResourceId.of(iri)), new UseCaseCode(code), "Titel", "Ziel.", null, "Trigger.",
+                new ActorRef(ACTOR), List.of(), null, "Nachbedingung.",
                 List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(), List.of());
+    }
+
+    private static Term term(final ResourceId id, final String code, final String label) {
+        return new Term(new TermId(id), new TermCode(code), label, "Definition von " + label + ".", null);
     }
 }
