@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.hauschel.arknet</groupId>
+        <artifactId>arknet-actor</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>arknet-actor-adapter-mcp</artifactId>
+    <description>In-adapter (driving): translates MCP tool calls into the arknet-actor-core in-ports via Spring AI @McpTool. A composition root (arknet-mcp) collects the tools by bean auto-detection.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-core</artifactId>
+        </dependency>
+        <!-- No neighbour bounded context's in-port here, unlike the bc/adr/uc in-adapters: an
+             Actor holds no cross-BC reference of its own in this scope, so there is nothing to
+             resolve for display and no ADR-008 borrow to make. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

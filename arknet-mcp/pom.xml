@@ -130,6 +130,22 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Actor-Hexagon: siebte hexagonale BC, gleiche Verdrahtung wie die uebrigen
+             (In-Adapter mit @McpTool-Beans + Out-Adapter Repository) ueber den geteilten
+             DatasetLifecycle. Anders als bc/adr ohne jeden Cross-BC-Lookup und ohne geborgten
+             Anzeige-In-Port: ein Actor traegt in diesem Schnitt keine Referenz auf eine Ressource
+             eines Nachbar-BC. -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Persistence-Support: RDF4J-freie Technik-Bausteine. Der generische Store-Lesepfad
              nutzt SparqlTerms (IRIREF-Serialisierung), der Traceability-Lesepfad zusaetzlich
              ArkreqVocabulary (die geteilten arkreq:-Praedikat-IRIs, gemeinsame Quelle mit den

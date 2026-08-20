@@ -1,13 +1,23 @@
 ##############################################################################
 #  arknet – Architecture Knowledge Net
-#  Actor Ontology  ·  Version 0.2.0
+#  Actor Ontology  ·  Version 0.3.0
 #
 #  Namespace  : https://w3id.org/arknet/process#
 #  License    : CC-BY-4.0
 #
-#  Scope: the Actor taxonomy - HumanActor, SystemActor, LegalActor and
-#  actorRole - used to identify who or what participates in a use case
-#  (primaryActor/supportingActor) or fills a role on a bounded context.
+#  Scope: the Actor taxonomy - HumanActor, SystemActor, LegalActor,
+#  GroupActor and actorRole - used to identify who or what acts in, or holds
+#  an interest in, the system under description.
+#
+#  An Actor exists in two shapes, and both are supported side by side:
+#    - as a facet of a glossary term: an arkproc:*Actor type set on an
+#      existing skos:Concept by the ubiquitous-language context
+#      (term_add/term_update's actorKind/actorRole). Unchanged.
+#    - as a resource of its own: minted store-first through the arknet-actor
+#      bounded context (actor_add/actor_get/actor_list/actor_update), with
+#      its own dcterms:identifier (ACTOR-N) and its own SHACL shapes in
+#      actor-shapes.ttl - no skos:Concept, and therefore no glossary
+#      obligations, required. A resource may still be both.
 #
 #  Namespace note: this module lives under process#, not actor#, because
 #  arkproc:HumanActor/arkproc:SystemActor are already used as types on
@@ -20,6 +30,7 @@
 
 @prefix arkproc: <https://w3id.org/arknet/process#> .
 @prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix prov:    <http://www.w3.org/ns/prov#> .
 @prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
@@ -35,13 +46,13 @@
 <https://w3id.org/arknet/process>
     a owl:Ontology ;
     dcterms:title    "arknet Actor Ontology"@en ;
-    dcterms:description "Human and system actors participating in a bounded context or use case."@en ;
-    dcterms:version  "0.2.0" ;
+    dcterms:description "Human, system, legal and group actors that act in, or hold an interest in, the system under description."@en ;
+    dcterms:version  "0.3.0" ;
     dcterms:created  "2026-07-29"^^xsd:date ;
     dcterms:rights   "CC-BY-4.0" ;
     vann:preferredNamespacePrefix "arkproc" ;
     vann:preferredNamespaceUri    "https://w3id.org/arknet/process#" ;
-    owl:versionInfo  "0.2.0" .
+    owl:versionInfo  "0.3.0" .
 
 
 ##############################################################################
@@ -49,8 +60,10 @@
 ##############################################################################
 
 arkproc:Actor a owl:Class ;
+    rdfs:subClassOf prov:Agent ;
     rdfs:label "Actor"@en , "Akteur"@de ;
-    rdfs:comment "Person oder System, das an einem Prozess beteiligt ist."@de .
+    rdfs:comment "Someone or something that can act on the system under description, or hold an interest in it, or both. Acting covers participation in a use case (primaryActor/supportingActor) as much as any other interaction; holding an interest covers a regulator, a funder or a business unit that never touches the system at all. Participation is therefore one role an actor may take, not what makes it an actor."@en ,
+                 "Jemand oder etwas, das auf das beschriebene System einwirken kann, ein Interesse daran hat, oder beides. Einwirken schliesst die Teilnahme an einem Use Case (primaryActor/supportingActor) ebenso ein wie jede andere Interaktion; ein Interesse zu haben deckt eine Aufsichtsbehoerde, einen Geldgeber oder einen Fachbereich ab, der das System nie beruehrt. Die Use-Case-Teilnahme ist damit eine von mehreren Rollen eines Akteurs, nicht das, was ihn zum Akteur macht."@de .
 
 arkproc:HumanActor a owl:Class ;
     rdfs:subClassOf arkproc:Actor ;
@@ -73,10 +86,18 @@ arkproc:LegalActor a owl:Class ;
                  "Ein Akteur, der eine juristische Person (eine Organisation, ein Unternehmen oder ein Verein) repraesentiert, die am Prozess beteiligt ist, im Unterschied zu einer fuer sie handelnden natuerlichen Person."@de ;
     skos:example "Kunde GmbH, Zulieferer AG, Standardisierungsgremium" .
 
+arkproc:GroupActor a owl:Class ;
+    rdfs:subClassOf arkproc:Actor ;
+    rdfs:label "Group Actor"@en , "Gruppenakteur"@de ;
+    rdfs:comment "A group without a legal form of its own - a department, a committee, a team - acting or holding an interest collectively rather than through one identifiable natural or legal person."@en ,
+                 "Eine Gruppe ohne eigene Rechtsform - ein Fachbereich, ein Gremium, ein Team -, die gemeinsam handelt oder ein Interesse hat, statt durch eine einzelne benennbare natuerliche oder juristische Person."@de ;
+    skos:example "Fachbereich Vertrieb, Betriebsrat, Architektur-Gremium" .
+
 arkproc:actorRole a owl:DatatypeProperty ;
     rdfs:domain arkproc:Actor ;
     rdfs:range  xsd:string ;
     rdfs:label  "actor role"@en , "Akteursrolle"@de ;
-    rdfs:comment "Fachliche Rolle im Bounded Context."@de .
+    rdfs:comment "A short free-text note about the actor - NOT role modelling. Roles are expressed as edges once they exist; this property carries whatever an author wants to add in passing and nothing may be derived from it."@en ,
+                 "Kurze freitextliche Zusatzangabe zum Akteur - KEINE Rollenmodellierung. Rollen werden ueber Kanten ausgedrueckt, sobald es sie gibt; diese Property traegt, was ein Autor nebenbei ergaenzen will, und aus ihr darf nichts abgeleitet werden."@de .
 
 # END OF ACTOR ONTOLOGY
