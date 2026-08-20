@@ -1,0 +1,63 @@
+##############################################################################
+#  arknet - Architecture Knowledge Net
+#  Actor SHACL Shapes  :  Version 0.1.0
+#
+#  Validates the arknet-actor bounded context: an arkproc:Actor minted as a
+#  resource of its own (actor_add), NOT as a facet of a glossary term.
+#
+#  Its own minCount regime, deliberately: an actor written through this
+#  context inherits none of ul-shapes.ttl's SKOS obligations (no
+#  skos:prefLabel, no skos:definition, no glossary), because being an actor
+#  and being a glossary term are two independent claims about a resource.
+#  A resource that IS both simply satisfies both shape sets.
+#
+#  ActorShape targets the ABSTRACT arkproc:Actor, while an instance is only
+#  ever typed as one of the four concrete subclasses (HumanActor,
+#  SystemActor, LegalActor, GroupActor) - the arknet-actor out-adapter never
+#  writes the superclass itself. The shape therefore only fires because its
+#  write-gate merges arknet-actor.ttl's rdfs:subClassOf axioms into the
+#  validated data and reasons over them (see
+#  KognioRdfActorRepositoryFactory#buildGate), exactly as the requirements
+#  gate does for arkreq:Requirement. Enumerating the four concrete classes
+#  as targets instead would silently stop covering a fifth subclass added
+#  later, and would leave a bare "a arkproc:Actor" resource unvalidated.
+#
+#  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
+##############################################################################
+
+@prefix sh:       <http://www.w3.org/ns/shacl#> .
+@prefix arknet:   <https://w3id.org/arknet/core#> .
+@prefix arkproc:  <https://w3id.org/arknet/process#> .
+@prefix xsd:      <http://www.w3.org/2001/XMLSchema#> .
+@prefix actshapes: <https://w3id.org/arknet/shapes/actor#> .
+
+
+##############################################################################
+#  ACTOR SHAPE
+##############################################################################
+
+actshapes:ActorShape
+    a sh:NodeShape ;
+    sh:targetClass arkproc:Actor ;
+    sh:property actshapes:Actor-name ;
+    sh:property actshapes:Actor-description .
+
+actshapes:Actor-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:message  "An Actor must have exactly one 'arknet:name' (min. 2 characters) - what this actor is called, e.g. 'Sachbearbeiter' or 'PaymentService'."@en , "Ein Actor muss genau einen 'arknet:name' haben (min. 2 Zeichen) - wie dieser Akteur heisst, z.B. 'Sachbearbeiter' oder 'PaymentService'."@de ;
+    sh:severity sh:Violation .
+
+actshapes:Actor-description
+    a sh:PropertyShape ;
+    sh:path     arknet:description ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:string ;
+    sh:message  "An Actor's 'arknet:description' is optional, but there is at most one - an actor carries a single description, not a set of them."@en , "Die 'arknet:description' eines Actors ist optional, es gibt aber hoechstens eine - ein Akteur traegt genau eine Beschreibung, keine Menge davon."@de ;
+    sh:severity sh:Violation .
+
+# END OF ACTOR SHAPES

@@ -303,6 +303,15 @@ ADR BC (`arknet-adr`) -- architecture decision records, store-backed and numbere
 | `adr_set_status` | Change a decision's lifecycle status: PROPOSED -> ACCEPTED, PROPOSED -> REJECTED, or ACCEPTED -> DEPRECATED |
 | `adr_supersede` | Record that one decision replaces an older one (`arkarch:supersedes`). Only the forward edge is stored -- the superseded decision reports it as "superseded by" from a reverse read, not from a second triple |
 
+Actor BC (`arknet-actor`) -- actors as resources of their own: someone or something that can act on the system under description, hold an interest in it, or both. An actor needs no glossary entry and no definition to exist, though a resource may be both an actor and a term. The glossary's own optional actor facet (`term_add`'s `actorKind`/`actorRole`) is unaffected and still in use:
+
+| Tool | Description |
+|------|-------------|
+| `actor_add` | Register a new actor, classified `HUMAN` (a natural person), `SYSTEM` (an external system or service), `LEGAL` (a legal person -- organization, company, association) or `GROUP` (a group without a legal form of its own -- department, committee, team). All four share one running number (`ACTOR-N`); type and code are fixed at creation |
+| `actor_list` | List all managed actors |
+| `actor_get` | Fetch a single actor by identity (e.g. ACTOR-1) |
+| `actor_update` | Correct an actor's name and/or description (each optional, unchanged if omitted -- omitting the description does not remove it). Type and code stay as created |
+
 Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
 
 | Tool | Description |
@@ -374,7 +383,7 @@ addendum.
 | Module | Description |
 |--------|-------------|
 | `arknet-ontology` | OWL ontology and SHACL shapes (.ttl resources only, no Java) |
-| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project / adr) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`/`resource_history`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`/`actor_usecase_matrix`/`term_cooccurrence`) |
+| `arknet-mcp` | MCP server (Streamable HTTP, local daemon) + composition root: wires the BC hexagons (requirements / ubiquitous-language / use-cases / bounded-context / project / adr / actor) via a shared DatasetLifecycle + the generic store read path (`store_overview`/`resource_get`/`resource_history`, whose HTML report is assembled per bounded context through their read in-ports) + the traceability read path (`trace_matrix`/`orphan_check`/`impact_analysis`/`actor_usecase_matrix`/`term_cooccurrence`) |
 | `arknet-shared-kernel` | DDD shared kernel: domain building blocks shared by several BCs (`ProjectId`, the `ProjectResolver` port, opaque `ResourceId`/`ResourceIdFactory`) |
 | `arknet-persistence-support` | Technical support for the kognio-rdf out-adapters: the shared SHACL write gate (validate-before-commit) and the shared write funnel (ADR-013) |
 | `arknet-persistence-test-support` | Test-side counterpart to `arknet-persistence-support`: shared `DatasetLifecycle`/`DatasetHandle`/`DatasetTx` decorators that pin a deterministic write interleaving for real-store concurrency tests, consumed at test scope by the requirement/use-case/bounded-context/term adapters |
@@ -384,6 +393,7 @@ addendum.
 | `arknet-bounded-context` | Fourth hexagonal BC: BoundedContext lifecycle, assigns glossary terms to a domain cut (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-project` | Fifth hexagonal BC: the project registry, mapping a client's opaque anchor to the project whose dataset holds its data (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter); unlike the other BCs it is not itself project-scoped ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |
 | `arknet-adr` | Sixth hexagonal BC: architecture decision records -- context, decision, consequences and considered options, plus the edges to the requirement a decision addresses, the bounded context it affects and the older decision it supersedes (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter). Store-backed and numbered independently of the hand-written markdown decision records under `docs/adr/` |
+| `arknet-actor` | Seventh hexagonal BC: actors as resources of their own -- human, system, legal and group actors that act on the system under description or hold an interest in it (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter). Independent of the glossary's optional actor facet, which is unaffected |
 | `arknet-architecture-tests` | ArchUnit rules for the dependency invariants the module cut cannot enforce (only `src/test`, no production code) |
 
 ## Ontology
@@ -396,7 +406,7 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 |--------|--------|----------|
 | `arknet-core.ttl` | `arknet:` | Generic utility vocabulary (name, description, ...), reusable across every module |
 | `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (Context Mapping, tactical DDD) |
-| `arknet-actor.ttl` | `arkproc:` | Actor, HumanActor, SystemActor, LegalActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module `arknet-use-cases`/`arknet-bounded-context` actually write |
+| `arknet-actor.ttl` | `arkproc:` | Actor (a `prov:Agent` subclass), HumanActor, SystemActor, LegalActor, GroupActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module `arknet-actor`/`arknet-use-cases`/`arknet-bounded-context` actually write |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
 | `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)) |
 | `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)) |

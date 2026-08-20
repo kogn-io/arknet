@@ -42,7 +42,7 @@ einer eigenen `CLAUDE.md` im Modulverzeichnis -- laedt nur, wenn dort auch
 gearbeitet wird.
 
 - **arknet-ontology**: nur .ttl-Ressourcen (Ontologie-Module, Shapes). Details: `arknet-ontology/CLAUDE.md`
-- **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Projekte auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess; Projekt pro Aufruf ueber den Anker aus dem Header, ADR-009/ADR-016) + Composition Root, verdrahtet alle sechs BC-Hexagons + geteilter DatasetLifecycle + der Anker-Aufloesung ueber die Projekt-Registry + generischer Store-Lesepfad (ADR-006; der Agent-Digest bleibt generisch, der HTML-Report wird pro BC aus deren Lese-In-Ports zusammengesetzt und faellt fuer alles Uebrige auf die generische Rohsicht zurueck).
+- **arknet-mcp**: MCP-Server (Streamable HTTP, EIN geteilter lokaler Daemon fuer alle Projekte auf `127.0.0.1:47331`, admin-gestartet -- kein Claude-Code-Subprozess; Projekt pro Aufruf ueber den Anker aus dem Header, ADR-009/ADR-016) + Composition Root, verdrahtet alle sieben BC-Hexagons + geteilter DatasetLifecycle + der Anker-Aufloesung ueber die Projekt-Registry + generischer Store-Lesepfad (ADR-006; der Agent-Digest bleibt generisch, der HTML-Report wird pro BC aus deren Lese-In-Ports zusammengesetzt und faellt fuer alles Uebrige auf die generische Rohsicht zurueck).
 Details: `arknet-mcp/CLAUDE.md`
 - **arknet-shared-kernel**: DDD Shared Kernel -- ProjectId (inkl. der reservierten System-Dataset-Invariante), ProjectResolver-Port (Per-Aufruf-Aufloesung ueber den Anker, ADR-009/ADR-016), ResourceId, DisplayLocale/LocalizedLiteral. Details: `arknet-shared-kernel/CLAUDE.md`
 - **arknet-persistence-support**: technischer Support der kognio-rdf-Out-Adapter -- geteiltes SHACL-Write-Gate (ADR-007), geteilter Schreibtrichter WriteFunnel (ADR-013; schreibt je Write atomar eine PROV-O-Revision + Head-Pointer, ADR-014), SparqlTerms, UnresolvedReferenceException, die Vokabular-Konstanten ArkprovVocabulary/ArkreqVocabulary/ArkdddVocabulary/ArkprjVocabulary/ArkarchVocabulary.
@@ -60,18 +60,22 @@ Details: `arknet-use-cases/CLAUDE.md`
 - **arknet-bounded-context**: vierte hexagonale BC -- BoundedContext-Lifecycle (`bc_*`-Tools), ubiquitousLanguageTerm-Kante ins Glossar (BC->Term), `arkddd:ContextRelationship` als eigene Ressource fuer die gerichtete Context-Mapping-Kante zwischen zwei Bounded Contexts (`bc_link_context`), opake Identitaet. Details: `arknet-bounded-context/CLAUDE.md`
 - **arknet-project**: fuenfte hexagonale BC -- die Projekt-Registry (`project_*`-Tools), die einen vom Client gesendeten, opaken und typisierten Anker auf das Projekt abbildet, dessen Dataset die Modelldaten haelt (ADR-016).
 Verwaltet Identitaet statt Modell und ist als einziger BC nicht projekt-scoped: seine Registry wohnt im reservierten System-Dataset.
-Sie ist die Aufloesungsquelle, auf die jeder Tool-Aufruf der fuenf Modell-BCs geroutet wird.
+Sie ist die Aufloesungsquelle, auf die jeder Tool-Aufruf der sechs Modell-BCs geroutet wird.
 Details: `arknet-project/CLAUDE.md`
 - **arknet-adr**: sechste hexagonale BC -- Architecture-Decision-Record-Lifecycle (`adr_*`-Tools), `addressesRequirement`-Kante zu den Requirements, `affectsContext`-Kante zu den Bounded Contexts, selbstbezuegliche `supersedes`-Kante (nur die Vorwaertsrichtung wird als Tripel geschrieben), opake Identitaet.
 Der store-first-Lebenszyklus fuer ADRs (ADR-005) steht neben den handgepflegten Markdown-ADRs unter `docs/adr/`; die beiden Nummernraeume sind unabhaengig voneinander.
 Details: `arknet-adr/CLAUDE.md`
+- **arknet-actor**: siebte hexagonale BC -- Actor-Lifecycle (`actor_*`-Tools), `ACTOR-N`-Codes aus einem Zaehler fuer alle vier Typen (`HUMAN`/`SYSTEM`/`LEGAL`/`GROUP`; Typ und Code stehen mit der Anlage fest, Name und Beschreibung sind korrigierbar), opake Identitaet.
+Macht `arkproc:Actor` zu einer eigenstaendigen Ressource statt zu einer Facette am Glossarbegriff: ein Akteur braucht weder Definition noch `TERM-N`-Code, darf aber zusaetzlich Glossarbegriff sein.
+Name und Beschreibung sind bewusst ungetaggte Literale ohne Mehrsprachigkeits-Mechanismus, und der Hexagon traegt keine Cross-BC-Kante -- die Actor-Facette der ubiquitous-language-BC laeuft unveraendert weiter, und in diesem Schnitt zeigt noch kein Konsument hierher.
+Details: `arknet-actor/CLAUDE.md`
 
 ## Ontologie-Namespaces
 
 - **Basis:** `https://w3id.org/arknet/`
 - `https://w3id.org/arknet/core#` (Prefix: `arknet:`) — generisches Utility-Vokabular (name, description, ...), wiederverwendbar in jedem Modul
 - `https://w3id.org/arknet/ddd#` (Prefix: `arkddd:`) — BoundedContext, Domain, Subdomain, ContextRelationship, RelationshipType (Live, `arknet-ddd.ttl`, von arknet-bounded-context genutzt); ContextMap sowie das taktische DDD (Aggregate, Entity, ValueObject, Command, DomainEvent, ...) bleiben geparkt (`parked/arknet-ddd_parked.ttl`, kein BC), teilen sich aber den Namespace
-- `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Actor/HumanActor/SystemActor/LegalActor/actorRole (Live, `arknet-actor.ttl`, von arknet-use-cases genutzt); Process, Step, StateTransition, BusinessRule, Outcome bleiben geparkt (`parked/arknet-process.ttl`, kein BC)
+- `https://w3id.org/arknet/process#` (Prefix: `arkproc:`) — Actor (Unterklasse von `prov:Agent`)/HumanActor/SystemActor/LegalActor/GroupActor/actorRole (Live, `arknet-actor.ttl`, von arknet-actor als eigenstaendige Ressource geschrieben und von arknet-use-cases/arknet-ubiquitous-language als Term-Facette genutzt); Process, Step, StateTransition, BusinessRule, Outcome bleiben geparkt (`parked/arknet-process.ttl`, kein BC)
 - `https://w3id.org/arknet/requirements#` (Prefix: `arkreq:`) — Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release (OSLC-RM-aligned, doap:Version)
 - `https://w3id.org/arknet/architecture#` (Prefix: `arkarch:`) — ArchitectureDecisionRecord samt Textfeldern, Relationen (`supersedes`/`supersededBy`, `relatedTo`, `addressesRequirement`, `affectsContext`) und den fuenf ADRStatus-Individuen (Live, `arknet-architecture.ttl`, von arknet-adr genutzt); die uebrige ISO-42010-Architekturbeschreibung (Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint, View) bleibt geparkt (`parked/arknet-architecture_parked.ttl`, kein BC), teilt sich aber den Namespace
 - `https://w3id.org/arknet/tech#` (Prefix: `arktech:`) — Service, Container, API, Database, MessageBroker

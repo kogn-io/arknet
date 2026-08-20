@@ -4,7 +4,7 @@ DDD Shared Kernel -- technologieneutrale, von mehreren BCs geteilte Domain-Baust
 
 `ProjectId` traegt die Invariante `RESERVED_SYSTEM_DATASET` (`urn:arknet:system`, das Dataset der
 Projekt-Registry) und lehnt genau diesen Wert im Konstruktor ab. Die Konstante liegt hier und nicht
-im `arknet-project-core`, obwohl dort der Lebenszyklus des Bezeichneten verwaltet wird: die vier
+im `arknet-project-core`, obwohl dort der Lebenszyklus des Bezeichneten verwaltet wird: die
 Modell-BC-Cores routen auf dieser Identitaet und duerfen nicht an einem Nachbar-BC haengen,
 waehrend der Kernel das eine Modul ist, an dem jeder Core ohnehin haengt. Die Form des Werts ist
 sonst unbeschraenkt (nur non-blank) -- neue Projekte minten eine UUID, aus der alten Slug-Ableitung

@@ -28,6 +28,10 @@ import de.hauschel.arknet.mcp.report.RequirementCards;
 import de.hauschel.arknet.mcp.report.TermCards;
 import de.hauschel.arknet.mcp.report.UseCaseCards;
 import de.hauschel.arknet.mcp.store.Prefixes;
+import de.hauschel.arknet.actor.adapter.kogniordf.KognioRdfActorRepositoryFactory;
+import de.hauschel.arknet.actor.adapter.mcp.ActorMcpTools;
+import de.hauschel.arknet.actor.application.ActorService;
+import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
 import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools;
 import de.hauschel.arknet.adr.application.AdrService;
@@ -85,7 +89,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *
  * <p>Every bean declared here that exposes {@code @McpTool} methods is picked up
  * automatically by the Spring AI MCP server annotation scanner and registered as an MCP
- * tool - there is no manual tool-specification bridging. Six hexagons are wired:</p>
+ * tool - there is no manual tool-specification bridging. Seven hexagons are wired:</p>
  *
  * <ul>
  *   <li><strong>requirements</strong> ({@link RequirementMcpTools} over
@@ -165,6 +169,18 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       hexagon here wired <em>without</em> a {@link ProjectResolver} - it reads the caller's
  *       anchor raw and looks it up, which is the substance of ADR-016 rather than an omission.
  *       Since it answers the routing question for everyone else, it cannot itself be routed.</li>
+ *   <li><strong>actor</strong> ({@link ActorMcpTools} over {@link ActorService} over an
+ *       RDF-persisted actor repository) - the four actor tools ({@code actor_add}/
+ *       {@code actor_list}/{@code actor_get}/{@code actor_update}), assembled through
+ *       {@link KognioRdfActorRepositoryFactory}. The plainest wiring of the seven: no cross-BC
+ *       lookup bean on the write side and no borrowed neighbour in-port on the read side (ADR-008),
+ *       because an {@code arkproc:Actor} carries no reference to a term, a requirement or a bounded
+ *       context in this scope - it exists as a resource of its own, independent of the actor facet
+ *       the ubiquitous-language hexagon still sets on a {@code skos:Concept}. Its repository also
+ *       builds its own {@link WriteFunnel} inside that factory rather than sharing one, since it
+ *       owns both of its resource files ({@code actor-shapes.ttl}, {@code arknet-actor.ttl})
+ *       outright - unlike {@link ConstraintMcpTools}'s repository, which shares the requirements
+ *       funnel precisely because it shares those files.</li>
  * </ul>
  *
  * <p>All persistence hexagons share the single {@link DatasetLifecycle} bean (one store under
@@ -631,6 +647,44 @@ public class ArknetMcpConfiguration {
             final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
         return new AdrMcpTools(service, service, service, service, service, service, service,
                 resolveRequirements, resolveBoundedContexts, projectResolver);
+    }
+
+    // --- Actor hexagon -----------------------------------------------------------
+
+    /**
+     * Persists {@code arkproc:Actor} resources of their own - not the actor facet the
+     * ubiquitous-language hexagon sets on a {@code skos:Concept}, which is untouched by this
+     * hexagon and keeps running as before. Acquires datasets from the same shared
+     * {@link DatasetLifecycle} as every other model hexagon, so an actor lands in the same project
+     * dataset as the requirements and use cases that will eventually refer to it.
+     *
+     * <p>Unlike {@link #constraintRepository}, this factory builds its own SHACL gate and
+     * {@link WriteFunnel} internally rather than taking one: {@code actor-shapes.ttl} and
+     * {@code arknet-actor.ttl} belong to this hexagon alone, so there is no sibling repository to
+     * share a gate with. Its gate is the second in this composition (after the requirements one)
+     * to reason over its axioms - {@code actshapes:ActorShape} targets the abstract
+     * {@code arkproc:Actor} while an instance is typed as one of the four concrete subclasses.</p>
+     */
+    @Bean
+    ActorRepository actorRepository(
+            final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
+        return KognioRdfActorRepositoryFactory.over(datasetLifecycle, displayLocale);
+    }
+
+    @Bean
+    ActorService actorService(final ActorRepository repository, final ResourceIdFactory resourceIdFactory) {
+        return new ActorService(repository, resourceIdFactory);
+    }
+
+    /**
+     * No {@code ResolveTerms}/{@code ResolveRequirements}-style borrowed port here, unlike
+     * {@link #boundedContextMcpTools} or {@link #adrMcpTools}: an {@link ActorService} result
+     * carries no opaque identity of a neighbour hexagon's resource, so there is nothing to render
+     * as a business code and no ADR-008 borrow to justify.
+     */
+    @Bean
+    ActorMcpTools actorMcpTools(final ActorService service, final ProjectResolver projectResolver) {
+        return new ActorMcpTools(service, service, service, service, projectResolver);
     }
 
     // --- Project hexagon (the registry, ADR-016) -------------------------------

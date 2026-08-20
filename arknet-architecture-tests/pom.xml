@@ -71,6 +71,12 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Regel 3: die technologieneutralen Hexagon-Inneren. -->
         <dependency>
@@ -106,6 +112,12 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-adr-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-core</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -145,6 +157,12 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-adr-adapter-mcp</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-actor-adapter-mcp</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
