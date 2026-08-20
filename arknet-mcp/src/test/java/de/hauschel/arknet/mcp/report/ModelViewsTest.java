@@ -9,6 +9,11 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.actor.application.port.in.ListActors;
+import de.hauschel.arknet.actor.domain.Actor;
+import de.hauschel.arknet.actor.domain.ActorCode;
+import de.hauschel.arknet.actor.domain.ActorId;
+import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -53,7 +58,8 @@ class ModelViewsTest {
                 }, (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
-                emptyAdrCards());
+                emptyAdrCards(),
+                emptyActorCards());
 
         final ModelViews.Views result = views.of(PROJECT, null);
 
@@ -80,7 +86,8 @@ class ModelViewsTest {
                 new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
-                emptyAdrCards());
+                emptyAdrCards(),
+                emptyActorCards());
 
         final ModelViews.Views result = views.of(PROJECT, null);
 
@@ -100,7 +107,8 @@ class ModelViewsTest {
                 new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
-                emptyAdrCards());
+                emptyAdrCards(),
+                emptyActorCards());
 
         final ModelViews.Views result = views.of(PROJECT, null);
 
@@ -111,7 +119,7 @@ class ModelViewsTest {
     /**
      * Reading order is strategic to detailed: what the model is about (bounded contexts), what it
      * must do (requirements), how that plays out (use cases), what was decided about it (ADRs),
-     * and the shared language underneath all of it.
+     * who or what acts on it (actors, issue #336), and the shared language underneath all of it.
      */
     @Test
     void ordersSectionsFromStrategicToDetailed() {
@@ -121,11 +129,12 @@ class ModelViewsTest {
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 new AdrCards(projectId -> List.of(adrDetail()),
-                        (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
+                        (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
+                new ActorCards(projectId -> List.of(actor())));
 
         assertThat(views.of(PROJECT, null).sections()).extracting(ModelSection::title)
-                .containsExactly(
-                        "Bounded Contexts", "Requirements", "Use Cases", "Architecture Decisions", "Glossary");
+                .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Architecture Decisions",
+                        "Actors", "Glossary");
     }
 
     private static UseCase useCase() {
@@ -169,5 +178,15 @@ class ModelViewsTest {
 
     private static AdrCards emptyAdrCards() {
         return new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
+    }
+
+    private static Actor actor() {
+        return new Actor(
+                new ActorId(ResourceId.of("https://w3id.org/arknet/id/actor-1")),
+                new ActorCode("ACTOR-1"), ActorType.HUMAN, "Kunde", null);
+    }
+
+    private static ActorCards emptyActorCards() {
+        return new ActorCards(projectId -> List.of());
     }
 }

@@ -20,6 +20,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.mcp.dataset.DaemonStorageLock;
 import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
+import de.hauschel.arknet.mcp.report.ActorCards;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
@@ -512,20 +513,22 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * {@code resolveTerms}/{@code resolveRequirements}/{@code resolveConstraints} are the
-     * ubiquitous-language and requirements hexagons' own driving ports (implemented by their
-     * {@code TermService}/{@code RequirementService}/{@code ConstraintService} beans) - borrowed
-     * here purely so {@code uc_get}/{@code uc_list} can render a referenced actor's name /
-     * requirement's business code / linked term's or constraint's business code instead of a bare
-     * IRI. This wires an In-Adapter to <em>different</em> hexagons' In-Ports, not to those
+     * {@code resolveActors}/{@code resolveTerms}/{@code resolveRequirements}/{@code
+     * resolveConstraints} are the actor, ubiquitous-language and requirements hexagons' own
+     * driving ports (implemented by their {@code ActorService}/{@code TermService}/{@code
+     * RequirementService}/{@code ConstraintService} beans) - borrowed here purely so {@code
+     * uc_get}/{@code uc_list} can render a referenced actor's business code (issue #336; the
+     * register replaced the old ubiquitous-language actor facet as the resolution source) /
+     * linked term's / requirement's business code / linked constraint's business code instead of
+     * a bare IRI. This wires an In-Adapter to <em>different</em> hexagons' In-Ports, not to those
      * hexagons' cores - see the "kein *-core* haengt an einem anderen BC" precision in CLAUDE.md.
      */
     @Bean
     UseCaseMcpTools useCaseMcpTools(
-            final UseCaseService service, final ResolveTerms resolveTerms,
+            final UseCaseService service, final ActorService actorService, final ResolveTerms resolveTerms,
             final ResolveRequirements resolveRequirements, final ConstraintService constraintService,
             final ProjectResolver projectResolver) {
-        return new UseCaseMcpTools(service, service, service, service, service, service, resolveTerms,
+        return new UseCaseMcpTools(service, service, service, service, service, service, actorService, resolveTerms,
                 resolveRequirements, constraintService, projectResolver);
     }
 
@@ -774,7 +777,7 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Assembles the HTML report's per-bounded-context sections by borrowing all five hexagons'
+     * Assembles the HTML report's per-bounded-context sections by borrowing all six hexagons'
      * read In-Ports - the same In-Adapter-as-gateway role ADR-008 grants {@code uc_get} when it
      * borrows {@link ResolveTerms}, here for the report rather than for a tool response. A use
      * case reconstructed from raw triples is not readable as a use case (its flow is a set of
@@ -787,18 +790,23 @@ public class ArknetMcpConfiguration {
      * labelling references, the report marks the ubiquitous language up inside the other
      * contexts' prose, and telling a linked mention from an unlinked one needs every term, not
      * just the ones an edge already points at.</p>
+     *
+     * <p>{@link ActorCards} (issue #336) is the sixth: {@code actorService} was already wired for
+     * {@link #actorMcpTools}, and {@link ActorService} implements {@code ListActors} too, so no
+     * new bean is needed to read it a second time for the report.</p>
      */
     @Bean
     ModelViews modelViews(
             final UseCaseService useCases, final RequirementService requirements, final TermService terms,
-            final BoundedContextService boundedContexts, final AdrService adrs,
+            final BoundedContextService boundedContexts, final AdrService adrs, final ActorService actorService,
             final ResolveRequirements resolveRequirements) {
         return new ModelViews(
                 terms,
                 new UseCaseCards(useCases, resolveRequirements),
                 new RequirementCards(requirements),
                 new BoundedContextCards(boundedContexts),
-                new AdrCards(adrs, resolveRequirements, boundedContexts));
+                new AdrCards(adrs, resolveRequirements, boundedContexts),
+                new ActorCards(actorService));
     }
 
     /**

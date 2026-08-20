@@ -43,6 +43,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.kernel.UuidResourceIdFactory;
+import de.hauschel.arknet.mcp.report.ActorCards;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
@@ -162,7 +163,8 @@ class StoreReportToolsTest {
                 new RequirementCards(
                         (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
                 new BoundedContextCards(projectId -> List.of()),
-                new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
+                new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
+                new ActorCards(projectId -> List.of()));
     }
 
     @AfterEach
@@ -516,7 +518,7 @@ class StoreReportToolsTest {
         final Term deTerm = termService.add(PROJECT,
                 new NewTerm("Anmeldung", "Der Nachweis der eigenen Identitaet.", null, null), "de");
         termService.update(PROJECT, deTerm.code(), "Login", "The act of proving one's identity.",
-                null, "en", "de", null);
+                "en", "de", null);
 
         final Prefixes prefixes = Prefixes.defaults();
         final StoreReader reader = new StoreReader(lifecycle);
@@ -527,7 +529,8 @@ class StoreReportToolsTest {
                 new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
-                new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()));
+                new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
+                new ActorCards(projectId -> List.of()));
         final StoreReportTools toolsWithGermanDefault = new StoreReportTools(
                 reader, prefixes, DisplayLocale.DEFAULT, new HtmlReportRenderer(prefixes),
                 modelViewsWithRealTerms, germanDefaultProject, NO_LABELS, reportDir, null);

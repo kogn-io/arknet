@@ -37,6 +37,7 @@ public final class ModelViews {
     private final ListTerms terms;
     private final BoundedContextCards boundedContexts;
     private final AdrCards adrs;
+    private final ActorCards actors;
 
     /**
      * @param terms           the ubiquitous-language context's list in-port, read once into the
@@ -45,18 +46,21 @@ public final class ModelViews {
      * @param requirements    builds the requirements section
      * @param boundedContexts builds the bounded-context section
      * @param adrs            builds the architecture-decisions section
+     * @param actors          builds the actor section
      */
     public ModelViews(
             final ListTerms terms,
             final UseCaseCards useCases,
             final RequirementCards requirements,
             final BoundedContextCards boundedContexts,
-            final AdrCards adrs) {
+            final AdrCards adrs,
+            final ActorCards actors) {
         this.terms = Objects.requireNonNull(terms, "terms");
         this.useCases = Objects.requireNonNull(useCases, "useCases");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
         this.boundedContexts = Objects.requireNonNull(boundedContexts, "boundedContexts");
         this.adrs = Objects.requireNonNull(adrs, "adrs");
+        this.actors = Objects.requireNonNull(actors, "actors");
     }
 
     /**
@@ -96,6 +100,7 @@ public final class ModelViews {
         collect(sections, failures, UseCaseCards.SECTION_TITLE,
                 () -> useCases.section(projectId, displayLocale, glossary));
         collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));
+        collect(sections, failures, ActorCards.SECTION_TITLE, () -> actors.section(projectId));
         collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
         return new Views(sections, failures);
     }
