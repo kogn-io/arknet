@@ -22,8 +22,6 @@ import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
-import de.hauschel.arknet.ul.domain.ActorFacet;
-import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 
@@ -172,13 +170,6 @@ public final class UbiquitousLanguageMcpTools {
                     + "architecture, technology, or implementation decisions (source-of-record, persistence, "
                     + "tenancy, who-triggers-what, ...). Those belong in an ADR (adr_add)")
             final String definition,
-            @McpToolParam(description = "Optional: mark this term as an actor (a skos:Concept that is "
-                    + "additionally an arkproc:Actor). Actor kind: HUMAN, SYSTEM or LEGAL (a legal person, "
-                    + "e.g. an organization, company or association)", required = false)
-            final String actorKind,
-            @McpToolParam(description = "Optional: the actor's role in the bounded context "
-                    + "(arkproc:actorRole); only meaningful together with actorKind", required = false)
-            final String actorRole,
             @McpToolParam(description = "Optional: identity (e.g. TERM-1) of an already-existing term this one "
                     + "specializes - its broader, superordinate term (skos:broader), e.g. 'Human Actor' as the "
                     + "broader term of 'Customer'. Rejected if the code does not resolve to an existing term",
@@ -192,10 +183,9 @@ public final class UbiquitousLanguageMcpTools {
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
-        final ActorFacet facet = parseActorFacet(actorKind, actorRole);
         final TermCode broaderCode = blankToNull(broader) == null ? null : new TermCode(broader.trim());
         final Term created = addTerm.add(project.id(),
-                new NewTerm(label, definition, facet, blankToNull(language), broaderCode),
+                new NewTerm(label, definition, blankToNull(language), broaderCode),
                 project.defaultLanguage());
         return format(created);
     }
@@ -238,7 +228,7 @@ public final class UbiquitousLanguageMcpTools {
     }
 
     @McpTool(name = "term_update",
-            description = "Correct an already-created term's preferred label, definition and/or actor facette, "
+            description = "Correct an already-created term's preferred label and/or definition, "
                     + "keeping its identity and every existing link into it (e.g. arkreq:usesTerm) unchanged. "
                     + "Every argument is optional - an omitted one leaves that field unchanged.")
     public String update(
@@ -250,15 +240,6 @@ public final class UbiquitousLanguageMcpTools {
                     + "no architecture, technology, or implementation decisions (source-of-record, persistence, "
                     + "tenancy, who-triggers-what, ...). Those belong in an ADR (adr_add)", required = false)
             final String definition,
-            @McpToolParam(description = "Optional: (re-)mark this term as an actor. Actor kind: HUMAN, SYSTEM or "
-                    + "LEGAL (a legal person, e.g. an organization, company or association). Leaves an "
-                    + "already-set actor facette unchanged if omitted", required = false)
-            final String actorKind,
-            @McpToolParam(description = "Optional: the actor's role in the bounded context "
-                    + "(arkproc:actorRole); only meaningful together with actorKind. Omitting it while "
-                    + "giving actorKind leaves an already-set role unchanged (it does not clear it)",
-                    required = false)
-            final String actorRole,
             @McpToolParam(description = "Optional: identity (e.g. TERM-1) of an already-existing term this one "
                     + "specializes - its broader, superordinate term (skos:broader). Omit to leave an "
                     + "already-set broader term unchanged; pass an empty string to explicitly clear it; pass "
@@ -279,19 +260,17 @@ public final class UbiquitousLanguageMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final TermCode code = new TermCode(id);
-        final ActorFacet facet = parseActorFacet(actorKind, actorRole);
         final Optional<TermCode> broaderPatch = parseBroaderPatch(broader);
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
-                facet, blankToNull(language), project.defaultLanguage(), broaderPatch);
+                blankToNull(language), project.defaultLanguage(), broaderPatch);
         return format(updated);
     }
 
     @McpTool(name = "term_delete",
-            description = "Delete an already-created term and every triple it carries (its label, definition "
-                    + "and actor facette, in every language) - not just a correction, the whole resource goes "
+            description = "Delete an already-created term and every triple it carries (its label and "
+                    + "definition, in every language) - not just a correction, the whole resource goes "
                     + "away. Rejected if anything else still references it: a requirement's or use case's "
-                    + "usesTerm, a bounded context's ubiquitousLanguageTerm, another term's broader, or - for "
-                    + "a term also marked as an actor - a use case's primaryActor/supportingActor. Remove "
+                    + "usesTerm, a bounded context's ubiquitousLanguageTerm, or another term's broader. Remove "
                     + "those edges first (req_update/uc_update, bc_link_term, or term_update to clear broader).")
     public String delete(
             final McpSyncRequestContext context,
@@ -302,12 +281,6 @@ public final class UbiquitousLanguageMcpTools {
         final TermCode code = new TermCode(id);
         deleteTerm.delete(project.id(), code);
         return "Deleted: " + code.value();
-    }
-
-    private static ActorFacet parseActorFacet(final String actorKind, final String actorRole) {
-        return blankToNull(actorKind) == null
-                ? null
-                : new ActorFacet(ActorKind.valueOf(actorKind.trim()), blankToNull(actorRole));
     }
 
     /**
@@ -327,12 +300,8 @@ public final class UbiquitousLanguageMcpTools {
     }
 
     private static String format(final Term t) {
-        final ActorFacet facet = t.actorFacet();
-        final String actor = facet == null
-                ? ""
-                : " [actor:%s%s]".formatted(facet.kind(), facet.role() == null ? "" : " role=" + facet.role());
         final String broader = t.broader() == null ? "" : " [broader:%s]".formatted(t.broader().value());
-        return "%s %s - %s%s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), actor, broader);
+        return "%s %s - %s%s".formatted(t.code().value(), t.prefLabel(), t.definition(), broader);
     }
 
     private static String blankToNull(final String value) {

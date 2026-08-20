@@ -54,8 +54,6 @@ import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.ul.domain.ActorFacet;
-import de.hauschel.arknet.ul.domain.ActorKind;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
@@ -171,7 +169,7 @@ class KognioRdfTermRepositoryTest {
     @Test
     void updateRejectsAnUnknownCode() {
         assertThrows(TermNotFoundException.class,
-                () -> repository.update(PROJECT_A, new TermCode("TERM-1"), "Erstattung", null, null, null, null, null));
+                () -> repository.update(PROJECT_A, new TermCode("TERM-1"), "Erstattung", null, null, null, null));
         assertTrue(repository.findAll(PROJECT_A, null).isEmpty());
     }
 
@@ -181,7 +179,7 @@ class KognioRdfTermRepositoryTest {
         repository.create(PROJECT_A,
                 new Term(freshId(), code, "Gutschrift", "Erste Definition.", null), null);
 
-        Term result = repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null);
+        Term result = repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null);
 
         assertEquals("Gutschrift", result.prefLabel());
         assertEquals("Ueberarbeitete Definition.", result.definition());
@@ -196,7 +194,7 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null), null);
 
-        repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null);
+        repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null);
 
         assertEquals(id, repository.findByCode(PROJECT_A, code, null).orElseThrow().id());
     }
@@ -216,71 +214,13 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Erste Definition.", "\"Kunde\"@de, \"Customer\"@en");
 
-        repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null);
+        repository.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null);
 
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"),
                 "the German prefLabel variant must survive an update that never touches prefLabel");
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"),
                 "the English prefLabel variant must survive an update that never touches prefLabel");
         assertEquals("Ueberarbeitete Definition.", repository.findByCode(PROJECT_A, code, null).orElseThrow().definition());
-    }
-
-    /**
-     * Same bug 1 regression, exercised the way the PR review actually found it: an update that
-     * only touches the Actor facette (never {@code prefLabel} or {@code definition} at all) must
-     * not disturb either of them, including a store-first multi-valued {@code prefLabel}.
-     */
-    @Test
-    void updateChangingOnlyActorFacetPreservesMultiValuedPrefLabelAndDefinition() {
-        TermId id = freshId();
-        TermCode code = new TermCode("TERM-1");
-        givenMultilingualConcept(PROJECT_A, id, "TERM-1", "Eine Definition.", "\"Kunde\"@de, \"Customer\"@en");
-
-        Term result = repository.update(PROJECT_A, code, null, null, new ActorFacet(ActorKind.HUMAN, "Besteller"), null, null, null);
-
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
-        assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Customer", "en"));
-        assertEquals("Eine Definition.", result.definition());
-        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), result.actorFacet());
-    }
-
-    /**
-     * Bug 3 (data loss, found reviewing the same PR): correcting only {@code actorKind} (e.g. a
-     * miscategorised {@code HUMAN} actor that should have been {@code SYSTEM}) without restating
-     * {@code actorRole} must not wipe the role already on record - a {@code null} role means
-     * "unchanged", not "clear", exactly like every other field {@link #update} takes.
-     */
-    @Test
-    void updateChangingOnlyActorKindPreservesTheExistingActorRole() {
-        TermId id = freshId();
-        TermCode code = new TermCode("TERM-1");
-        repository.create(PROJECT_A,
-                new Term(id, code, "Kunde", "def a", new ActorFacet(ActorKind.HUMAN, "Besteller")), null);
-
-        Term result = repository.update(PROJECT_A, code, null, null, new ActorFacet(ActorKind.SYSTEM, null), null, null, null);
-
-        assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"), result.actorFacet());
-        assertEquals(new ActorFacet(ActorKind.SYSTEM, "Besteller"),
-                repository.findByCode(PROJECT_A, code, null).orElseThrow().actorFacet());
-    }
-
-    /**
-     * Same class of bug as {@link #updateChangingOnlyActorKindPreservesTheExistingActorRole}, from
-     * the other direction: correcting {@code actorKind} away from {@code LEGAL} must remove the
-     * stale {@code arkproc:LegalActor} type triple, not leave the subject typed as two actor kinds
-     * at once.
-     */
-    @Test
-    void updateChangingActorKindAwayFromLegalRemovesTheStaleType() {
-        TermId id = freshId();
-        TermCode code = new TermCode("TERM-1");
-        repository.create(PROJECT_A,
-                new Term(id, code, "Kunde GmbH", "def a", new ActorFacet(ActorKind.LEGAL, "Besteller")), null);
-
-        repository.update(PROJECT_A, code, null, null, new ActorFacet(ActorKind.HUMAN, "Besteller"), null, null, null);
-
-        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#LegalActor"));
-        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
     }
 
     /**
@@ -298,7 +238,7 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
 
-        repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null, null);
+        repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null);
 
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"),
                 "an untagged correction must not delete an unrelated language-tagged variant");
@@ -318,8 +258,8 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
 
-        repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null, null);
-        repository.update(PROJECT_A, code, "Stammkunde", null, null, null, null, null);
+        repository.update(PROJECT_A, code, "Bestandskunde", null, null, null, null);
+        repository.update(PROJECT_A, code, "Stammkunde", null, null, null, null);
 
         assertFalse(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Bestandskunde"));
         assertTrue(subjectHasUntaggedPrefLabel(PROJECT_A, id, "Stammkunde"));
@@ -339,7 +279,7 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"@de, \"Customer\"@en");
 
-        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, null, "de", null, null);
+        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, "de", null, null);
 
         assertEquals("Stammkunde", result.prefLabel());
         assertFalse(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Kunde", "de"));
@@ -358,7 +298,7 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"");
 
-        Term result = repository.update(PROJECT_A, code, "Bestandskunde", null, null, "de", "de", null);
+        Term result = repository.update(PROJECT_A, code, "Bestandskunde", null, "de", "de", null);
 
         assertEquals("Bestandskunde", result.prefLabel());
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Bestandskunde", "de"));
@@ -376,7 +316,7 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-1");
         givenMultilingualConcept(PROJECT_A, id, "TERM-1", "def a", "\"Kunde\"");
 
-        Term result = repository.update(PROJECT_A, code, "Client", null, null, "fr", "de", null);
+        Term result = repository.update(PROJECT_A, code, "Client", null, "fr", "de", null);
 
         assertEquals("Client", result.prefLabel());
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Client", "fr"));
@@ -400,7 +340,7 @@ class KognioRdfTermRepositoryTest {
         Term term = new Term(id, code, "Kunde", "Person, die eine Bestellung aufgibt.", null);
         repository.create(PROJECT_A, term, "de");
 
-        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, null, "DE", null, null);
+        Term result = repository.update(PROJECT_A, code, "Stammkunde", null, "DE", null, null);
 
         assertEquals("Stammkunde", result.prefLabel());
         assertTrue(subjectHasLanguageTaggedPrefLabel(PROJECT_A, id, "Stammkunde", "de"));
@@ -442,7 +382,7 @@ class KognioRdfTermRepositoryTest {
         TermCode broaderCode = new TermCode("TERM-1");
         repository.create(PROJECT_A, new Term(freshId(), broaderCode, "Actor", "Someone or something acting.",
                 null), null);
-        Term narrower = new Term(freshId(), new TermCode("TERM-2"), "Human Actor", "A human acting.", null,
+        Term narrower = new Term(freshId(), new TermCode("TERM-2"), "Human Actor", "A human acting.",
                 broaderCode);
 
         repository.create(PROJECT_A, narrower, null);
@@ -453,7 +393,7 @@ class KognioRdfTermRepositoryTest {
 
     @Test
     void createRejectsABroaderCodeThatDoesNotResolveAndPersistsNothing() {
-        Term narrower = new Term(freshId(), new TermCode("TERM-1"), "Human Actor", "A human acting.", null,
+        Term narrower = new Term(freshId(), new TermCode("TERM-1"), "Human Actor", "A human acting.",
                 new TermCode("TERM-404"));
 
         assertThrows(TermNotFoundException.class, () -> repository.create(PROJECT_A, narrower, null));
@@ -468,7 +408,7 @@ class KognioRdfTermRepositoryTest {
                 null), null);
         repository.create(PROJECT_A, new Term(freshId(), code, "Human Actor", "A human acting.", null), null);
 
-        Term result = repository.update(PROJECT_A, code, null, null, null, null, null, Optional.of(broaderCode));
+        Term result = repository.update(PROJECT_A, code, null, null, null, null, Optional.of(broaderCode));
 
         assertEquals(broaderCode, result.broader());
         assertEquals(broaderCode, repository.findByCode(PROJECT_A, code, null).orElseThrow().broader());
@@ -480,10 +420,10 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-2");
         repository.create(PROJECT_A, new Term(freshId(), broaderCode, "Actor", "Someone or something acting.",
                 null), null);
-        repository.create(PROJECT_A, new Term(freshId(), code, "Human Actor", "A human acting.", null,
+        repository.create(PROJECT_A, new Term(freshId(), code, "Human Actor", "A human acting.",
                 broaderCode), null);
 
-        Term result = repository.update(PROJECT_A, code, null, null, null, null, null, Optional.empty());
+        Term result = repository.update(PROJECT_A, code, null, null, null, null, Optional.empty());
 
         assertNull(result.broader());
         assertNull(repository.findByCode(PROJECT_A, code, null).orElseThrow().broader());
@@ -495,10 +435,10 @@ class KognioRdfTermRepositoryTest {
         TermCode code = new TermCode("TERM-2");
         repository.create(PROJECT_A, new Term(freshId(), broaderCode, "Actor", "Someone or something acting.",
                 null), null);
-        repository.create(PROJECT_A, new Term(freshId(), code, "Human Actor", "A human acting.", null,
+        repository.create(PROJECT_A, new Term(freshId(), code, "Human Actor", "A human acting.",
                 broaderCode), null);
 
-        Term result = repository.update(PROJECT_A, code, "Human Being", null, null, null, null, null);
+        Term result = repository.update(PROJECT_A, code, "Human Being", null, null, null, null);
 
         assertEquals("Human Being", result.prefLabel());
         assertEquals(broaderCode, result.broader());
@@ -511,7 +451,7 @@ class KognioRdfTermRepositoryTest {
         repository.create(PROJECT_A, new Term(freshId(), code, "Human Actor", "A human acting.", null), null);
 
         assertThrows(TermNotFoundException.class, () -> repository.update(
-                PROJECT_A, code, null, null, null, null, null, Optional.of(new TermCode("TERM-404"))));
+                PROJECT_A, code, null, null, null, null, Optional.of(new TermCode("TERM-404"))));
         assertNull(repository.findByCode(PROJECT_A, code, null).orElseThrow().broader());
     }
 
@@ -522,7 +462,7 @@ class KognioRdfTermRepositoryTest {
                 null);
 
         assertThrows(TermCycleException.class, () -> repository.update(
-                PROJECT_A, code, null, null, null, null, null, Optional.of(code)));
+                PROJECT_A, code, null, null, null, null, Optional.of(code)));
         assertNull(repository.findByCode(PROJECT_A, code, null).orElseThrow().broader());
     }
 
@@ -539,12 +479,12 @@ class KognioRdfTermRepositoryTest {
         TermCode term3 = new TermCode("TERM-3");
         repository.create(PROJECT_A, new Term(freshId(), term1, "Actor", "Someone or something acting.", null),
                 null);
-        repository.create(PROJECT_A, new Term(freshId(), term2, "Human Actor", "A human acting.", null, term1),
+        repository.create(PROJECT_A, new Term(freshId(), term2, "Human Actor", "A human acting.", term1),
                 null);
-        repository.create(PROJECT_A, new Term(freshId(), term3, "Customer", "A buying human.", null, term2), null);
+        repository.create(PROJECT_A, new Term(freshId(), term3, "Customer", "A buying human.", term2), null);
 
         assertThrows(TermCycleException.class, () -> repository.update(
-                PROJECT_A, term1, null, null, null, null, null, Optional.of(term3)));
+                PROJECT_A, term1, null, null, null, null, Optional.of(term3)));
         assertNull(repository.findByCode(PROJECT_A, term1, null).orElseThrow().broader());
     }
 
@@ -573,7 +513,7 @@ class KognioRdfTermRepositoryTest {
         TermRepository conflicting = KognioRdfTermRepositoryFactory.over(new ConflictingWriteLifecycle(lifecycle));
 
         assertThrows(TermConcurrentlyModifiedException.class,
-                () -> conflicting.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null));
+                () -> conflicting.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null));
         assertEquals(Optional.of(new Term(id, code, "Gutschrift", "Erste Definition.", null)),
                 repository.findByCode(PROJECT_A, code, null));
     }
@@ -814,80 +754,6 @@ class KognioRdfTermRepositoryTest {
         invalidConcept.add(subject, VocabRdf.TYPE, rdf.createIRI(SKOS_CONCEPT));
 
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(invalidConcept));
-    }
-
-    @Test
-    void createsAndFindsTermWithHumanActorFacet() {
-        TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Kunde", "Person, die eine Bestellung aufgibt.",
-                new ActorFacet(ActorKind.HUMAN, "Besteller"));
-
-        repository.create(PROJECT_A, term, null);
-        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null);
-
-        assertEquals(Optional.of(term), found);
-        ActorFacet facet = found.orElseThrow().actorFacet();
-        assertEquals(ActorKind.HUMAN, facet.kind());
-        assertEquals("Besteller", facet.role());
-        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
-    }
-
-    @Test
-    void createsAndFindsTermWithSystemActorFacet() {
-        TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Zahlungsdienst", "Verarbeitet Zahlungen.",
-                new ActorFacet(ActorKind.SYSTEM, "PaymentService"));
-
-        repository.create(PROJECT_A, term, null);
-        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null);
-
-        assertEquals(Optional.of(term), found);
-        ActorFacet facet = found.orElseThrow().actorFacet();
-        assertEquals(ActorKind.SYSTEM, facet.kind());
-        assertEquals("PaymentService", facet.role());
-        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#SystemActor"));
-    }
-
-    @Test
-    void createsAndFindsTermWithLegalActorFacet() {
-        TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Kunde GmbH", "Ein Unternehmen, das Bestellungen aufgibt.",
-                new ActorFacet(ActorKind.LEGAL, "Besteller"));
-
-        repository.create(PROJECT_A, term, null);
-        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null);
-
-        assertEquals(Optional.of(term), found);
-        ActorFacet facet = found.orElseThrow().actorFacet();
-        assertEquals(ActorKind.LEGAL, facet.kind());
-        assertEquals("Besteller", facet.role());
-        assertTrue(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#LegalActor"));
-    }
-
-    @Test
-    void createsAndFindsTermWithoutActorFacet() {
-        TermId id = freshId();
-        Term term = new Term(id, new TermCode("TERM-1"), "Gutschrift", "def a", null);
-
-        repository.create(PROJECT_A, term, null);
-        Optional<Term> found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null);
-
-        assertNull(found.orElseThrow().actorFacet());
-        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#HumanActor"));
-        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#SystemActor"));
-        assertFalse(subjectHasType(PROJECT_A, id, "https://w3id.org/arknet/process#LegalActor"));
-    }
-
-    @Test
-    void findAllReconstructsActorFacet() {
-        Term withFacet = new Term(freshId(), new TermCode("TERM-1"), "Kunde", "def a",
-                new ActorFacet(ActorKind.HUMAN, "Besteller"));
-        repository.create(PROJECT_A, withFacet, null);
-
-        List<Term> all = repository.findAll(PROJECT_A, null);
-
-        assertEquals(1, all.size());
-        assertEquals(new ActorFacet(ActorKind.HUMAN, "Besteller"), all.get(0).actorFacet());
     }
 
     // ---- display-language fallback for multilingual prefLabel ----------------------------
@@ -1184,83 +1050,6 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- actorRole: row multiplication when arkproc:actorRole is repeated -----------------
-
-    /**
-     * Store-first regression test (issue #154): neither {@code ulshapes:TermShape} nor
-     * {@code arknet-actor.ttl} place a {@code sh:maxCount} on {@code arkproc:actorRole}, so an
-     * actor-facetted subject with two role literals is shape-legal even though
-     * {@code term_add}/{@code term_update} never write more than one. Before the fix,
-     * {@code assemblyFor} read the actor facet (kind + role together) only from the first SPARQL
-     * row bound for a subject via {@code computeIfAbsent} - correct by accident whenever the two
-     * role rows happened to bind in insertion order, but silently dropping the second value
-     * regardless, unlike the sibling {@code definition} case which already logged a {@code WARN}.
-     * This pins the outward-visible contract: neither read throws, and each returns one of the
-     * two role values without crashing.
-     */
-    @Test
-    void findByCodeDoesNotThrowForATermWithTwoActorRoles() {
-        TermId id = freshId();
-        givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
-
-        Term found = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow();
-
-        assertTrue(List.of("Kaeufer", "Verkaeufer").contains(found.actorFacet().role()));
-    }
-
-    /** Same regression as above, exercised via the batch {@link TermRepository#findAll}. */
-    @Test
-    void findAllDoesNotThrowForATermWithTwoActorRoles() {
-        TermId id = freshId();
-        givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
-
-        List<Term> all = repository.findAll(PROJECT_A, null);
-
-        assertEquals(1, all.size());
-        assertTrue(List.of("Kaeufer", "Verkaeufer").contains(all.get(0).actorFacet().role()));
-    }
-
-    /**
-     * The chosen role is deterministic across repeated reads against the same, unchanged store
-     * state - not merely "does not throw" - mirroring
-     * {@link #findByCodePicksTheSameDefinitionOnRepeatedReads}'s determinism check for the
-     * sibling {@code definition} case.
-     */
-    @Test
-    void findByCodePicksTheSameActorRoleOnRepeatedReads() {
-        TermId id = freshId();
-        givenActorTermWithTwoRoles(PROJECT_A, id, "TERM-1", "Kaeufer", "Verkaeufer");
-
-        String first = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow().actorFacet().role();
-        String second = repository.findByCode(PROJECT_A, new TermCode("TERM-1"), null).orElseThrow().actorFacet().role();
-
-        assertEquals(first, second);
-    }
-
-    /**
-     * Writes an actor-facetted {@code skos:Concept} with two {@code arkproc:actorRole} literals
-     * straight into the terms graph - shape-legal ({@code ulshapes:TermShape}/
-     * {@code arknet-actor.ttl} place no constraint on the property's cardinality), but
-     * unreachable via {@code term_add}/{@code term_update}, which only ever write one.
-     */
-    private void givenActorTermWithTwoRoles(
-            ProjectId projectId, TermId id, String code, String firstRole, String secondRole) {
-        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
-                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> , "
-                + "<https://w3id.org/arknet/process#HumanActor> ; "
-                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
-                + "<http://www.w3.org/2004/02/skos/core#prefLabel> \"Kunde\" ; "
-                + "<http://www.w3.org/2004/02/skos/core#definition> \"Definition.\" ; "
-                + "<https://w3id.org/arknet/process#actorRole> \"" + firstRole + "\" ; "
-                + "<https://w3id.org/arknet/process#actorRole> \"" + secondRole + "\" } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            handle.transactor().inTransaction(tx -> {
-                tx.update(insert);
-                return null;
-            });
-        }
-    }
-
     // ---- findByIds: batch resolution for ResolveTerms -------------------------------------
 
     @Test
@@ -1427,14 +1216,6 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    private boolean subjectHasType(ProjectId projectId, TermId id, String typeIri) {
-        String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
-                + "<" + id.value().value() + "> a <" + typeIri + "> } }";
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            return handle.sparqlQuery().ask(query);
-        }
-    }
-
     // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
 
     /**
@@ -1466,7 +1247,7 @@ class KognioRdfTermRepositoryTest {
         repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Erste Definition.", null), null);
         List<String> headAfterCreate = headsOf(id);
 
-        repository.update(PROJECT_A, code, null, "Zweite Definition.", null, null, null, null);
+        repository.update(PROJECT_A, code, null, "Zweite Definition.", null, null, null);
 
         List<String> revisions = revisionsOf(id);
         assertEquals(2, revisions.size(), "update must record exactly one more revision");
@@ -1493,7 +1274,7 @@ class KognioRdfTermRepositoryTest {
                 new Term(id, code, "Gutschrift", "Erste Definition.", null), null);
         List<String> headAfterCreate = headsOf(id);
 
-        Term result = repository.update(PROJECT_A, code, null, null, null, null, null, null);
+        Term result = repository.update(PROJECT_A, code, null, null, null, null, null);
 
         assertEquals(1, revisionsOf(id).size(), "a field-less update must record no further revision");
         assertEquals(headAfterCreate, headsOf(id), "a field-less update must not move the head");
@@ -1523,11 +1304,11 @@ class KognioRdfTermRepositoryTest {
         TermRepository racing = KognioRdfTermRepositoryFactory.over(
                 new HeadAdvancingLifecycle(lifecycle, () -> {
                     if (pending.compareAndSet(true, false)) {
-                        repository.update(PROJECT_A, code, null, "Definition des Konkurrenten.", null, null, null, null);
+                        repository.update(PROJECT_A, code, null, "Definition des Konkurrenten.", null, null, null);
                     }
                 }));
 
-        Term result = racing.update(PROJECT_A, code, "Gutschriftsbeleg", null, null, null, null, null);
+        Term result = racing.update(PROJECT_A, code, "Gutschriftsbeleg", null, null, null, null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         Term expected = new Term(id, code, "Gutschriftsbeleg", "Definition des Konkurrenten.", null);
@@ -1658,11 +1439,11 @@ class KognioRdfTermRepositoryTest {
         TermRepository racing = KognioRdfTermRepositoryFactory.over(
                 new SelectRacingLifecycle(lifecycle, () -> {
                     if (pending.compareAndSet(true, false)) {
-                        repository.update(PROJECT_A, code, "Neu", null, null, null, null, null);
+                        repository.update(PROJECT_A, code, "Neu", null, null, null, null);
                     }
                 }));
 
-        Term result = racing.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null, null);
+        Term result = racing.update(PROJECT_A, code, null, "Ueberarbeitete Definition.", null, null, null);
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         Term expected = new Term(id, code, "Neu", "Ueberarbeitete Definition.", null);
@@ -1874,7 +1655,7 @@ class KognioRdfTermRepositoryTest {
         repository.create(PROJECT_A, new Term(broaderId, broaderCode, "Zahlungsverkehr", "Oberbegriff.", null), null);
         repository.create(PROJECT_A, new Term(freshId(), new TermCode("TERM-2"), "Gutschrift",
                 "Eine Erstattung.", null), null);
-        repository.update(PROJECT_A, new TermCode("TERM-2"), null, null, null, null, null,
+        repository.update(PROJECT_A, new TermCode("TERM-2"), null, null, null, null,
                 Optional.of(broaderCode));
 
         assertThrows(TermReferencedException.class, () -> repository.delete(PROJECT_A, broaderCode));

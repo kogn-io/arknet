@@ -19,7 +19,6 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 
@@ -76,7 +75,7 @@ class TermServiceConcurrencyTest {
     }
 
     private static NewTerm newTerm() {
-        return new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null, null);
+        return new NewTerm("Gutschrift", "Rueckerstattung eines bereits gezahlten Betrags.", null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -114,9 +113,8 @@ class TermServiceConcurrencyTest {
 
         @Override
         public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-                ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
-            return delegate.update(projectId, code, prefLabel, definition, actorFacet, language, defaultLanguage,
-                    broader);
+                String language, String defaultLanguage, Optional<TermCode> broader) {
+            return delegate.update(projectId, code, prefLabel, definition, language, defaultLanguage, broader);
         }
 
         @Override

@@ -4,7 +4,6 @@
 package de.hauschel.arknet.ul.application.port.in;
 
 import de.hauschel.arknet.kernel.ProjectId;
-import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.Term;
 import de.hauschel.arknet.ul.domain.TermCode;
 
@@ -41,9 +40,6 @@ public interface AddTerm {
      *
      * @param prefLabel  the preferred label, i.e. the term itself
      * @param definition the meaning of the term
-     * @param actorFacet optional Actor facette: if set, the same
-     *                   skos:Concept is additionally an {@code arkproc:Actor}.
-     *                   Optional (may be {@code null})
      * @param language   the BCP-47 language tag {@code prefLabel} and {@code definition} are
      *                   written in (e.g. {@code "de"}), or {@code null} to fall back to the
      *                   target project's configured default language - the same tag applies to
@@ -56,14 +52,14 @@ public interface AddTerm {
      *                   cycle protection never triggers here (only {@code term_update} can create
      *                   a cycle)
      */
-    record NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language, TermCode broader) {
+    record NewTerm(String prefLabel, String definition, String language, TermCode broader) {
 
         /**
          * Convenience constructor for a new term with no {@code broader} reference - equivalent
          * to passing {@code null} for {@link #broader} explicitly.
          */
-        public NewTerm(String prefLabel, String definition, ActorFacet actorFacet, String language) {
-            this(prefLabel, definition, actorFacet, language, null);
+        public NewTerm(String prefLabel, String definition, String language) {
+            this(prefLabel, definition, language, null);
         }
     }
 }

@@ -13,7 +13,6 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
 import de.hauschel.arknet.ul.application.port.out.TermRepository;
-import de.hauschel.arknet.ul.domain.ActorFacet;
 import de.hauschel.arknet.ul.domain.DuplicateTermCodeException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.ul.domain.Term;
@@ -55,7 +54,7 @@ final class InMemoryTermRepository implements TermRepository {
 
     @Override
     public Term update(ProjectId projectId, TermCode code, String prefLabel, String definition,
-            ActorFacet actorFacet, String language, String defaultLanguage, Optional<TermCode> broader) {
+            String language, String defaultLanguage, Optional<TermCode> broader) {
         // Nothing multi-valued to sweep in this plain in-memory fake either (see class-level
         // note) - defaultLanguage is accepted and ignored here too. broader (issue #252) is not
         // resolved/cycle-checked here either - that is the real out-adapter's concern (see
@@ -69,7 +68,6 @@ final class InMemoryTermRepository implements TermRepository {
         Term updated = new Term(current.id(), current.code(),
                 prefLabel != null ? prefLabel : current.prefLabel(),
                 definition != null ? definition : current.definition(),
-                actorFacet != null ? actorFacet : current.actorFacet(),
                 broader != null ? broader.orElse(null) : current.broader());
         terms.put(updated.id(), updated);
         return updated;

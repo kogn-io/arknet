@@ -227,7 +227,7 @@ class TermServiceRealStoreConcurrencyTest {
 
         Thread winnerThread = new Thread(() -> {
             try {
-                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, null, "de", null, null);
+                winnerRepository.update(WS, code, "Kunde (korrigiert)", null, "de", null, null);
             } catch (Throwable t) {
                 winnerFailure.set(t);
             } finally {
@@ -236,7 +236,7 @@ class TermServiceRealStoreConcurrencyTest {
         }, "racer-A");
         Thread loserThread = new Thread(() -> {
             try {
-                loserRepository.update(WS, code, "Client", null, null, "fr", null, null);
+                loserRepository.update(WS, code, "Client", null, "fr", null, null);
             } catch (Throwable t) {
                 loserFailure.set(t);
             }
@@ -310,7 +310,7 @@ class TermServiceRealStoreConcurrencyTest {
 
         Thread racerAThread = new Thread(() -> {
             try {
-                racerARepository.update(WS, codeA, null, null, null, "de", null, Optional.of(codeB));
+                racerARepository.update(WS, codeA, null, null, "de", null, Optional.of(codeB));
             } catch (Throwable t) {
                 racerAFailure.set(t);
             }
@@ -318,7 +318,7 @@ class TermServiceRealStoreConcurrencyTest {
         Thread racerBThread = new Thread(() -> {
             try {
                 awaitLatch(racerAReachedReCheck);
-                straightThrough.update(WS, codeB, null, null, null, "de", null, Optional.of(codeA));
+                straightThrough.update(WS, codeB, null, null, "de", null, Optional.of(codeA));
             } catch (Throwable t) {
                 racerBFailure.set(t);
             } finally {
