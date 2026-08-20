@@ -18,6 +18,7 @@ import org.springframework.ai.mcp.annotation.McpTool;
 
 import de.hauschel.arknet.actor.application.port.in.AddActor;
 import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
+import de.hauschel.arknet.actor.application.port.in.DeleteActor;
 import de.hauschel.arknet.actor.application.port.in.GetActor;
 import de.hauschel.arknet.actor.application.port.in.ListActors;
 import de.hauschel.arknet.actor.application.port.in.UpdateActor;
@@ -31,7 +32,7 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 
 /**
- * Scaffold-level check that the adapter declares exactly the four actor tools and guards its
+ * Scaffold-level check that the adapter declares exactly the five actor tools and guards its
  * in-port dependencies, plus each tool's delegation to its in-port and rendering of the result.
  */
 class ActorMcpToolsTest {
@@ -45,31 +46,42 @@ class ActorMcpToolsTest {
     private static final ProjectResolver PROJECTS = anchor -> new ResolvedProject(PROJECT, null);
 
     private final Stub stub = new Stub();
-    private final ActorMcpTools adapter = new ActorMcpTools(stub, stub, stub, stub, PROJECTS);
+    private final ActorMcpTools adapter = new ActorMcpTools(stub, stub, stub, stub, stub, PROJECTS);
 
     @Test
-    void declaresTheFourActorTools() {
+    void declaresTheFiveActorTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(4, names.size());
-        assertTrue(names.containsAll(List.of("actor_add", "actor_list", "actor_get", "actor_update")));
+        assertEquals(5, names.size());
+        assertTrue(names.containsAll(
+                List.of("actor_add", "actor_list", "actor_get", "actor_update", "actor_delete")));
     }
 
     @Test
     void rejectsNullInPort() {
-        assertThrows(NullPointerException.class, () -> new ActorMcpTools(null, stub, stub, stub, PROJECTS));
-        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, null, stub, stub, PROJECTS));
-        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, null, stub, PROJECTS));
-        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, stub, null, PROJECTS));
+        assertThrows(NullPointerException.class, () -> new ActorMcpTools(null, stub, stub, stub, stub, PROJECTS));
+        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, null, stub, stub, stub, PROJECTS));
+        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, null, stub, stub, PROJECTS));
+        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, stub, null, stub, PROJECTS));
+        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
-        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, stub, stub, null));
+        assertThrows(NullPointerException.class, () -> new ActorMcpTools(stub, stub, stub, stub, stub, null));
+    }
+
+    /** {@code actor_delete} passes the parsed code straight through to the in-port. */
+    @Test
+    void deletePassesTheCodeThrough() {
+        String rendered = adapter.delete(null, "ACTOR-1", null);
+
+        assertEquals(new ActorCode("ACTOR-1"), stub.lastDeleteCode);
+        assertEquals("Deleted: ACTOR-1", rendered);
     }
 
     @Test
@@ -172,8 +184,8 @@ class ActorMcpToolsTest {
         return new Actor(ID, new ActorCode(code), type, name, description);
     }
 
-    /** Structural stub implementing the four driving in-ports. */
-    private static final class Stub implements AddActor, ListActors, GetActor, UpdateActor {
+    /** Structural stub implementing the five driving in-ports. */
+    private static final class Stub implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor {
 
         private NewActor lastAddCommand;
         private List<Actor> allActors = List.of();
@@ -182,6 +194,7 @@ class ActorMcpToolsTest {
         private ActorCode lastUpdateCode;
         private String lastUpdateName;
         private String lastUpdateDescription;
+        private ActorCode lastDeleteCode;
 
         @Override
         public Actor add(ProjectId projectId, NewActor command) {
@@ -207,6 +220,11 @@ class ActorMcpToolsTest {
             lastUpdateName = name;
             lastUpdateDescription = description;
             return new Actor(ID, code, ActorType.HUMAN, name == null ? "unchanged" : name, description);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, ActorCode code) {
+            lastDeleteCode = code;
         }
     }
 }

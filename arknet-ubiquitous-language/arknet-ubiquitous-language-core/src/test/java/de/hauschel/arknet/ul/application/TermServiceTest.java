@@ -422,5 +422,10 @@ class TermServiceTest {
         public List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
+
+        @Override
+        public void delete(ProjectId projectId, TermCode code) {
+            delegate.delete(projectId, code);
+        }
     }
 }

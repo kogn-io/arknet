@@ -33,12 +33,14 @@ import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
+import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -257,6 +259,75 @@ public class KognioRdfActorRepository implements ActorRepository {
                 + "GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } }";
         tx.update(deleteExisting);
         tx.add(graphIri, graph);
+    }
+
+    /**
+     * Deletes the actor identified by {@code code}, and every triple it carries in
+     * {@link #ACTOR_GRAPH}, from the project (issue #335). Resolves the subject by code outside any
+     * transaction (mirroring {@link #findByCode}'s own read), then hands the whole
+     * check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first,
+     * inside the funnel's own write transaction, and only once it finds nothing pointing at the
+     * actor does the body remove the subject's triples wholesale - the same "nothing to preserve"
+     * whole-subject delete {@link #replaceExistingTriples} already runs, scoped to
+     * {@link #ACTOR_GRAPH} so a subject that is also a glossary term keeps its {@code skos:*}
+     * triples in the ul context's own named graph untouched.
+     */
+    @Override
+    public void delete(ProjectId projectId, ActorCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            String query = "SELECT ?s WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                    + "?s a ?type . " + actorTypeFilter()
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" } }";
+            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .orElseThrow(() -> new ActorNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, ACTOR_GRAPH, subjectIriString,
+                () -> new ActorNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    tx.update("DELETE WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } }");
+                });
+    }
+
+    /**
+     * The predicates that, if found pointing at an actor, block its deletion (issue #335): a use
+     * case's {@code arkreq:primaryActor}/{@code supportingActor}. See
+     * {@link de.hauschel.arknet.actor.domain.ActorReferencedException}'s javadoc for why this check
+     * is currently unreachable in practice - no consumer in this cut writes either predicate
+     * against an actor identity yet - but is still run, matching issue #335's own scope.
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkreqVocabulary.PRIMARY_ACTOR, "primaryActor",
+            ArkreqVocabulary.SUPPORTING_ACTOR, "supportingActor");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} - searched across
+     * every named graph ({@code GRAPH ?g}), since a referencing edge would live in the use-case
+     * BC's own model graph, not {@link #ACTOR_GRAPH}. Runs inside the live write transaction
+     * {@link WriteFunnel#delete} hands its {@code body}, so the check and the eventual delete
+     * share one atomic snapshot.
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, ActorCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = new ArrayList<>();
+        REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
+            String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+            if (tx.ask(query, Map.of("target", target))) {
+                referencing.add(shorthand);
+            }
+        });
+        if (!referencing.isEmpty()) {
+            throw new ActorReferencedException(projectId, code, referencing);
+        }
     }
 
     @Override

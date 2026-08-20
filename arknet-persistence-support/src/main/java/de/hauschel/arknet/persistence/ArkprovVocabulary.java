@@ -87,6 +87,16 @@ public final class ArkprovVocabulary {
     /** {@code prov:generatedAtTime} - revision -&gt; its {@code xsd:dateTime} creation instant. */
     public static final String GENERATED_AT_TIME = PROV_NAMESPACE + "generatedAtTime";
 
+    /**
+     * {@code prov:invalidatedAtTime} - revision -&gt; the {@code xsd:dateTime} its resource was
+     * deleted through {@link WriteFunnel#delete}. Set only on the last revision a deleted
+     * resource ever had (its {@code arkprov:head} at the moment of deletion), together with the
+     * removal of that {@code arkprov:head} triple itself - the resource no longer exists, so
+     * nothing is "current" any more, but the revision chain up to that point stays exactly as
+     * written: a tombstone, not an erasure (issue #335).
+     */
+    public static final String INVALIDATED_AT_TIME = PROV_NAMESPACE + "invalidatedAtTime";
+
     /** {@code prov:specializationOf} - revision -&gt; the evolving resource it is a state of. */
     public static final String SPECIALIZATION_OF = PROV_NAMESPACE + "specializationOf";
 

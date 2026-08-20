@@ -16,6 +16,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermReferencedException;
 import de.hauschel.arknet.ul.domain.ResourceAlreadyExistsException;
 
 /**
@@ -189,4 +190,17 @@ public interface TermRepository {
      * @return the resolved terms found, in no particular order, never {@code null}
      */
     List<ResolveTerms.ResolvedTerm> findByIds(ProjectId projectId, List<ResourceId> ids);
+
+    /**
+     * Deletes the term identified by {@code code}, and every triple it carries in the glossary's
+     * named graph, from the project (issue #335). Rejects outright, without deleting anything, if
+     * anything else in the project still references the term - see {@link TermReferencedException}
+     * for the predicates checked.
+     *
+     * @param projectId the project (architecture model) the term lives in
+     * @param code      the term code, e.g. {@code TERM-1}
+     * @throws TermNotFoundException   if no term with this code exists
+     * @throws TermReferencedException if anything else in the project still references the term
+     */
+    void delete(ProjectId projectId, TermCode code);
 }

@@ -430,7 +430,7 @@ public class ArknetMcpConfiguration {
     @Bean
     UbiquitousLanguageMcpTools ubiquitousLanguageMcpTools(
             final TermService service, final ProjectResolver projectResolver) {
-        return new UbiquitousLanguageMcpTools(service, service, service, service, projectResolver);
+        return new UbiquitousLanguageMcpTools(service, service, service, service, service, projectResolver);
     }
 
     // --- Use-cases hexagon -----------------------------------------------------
@@ -684,7 +684,7 @@ public class ArknetMcpConfiguration {
      */
     @Bean
     ActorMcpTools actorMcpTools(final ActorService service, final ProjectResolver projectResolver) {
-        return new ActorMcpTools(service, service, service, service, projectResolver);
+        return new ActorMcpTools(service, service, service, service, service, projectResolver);
     }
 
     // --- Project hexagon (the registry, ADR-016) -------------------------------

@@ -18,6 +18,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
 import de.hauschel.arknet.ul.application.port.in.AddTerm.NewTerm;
+import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
@@ -70,16 +71,18 @@ public final class UbiquitousLanguageMcpTools {
     private final ListTerms listTerms;
     private final GetTerm getTerm;
     private final UpdateTerm updateTerm;
+    private final DeleteTerm deleteTerm;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its four driving in-ports and the resolver that maps each
+     * Creates the adapter with its five driving in-ports and the resolver that maps each
      * call's origin directory to a project.
      *
      * @param addTerm     in-port backing {@code term_add}
      * @param listTerms   in-port backing {@code term_list}
      * @param getTerm     in-port backing {@code term_get}
      * @param updateTerm  in-port backing {@code term_update}
+     * @param deleteTerm  in-port backing {@code term_delete}
      * @param projects  resolves each call's target project from its origin directory
      */
     public UbiquitousLanguageMcpTools(
@@ -87,11 +90,13 @@ public final class UbiquitousLanguageMcpTools {
             final ListTerms listTerms,
             final GetTerm getTerm,
             final UpdateTerm updateTerm,
+            final DeleteTerm deleteTerm,
             final ProjectResolver projects) {
         this.addTerm = Objects.requireNonNull(addTerm, "addTerm");
         this.listTerms = Objects.requireNonNull(listTerms, "listTerms");
         this.getTerm = Objects.requireNonNull(getTerm, "getTerm");
         this.updateTerm = Objects.requireNonNull(updateTerm, "updateTerm");
+        this.deleteTerm = Objects.requireNonNull(deleteTerm, "deleteTerm");
         this.projects = Objects.requireNonNull(projects, "projects");
     }
 
@@ -279,6 +284,24 @@ public final class UbiquitousLanguageMcpTools {
         final Term updated = updateTerm.update(project.id(), code, blankToNull(label), blankToNull(definition),
                 facet, blankToNull(language), project.defaultLanguage(), broaderPatch);
         return format(updated);
+    }
+
+    @McpTool(name = "term_delete",
+            description = "Delete an already-created term and every triple it carries (its label, definition "
+                    + "and actor facette, in every language) - not just a correction, the whole resource goes "
+                    + "away. Rejected if anything else still references it: a requirement's or use case's "
+                    + "usesTerm, a bounded context's ubiquitousLanguageTerm, another term's broader, or - for "
+                    + "a term also marked as an actor - a use case's primaryActor/supportingActor. Remove "
+                    + "those edges first (req_update/uc_update, bc_link_term, or term_update to clear broader).")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,
+            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final TermCode code = new TermCode(id);
+        deleteTerm.delete(project.id(), code);
+        return "Deleted: " + code.value();
     }
 
     private static ActorFacet parseActorFacet(final String actorKind, final String actorRole) {
