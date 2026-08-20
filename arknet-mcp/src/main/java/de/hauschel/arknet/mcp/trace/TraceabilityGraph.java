@@ -121,11 +121,13 @@ public final class TraceabilityGraph {
     private static final String AFFECTS_CONTEXT = ArkarchVocabulary.AFFECTS_CONTEXT;
     private static final String SUPERSEDES = ArkarchVocabulary.SUPERSEDES;
 
-    // arkddd:ubiquitousLanguageTerm (BoundedContext -> Term) and arkddd:BoundedContext below are,
-    // unlike arkreq:acceptanceCriterion/arkddd:domainVision above, used only within this class -
-    // ArkdddVocabulary's scope is deliberately limited to predicates duplicated across modules
-    // (see its javadoc), so these two stay local rather than growing that shared class further.
-    private static final String UBIQUITOUS_LANGUAGE_TERM = ARKDDD_NAMESPACE + "ubiquitousLanguageTerm";
+    // arkddd:BoundedContext below is, unlike arkreq:acceptanceCriterion/arkddd:domainVision above,
+    // used only within this class - ArkdddVocabulary's scope is deliberately limited to
+    // predicates duplicated across modules (see its javadoc), so this one stays local rather than
+    // growing that shared class further. arkddd:ubiquitousLanguageTerm moved to
+    // ArkdddVocabulary#UBIQUITOUS_LANGUAGE_TERM with issue #335, once KognioRdfTermRepository's
+    // reference check became a third reader.
+    private static final String UBIQUITOUS_LANGUAGE_TERM = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
 
     private static final String FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.FUNCTIONAL_REQUIREMENT_TYPE;
     private static final String NON_FUNCTIONAL_REQUIREMENT_TYPE = ArkreqVocabulary.NON_FUNCTIONAL_REQUIREMENT_TYPE;

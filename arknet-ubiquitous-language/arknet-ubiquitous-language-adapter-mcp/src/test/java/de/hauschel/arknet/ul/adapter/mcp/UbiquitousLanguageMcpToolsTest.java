@@ -20,6 +20,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
+import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.UpdateTerm;
@@ -30,7 +31,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
 import de.hauschel.arknet.ul.domain.TermId;
 
 /**
- * Scaffold-level check that the adapter declares exactly the four term tools and
+ * Scaffold-level check that the adapter declares exactly the five term tools and
  * guards its in-port dependencies. Behaviour of the handlers is not asserted here.
  */
 class UbiquitousLanguageMcpToolsTest {
@@ -51,32 +52,44 @@ class UbiquitousLanguageMcpToolsTest {
 
     private final Stub stub = new Stub();
     private final UbiquitousLanguageMcpTools adapter =
-            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, PROJECTS);
+            new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, PROJECTS);
 
     @Test
-    void declaresTheFourTermTools() {
+    void declaresTheFiveTermTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(4, names.size());
-        assertTrue(names.containsAll(List.of("term_add", "term_list", "term_get", "term_update")));
+        assertEquals(5, names.size());
+        assertTrue(names.containsAll(
+                List.of("term_add", "term_list", "term_get", "term_update", "term_delete")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(null, stub, stub, stub, stub, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null, PROJECTS));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, null, stub, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, null));
+                () -> new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, null));
+    }
+
+    /** {@code term_delete} passes the parsed code straight through to the in-port. */
+    @Test
+    void deletePassesTheCodeThrough() {
+        String rendered = adapter.delete(null, "TERM-1", null);
+
+        assertEquals(new TermCode("TERM-1"), stub.lastDeletedTerm);
+        assertEquals("Deleted: TERM-1", rendered);
     }
 
     @Test
@@ -269,18 +282,19 @@ class UbiquitousLanguageMcpToolsTest {
     @Test
     void listPassesTheProjectsDefaultLanguageThrough() {
         UbiquitousLanguageMcpTools adapterWithGermanDefault =
-                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
+                new UbiquitousLanguageMcpTools(stub, stub, stub, stub, stub, PROJECTS_WITH_GERMAN_DEFAULT);
 
         adapterWithGermanDefault.list(null, null);
 
         assertEquals("de", stub.lastListDisplayLocale);
     }
 
-    /** Structural stub implementing the four driving in-ports. */
-    private static final class Stub implements AddTerm, ListTerms, GetTerm, UpdateTerm {
+    /** Structural stub implementing the five driving in-ports. */
+    private static final class Stub implements AddTerm, ListTerms, GetTerm, UpdateTerm, DeleteTerm {
 
         private NewTerm lastCommand;
         private TermCode lastUpdatedTerm;
+        private TermCode lastDeletedTerm;
         private String lastUpdatePrefLabel;
         private String lastUpdateDefinition;
         private ActorFacet lastUpdateActorFacet;
@@ -323,6 +337,11 @@ class UbiquitousLanguageMcpToolsTest {
             return new Term(new TermId(ResourceId.of("https://w3id.org/arknet/id/stub")), code,
                     prefLabel != null ? prefLabel : "p", definition != null ? definition : "d", actorFacet,
                     broader != null ? broader.orElse(null) : null);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, TermCode code) {
+            lastDeletedTerm = code;
         }
     }
 }

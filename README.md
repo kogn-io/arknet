@@ -271,6 +271,7 @@ Ubiquitous Language BC -- glossary terms (SKOS Concepts):
 | `term_update` | Correct a term's preferred label, definition, actor facette and/or broader term, keeping its identity (and all links into it) unchanged (each argument optional, unchanged if omitted). `broader` is the one exception to "omitted = unchanged": passing an empty string explicitly clears an already-set broader term, since omitting it already means "leave alone" -- rejected if the code does not resolve, or if it would make the term its own (direct or transitive) broader term. `language` scopes the write to that one language's literal (falling back to the project's default language if omitted, rejecting the call if neither is set), leaving other language variants untouched -- except a stale untagged one, swept away once the resolved tag equals the project's default |
 | `term_list` | List all glossary terms |
 | `term_get` | Fetch a single term by identity (e.g. TERM-1). An optional `displayLocale` argument picks which language variant of a multilingual label/definition to return, falling back to the calling project's `defaultLanguage`, then to an untagged value |
+| `term_delete` | Delete a term and every triple it carries (label, definition, actor facette, in every language) -- the whole resource, not a field correction. Rejected if anything else still references it: a requirement's/use case's `usesTerm`, a bounded context's `ubiquitousLanguageTerm`, another term's `broader`, or a use case's `primaryActor`/`supportingActor` |
 
 Use Cases BC (`arknet-use-cases`) -- flow-oriented Cockburn use cases (bind FRs via an interaction flow):
 
@@ -311,6 +312,7 @@ Actor BC (`arknet-actor`) -- actors as resources of their own: someone or someth
 | `actor_list` | List all managed actors |
 | `actor_get` | Fetch a single actor by identity (e.g. ACTOR-1) |
 | `actor_update` | Correct an actor's name and/or description (each optional, unchanged if omitted -- omitting the description does not remove it). Type and code stay as created |
+| `actor_delete` | Delete an actor and every triple it carries -- the whole resource, not a field correction. Rejected if a use case still references it as `primaryActor`/`supportingActor`. A resource that is also a glossary term (`term_add`) keeps its glossary entry |
 
 Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project ([ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
 

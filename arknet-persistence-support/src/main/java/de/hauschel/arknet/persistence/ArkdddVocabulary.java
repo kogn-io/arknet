@@ -16,12 +16,16 @@ package de.hauschel.arknet.persistence;
  * <p>Same rationale as {@link ArkreqVocabulary}: before this class each duplicated predicate was
  * declared as a private copy of the same IRI literal in more than one place, which could drift
  * silently. Scope is just as narrow - this class holds only the {@code arkddd:} predicates that
- * are duplicated across modules, not the whole {@code arkddd:} namespace (e.g. {@code
- * arkddd:ubiquitousLanguageTerm} and {@code arkddd:BoundedContext} are currently only used within
- * {@code TraceabilityGraph} itself and stay local there; {@code arkddd:ContextRelationship}/
- * {@code relationshipType} and the eight {@code arkddd:RelationshipType} individuals stay local to
+ * are duplicated across modules, not the whole {@code arkddd:} namespace ({@code
+ * arkddd:BoundedContext} is currently only used within {@code TraceabilityGraph} itself and stays
+ * local there; {@code arkddd:ContextRelationship}/{@code relationshipType} and the eight
+ * {@code arkddd:RelationshipType} individuals stay local to
  * {@code KognioRdfContextRelationshipRepository} for the same reason - nothing outside that
- * adapter reads them).</p>
+ * adapter reads them). {@link #UBIQUITOUS_LANGUAGE_TERM} joined this class with issue #335: the
+ * ubiquitous-language out-adapter's {@code term_delete} needed to recognise the same predicate the
+ * bounded-context out-adapter writes and {@code TraceabilityGraph} already read, a third reader
+ * that turned the former "stays local" note into exactly the drift risk this class exists to
+ * close.</p>
  */
 public final class ArkdddVocabulary {
 
@@ -29,6 +33,13 @@ public final class ArkdddVocabulary {
 
     /** {@code arkddd:domainVision} - BoundedContext -&gt; its vision text. */
     public static final String DOMAIN_VISION = NAMESPACE + "domainVision";
+
+    /**
+     * {@code arkddd:ubiquitousLanguageTerm} - BoundedContext -&gt; a glossary term it uses
+     * (issue #335: shared once {@code KognioRdfTermRepository#delete}'s reference check became a
+     * third reader alongside the writing bc-adapter and {@code TraceabilityGraph}).
+     */
+    public static final String UBIQUITOUS_LANGUAGE_TERM = NAMESPACE + "ubiquitousLanguageTerm";
 
     /**
      * {@code arkddd:upstream} - ContextRelationship -&gt; the BoundedContext whose model/protocol

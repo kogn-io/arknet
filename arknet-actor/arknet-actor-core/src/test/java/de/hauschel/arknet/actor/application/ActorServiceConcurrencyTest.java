@@ -193,6 +193,11 @@ class ActorServiceConcurrencyTest {
             }
             return result;
         }
+
+        @Override
+        public void delete(ProjectId projectId, ActorCode code) {
+            delegate.delete(projectId, code);
+        }
     }
 
     /**
@@ -242,6 +247,11 @@ class ActorServiceConcurrencyTest {
         public List<Actor> findAll(ProjectId projectId) {
             return delegate.findAll(projectId);
         }
+
+        @Override
+        public void delete(ProjectId projectId, ActorCode code) {
+            delegate.delete(projectId, code);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -279,6 +289,11 @@ class ActorServiceConcurrencyTest {
         @Override
         public List<Actor> findAll(ProjectId projectId) {
             return delegate.findAll(projectId);
+        }
+
+        @Override
+        public void delete(ProjectId projectId, ActorCode code) {
+            delegate.delete(projectId, code);
         }
     }
 }

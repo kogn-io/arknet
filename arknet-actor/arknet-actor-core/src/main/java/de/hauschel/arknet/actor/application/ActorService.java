@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import de.hauschel.arknet.actor.application.port.in.AddActor;
+import de.hauschel.arknet.actor.application.port.in.DeleteActor;
 import de.hauschel.arknet.actor.application.port.in.GetActor;
 import de.hauschel.arknet.actor.application.port.in.ListActors;
 import de.hauschel.arknet.actor.application.port.in.UpdateActor;
@@ -48,7 +49,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * user against one local store are the normal case, not a remote/multi-writer concern
  * (ADR-001).</p>
  */
-public class ActorService implements AddActor, ListActors, GetActor, UpdateActor {
+public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor {
 
     private static final String CODE_PREFIX = "ACTOR";
 
@@ -112,6 +113,16 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         return updateWithOptimisticRetry(projectId, code, name, description);
+    }
+
+    @Override
+    public void delete(ProjectId projectId, ActorCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (is anything else in the project still pointing at this actor?) is
+        // the out-adapter's business - it is the only side that can traverse the store's other
+        // named graphs.
+        repository.delete(projectId, code);
     }
 
     /**

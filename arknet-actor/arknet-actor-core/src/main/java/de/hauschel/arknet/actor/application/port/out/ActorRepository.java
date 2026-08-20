@@ -10,6 +10,7 @@ import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
+import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -129,4 +130,17 @@ public interface ActorRepository {
      * @return all actors, never {@code null}
      */
     List<Actor> findAll(ProjectId projectId);
+
+    /**
+     * Deletes the actor identified by {@code code}, and every triple it carries in this
+     * hexagon's own named graph, from the project (issue #335). Rejects outright, without deleting
+     * anything, if anything else in the project still references the actor - see
+     * {@link ActorReferencedException}.
+     *
+     * @param projectId the project (architecture model) the actor lives in
+     * @param code      the actor code, e.g. {@code ACTOR-1}
+     * @throws ActorNotFoundException   if no actor with this identity exists
+     * @throws ActorReferencedException if anything else in the project still references the actor
+     */
+    void delete(ProjectId projectId, ActorCode code);
 }

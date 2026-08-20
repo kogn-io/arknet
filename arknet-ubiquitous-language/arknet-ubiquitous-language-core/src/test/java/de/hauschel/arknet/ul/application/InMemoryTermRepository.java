@@ -97,4 +97,19 @@ final class InMemoryTermRepository implements TermRepository {
                 .map(t -> new ResolveTerms.ResolvedTerm(t.id().value(), t.code()))
                 .toList();
     }
+
+    @Override
+    public void delete(ProjectId projectId, TermCode code) {
+        // The cross-BC reference check (issue #335) is the real out-adapter's concern - it is the
+        // only side that can traverse the store's other named graphs (see
+        // TermReferencedException's javadoc). This fake only exercises TermService's own
+        // pass-through and the not-found case.
+        Map<TermId, Term> terms = byProject.getOrDefault(projectId, Map.of());
+        TermId id = terms.values().stream()
+                .filter(t -> t.code().equals(code))
+                .findFirst()
+                .map(Term::id)
+                .orElseThrow(() -> new TermNotFoundException(projectId, code));
+        terms.remove(id);
+    }
 }

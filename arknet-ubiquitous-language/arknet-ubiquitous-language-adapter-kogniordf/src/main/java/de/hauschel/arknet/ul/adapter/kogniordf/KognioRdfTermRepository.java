@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kogn.rdf.dataset.BindingSet;
+import io.kogn.rdf.dataset.DatasetTx;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -37,6 +38,7 @@ import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.SparqlTerms;
@@ -54,6 +56,7 @@ import de.hauschel.arknet.ul.domain.TermConcurrentlyModifiedException;
 import de.hauschel.arknet.ul.domain.TermCycleException;
 import de.hauschel.arknet.ul.domain.TermId;
 import de.hauschel.arknet.ul.domain.TermNotFoundException;
+import de.hauschel.arknet.ul.domain.TermReferencedException;
 
 /**
  * Out-adapter: {@link TermRepository} backed by the kognio-rdf substrate
@@ -468,6 +471,83 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         }
         throw lastConflict;
+    }
+
+    /**
+     * Deletes the term identified by {@code code}, and every triple it carries in
+     * {@link #TERMS_GRAPH}, from the project (issue #335). Resolves the subject outside any
+     * transaction (mirroring {@link #attemptUpdate}'s own pre-transaction reads), then hands the
+     * whole check-and-delete to {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs
+     * first, inside the funnel's own write transaction (so a concurrent writer racing to add a
+     * reference is resolved by the store's {@code SERIALIZABLE} isolation rather than a window
+     * between a separate pre-check and this write), and only once it finds nothing pointing at the
+     * term does the body remove the subject's triples wholesale.
+     */
+    @Override
+    public void delete(ProjectId projectId, TermCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            subjectIriString = resolveTermSubjectIri(handle.sparqlQuery()::select, code)
+                    .orElseThrow(() -> new TermNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, TERMS_GRAPH, subjectIriString,
+                () -> new TermNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, subjectIriString, projectId, code);
+                    tx.update("DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }");
+                });
+    }
+
+    /**
+     * The predicates that, if found pointing at a term, block its deletion (issue #335): a
+     * requirement's or use case's {@code arkreq:usesTerm}, a bounded context's
+     * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, and - checked
+     * unconditionally rather than only for a term carrying an Actor facette, since a term's facette
+     * is itself mutable - a use case's {@code arkreq:primaryActor}/{@code supportingActor}. Keys
+     * are the absolute predicate IRIs this adapter and its siblings write; values are the
+     * human-readable shorthand {@link de.hauschel.arknet.ul.domain.TermReferencedException} names
+     * a caller by.
+     */
+    private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
+            ArkreqVocabulary.USES_TERM, "usesTerm",
+            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "ubiquitousLanguageTerm",
+            ArkreqVocabulary.PRIMARY_ACTOR, "primaryActor",
+            ArkreqVocabulary.SUPPORTING_ACTOR, "supportingActor");
+
+    /**
+     * Rejects the delete, without touching a single triple, if anything in the project still
+     * references {@code subjectIri} via one of {@link #REFERENCING_PREDICATES} or the
+     * ubiquitous-language BC's own {@code skos:broader} - searched across every named graph
+     * ({@code GRAPH ?g}), since a referencing edge lives in its own BC's model graph, not
+     * {@link #TERMS_GRAPH}. Runs inside the live write transaction {@link WriteFunnel#delete} hands
+     * its {@code body}, so the check and the eventual delete share one atomic snapshot.
+     */
+    private void rejectIfReferenced(DatasetTx tx, String subjectIri, ProjectId projectId, TermCode code) {
+        IRI target = rdf.createIRI(subjectIri);
+        List<String> referencing = new ArrayList<>();
+        REFERENCING_PREDICATES.forEach((predicateIri, shorthand) -> {
+            if (isReferencedVia(tx, target, predicateIri)) {
+                referencing.add(shorthand);
+            }
+        });
+        if (isReferencedVia(tx, target, BROADER_PROPERTY)) {
+            referencing.add("broader");
+        }
+        if (!referencing.isEmpty()) {
+            throw new TermReferencedException(projectId, code, referencing);
+        }
+    }
+
+    /** {@code true} if any named graph holds a triple {@code ?s <predicateIri> target}. */
+    private boolean isReferencedVia(DatasetTx tx, IRI target, String predicateIri) {
+        String query = "ASK { GRAPH ?g { ?s <" + predicateIri + "> ?target } }";
+        return tx.ask(query, Map.of("target", target));
     }
 
     /**

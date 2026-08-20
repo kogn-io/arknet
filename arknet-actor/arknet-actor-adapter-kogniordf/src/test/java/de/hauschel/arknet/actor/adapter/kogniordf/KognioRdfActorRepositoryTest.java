@@ -42,6 +42,7 @@ import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorConcurrentlyModifiedException;
 import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
+import de.hauschel.arknet.actor.domain.ActorReferencedException;
 import de.hauschel.arknet.actor.domain.ActorType;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.actor.domain.ResourceAlreadyExistsException;
@@ -49,6 +50,7 @@ import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
 import de.hauschel.arknet.persistence.WriteFunnel;
@@ -510,6 +512,84 @@ class KognioRdfActorRepositoryTest {
 
         assertEquals("Antragsbearbeiter", repository.findByCode(PROJECT_A, original.code()).orElseThrow().name());
         assertEquals(1, headsOf(id.value().value()).size(), "the write must have recorded a head again");
+    }
+
+    // ---- delete (issue #335) -----------------------------------------------------------------
+
+    @Test
+    void deleteRemovesTheActorAndItsTriples() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, "Bearbeitet eingehende Antraege.");
+        repository.create(PROJECT_A, stored);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isEmpty());
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask("ASK { GRAPH <" + ACTOR_GRAPH + "> { <"
+                    + stored.id().value().value() + "> ?p ?o } }"), "no triple of the deleted actor may remain");
+        }
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(ActorNotFoundException.class, () -> repository.delete(PROJECT_A, new ActorCode("ACTOR-99")));
+    }
+
+    /**
+     * The tombstone contract {@link de.hauschel.arknet.persistence.WriteFunnel#delete} documents:
+     * the {@code arkprov:head} pointer is removed and the last revision is marked
+     * {@code prov:invalidatedAtTime} rather than erased.
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        String subject = stored.id().value().value();
+        String lastRevision = headsOf(subject).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
+        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
+                    "the last revision must be tombstoned, not erased");
+        }
+    }
+
+    /**
+     * {@link ActorReferencedException} blocks the delete while something still points at the actor
+     * via {@code arkreq:primaryActor} - {@link KognioRdfActorRepository#rejectIfReferenced} searches
+     * across every named graph, so a reference living outside {@link #ACTOR_GRAPH} (as a use-case
+     * edge would) must still be found.
+     */
+    @Test
+    void deleteRejectsAnActorStillReferencedAsPrimaryActor() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        String reference = "INSERT DATA { GRAPH <https://example.org/uc> { <https://example.org/uc/1> <"
+                + ArkreqVocabulary.PRIMARY_ACTOR + "> <" + stored.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        assertThrows(ActorReferencedException.class, () -> repository.delete(PROJECT_A, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+                "a rejected delete must leave the actor untouched");
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+
+        assertThrows(ActorNotFoundException.class, () -> repository.delete(PROJECT_B, stored.code()));
+        assertTrue(repository.findByCode(PROJECT_A, stored.code()).isPresent(),
+                "a delete in another project must not touch this project's actor");
     }
 
     // ---- helpers ---------------------------------------------------------------------------

@@ -154,7 +154,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private static final String SUBDOMAIN_TYPE_PROPERTY = ARKDDD_NAMESPACE + "subdomainType";
     private static final String SUBDOMAIN_CLASS = ARKDDD_NAMESPACE + "Subdomain";
     private static final String OWNED_BY_PROPERTY = ARKDDD_NAMESPACE + "ownedBy";
-    private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ARKDDD_NAMESPACE + "ubiquitousLanguageTerm";
+    private static final String UBIQUITOUS_LANGUAGE_TERM_PROPERTY = ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM;
     private static final String HAS_AGGREGATE_PROPERTY = ARKDDD_NAMESPACE + "hasAggregate";
 
     private static final String CORE_DOMAIN = ARKDDD_NAMESPACE + "CoreDomain";

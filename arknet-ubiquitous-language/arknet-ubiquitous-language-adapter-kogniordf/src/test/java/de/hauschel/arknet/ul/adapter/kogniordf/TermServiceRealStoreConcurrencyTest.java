@@ -342,6 +342,216 @@ class TermServiceRealStoreConcurrencyTest {
         assertFalse(subjectHasBroader(idA, idB), "racer-A's half must NOT be persisted - no cycle in the store");
     }
 
+    /**
+     * The delete-vs-reference race issue #335's own review asked for: {@code term_delete}'s
+     * {@code rejectIfReferenced} check and a concurrent writer that commits a brand-new
+     * {@code arkreq:usesTerm} edge onto the very same term, genuinely overlapping under
+     * {@code SERIALIZABLE} isolation.
+     *
+     * <p>The delete's transaction is paused - via {@link #pausingBeforeFirstUpdateRepository} -
+     * immediately after {@link KognioRdfTermRepository#rejectIfReferenced} has run its {@code ASK}
+     * checks and found nothing (there is nothing to find yet) but before the physical
+     * {@code DELETE WHERE} that follows it. While paused, a second writer commits a fresh
+     * {@code arkreq:usesTerm} triple pointing at the very same term, in its own transaction against
+     * the same real store - deliberately raw SPARQL rather than a {@code RequirementService} call:
+     * this adapter module cannot depend on the requirements bounded context (ADR-006/ADR-007
+     * dependency rules), and the race is a store-level phenomenon between two write transactions,
+     * independent of which bounded context authored either one. Only then is the delete allowed to
+     * resume and attempt its commit.</p>
+     *
+     * <p><strong>What must hold regardless of which side the store resolves the conflict.</strong>
+     * The one invariant issue #335 exists to protect is that a {@code usesTerm} edge must never end
+     * up dangling at a deleted subject. Two outcomes are both acceptable: (a) the store's
+     * {@code SERIALIZABLE} isolation detects that the delete's read set (the {@code ASK} pattern
+     * across every graph) was invalidated by the concurrent insert and rejects the delete's commit,
+     * in which case the term and the fresh reference both survive; or (b) the two transactions do
+     * not conflict at the store's own read/write-set granularity and the delete commits regardless,
+     * in which case the reference itself must be gone too - {@code usesTerm} pointing at the very
+     * subject whose triples {@link KognioRdfTermRepository#delete} just removed would itself be the
+     * dangling edge. What must never happen is the term gone <em>and</em> the reference still
+     * standing - that is the outcome this test pins against.</p>
+     */
+    @Test
+    void deleteRacingAConcurrentlyCommittedUsesTermReferenceLeavesNoDanglingReference()
+            throws InterruptedException {
+        TermRepository straightThrough = KognioRdfTermRepositoryFactory.over(realLifecycle);
+        TermId id = new TermId(new UuidResourceIdFactory().newId());
+        TermCode code = new TermCode("TERM-1");
+        straightThrough.create(WS, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), "de");
+
+        CountDownLatch deletePausedAfterReferenceCheck = new CountDownLatch(1);
+        CountDownLatch referenceCommitted = new CountDownLatch(1);
+
+        TermRepository deletingRepository = pausingBeforeFirstUpdateRepository(() -> {
+            deletePausedAfterReferenceCheck.countDown();
+            awaitLatch(referenceCommitted);
+        });
+
+        AtomicReference<Throwable> deleteFailure = new AtomicReference<>();
+        Thread deleteThread = new Thread(() -> {
+            try {
+                deletingRepository.delete(WS, code);
+            } catch (Throwable t) {
+                deleteFailure.set(t);
+            }
+        }, "racer-delete");
+        Thread referenceThread = new Thread(() -> {
+            awaitLatch(deletePausedAfterReferenceCheck);
+            String insert = "INSERT DATA { GRAPH <https://example.org/req> { <https://example.org/req/1> <"
+                    + ArkreqVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
+            try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+                handle.transactor().inTransaction(tx -> {
+                    tx.update(insert);
+                    return null;
+                });
+            } finally {
+                referenceCommitted.countDown();
+            }
+        }, "racer-reference");
+
+        deleteThread.start();
+        referenceThread.start();
+        deleteThread.join();
+        referenceThread.join();
+
+        boolean termStillExists = straightThrough.findByCode(WS, code, null).isPresent();
+        boolean referenceStillExists = isReferencedViaUsesTerm(id);
+        String diagnostics = "deleteFailure=" + (deleteFailure.get() == null ? "none"
+                : deleteFailure.get().getClass().getName() + ": " + deleteFailure.get().getMessage())
+                + ", termStillExists=" + termStillExists + ", referenceStillExists=" + referenceStillExists;
+        assertFalse(!termStillExists && referenceStillExists,
+                "dangling reference: the term is gone but a usesTerm edge still points at it: " + diagnostics);
+        assertFalse(!termStillExists && deleteFailure.get() != null,
+                "the delete must not both fail and have removed the term: " + diagnostics);
+    }
+
+    /** {@code true} if any named graph holds an {@code arkreq:usesTerm} triple pointing at {@code id}. */
+    private boolean isReferencedViaUsesTerm(TermId id) {
+        String query = "ASK { GRAPH ?g { ?s <" + ArkreqVocabulary.USES_TERM + "> <"
+                + id.value().value() + "> } }";
+        try (DatasetHandle handle = realLifecycle.acquire(new DatasetId(WS.value()))) {
+            return handle.sparqlQuery().ask(query);
+        }
+    }
+
+    /**
+     * A term repository whose first write transaction runs {@code beforeFirstUpdate} right before
+     * its delegate's first {@link DatasetTx#update(String)} call - the point in
+     * {@link KognioRdfTermRepository#delete}'s write body where {@code rejectIfReferenced}'s
+     * {@code ASK} checks have already run and found nothing, and the physical
+     * {@code DELETE WHERE} is the very next thing to happen. Disarms itself afterwards, mirroring
+     * {@link #guardedRepository}/{@link #pausingAfterSecondSelectRepository}.
+     */
+    private TermRepository pausingBeforeFirstUpdateRepository(Runnable beforeFirstUpdate) {
+        AtomicBoolean armed = new AtomicBoolean(true);
+        DatasetLifecycle guarded = new GuardedLifecycle(realLifecycle, tx -> {
+            if (armed.compareAndSet(true, false)) {
+                return new PausingOnFirstUpdateTx(tx, beforeFirstUpdate);
+            }
+            return tx;
+        });
+        return KognioRdfTermRepositoryFactory.over(guarded);
+    }
+
+    /**
+     * Runs {@code beforeFirstUpdate} once, immediately before its delegate's first
+     * {@link DatasetTx#update(String)} call. Mirrors {@link PausingOnFirstAddTx}'s shape but hooks
+     * {@code update} instead of {@code add}, since {@link KognioRdfTermRepository#delete}'s write
+     * body issues no {@code add} at all - only {@code ask} (the reference checks) followed by one
+     * {@code update} (the physical {@code DELETE WHERE}).
+     */
+    private static final class PausingOnFirstUpdateTx implements DatasetTx {
+
+        private final DatasetTx delegate;
+        private final Runnable beforeFirstUpdate;
+        private boolean pending = true;
+
+        PausingOnFirstUpdateTx(DatasetTx delegate, Runnable beforeFirstUpdate) {
+            this.delegate = delegate;
+            this.beforeFirstUpdate = beforeFirstUpdate;
+        }
+
+        @Override
+        public void update(String sparqlUpdate) {
+            if (pending) {
+                pending = false;
+                beforeFirstUpdate.run();
+            }
+            delegate.update(sparqlUpdate);
+        }
+
+        @Override
+        public void update(String sparqlUpdate, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            delegate.update(sparqlUpdate, bindings);
+        }
+
+        @Override
+        public long add(IRI graph, ReadableGraph data) {
+            return delegate.add(graph, data);
+        }
+
+        @Override
+        public boolean contains(IRI graph, io.kogn.rdf.terms.BlankNodeOrIRI subject, IRI predicate,
+                io.kogn.rdf.terms.RDFTerm object) {
+            return delegate.contains(graph, subject, predicate, object);
+        }
+
+        @Override
+        public boolean ask(String query) {
+            return delegate.ask(query);
+        }
+
+        @Override
+        public boolean ask(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.ask(query, bindings);
+        }
+
+        @Override
+        public long remove(IRI graph, ReadableGraph data) {
+            return delegate.remove(graph, data);
+        }
+
+        @Override
+        public void clear(IRI graph) {
+            delegate.clear(graph);
+        }
+
+        @Override
+        public ReadableGraph export(IRI graph) {
+            return delegate.export(graph);
+        }
+
+        @Override
+        public long count(IRI graph) {
+            return delegate.count(graph);
+        }
+
+        @Override
+        public long count() {
+            return delegate.count();
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query) {
+            return delegate.select(query);
+        }
+
+        @Override
+        public Stream<BindingSet> select(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.select(query, bindings);
+        }
+
+        @Override
+        public ReadableGraph construct(String query) {
+            return delegate.construct(query);
+        }
+
+        @Override
+        public ReadableGraph construct(String query, java.util.Map<String, io.kogn.rdf.terms.RDFTerm> bindings) {
+            return delegate.construct(query, bindings);
+        }
+    }
+
     /** Whether {@code subject} carries a {@code skos:broader} edge to exactly {@code target}. */
     private boolean subjectHasBroader(TermId subject, TermId target) {
         String query = "ASK { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { <"

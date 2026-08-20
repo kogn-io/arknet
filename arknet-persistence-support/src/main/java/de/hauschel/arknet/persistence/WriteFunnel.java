@@ -426,6 +426,83 @@ public final class WriteFunnel {
     }
 
     /**
+     * Runs a guarded delete (issue #335): the subject must already exist; only then does
+     * {@code body} run, inside the same write transaction as the check, and is expected to remove
+     * every triple of the subject the caller's own model graph holds. No SHACL gate runs - there
+     * is no candidate graph to validate, only triples going away - and no {@code assertedContext}
+     * is accepted for the same reason.
+     *
+     * <p><strong>Revision handling is a tombstone, not {@link #recordRevision}.</strong> A
+     * delete does not record a new revision the way {@link #create}/{@link #update}/
+     * {@link #compareAndUpdate} do - a fresh {@code prov:specializationOf} entity for a subject
+     * that, by the time this method returns, no longer exists would misstate what happened. Instead,
+     * if the subject already had a head (i.e. some earlier write went through this funnel), that
+     * revision is marked {@code prov:invalidatedAtTime} at this delete's instant and the
+     * {@code arkprov:head} pointer itself is removed - the revision chain up to that point survives
+     * unerased as an audit trail ("this existed, until here"), but nothing is "current" any more.
+     * A subject that predates the funnel's revision recording (no head yet) has nothing to
+     * invalidate; only the model triples the {@code body} removes are affected.</p>
+     *
+     * <p>Callers wanting to reject a delete because something still references the subject (a
+     * cross-BC edge, a same-BC self-reference) run that check themselves as the first thing
+     * {@code body} does, against the live transaction ({@code tx::select}/{@code tx.contains}) -
+     * the funnel carries no concept of which predicates constitute "a reference" for any given
+     * bounded context (same "context differences are parameters" rule as everywhere else in this
+     * class).</p>
+     *
+     * @param dataset    the dataset (project) to write into
+     * @param graphIri   the named graph the check is scoped to
+     * @param subjectIri the subject's opaque IRI; expected IRIREF-safe by construction
+     * @param notFound   the bounded context's signal for a missing subject
+     * @param body       the delete itself (plus any of the caller's own pre-delete checks), given
+     *                   the live transaction after the existence check passed
+     */
+    public void delete(DatasetId dataset, String graphIri, String subjectIri,
+            Supplier<RuntimeException> notFound, Consumer<DatasetTx> body) {
+        Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(graphIri, "graphIri");
+        Objects.requireNonNull(subjectIri, "subjectIri");
+        Objects.requireNonNull(notFound, "notFound");
+        Objects.requireNonNull(body, "body");
+
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            handle.transactor().inTransaction(tx -> {
+                IRI graph = rdf.createIRI(graphIri);
+                IRI subject = rdf.createIRI(subjectIri);
+                if (!tx.contains(graph, subject, null, null)) {
+                    throw notFound.get();
+                }
+                Optional<IRI> currentHead = readHead(tx, subjectIri);
+                body.accept(tx);
+                invalidateRevision(tx, subjectIri, currentHead);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * Tombstones a deleted subject's last revision (see {@link #delete}): removes the
+     * {@code arkprov:head} triple and, only if one was ever recorded, marks that revision
+     * {@code prov:invalidatedAtTime} at this delete's instant. A subject with no prior head (
+     * {@code currentHead} empty) leaves the provenance graph untouched - there is nothing to
+     * tombstone.
+     */
+    private void invalidateRevision(DatasetTx tx, String subjectIri, Optional<IRI> currentHead) {
+        if (currentHead.isEmpty()) {
+            return;
+        }
+        String subject = SparqlTerms.iriRef(subjectIri);
+        String revision = SparqlTerms.iriRef(currentHead.get().getIRIString());
+        tx.update("DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + subject + " <" + ArkprovVocabulary.HEAD + "> " + revision + " } }");
+
+        Graph invalidation = rdf.createGraph();
+        invalidation.add(currentHead.get(), rdf.createIRI(ArkprovVocabulary.INVALIDATED_AT_TIME),
+                rdf.createLiteral(Instant.now(clock).toString(), VocabXsd.DATETIME));
+        tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), invalidation);
+    }
+
+    /**
      * Runs the transactional skeleton shared by {@link #create}, {@link #update} and
      * {@link #compareAndUpdate}: {@link #enforceGate}, {@code acquire}, open the write
      * transaction, run {@code checks} (the per-method existence/head checks, returning the

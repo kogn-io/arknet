@@ -15,6 +15,7 @@ import io.modelcontextprotocol.common.McpTransportContext;
 
 import de.hauschel.arknet.actor.application.port.in.AddActor;
 import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
+import de.hauschel.arknet.actor.application.port.in.DeleteActor;
 import de.hauschel.arknet.actor.application.port.in.GetActor;
 import de.hauschel.arknet.actor.application.port.in.ListActors;
 import de.hauschel.arknet.actor.application.port.in.UpdateActor;
@@ -63,17 +64,19 @@ public final class ActorMcpTools {
     private final ListActors listActors;
     private final GetActor getActor;
     private final UpdateActor updateActor;
+    private final DeleteActor deleteActor;
     private final ProjectResolver projects;
     private final ActorPresenter presenter = new ActorPresenter();
 
     /**
-     * Creates the adapter with its four driving in-ports and the resolver that maps each call's
+     * Creates the adapter with its five driving in-ports and the resolver that maps each call's
      * anchor to a project.
      *
      * @param addActor    in-port backing {@code actor_add}
      * @param listActors  in-port backing {@code actor_list}
      * @param getActor    in-port backing {@code actor_get}
      * @param updateActor in-port backing {@code actor_update}
+     * @param deleteActor in-port backing {@code actor_delete}
      * @param projects    resolves each call's target project from the anchor it carries
      */
     public ActorMcpTools(
@@ -81,11 +84,13 @@ public final class ActorMcpTools {
             final ListActors listActors,
             final GetActor getActor,
             final UpdateActor updateActor,
+            final DeleteActor deleteActor,
             final ProjectResolver projects) {
         this.addActor = Objects.requireNonNull(addActor, "addActor");
         this.listActors = Objects.requireNonNull(listActors, "listActors");
         this.getActor = Objects.requireNonNull(getActor, "getActor");
         this.updateActor = Objects.requireNonNull(updateActor, "updateActor");
+        this.deleteActor = Objects.requireNonNull(deleteActor, "deleteActor");
         this.projects = Objects.requireNonNull(projects, "projects");
     }
 
@@ -209,6 +214,27 @@ public final class ActorMcpTools {
         final ActorCode code = new ActorCode(id);
         final Actor updated = updateActor.update(projectId, code, blankToNull(name), blankToNull(description));
         return presenter.format(updated);
+    }
+
+    @McpTool(name = "actor_delete",
+            description = "Delete an already-created actor and every triple it carries - not just a "
+                    + "correction, the whole resource goes away. Rejected if a use case still references it "
+                    + "as its primaryActor/supportingActor. A resource that is also a glossary term (term_add) "
+                    + "keeps its glossary entry - this only removes the actor resource itself.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Actor identity, e.g. ACTOR-1") final String id,
+            @McpToolParam(description = "Optional anchor identifying the project this call "
+                    + "targets, used INSTEAD of the anchor your transport sends in the "
+                    + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
+                    + "header - most callers should omit this and let their transport identify the "
+                    + "project. Must be an anchor already registered for the project; project_list "
+                    + "shows what is registered.", required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ActorCode code = new ActorCode(id);
+        deleteActor.delete(projectId, code);
+        return "Deleted: " + code.value();
     }
 
     /**

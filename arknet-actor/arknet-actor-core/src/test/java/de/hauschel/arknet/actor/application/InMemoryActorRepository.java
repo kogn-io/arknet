@@ -94,4 +94,18 @@ final class InMemoryActorRepository implements ActorRepository {
     public List<Actor> findAll(ProjectId projectId) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
+
+    @Override
+    public void delete(ProjectId projectId, ActorCode code) {
+        // The cross-BC reference check (issue #335) is the real out-adapter's concern - this fake
+        // only exercises ActorService's own pass-through and the not-found case.
+        Map<ActorId, Actor> actors = byProject.getOrDefault(projectId, Map.of());
+        ActorId id = actors.values().stream()
+                .filter(a -> a.code().equals(code))
+                .findFirst()
+                .map(Actor::id)
+                .orElseThrow(() -> new ActorNotFoundException(projectId, code));
+        actors.remove(id);
+        headByIdentity.remove(id);
+    }
 }

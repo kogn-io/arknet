@@ -13,6 +13,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.ul.application.port.in.AddTerm;
+import de.hauschel.arknet.ul.application.port.in.DeleteTerm;
 import de.hauschel.arknet.ul.application.port.in.GetTerm;
 import de.hauschel.arknet.ul.application.port.in.ListTerms;
 import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
@@ -75,7 +76,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
  * de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}) - a call that touches neither field
  * never reaches the resolver and can never throw for a missing default.</p>
  */
-public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm {
+public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, UpdateTerm, DeleteTerm {
 
     private static final String ID_PREFIX = "TERM";
 
@@ -147,6 +148,16 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
                 : language;
         return repository.update(projectId, code, prefLabel, definition, actorFacet, effectiveLanguage,
                 defaultLanguage, broader);
+    }
+
+    @Override
+    public void delete(ProjectId projectId, TermCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        // The reference check (is anything else in the project still pointing at this term?) is
+        // the out-adapter's business - it is the only side that can traverse the store's other
+        // named graphs, exactly like the broader-cycle check in update() above.
+        repository.delete(projectId, code);
     }
 
     @Override
