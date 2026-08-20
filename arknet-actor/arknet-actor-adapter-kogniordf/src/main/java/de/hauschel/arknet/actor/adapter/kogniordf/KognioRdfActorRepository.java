@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 
+import de.hauschel.arknet.actor.application.port.in.ResolveActors;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.application.port.out.RevisionToken;
 import de.hauschel.arknet.actor.domain.Actor;
@@ -444,6 +446,46 @@ public class KognioRdfActorRepository implements ActorRepository {
                         new ActorCode(literalOf(row, "identifier").getLexicalForm()))).addRow(row);
             });
             return bySubject.values().stream().map(ActorAssembly::toActor).toList();
+        }
+    }
+
+    /**
+     * Finds every actor in a project whose identity is among {@code ids}, in one store
+     * round-trip - backs {@link ResolveActors}, the same batch shape
+     * {@code KognioRdfTermRepository#findByIds}/{@code KognioRdfRequirementRepository#findByIds}
+     * already establish. Not a per-id existence check: an id absent from the project (or not an
+     * actor at all) is simply absent from the result, never an error.
+     */
+    @Override
+    public List<ResolveActors.ResolvedActor> findByIds(ProjectId projectId, List<ResourceId> ids) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(ids, "ids");
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        // ResourceId#of validates IRIREF-safety at construction, so every id here is already
+        // guaranteed safe to embed - mirrors KognioRdfTermRepository#findByIds's reasoning.
+        String values = ids.stream()
+                .map(id -> SparqlTerms.iriRef(id.value()))
+                .collect(Collectors.joining(" "));
+
+        String query = "SELECT ?s ?identifier WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "VALUES ?s { " + values + " } "
+                + "?s a ?type . "
+                + actorTypeFilter()
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            Map<String, ResolveActors.ResolvedActor> bySubject = new LinkedHashMap<>();
+            handle.sparqlQuery().select(query).forEach(row -> {
+                String subjectIri = iriOf(row, "s").getIRIString();
+                // putIfAbsent, not put: the first row wins if a subject has several identifiers.
+                bySubject.putIfAbsent(subjectIri, new ResolveActors.ResolvedActor(
+                        ResourceId.of(subjectIri),
+                        new ActorCode(literalOf(row, "identifier").getLexicalForm())));
+            });
+            return List.copyOf(bySubject.values());
         }
     }
 
