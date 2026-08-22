@@ -488,9 +488,10 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * The predicates that, if found pointing at a term, block its deletion (issue #335): a
      * requirement's or use case's {@code arkreq:usesTerm}, a bounded context's
-     * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, and - checked
-     * unconditionally rather than only for a term carrying an Actor facette, since a term's facette
-     * is itself mutable - a use case's {@code arkreq:primaryActor}/{@code supportingActor}. Keys
+     * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, and - still
+     * checked although issue #336 moved actor resolution off glossary terms, since a store filled
+     * before that cut can hold such an edge - a use case's {@code arkreq:primaryActor}/{@code
+     * supportingActor}. Keys
      * are the absolute predicate IRIs this adapter and its siblings write; values are the
      * human-readable shorthand {@link de.hauschel.arknet.ul.domain.TermReferencedException} names
      * a caller by.

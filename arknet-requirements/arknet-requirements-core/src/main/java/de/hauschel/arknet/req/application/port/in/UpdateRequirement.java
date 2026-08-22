@@ -23,8 +23,7 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * {@code null} {@code priority} leaves an already-set one untouched - it is never a "remove the
  * priority" signal, since {@code null} is already the sentinel for every other field here;
  * un-setting a priority once set is out of scope, and would need a distinct signal rather than
- * overloading {@code null} (the same rule the sibling {@code UpdateTerm} port applies to its
- * Actor facette).</p>
+ * overloading {@code null}.</p>
  *
  * <p><strong>Acceptance criteria are two independent, narrowly-scoped mechanisms (issue
  * #266).</strong> {@code newAcceptanceCriteria} appends new, non-blank criterion texts after the

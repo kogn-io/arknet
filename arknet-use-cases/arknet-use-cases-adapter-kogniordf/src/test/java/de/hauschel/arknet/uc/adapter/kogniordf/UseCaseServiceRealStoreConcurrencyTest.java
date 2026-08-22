@@ -47,6 +47,7 @@ import de.hauschel.arknet.persistence.testsupport.GuardedLifecycle;
 import de.hauschel.arknet.uc.application.UseCaseService;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
@@ -387,8 +388,9 @@ class UseCaseServiceRealStoreConcurrencyTest {
      * <p>The interleaving is pinned by the {@code beforeTransaction} hook - which fires exactly
      * where the funnel's compare-and-set transaction opens - rather than by real threads, which
      * would make this flaky. The one-shot guard lives in the injected {@link Runnable}, so the
-     * retried attempt runs unimpeded. Mirrors {@code
-     * BoundedContextServiceRealStoreConcurrencyTest#linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}.</p>
+     * retried attempt runs unimpeded. Mirrors
+     * {@code BoundedContextServiceRealStoreConcurrencyTest
+     * #linkTermRetriesAndKeepsBothEdgesWhenAConcurrentWriterAdvancedTheHead}.</p>
      */
     @Test
     void updateRetriesAndKeepsBothChangesWhenAConcurrentWriterAdvancedTheHead() {
@@ -398,13 +400,15 @@ class UseCaseServiceRealStoreConcurrencyTest {
         AtomicBoolean pending = new AtomicBoolean(true);
         UseCaseService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
-                straightThrough.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null, null, null, "en");
+                straightThrough.update(WS, code, UseCaseCorrection.builder()
+                        .trigger("Concurrent trigger")
+                        .build(), "en");
             }
         }));
 
-        UseCase result = racing.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null, null, null, "en");
+        UseCase result = racing.update(WS, code, UseCaseCorrection.builder()
+                .precondition("Racing precondition")
+                .build(), "en");
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");
         assertEquals("Concurrent trigger", result.trigger(),
