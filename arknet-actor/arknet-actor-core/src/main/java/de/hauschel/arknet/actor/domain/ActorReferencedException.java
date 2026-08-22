@@ -12,14 +12,14 @@ import de.hauschel.arknet.kernel.ProjectId;
  * Thrown when {@code actor_delete} is asked to remove an actor that a use case still points at via
  * {@code arkreq:primaryActor}/{@code supportingActor} (issue #335).
  *
- * <p>In this cut nothing in the codebase yet writes either predicate against an
- * {@code arknet-actor}-minted identity - the use-case adapter's actor resolution still runs
- * against the ubiquitous-language BC's facette machinery (see {@code arknet-actor/CLAUDE.md}'s
- * "no consumer yet" note) - so this exception is currently unreachable in practice. The out-adapter
- * checks for it anyway, matching the wording of issue #335's own scope ("an actor
- * {@code arkreq:primaryActor} points at"): once a future consumer migration (tracked separately)
- * makes a use case reference an {@code arknet-actor} identity directly, the guard is already in
- * place rather than a second issue away.</p>
+ * <p>Reachable in practice since issue #336: {@code arknet-use-cases} resolves a use case's
+ * {@code primaryActor}/{@code supportingActor} against this register (see the "erster Konsument
+ * angeschlossen" note in {@code arknet-actor/CLAUDE.md}), and since issue #343 an
+ * {@code uc_update} can put such an edge on an actor as well - so {@code actor_delete} on a
+ * referenced actor is rejected rather than left to dangle. The guard predates that consumer: it
+ * was written with issue #335, matching the wording of that issue's own scope ("an actor
+ * {@code arkreq:primaryActor} points at"), so it was already in place rather than a second issue
+ * away when the first consumer arrived.</p>
  */
 public class ActorReferencedException extends RuntimeException {
 

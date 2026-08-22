@@ -145,7 +145,7 @@ public final class ArkreqVocabulary {
     /** {@code arkreq:Step} - the type of a use case's main-flow/extension step. */
     public static final String STEP_TYPE = NAMESPACE + "Step";
 
-    /** {@code skos:Concept} - the type of a glossary term (including actor-facetted ones). */
+    /** {@code skos:Concept} - the type of a glossary term. */
     public static final String CONCEPT_TYPE = SKOS_NAMESPACE + "Concept";
 
     /**

@@ -12,8 +12,8 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * Driving port: removes a term and its triples from the project glossary entirely (issue #335).
  *
  * <p>Unlike {@link UpdateTerm}, there is no field-level correction here - the whole resource, and
- * everything it carries (its {@code skos:prefLabel}/{@code skos:definition} in every language, any
- * Actor facette), goes away. Rejected outright, rather than silently orphaning an edge, if anything
+ * everything it carries (its {@code skos:prefLabel}/{@code skos:definition} in every language),
+ * goes away. Rejected outright, rather than silently orphaning an edge, if anything
  * else in the project still references the term - see {@link TermReferencedException}. Backs the
  * MVP tool {@code term_delete}, the closing counterpart of {@link AddTerm} this glossary lacked
  * until now.</p>

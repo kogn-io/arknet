@@ -83,7 +83,8 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@code supportingActors} are correctable too (issue #343), by name and through the very same
  * {@link ActorLookup} {@link #add} resolves against - {@code primaryActor} replace-or-leave,
  * {@code supportingActors} a wholesale replace whose empty list clears them; full step-list
- * restructuring stays out of this port's scope - see {@link UpdateUseCase}. Linking a glossary term or a constraint is idempotent, independent of
+ * restructuring stays out of this port's scope - see {@link UpdateUseCase}.
+ * Linking a glossary term or a constraint is idempotent, independent of
  * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
  * exactly (issue #329) - {@link #linkConstraint} resolves the human-typed constraint code via the
  * constructor-injected {@link ConstraintLookup} cross-BC port rather than a same-module

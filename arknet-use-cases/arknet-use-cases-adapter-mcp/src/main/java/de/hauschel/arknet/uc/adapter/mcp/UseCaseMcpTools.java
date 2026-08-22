@@ -354,8 +354,9 @@ public final class UseCaseMcpTools {
                     + "The actor references are correctable too: a given primaryActor replaces the current "
                     + "one (it cannot be cleared - a use case always has exactly one), and a given "
                     + "supportingActors array replaces the current list wholesale, an empty array clearing "
-                    + "it. Does not touch the step list's structure; use uc_add to recreate the use case if "
-                    + "the flow itself needs restructuring.")
+                    + "it. Does not touch the step list's structure; use uc_add to create a replacement use "
+                    + "case if the flow itself needs restructuring - note that this mints a new use-case code "
+                    + "and does not carry over inbound references.")
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,

@@ -302,8 +302,9 @@ public class KognioRdfActorRepository implements ActorRepository {
      * The predicates that, if found pointing at an actor, block its deletion (issue #335): a use
      * case's {@code arkreq:primaryActor}/{@code supportingActor}. See
      * {@link de.hauschel.arknet.actor.domain.ActorReferencedException}'s javadoc for why this check
-     * is currently unreachable in practice - no consumer in this cut writes either predicate
-     * against an actor identity yet - but is still run, matching issue #335's own scope.
+     * predates its first consumer - it was built with issue #335's own scope in mind and became
+     * reachable in practice with issue #336, which pointed {@code arknet-use-cases}' actor
+     * resolution at this register.
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
             ArkreqVocabulary.PRIMARY_ACTOR, "primaryActor",

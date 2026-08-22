@@ -54,8 +54,9 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * break every inbound reference to the use case.</p>
  *
  * <p><strong>Explicitly out of scope.</strong> Full step-list restructuring (adding, removing or
- * reordering steps) is untouched by this port - recreate the use case with {@code uc_add} if the
- * flow itself needs restructuring.</p>
+ * reordering steps) is untouched by this port - create a replacement use case with
+ * {@code uc_add} if the flow itself needs restructuring, at the price named above: a new
+ * {@link UseCaseCode}, and no inbound reference carried over.</p>
  *
  * <p><strong>Language.</strong> {@code title}, {@code goal}, {@code scope}, {@code trigger},
  * {@code precondition}, {@code postcondition}, each patched step's {@code text} and each entry of
