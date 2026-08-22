@@ -38,6 +38,7 @@ import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
@@ -246,7 +247,8 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, null, null, "de", null);
+        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, null, null, "de",
+                null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -315,7 +317,8 @@ class UseCaseMcpToolsTest {
 
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                 "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
-                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of(), List.of(), List.of()));
+                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of(), List.of(),
+                List.of()));
 
         String rendered = adapter.get(null, "UC1", null, null);
 
@@ -576,32 +579,30 @@ class UseCaseMcpToolsTest {
         private String lastUpdateLanguage;
 
         @Override
-        public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
-                String trigger, String primaryActorName, List<String> supportingActorNames, String precondition,
-                String postcondition, List<String> extensions, List<StepTextPatch> stepTextPatches,
-                List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches, String language,
+        public UseCase update(ProjectId projectId, UseCaseCode code, UseCaseCorrection correction,
                 String defaultLanguage) {
             if (updateFailure != null) {
                 throw updateFailure;
             }
             lastUpdatedUseCase = code;
-            lastUpdateTitle = title;
-            lastUpdateGoal = goal;
-            lastUpdateScope = scope;
-            lastUpdateTrigger = trigger;
-            lastUpdatePrimaryActor = primaryActorName;
-            lastUpdateSupportingActors = supportingActorNames;
-            lastUpdatePrecondition = precondition;
-            lastUpdatePostcondition = postcondition;
-            lastUpdateExtensions = extensions;
-            lastUpdateStepTextPatches = stepTextPatches;
-            lastUpdateStepRealisesPatches = stepRealisesPatches;
-            lastUpdateLanguage = language;
+            lastUpdateTitle = correction.title();
+            lastUpdateGoal = correction.goal();
+            lastUpdateScope = correction.scope();
+            lastUpdateTrigger = correction.trigger();
+            lastUpdatePrimaryActor = correction.primaryActor();
+            lastUpdateSupportingActors = correction.supportingActors();
+            lastUpdatePrecondition = correction.precondition();
+            lastUpdatePostcondition = correction.postcondition();
+            lastUpdateExtensions = correction.extensions();
+            lastUpdateStepTextPatches = correction.stepTextPatches();
+            lastUpdateStepRealisesPatches = correction.stepRealisesPatches();
+            lastUpdateLanguage = correction.language();
             ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
-            return new UseCase(opaqueId("uc-1"), code, title != null ? title : "t",
-                    goal != null ? goal : "goal", scope, trigger, primaryActor, List.of(), precondition,
-                    postcondition, List.of(new Step(1, "do something", List.of())),
-                    extensions != null ? extensions : List.of(), List.of(), List.of());
+            return new UseCase(opaqueId("uc-1"), code, correction.title() != null ? correction.title() : "t",
+                    correction.goal() != null ? correction.goal() : "goal", correction.scope(), correction.trigger(),
+                    primaryActor, List.of(), correction.precondition(), correction.postcondition(),
+                    List.of(new Step(1, "do something", List.of())),
+                    correction.extensions() != null ? correction.extensions() : List.of(), List.of(), List.of());
         }
 
         @Override

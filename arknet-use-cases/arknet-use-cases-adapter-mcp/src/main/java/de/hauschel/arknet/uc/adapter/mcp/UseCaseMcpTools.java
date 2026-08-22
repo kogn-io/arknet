@@ -26,6 +26,7 @@ import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.domain.StepTextPatch;
 import de.hauschel.arknet.uc.domain.UseCase;
 import de.hauschel.arknet.uc.domain.UseCaseCode;
@@ -425,12 +426,21 @@ public final class UseCaseMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);
-        final UseCase updated = updateUseCase.update(project.id(), code, blankToNull(title), blankToNull(goal),
-                blankToNull(scope), blankToNull(trigger), blankToNull(primaryActor),
-                supportingActors == null ? null : List.copyOf(supportingActors),
-                blankToNull(precondition), blankToNull(postcondition),
-                extensions == null ? null : List.copyOf(extensions), toStepTextPatches(stepTextPatches),
-                toStepRealisesPatches(stepRealisesPatches), blankToNull(language), project.defaultLanguage());
+        final UseCaseCorrection correction = UseCaseCorrection.builder()
+                .title(blankToNull(title))
+                .goal(blankToNull(goal))
+                .scope(blankToNull(scope))
+                .trigger(blankToNull(trigger))
+                .primaryActor(blankToNull(primaryActor))
+                .supportingActors(supportingActors == null ? null : List.copyOf(supportingActors))
+                .precondition(blankToNull(precondition))
+                .postcondition(blankToNull(postcondition))
+                .extensions(extensions == null ? null : List.copyOf(extensions))
+                .stepTextPatches(toStepTextPatches(stepTextPatches))
+                .stepRealisesPatches(toStepRealisesPatches(stepRealisesPatches))
+                .language(blankToNull(language))
+                .build();
+        final UseCase updated = updateUseCase.update(project.id(), code, correction, project.defaultLanguage());
         return presenter.formatFull(project.id(), updated);
     }
 
