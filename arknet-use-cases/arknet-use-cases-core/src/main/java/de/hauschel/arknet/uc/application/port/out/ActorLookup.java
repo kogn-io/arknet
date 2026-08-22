@@ -27,7 +27,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 public interface ActorLookup {
 
     /**
-     * Resolves {@code actorName} to the identity of the actor term it currently names within
+     * Resolves {@code actorName} to the identity of the actor it currently names within
      * {@code projectId}.
      *
      * @param projectId the project (architecture model) to resolve the name in
