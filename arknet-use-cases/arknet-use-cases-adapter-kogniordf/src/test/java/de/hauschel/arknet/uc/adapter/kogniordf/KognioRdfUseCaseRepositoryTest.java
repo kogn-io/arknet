@@ -815,6 +815,44 @@ class KognioRdfUseCaseRepositoryTest {
         }
     }
 
+    /**
+     * Issue #343: correcting a use case's actor references through {@code compareAndUpdate} must
+     * leave the store with exactly the new edges - the old {@code primaryActor} gone rather than
+     * lingering next to the new one (which would breach {@code arkreq:primaryActor}'s
+     * {@code sh:maxCount 1} on the next write), and a cleared {@code supportingActors} list gone
+     * entirely. The subject is rebuilt by identity, so this is what {@code deleteExisting} is for;
+     * the test pins it because {@code uc_update} is now a caller that actually changes these two.
+     */
+    @Test
+    void compareAndUpdateReplacesThePrimaryActorAndClearsSupportingActors() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+        UseCase current = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals(CUSTOMER, current.primaryActor());
+        assertEquals(List.of(PAYMENT_PROVIDER), current.supportingActors());
+
+        UseCase revised = new UseCase(current.id(), current.code(), current.title(), current.goal(),
+                current.scope(), current.trigger(), PAYMENT_PROVIDER, List.of(), current.precondition(),
+                current.postcondition(), current.steps(), current.extensions(), current.usesTerms(),
+                current.constrainedBy());
+        replaceViaCompareAndUpdate(PROJECT_A, revised);
+
+        UseCase found = repository.findByCode(PROJECT_A, CODE_1, null).orElseThrow();
+        assertEquals(PAYMENT_PROVIDER, found.primaryActor());
+        assertEquals(List.of(), found.supportingActors());
+        assertEquals(1, countEdges(PROJECT_A, "https://w3id.org/arknet/requirements#primaryActor"),
+                "the superseded primaryActor edge must be gone, not lingering beside the new one");
+        assertEquals(0, countEdges(PROJECT_A, "https://w3id.org/arknet/requirements#supportingActor"));
+    }
+
+    /** Counts the edges {@link #ID_1} carries under {@code predicateIri} in the use-cases graph. */
+    private long countEdges(ProjectId project, String predicateIri) {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(project.value()))) {
+            return handle.sparqlQuery().select("SELECT ?o WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                    + "<" + ID_1.value().value() + "> <" + predicateIri + "> ?o } }").count();
+        }
+    }
+
     // ---- usesTerm / constrainedBy (issue #329) -------------------------------------------
 
     private static UseCase placeOrderWithTermAndConstraint() {

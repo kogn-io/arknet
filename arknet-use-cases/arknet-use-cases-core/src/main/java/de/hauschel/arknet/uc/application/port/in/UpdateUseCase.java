@@ -38,9 +38,24 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * reorder steps, and a patch naming a position with no matching step is rejected rather than
  * silently ignored, in either list.</p>
  *
- * <p><strong>Explicitly out of scope.</strong> {@code primaryActor}, {@code supportingActors} and
- * full step-list restructuring (adding/removing/reordering steps) are untouched by this port -
- * recreate the use case with {@code uc_add} if those need to change.</p>
+ * <p><strong>Actor corrections (issue #343).</strong> {@code primaryActor} and
+ * {@code supportingActors} are corrected by name, exactly as {@link AddUseCase} takes them: raw,
+ * human-typed labels the application service resolves against the actor register, never opaque
+ * identities. What "unchanged" means differs between the two, because the model constrains them
+ * differently. A use case has exactly one primary actor ({@code sh:minCount 1}/{@code
+ * sh:maxCount 1} on {@code arkreq:primaryActor}), so {@code primaryActor} is a plain
+ * replace-or-leave field: {@code null} leaves it as it is, a name replaces it, and there is no
+ * way to clear it. {@code supportingActors} carries no such floor and is a wholesale replace
+ * with the same tri-state as {@code stepRealisesPatches}: {@code null} leaves the existing list
+ * untouched, a non-{@code null} list replaces it entirely, and an empty list is the explicit,
+ * unambiguous signal to clear every supporting actor. An unknown or ambiguous name is rejected
+ * before anything is written, exactly as in {@link AddUseCase} - correcting an actor reference
+ * never has to go through delete-and-recreate, which would mint a new {@link UseCaseCode} and
+ * break every inbound reference to the use case.</p>
+ *
+ * <p><strong>Explicitly out of scope.</strong> Full step-list restructuring (adding, removing or
+ * reordering steps) is untouched by this port - recreate the use case with {@code uc_add} if the
+ * flow itself needs restructuring.</p>
  *
  * <p><strong>Language.</strong> {@code title}, {@code goal}, {@code scope}, {@code trigger},
  * {@code precondition}, {@code postcondition}, each patched step's {@code text} and each entry of
@@ -74,6 +89,14 @@ public interface UpdateUseCase {
      *                        leave it unchanged
      * @param scope           the new system/design scope, or {@code null} to leave it unchanged
      * @param trigger         the new triggering event, or {@code null} to leave it unchanged
+     * @param primaryActor    the name of the actor that should be this use case's primary actor
+     *                        going forward, resolved against the actor register, or {@code null}
+     *                        to leave it unchanged - a use case always has exactly one, so there
+     *                        is no way to clear it
+     * @param supportingActors the names of the supporting (secondary) actors this use case should
+     *                        carry going forward, resolved against the actor register and
+     *                        replacing the existing ones wholesale; an empty list clears them all,
+     *                        {@code null} leaves them unchanged
      * @param precondition    the new precondition, or {@code null} to leave it unchanged
      * @param postcondition   the new postcondition, or {@code null} to leave it unchanged
      * @param extensions      the new alternative/exception flows, replacing the existing ones
@@ -105,6 +128,12 @@ public interface UpdateUseCase {
      * @return the updated use case
      * @throws UseCaseNotFoundException              if no use case with {@code code} exists in
      *                                                {@code projectId}
+     * @throws RuntimeException                      if {@code primaryActor} or any entry of
+     *                                                {@code supportingActors} names an actor that
+     *                                                is unknown or ambiguous within
+     *                                                {@code projectId} - the same didactic
+     *                                                rejection {@link AddUseCase} raises, thrown
+     *                                                before anything is written
      * @throws UseCaseConcurrentlyModifiedException if the write keeps losing the compare-and-set
      *                                                race against a concurrent writer across every
      *                                                retry attempt
@@ -116,9 +145,9 @@ public interface UpdateUseCase {
      *                                                defaultLanguage} is {@code null} too
      */
     UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
-            String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches, List<StepRealisesPatch> stepRealisesPatches, String language,
-            String defaultLanguage);
+            String trigger, String primaryActor, List<String> supportingActors, String precondition,
+            String postcondition, List<String> extensions, List<StepTextPatch> stepTextPatches,
+            List<StepRealisesPatch> stepRealisesPatches, String language, String defaultLanguage);
 
     /**
      * A correction to one existing main-flow step's {@code realises} references, addressed by

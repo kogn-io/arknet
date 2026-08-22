@@ -351,8 +351,11 @@ public final class UseCaseMcpTools {
                     + "stepRealisesPatches replaces a step's entire realises set wholesale (an empty array "
                     + "clears it) - a position omitted from either list is left untouched, and a position with "
                     + "no matching step is rejected in either list. Neither can add, remove or reorder steps. "
-                    + "Does not touch primaryActor, supportingActors or the step list's structure; use uc_add "
-                    + "to recreate the use case if those need to change.")
+                    + "The actor references are correctable too: a given primaryActor replaces the current "
+                    + "one (it cannot be cleared - a use case always has exactly one), and a given "
+                    + "supportingActors array replaces the current list wholesale, an empty array clearing "
+                    + "it. Does not touch the step list's structure; use uc_add to recreate the use case if "
+                    + "the flow itself needs restructuring.")
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,
@@ -367,6 +370,16 @@ public final class UseCaseMcpTools {
             final String scope,
             @McpToolParam(description = "New triggering event (optional, unchanged if omitted)", required = false)
             final String trigger,
+            @McpToolParam(description = "Label of the actor that should be this use case's primary actor "
+                    + "going forward, e.g. 'Customer'. Must be an existing actor (actor_add). Replaces the "
+                    + "current primary actor; it cannot be cleared, since a use case always has exactly one "
+                    + "(optional, unchanged if omitted)", required = false)
+            final String primaryActor,
+            @McpToolParam(description = "Labels of the supporting (secondary) actors this use case should "
+                    + "carry going forward, each an existing actor (actor_add), replacing the current list "
+                    + "wholesale - an empty array explicitly clears every supporting actor (optional, "
+                    + "unchanged if omitted)", required = false)
+            final List<String> supportingActors,
             @McpToolParam(description = "New precondition (optional, unchanged if omitted)", required = false)
             final String precondition,
             @McpToolParam(description = "New postcondition (optional, unchanged if omitted)", required = false)
@@ -412,7 +425,9 @@ public final class UseCaseMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final UseCaseCode code = new UseCaseCode(id);
         final UseCase updated = updateUseCase.update(project.id(), code, blankToNull(title), blankToNull(goal),
-                blankToNull(scope), blankToNull(trigger), blankToNull(precondition), blankToNull(postcondition),
+                blankToNull(scope), blankToNull(trigger), blankToNull(primaryActor),
+                supportingActors == null ? null : List.copyOf(supportingActors),
+                blankToNull(precondition), blankToNull(postcondition),
                 extensions == null ? null : List.copyOf(extensions), toStepTextPatches(stepTextPatches),
                 toStepRealisesPatches(stepRealisesPatches), blankToNull(language), project.defaultLanguage());
         return presenter.formatFull(project.id(), updated);

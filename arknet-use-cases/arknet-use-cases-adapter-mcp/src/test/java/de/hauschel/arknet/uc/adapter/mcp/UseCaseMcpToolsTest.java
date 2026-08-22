@@ -246,7 +246,7 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, "de", null);
+        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, null, null, "de", null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -371,7 +371,7 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
-        String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger",
+        String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger", null, null,
                 "New precondition", "New postcondition", List.of("2a. abort"),
                 List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null, null);
 
@@ -387,10 +387,48 @@ class UseCaseMcpToolsTest {
         assertTrue(rendered.contains("New title"), rendered);
     }
 
+    /**
+     * Issue #343: {@code uc_update} hands both actor arguments to the in-port as the raw,
+     * human-typed labels {@code uc_add} already takes - resolving them against the actor register
+     * is the application service's job, not this adapter's.
+     */
+    @Test
+    void updatePassesTheActorArgumentsThroughToTheInPort() {
+        adapter.update(null, "UC1", null, null, null, null, "Customer", List.of("PaymentProvider"), null, null,
+                null, null, null, null, null);
+
+        assertEquals("Customer", stub.lastUpdatePrimaryActor);
+        assertEquals(List.of("PaymentProvider"), stub.lastUpdateSupportingActors);
+    }
+
+    /**
+     * The two arms an omitted-vs-empty mix-up would silently swap (issue #343): an omitted
+     * {@code supportingActors} must reach the port as {@code null} ("leave them"), an explicitly
+     * empty array as an empty list ("clear them"). Collapsing the first into the second would
+     * wipe every supporting actor off any use case corrected for an unrelated field.
+     */
+    @Test
+    void updateDistinguishesAnOmittedSupportingActorArrayFromAnEmptyOne() {
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
+        assertEquals(null, stub.lastUpdateSupportingActors);
+
+        adapter.update(null, "UC1", null, null, null, null, null, List.of(), null, null, null, null, null, null,
+                null);
+        assertEquals(List.of(), stub.lastUpdateSupportingActors);
+    }
+
+    /** A blank {@code primaryActor} is treated as omitted, the same tolerance every other field gets. */
+    @Test
+    void updateTreatsABlankPrimaryActorAsOmitted() {
+        adapter.update(null, "UC1", null, null, null, null, "  ", null, null, null, null, null, null, null, null);
+
+        assertEquals(null, stub.lastUpdatePrimaryActor);
+    }
+
     /** {@code uc_update} maps {@code stepRealisesPatches} to {@link UpdateUseCase.StepRealisesPatch}. */
     @Test
     void updatePassesStepRealisesPatchesThroughMappedToThePort() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null,
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null,
                 List.of(new UseCaseMcpTools.StepRealisesPatchInput(1, List.of("FR-1", "FR-2")),
                         new UseCaseMcpTools.StepRealisesPatchInput(2, List.of())),
                 null, null);
@@ -409,7 +447,7 @@ class UseCaseMcpToolsTest {
     @Test
     void updateRejectsAStepRealisesPatchWithOmittedRealises() {
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null,
+                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null,
                         List.of(new UseCaseMcpTools.StepRealisesPatchInput(3, null)), null, null));
 
         assertTrue(thrown.getMessage().contains("3"), thrown.getMessage());
@@ -422,7 +460,7 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals(null, stub.lastUpdateTitle);
@@ -439,7 +477,7 @@ class UseCaseMcpToolsTest {
     /** A blank string is treated as omitted, the same tolerance {@code uc_add} already applies. */
     @Test
     void updateTreatsABlankFieldAsOmitted() {
-        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(null, stub.lastUpdateTitle);
     }
@@ -454,7 +492,7 @@ class UseCaseMcpToolsTest {
         stub.updateFailure = new StepPositionNotFoundException(PROJECT, new UseCaseCode("UC1"), 99);
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
-                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null,
+                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null,
                         List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null, null));
 
         assertTrue(thrown.getMessage().contains("99"), thrown.getMessage());
@@ -487,6 +525,8 @@ class UseCaseMcpToolsTest {
         private String lastUpdateGoal;
         private String lastUpdateScope;
         private String lastUpdateTrigger;
+        private String lastUpdatePrimaryActor;
+        private List<String> lastUpdateSupportingActors;
         private String lastUpdatePrecondition;
         private String lastUpdatePostcondition;
         private List<String> lastUpdateExtensions;
@@ -537,9 +577,10 @@ class UseCaseMcpToolsTest {
 
         @Override
         public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
-                String trigger, String precondition, String postcondition, List<String> extensions,
-                List<StepTextPatch> stepTextPatches, List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches,
-                String language, String defaultLanguage) {
+                String trigger, String primaryActorName, List<String> supportingActorNames, String precondition,
+                String postcondition, List<String> extensions, List<StepTextPatch> stepTextPatches,
+                List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches, String language,
+                String defaultLanguage) {
             if (updateFailure != null) {
                 throw updateFailure;
             }
@@ -548,6 +589,8 @@ class UseCaseMcpToolsTest {
             lastUpdateGoal = goal;
             lastUpdateScope = scope;
             lastUpdateTrigger = trigger;
+            lastUpdatePrimaryActor = primaryActorName;
+            lastUpdateSupportingActors = supportingActorNames;
             lastUpdatePrecondition = precondition;
             lastUpdatePostcondition = postcondition;
             lastUpdateExtensions = extensions;

@@ -106,12 +106,12 @@ class UseCaseServiceConcurrencyTest {
     void updateSurvivesAConcurrentUpdateOfADifferentFieldBetweenReadAndWrite() {
         UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger",
+                () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger", null, null,
                         null, null, null, null, null, null, DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
-        UseCase result = underTest.update(WS, code, null, null, null, null,
+        UseCase result = underTest.update(WS, code, null, null, null, null, null, null,
                 "Racing precondition", null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Concurrent trigger", result.trigger());
@@ -135,7 +135,7 @@ class UseCaseServiceConcurrencyTest {
         UseCaseService underTest = new UseCaseService(
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
-        UseCase result = underTest.update(WS, code, null, null, null, "Concurrent trigger",
+        UseCase result = underTest.update(WS, code, null, null, null, "Concurrent trigger", null, null,
                 null, null, null, null, null, null, DEFAULT_LANGUAGE);
 
         assertEquals("Concurrent trigger", result.trigger());
@@ -158,7 +158,7 @@ class UseCaseServiceConcurrencyTest {
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null,
+                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null, null, null,
                         null, DEFAULT_LANGUAGE));
 
         assertEquals(UseCaseService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());

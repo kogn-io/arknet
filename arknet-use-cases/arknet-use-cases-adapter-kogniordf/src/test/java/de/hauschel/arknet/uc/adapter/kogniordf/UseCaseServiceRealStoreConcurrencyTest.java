@@ -398,12 +398,12 @@ class UseCaseServiceRealStoreConcurrencyTest {
         AtomicBoolean pending = new AtomicBoolean(true);
         UseCaseService racing = serviceOver(new GuardedLifecycle(realLifecycle, tx -> tx, () -> {
             if (pending.compareAndSet(true, false)) {
-                straightThrough.update(WS, code, null, null, null, "Concurrent trigger",
+                straightThrough.update(WS, code, null, null, null, "Concurrent trigger", null, null,
                         null, null, null, null, null, null, "en");
             }
         }));
 
-        UseCase result = racing.update(WS, code, null, null, null, null,
+        UseCase result = racing.update(WS, code, null, null, null, null, null, null,
                 "Racing precondition", null, null, null, null, null, "en");
 
         assertFalse(pending.get(), "the concurrent writer must have committed - nothing was raced otherwise");

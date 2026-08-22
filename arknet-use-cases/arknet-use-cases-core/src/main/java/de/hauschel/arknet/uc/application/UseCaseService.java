@@ -79,9 +79,11 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * the {@code text} of existing main-flow steps by position, never their {@code realises}
  * references, while the separate, independent {@code stepRealisesPatches} corrects only a named
  * step's {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
- * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor},
- * {@code supportingActors} and full step-list restructuring stay out of this port's scope - see
- * {@link UpdateUseCase}. Linking a glossary term or a constraint is idempotent, independent of
+ * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor} and
+ * {@code supportingActors} are correctable too (issue #343), by name and through the very same
+ * {@link ActorLookup} {@link #add} resolves against - {@code primaryActor} replace-or-leave,
+ * {@code supportingActors} a wholesale replace whose empty list clears them; full step-list
+ * restructuring stays out of this port's scope - see {@link UpdateUseCase}. Linking a glossary term or a constraint is idempotent, independent of
  * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
  * exactly (issue #329) - {@link #linkConstraint} resolves the human-typed constraint code via the
  * constructor-injected {@link ConstraintLookup} cross-BC port rather than a same-module
@@ -196,15 +198,26 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
 
     @Override
     public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
-            String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches, List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches,
-            String language, String defaultLanguage) {
+            String trigger, String primaryActor, List<String> supportingActors, String precondition,
+            String postcondition, List<String> extensions, List<StepTextPatch> stepTextPatches,
+            List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches, String language, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         // Reference resolution happens once, before the retry, mirroring add(): an unresolvable
-        // requirement code must fail immediately and is not a code-collision race to retry on.
+        // requirement or actor reference must fail immediately and is not a code-collision race to
+        // retry on.
         Map<Integer, List<RequirementRef>> realisesByPosition = stepRealisesPatches == null
                 ? null : toRealisesByPosition(projectId, stepRealisesPatches);
+        // Null means "leave it" for both actor arguments; the difference is that an empty
+        // supportingActors list is a legal, explicit clear, while primaryActor has no clear at all
+        // (a use case always has exactly one) - see UpdateUseCase (issue #343).
+        ActorRef newPrimaryActor = primaryActor == null
+                ? null : new ActorRef(actorLookup.resolveByName(projectId, primaryActor));
+        List<ActorRef> newSupportingActors = supportingActors == null
+                ? null
+                : supportingActors.stream()
+                        .map(name -> new ActorRef(actorLookup.resolveByName(projectId, name)))
+                        .toList();
         // Which step positions this call itself patches, and whether it touches extensions at
         // all (issue #271): the signal updateWithOptimisticRetry resolves a fresh language
         // against, instead of comparing the patched/replaced text to what is already stored - a
@@ -224,7 +237,8 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
                     goal != null ? goal : current.goal(),
                     scope != null ? scope : current.scope(),
                     trigger != null ? trigger : current.trigger(),
-                    current.primaryActor(), current.supportingActors(),
+                    newPrimaryActor != null ? newPrimaryActor : current.primaryActor(),
+                    newSupportingActors != null ? newSupportingActors : current.supportingActors(),
                     precondition != null ? precondition : current.precondition(),
                     postcondition != null ? postcondition : current.postcondition(),
                     current.steps(),
