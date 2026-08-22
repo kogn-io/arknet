@@ -24,6 +24,7 @@ import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.ActorLookup;
 import de.hauschel.arknet.uc.application.port.out.ConstraintLookup;
 import de.hauschel.arknet.uc.application.port.out.RequirementLookup;
@@ -79,9 +80,12 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * the {@code text} of existing main-flow steps by position, never their {@code realises}
  * references, while the separate, independent {@code stepRealisesPatches} corrects only a named
  * step's {@code realises} set - replacing it wholesale, with an empty list explicitly clearing it
- * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor},
- * {@code supportingActors} and full step-list restructuring stay out of this port's scope - see
- * {@link UpdateUseCase}. Linking a glossary term or a constraint is idempotent, independent of
+ * (issue #255). Neither mechanism adds, removes or reorders steps. {@code primaryActor} and
+ * {@code supportingActors} are correctable too (issue #343), by name and through the very same
+ * {@link ActorLookup} {@link #add} resolves against - {@code primaryActor} replace-or-leave,
+ * {@code supportingActors} a wholesale replace whose empty list clears them; full step-list
+ * restructuring stays out of this port's scope - see {@link UpdateUseCase}.
+ * Linking a glossary term or a constraint is idempotent, independent of
  * {@link #update}, and mirrors {@code RequirementService#linkTerm}/{@code #linkConstraint}
  * exactly (issue #329) - {@link #linkConstraint} resolves the human-typed constraint code via the
  * constructor-injected {@link ConstraintLookup} cross-BC port rather than a same-module
@@ -195,42 +199,61 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     }
 
     @Override
-    public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
-            String trigger, String precondition, String postcondition, List<String> extensions,
-            List<StepTextPatch> stepTextPatches, List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches,
-            String language, String defaultLanguage) {
+    public UseCase update(ProjectId projectId, UseCaseCode code, UseCaseCorrection correction,
+            String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(correction, "correction");
         // Reference resolution happens once, before the retry, mirroring add(): an unresolvable
-        // requirement code must fail immediately and is not a code-collision race to retry on.
-        Map<Integer, List<RequirementRef>> realisesByPosition = stepRealisesPatches == null
-                ? null : toRealisesByPosition(projectId, stepRealisesPatches);
+        // requirement or actor reference must fail immediately and is not a code-collision race to
+        // retry on.
+        Map<Integer, List<RequirementRef>> realisesByPosition = correction.stepRealisesPatches() == null
+                ? null : toRealisesByPosition(projectId, correction.stepRealisesPatches());
+        // Null means "leave it" for both actor fields; the difference is that an empty
+        // supportingActors list is a legal, explicit clear, while primaryActor has no clear at all
+        // (a use case always has exactly one) - see UpdateUseCase (issue #343).
+        ActorRef newPrimaryActor = correction.primaryActor() == null
+                ? null : new ActorRef(actorLookup.resolveByName(projectId, correction.primaryActor()));
+        List<ActorRef> newSupportingActors = correction.supportingActors() == null
+                ? null
+                : correction.supportingActors().stream()
+                        .map(name -> new ActorRef(actorLookup.resolveByName(projectId, name)))
+                        .toList();
         // Which step positions this call itself patches, and whether it touches extensions at
         // all (issue #271): the signal updateWithOptimisticRetry resolves a fresh language
         // against, instead of comparing the patched/replaced text to what is already stored - a
         // caller correcting a typo back to the project's already-current wording is still an
         // explicit write, not a no-op. `extensions` is a wholesale replace (not a per-position
         // patch), so a non-null `extensions` touches every position in the replacement list.
-        Set<Integer> touchedStepPositions = stepTextPatches == null
+        // The two actor fields deliberately feed no touched signal at all: neither carries a
+        // language-tagged literal, so an actor-only correction never resolves a write language and
+        // goes through even in a project with no defaultLanguage (issue #343).
+        Set<Integer> touchedStepPositions = correction.stepTextPatches() == null
                 ? Set.of()
-                : stepTextPatches.stream().map(StepTextPatch::position).collect(Collectors.toUnmodifiableSet());
-        boolean extensionsTouched = extensions != null;
-        return updateWithOptimisticRetry(projectId, code, language, defaultLanguage,
-                title != null, goal != null, scope != null, trigger != null,
-                precondition != null, postcondition != null, touchedStepPositions, extensionsTouched, current -> {
+                : correction.stepTextPatches().stream()
+                        .map(StepTextPatch::position)
+                        .collect(Collectors.toUnmodifiableSet());
+        boolean extensionsTouched = correction.extensions() != null;
+        return updateWithOptimisticRetry(projectId, code, correction.language(), defaultLanguage,
+                correction.title() != null, correction.goal() != null, correction.scope() != null,
+                correction.trigger() != null, correction.precondition() != null,
+                correction.postcondition() != null, touchedStepPositions, extensionsTouched, current -> {
             UseCase base = new UseCase(
                     current.id(), current.code(),
-                    title != null ? title : current.title(),
-                    goal != null ? goal : current.goal(),
-                    scope != null ? scope : current.scope(),
-                    trigger != null ? trigger : current.trigger(),
-                    current.primaryActor(), current.supportingActors(),
-                    precondition != null ? precondition : current.precondition(),
-                    postcondition != null ? postcondition : current.postcondition(),
+                    correction.title() != null ? correction.title() : current.title(),
+                    correction.goal() != null ? correction.goal() : current.goal(),
+                    correction.scope() != null ? correction.scope() : current.scope(),
+                    correction.trigger() != null ? correction.trigger() : current.trigger(),
+                    newPrimaryActor != null ? newPrimaryActor : current.primaryActor(),
+                    newSupportingActors != null ? newSupportingActors : current.supportingActors(),
+                    correction.precondition() != null ? correction.precondition() : current.precondition(),
+                    correction.postcondition() != null ? correction.postcondition() : current.postcondition(),
                     current.steps(),
-                    extensions != null ? List.copyOf(extensions) : current.extensions(),
+                    correction.extensions() != null ? List.copyOf(correction.extensions()) : current.extensions(),
                     current.usesTerms(), current.constrainedBy());
-            base = stepTextPatches != null ? base.withStepTextPatches(projectId, stepTextPatches) : base;
+            base = correction.stepTextPatches() != null
+                    ? base.withStepTextPatches(projectId, correction.stepTextPatches())
+                    : base;
             return realisesByPosition != null ? base.withStepRealisesPatches(projectId, realisesByPosition) : base;
         });
     }

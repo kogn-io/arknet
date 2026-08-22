@@ -11,9 +11,9 @@ import de.hauschel.arknet.kernel.ProjectId;
 /**
  * Thrown when {@code term_delete} is asked to remove a term that something else in the project
  * still points at - a requirement's or use case's {@code arkreq:usesTerm}, a bounded context's
- * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, or - for a term
- * carrying an Actor facette - a use case's {@code arkreq:primaryActor}/{@code supportingActor}
- * (issue #335).
+ * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, or - only where a
+ * store still holds pre-#336 data, back when an actor was a facette of a glossary term - a use
+ * case's {@code arkreq:primaryActor}/{@code supportingActor} (issue #335).
  *
  * <p>Rejecting rather than deleting-and-leaving-the-edge-dangling follows the same line strict
  * cross-BC reference resolution already draws elsewhere ({@code UnresolvedReferenceException}):

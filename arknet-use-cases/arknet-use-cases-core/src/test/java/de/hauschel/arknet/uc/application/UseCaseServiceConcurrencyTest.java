@@ -20,6 +20,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewStep;
 import de.hauschel.arknet.uc.application.port.in.AddUseCase.NewUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.application.port.out.RevisionToken;
 import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
 import de.hauschel.arknet.uc.domain.TermRef;
@@ -106,13 +107,15 @@ class UseCaseServiceConcurrencyTest {
     void updateSurvivesAConcurrentUpdateOfADifferentFieldBetweenReadAndWrite() {
         UseCaseCode code = otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE).code();
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.update(WS, code, null, null, null, "Concurrent trigger",
-                        null, null, null, null, null, null, DEFAULT_LANGUAGE));
+                () -> otherCaller.update(WS, code, UseCaseCorrection.builder()
+                        .trigger("Concurrent trigger")
+                        .build(), DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
-        UseCase result = underTest.update(WS, code, null, null, null, null,
-                "Racing precondition", null, null, null, null, null, DEFAULT_LANGUAGE);
+        UseCase result = underTest.update(WS, code, UseCaseCorrection.builder()
+                .precondition("Racing precondition")
+                .build(), DEFAULT_LANGUAGE);
 
         assertEquals("Concurrent trigger", result.trigger());
         assertEquals("Racing precondition", result.precondition());
@@ -135,8 +138,9 @@ class UseCaseServiceConcurrencyTest {
         UseCaseService underTest = new UseCaseService(
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
-        UseCase result = underTest.update(WS, code, null, null, null, "Concurrent trigger",
-                null, null, null, null, null, null, DEFAULT_LANGUAGE);
+        UseCase result = underTest.update(WS, code, UseCaseCorrection.builder()
+                .trigger("Concurrent trigger")
+                .build(), DEFAULT_LANGUAGE);
 
         assertEquals("Concurrent trigger", result.trigger());
         assertEquals(List.of(new TermRef(TERM_1_ID)), result.usesTerms());
@@ -158,8 +162,9 @@ class UseCaseServiceConcurrencyTest {
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
         assertThrows(UseCaseConcurrentlyModifiedException.class,
-                () -> underTest.update(WS, code, null, null, null, "New trigger", null, null, null, null, null,
-                        null, DEFAULT_LANGUAGE));
+                () -> underTest.update(WS, code, UseCaseCorrection.builder()
+                        .trigger("New trigger")
+                        .build(), DEFAULT_LANGUAGE));
 
         assertEquals(UseCaseService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }

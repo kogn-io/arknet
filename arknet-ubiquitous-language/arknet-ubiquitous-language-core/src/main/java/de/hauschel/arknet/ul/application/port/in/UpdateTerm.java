@@ -11,8 +11,8 @@ import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Driving port: correct the preferred label and/or definition of an already-created term,
- * keeping its identity (and thus every existing {@code arkreq:usesTerm}/{@code primaryActor}/
- * {@code supportingActors} link into it) intact.
+ * keeping its identity (and thus every existing {@code arkreq:usesTerm}/{@code
+ * arkddd:ubiquitousLanguageTerm}/{@code skos:broader} link into it) intact.
  *
  * <p>Backs the MVP tool {@code term_update}. Before this port existed, correcting a
  * term's wording meant registering a fresh one via {@link AddTerm} - which mints a new identity

@@ -38,6 +38,7 @@ import de.hauschel.arknet.uc.application.port.in.LinkConstraint;
 import de.hauschel.arknet.uc.application.port.in.LinkTerm;
 import de.hauschel.arknet.uc.application.port.in.ListUseCases;
 import de.hauschel.arknet.uc.application.port.in.UpdateUseCase;
+import de.hauschel.arknet.uc.application.port.in.UpdateUseCase.UseCaseCorrection;
 import de.hauschel.arknet.uc.domain.ActorRef;
 import de.hauschel.arknet.uc.domain.ConstraintRef;
 import de.hauschel.arknet.uc.domain.RequirementRef;
@@ -246,7 +247,8 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update}'s {@code language} argument reaches {@link UpdateUseCase} unchanged. */
     @Test
     void updatePassesTheLanguageThrough() {
-        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, "de", null);
+        adapter.update(null, "UC1", "Neuer Titel", null, null, null, null, null, null, null, null, null, null, "de",
+                null);
 
         assertEquals("de", stub.lastUpdateLanguage);
     }
@@ -315,7 +317,8 @@ class UseCaseMcpToolsTest {
 
         stub.getResult = Optional.of(new UseCase(opaqueId("uc-1"), new UseCaseCode("UC1"), "Place order",
                 "Customer places an order", null, null, unresolvableActor, List.of(), null, null,
-                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of(), List.of(), List.of()));
+                List.of(new Step(1, "select items", List.of(unresolvableRequirement))), List.of(), List.of(),
+                List.of()));
 
         String rendered = adapter.get(null, "UC1", null, null);
 
@@ -371,7 +374,7 @@ class UseCaseMcpToolsTest {
     /** {@code uc_update} passes every given field through to the in-port. */
     @Test
     void updatePassesAllGivenFieldsThroughToTheInPort() {
-        String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger",
+        String rendered = adapter.update(null, "UC1", "New title", "New goal", "New scope", "New trigger", null, null,
                 "New precondition", "New postcondition", List.of("2a. abort"),
                 List.of(new UseCaseMcpTools.StepPatchInput(1, "corrected text")), null, null, null);
 
@@ -387,10 +390,48 @@ class UseCaseMcpToolsTest {
         assertTrue(rendered.contains("New title"), rendered);
     }
 
+    /**
+     * Issue #343: {@code uc_update} hands both actor arguments to the in-port as the raw,
+     * human-typed labels {@code uc_add} already takes - resolving them against the actor register
+     * is the application service's job, not this adapter's.
+     */
+    @Test
+    void updatePassesTheActorArgumentsThroughToTheInPort() {
+        adapter.update(null, "UC1", null, null, null, null, "Customer", List.of("PaymentProvider"), null, null,
+                null, null, null, null, null);
+
+        assertEquals("Customer", stub.lastUpdatePrimaryActor);
+        assertEquals(List.of("PaymentProvider"), stub.lastUpdateSupportingActors);
+    }
+
+    /**
+     * The two arms an omitted-vs-empty mix-up would silently swap (issue #343): an omitted
+     * {@code supportingActors} must reach the port as {@code null} ("leave them"), an explicitly
+     * empty array as an empty list ("clear them"). Collapsing the first into the second would
+     * wipe every supporting actor off any use case corrected for an unrelated field.
+     */
+    @Test
+    void updateDistinguishesAnOmittedSupportingActorArrayFromAnEmptyOne() {
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
+        assertEquals(null, stub.lastUpdateSupportingActors);
+
+        adapter.update(null, "UC1", null, null, null, null, null, List.of(), null, null, null, null, null, null,
+                null);
+        assertEquals(List.of(), stub.lastUpdateSupportingActors);
+    }
+
+    /** A blank {@code primaryActor} is treated as omitted, the same tolerance every other field gets. */
+    @Test
+    void updateTreatsABlankPrimaryActorAsOmitted() {
+        adapter.update(null, "UC1", null, null, null, null, "  ", null, null, null, null, null, null, null, null);
+
+        assertEquals(null, stub.lastUpdatePrimaryActor);
+    }
+
     /** {@code uc_update} maps {@code stepRealisesPatches} to {@link UpdateUseCase.StepRealisesPatch}. */
     @Test
     void updatePassesStepRealisesPatchesThroughMappedToThePort() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null,
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null,
                 List.of(new UseCaseMcpTools.StepRealisesPatchInput(1, List.of("FR-1", "FR-2")),
                         new UseCaseMcpTools.StepRealisesPatchInput(2, List.of())),
                 null, null);
@@ -409,7 +450,7 @@ class UseCaseMcpToolsTest {
     @Test
     void updateRejectsAStepRealisesPatchWithOmittedRealises() {
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null,
+                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null,
                         List.of(new UseCaseMcpTools.StepRealisesPatchInput(3, null)), null, null));
 
         assertTrue(thrown.getMessage().contains("3"), thrown.getMessage());
@@ -422,7 +463,7 @@ class UseCaseMcpToolsTest {
      */
     @Test
     void updateWithOmittedFieldsPassesNullThroughForEachOfThem() {
-        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(new UseCaseCode("UC1"), stub.lastUpdatedUseCase);
         assertEquals(null, stub.lastUpdateTitle);
@@ -439,7 +480,7 @@ class UseCaseMcpToolsTest {
     /** A blank string is treated as omitted, the same tolerance {@code uc_add} already applies. */
     @Test
     void updateTreatsABlankFieldAsOmitted() {
-        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null);
+        adapter.update(null, "UC1", "  ", null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertEquals(null, stub.lastUpdateTitle);
     }
@@ -454,7 +495,7 @@ class UseCaseMcpToolsTest {
         stub.updateFailure = new StepPositionNotFoundException(PROJECT, new UseCaseCode("UC1"), 99);
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
-                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null,
+                () -> adapter.update(null, "UC1", null, null, null, null, null, null, null, null, null,
                         List.of(new UseCaseMcpTools.StepPatchInput(99, "does not exist")), null, null, null));
 
         assertTrue(thrown.getMessage().contains("99"), thrown.getMessage());
@@ -487,6 +528,8 @@ class UseCaseMcpToolsTest {
         private String lastUpdateGoal;
         private String lastUpdateScope;
         private String lastUpdateTrigger;
+        private String lastUpdatePrimaryActor;
+        private List<String> lastUpdateSupportingActors;
         private String lastUpdatePrecondition;
         private String lastUpdatePostcondition;
         private List<String> lastUpdateExtensions;
@@ -536,29 +579,30 @@ class UseCaseMcpToolsTest {
         private String lastUpdateLanguage;
 
         @Override
-        public UseCase update(ProjectId projectId, UseCaseCode code, String title, String goal, String scope,
-                String trigger, String precondition, String postcondition, List<String> extensions,
-                List<StepTextPatch> stepTextPatches, List<UpdateUseCase.StepRealisesPatch> stepRealisesPatches,
-                String language, String defaultLanguage) {
+        public UseCase update(ProjectId projectId, UseCaseCode code, UseCaseCorrection correction,
+                String defaultLanguage) {
             if (updateFailure != null) {
                 throw updateFailure;
             }
             lastUpdatedUseCase = code;
-            lastUpdateTitle = title;
-            lastUpdateGoal = goal;
-            lastUpdateScope = scope;
-            lastUpdateTrigger = trigger;
-            lastUpdatePrecondition = precondition;
-            lastUpdatePostcondition = postcondition;
-            lastUpdateExtensions = extensions;
-            lastUpdateStepTextPatches = stepTextPatches;
-            lastUpdateStepRealisesPatches = stepRealisesPatches;
-            lastUpdateLanguage = language;
+            lastUpdateTitle = correction.title();
+            lastUpdateGoal = correction.goal();
+            lastUpdateScope = correction.scope();
+            lastUpdateTrigger = correction.trigger();
+            lastUpdatePrimaryActor = correction.primaryActor();
+            lastUpdateSupportingActors = correction.supportingActors();
+            lastUpdatePrecondition = correction.precondition();
+            lastUpdatePostcondition = correction.postcondition();
+            lastUpdateExtensions = correction.extensions();
+            lastUpdateStepTextPatches = correction.stepTextPatches();
+            lastUpdateStepRealisesPatches = correction.stepRealisesPatches();
+            lastUpdateLanguage = correction.language();
             ActorRef primaryActor = new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-customer"));
-            return new UseCase(opaqueId("uc-1"), code, title != null ? title : "t",
-                    goal != null ? goal : "goal", scope, trigger, primaryActor, List.of(), precondition,
-                    postcondition, List.of(new Step(1, "do something", List.of())),
-                    extensions != null ? extensions : List.of(), List.of(), List.of());
+            return new UseCase(opaqueId("uc-1"), code, correction.title() != null ? correction.title() : "t",
+                    correction.goal() != null ? correction.goal() : "goal", correction.scope(), correction.trigger(),
+                    primaryActor, List.of(), correction.precondition(), correction.postcondition(),
+                    List.of(new Step(1, "do something", List.of())),
+                    correction.extensions() != null ? correction.extensions() : List.of(), List.of(), List.of());
         }
 
         @Override

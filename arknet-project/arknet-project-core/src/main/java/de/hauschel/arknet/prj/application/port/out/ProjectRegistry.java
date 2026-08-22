@@ -159,8 +159,7 @@ public interface ProjectRegistry {
      * arkprj:defaultLanguage}, but only if its current concurrency token still equals {@code
      * expectedHead} - the same compare-and-set guard {@link #compareAndUpdate} runs, sharing its
      * token: {@code arkprov:head} is per-<em>resource</em>, not per-predicate, exactly like {@code
-     * TermRepository#update}'s CAS shares one head across {@code prefLabel}/{@code definition}/
-     * the Actor facette.
+     * TermRepository#update}'s CAS shares one head across {@code prefLabel}/{@code definition}.
      *
      * <p><strong>A targeted patch, not a replace-by-identity.</strong> Unlike {@link
      * #compareAndUpdate}, this method never touches {@code dcterms:identifier}/{@code
