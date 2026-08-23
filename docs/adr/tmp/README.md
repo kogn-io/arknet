@@ -30,6 +30,7 @@ werden nicht geschoent, sie werden abgeloest.
 | neu-10 Commit-Provenance statt Export | ADR-011 | unveraendert in der Sache |
 | neu-11 Revision als Provenance und Token | ADR-013 + ADR-014 | zwei Records zu einer Entscheidung zusammengefasst |
 | neu-12 Requirement-Status ohne Durchsetzung | ADR-018 + ADR-019 | ADR-018 war bereits abgeloest; eine Entscheidung statt zweier |
+| neu-13 Namespace-Grenzen folgen Kontextgrenzen | -- (neu) | zwei Regeln statt Eins-zu-eins; `arkreq:` loest sich mit neu-02 von selbst, `arkproc:` bleibt offen |
 
 ## Unveraendert uebernommen, nicht neu geschrieben
 
@@ -73,3 +74,12 @@ beim Review zu pruefen ist.
    mergen und ADR-022 unmittelbar danach durch neu-03 abloesen.
 4. **ADR-002** existiert nicht und hat nie existiert. Beim Umzug entweder die Luecke
    uebernehmen oder lueckenlos durchnummerieren.
+5. **Statuszeilen.** Alle Records stehen auf `Proposed` **ohne benannte
+   Uebergangsbedingung** -- das ADR-Skill wertet das als Smell. neu-13 hat als einziger eine.
+   Nachzuziehen, bevor der Satz umzieht.
+6. **Shipped heisst Accepted.** Mehrere Records beschreiben Entscheidungen, die gebaut sind
+   und laufen (Store-first, Daemon, Anker, generischer Lesepfad, Tech-Linie,
+   Commit-Provenance). Nach der Status-Hygiene des Skills gehoeren die auf `Accepted`, nicht
+   auf `Proposed`. Das ist Freds Entscheidung, keine Ableitung aus dem Bauzustand.
+7. **`arkproc:` verletzt Regel 2 aus neu-13** und die Behebung ist eine Store-Migration.
+   Eigene Abwaegung, noch nicht terminiert.
