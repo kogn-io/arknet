@@ -1,7 +1,7 @@
 # ADR-023: Das Requirement bekommt eine Herkunftskante zum Actor
 
 - Status: Accepted (2026-08-19)
-- Related: ADR-017, ADR-020, ADR-021
+- Verwandt: ADR-017, ADR-020, ADR-021
 
 ## Kontext
 

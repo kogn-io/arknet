@@ -1,7 +1,7 @@
 # ADR-020: Ein breit gefasster Actor statt eines eigenen Stakeholder-Typs
 
 - Status: Accepted (2026-08-19)
-- Related: ADR-017
+- Verwandt: ADR-017
 
 ## Kontext
 

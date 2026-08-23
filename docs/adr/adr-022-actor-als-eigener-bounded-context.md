@@ -1,7 +1,7 @@
 # ADR-022: Actor wird ein eigener Bounded Context
 
 - Status: Accepted (2026-08-19)
-- Related: ADR-020
+- Verwandt: ADR-020
 
 ## Kontext
 
@@ -47,9 +47,8 @@ den Wechsel unveraendert.
 hinzu, obwohl offen ist, ob der bestehende schon zu fein ist -- die Frage wird damit nicht
 beantwortet, sondern um einen Fall erweitert. Das Entfernen der Facette ist ein Breaking
 Change auf der Tool-Oberflaeche und trifft die Skills, die sie dokumentieren. Bestehende
-Modelle tragen Glossarbegriffe mit Actor-Typ, die bereinigt werden muessen; das setzt
-voraus, dass Ressourcen ueberhaupt loeschbar sind -- eine Faehigkeit, die das Werkzeug
-bisher nicht braucht und die mit dieser Entscheidung noetig wird.
+Modelle tragen Glossarbegriffe mit Actor-Typ, die bereinigt werden muessen; die
+Entscheidung erzwingt damit eine Loeschfaehigkeit fuer Ressourcen.
 
 ## Alternativen
 

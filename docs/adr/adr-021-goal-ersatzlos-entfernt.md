@@ -1,7 +1,6 @@
 # ADR-021: arkreq:Goal wird ersatzlos entfernt
 
 - Status: Accepted (2026-08-18)
-- Related: ADR-023
 
 ## Kontext
 
@@ -29,8 +28,7 @@ Parameters dokumentiert ihn lediglich als optional.
    und Shapes; `motivatedBy` verschwindet aus Ontologie, Shapes, Domaenenmodell und
    Tool-Oberflaeche.
 2. Es gibt keinen Ersatz und keine Migrationspflicht: eventuell vorhandene
-   `motivatedBy`-Tripel in Bestandsstores bleiben als tote Daten liegen -- ohne Shape und
-   ohne Leser stoeren sie nichts.
+   `motivatedBy`-Tripel in Bestandsstores werden nicht bereinigt.
 
 ## Konsequenzen
 
@@ -44,7 +42,13 @@ mehr als eigene Ressource fassen. Braucht arknet spaeter eine Ziel-Ebene -- etwa
 Richtung "Quelle fuer Testgenerierung" sie konkret verlangt --, entsteht sie als eigener,
 neuer Schnitt mit eigenem Entstehungsweg; diese Vorarbeit ist bewusst nicht geleistet. Das
 publizierte Vokabular verliert Begriffe -- fuer etwaige unbekannte externe Nutzer ein
-Bruch, der pre-1.0 in Kauf genommen wird.
+Bruch, der pre-1.0 in Kauf genommen wird. Nicht bereinigte `motivatedBy`-Tripel sind dabei
+kein harmloser Bodensatz: ohne Shape bleiben sie unvalidiert, der generische Lesepfad
+(ADR-006) zeigt sie praedikat-agnostisch weiter an -- als Verweis auf eine Klasse, die es
+dann nicht mehr gibt --, und das naechste Requirement-Update entfernt sie stillschweigend,
+weil ein solcher Schreibvorgang den Tripel-Satz seines Subjekts ersetzt und nur die dem
+Domaenenmodell bekannten Felder zurueckschreibt. Beides wird pre-1.0 in Kauf genommen,
+statt einen Bereinigungspfad zu bauen.
 
 ## Alternativen
 
