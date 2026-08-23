@@ -159,8 +159,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code adr_get}/{@code adr_list}'s reverse direction (identity back to a displayable code)
  *       is the requirements hexagon's own {@link ResolveRequirements} and the bounded-context
  *       hexagon's own {@link ResolveBoundedContexts} in-port, wired straight into
- *       {@link AdrMcpTools} (ADR-008). Its third relation, {@code supersedes}, is self-referential
- *       and therefore resolved inside {@link AdrService} - no port is borrowed for it.</li>
+ *       {@link AdrMcpTools} (ADR-008). Its other two relations, {@code supersedes} and
+ *       {@code relatedTo}, are self-referential and therefore resolved inside {@link AdrService} -
+ *       no port is borrowed for either.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
  *       RDF-persisted registry) - the project tools ({@code project_add}/
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/

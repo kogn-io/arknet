@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
@@ -59,7 +60,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@link #update} corrects an existing decision field by field, and the status decides how far it
  * may reach: the prose and the decision date are only correctable while {@link AdrStatus#PROPOSED}
  * and are refused with {@link AdrTextImmutableException} from {@link AdrStatus#ACCEPTED} on, while
- * both cross-context reference lists stay correctable in every status - completing a reference that
+ * all three reference lists stay correctable in every status - completing a reference that
  * could not exist at recording time states the same decision more fully instead of rewriting it, the
  * same licence {@code adr_supersede} already takes against an accepted decision. That rule lives on
  * {@link Adr#reviseText}/{@link Adr#reviseReferences}, not here; this service only fills the
@@ -77,13 +78,24 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@link AdrConcurrentlyModifiedException}. Parallel sessions of one user against one local store
  * are the normal case, not a remote/multi-writer concern (ADR-001).</p>
  *
- * <p><strong>Where each reference is resolved.</strong> The two cross-context codes are resolved
- * once, here, before anything is written - an unresolvable one must abort the whole
- * {@code adr_add} (or {@code adr_update}) rather than leave a half-linked decision behind, which is
- * also why resolution sits <em>outside</em> the code-assignment and compare-and-set retries: an
- * unknown {@code FR-9} is not a code collision and must not be retried. The self-referential
- * {@code supersedes} target needs no lookup port at all: it is this hexagon's own resource, resolved
- * through {@link AdrRepository#findByCode}.</p>
+ * <p><strong>Where each reference is resolved.</strong> Every reference code is resolved once,
+ * here, before anything is written - an unresolvable one must abort the whole {@code adr_add} (or
+ * {@code adr_update}) rather than leave a half-linked decision behind, which is also why resolution
+ * sits <em>outside</em> the code-assignment and compare-and-set retries: an unknown {@code FR-9} is
+ * not a code collision and must not be retried. The two cross-context codes go through their
+ * dedicated lookup ports. The two self-referential relations - the {@code supersedes} target and
+ * every {@code relatedTo} peer - need no lookup port at all: they are this hexagon's own resources,
+ * resolved through {@link AdrRepository#findByCode}, and an unknown one is a plain
+ * {@link AdrNotFoundException} rather than a didactic cross-context rejection.</p>
+ *
+ * <p><strong>How {@code relatedTo} is read back.</strong> Only the forward edge is stored, so a
+ * decision's peers are the union of what it points at and what points at it (see
+ * {@link AdrRepository#findRelatedCodes}) - one merged, deduplicated, running-number-ordered list
+ * rather than two directions, because the relation is symmetric and its stored direction carries no
+ * meaning. {@link #detailOf} pays one extra reverse read for it; {@link #list} inverts its single
+ * full read in memory instead, exactly as it already does for {@code supersededBy}. Neither follows
+ * a peer's own edges onwards, which is what lets {@code relatedTo} carry the cycles it explicitly
+ * permits.</p>
  */
 public class AdrService
         implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr {
@@ -151,6 +163,10 @@ public class AdrService
                 .map(code -> new BoundedContextRef(boundedContextLookup.resolveByCode(projectId, code)))
                 .distinct()
                 .toList();
+        // The peer decisions are this hexagon's own resources, so they resolve through the
+        // repository rather than a lookup port - the same reasoning supersede() applies, and just
+        // as much outside the retry: an unknown ADR-9 is not a code collision.
+        List<AdrId> peers = resolvePeers(projectId, command.relatedToCodes());
         // Identity is opaque and stable, so it is minted once, outside the retry: only the business
         // code is recomputed when a concurrent adr_add claims the same candidate first. See
         // CodeAssignment for why that race exists and why it must retry rather than surface the
@@ -161,7 +177,7 @@ public class AdrService
                     AdrCode code = nextCode(projectId);
                     Adr adr = new Adr(id, code, command.name(), AdrStatus.PROPOSED, command.context(),
                             command.decision(), command.consequences(), command.alternatives(),
-                            command.decisionDate(), requirements, contexts, List.of());
+                            command.decisionDate(), requirements, contexts, List.of(), peers);
                     repository.create(projectId, adr);
                     return adr;
                 });
@@ -177,16 +193,22 @@ public class AdrService
         Map<AdrId, AdrCode> codes = new LinkedHashMap<>();
         all.forEach(adr -> codes.putIfAbsent(adr.id(), adr.code()));
         Map<AdrId, TreeSet<String>> supersededBy = new LinkedHashMap<>();
+        Map<AdrId, TreeSet<String>> relatedFrom = new LinkedHashMap<>();
         for (Adr adr : all) {
             for (AdrId superseded : adr.supersedes()) {
                 supersededBy.computeIfAbsent(superseded, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
                         .add(adr.code().value());
             }
+            for (AdrId peer : adr.relatedTo()) {
+                relatedFrom.computeIfAbsent(peer, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
+                        .add(adr.code().value());
+            }
         }
         return all.stream()
                 .map(adr -> new AdrDetail(adr, codesOf(adr.supersedes(), codes),
-                        supersededBy.getOrDefault(adr.id(), new TreeSet<>(CODE_BY_RUNNING_NUMBER)).stream()
-                                .map(AdrCode::new).toList()))
+                        sortedCodes(supersededBy.get(adr.id())),
+                        mergedRelatedCodes(codesOf(adr.relatedTo(), codes),
+                                sortedCodes(relatedFrom.get(adr.id())))))
                 .toList();
     }
 
@@ -239,6 +261,16 @@ public class AdrService
                                 boundedContextLookup.resolveByCode(projectId, referenced)))
                         .distinct()
                         .toList();
+        // Self-reference is refused before the peer codes are even looked up, so a caller naming
+        // the decision itself is told exactly that rather than that "ADR-1" resolves - the same
+        // refusal, and the same wording, supersede() makes for the same shape of mistake.
+        if (correction.relatedToCodes() != null
+                && correction.relatedToCodes().stream().map(AdrCode::new).anyMatch(code::equals)) {
+            throw new IllegalArgumentException("an ADR must not be related to itself: " + code.value());
+        }
+        List<AdrId> peers = correction.relatedToCodes() == null
+                ? null
+                : resolvePeers(projectId, correction.relatedToCodes());
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, current -> current
                 .reviseText(
                         correction.name() != null ? correction.name() : current.name(),
@@ -249,7 +281,8 @@ public class AdrService
                         correction.decisionDate() != null ? correction.decisionDate() : current.decisionDate())
                 .reviseReferences(
                         requirements != null ? requirements : current.addressesRequirements(),
-                        contexts != null ? contexts : current.affectsContexts())));
+                        contexts != null ? contexts : current.affectsContexts(),
+                        peers != null ? peers : current.relatedTo())));
     }
 
     @Override
@@ -314,16 +347,56 @@ public class AdrService
 
     /**
      * Wraps one decision into the {@link AdrDetail} projection every driving port returns: its
-     * {@code supersedes} identities resolved to codes, plus the backward direction read from the
-     * store. Two cheap reads, and only on the single-decision paths - {@link #list} derives both
-     * directions from its one full read instead.
+     * {@code supersedes} and {@code relatedTo} identities resolved to codes in one lookup, plus the
+     * backward direction of each read from the store. Three cheap reads, and only on the
+     * single-decision paths - {@link #list} derives every direction from its one full read instead.
      */
     private AdrDetail detailOf(ProjectId projectId, Adr adr) {
-        Map<AdrId, AdrCode> codes = adr.supersedes().isEmpty()
+        List<AdrId> referenced = Stream.concat(adr.supersedes().stream(), adr.relatedTo().stream())
+                .distinct()
+                .toList();
+        Map<AdrId, AdrCode> codes = referenced.isEmpty()
                 ? Map.of()
-                : repository.findCodesByIds(projectId, adr.supersedes());
+                : repository.findCodesByIds(projectId, referenced);
         return new AdrDetail(adr, codesOf(adr.supersedes(), codes),
-                repository.findSupersedingCodes(projectId, adr.id()));
+                repository.findSupersedingCodes(projectId, adr.id()),
+                mergedRelatedCodes(codesOf(adr.relatedTo(), codes),
+                        repository.findRelatedCodes(projectId, adr.id())));
+    }
+
+    /**
+     * Unions a decision's own {@code relatedTo} codes with the codes of the decisions pointing back
+     * at it, deduplicated and ordered by running number - the single list {@link AdrDetail#relatedTo}
+     * promises. Deduplication is what makes a mutually declared pair ({@code A relatedTo B} and
+     * {@code B relatedTo A}, which nothing forbids) report each peer once instead of twice.
+     */
+    private static List<AdrCode> mergedRelatedCodes(List<AdrCode> forward, List<AdrCode> backward) {
+        TreeSet<String> merged = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        forward.forEach(code -> merged.add(code.value()));
+        backward.forEach(code -> merged.add(code.value()));
+        return merged.stream().map(AdrCode::new).toList();
+    }
+
+    /** Renders one in-memory inversion bucket as sorted codes; an absent bucket is an empty list. */
+    private static List<AdrCode> sortedCodes(TreeSet<String> codes) {
+        return codes == null ? List.of() : codes.stream().map(AdrCode::new).toList();
+    }
+
+    /**
+     * Resolves {@code relatedTo} business codes to this hexagon's own identities, rejecting an
+     * unknown one outright. Deliberately not a lookup port: unlike a requirement or a bounded
+     * context, a peer decision is a resource of this very hexagon, so {@link AdrRepository#findByCode}
+     * answers it and a miss is a plain {@link AdrNotFoundException} - the same choice
+     * {@link #supersede} made for its target.
+     */
+    private List<AdrId> resolvePeers(ProjectId projectId, List<String> codes) {
+        return codes.stream()
+                .map(AdrCode::new)
+                .distinct()
+                .map(peer -> repository.findByCode(projectId, peer)
+                        .map(Adr::id)
+                        .orElseThrow(() -> new AdrNotFoundException(projectId, peer)))
+                .toList();
     }
 
     /**

@@ -176,7 +176,7 @@ class AdrServiceConcurrencyTest {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                null, null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -235,6 +235,11 @@ class AdrServiceConcurrencyTest {
         @Override
         public List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId) {
             return delegate.findSupersedingCodes(projectId, supersededId);
+        }
+
+        @Override
+        public List<AdrCode> findRelatedCodes(ProjectId projectId, AdrId relatedId) {
+            return delegate.findRelatedCodes(projectId, relatedId);
         }
     }
 

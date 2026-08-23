@@ -29,7 +29,8 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * <p>Status becomes a badge; context, decision, consequences and alternatives - the MADR shape
  * this component records a decision in - become their own prose blocks rather than four
  * indistinguishable {@code arkarch:adr*} literals. {@link ListAdrs} already inverts the
- * self-referential {@code arkarch:supersedes} edge into both directions ({@link AdrDetail}), so
+ * self-referential {@code arkarch:supersedes} edge into both directions and merges the equally
+ * self-referential, symmetric {@code arkarch:relatedTo} edge into one list ({@link AdrDetail}), so
  * this class only has to turn the resolved {@link AdrCode}s it hands back into {@link Ref}s.</p>
  *
  * <p><strong>Two borrowed ports, one relation resolved locally.</strong> {@code
@@ -37,8 +38,8 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * business codes are rendered through the borrowed {@link ResolveRequirements}/
  * {@link ResolveBoundedContexts} ports (ADR-008, the same borrowing {@code uc_get}/{@code
  * adr_get} already do) - batched once per report across every ADR, never per card.
- * {@code supersedes}/{@code supersededBy} point back into this hexagon's own resources, and
- * {@link AdrDetail} already carries their codes; only the target's subject id, which a
+ * {@code supersedes}/{@code supersededBy}/{@code relatedTo} point back into this hexagon's own
+ * resources, and {@link AdrDetail} already carries their codes; only the target's subject id, which a
  * {@link Ref} needs to link to that ADR's own card, is missing, so this class builds an
  * in-memory code-to-id lookup from the same list of decisions it renders. A code named there
  * that no longer resolves (deleted store-first, ADR-005) falls back to itself rather than being
@@ -89,7 +90,7 @@ public final class AdrCards {
                 .map(detail -> card(detail, requirements, contexts, idsByCode))
                 .toList();
         return new ModelSection(SECTION_TITLE, "architecture-decisions",
-                "decisions made, their status, and what they replace", cards);
+                "decisions made, their status, what they replace and what they relate to", cards);
     }
 
     private static ModelCard card(
@@ -127,6 +128,11 @@ public final class AdrCards {
         }
         if (!detail.supersededBy().isEmpty()) {
             blocks.add(new Block.Refs("Superseded by", detail.supersededBy().stream()
+                    .map(code -> codeRef(code, idsByCode))
+                    .toList()));
+        }
+        if (!detail.relatedTo().isEmpty()) {
+            blocks.add(new Block.Refs("Related to", detail.relatedTo().stream()
                     .map(code -> codeRef(code, idsByCode))
                     .toList()));
         }

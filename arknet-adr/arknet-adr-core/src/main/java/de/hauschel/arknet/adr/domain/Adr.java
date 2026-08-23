@@ -17,11 +17,11 @@ import java.util.Objects;
  * <p>Value object of the ADR component. All invariants are enforced in the compact constructor;
  * instances are immutable and their collections are defensively copied.</p>
  *
- * <p><strong>Every edge lives inside the record.</strong> All three relations
- * ({@code addressesRequirement}, {@code affectsContext}, {@code supersedes}) are part of the
- * decision's own state rather than side edges: the out-adapter persists a decision by replacing its
- * triples wholesale, so an edge kept outside this record would be silently dropped by the next
- * write - the lesson the requirements and bounded-context contexts already paid for.</p>
+ * <p><strong>Every edge lives inside the record.</strong> All four relations
+ * ({@code addressesRequirement}, {@code affectsContext}, {@code supersedes}, {@code relatedTo}) are
+ * part of the decision's own state rather than side edges: the out-adapter persists a decision by
+ * replacing its triples wholesale, so an edge kept outside this record would be silently dropped by
+ * the next write - the lesson the requirements and bounded-context contexts already paid for.</p>
  *
  * @param id                    opaque, unchanging identity of this decision (never a business
  *                              label); minted once by a
@@ -59,6 +59,16 @@ import java.util.Objects;
  *                              ever asserted as a triple - the ontology's {@code owl:inverseOf}
  *                              partner {@code arkarch:supersededBy} is left to a reader (or a
  *                              reasoner), never written a second time by hand
+ * @param relatedTo             the peer decisions this one cross-references ("see also"); maps to
+ *                              {@code arkarch:relatedTo}, {@code 0..n}. Only this direction is ever
+ *                              asserted as a triple, although the ontology declares the property an
+ *                              {@code owl:SymmetricProperty}: nothing here reasons over symmetry,
+ *                              and two hand-maintained triples for one relation are exactly the
+ *                              drift risk this codebase avoids - which is also why the relation is
+ *                              unranked rather than directional, and why a reader is handed one
+ *                              merged list (see {@code AdrDetail}) instead of two. Never
+ *                              {@code null} or containing duplicates (a {@code null} argument is
+ *                              normalised to an empty list), and never this decision's own identity
  */
 public record Adr(
         AdrId id,
@@ -72,7 +82,8 @@ public record Adr(
         LocalDate decisionDate,
         List<RequirementRef> addressesRequirements,
         List<BoundedContextRef> affectsContexts,
-        List<AdrId> supersedes) {
+        List<AdrId> supersedes,
+        List<AdrId> relatedTo) {
 
     public Adr {
         Objects.requireNonNull(id, "id");
@@ -84,6 +95,7 @@ public record Adr(
         addressesRequirements = addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
         affectsContexts = affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
         supersedes = supersedes == null ? List.of() : List.copyOf(supersedes);
+        relatedTo = relatedTo == null ? List.of() : List.copyOf(relatedTo);
         requireNotBlank(name, "name");
         requireNotBlank(context, "context");
         requireNotBlank(decision, "decision");
@@ -96,8 +108,12 @@ public record Adr(
         requireNoDuplicates(addressesRequirements, "addressesRequirements");
         requireNoDuplicates(affectsContexts, "affectsContexts");
         requireNoDuplicates(supersedes, "supersedes");
+        requireNoDuplicates(relatedTo, "relatedTo");
         if (supersedes.contains(id)) {
             throw new IllegalArgumentException("an ADR must not supersede itself");
+        }
+        if (relatedTo.contains(id)) {
+            throw new IllegalArgumentException("an ADR must not be related to itself");
         }
     }
 
@@ -124,7 +140,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be accepted while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes);
+                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
     }
 
     /**
@@ -146,7 +162,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be rejected while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.REJECTED, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes);
+                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
     }
 
     /**
@@ -169,7 +185,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be deprecated while ACCEPTED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.DEPRECATED, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes);
+                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
     }
 
     /**
@@ -194,7 +210,7 @@ public record Adr(
         List<AdrId> extended = new ArrayList<>(supersedes);
         extended.add(superseded);
         return new Adr(id, code, name, status, context, decision, consequences, alternatives, decisionDate,
-                addressesRequirements, affectsContexts, extended);
+                addressesRequirements, affectsContexts, extended, relatedTo);
     }
 
     /**
@@ -245,42 +261,46 @@ public record Adr(
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes);
+                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
     }
 
     /**
-     * Returns this decision with both cross-context reference lists replaced wholesale, in
+     * Returns this decision with all three of its reference lists replaced wholesale, in
      * <em>every</em> status - the deliberate exception to {@link #reviseText}'s immutability rule.
      *
-     * <p><strong>Why no status check here.</strong> Adding {@code addressesRequirement} or
-     * {@code affectsContext} later does not change what was decided; it completes a reference that
-     * could not be written when the decision was recorded, because the requirement or bounded context
-     * it points at did not exist yet. Freezing these along with the prose would leave a decision in
-     * force permanently unable to state what it applies to. The precedent is already in this record:
-     * {@link #supersede(AdrId)} writes into an accepted decision's {@code supersedes} for exactly the
-     * same reason.</p>
+     * <p><strong>Why no status check here.</strong> Adding {@code addressesRequirement},
+     * {@code affectsContext} or {@code relatedTo} later does not change what was decided; it
+     * completes a reference that could not be written when the decision was recorded, because the
+     * requirement, bounded context or peer decision it points at did not exist yet. Freezing these
+     * along with the prose would leave a decision in force permanently unable to state what it
+     * applies to. The precedent is already in this record: {@link #supersede(AdrId)} writes into an
+     * accepted decision's {@code supersedes} for exactly the same reason.</p>
      *
-     * <p>Both arguments are a replacement, not an addition: an empty (or {@code null}) list clears
+     * <p>Every argument is a replacement, not an addition: an empty (or {@code null}) list clears
      * that relation, mirroring the compact constructor's own {@code null}-to-empty normalisation.
      * Deciding whether an omitted list means "clear" or "leave as it is" belongs to the application
      * service, which passes the current value through when the caller named none.</p>
      *
      * @param addressesRequirements the requirements this decision should address going forward
      * @param affectsContexts       the bounded contexts it should affect going forward
-     * @return the corrected decision, or {@code this} if both lists already matched
-     * @throws IllegalArgumentException if either list contains duplicates
+     * @param relatedTo             the peer decisions it should cross-reference going forward
+     * @return the corrected decision, or {@code this} if all three lists already matched
+     * @throws IllegalArgumentException if a list contains duplicates, or if {@code relatedTo}
+     *                                  contains this decision's own identity
      */
     public Adr reviseReferences(List<RequirementRef> addressesRequirements,
-            List<BoundedContextRef> affectsContexts) {
+            List<BoundedContextRef> affectsContexts, List<AdrId> relatedTo) {
         List<RequirementRef> requirements =
                 addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
         List<BoundedContextRef> contexts =
                 affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
-        if (requirements.equals(this.addressesRequirements) && contexts.equals(this.affectsContexts)) {
+        List<AdrId> peers = relatedTo == null ? List.of() : List.copyOf(relatedTo);
+        if (requirements.equals(this.addressesRequirements) && contexts.equals(this.affectsContexts)
+                && peers.equals(this.relatedTo)) {
             return this;
         }
         return new Adr(id, code, name, status, context, decision, consequences, alternatives,
-                decisionDate, requirements, contexts, supersedes);
+                decisionDate, requirements, contexts, supersedes, peers);
     }
 
     private static void requireNotBlank(String value, String field) {

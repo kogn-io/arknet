@@ -95,10 +95,17 @@ class KognioRdfAdrRepositoryTest {
     private static Adr adr(AdrId id, AdrCode code, AdrStatus status, String consequences, String alternatives,
             LocalDate decisionDate, List<RequirementRef> requirements, List<BoundedContextRef> contexts,
             List<AdrId> supersedes) {
+        return adr(id, code, status, consequences, alternatives, decisionDate, requirements, contexts,
+                supersedes, List.of());
+    }
+
+    private static Adr adr(AdrId id, AdrCode code, AdrStatus status, String consequences, String alternatives,
+            LocalDate decisionDate, List<RequirementRef> requirements, List<BoundedContextRef> contexts,
+            List<AdrId> supersedes, List<AdrId> relatedTo) {
         return new Adr(id, code, "Use an embedded triple store", status,
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                consequences, alternatives, decisionDate, requirements, contexts, supersedes);
+                consequences, alternatives, decisionDate, requirements, contexts, supersedes, relatedTo);
     }
 
     @Test
@@ -426,30 +433,166 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * {@code arkarch:relatedTo} and {@code arkarch:supersededBy} have no field on {@link Adr} at all -
-     * they are reachable only store-first (ADR-005). A replace-by-identity write must carry both
-     * along instead of silently erasing them, the same preservation the bounded-context adapter
-     * performs for {@code arkddd:hasAggregate}.
+     * {@code arkarch:supersededBy} has no field on {@link Adr} at all - it is reachable only
+     * store-first (ADR-005). A replace-by-identity write must carry it along instead of silently
+     * erasing it, the same preservation the bounded-context adapter performs for
+     * {@code arkddd:hasAggregate}. {@code arkarch:relatedTo} deliberately no longer belongs in this
+     * test: it is a field of the record now, so it travels inside the candidate graph rather than
+     * around it - see {@link #compareAndUpdateKeepsARelatedToEdgeTheRecordStillCarries}.
      */
     @Test
-    void compareAndUpdatePreservesStoreFirstRelatedToAndSupersededByEdges() {
+    void compareAndUpdatePreservesAStoreFirstSupersededByEdge() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
                 List.of(), List.of(), List.of());
         repository.create(PROJECT_A, original);
 
-        String relatedIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         String supersededByIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
-        String insert = "INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
-                + ArkarchVocabulary.RELATED_TO + "> <" + relatedIri + "> ; <"
-                + ArkarchVocabulary.SUPERSEDED_BY + "> <" + supersededByIri + "> } }";
-        update(insert);
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.SUPERSEDED_BY + "> <" + supersededByIri + "> } }");
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept());
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
-                + ArkarchVocabulary.RELATED_TO + "> <" + relatedIri + "> ; <"
                 + ArkarchVocabulary.SUPERSEDED_BY + "> <" + supersededByIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    @Test
+    void createsAndReadsBackRelatedToEdges() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(peer.id()));
+
+        repository.create(PROJECT_A, related);
+
+        assertEquals(List.of(peer.id()),
+                repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).orElseThrow().relatedTo());
+        assertEquals(List.of(peer.id()), repository.findAll(PROJECT_A).stream()
+                .filter(adr -> adr.code().equals(new AdrCode("ADR-2")))
+                .findFirst().orElseThrow().relatedTo());
+        assertEquals(List.of(peer.id()),
+                repository.findCurrentByCode(PROJECT_A, new AdrCode("ADR-2")).orElseThrow()
+                        .value().relatedTo());
+    }
+
+    /**
+     * Only the forward edge is asserted, even though the ontology declares {@code arkarch:relatedTo}
+     * an {@code owl:SymmetricProperty}: nothing here reasons over symmetry, and a hand-written
+     * mirror triple would be the drift risk this project avoids everywhere else. The peer's side of
+     * the relation is a reverse read ({@link #findRelatedCodesReadsTheReferencingDecisions}), never
+     * a second triple.
+     */
+    @Test
+    void createWritesOnlyTheForwardRelatedToEdge() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(peer.id()));
+        repository.create(PROJECT_A, related);
+
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + peer.id().value().value() + "> <"
+                + ArkarchVocabulary.RELATED_TO + "> <" + related.id().value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask(ask), "the mirror triple must not be asserted");
+        }
+        assertEquals(List.of(), repository.findByCode(PROJECT_A, peer.code()).orElseThrow().relatedTo());
+    }
+
+    /**
+     * The expensive lesson {@link Adr}'s javadoc records, pinned for this relation too: a later,
+     * unrelated write (here {@code adr_set_status}) replaces the decision's triples wholesale, so an
+     * edge the record still carries has to come back out of the candidate graph instead of being
+     * swept away.
+     */
+    @Test
+    void compareAndUpdateKeepsARelatedToEdgeTheRecordStillCarries() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(peer.id()));
+        repository.create(PROJECT_A, related);
+
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(related.code()), related.accept());
+
+        Adr found = repository.findByCode(PROJECT_A, related.code()).orElseThrow();
+        assertEquals(List.of(peer.id()), found.relatedTo());
+        assertEquals(AdrStatus.ACCEPTED, found.status());
+    }
+
+    /** The other half: a record that no longer carries the edge really does lose it. */
+    @Test
+    void compareAndUpdateDropsARelatedToEdgeTheRecordNoLongerCarries() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(peer.id()));
+        repository.create(PROJECT_A, related);
+
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(related.code()),
+                related.reviseReferences(List.of(), List.of(), List.of()));
+
+        assertEquals(List.of(), repository.findByCode(PROJECT_A, related.code()).orElseThrow().relatedTo());
+    }
+
+    @Test
+    void findRelatedCodesReadsTheReferencingDecisions() {
+        Adr target = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, target);
+        Adr referencingA = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(target.id()));
+        repository.create(PROJECT_A, referencingA);
+        Adr referencingB = adr(freshId(), new AdrCode("ADR-10"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(target.id()));
+        repository.create(PROJECT_A, referencingB);
+
+        // Ordered by running number, not lexicographically - ADR-10 must not sort before ADR-2.
+        assertEquals(List.of(new AdrCode("ADR-2"), new AdrCode("ADR-10")),
+                repository.findRelatedCodes(PROJECT_A, target.id()));
+        assertEquals(List.of(), repository.findRelatedCodes(PROJECT_A, referencingA.id()));
+    }
+
+    /**
+     * {@code ashapes:ADR-relatedTo} carries {@code sh:class arkarch:ArchitectureDecisionRecord}, so
+     * an edge pointing at something that is not a recorded decision is refused at the gate and
+     * nothing is written. The application service resolves peer codes before it ever gets here, so
+     * this only fires for a caller reaching past it - which is exactly what the shape is for.
+     */
+    @Test
+    void refusesARelatedToEdgeToSomethingThatIsNotAnAdr() {
+        AdrId dangling = freshId();
+        Adr related = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(dangling));
+
+        assertThrows(WriteConstraintViolationException.class, () -> repository.create(PROJECT_A, related));
+
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+    }
+
+    /**
+     * The blank-node counterpart for {@code arkarch:relatedTo}: the edge is a field of the record
+     * now, but {@link ResourceId} still cannot represent a blank node, so a store-first edge onto one
+     * never reaches the domain object and would be erased by the next write unless the write path
+     * captures and re-attaches it. Re-attachment happens inside the transaction, past the gate, which
+     * is why {@code ashapes:ADR-relatedTo}'s {@code sh:nodeKind sh:IRI} does not stand in its way.
+     */
+    @Test
+    void compareAndUpdatePreservesABlankNodeRelatedToEdge() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of());
+        repository.create(PROJECT_A, original);
+
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.RELATED_TO + "> [ a <" + ArkarchVocabulary.ADR_TYPE + "> ] } }");
+
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept());
+
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.RELATED_TO + "> ?target FILTER(isBlank(?target)) } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             assertTrue(handle.sparqlQuery().ask(ask));
         }

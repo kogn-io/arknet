@@ -96,7 +96,7 @@ class AdrMcpToolsTest {
     @Test
     void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
         String created = adapter.add(null, "A title", "Why this was needed", "What was decided",
-                null, null, null, null, null, ANCHOR);
+                null, null, null, null, null, null, ANCHOR);
 
         assertTrue(created.contains("ADR-1"), created);
         assertEquals(PROJECT, stub.lastProjectId);
@@ -110,7 +110,7 @@ class AdrMcpToolsTest {
     void rejectsACallThatCarriesNoAnchorAtAll() {
         assertThrows(UnresolvedProjectAnchorException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, null, null, null, null));
+                        null, null, null, null, null, null, null));
     }
 
     @Test
@@ -165,7 +165,7 @@ class AdrMcpToolsTest {
     void addPassesTheFieldsThroughAndRendersThem() {
         String rendered = adapter.add(null, "Use an embedded triple store", "Why this was needed",
                 "What was decided", "What follows", "What else was considered", "2026-07-31",
-                List.of("FR-1"), List.of("BC-1"), ANCHOR);
+                List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals("Use an embedded triple store", stub.lastAddCommand.name());
         assertEquals("Why this was needed", stub.lastAddCommand.context());
@@ -175,6 +175,7 @@ class AdrMcpToolsTest {
         assertEquals(LocalDate.of(2026, 7, 31), stub.lastAddCommand.decisionDate());
         assertEquals(List.of("FR-1"), stub.lastAddCommand.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastAddCommand.affectsContextCodes());
+        assertEquals(List.of("ADR-3"), stub.lastAddCommand.relatedToCodes());
         assertTrue(rendered.contains("ADR-1"), rendered);
         assertTrue(rendered.contains("[PROPOSED]"), rendered);
         assertTrue(rendered.contains("decided: 2026-07-31"), rendered);
@@ -183,7 +184,7 @@ class AdrMcpToolsTest {
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
         adapter.add(null, "A title", "Why this was needed", "What was decided", "  ", "", "  ",
-                null, null, ANCHOR);
+                null, null, null, ANCHOR);
 
         assertEquals(null, stub.lastAddCommand.consequences());
         assertEquals(null, stub.lastAddCommand.alternatives());
@@ -198,7 +199,7 @@ class AdrMcpToolsTest {
     void addRejectsAMalformedDecisionDate() {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, "31.07.2026", null, null, ANCHOR));
+                        null, null, "31.07.2026", null, null, null, ANCHOR));
     }
 
     /**
@@ -213,7 +214,7 @@ class AdrMcpToolsTest {
     void malformedDecisionDateRemedyReachesTheMcpCaller() throws NoSuchMethodException {
         final Method method = AdrMcpTools.class.getMethod("add", McpSyncRequestContext.class, String.class,
                 String.class, String.class, String.class, String.class, String.class, List.class,
-                List.class, String.class);
+                List.class, List.class, String.class);
         final SyncMcpToolMethodCallback callback = new SyncMcpToolMethodCallback(ReturnMode.TEXT, method, adapter);
         // Never actually invoked: the explicit projectAnchor parameter below short-circuits
         // resolveProject before it would read anything off the context/exchange. Only its
@@ -329,6 +330,30 @@ class AdrMcpToolsTest {
         assertTrue(rendered.contains("superseded by: ADR-9"), rendered);
     }
 
+    /**
+     * The codes arrive ready-merged in {@link AdrDetail} - one list, not two directions, because the
+     * relation is symmetric - so the adapter borrows no port for them and only has to render them.
+     */
+    @Test
+    void getRendersTheMergedRelatedToList() {
+        stub.nextDetail = detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of(),
+                List.of(new AdrCode("ADR-3"), new AdrCode("ADR-4")));
+
+        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+
+        assertTrue(rendered.contains("related to: ADR-3, ADR-4"), rendered);
+    }
+
+    @Test
+    void listRendersRelatedToInline() {
+        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of(),
+                List.of(new AdrCode("ADR-3"))));
+
+        String rendered = adapter.list(null, ANCHOR);
+
+        assertTrue(rendered.contains("[related to: ADR-3]"), rendered);
+    }
+
     /** Absent optional fields are omitted entirely rather than printed empty. */
     @Test
     void formatOmitsFieldsTheDecisionDoesNotCarry() {
@@ -340,6 +365,7 @@ class AdrMcpToolsTest {
         assertFalse(rendered.contains("decided:"), rendered);
         assertFalse(rendered.contains("addresses:"), rendered);
         assertFalse(rendered.contains("supersedes:"), rendered);
+        assertFalse(rendered.contains("related to:"), rendered);
     }
 
     @Test
@@ -422,7 +448,7 @@ class AdrMcpToolsTest {
     void updatePassesEveryFieldThroughToTheInPort() {
         adapter.update(null, "ADR-1", "A better title", "Sharper context", "Sharper decision",
                 "What follows", "What else was considered", "2026-08-23", List.of("FR-1"),
-                List.of("BC-1"), ANCHOR);
+                List.of("BC-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastUpdatedCode);
         assertEquals("A better title", stub.lastCorrection.name());
@@ -433,6 +459,7 @@ class AdrMcpToolsTest {
         assertEquals(LocalDate.of(2026, 8, 23), stub.lastCorrection.decisionDate());
         assertEquals(List.of("FR-1"), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastCorrection.affectsContextCodes());
+        assertEquals(List.of("ADR-3"), stub.lastCorrection.relatedToCodes());
     }
 
     /**
@@ -442,7 +469,7 @@ class AdrMcpToolsTest {
      */
     @Test
     void updateNormalisesBlankFieldsToTheLeaveItUnchangedSentinel() {
-        adapter.update(null, "ADR-1", "  ", "", "   ", " ", "", "  ", null, null, ANCHOR);
+        adapter.update(null, "ADR-1", "  ", "", "   ", " ", "", "  ", null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.name());
         assertNull(stub.lastCorrection.context());
@@ -459,22 +486,25 @@ class AdrMcpToolsTest {
      */
     @Test
     void updateKeepsTheReferenceListsTriStateApart() {
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, ANCHOR);
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.addressesRequirementCodes());
         assertNull(stub.lastCorrection.affectsContextCodes());
+        assertNull(stub.lastCorrection.relatedToCodes());
 
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, List.of(), List.of(), ANCHOR);
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, List.of(), List.of(),
+                List.of(), ANCHOR);
 
         assertEquals(List.of(), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of(), stub.lastCorrection.affectsContextCodes());
+        assertEquals(List.of(), stub.lastCorrection.relatedToCodes());
     }
 
     @Test
     void updateRejectsAMalformedDecisionDate() {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.update(null, "ADR-1", null, null, null, null, null, "23.08.2026",
-                        null, null, ANCHOR));
+                        null, null, null, ANCHOR));
     }
 
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
@@ -483,11 +513,16 @@ class AdrMcpToolsTest {
                 "Why this was needed", "What was decided", null, null, null,
                 requirementIds.stream().map(RequirementRef::new).toList(),
                 contextIds.stream().map(BoundedContextRef::new).toList(),
-                supersedes);
+                supersedes, List.of());
     }
 
     private static AdrDetail detail(Adr adr, List<AdrCode> supersedes, List<AdrCode> supersededBy) {
-        return new AdrDetail(adr, supersedes, supersededBy);
+        return detail(adr, supersedes, supersededBy, List.of());
+    }
+
+    private static AdrDetail detail(Adr adr, List<AdrCode> supersedes, List<AdrCode> supersededBy,
+            List<AdrCode> relatedTo) {
+        return new AdrDetail(adr, supersedes, supersededBy, relatedTo);
     }
 
     /** Structural stub implementing the eight driving in-ports. */
@@ -514,8 +549,8 @@ class AdrMcpToolsTest {
             lastProjectId = projectId;
             Adr adr = new Adr(ID, new AdrCode("ADR-1"), command.name(), AdrStatus.PROPOSED,
                     command.context(), command.decision(), command.consequences(), command.alternatives(),
-                    command.decisionDate(), List.of(), List.of(), List.of());
-            return new AdrDetail(adr, List.of(), List.of());
+                    command.decisionDate(), List.of(), List.of(), List.of(), List.of());
+            return new AdrDetail(adr, List.of(), List.of(), List.of());
         }
 
         @Override

@@ -31,9 +31,9 @@ class AdrTest {
     @Test
     void rejectsBlankOptionalTextWhenPresent() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", "  ", null, null, null, null, null));
+                AdrStatus.PROPOSED, "context", "decision", "  ", null, null, null, null, null, null));
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, "  ", null, null, null, null));
+                AdrStatus.PROPOSED, "context", "decision", null, "  ", null, null, null, null, null));
     }
 
     @Test
@@ -43,6 +43,7 @@ class AdrTest {
         assertEquals(List.of(), adr.addressesRequirements());
         assertEquals(List.of(), adr.affectsContexts());
         assertEquals(List.of(), adr.supersedes());
+        assertEquals(List.of(), adr.relatedTo());
     }
 
     @Test
@@ -50,7 +51,7 @@ class AdrTest {
         RequirementRef ref = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
 
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, List.of(ref, ref), null, null));
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, List.of(ref, ref), null, null, null));
     }
 
     /**
@@ -61,7 +62,26 @@ class AdrTest {
     @Test
     void rejectsSupersedingItself() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, List.of(ID)));
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, List.of(ID), null));
+    }
+
+    /**
+     * A "see also" edge onto the decision itself says nothing, and the merged reading of the
+     * relation (see {@code AdrDetail}) would report the decision as its own peer. Refused in the
+     * constructor rather than only in the service, exactly as superseding itself is.
+     */
+    @Test
+    void rejectsBeingRelatedToItself() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null,
+                List.of(ID)));
+    }
+
+    @Test
+    void rejectsDuplicateRelatedToEntries() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null,
+                List.of(OTHER, OTHER)));
     }
 
     @Test
@@ -214,7 +234,8 @@ class AdrTest {
                 new BoundedContextRef(ResourceId.of("https://w3id.org/arknet/id/bc-1"));
 
         for (AdrStatus status : AdrStatus.values()) {
-            Adr revised = withStatus(status).reviseReferences(List.of(requirement), List.of(boundedContext));
+            Adr revised = withStatus(status)
+                    .reviseReferences(List.of(requirement), List.of(boundedContext), List.of());
 
             assertEquals(List.of(requirement), revised.addressesRequirements());
             assertEquals(List.of(boundedContext), revised.affectsContexts());
@@ -222,35 +243,65 @@ class AdrTest {
         }
     }
 
+    /**
+     * {@code relatedTo} is not text: it names a peer decision, and the peer may well have been
+     * recorded after this decision was accepted. Freezing the edge with the prose would leave a
+     * decision in force permanently unable to point at it.
+     */
     @Test
-    void reviseReferencesClearsBothRelationsWhenGivenEmptyLists() {
+    void reviseReferencesSetsAndClearsRelatedToInEveryStatusIncludingAccepted() {
+        for (AdrStatus status : AdrStatus.values()) {
+            Adr linked = withStatus(status).reviseReferences(List.of(), List.of(), List.of(OTHER));
+
+            assertEquals(List.of(OTHER), linked.relatedTo());
+            assertEquals(status, linked.status());
+
+            Adr cleared = linked.reviseReferences(List.of(), List.of(), List.of());
+
+            assertEquals(List.of(), cleared.relatedTo());
+            assertEquals(status, cleared.status());
+        }
+    }
+
+    @Test
+    void reviseReferencesRejectsRelatingADecisionToItself() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> accepted.reviseReferences(List.of(), List.of(), List.of(ID)));
+    }
+
+    @Test
+    void reviseReferencesClearsEveryRelationWhenGivenEmptyLists() {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
         BoundedContextRef boundedContext =
                 new BoundedContextRef(ResourceId.of("https://w3id.org/arknet/id/bc-1"));
         Adr linked = withStatus(AdrStatus.ACCEPTED)
-                .reviseReferences(List.of(requirement), List.of(boundedContext));
+                .reviseReferences(List.of(requirement), List.of(boundedContext), List.of(OTHER));
 
-        Adr cleared = linked.reviseReferences(List.of(), List.of());
+        Adr cleared = linked.reviseReferences(List.of(), List.of(), List.of());
 
         assertEquals(List.of(), cleared.addressesRequirements());
         assertEquals(List.of(), cleared.affectsContexts());
+        assertEquals(List.of(), cleared.relatedTo());
     }
 
     @Test
-    void reviseReferencesIsANoOpWhenBothListsAlreadyMatch() {
+    void reviseReferencesIsANoOpWhenEveryListAlreadyMatches() {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
-        Adr linked = adr("name", "context", "decision").reviseReferences(List.of(requirement), List.of());
+        Adr linked = adr("name", "context", "decision")
+                .reviseReferences(List.of(requirement), List.of(), List.of());
 
-        assertSame(linked, linked.reviseReferences(List.of(requirement), List.of()));
+        assertSame(linked, linked.reviseReferences(List.of(requirement), List.of(), List.of()));
     }
 
     private static Adr adr(String name, String context, String decision) {
         return new Adr(ID, new AdrCode("ADR-1"), name, AdrStatus.PROPOSED, context, decision,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static Adr withStatus(AdrStatus status) {
         return new Adr(ID, new AdrCode("ADR-1"), "name", status, "context", "decision",
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 }

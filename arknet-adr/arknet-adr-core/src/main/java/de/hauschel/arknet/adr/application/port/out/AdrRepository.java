@@ -166,4 +166,25 @@ public interface AdrRepository {
      * @return the superseding decisions' codes, sorted, never {@code null}
      */
     List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId);
+
+    /**
+     * Reads the backward direction of {@code arkarch:relatedTo}: the business codes of every
+     * decision whose {@code relatedTo} edge points at {@code relatedId}.
+     *
+     * <p>This exists for the same reason {@link #findSupersedingCodes} does - only the forward edge
+     * is ever asserted, so the other direction has to be read backwards. What differs is what the
+     * caller does with the answer: {@code relatedTo} is an {@code owl:SymmetricProperty}, so the
+     * application service unions this result with the decision's own forward edges into the single
+     * list {@code AdrDetail#relatedTo} carries, rather than reporting two directions of one and the
+     * same relation.</p>
+     *
+     * <p>One step backwards, never a traversal: the peers this returns are not themselves followed.
+     * That is what keeps a legitimate {@code A relatedTo B}, {@code B relatedTo A} cycle - which
+     * this relation explicitly permits, unlike {@code supersedes} - from looping.</p>
+     *
+     * @param projectId the project (architecture model) to read in
+     * @param relatedId the identity of the decision to find the referencing peers of
+     * @return the referencing decisions' codes, sorted, never {@code null}
+     */
+    List<AdrCode> findRelatedCodes(ProjectId projectId, AdrId relatedId);
 }

@@ -143,7 +143,8 @@ class ModelViewsTest {
                 new UseCaseCode("UC1"), "Bestellung aufgeben", "Der Kunde bestellt Artikel.",
                 null, null, new ActorRef(ResourceId.of("https://w3id.org/arknet/id/actor-1")),
                 List.of(), null, null,
-                List.of(new Step(1, "Artikel in den Warenkorb legen", List.of())), List.of(), List.of(), List.of());
+                List.of(new Step(1, "Artikel in den Warenkorb legen", List.of())), List.of(), List.of(),
+                List.of());
     }
 
     private static Requirement requirement() {
@@ -172,8 +173,9 @@ class ModelViewsTest {
         final Adr adr = new Adr(
                 new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-1")),
                 new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.ACCEPTED,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), List.of());
-        return new AdrDetail(adr, List.of(), List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(),
+                List.of(), List.of());
+        return new AdrDetail(adr, List.of(), List.of(), List.of());
     }
 
     private static AdrCards emptyAdrCards() {

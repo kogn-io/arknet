@@ -15,13 +15,15 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@link de.hauschel.arknet.adr.domain.AdrId}) and business-code assignment ({@code ADR-N}) are
  * policy of the implementing application service.</p>
  *
- * <p><strong>Coarse-grained write.</strong> A decision arrives complete, including its cross-context
- * references - the same shape {@code uc_add} uses for a use case's actors and realised requirements,
- * and for the same reason: the references are part of what makes the decision comprehensible, not a
- * later annotation. There is deliberately no separate {@code adr_link_requirement} tool - a
- * reference that has to be completed later (because the requirement or bounded context it points at
- * did not exist yet) is corrected through {@link UpdateAdr}, which replaces either relation
- * wholesale in any status rather than growing a link tool per relation.</p>
+ * <p><strong>Coarse-grained write.</strong> A decision arrives complete, including its references -
+ * the same shape {@code uc_add} uses for a use case's actors and realised requirements, and for the
+ * same reason: the references are part of what makes the decision comprehensible, not a later
+ * annotation. There is deliberately no separate {@code adr_link_requirement} or
+ * {@code adr_link_related} tool - a reference that has to be completed later (because the
+ * requirement, bounded context or peer decision it points at did not exist yet) is corrected
+ * through {@link UpdateAdr}, which replaces any of the three relations wholesale in any status
+ * rather than growing a link tool per relation. {@code supersedes} keeps its own
+ * {@code adr_supersede} tool because it records a lifecycle act, not a reference.</p>
  */
 public interface AddAdr {
 
@@ -54,6 +56,11 @@ public interface AddAdr {
      *                                  e.g. {@code FR-1}; may be {@code null} or empty
      * @param affectsContextCodes       business codes of the bounded contexts this decision affects,
      *                                  e.g. {@code BC-1}; may be {@code null} or empty
+     * @param relatedToCodes            business codes of the peer decisions this one cross-references,
+     *                                  e.g. {@code ADR-3}; may be {@code null} or empty, must not
+     *                                  name the decision being recorded (which has no code yet) and
+     *                                  is written in this direction only, however symmetric the
+     *                                  relation reads
      */
     record NewAdr(
             String name,
@@ -63,12 +70,14 @@ public interface AddAdr {
             String alternatives,
             LocalDate decisionDate,
             List<String> addressesRequirementCodes,
-            List<String> affectsContextCodes) {
+            List<String> affectsContextCodes,
+            List<String> relatedToCodes) {
 
         public NewAdr {
             addressesRequirementCodes =
                     addressesRequirementCodes == null ? List.of() : List.copyOf(addressesRequirementCodes);
             affectsContextCodes = affectsContextCodes == null ? List.of() : List.copyOf(affectsContextCodes);
+            relatedToCodes = relatedToCodes == null ? List.of() : List.copyOf(relatedToCodes);
         }
     }
 }

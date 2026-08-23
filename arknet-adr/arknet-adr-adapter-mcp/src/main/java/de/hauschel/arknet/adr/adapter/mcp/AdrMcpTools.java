@@ -70,9 +70,11 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * {@code adr_add}'s own write path still resolves via the decoupled {@code RequirementLookup}/
  * {@code BoundedContextLookup} out-ports. Every rendering calls each borrowed port at most once,
  * batched across every reference involved; an id a port could not resolve simply falls back to the
- * bare IRI - {@link #format} never throws and never drops a reference. The third relation,
- * {@code supersedes}, needs no borrowing at all: it points back into this very hexagon, so the
- * application service resolves it and hands the codes over in {@link AdrDetail}.</p>
+ * bare IRI - {@link #format} never throws and never drops a reference. The two self-referential
+ * relations, {@code supersedes} and {@code relatedTo}, need no borrowing at all: they point back
+ * into this very hexagon, so the application service resolves them and hands the codes over in
+ * {@link AdrDetail} - {@code relatedTo} already merged into the one list a symmetric relation
+ * deserves rather than split into two directions.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a {@link ProjectId} routing
  * key. arknet-mcp runs as one shared server for every project on the machine, so there is no single
@@ -179,9 +181,11 @@ public final class AdrMcpTools {
 
     @McpTool(name = "adr_add", description = "Record a new architecture decision (context, decision, "
             + "consequences, considered options) as an ADR. It starts out PROPOSED; accept it later "
-            + "with adr_set_status. The assigned code runs ADR-1, ADR-2, ... per project and is "
-            + "unrelated to the numbering of any markdown decision records the repository may also "
-            + "keep.")
+            + "with adr_set_status. It can already name the requirements it addresses, the bounded "
+            + "contexts it affects and the peer decisions it is related to; all three stay "
+            + "correctable with adr_update. The assigned code runs ADR-1, ADR-2, ... per project and "
+            + "is unrelated to the numbering of any markdown decision records the repository may "
+            + "also keep.")
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The decision's title, e.g. 'Use an embedded triple store'")
@@ -207,18 +211,25 @@ public final class AdrMcpTools {
                     + "e.g. [\"BC-1\"]. Each must already exist (create it with bc_add first). "
                     + "Optional.", required = false)
             final List<String> affectsContexts,
+            @McpToolParam(description = "Business codes of other decisions this one is related to "
+                    + "('see also'), e.g. [\"ADR-3\"]. Each must already exist and must not be this "
+                    + "decision itself. The relation reads both ways for a reader, but only this "
+                    + "direction is stored - so a decision recorded later names the earlier one, and "
+                    + "adr_update completes the link the other way round when needed. Optional.",
+                    required = false)
+            final List<String> relatedTo,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final AdrDetail created = addAdr.add(projectId, new NewAdr(name, adrContext, decision,
                 blankToNull(consequences), blankToNull(alternatives), parseDate(decisionDate),
-                addressesRequirements, affectsContexts));
+                addressesRequirements, affectsContexts, relatedTo));
         return format(projectId, created);
     }
 
     @McpTool(name = "adr_list", description = "List all recorded architecture decisions, one compact "
             + "line each (code, status, title, and the codes it addresses/affects/supersedes/is "
-            + "superseded by). Use adr_get for a decision's full text.",
+            + "superseded by/is related to). Use adr_get for a decision's full text.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
@@ -238,8 +249,8 @@ public final class AdrMcpTools {
     }
 
     @McpTool(name = "adr_get", description = "Fetch a single architecture decision by its identity "
-            + "(e.g. ADR-1), including its full context/decision/consequences text and both "
-            + "directions of the supersedes relation.",
+            + "(e.g. ADR-1), including its full context/decision/consequences text, both "
+            + "directions of the supersedes relation, and every decision it is related to.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             final McpSyncRequestContext context,
@@ -260,11 +271,11 @@ public final class AdrMcpTools {
             + "decision is PROPOSED: from ACCEPTED on (and likewise REJECTED/DEPRECATED) a text "
             + "change is refused, because a decision in force records what was decided at the time - "
             + "record the correction as a new decision with adr_add and link it with adr_supersede "
-            + "instead. The two reference lists are the exception and stay correctable in EVERY "
-            + "status, so an edge to a requirement or bounded context that did not exist yet when "
-            + "the decision was made can still be completed: passing a list replaces that relation "
-            + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
-            + "untouched. Status and the supersedes relation are not changed here - use "
+            + "instead. The three reference lists are the exception and stay correctable in EVERY "
+            + "status, so an edge to a requirement, bounded context or peer decision that did not "
+            + "exist yet when the decision was made can still be completed: passing a list replaces "
+            + "that relation wholesale, passing an empty list removes every edge of it, omitting it "
+            + "leaves it untouched. Status and the supersedes relation are not changed here - use "
             + "adr_set_status and adr_supersede.")
     public String update(
             final McpSyncRequestContext context,
@@ -297,6 +308,13 @@ public final class AdrMcpTools {
                     + "Each must already exist. Pass an empty list to remove all of them; omit to "
                     + "leave them unchanged. Correctable in every status.", required = false)
             final List<String> affectsContexts,
+            @McpToolParam(description = "Business codes of the decisions this one should be related "
+                    + "to going forward, e.g. [\"ADR-3\"], replacing the existing ones wholesale. "
+                    + "Each must already exist and none may be this decision itself. Pass an empty "
+                    + "list to remove all of them; omit to leave them unchanged. Correctable in "
+                    + "every status - this is where a decision names a peer that was recorded after "
+                    + "it.", required = false)
+            final List<String> relatedTo,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
@@ -313,6 +331,7 @@ public final class AdrMcpTools {
                 .decisionDate(parseDate(decisionDate))
                 .addressesRequirementCodes(addressesRequirements)
                 .affectsContextCodes(affectsContexts)
+                .relatedToCodes(relatedTo)
                 .build();
         return format(projectId, updateAdr.update(projectId, new AdrCode(id), correction));
     }
@@ -393,6 +412,7 @@ public final class AdrMcpTools {
         appendInline(line, "affects", contextCodes(detail, contexts));
         appendInline(line, "supersedes", codeValues(detail.supersedes()));
         appendInline(line, "superseded by", codeValues(detail.supersededBy()));
+        appendInline(line, "related to", codeValues(detail.relatedTo()));
         return line.toString();
     }
 
@@ -416,6 +436,7 @@ public final class AdrMcpTools {
         appendField(out, "affects", joinOrNull(contextCodes(detail, contexts)));
         appendField(out, "supersedes", joinOrNull(codeValues(detail.supersedes())));
         appendField(out, "superseded by", joinOrNull(codeValues(detail.supersededBy())));
+        appendField(out, "related to", joinOrNull(codeValues(detail.relatedTo())));
         return out.toString();
     }
 

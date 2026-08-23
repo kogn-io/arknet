@@ -120,6 +120,17 @@ class InMemoryAdrRepository implements AdrRepository {
                 .toList();
     }
 
+    @Override
+    public List<AdrCode> findRelatedCodes(ProjectId projectId, AdrId relatedId) {
+        return byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> adr.relatedTo().contains(relatedId))
+                .map(adr -> adr.code().value())
+                .collect(java.util.stream.Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
+                .stream()
+                .map(AdrCode::new)
+                .toList();
+    }
+
     /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */
     private static int runningNumber(String code) {
         int dash = code.lastIndexOf('-');
