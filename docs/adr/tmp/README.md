@@ -18,7 +18,7 @@ werden nicht geschoent, sie werden abgeloest.
 
 | Zielsatz | ersetzt | Aenderung gegenueber dem Bestand |
 |---|---|---|
-| neu-01 Domaenenanalyse als Scope-Rahmen | ADR-017 | Rahmen ist das Zielbild, nicht der Bauzustand; Ungebautes ist "noch nicht", nicht "ausserhalb" |
+| neu-01 Lifecycle-Zielschnitt als Scope-Rahmen | ADR-017 | Rahmen ist das Zielbild, nicht der Bauzustand; Ungebautes ist "noch nicht", nicht "ausserhalb". Der Record traegt den Zielschnitt selbst, statt auf ein Dokument ausserhalb des Repos zu verweisen |
 | neu-02 Modell-Kontexte folgen dem Zielschnitt | -- (neu) | sechs Modell-Kontexte werden drei |
 | neu-03 Actor als Querschnitt | ADR-022 (in PR #330, ungemergt) | Actor ist kein eigener Kontext |
 | neu-04 Lokaler Client, austauschbarer Store | ADR-001 | ohne CLI und `arknet-core` (existieren nicht mehr); ProjectId statt WorkspaceId |
