@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -24,6 +25,7 @@ import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -39,10 +41,11 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code CodeAssignment}'s retry, one of two well-formed callers would see the out-adapter's
  * in-transaction uniqueness guard fire as a caller-visible failure.</p>
  *
- * <p><strong>Lost update.</strong> {@link AdrService#supersede} and {@link AdrService#accept} are
- * read-modify-write round trips. Without the compare-and-set guard, two racing
- * {@code adr_supersede} calls on the same decision would silently lose one of the two
- * {@code arkarch:supersedes} edges.</p>
+ * <p><strong>Lost update.</strong> {@link AdrService#supersede}, {@link AdrService#accept} and
+ * {@link AdrService#update} are read-modify-write round trips. Without the compare-and-set guard,
+ * two racing {@code adr_supersede} calls on the same decision would silently lose one of the two
+ * {@code arkarch:supersedes} edges, and an {@code adr_update} would restore whatever a concurrent
+ * {@code adr_set_status} had just committed.</p>
  *
  * <p>Both races are reproduced deterministically, without real threads: an {@link AdrRepository}
  * decorator runs an "other caller"'s complete round trip exactly once, at the precise point where a
@@ -54,6 +57,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 class AdrServiceConcurrencyTest {
 
     private static final ProjectId PROJECT = new ProjectId("test-project");
+    private static final ResourceId BC_1 = ResourceId.of("https://w3id.org/arknet/id/bc-1");
 
     private InMemoryAdrRepository store;
     /**
@@ -74,6 +78,7 @@ class AdrServiceConcurrencyTest {
         resourceIdFactory = new SequentialResourceIdFactory();
         requirements = new InMemoryReferenceLookups.Requirements();
         contexts = new InMemoryReferenceLookups.BoundedContexts();
+        contexts.register("BC-1", BC_1);
         otherCaller = new AdrService(store, resourceIdFactory, requirements, contexts);
     }
 
@@ -138,6 +143,33 @@ class AdrServiceConcurrencyTest {
                 new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts);
 
         assertEquals(AdrStatus.ACCEPTED, underTest.accept(PROJECT, code).adr().status());
+    }
+
+    /**
+     * {@code adr_update} is a read-modify-write round trip like every other one here, so it has to
+     * absorb the same lost-update race: a concurrent writer committing between this caller's read and
+     * its own write must be retried against, not overwritten. Here the "other caller" accepts the
+     * very decision this caller is correcting - without the compare-and-set retry, this caller's
+     * write would blindly restore the decision to {@code PROPOSED} and silently discard an
+     * already-committed transition.
+     */
+    @Test
+    void concurrentUpdateRetriesAgainstTheOtherWritersCommitInsteadOfOverwritingIt() {
+        AdrCode code = otherCaller.add(PROJECT, newAdr()).adr().code();
+        RaceOnFirstReadRepository racing =
+                new RaceOnFirstReadRepository(store, () -> otherCaller.accept(PROJECT, code));
+        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
+
+        // A reference-only correction, because the text of an accepted decision is immutable - and
+        // by the time this write lands, the other caller has already accepted it.
+        Adr result = underTest.update(PROJECT, code,
+                AdrCorrection.builder().affectsContextCodes(List.of("BC-1")).build()).adr();
+
+        assertEquals(AdrStatus.ACCEPTED, result.status());
+        assertEquals(List.of(new BoundedContextRef(BC_1)), result.affectsContexts());
+        Adr stored = store.findByCode(PROJECT, code).orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, stored.status());
+        assertEquals(List.of(new BoundedContextRef(BC_1)), stored.affectsContexts());
     }
 
     private static NewAdr newAdr() {

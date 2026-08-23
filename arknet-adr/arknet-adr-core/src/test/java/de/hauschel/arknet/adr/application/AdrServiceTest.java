@@ -21,11 +21,13 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -34,8 +36,9 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 
 /**
  * Policy tests for {@link AdrService}: identity minting, code assignment, listing, lookup, the
- * accept transition and both directions of the supersedes relation, exercised against an in-memory
- * fake repository, two fake lookups and a deterministic fake {@link ResourceIdFactory}.
+ * accept transition, field-wise correction and both directions of the supersedes relation,
+ * exercised against an in-memory fake repository, two fake lookups and a deterministic fake
+ * {@link ResourceIdFactory}.
  */
 class AdrServiceTest {
 
@@ -444,6 +447,144 @@ class AdrServiceTest {
                 .filter(d -> d.adr().code().equals(target.code())).findFirst().orElseThrow();
 
         assertEquals(List.of(new AdrCode("ADR-1x"), new AdrCode("ADR-2y")), targetDetail.supersededBy());
+    }
+
+    @Test
+    void updatePatchesOnlyTheNamedFieldAndLeavesEveryOtherAlone() {
+        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
+                "Some decision here", "What follows", "What else", LocalDate.of(2026, 7, 31),
+                List.of("FR-1"), List.of("BC-1")));
+
+        Adr updated = service.update(PROJECT, added.adr().code(),
+                AdrCorrection.builder().decision("A sharper decision").build()).adr();
+
+        assertEquals("A sharper decision", updated.decision());
+        assertEquals("Title", updated.name());
+        assertEquals("Some context here", updated.context());
+        assertEquals("What follows", updated.consequences());
+        assertEquals("What else", updated.alternatives());
+        assertEquals(LocalDate.of(2026, 7, 31), updated.decisionDate());
+        assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
+        assertEquals(List.of(new BoundedContextRef(BC_1)), updated.affectsContexts());
+        assertEquals(added.adr().id(), updated.id());
+        assertEquals(added.adr().code(), updated.code());
+    }
+
+    /**
+     * The tri-state of both reference lists: {@code null} is "leave this relation alone", not "clear
+     * it" - conflating the two would silently wipe every edge of a decision whose caller only meant
+     * to fix a typo.
+     */
+    @Test
+    void updateLeavesBothReferenceRelationsUntouchedWhenNeitherListIsGiven() {
+        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, List.of("FR-1"), List.of("BC-1")));
+
+        Adr updated = service.update(PROJECT, added.adr().code(),
+                AdrCorrection.builder().name("Another title").build()).adr();
+
+        assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
+        assertEquals(List.of(new BoundedContextRef(BC_1)), updated.affectsContexts());
+    }
+
+    /** The other half of the tri-state: an empty list is the explicit signal to remove every edge. */
+    @Test
+    void updateClearsAReferenceRelationWhenGivenAnEmptyList() {
+        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, List.of("FR-1"), List.of("BC-1")));
+
+        Adr updated = service.update(PROJECT, added.adr().code(),
+                AdrCorrection.builder().addressesRequirementCodes(List.of()).build()).adr();
+
+        assertEquals(List.of(), updated.addressesRequirements());
+        assertEquals(List.of(new BoundedContextRef(BC_1)), updated.affectsContexts());
+    }
+
+    @Test
+    void updateReplacesAReferenceRelationWholesale() {
+        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, List.of("FR-1"), null));
+
+        Adr updated = service.update(PROJECT, added.adr().code(),
+                AdrCorrection.builder().addressesRequirementCodes(List.of("NFR-2")).build()).adr();
+
+        assertEquals(List.of(new RequirementRef(NFR_2)), updated.addressesRequirements());
+    }
+
+    /**
+     * Resolution sits outside the retry and before any write, exactly as in {@code add}: an unknown
+     * code must abort the whole call and leave the decision exactly as it was.
+     */
+    @Test
+    void updateRejectsAnUnknownReferenceCodeBeforeWritingAnything() {
+        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, List.of("FR-1"), null));
+
+        assertThrows(NoSuchElementException.class, () -> service.update(PROJECT, added.adr().code(),
+                AdrCorrection.builder().name("Another title")
+                        .addressesRequirementCodes(List.of("FR-99")).build()));
+        assertThrows(NoSuchElementException.class, () -> service.update(PROJECT, added.adr().code(),
+                AdrCorrection.builder().affectsContextCodes(List.of("BC-99")).build()));
+
+        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code()).orElseThrow());
+    }
+
+    /**
+     * The deliberate exception to the immutability rule (see {@link Adr#reviseReferences}): an edge
+     * to a resource that did not exist when the decision was accepted is still completable
+     * afterwards.
+     */
+    @Test
+    void updateCorrectsTheReferencesOfAnAcceptedDecision() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        Adr updated = service.update(PROJECT, code,
+                AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
+
+        assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
+    /**
+     * The rule itself, at the service boundary: correcting the prose of a decision already in force
+     * is refused and nothing is written - the caller is pointed at {@code adr_supersede} instead.
+     */
+    @Test
+    void updateRejectsATextChangeOnAnAcceptedDecisionAndWritesNothing() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        Adr accepted = service.accept(PROJECT, code).adr();
+
+        AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
+                () -> service.update(PROJECT, code,
+                        AdrCorrection.builder().name("A rewritten title").build()));
+
+        assertEquals(AdrStatus.ACCEPTED, thrown.status());
+        assertEquals(accepted, repository.findByCode(PROJECT, code).orElseThrow());
+    }
+
+    /**
+     * A reference-only correction of an accepted decision still travels through {@code reviseText}
+     * with every text value unchanged - that path must stay a no-op rather than a rejection, or the
+     * exception above would swallow the exception this rule deliberately grants.
+     */
+    @Test
+    void updateAcceptsACorrectionThatRestatesTheTextOfAnAcceptedDecisionUnchanged() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        Adr accepted = service.accept(PROJECT, code).adr();
+
+        Adr updated = service.update(PROJECT, code, AdrCorrection.builder()
+                .name(accepted.name())
+                .addressesRequirementCodes(List.of("FR-1"))
+                .build()).adr();
+
+        assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
+    }
+
+    @Test
+    void updateRejectsAnUnknownCode() {
+        assertThrows(AdrNotFoundException.class, () -> service.update(PROJECT, new AdrCode("ADR-9"),
+                AdrCorrection.builder().name("Another title").build()));
     }
 
     private static NewAdr newAdr() {

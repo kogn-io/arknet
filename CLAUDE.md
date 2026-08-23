@@ -62,7 +62,8 @@ Details: `arknet-use-cases/CLAUDE.md`
 Verwaltet Identitaet statt Modell und ist als einziger BC nicht projekt-scoped: seine Registry wohnt im reservierten System-Dataset.
 Sie ist die Aufloesungsquelle, auf die jeder Tool-Aufruf der sechs Modell-BCs geroutet wird.
 Details: `arknet-project/CLAUDE.md`
-- **arknet-adr**: sechste hexagonale BC -- Architecture-Decision-Record-Lifecycle (`adr_*`-Tools), `addressesRequirement`-Kante zu den Requirements, `affectsContext`-Kante zu den Bounded Contexts, selbstbezuegliche `supersedes`-Kante (nur die Vorwaertsrichtung wird als Tripel geschrieben), opake Identitaet.
+- **arknet-adr**: sechste hexagonale BC -- Architecture-Decision-Record-Lifecycle (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`), `addressesRequirement`-Kante zu den Requirements, `affectsContext`-Kante zu den Bounded Contexts, selbstbezuegliche `supersedes`-Kante (nur die Vorwaertsrichtung wird als Tripel geschrieben), opake Identitaet.
+Korrektur ist gestaffelt: die Textfelder sind nur solange `PROPOSED` aenderbar (ab `ACCEPTED` verweist die Ablehnung auf `adr_supersede`), die beiden Kanten-Listen dagegen in jedem Status.
 Der store-first-Lebenszyklus fuer ADRs (ADR-005) steht neben den handgepflegten Markdown-ADRs unter `docs/adr/`; die beiden Nummernraeume sind unabhaengig voneinander.
 Details: `arknet-adr/CLAUDE.md`
 - **arknet-actor**: siebte hexagonale BC -- Actor-Lifecycle (`actor_*`-Tools), `ACTOR-N`-Codes aus einem Zaehler fuer alle vier Typen (`HUMAN`/`SYSTEM`/`LEGAL`/`GROUP`; Typ und Code stehen mit der Anlage fest, Name und Beschreibung sind korrigierbar), opake Identitaet.

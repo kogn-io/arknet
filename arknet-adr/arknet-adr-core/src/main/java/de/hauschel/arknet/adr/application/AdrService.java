@@ -21,6 +21,7 @@ import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
@@ -30,6 +31,7 @@ import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.RequirementRef;
@@ -53,26 +55,38 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code PROPOSED} a decision may become {@link AdrStatus#ACCEPTED} or {@link AdrStatus#REJECTED};
  * an accepted one may further become {@link AdrStatus#DEPRECATED}. {@link AdrStatus#SUPERSEDED} is
  * not a value this service ever writes - it stays derived-only from {@code adr_supersede}'s
- * {@code supersedes}/{@code supersededBy} reverse-read (see {@link Adr#supersede}).</p>
+ * {@code supersedes}/{@code supersededBy} reverse-read (see {@link Adr#supersede}).
+ * {@link #update} corrects an existing decision field by field, and the status decides how far it
+ * may reach: the prose and the decision date are only correctable while {@link AdrStatus#PROPOSED}
+ * and are refused with {@link AdrTextImmutableException} from {@link AdrStatus#ACCEPTED} on, while
+ * both cross-context reference lists stay correctable in every status - completing a reference that
+ * could not exist at recording time states the same decision more fully instead of rewriting it, the
+ * same licence {@code adr_supersede} already takes against an accepted decision. That rule lives on
+ * {@link Adr#reviseText}/{@link Adr#reviseReferences}, not here; this service only fills the
+ * caller's untouched fields from the current state and hands the result to the same CAS helper every
+ * other write path uses.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code adr_add} claims the same {@code ADR-N} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}, and every read-modify-write path
- * ({@link #accept}, {@link #reject}, {@link #deprecate}, {@link #supersede}) retries its whole round
- * trip via {@link AdrRepository#compareAndUpdate} whenever a concurrent writer commits in between - see
- * {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed caller; only
+ * ({@link #accept}, {@link #reject}, {@link #deprecate}, {@link #supersede}, {@link #update})
+ * retries its whole round trip via {@link AdrRepository#compareAndUpdate} whenever a concurrent
+ * writer commits in between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a
+ * well-formed caller; only
  * sustained, pathological contention on the very same decision surfaces as
  * {@link AdrConcurrentlyModifiedException}. Parallel sessions of one user against one local store
  * are the normal case, not a remote/multi-writer concern (ADR-001).</p>
  *
  * <p><strong>Where each reference is resolved.</strong> The two cross-context codes are resolved
  * once, here, before anything is written - an unresolvable one must abort the whole
- * {@code adr_add} rather than leave a half-linked decision behind, which is also why resolution sits
- * <em>outside</em> the code-assignment retry: an unknown {@code FR-9} is not a code collision and
- * must not be retried. The self-referential {@code supersedes} target needs no lookup port at all:
- * it is this hexagon's own resource, resolved through {@link AdrRepository#findByCode}.</p>
+ * {@code adr_add} (or {@code adr_update}) rather than leave a half-linked decision behind, which is
+ * also why resolution sits <em>outside</em> the code-assignment and compare-and-set retries: an
+ * unknown {@code FR-9} is not a code collision and must not be retried. The self-referential
+ * {@code supersedes} target needs no lookup port at all: it is this hexagon's own resource, resolved
+ * through {@link AdrRepository#findByCode}.</p>
  */
-public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr {
+public class AdrService
+        implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -205,6 +219,40 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
     }
 
     @Override
+    public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(correction, "correction");
+        // Resolution first, outside the retry, exactly as in add(): an unknown FR-9 or BC-9 is a
+        // didactic rejection of the whole call, never a race worth retrying. Null stays null here -
+        // it is the "leave this relation alone" signal, and an empty list is a deliberate clear.
+        List<RequirementRef> requirements = correction.addressesRequirementCodes() == null
+                ? null
+                : correction.addressesRequirementCodes().stream()
+                        .map(referenced -> new RequirementRef(requirementLookup.resolveByCode(projectId, referenced)))
+                        .distinct()
+                        .toList();
+        List<BoundedContextRef> contexts = correction.affectsContextCodes() == null
+                ? null
+                : correction.affectsContextCodes().stream()
+                        .map(referenced -> new BoundedContextRef(
+                                boundedContextLookup.resolveByCode(projectId, referenced)))
+                        .distinct()
+                        .toList();
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, current -> current
+                .reviseText(
+                        correction.name() != null ? correction.name() : current.name(),
+                        correction.context() != null ? correction.context() : current.context(),
+                        correction.decision() != null ? correction.decision() : current.decision(),
+                        correction.consequences() != null ? correction.consequences() : current.consequences(),
+                        correction.alternatives() != null ? correction.alternatives() : current.alternatives(),
+                        correction.decisionDate() != null ? correction.decisionDate() : current.decisionDate())
+                .reviseReferences(
+                        requirements != null ? requirements : current.addressesRequirements(),
+                        contexts != null ? contexts : current.affectsContexts())));
+    }
+
+    @Override
     public AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
@@ -223,8 +271,8 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
     }
 
     /**
-     * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate} and
-     * {@link #supersede}: reads the current decision and its concurrency token together via
+     * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate},
+     * {@link #supersede} and {@link #update}: reads the current decision and its concurrency token together via
      * {@link AdrRepository#findCurrentByCode},
      * derives the next state via {@code mutation}, and writes it back via
      * {@link AdrRepository#compareAndUpdate} - retrying with a fresh read whenever a concurrent
@@ -234,8 +282,9 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
      * another's edge.
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as a
-     * no-op: accepting an already-accepted decision, or recording an already-recorded supersede,
-     * skips the write entirely - no revision, no moved head.</p>
+     * no-op: accepting an already-accepted decision, recording an already-recorded supersede, or
+     * correcting a field to the value it already holds skips the write entirely - no revision, no
+     * moved head.</p>
      *
      * @throws AdrNotFoundException             if no decision with {@code code} exists
      * @throws AdrConcurrentlyModifiedException if the write keeps losing the race across every retry

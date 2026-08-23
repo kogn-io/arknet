@@ -301,6 +301,7 @@ ADR BC (`arknet-adr`) -- architecture decision records, store-backed and numbere
 | `adr_add` | Record a new decision in one call (title, context, decision, optional consequences, considered options and decision date, plus the requirement codes it addresses and the bounded-context codes it affects; each referenced resource must already exist). Starts out PROPOSED |
 | `adr_list` | List all decisions, one compact line each |
 | `adr_get` | Fetch a single decision with its full text and both directions of the supersedes relation (e.g. ADR-1) |
+| `adr_update` | Correct an already-recorded decision (each field optional, unchanged if omitted). The text fields are only correctable while the decision is PROPOSED -- from ACCEPTED on, record a successor and link it with `adr_supersede` instead. The requirement/bounded-context reference lists are the exception and stay correctable in every status: a list replaces that relation wholesale, an empty list clears it |
 | `adr_set_status` | Change a decision's lifecycle status: PROPOSED -> ACCEPTED, PROPOSED -> REJECTED, or ACCEPTED -> DEPRECATED |
 | `adr_supersede` | Record that one decision replaces an older one (`arkarch:supersedes`). Only the forward edge is stored -- the superseded decision reports it as "superseded by" from a reverse read, not from a second triple |
 

@@ -27,6 +27,8 @@ import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
@@ -41,8 +43,9 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
 
 /**
  * Driving (in) adapter of the ADR component: exposes the architecture-decision use cases as MCP
- * tools ({@code adr_add}, {@code adr_list}, {@code adr_get}, {@code adr_set_status},
- * {@code adr_supersede}) and delegates each tool call to the corresponding in-port.
+ * tools ({@code adr_add}, {@code adr_list}, {@code adr_get}, {@code adr_update},
+ * {@code adr_set_status}, {@code adr_supersede}) and delegates each tool call to the corresponding
+ * in-port.
  *
  * <p>This adapter belongs to the ADR hexagon (symmetric to the out-adapter
  * {@code arknet-adr-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -93,6 +96,7 @@ public final class AdrMcpTools {
     private final AddAdr addAdr;
     private final ListAdrs listAdrs;
     private final GetAdr getAdr;
+    private final UpdateAdr updateAdr;
     private final AcceptAdr acceptAdr;
     private final RejectAdr rejectAdr;
     private final DeprecateAdr deprecateAdr;
@@ -102,12 +106,13 @@ public final class AdrMcpTools {
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its seven driving in-ports, the two borrowed display ports and the
+     * Creates the adapter with its eight driving in-ports, the two borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
      * @param listAdrs               in-port backing {@code adr_list}
      * @param getAdr                 in-port backing {@code adr_get}
+     * @param updateAdr              in-port backing {@code adr_update}
      * @param acceptAdr              in-port backing {@code adr_set_status}'s {@code ACCEPTED} target
      * @param rejectAdr              in-port backing {@code adr_set_status}'s {@code REJECTED} target
      * @param deprecateAdr           in-port backing {@code adr_set_status}'s {@code DEPRECATED}
@@ -123,6 +128,7 @@ public final class AdrMcpTools {
             final AddAdr addAdr,
             final ListAdrs listAdrs,
             final GetAdr getAdr,
+            final UpdateAdr updateAdr,
             final AcceptAdr acceptAdr,
             final RejectAdr rejectAdr,
             final DeprecateAdr deprecateAdr,
@@ -133,6 +139,7 @@ public final class AdrMcpTools {
         this.addAdr = Objects.requireNonNull(addAdr, "addAdr");
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
         this.getAdr = Objects.requireNonNull(getAdr, "getAdr");
+        this.updateAdr = Objects.requireNonNull(updateAdr, "updateAdr");
         this.acceptAdr = Objects.requireNonNull(acceptAdr, "acceptAdr");
         this.rejectAdr = Objects.requireNonNull(rejectAdr, "rejectAdr");
         this.deprecateAdr = Objects.requireNonNull(deprecateAdr, "deprecateAdr");
@@ -244,6 +251,70 @@ public final class AdrMcpTools {
         return getAdr.get(projectId, code)
                 .map(detail -> format(projectId, detail))
                 .orElse("ADR not found: " + code.value());
+    }
+
+    @McpTool(name = "adr_update", description = "Correct an already-recorded architecture decision. "
+            + "Every field except the identity is optional - omit (or leave blank) what should stay "
+            + "as it is; omitting a field never removes it. The text fields (name, adrContext, "
+            + "decision, consequences, alternatives, decisionDate) can only be corrected while the "
+            + "decision is PROPOSED: from ACCEPTED on (and likewise REJECTED/DEPRECATED) a text "
+            + "change is refused, because a decision in force records what was decided at the time - "
+            + "record the correction as a new decision with adr_add and link it with adr_supersede "
+            + "instead. The two reference lists are the exception and stay correctable in EVERY "
+            + "status, so an edge to a requirement or bounded context that did not exist yet when "
+            + "the decision was made can still be completed: passing a list replaces that relation "
+            + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
+            + "untouched. Status and the supersedes relation are not changed here - use "
+            + "adr_set_status and adr_supersede.")
+    public String update(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
+            @McpToolParam(description = "The corrected title (optional; unchanged if omitted)",
+                    required = false)
+            final String name,
+            @McpToolParam(description = "The corrected forces and constraints - why the decision was "
+                    + "necessary (optional; unchanged if omitted, min. 5 characters)", required = false)
+            final String adrContext,
+            @McpToolParam(description = "The corrected decision (optional; unchanged if omitted, "
+                    + "min. 5 characters)", required = false)
+            final String decision,
+            @McpToolParam(description = "The corrected consequences (optional; unchanged if omitted - "
+                    + "omitting does not remove an already-recorded one)", required = false)
+            final String consequences,
+            @McpToolParam(description = "The corrected considered but rejected options (optional; "
+                    + "unchanged if omitted)", required = false)
+            final String alternatives,
+            @McpToolParam(description = "The corrected decision date, as ISO-8601 yyyy-MM-dd "
+                    + "(optional; unchanged if omitted)", required = false)
+            final String decisionDate,
+            @McpToolParam(description = "Business codes of the requirements this decision should "
+                    + "address going forward, e.g. [\"FR-1\", \"NFR-2\"], replacing the existing ones "
+                    + "wholesale. Each must already exist. Pass an empty list to remove all of them; "
+                    + "omit to leave them unchanged. Correctable in every status.", required = false)
+            final List<String> addressesRequirements,
+            @McpToolParam(description = "Business codes of the bounded contexts this decision should "
+                    + "affect going forward, e.g. [\"BC-1\"], replacing the existing ones wholesale. "
+                    + "Each must already exist. Pass an empty list to remove all of them; omit to "
+                    + "leave them unchanged. Correctable in every status.", required = false)
+            final List<String> affectsContexts,
+            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
+        // Blank collapses to null - "leave this field alone" - for every text field, exactly as in
+        // adr_add. The two lists are handed over as they arrive: unlike a blank string, an empty
+        // list is a meaningful, distinct instruction here (clear the relation), so it must not be
+        // normalised away.
+        final AdrCorrection correction = AdrCorrection.builder()
+                .name(blankToNull(name))
+                .context(blankToNull(adrContext))
+                .decision(blankToNull(decision))
+                .consequences(blankToNull(consequences))
+                .alternatives(blankToNull(alternatives))
+                .decisionDate(parseDate(decisionDate))
+                .addressesRequirementCodes(addressesRequirements)
+                .affectsContextCodes(affectsContexts)
+                .build();
+        return format(projectId, updateAdr.update(projectId, new AdrCode(id), correction));
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "

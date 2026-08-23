@@ -5,6 +5,7 @@ package de.hauschel.arknet.adr.adapter.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,6 +36,8 @@ import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
@@ -52,7 +55,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the five ADR tools and guards its in-port
+ * Scaffold-level check that the adapter declares exactly the six ADR tools and guards its in-port
  * dependencies, plus the reference-display-resolution contract ({@link ResolveRequirements},
  * {@link ResolveBoundedContexts}, ADR-008): renders the resolved business codes, falls back to the
  * bare IRI for an id it cannot resolve, and never issues more than one batch call per port per
@@ -82,7 +85,8 @@ class AdrMcpToolsTest {
     private final RecordingResolveRequirements requirements = new RecordingResolveRequirements();
     private final RecordingResolveBoundedContexts contexts = new RecordingResolveBoundedContexts();
     private final AdrMcpTools adapter =
-            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, requirements, contexts, PROJECTS);
+            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, requirements, contexts,
+                    PROJECTS);
 
     /**
      * ADR-016 decision 2: the explicit tool parameter is a full second delivery path, open to a client
@@ -110,46 +114,51 @@ class AdrMcpToolsTest {
     }
 
     @Test
-    void declaresTheFiveAdrTools() {
+    void declaresTheSixAdrTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(5, names.size());
-        assertTrue(names.containsAll(
-                List.of("adr_add", "adr_list", "adr_get", "adr_set_status", "adr_supersede")));
+        assertEquals(6, names.size());
+        assertTrue(names.containsAll(List.of("adr_add", "adr_list", "adr_get", "adr_update",
+                "adr_set_status", "adr_supersede")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, requirements, contexts,
+                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
                         PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, requirements, null,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
                         PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, requirements, contexts, null));
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, null));
     }
 
     @Test
@@ -409,6 +418,65 @@ class AdrMcpToolsTest {
         assertEquals(new AdrCode("ADR-1"), stub.lastSupersededCode);
     }
 
+    @Test
+    void updatePassesEveryFieldThroughToTheInPort() {
+        adapter.update(null, "ADR-1", "A better title", "Sharper context", "Sharper decision",
+                "What follows", "What else was considered", "2026-08-23", List.of("FR-1"),
+                List.of("BC-1"), ANCHOR);
+
+        assertEquals(new AdrCode("ADR-1"), stub.lastUpdatedCode);
+        assertEquals("A better title", stub.lastCorrection.name());
+        assertEquals("Sharper context", stub.lastCorrection.context());
+        assertEquals("Sharper decision", stub.lastCorrection.decision());
+        assertEquals("What follows", stub.lastCorrection.consequences());
+        assertEquals("What else was considered", stub.lastCorrection.alternatives());
+        assertEquals(LocalDate.of(2026, 8, 23), stub.lastCorrection.decisionDate());
+        assertEquals(List.of("FR-1"), stub.lastCorrection.addressesRequirementCodes());
+        assertEquals(List.of("BC-1"), stub.lastCorrection.affectsContextCodes());
+    }
+
+    /**
+     * A blank string is what an MCP client sends for "I am not touching this", so it has to reach the
+     * port as {@code null} - the port's own sentinel for "leave it as it is". Anything else would
+     * turn an omitted field into an attempted (and, for a mandatory field, invalid) write.
+     */
+    @Test
+    void updateNormalisesBlankFieldsToTheLeaveItUnchangedSentinel() {
+        adapter.update(null, "ADR-1", "  ", "", "   ", " ", "", "  ", null, null, ANCHOR);
+
+        assertNull(stub.lastCorrection.name());
+        assertNull(stub.lastCorrection.context());
+        assertNull(stub.lastCorrection.decision());
+        assertNull(stub.lastCorrection.consequences());
+        assertNull(stub.lastCorrection.alternatives());
+        assertNull(stub.lastCorrection.decisionDate());
+    }
+
+    /**
+     * The tri-state of the two reference lists has to survive the adapter untouched: an omitted list
+     * arrives as {@code null} ("leave the relation alone"), an empty one as an empty list ("remove
+     * every edge"). Collapsing the two here would make the clear unreachable from MCP.
+     */
+    @Test
+    void updateKeepsTheReferenceListsTriStateApart() {
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, ANCHOR);
+
+        assertNull(stub.lastCorrection.addressesRequirementCodes());
+        assertNull(stub.lastCorrection.affectsContextCodes());
+
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, List.of(), List.of(), ANCHOR);
+
+        assertEquals(List.of(), stub.lastCorrection.addressesRequirementCodes());
+        assertEquals(List.of(), stub.lastCorrection.affectsContextCodes());
+    }
+
+    @Test
+    void updateRejectsAMalformedDecisionDate() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.update(null, "ADR-1", null, null, null, null, null, "23.08.2026",
+                        null, null, ANCHOR));
+    }
+
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
             List<AdrId> supersedes) {
         return new Adr(ID, new AdrCode("ADR-1"), "Use an embedded triple store", AdrStatus.PROPOSED,
@@ -422,11 +490,14 @@ class AdrMcpToolsTest {
         return new AdrDetail(adr, supersedes, supersededBy);
     }
 
-    /** Structural stub implementing the seven driving in-ports. */
+    /** Structural stub implementing the eight driving in-ports. */
     private static final class Stub
-            implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr {
+            implements AddAdr, ListAdrs, GetAdr, UpdateAdr, AcceptAdr, RejectAdr, DeprecateAdr,
+            SupersedeAdr {
 
         private NewAdr lastAddCommand;
+        private AdrCorrection lastCorrection;
+        private AdrCode lastUpdatedCode;
         private AdrCode lastAcceptedCode;
         private AdrCode lastRejectedCode;
         private AdrCode lastDeprecatedCode;
@@ -445,6 +516,14 @@ class AdrMcpToolsTest {
                     command.context(), command.decision(), command.consequences(), command.alternatives(),
                     command.decisionDate(), List.of(), List.of(), List.of());
             return new AdrDetail(adr, List.of(), List.of());
+        }
+
+        @Override
+        public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction) {
+            lastUpdatedCode = code;
+            lastCorrection = correction;
+            lastProjectId = projectId;
+            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
         }
 
         @Override

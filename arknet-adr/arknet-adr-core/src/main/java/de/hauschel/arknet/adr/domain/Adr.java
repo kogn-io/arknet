@@ -197,6 +197,92 @@ public record Adr(
                 addressesRequirements, affectsContexts, extended);
     }
 
+    /**
+     * Returns this decision with its prose and decision date corrected - the rule behind
+     * {@code adr_update}'s text fields.
+     *
+     * <p><strong>The text of a decision in force is not editable.</strong> Correcting the wording of
+     * a decision only stays honest while it is still {@link AdrStatus#PROPOSED}; once it is
+     * {@link AdrStatus#ACCEPTED}, {@link AdrStatus#REJECTED} or {@link AdrStatus#DEPRECATED} it is a
+     * record of what was decided at the time, and rewriting it erases the history an ADR exists to
+     * keep (Nygard). The correction path from there is a successor decision plus
+     * {@link #supersede(AdrId)}, which is what {@link AdrTextImmutableException} tells the caller.
+     * The status is checked here, in the domain, rather than in the SHACL write gate: a shape
+     * validates one graph state, not a transition between two, so "this text must not have changed"
+     * is not expressible there at all.</p>
+     *
+     * <p><strong>Order matters: compare first, then check the status.</strong> A call that changes
+     * nothing is a no-op returning {@code this} - in <em>any</em> status, without throwing. That is
+     * load-bearing rather than a convenience: a caller correcting only the references travels the
+     * very same path (see {@link #reviseReferences}), so a correction that leaves the text alone must
+     * not be refused just because the decision is accepted. Comparing before checking also keeps the
+     * failure honest for an accepted decision handed an invalid value: it is refused as immutable -
+     * the reason the call could never succeed - rather than as blank, which is what building the
+     * replacement first would report.</p>
+     *
+     * @param name         the corrected title
+     * @param context      the corrected forces and constraints
+     * @param decision     the corrected decision
+     * @param consequences the corrected consequences, or {@code null} for none
+     * @param alternatives the corrected considered options, or {@code null} for none
+     * @param decisionDate the corrected decision date, or {@code null} for none
+     * @return the corrected decision, or {@code this} if every value already matched
+     * @throws AdrTextImmutableException if any value differs and this decision is no longer
+     *                                   {@link AdrStatus#PROPOSED}
+     * @throws IllegalArgumentException  if a corrected value violates this record's own invariants
+     */
+    public Adr reviseText(String name, String context, String decision, String consequences,
+            String alternatives, LocalDate decisionDate) {
+        if (Objects.equals(this.name, name)
+                && Objects.equals(this.context, context)
+                && Objects.equals(this.decision, decision)
+                && Objects.equals(this.consequences, consequences)
+                && Objects.equals(this.alternatives, alternatives)
+                && Objects.equals(this.decisionDate, decisionDate)) {
+            return this;
+        }
+        if (status != AdrStatus.PROPOSED) {
+            throw new AdrTextImmutableException(code, status);
+        }
+        return new Adr(id, code, name, status, context, decision, consequences, alternatives,
+                decisionDate, addressesRequirements, affectsContexts, supersedes);
+    }
+
+    /**
+     * Returns this decision with both cross-context reference lists replaced wholesale, in
+     * <em>every</em> status - the deliberate exception to {@link #reviseText}'s immutability rule.
+     *
+     * <p><strong>Why no status check here.</strong> Adding {@code addressesRequirement} or
+     * {@code affectsContext} later does not change what was decided; it completes a reference that
+     * could not be written when the decision was recorded, because the requirement or bounded context
+     * it points at did not exist yet. Freezing these along with the prose would leave a decision in
+     * force permanently unable to state what it applies to. The precedent is already in this record:
+     * {@link #supersede(AdrId)} writes into an accepted decision's {@code supersedes} for exactly the
+     * same reason.</p>
+     *
+     * <p>Both arguments are a replacement, not an addition: an empty (or {@code null}) list clears
+     * that relation, mirroring the compact constructor's own {@code null}-to-empty normalisation.
+     * Deciding whether an omitted list means "clear" or "leave as it is" belongs to the application
+     * service, which passes the current value through when the caller named none.</p>
+     *
+     * @param addressesRequirements the requirements this decision should address going forward
+     * @param affectsContexts       the bounded contexts it should affect going forward
+     * @return the corrected decision, or {@code this} if both lists already matched
+     * @throws IllegalArgumentException if either list contains duplicates
+     */
+    public Adr reviseReferences(List<RequirementRef> addressesRequirements,
+            List<BoundedContextRef> affectsContexts) {
+        List<RequirementRef> requirements =
+                addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
+        List<BoundedContextRef> contexts =
+                affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
+        if (requirements.equals(this.addressesRequirements) && contexts.equals(this.affectsContexts)) {
+            return this;
+        }
+        return new Adr(id, code, name, status, context, decision, consequences, alternatives,
+                decisionDate, requirements, contexts, supersedes);
+    }
+
     private static void requireNotBlank(String value, String field) {
         if (value.isBlank()) {
             throw new IllegalArgumentException(field + " must not be blank");

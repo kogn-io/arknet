@@ -18,8 +18,10 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p><strong>Coarse-grained write.</strong> A decision arrives complete, including its cross-context
  * references - the same shape {@code uc_add} uses for a use case's actors and realised requirements,
  * and for the same reason: the references are part of what makes the decision comprehensible, not a
- * later annotation. There is deliberately no separate {@code adr_link_requirement} tool; a decision
- * whose references need correcting is a decision that was not yet made.</p>
+ * later annotation. There is deliberately no separate {@code adr_link_requirement} tool - a
+ * reference that has to be completed later (because the requirement or bounded context it points at
+ * did not exist yet) is corrected through {@link UpdateAdr}, which replaces either relation
+ * wholesale in any status rather than growing a link tool per relation.</p>
  */
 public interface AddAdr {
 
