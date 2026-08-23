@@ -1,6 +1,6 @@
 # neu-06: Der generische Store-Lesepfad lebt im Composition Root, nicht in einem Kontext
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-006
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

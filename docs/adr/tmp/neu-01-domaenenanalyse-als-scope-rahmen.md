@@ -1,14 +1,14 @@
 # neu-01: Die Domaenenanalyse ist der Scope-Rahmen, arknet baut einen Ausschnitt
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-017
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 
-ADR-017 hat ISO/IEC/IEEE 15288 als Scope-Rahmen benannt. Faktisch beschreibt es aber nicht
-den Rahmen, sondern den Bauzustand: "arknet ist ein Design-Time-Dokumentationswerkzeug, kein
-Betriebs-, Test- oder Beschaffungswerkzeug". Damit wurde der Stand von August zur Grenze
-erklaert. Jede spaetere Erweiterung liest sich als Verstoss gegen den eigenen Rahmen, statt
-als naechster Schritt.
+arknets Scope wird bisher am zuletzt gebauten Stand gemessen: was da ist, gilt als drin, und
+alles daneben als draussen. Das hat zwei Folgen. Jede Erweiterung muss sich rechtfertigen,
+als waere sie ein Ausbruch, statt als naechster Schritt behandelt zu werden. Und es gibt kein
+Kriterium fuer die Reihenfolge -- ob etwas als naechstes kommt oder gar nicht, sieht gleich
+aus.
 
 Inzwischen liegt eine eigenstaendige Domaenenanalyse vor
 (`arknet-management/research/domain-analysis/`): rund 110 Begriffe mit Quellenangabe,
@@ -46,8 +46,8 @@ nachlesbar; das ist gewollt, macht ihn aber zu einer nur intern pruefbaren Refer
 
 ## Alternativen
 
-- **ADR-017 unveraendert lassen.** Verworfen -- es erklaert den Ist-Zustand zur Grenze und
-  produziert damit genau die Scope-Konflikte, gegen die es geschrieben wurde.
+- **Den Scope weiter am Bauzustand messen.** Verworfen -- erklaert eine Momentaufnahme zur
+  Grenze und macht jede Erweiterung zum Rechtfertigungsfall.
 - **Die Domaenenanalyse ins Repo aufnehmen und zum oeffentlichen Zielbild machen.** Verworfen
   -- sie beschreibt ein Produkt, das es nicht gibt. In einem oeffentlichen Repo ist das ein
   Versprechen, kein Rahmen.

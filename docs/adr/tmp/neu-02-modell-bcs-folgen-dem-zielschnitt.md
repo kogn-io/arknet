@@ -10,10 +10,11 @@ ist PR fuer PR gewachsen, nicht aus einer Kontextanalyse hervorgegangen.
 
 Die Belege fuer zu feine Grenzen liegen seit Monaten vor: Cross-Kontext-Kanten sind der
 Normalfall statt der Ausnahme (`usesTerm`, `stepRealises`, `primaryActor`,
-`ubiquitousLanguageTerm`, `addressesRequirement`, `affectsContext`); ADR-008 existiert nur,
-um eine selbstgesetzte Invariante wieder aufzuweichen, die zwischen diesen Grenzen zu strikt
-war; alles laeuft in einem Prozess gegen einen Store, der uebliche Nutzen einer
-Kontexttrennung wird also gar nicht eingeloest.
+`ubiquitousLanguageTerm`, `addressesRequirement`, `affectsContext`); die selbstgesetzte
+Invariante "kein Kontext haengt am anderen" liess sich nur halten, indem eine
+Gateway-Konstruktion sie an den In-Adaptern wieder aufweichte; und alles laeuft in einem
+Prozess gegen einen Store, der uebliche Nutzen einer Kontexttrennung wird also gar nicht
+eingeloest.
 
 Der Zielschnitt (neu-01) legt anders: Use Case und Primaerakteur liegen dort im selben
 Kontext wie Requirements; Glossar, Kontextkarte und Kontextbeziehung liegen zusammen;
@@ -51,8 +52,9 @@ dazu zu liegen -- kuenftige Kontexte werden angebaut, nicht eingepasst.
 **Negativ:** Umbau an Modulgrenzen, ArchUnit-Regeln und Composition Root, ohne dass ein
 Nutzer davon etwas sieht. Und die Entlastung ist nur teilweise: `usesTerm` von Requirement
 und UseCase ins Glossar bleibt eine Kante ueber eine Kontextgrenze, ebenso
-`addressesRequirement` und `affectsContext` vom ADR aus. ADR-008s Muster wird also seltener
-gebraucht, aber nicht ueberfluessig -- wer das Gegenteil erwartet, wird enttaeuscht.
+`addressesRequirement` und `affectsContext` vom Entscheidungsrecord aus. Das Gateway-Muster
+wird also seltener gebraucht, aber nicht ueberfluessig -- wer das Gegenteil erwartet, wird
+enttaeuscht.
 
 ## Alternativen
 

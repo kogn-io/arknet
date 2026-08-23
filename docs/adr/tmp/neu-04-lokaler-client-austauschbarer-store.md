@@ -1,6 +1,6 @@
 # neu-04: Lokaler Single-User-Client, Store hinter domaennahen Out-Ports austauschbar
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-001
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

@@ -1,6 +1,6 @@
 # neu-07: Spring AI ist die Technologie-Linie des MCP-Layers
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-004
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

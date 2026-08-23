@@ -1,6 +1,6 @@
 # neu-05: Der Store ist der einzige Modell-Lebenszyklus
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-005
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

@@ -1,6 +1,6 @@
 # neu-08: EIN geteilter HTTP-Daemon auf Loopback statt eines Subprozesses je Session
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-009
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

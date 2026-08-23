@@ -1,13 +1,12 @@
 # neu-03: Actor ist ein Querschnitt, kein eigener Kontext
 
-- Status: Proposed (2026-08-23) -- loest ADR-022 ab, bevor dieser gemergt ist
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 
-Seit Issue #336 ist `arkproc:Actor` eine eigenstaendige Ressource mit eigener
-Tool-Oberflaeche (`actor_*`) statt einer Facette am Glossarbegriff. Diese Entscheidung ist
-richtig und bleibt bestehen. Offen ist nur, ob der Actor damit auch ein eigener Kontext ist
--- ADR-022 (in PR #330, nicht gemergt) haelt genau das fest.
+`arkproc:Actor` ist eine eigenstaendige Ressource mit eigener Tool-Oberflaeche (`actor_*`)
+statt einer Facette am Glossarbegriff. Das bleibt so. Offen ist nur, ob der Actor damit auch
+ein eigener Kontext ist -- der heutige Bau fuehrt ihn als solchen.
 
 Der Zielschnitt (neu-01) fuehrt Akteure als **Querschnitt** und verwirft ein Actor-Modul je
 Kontext ausdruecklich: es wuerde dieselbe Struktur vervielfachen. Er verbindet das mit einer
@@ -37,8 +36,8 @@ Begriffe unter einem Wort.
 ## Konsequenzen
 
 **Positiv:** Kein eigener Hexagon fuer eine Ressource, die von mehreren Kontexten gelesen und
-von keinem besessen wird. ADR-022 wird abgeloest, bevor er gemergt ist -- eine Entscheidung
-weniger, die spaeter zurueckgenommen werden muss.
+von keinem besessen wird -- und die Frage wird geklaert, bevor der eigene Kontext sich
+weiter verfestigt.
 
 **Negativ:** Ein Querschnitt ist die teuerste Beziehungsform der Kontextkarte: jede Aenderung
 trifft alle Konsumenten. Die Zwangsbegrenzung ist nicht technisch erzwungen, sondern muss im
@@ -48,9 +47,9 @@ Attributdisziplin.
 
 ## Alternativen
 
-- **Actor als eigener Kontext (ADR-022).** Verworfen -- er hat keinen eigenen Sprachraum, nur
+- **Actor als eigener Kontext.** Verworfen -- er hat keinen eigenen Sprachraum, nur
   einen eigenen Lebenszyklus, und der begruendet keine Kontextgrenze.
-- **Actor-Facette am Glossarbegriff** (Zustand vor #336). Verworfen und bleibt verworfen --
+- **Actor-Facette am Glossarbegriff.** Verworfen und bleibt verworfen --
   ein Akteur braucht weder Definition noch `TERM`-Code.
 - **Je Kontext ein eigener Actor-Begriff.** Verworfen -- vervielfacht dieselbe Struktur; der
   Zielschnitt nennt das als Grund fuer den Querschnitt.

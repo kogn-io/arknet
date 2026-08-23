@@ -1,6 +1,6 @@
 # neu-10: Nachvollziehbarkeit ueber Commit-Provenance statt ueber einen diffbaren Export
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-011
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

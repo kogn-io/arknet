@@ -1,6 +1,6 @@
 # neu-09: Projekt-Identitaet wird registriert, nicht abgeleitet
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-016
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

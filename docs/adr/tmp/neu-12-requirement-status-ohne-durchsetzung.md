@@ -1,6 +1,6 @@
 # neu-12: Requirement-Status ist ein unverbindliches Reifegrad-Signal, beidseitig setzbar
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-018 und ADR-019
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 

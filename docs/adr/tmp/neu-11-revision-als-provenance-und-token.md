@@ -1,6 +1,6 @@
 # neu-11: Die Revision traegt Provenance und dient zugleich als Concurrency-Token
 
-- Status: Proposed (2026-08-23) -- ersetzt ADR-013 und ADR-014
+- Status: Proposed (2026-08-23)
 
 ## Kontext
 
