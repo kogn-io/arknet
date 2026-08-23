@@ -150,8 +150,9 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       ({@link KognioRdfContextRelationshipRepositoryFactory}) over the same shared dataset
  *       lifecycle - its own resource, not a field on either {@code BoundedContext}.</li>
  *   <li><strong>adr</strong> ({@link AdrMcpTools} over {@link AdrService} over an RDF-persisted
- *       ADR repository) - the six ADR tools ({@code adr_add}/{@code adr_list}/{@code adr_get}/
- *       {@code adr_update}/{@code adr_set_status}/{@code adr_supersede}), assembled through
+ *       ADR repository) - the seven ADR tools ({@code adr_add}/{@code adr_list}/{@code adr_get}/
+ *       {@code adr_update}/{@code adr_set_status}/{@code adr_supersede}/{@code adr_delete}),
+ *       assembled through
  *       {@link KognioRdfAdrRepositoryFactory}. {@code adr_add}'s and {@code adr_update}'s two
  *       cross-BC code-to-identity
  *       resolutions are separate {@code KognioRdfRequirementLookup}/
@@ -651,7 +652,7 @@ public class ArknetMcpConfiguration {
             final AdrService service, final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
         return new AdrMcpTools(service, service, service, service, service, service, service, service,
-                resolveRequirements, resolveBoundedContexts, projectResolver);
+                service, resolveRequirements, resolveBoundedContexts, projectResolver);
     }
 
     // --- Actor hexagon -----------------------------------------------------------

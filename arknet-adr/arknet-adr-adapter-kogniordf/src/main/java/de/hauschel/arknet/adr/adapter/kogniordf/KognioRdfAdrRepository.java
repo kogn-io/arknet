@@ -42,6 +42,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
@@ -87,6 +88,13 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * concurrent {@code adr_supersede} calls cannot silently lose one another's edge - the retrofit
  * other bounded contexts had to perform later on their own write paths, here from the first commit.</p>
  *
+ * <p><strong>Delete.</strong> {@link #delete} runs through the funnel's own guarded delete: the
+ * reference check first, inside that transaction, then the whole-subject removal. The tombstone it
+ * leaves behind (the last revision invalidated, the head pointer gone, the chain intact) is the
+ * funnel's, but the deleted decision's business code is not - that one this adapter hangs on the
+ * revision itself so {@link #findRetainedCodes} can keep the number out of circulation. See
+ * {@link #retainCode} for why nothing else could carry it.</p>
+ *
  * <p><strong>References arrive pre-resolved.</strong> {@link RequirementRef}/
  * {@link BoundedContextRef} carry the neighbour's opaque subject {@link ResourceId} directly -
  * resolving a human-typed code (e.g. {@code FR-1}, {@code BC-1}) against the shared project store,
@@ -130,6 +138,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
     private static final String ARKNET_NAMESPACE = "https://w3id.org/arknet/core#";
     private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
+
+    /**
+     * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
+     * tell an ADR code kept on a tombstoned revision from any other business code a future writer
+     * might retain the same way in the shared provenance graph (see that method).
+     */
+    private static final String CODE_PREFIX = "ADR-";
 
     private static final String ADR_TYPE = ArkarchVocabulary.ADR_TYPE;
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
@@ -342,6 +357,154 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
     /** One edge {@link #replaceTriples} captures before the rewrite and re-attaches afterwards. */
     private record PreservedEdge(IRI predicate, RDFTerm object) {
+    }
+
+    /**
+     * Deletes the decision identified by {@code code}, and every triple it carries in
+     * {@link #ADR_GRAPH}, from the project. Resolves the subject by code outside any transaction
+     * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
+     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
+     * write transaction, so the check and the removal share one atomic snapshot and a
+     * {@code relatedTo} edge written in between cannot slip through. Only once nothing points at the
+     * decision does the body remove the subject's triples wholesale.
+     *
+     * <p><strong>The business code outlives the resource.</strong> The funnel's tombstone
+     * (ADR-013/ADR-014) keeps the revision chain but records no code of its own - it writes
+     * {@code prov:specializationOf} against the <em>opaque</em> subject IRI, and the readable
+     * {@code ADR-7} lives solely on the model triple this delete removes. {@link #retainCode}
+     * therefore hangs that code on the revision about to be tombstoned, which is what lets
+     * {@link #findRetainedCodes} keep the number out of circulation afterwards. Deliberately local to
+     * this adapter rather than folded into the shared funnel: no other bounded context needs it yet,
+     * and whether the mechanism should be shared is a question of its own.</p>
+     */
+    @Override
+    public void delete(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+
+        DatasetId dataset = new DatasetId(projectId.value());
+        String subjectIriString;
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            String query = "SELECT ?s WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                    + "?s a <" + ADR_TYPE + "> . "
+                    + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
+                    + "FILTER(isIRI(?s)) } }";
+            subjectIriString = handle.sparqlQuery().select(query).findFirst()
+                    .map(row -> iriOf(row, "s").getIRIString())
+                    .orElseThrow(() -> new AdrNotFoundException(projectId, code));
+        }
+        String subject = SparqlTerms.iriRef(subjectIriString);
+
+        funnel.delete(dataset, ADR_GRAPH, subjectIriString,
+                () -> new AdrNotFoundException(projectId, code),
+                tx -> {
+                    rejectIfReferenced(tx, projectId, code, subjectIriString);
+                    retainCode(tx, subjectIriString, code);
+                    tx.update("DELETE WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } }");
+                });
+    }
+
+    /**
+     * Rejects the delete, without touching a single triple, while another decision still points at
+     * {@code subjectIri} via {@code arkarch:supersedes} or {@code arkarch:relatedTo}, naming every
+     * referrer by its business code. Runs inside the live write transaction
+     * {@link WriteFunnel#delete} hands its {@code body}, so this - unlike the application service's
+     * own didactic pre-check - is the race-free one.
+     *
+     * <p>Scoped to {@link #ADR_GRAPH} rather than searched across every named graph the way the
+     * glossary's and the actor register's checks are: both relations run decision-to-decision, are
+     * written by this adapter alone and are read back from this one graph by
+     * {@link #findSupersedingCodes}/{@link #findRelatedCodes}. Widening the search here and nowhere
+     * else would refuse a delete over an edge no read path of this hexagon ever surfaces.</p>
+     */
+    private void rejectIfReferenced(DatasetTx tx, ProjectId projectId, AdrCode code, String subjectIri) {
+        String target = SparqlTerms.iriRef(subjectIri);
+        List<AdrReferencedException.Reference> references = new ArrayList<>();
+        collectReferences(tx, target, SUPERSEDES_PROPERTY, AdrReferencedException.SUPERSEDES, references);
+        collectReferences(tx, target, RELATED_TO_PROPERTY, AdrReferencedException.RELATED_TO, references);
+        if (!references.isEmpty()) {
+            throw new AdrReferencedException(projectId, code, references);
+        }
+    }
+
+    /**
+     * Collects the codes of every decision pointing at {@code target} with one predicate, sorted by
+     * running number and deduplicated for the same two reasons {@link #findSupersedingCodes} sorts
+     * and deduplicates: RDF has no intrinsic statement order, and a referrer carrying two identifier
+     * triples would otherwise be named twice in one rejection message.
+     */
+    private static void collectReferences(DatasetTx tx, String target, String predicate, String shorthand,
+            List<AdrReferencedException.Reference> into) {
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + "?s <" + predicate + "> " + target + " . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
+        tx.select(query)
+                .map(row -> literalOf(row, "identifier").getLexicalForm())
+                .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
+                .forEach(value -> into.add(
+                        new AdrReferencedException.Reference(new AdrCode(value), shorthand)));
+    }
+
+    /**
+     * Hangs the deleted decision's business code on the revision {@link WriteFunnel#delete} is about
+     * to tombstone, as a {@code dcterms:identifier} in the provenance graph - the only place a code
+     * can survive its resource, and what {@link #findRetainedCodes} reads back. The head pointer is
+     * still in place while this runs: the funnel reads it before the body and removes it only
+     * afterwards, so the revision this attaches to is exactly the one that gets
+     * {@code prov:invalidatedAtTime}.
+     *
+     * <p><strong>Known gap, not repaired here.</strong> A decision written before revisions were
+     * recorded at all has no head, hence no revision to hang the code on - its number can be handed
+     * out a second time. Logged as a {@code WARN} rather than fabricated: a revision minted at delete
+     * time would claim a write that never happened.</p>
+     */
+    private void retainCode(DatasetTx tx, String subjectIri, AdrCode code) {
+        String subject = SparqlTerms.iriRef(subjectIri);
+        Optional<IRI> head = tx.select("SELECT ?head WHERE { GRAPH <"
+                        + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                        + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } }")
+                .map(row -> row.getValue("head").orElse(null))
+                .filter(IRI.class::isInstance)
+                .map(IRI.class::cast)
+                .findFirst();
+        if (head.isEmpty()) {
+            LOG.warn("ADR {} has no recorded revision, so its code {} cannot be kept out of "
+                    + "circulation and may be assigned again", subjectIri, code.value());
+            return;
+        }
+        Graph retained = rdf.createGraph();
+        retained.add(head.get(), VocabDct.IDENTIFIER, rdf.createLiteral(code.value()));
+        tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), retained);
+    }
+
+    /**
+     * Reads back the codes {@link #retainCode} kept: the {@code dcterms:identifier} of every
+     * tombstoned revision in the project's provenance graph.
+     *
+     * <p>The provenance graph is shared by every bounded context, so the read is narrowed twice: to
+     * revisions that actually carry {@code prov:invalidatedAtTime} (a live resource's revisions never
+     * do), and to identifiers bearing this hexagon's {@link #CODE_PREFIX}. The second filter is what
+     * keeps a neighbour that later retains its own codes the same way from inflating this
+     * hexagon's numbering - the deleted resource's type triple is gone by then, so its own code is
+     * the only thing left to tell the two apart.</p>
+     */
+    @Override
+    public List<AdrCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?revision <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?invalidatedAt . "
+                + "?revision <" + IDENTIFIER_PROPERTY + "> ?identifier } "
+                + "FILTER(STRSTARTS(STR(?identifier), \"" + CODE_PREFIX + "\")) }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
+                    .stream()
+                    .map(AdrCode::new)
+                    .toList();
+        }
     }
 
     @Override

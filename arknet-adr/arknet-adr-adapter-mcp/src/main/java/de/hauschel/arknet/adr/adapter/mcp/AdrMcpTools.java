@@ -22,6 +22,7 @@ import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
@@ -44,8 +45,8 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
 /**
  * Driving (in) adapter of the ADR component: exposes the architecture-decision use cases as MCP
  * tools ({@code adr_add}, {@code adr_list}, {@code adr_get}, {@code adr_update},
- * {@code adr_set_status}, {@code adr_supersede}) and delegates each tool call to the corresponding
- * in-port.
+ * {@code adr_set_status}, {@code adr_supersede}, {@code adr_delete}) and delegates each tool call to
+ * the corresponding in-port.
  *
  * <p>This adapter belongs to the ADR hexagon (symmetric to the out-adapter
  * {@code arknet-adr-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -103,12 +104,13 @@ public final class AdrMcpTools {
     private final RejectAdr rejectAdr;
     private final DeprecateAdr deprecateAdr;
     private final SupersedeAdr supersedeAdr;
+    private final DeleteAdr deleteAdr;
     private final ResolveRequirements resolveRequirements;
     private final ResolveBoundedContexts resolveBoundedContexts;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its eight driving in-ports, the two borrowed display ports and the
+     * Creates the adapter with its nine driving in-ports, the two borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
@@ -120,6 +122,7 @@ public final class AdrMcpTools {
      * @param deprecateAdr           in-port backing {@code adr_set_status}'s {@code DEPRECATED}
      *                               target
      * @param supersedeAdr           in-port backing {@code adr_supersede}
+     * @param deleteAdr              in-port backing {@code adr_delete}
      * @param resolveRequirements    requirements driving port used only to render an addressed
      *                               requirement's business code instead of its bare IRI
      * @param resolveBoundedContexts bounded-context driving port used only to render an affected
@@ -135,6 +138,7 @@ public final class AdrMcpTools {
             final RejectAdr rejectAdr,
             final DeprecateAdr deprecateAdr,
             final SupersedeAdr supersedeAdr,
+            final DeleteAdr deleteAdr,
             final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts,
             final ProjectResolver projects) {
@@ -146,6 +150,7 @@ public final class AdrMcpTools {
         this.rejectAdr = Objects.requireNonNull(rejectAdr, "rejectAdr");
         this.deprecateAdr = Objects.requireNonNull(deprecateAdr, "deprecateAdr");
         this.supersedeAdr = Objects.requireNonNull(supersedeAdr, "supersedeAdr");
+        this.deleteAdr = Objects.requireNonNull(deleteAdr, "deleteAdr");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
         this.projects = Objects.requireNonNull(projects, "projects");
@@ -339,7 +344,11 @@ public final class AdrMcpTools {
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
             + "decision. Supported transitions: PROPOSED -> ACCEPTED, PROPOSED -> REJECTED, and "
             + "ACCEPTED -> DEPRECATED (for a decision that became obsolete without a successor - use "
-            + "adr_supersede instead when a newer decision replaces it).")
+            + "adr_supersede instead when a newer decision replaces it). REJECTED means the option "
+            + "was considered and turned down - a record worth keeping, because it is what stops the "
+            + "same option coming back a year later. It is NOT the way to get rid of a decision "
+            + "recorded by mistake: use adr_delete for that, which removes a PROPOSED decision "
+            + "outright.")
     public String setStatus(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
@@ -389,6 +398,28 @@ public final class AdrMcpTools {
         final AdrDetail updated =
                 supersedeAdr.supersede(projectId, new AdrCode(id), new AdrCode(supersededId));
         return format(projectId, updated);
+    }
+
+    @McpTool(name = "adr_delete", description = "Delete a recorded architecture decision and every "
+            + "triple it carries - the whole resource goes away, this is not a field correction. "
+            + "Only a PROPOSED decision can be deleted: this tool undoes a record created by mistake "
+            + "(a duplicate, a draft that belongs elsewhere). From ACCEPTED on the record stays, "
+            + "because what was decided is exactly what a decision record exists to keep - supersede "
+            + "it with adr_supersede, or mark it obsolete with adr_set_status DEPRECATED. REJECTED "
+            + "cannot be deleted either, and is not a way to get rid of a record: it means the option "
+            + "was considered and turned down, which is itself a decision worth keeping. The delete "
+            + "is refused while another decision still points at this one via supersedes or "
+            + "relatedTo; the refusal names those decisions. The freed code is NOT handed out again - "
+            + "the next adr_add continues above it.")
+    public String delete(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
+            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final AdrCode code = new AdrCode(id);
+        deleteAdr.delete(projectId, code);
+        return "Deleted: " + code.value();
     }
 
     // --- Rendering ------------------------------------------------------------

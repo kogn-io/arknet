@@ -30,6 +30,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -40,6 +41,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
@@ -768,6 +770,166 @@ class KognioRdfAdrRepositoryTest {
                 "the rejected write must not have recorded a revision");
     }
 
+    // ---- delete ------------------------------------------------------------------------
+
+    @Test
+    void deleteRemovesEveryTripleOfTheDecision() {
+        Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, "Some consequences",
+                "Some alternatives", LocalDate.of(2026, 8, 23), List.of(), List.of(), List.of());
+        repository.create(PROJECT_A, created);
+
+        repository.delete(PROJECT_A, created.code());
+
+        assertTrue(repository.findByCode(PROJECT_A, created.code()).isEmpty());
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+        assertTrue(triplesOf(created.id().value().value()).isEmpty(), "no triple of the subject may survive");
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(AdrNotFoundException.class, () -> repository.delete(PROJECT_A, new AdrCode("ADR-9")));
+    }
+
+    @Test
+    void projectsAreIsolatedForDelete() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created);
+
+        assertThrows(AdrNotFoundException.class, () -> repository.delete(PROJECT_B, created.code()));
+        assertTrue(repository.findByCode(PROJECT_A, created.code()).isPresent(),
+                "a delete in another project must not touch this project's decision");
+    }
+
+    /**
+     * The tombstone the shared funnel leaves (ADR-013/ADR-014): the head pointer goes, the last
+     * revision is marked {@code prov:invalidatedAtTime}, and the chain up to it stays as the audit
+     * trail - "this existed, until here".
+     */
+    @Test
+    void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created);
+        String subject = created.id().value().value();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(created.code()),
+                created.supersede(freshId()));
+        String lastRevision = headsOf(subject).get(0);
+
+        repository.delete(PROJECT_A, created.code());
+
+        assertTrue(headsOf(subject).isEmpty(), "the head pointer must be removed");
+        assertEquals(2, revisionsOf(subject).size(), "the revision chain must survive the delete");
+        String invalidated = "SELECT ?t WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + lastRevision + "> <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?t } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertEquals(1, handle.sparqlQuery().select(invalidated).count(),
+                    "the last revision must be tombstoned, not erased");
+        }
+    }
+
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model triple
+     * the delete removes, so the adapter hangs it on the tombstoned revision itself - the only place
+     * it can outlive its resource, and what keeps {@code ADR-1} from naming a second decision later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created);
+        String lastRevision = headsOf(created.id().value().value()).get(0);
+
+        repository.delete(PROJECT_A, created.code());
+
+        assertEquals(List.of("ADR-1"), identifiersOf(lastRevision));
+        assertEquals(List.of(new AdrCode("ADR-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    /** A living decision's revision carries no retained code - only a tombstoned one does. */
+    @Test
+    void findRetainedCodesIgnoresLivingDecisionsAndOtherProjects() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+        Adr deleted = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, deleted);
+
+        repository.delete(PROJECT_A, deleted.code());
+
+        assertEquals(List.of(new AdrCode("ADR-2")), repository.findRetainedCodes(PROJECT_A));
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_B));
+    }
+
+    /**
+     * The provenance graph is shared by every bounded context, so a neighbour retaining its own code
+     * the same way must not be counted as an ADR code - the deleted resource's type triple is gone,
+     * leaving the code prefix as the only discriminator.
+     */
+    @Test
+    void findRetainedCodesIgnoresAnotherContextsRetainedCode() {
+        update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "<https://w3id.org/arknet/revision/foreign> <" + ArkprovVocabulary.INVALIDATED_AT_TIME
+                + "> \"2026-08-23T10:00:00Z\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ; "
+                + "<http://purl.org/dc/terms/identifier> \"TERM-9\" } }");
+
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    /**
+     * Only a <em>tombstoned</em> revision retains a code. A code sitting on a live decision's
+     * revision - which nothing in this adapter writes, but a store-first (ADR-005) edit can - is not
+     * a retained one: counting it would raise the numbering over a decision that is still there and
+     * already carries that very code.
+     */
+    @Test
+    void findRetainedCodesIgnoresACodeOnARevisionThatWasNeverTombstoned() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created);
+        String liveRevision = headsOf(created.id().value().value()).get(0);
+
+        update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <" + liveRevision
+                + "> <http://purl.org/dc/terms/identifier> \"ADR-1\" } }");
+
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    /**
+     * The race-free half of the reference check: the application service asks before the write
+     * transaction opens, this one asks inside it. Pinned against real triples, and for both
+     * relations, because they are what a rejection has to name.
+     */
+    @Test
+    void deleteRejectsADecisionAnotherOneSupersedes() {
+        Adr superseded = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, superseded);
+        Adr successor = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(superseded.id()));
+        repository.create(PROJECT_A, successor);
+
+        AdrReferencedException thrown = assertThrows(AdrReferencedException.class,
+                () -> repository.delete(PROJECT_A, superseded.code()));
+
+        assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
+                AdrReferencedException.SUPERSEDES)), thrown.references());
+        assertTrue(repository.findByCode(PROJECT_A, superseded.code()).isPresent(),
+                "a rejected delete must leave the decision untouched");
+        assertFalse(headsOf(superseded.id().value().value()).isEmpty(),
+                "a rejected delete must not tombstone anything");
+    }
+
+    @Test
+    void deleteRejectsADecisionAnotherOneIsRelatedTo() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        Adr naming = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), List.of(), List.of(peer.id()));
+        repository.create(PROJECT_A, naming);
+
+        AdrReferencedException thrown = assertThrows(AdrReferencedException.class,
+                () -> repository.delete(PROJECT_A, peer.code()));
+
+        assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
+                AdrReferencedException.RELATED_TO)), thrown.references());
+        assertTrue(repository.findByCode(PROJECT_A, peer.code()).isPresent(),
+                "a rejected delete must leave the decision untouched");
+    }
+
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
     private String currentHeadOf(AdrCode code) {
         return repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
@@ -796,6 +958,27 @@ class KognioRdfAdrRepositoryTest {
     private List<String> objectsOf(String subjectIri, String predicateIri) {
         return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
                 + subjectIri + "> <" + predicateIri + "> ?v } }");
+    }
+
+    /** Every triple of one subject in the ADR graph, as {@code predicate=object} pairs. */
+    private List<String> triplesOf(String subjectIri) {
+        String query = "SELECT ?p ?o WHERE { GRAPH <" + ADR_GRAPH + "> { <" + subjectIri + "> ?p ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> row.getValue("p").orElseThrow() + "=" + row.getValue("o").orElseThrow())
+                    .toList();
+        }
+    }
+
+    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
+                    .toList();
+        }
     }
 
     private List<String> selectIris(String query) {

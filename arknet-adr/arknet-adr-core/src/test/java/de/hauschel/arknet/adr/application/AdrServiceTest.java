@@ -25,7 +25,9 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
@@ -36,9 +38,9 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 
 /**
  * Policy tests for {@link AdrService}: identity minting, code assignment, listing, lookup, the
- * accept transition, field-wise correction and both directions of the supersedes relation,
- * exercised against an in-memory fake repository, two fake lookups and a deterministic fake
- * {@link ResourceIdFactory}.
+ * accept transition, field-wise correction, both directions of the supersedes relation and the
+ * status- and reference-staged delete, exercised against an in-memory fake repository, two fake
+ * lookups and a deterministic fake {@link ResourceIdFactory}.
  */
 class AdrServiceTest {
 
@@ -741,6 +743,155 @@ class AdrServiceTest {
     void updateRejectsAnUnknownCode() {
         assertThrows(AdrNotFoundException.class, () -> service.update(PROJECT, new AdrCode("ADR-9"),
                 AdrCorrection.builder().name("Another title").build()));
+    }
+
+    // --- delete ---------------------------------------------------------------
+
+    @Test
+    void deleteRemovesAProposedDecision() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+
+        service.delete(PROJECT, code);
+
+        assertTrue(service.get(PROJECT, code).isEmpty());
+        assertTrue(service.list(PROJECT).isEmpty());
+    }
+
+    @Test
+    void deleteRejectsAnUnknownCode() {
+        assertThrows(AdrNotFoundException.class, () -> service.delete(PROJECT, new AdrCode("ADR-9")));
+    }
+
+    /**
+     * The staging itself: an accepted decision is a record of what was decided, so it stays - and the
+     * refusal names the successor path rather than only saying no.
+     */
+    @Test
+    void deleteRefusesAnAcceptedDecisionAndPointsAtSupersede() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        AdrNotDeletableException thrown =
+                assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
+
+        assertEquals(AdrStatus.ACCEPTED, thrown.status());
+        assertTrue(thrown.getMessage().contains("adr_supersede"), thrown.getMessage());
+        assertTrue(service.get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+    }
+
+    /**
+     * The point of the whole staging (see {@code DeleteAdr}): "considered and turned down" is a
+     * decision with value, so REJECTED is as undeletable as ACCEPTED - and must not become the
+     * back door for getting rid of a record either.
+     */
+    @Test
+    void deleteRefusesARejectedDecisionBecauseTurningAnOptionDownIsItselfADecision() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.reject(PROJECT, code);
+
+        AdrNotDeletableException thrown =
+                assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
+
+        assertEquals(AdrStatus.REJECTED, thrown.status());
+        assertTrue(thrown.getMessage().contains("considered and turned down"), thrown.getMessage());
+        assertTrue(service.get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+    }
+
+    @Test
+    void deleteRefusesADeprecatedDecision() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.accept(PROJECT, code);
+        service.deprecate(PROJECT, code);
+
+        AdrNotDeletableException thrown =
+                assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
+
+        assertEquals(AdrStatus.DEPRECATED, thrown.status());
+        assertTrue(service.get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+    }
+
+    /**
+     * A superseded decision may well still be PROPOSED - {@code adr_supersede} does not touch its
+     * status - so the incoming edge is what has to stop the delete, and the refusal has to name the
+     * decision holding it.
+     */
+    @Test
+    void deleteRefusesADecisionAnotherOneSupersedes() {
+        AdrCode superseded = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode successor = service.add(PROJECT, newAdr()).adr().code();
+        service.supersede(PROJECT, successor, superseded);
+
+        AdrReferencedException thrown =
+                assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, superseded));
+
+        assertEquals(List.of(new AdrReferencedException.Reference(successor,
+                AdrReferencedException.SUPERSEDES)), thrown.references());
+        assertTrue(thrown.getMessage().contains(successor.value()), thrown.getMessage());
+        assertTrue(service.get(PROJECT, superseded).isPresent(), "a refused delete must leave the decision");
+    }
+
+    /**
+     * The other incoming edge, and the one a caller can actually clear: only the forward direction of
+     * {@code relatedTo} is stored, so the peer named by somebody else has to be protected by a
+     * reverse read - and the refusal points at {@code adr_update} for it.
+     */
+    @Test
+    void deleteRefusesADecisionAnotherOneIsRelatedTo() {
+        AdrCode peer = service.add(PROJECT, newAdr()).adr().code();
+        service.add(PROJECT, new NewAdr("Title", "Some context here", "Some decision here",
+                null, null, null, null, null, List.of(peer.value())));
+
+        AdrReferencedException thrown =
+                assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, peer));
+
+        assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
+                AdrReferencedException.RELATED_TO)), thrown.references());
+        assertTrue(thrown.getMessage().contains("adr_update"), thrown.getMessage());
+        assertTrue(service.get(PROJECT, peer).isPresent(), "a refused delete must leave the decision");
+    }
+
+    /**
+     * The decision that carries the edge is free to go: only the <em>incoming</em> direction leaves a
+     * dangling reference behind, so a decision that merely names others is deletable.
+     */
+    @Test
+    void deleteAllowsADecisionThatOnlyPointsAtOthers() {
+        AdrCode peer = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode naming = service.add(PROJECT, new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, null, null, List.of(peer.value())))
+                .adr().code();
+
+        service.delete(PROJECT, naming);
+
+        assertTrue(service.get(PROJECT, naming).isEmpty());
+        assertTrue(service.get(PROJECT, peer).isPresent());
+    }
+
+    /**
+     * The numbering must not fall back over a delete: {@code ADR-2} may already stand for something
+     * in a commit message or a note, so the next decision is {@code ADR-3} even though nothing
+     * carries the number 2 any more.
+     */
+    @Test
+    void deleteDoesNotFreeTheCodeForTheNextDecision() {
+        service.add(PROJECT, newAdr());
+        AdrCode second = service.add(PROJECT, newAdr()).adr().code();
+        assertEquals(new AdrCode("ADR-2"), second);
+
+        service.delete(PROJECT, second);
+        AdrCode next = service.add(PROJECT, newAdr()).adr().code();
+
+        assertEquals(new AdrCode("ADR-3"), next);
+    }
+
+    /** Retained codes are per project, exactly as the living ones are. */
+    @Test
+    void retainedCodesDoNotLeakIntoAnotherProjectsNumbering() {
+        ProjectId other = new ProjectId("other-project");
+        service.add(PROJECT, newAdr());
+        service.delete(PROJECT, new AdrCode("ADR-1"));
+
+        assertEquals(new AdrCode("ADR-1"), service.add(other, newAdr()).adr().code());
     }
 
     private static NewAdr newAdr() {

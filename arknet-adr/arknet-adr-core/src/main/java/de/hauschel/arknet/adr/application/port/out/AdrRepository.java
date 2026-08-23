@@ -13,6 +13,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -135,6 +136,39 @@ public interface AdrRepository {
      * @return all decisions, never {@code null}
      */
     List<Adr> findAll(ProjectId projectId);
+
+    /**
+     * Deletes the decision identified by {@code code}, and every triple it carries in this hexagon's
+     * own named graph, from the project. Whether the decision may be deleted at all - its status,
+     * and whether anything still points at it - is decided above this port; what this port adds is
+     * the guarantee that the check and the removal share one atomic view of the store, so a
+     * reference written between the two cannot slip through: an implementation therefore repeats the
+     * reference check against its own write transaction and rejects with
+     * {@link AdrReferencedException} there too.
+     *
+     * @param projectId the project (architecture model) the decision lives in
+     * @param code      the ADR code, e.g. {@code ADR-1}
+     * @throws AdrNotFoundException   if no decision with this code exists
+     * @throws AdrReferencedException if another decision still points at it
+     */
+    void delete(ProjectId projectId, AdrCode code);
+
+    /**
+     * Returns the business codes of decisions that were deleted from the project and are kept out of
+     * circulation - what {@link #delete} retains so a code can never name two different decisions
+     * over a project's lifetime. Read together with {@link #findAll} whenever the next free code is
+     * derived; the two sets are disjoint, since a retained code belongs to a decision that no longer
+     * exists.
+     *
+     * <p>Never rejects and never reports a code twice. A decision deleted <em>without</em> the
+     * implementation being able to retain its code is simply absent - the contract is "every code
+     * this port could keep", not "every code ever used", and the one implementation-side gap this
+     * leaves is documented where it arises.</p>
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, sorted by running number, never {@code null}
+     */
+    List<AdrCode> findRetainedCodes(ProjectId projectId);
 
     /**
      * Resolves opaque decision identities to their business codes, in one store round-trip (not one

@@ -241,6 +241,16 @@ class AdrServiceConcurrencyTest {
         public List<AdrCode> findRelatedCodes(ProjectId projectId, AdrId relatedId) {
             return delegate.findRelatedCodes(projectId, relatedId);
         }
+
+        @Override
+        public void delete(ProjectId projectId, AdrCode code) {
+            delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<AdrCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 
     /**

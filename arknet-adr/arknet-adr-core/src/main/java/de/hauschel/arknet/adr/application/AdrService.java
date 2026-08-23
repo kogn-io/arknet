@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
@@ -30,7 +31,9 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
@@ -65,7 +68,14 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * same licence {@code adr_supersede} already takes against an accepted decision. That rule lives on
  * {@link Adr#reviseText}/{@link Adr#reviseReferences}, not here; this service only fills the
  * caller's untouched fields from the current state and hands the result to the same CAS helper every
- * other write path uses.</p>
+ * other write path uses. {@link #delete} is the one path that removes a decision instead of changing
+ * it, and it is staged by status as well - only a {@link AdrStatus#PROPOSED} one may go, because what
+ * this lifecycle protects is a decision and not a draft (Nygard); every other status is refused with
+ * {@link AdrNotDeletableException} and pointed at the path that fits it. While another decision
+ * points at it, the delete is refused outright with {@link AdrReferencedException} rather than
+ * orphaning that edge, and the code of a deleted decision stays out of circulation - {@link #nextCode}
+ * counts retained codes as used, so {@code ADR-7} never names two different decisions over a
+ * project's lifetime.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code adr_add} claims the same {@code ADR-N} first, via
@@ -98,7 +108,8 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * permits.</p>
  */
 public class AdrService
-        implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr {
+        implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr,
+        DeleteAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -303,6 +314,45 @@ public class AdrService
                 updateWithOptimisticRetry(projectId, code, current -> current.supersede(supersededId)));
     }
 
+    @Override
+    public void delete(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Adr adr = repository.findByCode(projectId, code)
+                .orElseThrow(() -> new AdrNotFoundException(projectId, code));
+        if (adr.status() != AdrStatus.PROPOSED) {
+            throw new AdrNotDeletableException(code, adr.status());
+        }
+        rejectIfReferenced(projectId, code, adr.id());
+        repository.delete(projectId, code);
+    }
+
+    /**
+     * Refuses a delete while another decision still points at {@code id}, naming every referrer and
+     * the edge it points with. Both relations are this hexagon's own, so the two reverse reads
+     * {@code adr_get} already pays answer the question here too - no new port, and a message in the
+     * codes the caller typed rather than in bare identities.
+     *
+     * <p>This check is didactic, not the guard: it reads before the write transaction opens, so a
+     * reference committed in between would slip past it. {@link AdrRepository#delete} repeats it
+     * against its own transaction and raises the very same exception - what this one buys is that the
+     * common case is rejected with the concrete referrers in hand rather than by a race-free but
+     * later check.</p>
+     */
+    private void rejectIfReferenced(ProjectId projectId, AdrCode code, AdrId id) {
+        List<AdrReferencedException.Reference> references = Stream.concat(
+                repository.findSupersedingCodes(projectId, id).stream()
+                        .map(referrer -> new AdrReferencedException.Reference(
+                                referrer, AdrReferencedException.SUPERSEDES)),
+                repository.findRelatedCodes(projectId, id).stream()
+                        .map(referrer -> new AdrReferencedException.Reference(
+                                referrer, AdrReferencedException.RELATED_TO)))
+                .toList();
+        if (!references.isEmpty()) {
+            throw new AdrReferencedException(projectId, code, references);
+        }
+    }
+
     /**
      * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate},
      * {@link #supersede} and {@link #update}: reads the current decision and its concurrency token together via
@@ -416,15 +466,26 @@ public class AdrService
     }
 
     /**
-     * Derives the next free business code in {@code projectId}: the highest running number currently
-     * in use, plus one (starting at 1).
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project has ever used, plus one (starting at 1).
+     *
+     * <p><strong>Ever used, not currently in use.</strong> The maximum runs over the living decisions
+     * <em>and</em> the codes {@link AdrRepository#findRetainedCodes} kept from deleted ones. Over the
+     * living ones alone, deleting the highest-numbered decision would let the maximum fall back and
+     * the next {@code adr_add} hand out that same number again - and a code that already appeared in
+     * a commit message or a note would then name something else entirely. Numbers are cheap; a
+     * re-used one is a false trail.</p>
      */
     private AdrCode nextCode(ProjectId projectId) {
-        int next = repository.findAll(projectId).stream()
+        int highestLiving = repository.findAll(projectId).stream()
                 .mapToInt(adr -> runningNumber(adr.code()))
                 .max()
-                .orElse(0) + 1;
-        return new AdrCode(CODE_PREFIX + "-" + next);
+                .orElse(0);
+        int highestRetained = repository.findRetainedCodes(projectId).stream()
+                .mapToInt(AdrService::runningNumber)
+                .max()
+                .orElse(0);
+        return new AdrCode(CODE_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
     }
 
     /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */

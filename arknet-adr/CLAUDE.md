@@ -1,7 +1,7 @@
 # arknet-adr
 
 Sechste hexagonale BC (Bauart 1:1 zu bounded-context) -- arknet-adr-core + arknet-adr-adapter-kogniordf (Out) + arknet-adr-adapter-mcp (In).
-Macht `arkarch:ArchitectureDecisionRecord` store-first mintbar (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`, #69) -- der Anlass ist ADR-005: ADRs waren die letzte Artefaktklasse mit datei-basiertem Lebenszyklus, ausgerechnet die, fuer die arknet das Vokabular laengst mitbrachte. **Die 15 Markdown-ADRs unter `docs/adr/` sind explizit nicht Teil davon**: keine Migration, keine Koexistenz-Logik, kein gemeinsamer Nummernraum -- der Store-Code laeuft ungepolstert `ADR-1`, `ADR-2`, ..., je Projekt, die Dateien zero-padded `adr-NNN-*.md`; `AdrCode`s Javadoc sagt das, und die `adr_add`-Tool-Beschreibung sagt es dem Aufrufer, damit niemand die beiden Raeume verwechselt.
+Macht `arkarch:ArchitectureDecisionRecord` store-first mintbar (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`/`adr_delete`, #69) -- der Anlass ist ADR-005: ADRs waren die letzte Artefaktklasse mit datei-basiertem Lebenszyklus, ausgerechnet die, fuer die arknet das Vokabular laengst mitbrachte. **Die 15 Markdown-ADRs unter `docs/adr/` sind explizit nicht Teil davon**: keine Migration, keine Koexistenz-Logik, kein gemeinsamer Nummernraum -- der Store-Code laeuft ungepolstert `ADR-1`, `ADR-2`, ..., je Projekt, die Dateien zero-padded `adr-NNN-*.md`; `AdrCode`s Javadoc sagt das, und die `adr_add`-Tool-Beschreibung sagt es dem Aufrufer, damit niemand die beiden Raeume verwechselt.
 Ob und wann migriert wird, ist eine eigene, nachgelagerte Entscheidung (Klaerung zu #69).
 
 **Ontologie war die Vorarbeit, nicht der Bau.** `arkarch:` existierte vollstaendig, lag aber unter `parked/` (kein lebender Konsument, `arknet-ontology/CLAUDE.md`).
@@ -61,6 +61,26 @@ Beide Regeln leben auf `Adr#reviseText()`/`Adr#reviseReferences()`, nicht im Ser
 Gepatcht wird feldweise: `null` heisst "unveraendert lassen" und ist nie ein Loesch-Signal.
 Fuer die drei Kanten-Listen ist der Unterschied `null`/leer dagegen bedeutungstragend (`null` = unveraendert, leere Liste = alle Kanten entfernen, nicht-leere Liste = Wholesale-Ersatz), darum normalisiert `AdrCorrection`s Compact Constructor `null` als einziger im BC **nicht** auf `List.of()`.
 Die Referenz-Codes loest `AdrService#update` wie `#add` **vor** der Retry-Schleife auf; der Rest laeuft ueber denselben `updateWithOptimisticRetry`-CAS-Helfer.
+
+**Loeschen ist eine Ausnahme, kein Lifecycle-Schritt** (`adr_delete`, `DeleteAdr`).
+Loeschbar ist ausschliesslich ein `PROPOSED`-Record: `adr_delete` macht ein versehentliches `adr_add` rueckgaengig (Dublette, Entwurf am falschen Ort), es beendet keine Entscheidung.
+Ab `ACCEPTED` bleibt der Record stehen, weil genau das Entschiedene der Zweck eines Decision Records ist (Nygard) -- `AdrNotDeletableException` sagt das und nennt **je Status** den passenden Weg (`adr_supersede` bzw. `adr_set_status DEPRECATED`) statt eines gemeinsamen "nein".
+`REJECTED` ist ausdruecklich genauso wenig loeschbar: "erwogen und verworfen" ist eine dokumentierte Entscheidung mit Wert -- sie haelt dieselbe Option davon ab, ein Jahr spaeter wieder aufzutauchen -- und darf darum weder geloescht werden noch selbst der Ausweg sein, einen versehentlich angelegten Record loszuwerden.
+Die Tool-Beschreibungen von `adr_delete` **und** `adr_set_status` sagen diesen Unterschied dem Aufrufer, bevor er in die Ablehnung laeuft.
+Solange ein anderer Record ueber `arkarch:supersedes` oder `arkarch:relatedTo` auf den Kandidaten zeigt, wird abgelehnt statt die Kante baumeln zu lassen (`AdrReferencedException`) -- dieselbe Linie, die `term_delete`/`actor_delete` ziehen.
+Weil beide Relationen hexagon-eigen sind, nennt die Meldung die verweisenden Records **mit Code** und je Kante den Remedy, den es wirklich gibt: `adr_update` raeumt eine `relatedTo`-Kante weg; fuer `supersedes` gibt es kein Tool, die Kante verschwindet nur mit dem abloesenden Record selbst.
+*Befund, nicht behoben:* `adr_supersede` prueft den Status des abgeloesten Records nicht, ein `PROPOSED`-Record kann also abgeloest sein -- und ist dann bis zum Verschwinden seines Nachfolgers nicht loeschbar.
+Die Referenzpruefung sitzt bewusst **zweimal**: im Service als didaktischer Vorab-Check ueber die vorhandenen Reverse-Reads (`findSupersedingCodes`/`findRelatedCodes`), im Out-Adapter als race-freier Backstop in der laufenden Schreib-Transaktion -- der Vorab-Check liest vor der Transaktion, eine dazwischen geschriebene Kante kaeme nur am zweiten vorbei.
+
+**Ein geloeschter Code kommt nicht zurueck.**
+Der Loeschpfad laeuft ueber `WriteFunnel#delete`: Tombstone statt Revision (letzte Revision `prov:invalidatedAtTime`, `arkprov:head` weg, Kette bleibt als Audit-Trail).
+Der Tombstone traegt aber **keinen** Business-Code -- `recordRevision` schreibt nur Typ, `prov:specializationOf` (auf die opake Subject-IRI), `wasGeneratedBy`, `generatedAtTime`, `wasRevisionOf`; `ADR-7` steht ausschliesslich am Modelltripel, das der Loeschvorgang wegraeumt.
+Ohne Gegenmassnahme faellt das Maximum aus `AdrService#nextCode` zurueck und das naechste `adr_add` vergaebe dieselbe Nummer erneut -- fuer eine Nummer, die in einer Commit-Message oder Notiz laengst fuer etwas anderes steht, ist das eine falsche Faehrte.
+Der Out-Adapter haengt darum beim Loeschen den Code als `dcterms:identifier` an genau die Revision, die getombstoned wird (`KognioRdfAdrRepository#retainCode`; der Head-Zeiger steht zu diesem Zeitpunkt noch, der Trichter entfernt ihn erst nach dem Body).
+`AdrRepository#findRetainedCodes` liest sie zurueck, und `nextCode` bildet das Maximum ueber lebende **plus** aufbewahrte Codes.
+Der Lesepfad ist doppelt eingegrenzt, weil der Provenance-Graph allen BCs gehoert: nur Revisionen mit `prov:invalidatedAtTime` und nur Identifier mit `ADR-`-Praefix -- die Typ-Tripel der geloeschten Ressource sind weg, ihr Code ist das Einzige, was einen Nachbarn unterscheidbar macht, der spaeter dasselbe tut.
+Der Mechanismus ist bewusst **adapter-lokal** und nicht in `arknet-persistence-support` gewandert; ob er geteilt gehoert, ist eine eigene Frage.
+*Bekannte Luecke, dokumentiert statt kaschiert:* eine Ressource ohne jede Revision (vor Einfuehrung der Revisionsaufzeichnung angelegt) hat keinen Head, an den sich der Code haengen liesse -- ihr Code kann ein zweites Mal vergeben werden; der Adapter loggt das mit `WARN`, statt eine Revision zu erfinden, die es nie gab.
 
 **`AdrDetail` statt nacktem `Adr` an jedem In-Port.** Jeder Driving-Port liefert `AdrDetail(Adr, List<AdrCode> supersedes, List<AdrCode> supersededBy, List<AdrCode> relatedTo)`.
 Grund: die `supersedes`- und `relatedTo`-Identitaeten sind opak, ihre Anzeige-Codes gehoeren diesem Hexagon (kein ADR-008-Borrow noetig), und die jeweilige Rueckrichtung ist ueberhaupt nur per Reverse-Read zu haben.

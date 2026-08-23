@@ -4,6 +4,7 @@
 package de.hauschel.arknet.adr.application;
 
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,6 +56,7 @@ class InMemoryAdrRepository implements AdrRepository {
 
     private final Map<ProjectId, Map<AdrId, Adr>> byProject = new LinkedHashMap<>();
     private final Map<AdrId, String> headByIdentity = new LinkedHashMap<>();
+    private final Map<ProjectId, List<AdrCode>> retainedByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Adr adr) {
@@ -80,6 +82,33 @@ class InMemoryAdrRepository implements AdrRepository {
         }
         adrs.put(updated.id(), updated);
         headByIdentity.put(updated.id(), UUID.randomUUID().toString());
+    }
+
+    /**
+     * Mirrors the real out-adapter's delete in the two respects the service's policy depends on: the
+     * decision goes away, and its business code is retained (see {@link #findRetainedCodes}) so
+     * {@code adr_add} cannot hand the number out again.
+     *
+     * <p>Deliberately <em>without</em> the adapter's own in-transaction reference check: this fake
+     * has no transaction, and the check it would duplicate is the race-free backstop pinned against
+     * the real store in {@code KognioRdfAdrRepositoryTest}. The service's own didactic check runs
+     * before this method is ever reached, which is what {@code AdrServiceTest} exercises.</p>
+     */
+    @Override
+    public void delete(ProjectId projectId, AdrCode code) {
+        Map<AdrId, Adr> adrs = byProject.getOrDefault(projectId, Map.of());
+        Adr stored = adrs.values().stream()
+                .filter(adr -> adr.code().equals(code))
+                .findFirst()
+                .orElseThrow(() -> new AdrNotFoundException(projectId, code));
+        adrs.remove(stored.id());
+        headByIdentity.remove(stored.id());
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    @Override
+    public List<AdrCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 
     @Override

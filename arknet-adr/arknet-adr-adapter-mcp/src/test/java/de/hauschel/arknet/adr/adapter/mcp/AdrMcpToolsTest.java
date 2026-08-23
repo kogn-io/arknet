@@ -31,6 +31,7 @@ import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
@@ -41,6 +42,8 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.RequirementRef;
@@ -55,7 +58,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.RequirementCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the six ADR tools and guards its in-port
+ * Scaffold-level check that the adapter declares exactly the seven ADR tools and guards its in-port
  * dependencies, plus the reference-display-resolution contract ({@link ResolveRequirements},
  * {@link ResolveBoundedContexts}, ADR-008): renders the resolved business codes, falls back to the
  * bare IRI for an id it cannot resolve, and never issues more than one batch call per port per
@@ -85,8 +88,8 @@ class AdrMcpToolsTest {
     private final RecordingResolveRequirements requirements = new RecordingResolveRequirements();
     private final RecordingResolveBoundedContexts contexts = new RecordingResolveBoundedContexts();
     private final AdrMcpTools adapter =
-            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, requirements, contexts,
-                    PROJECTS);
+            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+                    contexts, PROJECTS);
 
     /**
      * ADR-016 decision 2: the explicit tool parameter is a full second delivery path, open to a client
@@ -114,51 +117,60 @@ class AdrMcpToolsTest {
     }
 
     @Test
-    void declaresTheSixAdrTools() {
+    void declaresTheSevenAdrTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(6, names.size());
+        assertEquals(7, names.size());
         assertTrue(names.containsAll(List.of("adr_add", "adr_list", "adr_get", "adr_update",
-                "adr_set_status", "adr_supersede")));
+                "adr_set_status", "adr_supersede", "adr_delete")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, requirements,
-                        contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, requirements,
-                        contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, requirements,
-                        contexts, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
+                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, requirements, contexts,
                         PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
+                () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, requirements, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
+                        PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
                         PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, null));
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, null));
     }
 
     @Test
@@ -445,6 +457,67 @@ class AdrMcpToolsTest {
     }
 
     @Test
+    void deletePassesTheParsedCodeThroughAndConfirmsIt() {
+        String rendered = adapter.delete(null, "ADR-1", ANCHOR);
+
+        assertEquals(new AdrCode("ADR-1"), stub.lastDeletedCode);
+        assertEquals(PROJECT, stub.lastProjectId);
+        assertEquals("Deleted: ADR-1", rendered);
+    }
+
+    /**
+     * The refusals a caller of {@code adr_delete} runs into have to arrive as text they can act on,
+     * not as a bare "no": the status refusal names the tool that fits the status instead, and the
+     * reference refusal names the decisions in the way.
+     */
+    @Test
+    void deletePropagatesTheDidacticRefusalsUnchanged() {
+        stub.deleteFailure = new AdrNotDeletableException(new AdrCode("ADR-1"), AdrStatus.REJECTED);
+        AdrNotDeletableException rejected = assertThrows(AdrNotDeletableException.class,
+                () -> adapter.delete(null, "ADR-1", ANCHOR));
+        assertTrue(rejected.getMessage().contains("considered and turned down"), rejected.getMessage());
+        assertTrue(rejected.getMessage().contains("created by mistake"), rejected.getMessage());
+
+        stub.deleteFailure = new AdrReferencedException(PROJECT, new AdrCode("ADR-1"),
+                List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
+                        AdrReferencedException.RELATED_TO)));
+        AdrReferencedException referenced = assertThrows(AdrReferencedException.class,
+                () -> adapter.delete(null, "ADR-1", ANCHOR));
+        assertTrue(referenced.getMessage().contains("ADR-2 (relatedTo)"), referenced.getMessage());
+        assertTrue(referenced.getMessage().contains("adr_update"), referenced.getMessage());
+    }
+
+    /**
+     * The two tool descriptions that carry the {@code REJECTED} lesson: rejecting a decision is a
+     * verdict on the option, not a way to remove a record recorded by accident. A caller reads the
+     * description before the exception, so the distinction has to be there and not only in the
+     * refusal.
+     */
+    @Test
+    void theToolDescriptionsSayWhatRejectedMeansAndWhatDeleteIsFor() {
+        String delete = descriptionOf("delete");
+        assertTrue(delete.contains("Only a PROPOSED decision can be deleted"), delete);
+        assertTrue(delete.contains("considered and turned down"), delete);
+        assertTrue(delete.contains("adr_supersede"), delete);
+        assertTrue(delete.contains("adr_set_status DEPRECATED"), delete);
+
+        String setStatus = descriptionOf("setStatus");
+        assertTrue(setStatus.contains("considered and turned down"), setStatus);
+        assertTrue(setStatus.contains("adr_delete"), setStatus);
+    }
+
+    /** The {@link McpTool} description declared on one of this adapter's tool methods. */
+    private String descriptionOf(String methodName) {
+        return Arrays.stream(adapter.getClass().getDeclaredMethods())
+                .filter(method -> method.getName().equals(methodName))
+                .map(method -> method.getAnnotation(McpTool.class))
+                .filter(annotation -> annotation != null)
+                .map(McpTool::description)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    @Test
     void updatePassesEveryFieldThroughToTheInPort() {
         adapter.update(null, "ADR-1", "A better title", "Sharper context", "Sharper decision",
                 "What follows", "What else was considered", "2026-08-23", List.of("FR-1"),
@@ -528,7 +601,7 @@ class AdrMcpToolsTest {
     /** Structural stub implementing the eight driving in-ports. */
     private static final class Stub
             implements AddAdr, ListAdrs, GetAdr, UpdateAdr, AcceptAdr, RejectAdr, DeprecateAdr,
-            SupersedeAdr {
+            SupersedeAdr, DeleteAdr {
 
         private NewAdr lastAddCommand;
         private AdrCorrection lastCorrection;
@@ -538,6 +611,9 @@ class AdrMcpToolsTest {
         private AdrCode lastDeprecatedCode;
         private AdrCode lastSupersedingCode;
         private AdrCode lastSupersededCode;
+        private AdrCode lastDeletedCode;
+        /** The failure the next {@link #delete} raises instead of succeeding, if a test set one. */
+        private RuntimeException deleteFailure;
         private AdrDetail nextDetail;
         private List<AdrDetail> allAdrs = List.of();
         /** Records which project the adapter routed to, so a test can assert the routing itself. */
@@ -594,6 +670,15 @@ class AdrMcpToolsTest {
             lastSupersedingCode = code;
             lastSupersededCode = supersededCode;
             return detail(adrWith(List.of(), List.of(), List.of()), List.of(supersededCode), List.of());
+        }
+
+        @Override
+        public void delete(ProjectId projectId, AdrCode code) {
+            lastDeletedCode = code;
+            lastProjectId = projectId;
+            if (deleteFailure != null) {
+                throw deleteFailure;
+            }
         }
     }
 
