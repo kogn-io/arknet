@@ -17,18 +17,19 @@ Was fehlt, ist ein Zielbild, das groesser ist als das Gebaute und trotzdem benan
 Der Scope-Rahmen ist ein Zielschnitt ueber den gesamten Software-Engineering-Lifecycle in
 acht fachlichen Kontexten:
 
-| # | Kontext | in arknet |
-|---|---|---|
-| 1 | Product & Requirements | gebaut |
-| 2 | Domaenenmodellierung (Ubiquitous Language, Kontexte, Kontextkarte) | gebaut |
-| 3 | Architektur & Entscheidungen | gebaut |
-| 4 | Planung & Kapazitaet | noch nicht gebaut |
-| 5 | Vorgangsverwaltung | noch nicht gebaut |
-| 6 | Verifikation & Qualitaet | noch nicht gebaut |
-| 7 | Delivery & Release | noch nicht gebaut |
-| 8 | Betrieb & Observability | noch nicht gebaut |
+1. Product & Requirements
+2. Domaenenmodellierung (Ubiquitous Language, Kontexte, Kontextkarte)
+3. Architektur & Entscheidungen
+4. Planung & Kapazitaet
+5. Vorgangsverwaltung
+6. Verifikation & Qualitaet
+7. Delivery & Release
+8. Betrieb & Observability
 
 Dazu quer zu allen acht: Akteursidentitaet (siehe neu-03).
+
+arknet realisiert davon einen bewusst gewaehlten Ausschnitt. Welche Kontexte das zu einem
+gegebenen Zeitpunkt sind, ist Bauzustand und steht nicht in diesem Record.
 
 Die Kontextgrenzen folgen Sprachbruechen -- Stellen, an denen derselbe Sachverhalt beim
 Uebergang andere Regeln bekommt (eine Anforderung wird zu einem priorisierbaren
@@ -58,9 +59,9 @@ Streit "gehoert das noch zu arknet" wird zur Reihenfolgefrage.
 
 **Negativ:** Das Zielbild ist um ein Vielfaches groesser als das Gebaute. Damit steigt die
 Versuchung, Ungebautes nach aussen als vorhanden oder zugesagt darzustellen -- README und
-Produktbeschreibung muessen den Ausschnitt benennen, nicht das Zielbild. Fuenf der acht
-Kontexte sind ausserdem unbelegt in dem Sinne, dass fuer sie noch kein einziger Nutzer, kein
-Anwendungsfall und keine Zeile Code spricht; sie sind eine Absicht, keine Zusage.
+Produktbeschreibung muessen den Ausschnitt benennen, nicht das Zielbild. Ein Teil der
+Kontexte ist ausserdem unbelegt in dem Sinne, dass fuer sie weder ein Nutzer noch ein
+Anwendungsfall spricht; sie sind eine Absicht, keine Zusage.
 
 ## Alternativen
 
