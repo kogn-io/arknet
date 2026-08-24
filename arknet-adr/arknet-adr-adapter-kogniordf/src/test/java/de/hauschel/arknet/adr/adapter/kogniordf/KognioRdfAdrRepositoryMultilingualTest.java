@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -250,7 +251,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
 
         Adr corrected = original.withConsequenceCorrections(PROJECT,
                 List.of(new de.hauschel.arknet.adr.domain.ConsequenceCorrection(1, "Corrected wording",
-                        ConsequenceType.POSITIVE)));
+                        ConsequenceType.POSITIVE)), Set.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), corrected,
                 "en", "en", "en", Map.of(1, "en"), Map.of(), null);
 
@@ -299,5 +300,81 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals("Deutscher Wortlaut", deSelected.consequences().get(0).statement());
         Adr enSelected = repository.findByCode(PROJECT, original.code(), "en").orElseThrow();
         assertEquals("English wording", enSelected.consequences().get(0).statement());
+    }
+
+    /**
+     * The end-to-end guarantee the per-position new-language exemption exists for
+     * (kogn-io/arknet#357): an already-{@link AdrStatus#ACCEPTED} decision is translated in full -
+     * {@code name}/{@code context}/{@code decision} via {@link Adr#reviseText}, both consequences and
+     * both considered options via {@link Adr#withConsequenceCorrections}/
+     * {@link Adr#withConsideredOptionCorrections} - in one {@code compareAndUpdate} call, exactly the
+     * shape {@code AdrService#update} builds. Both language versions must read back cleanly through
+     * {@link DisplayLocale}, and neither list may have grown or shrunk in the process - the guard this
+     * whole feature protects, not just the individual field-level rules the other tests in this class
+     * and {@code AdrTest} pin down separately.
+     */
+    @Test
+    void compareAndUpdateRoundtripsAFullTranslationOfAnAcceptedAdrThroughBothLocales() {
+        AdrId id = freshId();
+        AdrCode code = new AdrCode("ADR-1");
+        Adr original = adr(id, code,
+                List.of(new Consequence(1, "English consequence one", ConsequenceType.POSITIVE),
+                        new Consequence(2, "English consequence two", ConsequenceType.NEGATIVE)),
+                List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "Option B", "Rationale B", OptionOutcome.REJECTED)));
+        repository.create(PROJECT, original, "en");
+        repository.compareAndUpdate(PROJECT, currentHeadOf(code), original.accept(),
+                "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null);
+
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code).orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, current.value().status());
+
+        String germanName = "Einen eingebetteten Triple Store verwenden";
+        String germanContext = "Das Modell muss irgendwo leben, das ein Einzelbenutzer-Client ohne Server "
+                + "erreichen kann.";
+        String germanDecision = "Verwende kognio-rdf als eingebettetes RDF-Substrat hinter einem Out-Port.";
+        Adr translated = current.value()
+                .reviseText(germanName, germanContext, germanDecision, null, true)
+                .withConsequenceCorrections(PROJECT,
+                        List.of(new de.hauschel.arknet.adr.domain.ConsequenceCorrection(
+                                        1, "Deutsche Folge eins", ConsequenceType.POSITIVE),
+                                new de.hauschel.arknet.adr.domain.ConsequenceCorrection(
+                                        2, "Deutsche Folge zwei", ConsequenceType.NEGATIVE)),
+                        Set.of(1, 2))
+                .withConsideredOptionCorrections(PROJECT,
+                        List.of(new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
+                                        1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN),
+                                new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
+                                        2, "Option B (de)", "Begruendung B", OptionOutcome.REJECTED)),
+                        Set.of(1, 2));
+
+        repository.compareAndUpdate(PROJECT, current.head(), translated,
+                "de", "de", "de", Map.of(1, "de", 2, "de"), Map.of(1, "de", 2, "de"), null);
+
+        Adr enSelected = repository.findByCode(PROJECT, code, "en").orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, enSelected.status());
+        assertEquals("Use an embedded triple store", enSelected.name());
+        assertEquals(2, enSelected.consequences().size());
+        assertEquals("English consequence one", enSelected.consequences().get(0).statement());
+        assertEquals("English consequence two", enSelected.consequences().get(1).statement());
+        assertEquals(2, enSelected.consideredOptions().size());
+        assertEquals("Option A", enSelected.consideredOptions().get(0).name());
+        assertEquals("Rationale A", enSelected.consideredOptions().get(0).rationale());
+        assertEquals(OptionOutcome.CHOSEN, enSelected.consideredOptions().get(0).outcome());
+        assertEquals("Option B", enSelected.consideredOptions().get(1).name());
+
+        Adr deSelected = repository.findByCode(PROJECT, code, "de").orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, deSelected.status());
+        assertEquals(germanName, deSelected.name());
+        assertEquals(germanContext, deSelected.context());
+        assertEquals(germanDecision, deSelected.decision());
+        assertEquals(2, deSelected.consequences().size());
+        assertEquals("Deutsche Folge eins", deSelected.consequences().get(0).statement());
+        assertEquals("Deutsche Folge zwei", deSelected.consequences().get(1).statement());
+        assertEquals(2, deSelected.consideredOptions().size());
+        assertEquals("Option A (de)", deSelected.consideredOptions().get(0).name());
+        assertEquals("Begruendung A", deSelected.consideredOptions().get(0).rationale());
+        assertEquals(OptionOutcome.CHOSEN, deSelected.consideredOptions().get(0).outcome());
+        assertEquals("Option B (de)", deSelected.consideredOptions().get(1).name());
     }
 }

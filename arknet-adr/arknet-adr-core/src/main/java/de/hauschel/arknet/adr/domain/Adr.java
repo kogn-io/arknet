@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import de.hauschel.arknet.kernel.ProjectId;
 
@@ -215,10 +216,10 @@ public record Adr(
      * path from there is a successor decision plus {@link #supersededBy(AdrId)}, which is what
      * {@link AdrTextImmutableException} tells the caller.</p>
      *
-     * <p><strong>Only these three fields carry the exemption.</strong> {@link #consequences()}/
-     * {@link #consideredOptions()} corrections ({@link #withConsequenceCorrections}/
-     * {@link #withConsideredOptionCorrections}) do not: see those methods' javadoc for why the
-     * reasoning does not transfer to them one-for-one.</p>
+     * <p><strong>{@link #consequences()}/{@link #consideredOptions()} carry the same exemption, at a
+     * finer grain.</strong> {@link #withConsequenceCorrections}/{@link #withConsideredOptionCorrections}
+     * apply it per position rather than per call - see those methods' javadoc for the exact rule and
+     * why the granularity differs from this method's single call-wide flag.</p>
      *
      * <p><strong>{@code newLanguageVariant} is one flag for the whole call, not per field.</strong>
      * {@code adr_add}/{@code adr_update} take a single {@code language} argument for the entire call
@@ -305,30 +306,51 @@ public record Adr(
      * exactly the reasoning the requirements precedent gives for its own acceptance criteria and
      * which transfers here unchanged.
      *
-     * <p><strong>Deliberately narrower than {@link #reviseText}: no new-language exemption.</strong>
-     * A correction here is gated by {@link AdrStatus#PROPOSED} unconditionally - {@link
-     * #withAppendedConsequences} is the always-available path for stating a consequence in an
-     * additional language once the decision is in force, by adding it as its own new entry rather
-     * than rewriting an existing one. The reasoning behind {@link #reviseText}'s per-language
-     * exemption does not transfer one-for-one: {@code adr_update} carries a single {@code language}
-     * argument for the whole call, and extending the exemption down to individual positions would
-     * need a per-position language-tag set the write path does not otherwise require, for a
-     * comparatively rare case (translating one already-accepted consequence while also fixing another
-     * one's wording in the same call). Reasoned deviation, not an oversight - see kogn-io/arknet#357's
-     * PR description for the alternative considered and rejected.</p>
+     * <p><strong>Carries {@link #reviseText}'s new-language exemption, at the granularity of a
+     * position rather than a whole call.</strong> A correction that only changes {@code statement} -
+     * never {@code type} - at a position named in {@code newLanguageVariantPositions} is exempt from
+     * the {@link AdrStatus#PROPOSED} gate, for the same reason a translation of {@code name}/
+     * {@code context}/{@code decision} is: it makes an already-decided consequence accessible in a
+     * language it was not recorded in, it does not change what was decided. A correction that also
+     * changes {@code type} is never exempt, regardless of language: the classification of a
+     * consequence as positive/negative/neutral is a judgement about the decision, not a fact of its
+     * wording, so translating the statement can never carry a type change past the gate for free.
+     * Correcting an existing language variant's wording - the position is not in
+     * {@code newLanguageVariantPositions} - is gated exactly as before this exemption existed.</p>
+     *
+     * <p><strong>Per position, not per call - the finer of {@link #reviseText}'s two possible
+     * shapes.</strong> {@code reviseText} uses one flag for the whole call because {@code name}/
+     * {@code context}/{@code decision} are three fields of the very same call-scoped
+     * {@code language} argument, with no per-field identity finer than the call to hang a flag on.
+     * A correction here already carries its own identity - {@code position} - and the caller (
+     * {@code AdrService}) already computes a per-position language state to fill
+     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#compareAndUpdate}'s
+     * {@code consequenceLanguageByPosition} map, so a per-position exemption costs nothing beyond
+     * what the write path already builds - unlike the call-wide shape {@code reviseText} settled for
+     * where no such per-field state exists. The alternative considered - one flag for the whole call,
+     * mirroring {@code reviseText} exactly - was rejected as an unnecessary loss of precision: it
+     * would refuse a call that genuinely translates one position while also, in the very same call,
+     * correcting a same-language typo in another.</p>
      *
      * @param projectId   the project the correction is issued against, for the exception message only
      * @param corrections corrections for individual existing consequences, addressed by their
      *                    {@code position}; never {@code null}
+     * @param newLanguageVariantPositions the positions, among those named in {@code corrections},
+     *                    whose {@code statement} this call writes in a language the position did not
+     *                    already carry - computed by the caller from
+     *                    {@link de.hauschel.arknet.adr.application.port.out.AdrRepository.CurrentAdr#consequenceLanguagesByPosition()};
+     *                    {@code null} or empty exempts nothing, the pre-exemption behaviour
      * @return a new decision with the corrected consequences
      * @throws ConsequencePositionNotFoundException if a correction names a position no consequence in
      *                                               {@link #consequences()} carries
-     * @throws AdrTextImmutableException             if a correction changes an existing consequence
-     *                                               and this decision is no longer
-     *                                               {@link AdrStatus#PROPOSED}
+     * @throws AdrTextImmutableException             if a correction changes an existing consequence in
+     *                                               a way that is not exempt and this decision is no
+     *                                               longer {@link AdrStatus#PROPOSED}
      */
-    public Adr withConsequenceCorrections(ProjectId projectId, List<ConsequenceCorrection> corrections) {
+    public Adr withConsequenceCorrections(ProjectId projectId, List<ConsequenceCorrection> corrections,
+            Set<Integer> newLanguageVariantPositions) {
         Objects.requireNonNull(corrections, "corrections");
+        Set<Integer> exemptPositions = newLanguageVariantPositions == null ? Set.of() : newLanguageVariantPositions;
         if (corrections.isEmpty()) {
             return this;
         }
@@ -337,6 +359,7 @@ public record Adr(
             byPosition.put(correction.position(), correction);
         }
         boolean[] changed = {false};
+        boolean[] gateViolated = {false};
         List<Consequence> patched = consequences.stream()
                 .map(current -> {
                     ConsequenceCorrection correction = byPosition.remove(current.position());
@@ -347,6 +370,13 @@ public record Adr(
                             correction.type());
                     if (!revised.equals(current)) {
                         changed[0] = true;
+                        boolean typeChanged = current.type() != correction.type();
+                        boolean textOnlyNewLanguage = !typeChanged
+                                && !Objects.equals(current.statement(), correction.statement())
+                                && exemptPositions.contains(current.position());
+                        if (!textOnlyNewLanguage) {
+                            gateViolated[0] = true;
+                        }
                     }
                     return revised;
                 })
@@ -358,7 +388,7 @@ public record Adr(
         if (!changed[0]) {
             return this;
         }
-        if (status != AdrStatus.PROPOSED) {
+        if (gateViolated[0] && status != AdrStatus.PROPOSED) {
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, patched, consideredOptions,
@@ -390,23 +420,34 @@ public record Adr(
 
     /**
      * {@link #withConsequenceCorrections} for {@link #consideredOptions()} - same in-place-only
-     * pattern, same {@link AdrStatus#PROPOSED}-only gate, same reasoning for why {@link #reviseText}'s
-     * new-language exemption does not transfer.
+     * pattern, same per-position new-language exemption. {@code name}/{@code rationale} are this
+     * type's text fields (both governed by the one tag a position carries, mirroring
+     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#compareAndUpdate}'s
+     * {@code optionLanguageByPosition}); {@code outcome} is the non-text field that, like
+     * {@link Consequence#type()}, is never exempt - whether an option was chosen or rejected is a
+     * judgement about the decision, not a fact of its wording.
      *
      * @param projectId   the project the correction is issued against, for the exception message only
      * @param corrections corrections for individual existing options, addressed by their
      *                    {@code position}; never {@code null}
+     * @param newLanguageVariantPositions the positions, among those named in {@code corrections},
+     *                    whose {@code name}/{@code rationale} this call writes in a language the
+     *                    position did not already carry - computed by the caller from
+     *                    {@link de.hauschel.arknet.adr.application.port.out.AdrRepository.CurrentAdr#optionLanguagesByPosition()};
+     *                    {@code null} or empty exempts nothing, the pre-exemption behaviour
      * @return a new decision with the corrected options
      * @throws ConsideredOptionPositionNotFoundException if a correction names a position no option in
      *                                                    {@link #consideredOptions()} carries
-     * @throws AdrTextImmutableException                 if a correction changes an existing option
-     *                                                    and this decision is no longer
-     *                                                    {@link AdrStatus#PROPOSED}
+     * @throws AdrTextImmutableException                 if a correction changes an existing option in
+     *                                                    a way that is not exempt and this decision is
+     *                                                    no longer {@link AdrStatus#PROPOSED}
      * @throws IllegalArgumentException                  if the result would carry more than one
      *                                                    {@link OptionOutcome#CHOSEN} option
      */
-    public Adr withConsideredOptionCorrections(ProjectId projectId, List<ConsideredOptionCorrection> corrections) {
+    public Adr withConsideredOptionCorrections(ProjectId projectId, List<ConsideredOptionCorrection> corrections,
+            Set<Integer> newLanguageVariantPositions) {
         Objects.requireNonNull(corrections, "corrections");
+        Set<Integer> exemptPositions = newLanguageVariantPositions == null ? Set.of() : newLanguageVariantPositions;
         if (corrections.isEmpty()) {
             return this;
         }
@@ -415,6 +456,7 @@ public record Adr(
             byPosition.put(correction.position(), correction);
         }
         boolean[] changed = {false};
+        boolean[] gateViolated = {false};
         List<ConsideredOption> patched = consideredOptions.stream()
                 .map(current -> {
                     ConsideredOptionCorrection correction = byPosition.remove(current.position());
@@ -425,6 +467,14 @@ public record Adr(
                             correction.rationale(), correction.outcome());
                     if (!revised.equals(current)) {
                         changed[0] = true;
+                        boolean outcomeChanged = current.outcome() != correction.outcome();
+                        boolean textChanged = !Objects.equals(current.name(), correction.name())
+                                || !Objects.equals(current.rationale(), correction.rationale());
+                        boolean textOnlyNewLanguage = !outcomeChanged && textChanged
+                                && exemptPositions.contains(current.position());
+                        if (!textOnlyNewLanguage) {
+                            gateViolated[0] = true;
+                        }
                     }
                     return revised;
                 })
@@ -436,7 +486,7 @@ public record Adr(
         if (!changed[0]) {
             return this;
         }
-        if (status != AdrStatus.PROPOSED) {
+        if (gateViolated[0] && status != AdrStatus.PROPOSED) {
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, patched,

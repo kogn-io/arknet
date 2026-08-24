@@ -6,6 +6,7 @@ package de.hauschel.arknet.adr.application;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -108,9 +109,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * one (issue #258: {@code accept}/{@code reject}/{@code deprecate}/{@code supersede} never touch any
  * multilingual field and therefore never demand a {@code defaultLanguage} the project may not have).</p>
  *
- * <p><strong>The fine-grained text-immutability exemption is call-scoped, not field-scoped
- * (kogn-io/arknet#357).</strong> Because one {@code language} argument governs the whole call, this
- * service computes a single {@code newLanguageVariant} boolean per {@code update} call: whether the
+ * <p><strong>The text-immutability exemption is call-scoped for {@code name}/{@code context}/
+ * {@code decision}, position-scoped for consequences/considered options (kogn-io/arknet#357).</strong>
+ * Because one {@code language} argument governs the whole call, this service computes a single
+ * {@code newLanguageVariant} boolean per {@code update} call for the three scalar fields: whether the
  * resolved write language is entirely absent from
  * {@link AdrRepository.CurrentAdr#nameContextDecisionLanguages()} (the union of every language tag
  * currently present across {@code name}/{@code context}/{@code decision}). If so, the whole call is
@@ -119,8 +121,11 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * whole call is treated as editing existing content and is not exempt for any of them. See
  * {@link Adr#reviseText}'s own javadoc for the full rule and the trade-off this simplification makes.
  * Appending a consequence/considered option is never gated at all (any status); correcting an
- * existing one in place is gated exactly like {@code name}/{@code context}/{@code decision}, but
- * without this exemption - see {@link Adr#withConsequenceCorrections}'s javadoc for why.</p>
+ * existing one in place is gated exactly like {@code name}/{@code context}/{@code decision}, but at the
+ * finer, per-position granularity {@link #newLanguageVariantPositions} computes from
+ * {@link AdrRepository.CurrentAdr#consequenceLanguagesByPosition()}/{@code optionLanguagesByPosition()} -
+ * see {@link Adr#withConsequenceCorrections}'s javadoc for the exact rule and why the granularity
+ * differs from the scalar fields'.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code adr_add} claims the same {@code ADR-N} first, via
@@ -401,9 +406,15 @@ public class AdrService
                                 newLanguageVariant(current, correction.language(), defaultLanguage,
                                         nameTouched || contextTouched || decisionTouched))
                         .withAppendedConsequences(correction.newConsequences())
-                        .withConsequenceCorrections(projectId, correction.consequenceCorrections())
+                        .withConsequenceCorrections(projectId, correction.consequenceCorrections(),
+                                newLanguageVariantPositions(touchedConsequencePositions,
+                                        current.consequenceLanguagesByPosition(), correction.language(),
+                                        defaultLanguage))
                         .withAppendedConsideredOptions(correction.newConsideredOptions())
-                        .withConsideredOptionCorrections(projectId, correction.consideredOptionCorrections())
+                        .withConsideredOptionCorrections(projectId, correction.consideredOptionCorrections(),
+                                newLanguageVariantPositions(touchedOptionPositions,
+                                        current.optionLanguagesByPosition(), correction.language(),
+                                        defaultLanguage))
                         .reviseReferences(
                                 requirements != null ? requirements : current.value().addressesRequirements(),
                                 contexts != null ? contexts : current.value().affectsContexts(),
@@ -426,6 +437,33 @@ public class AdrService
         }
         String resolved = LanguageTag.resolveWriteLanguage(language, defaultLanguage);
         return !current.nameContextDecisionLanguages().contains(resolved);
+    }
+
+    /**
+     * {@link #newLanguageVariant}'s counterpart for {@link Adr#withConsequenceCorrections}/
+     * {@link Adr#withConsideredOptionCorrections}, at the finer, per-position granularity those two
+     * methods take rather than {@link Adr#reviseText}'s single call-wide flag: which of
+     * {@code touchedPositions} (the positions this call's own corrections name) this call writes in a
+     * language absent from {@code currentLanguagesByPosition}'s set for that very position - the
+     * per-position equivalent of {@link AdrRepository.CurrentAdr#nameContextDecisionLanguages()}.
+     * Resolved lazily, exactly like {@link #newLanguageVariant}: an empty {@code touchedPositions}
+     * (no corrections at all in this call) never demands a {@code defaultLanguage} the project may
+     * not have.
+     */
+    private static Set<Integer> newLanguageVariantPositions(Set<Integer> touchedPositions,
+            Map<Integer, Set<String>> currentLanguagesByPosition, String language, String defaultLanguage) {
+        if (touchedPositions.isEmpty()) {
+            return Set.of();
+        }
+        String resolved = LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+        Set<Integer> newVariantPositions = new LinkedHashSet<>();
+        for (Integer position : touchedPositions) {
+            Set<String> existing = currentLanguagesByPosition.getOrDefault(position, Set.of());
+            if (!existing.contains(resolved)) {
+                newVariantPositions.add(position);
+            }
+        }
+        return newVariantPositions;
     }
 
     @Override

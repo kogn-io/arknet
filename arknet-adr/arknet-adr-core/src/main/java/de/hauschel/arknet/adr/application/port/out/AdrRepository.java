@@ -179,10 +179,24 @@ public interface AdrRepository {
      * @param optionLanguageByPosition  {@code consequenceLanguageByPosition}'s counterpart for
      *                                  {@code arknet:name}/{@code arkarch:optionRationale} of each
      *                                  existing considered option
+     * @param consequenceLanguagesByPosition the union of every language tag currently present on
+     *                                  {@code arkarch:consequenceStatement} at each existing position
+     *                                  (not just the displayed candidate {@code consequenceLanguageByPosition}
+     *                                  carries) - {@code consequenceLanguageByPosition}'s counterpart to
+     *                                  {@code nameContextDecisionLanguages}, what
+     *                                  {@code AdrService} checks a consequence correction's resolved
+     *                                  write language against to decide, per position, whether it adds
+     *                                  a genuinely new variant (see
+     *                                  {@code Adr#withConsequenceCorrections}'s javadoc)
+     * @param optionLanguagesByPosition {@code consequenceLanguagesByPosition}'s counterpart for each
+     *                                  existing considered option's {@code arknet:name}/
+     *                                  {@code arkarch:optionRationale}
      */
     record CurrentAdr(Adr value, String head, String nameLanguage, String contextLanguage,
             String decisionLanguage, Set<String> nameContextDecisionLanguages,
-            Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition) {
+            Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
+            Map<Integer, Set<String>> consequenceLanguagesByPosition,
+            Map<Integer, Set<String>> optionLanguagesByPosition) {
 
         public CurrentAdr {
             nameContextDecisionLanguages =
@@ -191,6 +205,10 @@ public interface AdrRepository {
                     consequenceLanguageByPosition == null ? Map.of() : Map.copyOf(consequenceLanguageByPosition);
             optionLanguageByPosition =
                     optionLanguageByPosition == null ? Map.of() : Map.copyOf(optionLanguageByPosition);
+            consequenceLanguagesByPosition =
+                    consequenceLanguagesByPosition == null ? Map.of() : Map.copyOf(consequenceLanguagesByPosition);
+            optionLanguagesByPosition =
+                    optionLanguagesByPosition == null ? Map.of() : Map.copyOf(optionLanguagesByPosition);
         }
     }
 

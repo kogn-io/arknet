@@ -725,7 +725,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
                             .map(LocalizedLiteral::languageTag).orElse(null),
                     nameContextDecisionTags,
                     childLanguageByPosition(handle, subject, CONSEQUENCE_PROPERTY, CONSEQUENCE_STATEMENT_PROPERTY),
-                    childLanguageByPosition(handle, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY)));
+                    childLanguageByPosition(handle, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY),
+                    allLanguageTagsByPosition(handle, subject, CONSEQUENCE_PROPERTY, CONSEQUENCE_STATEMENT_PROPERTY),
+                    allLanguageTagsByPosition(
+                            handle, subject, CONSIDERED_OPTION_PROPERTY, OPTION_RATIONALE_PROPERTY)));
         }
     }
 
@@ -767,6 +770,30 @@ public class KognioRdfAdrRepository implements AdrRepository {
         candidatesByPosition.forEach((position, candidates) -> displayLocale.select(candidates)
                 .ifPresent(selected -> result.put(position, selected.languageTag())));
         return result;
+    }
+
+    /**
+     * {@link #allLanguageTags} grouped by {@code arknet:position} instead of collected flat - every
+     * <em>tagged</em> language a position's {@code textPredicate} currently carries (not just the one
+     * {@link #displayLocale} would select), for
+     * {@link AdrRepository.CurrentAdr#consequenceLanguagesByPosition()}/{@code optionLanguagesByPosition()}'s
+     * per-position new-variant check (kogn-io/arknet#357's follow-up to {@code Adr#withConsequenceCorrections}/
+     * {@code #withConsideredOptionCorrections}). Runs the same query {@link #childLanguageByPosition}
+     * already issues for the very same predicate pair, one row per existing language variant - the set
+     * this method groups from is already being read, not newly fetched.
+     */
+    private Map<Integer, Set<String>> allLanguageTagsByPosition(DatasetHandle handle, String subject,
+            String childEdgePredicate, String textPredicate) {
+        String query = "SELECT ?position ?text WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + subject + " <" + childEdgePredicate + "> ?child . "
+                + "?child <" + POSITION_PROPERTY + "> ?position ; <" + textPredicate + "> ?text } }";
+        Map<Integer, Set<String>> byPosition = new LinkedHashMap<>();
+        handle.sparqlQuery().select(query).forEach(row -> {
+            int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
+            literalOf(row, "text").getLanguageTag().ifPresent(tag ->
+                    byPosition.computeIfAbsent(position, key -> new LinkedHashSet<>()).add(tag));
+        });
+        return byPosition;
     }
 
     @Override

@@ -49,8 +49,11 @@ import de.hauschel.arknet.kernel.ProjectId;
  * to the value it already holds changes nothing and is therefore accepted in any status - it is a
  * no-op, not a text change. {@code newConsequences}/{@code newConsideredOptions} (appending) are
  * likewise unlocked in every status; {@code consequenceCorrections}/{@code consideredOptionCorrections}
- * (in-place) are locked like {@code name}/{@code context}/{@code decision} but without that
- * new-language exemption - see {@code Adr#withConsequenceCorrections}'s javadoc for why.</p>
+ * (in-place) are locked like {@code name}/{@code context}/{@code decision} and carry the very same
+ * new-language exemption, at the finer grain of an individual position rather than the whole call -
+ * see {@code Adr#withConsequenceCorrections}'s javadoc for the exact rule. A non-text field
+ * ({@code consequenceType}/{@code optionOutcome}) is never exempt, even when the same correction also
+ * writes a genuinely new language for that position's text.</p>
  *
  * <p><strong>The three reference lists are the deliberate exception and stay correctable in every
  * status.</strong> Adding an {@code addressesRequirement}, {@code affectsContext} or
@@ -131,7 +134,8 @@ public interface UpdateAdr {
      *                                  {@link de.hauschel.arknet.adr.domain.Adr#withAppendedConsequences})
      * @param consequenceCorrections    text/type corrections for existing consequences, addressed by
      *                                  position, or {@code null}/empty for none; only allowed while
-     *                                  {@link AdrStatus#PROPOSED} (see
+     *                                  {@link AdrStatus#PROPOSED}, or per position to add a language
+     *                                  that position's {@code statement} never had (see
      *                                  {@link de.hauschel.arknet.adr.domain.Adr#withConsequenceCorrections})
      * @param newConsideredOptions      options to append, or {@code null}/empty for none - same
      *                                  always-allowed rule as {@code newConsequences}

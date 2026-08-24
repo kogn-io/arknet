@@ -77,6 +77,16 @@ class InMemoryAdrRepository implements AdrRepository {
     private final Map<AdrId, Map<Integer, String>> optionLanguageByIdentity = new LinkedHashMap<>();
 
     /**
+     * The full, accumulated-forever-unless-overwritten set of language tags each position has ever
+     * been written under - {@code consequenceLanguageByIdentity}/{@code optionLanguageByIdentity}'s
+     * counterpart to {@code nameContextDecisionLanguagesByIdentity}, what
+     * {@code AdrService#newLanguageVariantPositions} checks a correction's resolved write language
+     * against.
+     */
+    private final Map<AdrId, Map<Integer, Set<String>>> consequenceLanguagesByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, Map<Integer, Set<String>>> optionLanguagesByIdentity = new LinkedHashMap<>();
+
+    /**
      * Store-first (pre-#357) {@code arkarch:supersedes} pairs, seeded directly by
      * {@link #seedLegacySupersession} rather than reachable through any {@link AdrService} in-port -
      * exactly as a real project's legacy data would be, having been written before this issue existed
@@ -107,6 +117,14 @@ class InMemoryAdrRepository implements AdrRepository {
         Map<Integer, String> optionTags = new LinkedHashMap<>();
         adr.consideredOptions().forEach(o -> optionTags.put(o.position(), language));
         optionLanguageByIdentity.put(adr.id(), optionTags);
+        if (language != null) {
+            Map<Integer, Set<String>> consequenceLanguages = new LinkedHashMap<>();
+            adr.consequences().forEach(c -> consequenceLanguages.put(c.position(), new LinkedHashSet<>(Set.of(language))));
+            consequenceLanguagesByIdentity.put(adr.id(), consequenceLanguages);
+            Map<Integer, Set<String>> optionLanguages = new LinkedHashMap<>();
+            adr.consideredOptions().forEach(o -> optionLanguages.put(o.position(), new LinkedHashSet<>(Set.of(language))));
+            optionLanguagesByIdentity.put(adr.id(), optionLanguages);
+        }
     }
 
     @Override
@@ -139,6 +157,20 @@ class InMemoryAdrRepository implements AdrRepository {
         decisionLanguageByIdentity.put(updated.id(), decisionLanguage);
         consequenceLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(consequenceLanguageByPosition));
         optionLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(optionLanguageByPosition));
+        Map<Integer, Set<String>> consequenceLanguages =
+                consequenceLanguagesByIdentity.computeIfAbsent(updated.id(), key -> new LinkedHashMap<>());
+        consequenceLanguageByPosition.forEach((position, tag) -> {
+            if (tag != null) {
+                consequenceLanguages.computeIfAbsent(position, key -> new LinkedHashSet<>()).add(tag);
+            }
+        });
+        Map<Integer, Set<String>> optionLanguages =
+                optionLanguagesByIdentity.computeIfAbsent(updated.id(), key -> new LinkedHashMap<>());
+        optionLanguageByPosition.forEach((position, tag) -> {
+            if (tag != null) {
+                optionLanguages.computeIfAbsent(position, key -> new LinkedHashSet<>()).add(tag);
+            }
+        });
     }
 
     /**
@@ -183,7 +215,9 @@ class InMemoryAdrRepository implements AdrRepository {
                         decisionLanguageByIdentity.get(adr.id()),
                         nameContextDecisionLanguagesByIdentity.getOrDefault(adr.id(), Set.of()),
                         consequenceLanguageByIdentity.getOrDefault(adr.id(), Map.of()),
-                        optionLanguageByIdentity.getOrDefault(adr.id(), Map.of())));
+                        optionLanguageByIdentity.getOrDefault(adr.id(), Map.of()),
+                        consequenceLanguagesByIdentity.getOrDefault(adr.id(), Map.of()),
+                        optionLanguagesByIdentity.getOrDefault(adr.id(), Map.of())));
     }
 
     @Override
