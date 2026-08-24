@@ -12,7 +12,10 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
+import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -137,6 +140,41 @@ public interface AdrRepository {
     List<Adr> findAll(ProjectId projectId);
 
     /**
+     * Deletes the decision identified by {@code code}, and every triple it carries in this hexagon's
+     * own named graph, from the project. Whether the decision may be deleted at all - its status,
+     * and whether anything still points at it - is decided above this port first; what this port
+     * adds is the guarantee that both checks and the removal share one atomic view of the store, so
+     * a status change or a reference written between the two cannot slip through: an implementation
+     * therefore repeats both the status check and the reference check against its own write
+     * transaction, rejecting with {@link AdrNotDeletableException} or {@link AdrReferencedException}
+     * there too.
+     *
+     * @param projectId the project (architecture model) the decision lives in
+     * @param code      the ADR code, e.g. {@code ADR-1}
+     * @throws AdrNotFoundException     if no decision with this code exists
+     * @throws AdrNotDeletableException if the decision is no longer {@link AdrStatus#PROPOSED}
+     * @throws AdrReferencedException   if another decision still points at it
+     */
+    void delete(ProjectId projectId, AdrCode code);
+
+    /**
+     * Returns the business codes of decisions that were deleted from the project and are kept out of
+     * circulation - what {@link #delete} retains so a code can never name two different decisions
+     * over a project's lifetime. Read together with {@link #findAll} whenever the next free code is
+     * derived; the two sets are disjoint, since a retained code belongs to a decision that no longer
+     * exists.
+     *
+     * <p>Never rejects and never reports a code twice. A decision deleted <em>without</em> the
+     * implementation being able to retain its code is simply absent - the contract is "every code
+     * this port could keep", not "every code ever used", and the one implementation-side gap this
+     * leaves is documented where it arises.</p>
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, sorted by running number, never {@code null}
+     */
+    List<AdrCode> findRetainedCodes(ProjectId projectId);
+
+    /**
      * Resolves opaque decision identities to their business codes, in one store round-trip (not one
      * per id) - what turns {@link Adr#supersedes()}'s bare identities into something a human can
      * re-type.
@@ -166,4 +204,25 @@ public interface AdrRepository {
      * @return the superseding decisions' codes, sorted, never {@code null}
      */
     List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId);
+
+    /**
+     * Reads the backward direction of {@code arkarch:relatedTo}: the business codes of every
+     * decision whose {@code relatedTo} edge points at {@code relatedId}.
+     *
+     * <p>This exists for the same reason {@link #findSupersedingCodes} does - only the forward edge
+     * is ever asserted, so the other direction has to be read backwards. What differs is what the
+     * caller does with the answer: {@code relatedTo} is an {@code owl:SymmetricProperty}, so the
+     * application service unions this result with the decision's own forward edges into the single
+     * list {@code AdrDetail#relatedTo} carries, rather than reporting two directions of one and the
+     * same relation.</p>
+     *
+     * <p>One step backwards, never a traversal: the peers this returns are not themselves followed.
+     * That is what keeps a legitimate {@code A relatedTo B}, {@code B relatedTo A} cycle - which
+     * this relation explicitly permits, unlike {@code supersedes} - from looping.</p>
+     *
+     * @param projectId the project (architecture model) to read in
+     * @param relatedId the identity of the decision to find the referencing peers of
+     * @return the referencing decisions' codes, sorted, never {@code null}
+     */
+    List<AdrCode> findRelatedCodes(ProjectId projectId, AdrId relatedId);
 }

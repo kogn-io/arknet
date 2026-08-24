@@ -1,18 +1,19 @@
 # arknet-adr
 
 Sechste hexagonale BC (Bauart 1:1 zu bounded-context) -- arknet-adr-core + arknet-adr-adapter-kogniordf (Out) + arknet-adr-adapter-mcp (In).
-Macht `arkarch:ArchitectureDecisionRecord` store-first mintbar (`adr_add`/`adr_list`/`adr_get`/`adr_set_status`/`adr_supersede`, #69) -- der Anlass ist ADR-005: ADRs waren die letzte Artefaktklasse mit datei-basiertem Lebenszyklus, ausgerechnet die, fuer die arknet das Vokabular laengst mitbrachte. **Die 15 Markdown-ADRs unter `docs/adr/` sind explizit nicht Teil davon**: keine Migration, keine Koexistenz-Logik, kein gemeinsamer Nummernraum -- der Store-Code laeuft ungepolstert `ADR-1`, `ADR-2`, ..., je Projekt, die Dateien zero-padded `adr-NNN-*.md`; `AdrCode`s Javadoc sagt das, und die `adr_add`-Tool-Beschreibung sagt es dem Aufrufer, damit niemand die beiden Raeume verwechselt.
+Macht `arkarch:ArchitectureDecisionRecord` store-first mintbar (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`/`adr_delete`, #69) -- der Anlass ist ADR-005: ADRs waren die letzte Artefaktklasse mit datei-basiertem Lebenszyklus, ausgerechnet die, fuer die arknet das Vokabular laengst mitbrachte. **Die 15 Markdown-ADRs unter `docs/adr/` sind explizit nicht Teil davon**: keine Migration, keine Koexistenz-Logik, kein gemeinsamer Nummernraum -- der Store-Code laeuft ungepolstert `ADR-1`, `ADR-2`, ..., je Projekt, die Dateien zero-padded `adr-NNN-*.md`; `AdrCode`s Javadoc sagt das, und die `adr_add`-Tool-Beschreibung sagt es dem Aufrufer, damit niemand die beiden Raeume verwechselt.
 Ob und wann migriert wird, ist eine eigene, nachgelagerte Entscheidung (Klaerung zu #69).
 
 **Ontologie war die Vorarbeit, nicht der Bau.** `arkarch:` existierte vollstaendig, lag aber unter `parked/` (kein lebender Konsument, `arknet-ontology/CLAUDE.md`).
 Der Split folgt exakt dem `arkddd#`-Praezedenzfall aus PR #57: die ADR-Sektionen (Klasse, Datatype-Properties, Relationen, die fuenf Status-Individuen, die zwei OWL-Restriktionen) wandern in ein aktives `arknet-architecture.ttl`, der ISO-42010-Rest (Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint, View) bleibt geparkt als `parked/arknet-architecture_parked.ttl` -- gleicher Namespace, gleicher Ontologie-IRI, `_parked`-Suffix wie bei `arknet-ddd_parked.ttl`, weil der Dateiname sonst kollidiert.
-Dieselbe Teilung fuer die Shapes: aktiv `architecture-shapes.ttl` (nur `ashapes:ADRShape` + seine sieben Property-Shapes), geparkt `parked/architecture-shapes_parked.ttl`.
+Dieselbe Teilung fuer die Shapes: aktiv `architecture-shapes.ttl` (nur `ashapes:ADRShape` + seine acht Property-Shapes), geparkt `parked/architecture-shapes_parked.ttl`.
+**Befund, nicht behoben:** fuer `arkarch:supersedes` traegt `ADRShape` gar keine Property-Shape -- die einzige Referenz-Kante mit Shape ist `ashapes:ADR-relatedTo`.
 Die `sh:in`-Liste von `ashapes:ADR-status` bleibt unangetastet fuenfwertig.
 
 **Opake Identitaet:** `AdrId` wrapt eine vom Kernel gemintete `ResourceId`, `AdrCode` traegt die `ADR-N`-Semantik als reines Business-Label (`dcterms:identifier`) -- der MCP-Nutzer tippt den Code.
 `AdrId` ist zugleich der Referenztyp der selbstbezueglichen `supersedes`-Kante: ein abgeloestes ADR ist eine Ressource **dieses** Hexagons, also ist dessen eigener Identitaetstyp der ehrliche, und ein separates `AdrRef` verdient sich seinen Platz nicht (anders als `RequirementRef`/`BoundedContextRef`, die nackte `ResourceId`s halten, gerade weil ihr Ziel im Nachbar-Hexagon liegt).
 
-**Drei Relationen, drei verschiedene Aufloesungsmuster** -- hier ist die BC echt komplexer als ihre Vorlage:
+**Vier Relationen, vier verschiedene Aufloesungsmuster** -- hier ist die BC echt komplexer als ihre Vorlage:
 
 1. `arkarch:supersedes` (ADR -> ADR, selbstbezueglich).
 Kein neuer Out-Port: `AdrService#supersede` loest den Ziel-Code ueber `AdrRepository#findByCode` im eigenen Hexagon auf, ein unbekannter ist eine gewoehnliche `AdrNotFoundException` statt einer didaktischen Cross-BC-Ablehnung. **Nur die Vorwaertskante wird als Tripel geschrieben.** Das ontologische `owl:inverseOf`-Gegenstueck `arkarch:supersededBy` bleibt bewusst unmaterialisiert -- nichts in diesem Code reasont ueber Inverse (der Gate reasont nicht, s. bounded-context), und zwei handgepflegte Tripel sind genau das Drift-Risiko, das dieses Projekt sonst meidet.
@@ -21,12 +22,21 @@ Ein `KognioRdfAdrRepositoryTest` nagelt fest, dass `supersededBy` nach einem `ad
 2. `arkarch:addressesRequirement` (ADR -> `arkreq:Requirement`, Cross-BC).
 Schreibseite: eigener Out-Port `RequirementLookup` + `KognioRdfRequirementLookup` (Code -> `ResourceId` per `dcterms:identifier`, didaktische Ablehnung ueber `UnresolvedReferenceException`), Bauart 1:1 zum gleichnamigen uc-Adapter.
 Leseseite: der **bestehende** req-In-Port `ResolveRequirements`, konsumiert vom In-Adapter (ADR-008) -- kein zweiter Mechanismus fuer dieselbe Richtung.
-3. `arkarch:affectsContext` (ADR -> `arkddd:BoundedContext`, Cross-BC).
+3. `arkarch:relatedTo` (ADR <-> ADR, selbstbezueglich, `owl:SymmetricProperty`).
+Kein neuer Out-Port und kein eigenes Link-Tool: `AdrService` loest die Ziel-Codes wie bei `supersede` ueber `AdrRepository#findByCode` im eigenen Hexagon auf, gesetzt wird die Kante mit `adr_add` und korrigiert mit `adr_update` -- dieselbe Regel, der `addressesRequirement`/`affectsContext` folgen, und die zugleich den Reihenfolge-Fall abdeckt (der zuerst geschriebene Record kann den spaeteren erst nachtraeglich nennen).
+`supersedes` behaelt sein eigenes Tool, weil es ein Lifecycle-Akt ist und keine Referenz.
+**Auch hier wird nur die Vorwaertskante geschrieben**, obwohl die Ontologie die Property als symmetrisch deklariert: der Gate reasont nicht, und zwei handgepflegte Tripel fuer eine Aussage sind dasselbe Drift-Risiko, das `supersededBy` unmaterialisiert laesst.
+Gelesen wird darum **eine** zusammengefuehrte Liste statt zweier Richtungen -- "relatedTo" und "relatedFrom" waeren bei einer symmetrischen Relation zwei Namen fuer dieselbe Sache.
+`AdrDetail#relatedTo` vereinigt die eigenen Vorwaertskanten mit denen, die auf den Record zeigen (`AdrRepository#findRelatedCodes`), dedupliziert und nach laufender Nummer sortiert.
+Zyklen sind ausdruecklich erlaubt (anders als bei `supersedes`); die Zusammenfuehrung ist ein Ein-Schritt-Reverse-Read und keine Traversierung, darum terminiert sie und meldet jeden Peer genau einmal.
+Selbstbezug wird abgelehnt -- im Compact Constructor von `Adr` und, mit dem sprechenderen Code im Text, schon in `AdrService#update`.
+4. `arkarch:affectsContext` (ADR -> `arkddd:BoundedContext`, Cross-BC).
 Schreibseite analog (`BoundedContextLookup` + `KognioRdfBoundedContextLookup`).
 Leseseite: der bc-BC hatte noch **keinen** `ResolveBoundedContexts`-In-Port -- dieser Bau zieht ihn nach, Form 1:1 zu `ResolveTerms`/`ResolveRequirements` (`resolveExisting(ProjectId, ResourceId...)` -> `List<ResolvedBoundedContext>`, wirft nie, Batch nach Identitaet), getragen vom neuen Out-Port `BoundedContextRepository#findByIds` (`VALUES`-gebundener SPARQL-Batch, Join nur ueber `dcterms:identifier`, damit ein store-first BC ohne `name`/`domainVision` trotzdem anzeigbar bleibt). *Namens-Drift benannt statt stillschweigend entschieden:* `ResolveTerms` heisst seine Methode `getById`, `ResolveRequirements` `resolveExisting` -- zwei Elemente, zwei Namen.
 Der neue folgt dem juengeren (`resolveExisting`); die Vereinheitlichung der bestehenden zwei ist bewusst nicht Teil dieses Baus.
 
-Alle drei Kanten stecken **im** `Adr`-Record, nicht daneben -- sonst loescht der naechste replace-by-identity-Write sie still (Lehre aus req/bc).
+Alle vier Kanten stecken **im** `Adr`-Record, nicht daneben -- sonst loescht der naechste replace-by-identity-Write sie still (Lehre aus req/bc).
+`relatedTo` war vor seinem Bau eine der Kanten, die der Out-Adapter ueber den Write hinweg *bewahren* musste; jetzt reist sie im Kandidatengraph mit, und die Bewahrung waere sogar schaedlich (sie machte das Loeschen per `adr_update` unmoeglich).
 
 **Schreibpfad von Anfang an mit CAS.** `AdrRepository` traegt `create` + `compareAndUpdate` und **keine** unbedingte Update-Methode; `AdrService#accept`/`#supersede` laufen ueber `updateWithOptimisticRetry` (Kernfelder+`arkprov:head` aus `findCurrentByCode`, Mutation, `compareAndUpdate` mit dem beobachteten Head, Retry gegen einen frischen Read, `AdrConcurrentlyModifiedException` bei Erschoepfung).
 Das ist die Nachruestung, die req und bc je nachtraeglich brauchten -- hier ab dem ersten Commit.
@@ -42,22 +52,58 @@ Die Transitionsregeln selbst leben auf `Adr#accept()`/`#reject()`/`#deprecate()`
 `SUPERSEDED` bleibt bewusst **kein** Statuswert: es blieb offen, ob die fuenfte Ontologie-Individuum zusaetzlich als Status geschrieben wird oder ausschliesslich aus der `supersedes`/`supersededBy`-Relation abgeleitet bleibt -- entschieden fuer Letzteres, aus derselben Begruendung, die `supersededBy` selbst nie als zweites Tripel materialisiert: zwei unabhaengig gepflegte Signale fuer denselben Sachverhalt sind genau das Drift-Risiko, das dieses Projekt meidet.
 `adr_supersede` laesst den Status des abgeloesten ADR entsprechend weiterhin unberuehrt.
 
-**`AdrDetail` statt nacktem `Adr` an jedem In-Port.** Jeder Driving-Port liefert `AdrDetail(Adr, List<AdrCode> supersedes, List<AdrCode> supersededBy)`.
-Grund: die `supersedes`-Identitaeten sind opak, ihre Anzeige-Codes gehoeren diesem Hexagon (kein ADR-008-Borrow noetig), und die Rueckrichtung ist ueberhaupt nur per Reverse-Read zu haben.
-`adr_list` leitet **beide** Richtungen aus seinem einen `findAll` in-memory ab (kein Reverse-Query je Zeile); die Einzel-ADR-Pfade zahlen dafuer zwei billige Reads (`findCodesByIds` + `findSupersedingCodes`).
+**Korrektur ist gestaffelt: Text nur solange `PROPOSED`, Kanten immer** (`adr_update`, `UpdateAdr`/`AdrCorrection`).
+Die sechs Textfelder (`name`/`context`/`decision`/`consequences`/`alternatives`/`decisionDate`) sind ab `ACCEPTED` -- und ebenso ab `REJECTED`/`DEPRECATED` -- nicht mehr aenderbar: eine in Kraft gesetzte Entscheidung protokolliert, was damals entschieden wurde, und die Korrektur laeuft ueber einen Nachfolger statt ueber einen Edit (Nygard).
+`AdrTextImmutableException` sagt das dem Aufrufer und verweist auf `adr_supersede`, statt nur zu blocken.
+`arkarch:addressesRequirement`, `arkarch:affectsContext` und `arkarch:relatedTo` sind die bewusste Ausnahme und bleiben in **jedem** Status korrigierbar: eine spaeter ergaenzte Kante vervollstaendigt einen Verweis, den es zur Schreibzeit nicht geben konnte, weil das Ziel noch nicht existierte -- dieselbe Lizenz, die sich `adr_supersede` gegen ein `ACCEPTED`-ADR laengst nimmt.
+Beide Regeln leben auf `Adr#reviseText()`/`Adr#reviseReferences()`, nicht im Service und **nicht** in `architecture-shapes.ttl`: eine Shape validiert einen Graph-Zustand, keinen Uebergang, "dieser Text darf sich nicht geaendert haben" ist dort gar nicht ausdrueckbar.
+`reviseText` vergleicht **zuerst** feldweise und prueft **danach** den Status -- eine Aenderung, die nichts aendert, ist in jedem Status ein No-op statt einer Ablehnung. Das ist load-bearing, weil ein reiner Kanten-Update denselben Pfad nimmt; und ein ungueltiger Wert an einem `ACCEPTED`-Record scheitert so an der Unveraenderlichkeit, dem eigentlichen Grund, statt an der Validierung.
+Gepatcht wird feldweise: `null` heisst "unveraendert lassen" und ist nie ein Loesch-Signal.
+Fuer die drei Kanten-Listen ist der Unterschied `null`/leer dagegen bedeutungstragend (`null` = unveraendert, leere Liste = alle Kanten entfernen, nicht-leere Liste = Wholesale-Ersatz), darum normalisiert `AdrCorrection`s Compact Constructor `null` als einziger im BC **nicht** auf `List.of()`.
+Die Referenz-Codes loest `AdrService#update` wie `#add` **vor** der Retry-Schleife auf; der Rest laeuft ueber denselben `updateWithOptimisticRetry`-CAS-Helfer.
+*Befund, nicht behoben:* die Peer-Aufloesung fuer `relatedTo` liest ausserhalb jeder Transaktion -- loescht ein konkurrenter `adr_delete` das Ziel zwischen Aufloesung und Commit, schreibt `adr_update` eine Kante auf eine tote IRI, und jeder weitere Write am verweisenden Record scheitert danach am Gate (`ashapes:ADR-relatedTo`). Wiederherstellbar nur ueber `adr_update ... relatedTo=[]`, was auch die uebrigen `relatedTo`-Kanten mit wegwirft. Nachgehalten in #356.
+
+**Loeschen ist eine Ausnahme, kein Lifecycle-Schritt** (`adr_delete`, `DeleteAdr`).
+Loeschbar ist ausschliesslich ein `PROPOSED`-Record: `adr_delete` macht ein versehentliches `adr_add` rueckgaengig (Dublette, Entwurf am falschen Ort), es beendet keine Entscheidung.
+Ab `ACCEPTED` bleibt der Record stehen, weil genau das Entschiedene der Zweck eines Decision Records ist (Nygard) -- `AdrNotDeletableException` sagt das und nennt **je Status** den passenden Weg (`adr_supersede` bzw. `adr_set_status DEPRECATED`) statt eines gemeinsamen "nein".
+`REJECTED` ist ausdruecklich genauso wenig loeschbar: "erwogen und verworfen" ist eine dokumentierte Entscheidung mit Wert -- sie haelt dieselbe Option davon ab, ein Jahr spaeter wieder aufzutauchen -- und darf darum weder geloescht werden noch selbst der Ausweg sein, einen versehentlich angelegten Record loszuwerden.
+Die Tool-Beschreibungen von `adr_delete` **und** `adr_set_status` sagen diesen Unterschied dem Aufrufer, bevor er in die Ablehnung laeuft.
+Solange ein anderer Record ueber `arkarch:supersedes` oder `arkarch:relatedTo` auf den Kandidaten zeigt, wird abgelehnt statt die Kante baumeln zu lassen (`AdrReferencedException`) -- dieselbe Linie, die `term_delete`/`actor_delete` ziehen.
+Weil beide Relationen hexagon-eigen sind, nennt die Meldung die verweisenden Records **mit Code** und je Kante den Remedy, den es wirklich gibt: `adr_update` raeumt eine `relatedTo`-Kante weg; fuer `supersedes` gibt es kein Tool, die Kante verschwindet nur mit dem abloesenden Record selbst.
+*Befund, nicht behoben:* `adr_supersede` prueft den Status des abgeloesten Records nicht, ein `PROPOSED`-Record kann also abgeloest sein -- und ist dann bis zum Verschwinden seines Nachfolgers nicht loeschbar.
+Die Referenzpruefung sitzt bewusst **zweimal**: im Service als didaktischer Vorab-Check ueber die vorhandenen Reverse-Reads (`findSupersedingCodes`/`findRelatedCodes`), im Out-Adapter als race-freier Backstop in der laufenden Schreib-Transaktion -- der Vorab-Check liest vor der Transaktion, eine dazwischen geschriebene Kante kaeme nur am zweiten vorbei.
+
+**Ein geloeschter Code kommt nicht zurueck.**
+Der Loeschpfad laeuft ueber `WriteFunnel#delete`: Tombstone statt Revision (letzte Revision `prov:invalidatedAtTime`, `arkprov:head` weg, Kette bleibt als Audit-Trail).
+Der Tombstone traegt aber **keinen** Business-Code -- `recordRevision` schreibt nur Typ, `prov:specializationOf` (auf die opake Subject-IRI), `wasGeneratedBy`, `generatedAtTime`, `wasRevisionOf`; `ADR-7` steht ausschliesslich am Modelltripel, das der Loeschvorgang wegraeumt.
+Ohne Gegenmassnahme faellt das Maximum aus `AdrService#nextCode` zurueck und das naechste `adr_add` vergaebe dieselbe Nummer erneut -- fuer eine Nummer, die in einer Commit-Message oder Notiz laengst fuer etwas anderes steht, ist das eine falsche Faehrte.
+Der Out-Adapter haengt darum beim Loeschen den Code als `dcterms:identifier` an genau die Revision, die getombstoned wird (`KognioRdfAdrRepository#retainCode`; der Head-Zeiger steht zu diesem Zeitpunkt noch, der Trichter entfernt ihn erst nach dem Body).
+`AdrRepository#findRetainedCodes` liest sie zurueck, und `nextCode` bildet das Maximum ueber lebende **plus** aufbewahrte Codes.
+Der Lesepfad ist doppelt eingegrenzt, weil der Provenance-Graph allen BCs gehoert: nur Revisionen mit `prov:invalidatedAtTime` und nur Identifier mit `ADR-`-Praefix -- die Typ-Tripel der geloeschten Ressource sind weg, ihr Code ist das Einzige, was einen Nachbarn unterscheidbar macht, der spaeter dasselbe tut.
+Der Mechanismus ist bewusst **adapter-lokal** und nicht in `arknet-persistence-support` gewandert; ob er geteilt gehoert, ist eine eigene Frage.
+*Bekannte Luecke, dokumentiert statt kaschiert:* eine Ressource ohne jede Revision (vor Einfuehrung der Revisionsaufzeichnung angelegt) hat keinen Head, an den sich der Code haengen liesse -- ihr Code kann ein zweites Mal vergeben werden; der Adapter loggt das mit `WARN`, statt eine Revision zu erfinden, die es nie gab.
+
+**`AdrDetail` statt nacktem `Adr` an jedem In-Port.** Jeder Driving-Port liefert `AdrDetail(Adr, List<AdrCode> supersedes, List<AdrCode> supersededBy, List<AdrCode> relatedTo)`.
+Grund: die `supersedes`- und `relatedTo`-Identitaeten sind opak, ihre Anzeige-Codes gehoeren diesem Hexagon (kein ADR-008-Borrow noetig), und die jeweilige Rueckrichtung ist ueberhaupt nur per Reverse-Read zu haben.
+`adr_list` leitet **beide** Richtungen -- die von `supersedes` und die von `relatedTo` -- aus seinem einen `findAll` in-memory ab (kein Reverse-Query je Zeile); die Einzel-ADR-Pfade zahlen dafuer drei billige Reads (`findCodesByIds` + `findSupersedingCodes` + `findRelatedCodes`).
 
 **Out-Adapter.** Ein Named Graph `https://w3id.org/arknet/model/adr`; alle Praedikat-/Typ-/Individuen-IRIs aus `ArkarchVocabulary` (`arknet-persistence-support`).
 Anders als `ArkreqVocabulary`/`ArkdddVocabulary`, deren Scope bewusst nur die modul-uebergreifend duplizierten Praedikate umfasst, spiegelt `ArkarchVocabulary` sein **ganzes** (ADR-only) Ontologie-Modul -- die Bauart von `ArkprovVocabulary`/`ArkprjVocabulary`, und erst sie macht den beidseitigen Abgleich `ArchitectureVocabularyMatchesOntologyTest` (arknet-architecture-tests) moeglich.
-`replaceTriples` bewahrt ueber den replace-by-identity-Write hinweg: **alle** `arkarch:supersededBy`- und `arkarch:relatedTo`-Kanten (kein Domain-Feld, nur store-first erreichbar -- dieselbe Rolle wie `arkddd:hasAggregate` bei bc) sowie Nicht-IRI-Ziele von `addressesRequirement`/`affectsContext`/`supersedes` (Blank Nodes, die `ResourceId` nicht darstellen kann, dieselbe Bewahrungslogik wie bei den anderen BCs).
+`replaceTriples` bewahrt ueber den replace-by-identity-Write hinweg: **alle** `arkarch:supersededBy`-Kanten (kein Domain-Feld, nur store-first erreichbar -- dieselbe Rolle wie `arkddd:hasAggregate` bei bc) sowie Nicht-IRI-Ziele von `addressesRequirement`/`affectsContext`/`supersedes` (Blank Nodes, die `ResourceId` nicht darstellen kann, dieselbe Bewahrungslogik wie bei den anderen BCs).
+`relatedTo` ist von dieser Bewahrung ausgenommen: `ashapes:ADR-relatedTo` shaped es `sh:nodeKind sh:IRI` mit `sh:Violation`, ein Blank-Node-Ziel ist also genau der Zustand, den die Shape verbietet -- ein store-first eingefuegtes bleibt darum ab dem naechsten Write weg statt past den Gate re-attached zu werden.
 Beide Faelle mit Regressionstest.
 Die Lese-Pfade gruppieren pro Subject und waehlen deterministisch den zuerst gesehenen Wert mit `WARN` bei kollabierten Mehrwerten: ausser `dcterms:identifier` und `adrStatus` traegt keine ADR-Property-Shape ein durchsetzbares `sh:maxCount`.
 `FILTER(isIRI(?s))` schuetzt gegen ein store-first Blank-Node-Subject.
 `arkarch:decisionDate` traegt gar keine Property-Shape -- ein unparsbares Literal wird mit `WARN` uebersprungen statt den ganzen Read zu reissen.
 Das Gate laedt `/architecture-shapes.ttl`, targetet `arkarch:ArchitectureDecisionRecord` direkt und braucht darum weder Axiome noch Shape-Filterung (wie bc, anders als req/uc).
-Ein `sh:class`-Constraint auf den Referenz-Praedikaten gibt es nicht, also auch keinen validation-only `assertedContext`.
+`addressesRequirement`/`affectsContext`/`supersedes` tragen keinen `sh:class`-Constraint; `ashapes:ADR-relatedTo` traegt einen (`sh:nodeKind sh:IRI` + `sh:class arkarch:ArchitectureDecisionRecord`) und ist damit die einzige Kante mit validation-only `assertedContext`.
+Der kopiert je Ziel-ADR nur dessen Typ-Tripel und die fuenf Felder, die `ADRShape`s `sh:Violation`-Property-Shapes fordern (`dcterms:identifier`, `arknet:name`, `adrStatus`, `adrContext`, `adrDecision`) -- Bauart wie `KognioRdfRequirementRepository#constraintAssertedContext`.
+Ein blosses Typ-Tripel reichte nicht: `ADRShape` targetet `arkarch:ArchitectureDecisionRecord` und liegt in derselben Shapes-Datei, wuerde das so getypte Ziel also mitvalidieren und mangels Pflichtfeldern ablehnen.
+Mehr als diese sechs Tripel zu kopieren, reichte umgekehrt zu weit: die eigenen Referenz-Kanten des Ziels verlangten dann, dass auch dessen Peers getypt sind, und so weiter nach aussen.
+Preis der Entscheidung: ein `relatedTo`-Ziel, das store-first unvollstaendig ist (oder gar kein ADR), blockiert jeden weiteren Write am *verweisenden* Record -- laut, mit der Shape-Meldung, statt still.
 
 **Traceability.** `impact_analysis` (arknet-mcp) folgt die drei ADR-Kanten rueckwaerts mit: Requirement aendern -> das adressierende ADR ist betroffen, BoundedContext aendern -> das betreffende ADR, ADR abloesen -> sein Nachfolger.
-`arkarch:relatedTo` bleibt bewusst draussen -- eine symmetrische "siehe auch"-Kante machte jedes verwandte ADR von jedem anderen erreichbar und den Impact-Report zum Cluster-Dump.
+`arkarch:relatedTo` bleibt bewusst draussen, obwohl `adr_add`/`adr_update` sie inzwischen schreiben -- eine symmetrische "siehe auch"-Kante machte jedes verwandte ADR von jedem anderen erreichbar und den Impact-Report zum Cluster-Dump.
 `arkarch:supersededBy` bleibt draussen, weil es niemand schreibt.
 Vorwaertsrichtung ist bewusst **nicht** ergaenzt: `impact_analysis` ist definitionsgemaess der Rueckwaerts-Abschluss (`dependents`), und was ein ADR selbst referenziert, zeigt `adr_get` ohnehin.
 Kein `adr_impact`.

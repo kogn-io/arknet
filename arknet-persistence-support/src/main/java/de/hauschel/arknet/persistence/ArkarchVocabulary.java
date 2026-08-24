@@ -29,16 +29,19 @@ package de.hauschel.arknet.persistence;
  * "the whole module" and "what the ADR context writes" coincide here - and the mirror is what makes
  * the drift test possible in the first place.</p>
  *
- * <p><strong>Why terms nothing writes are still named.</strong> {@link #SUPERSEDED_BY} and
- * {@link #RELATED_TO} are never asserted by any tool: the codebase materialises no
- * {@code owl:inverseOf} pair as a second physical triple, and {@code relatedTo} has no tool at all.
- * The ADR out-adapter nevertheless names both - it must preserve such store-first (ADR-005) edges
- * across its replace-by-identity write instead of erasing them. {@link #SUPERSEDED} is likewise
- * named without being written: the shipped {@code ashapes:ADR-status} shape admits it as a fifth
- * lifecycle individual, but the Java {@code AdrStatus} enum deliberately never implements it -
- * {@code Superseded} stays derived-only from the {@code supersedes}/{@code supersededBy}
- * reverse-read, the same reasoning that keeps {@code supersededBy} itself unmaterialised. The
- * vocabulary mirrors what arknet ships, not what the tools currently write.</p>
+ * <p><strong>Why terms nothing writes are still named.</strong> {@link #SUPERSEDED_BY} is never
+ * asserted by any tool: the codebase materialises no {@code owl:inverseOf} pair as a second
+ * physical triple. The ADR out-adapter nevertheless names it - it must preserve such store-first
+ * (ADR-005) edges across its replace-by-identity write instead of erasing them.
+ * {@link #SUPERSEDED} is likewise named without being written: the shipped
+ * {@code ashapes:ADR-status} shape admits it as a fifth lifecycle individual, but the Java
+ * {@code AdrStatus} enum deliberately never implements it - {@code Superseded} stays derived-only
+ * from the {@code supersedes}/{@code supersededBy} reverse-read, the same reasoning that keeps
+ * {@code supersededBy} itself unmaterialised. The vocabulary mirrors what arknet ships, not what
+ * the tools currently write. {@link #RELATED_TO} used to belong in this paragraph and no longer
+ * does: {@code adr_add}/{@code adr_update} write it, and the same one-direction-only rule
+ * {@code supersedes} follows applies to it although the ontology declares it an
+ * {@code owl:SymmetricProperty}.</p>
  */
 public final class ArkarchVocabulary {
 
@@ -68,7 +71,13 @@ public final class ArkarchVocabulary {
     /** {@code arkarch:supersededBy} - ADR -&gt; the newer ADR replacing it ({@code owl:inverseOf} supersedes). */
     public static final String SUPERSEDED_BY = NAMESPACE + "supersededBy";
 
-    /** {@code arkarch:relatedTo} - ADR &lt;-&gt; ADR, a loose symmetric cross-reference. */
+    /**
+     * {@code arkarch:relatedTo} - ADR &lt;-&gt; ADR, a loose symmetric cross-reference. Written by
+     * {@code adr_add}/{@code adr_update} in the forward direction only, even though the ontology
+     * declares it an {@code owl:SymmetricProperty}: a reader sees both directions because the
+     * application service unions the forward edges with a reverse read, not because a second
+     * triple was maintained by hand.
+     */
     public static final String RELATED_TO = NAMESPACE + "relatedTo";
 
     /** {@code arkarch:addressesRequirement} - ADR -&gt; the {@code arkreq:Requirement} it addresses. */

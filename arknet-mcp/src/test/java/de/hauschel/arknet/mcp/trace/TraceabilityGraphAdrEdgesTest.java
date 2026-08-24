@@ -95,12 +95,12 @@ class TraceabilityGraphAdrEdgesTest {
                 "Use kognio-rdf behind an out-port.", null, null, null,
                 List.of(new RequirementRef(ResourceId.of(FR_1_IRI))),
                 List.of(new BoundedContextRef(ResourceId.of(BC_1_IRI))),
-                List.of()));
+                List.of(), List.of()));
         adrs.create(PROJECT, new Adr(
                 new AdrId(ResourceId.of(ADR_2_IRI)), new AdrCode("ADR-2"), "Swap the store",
                 AdrStatus.PROPOSED, "The embedded store no longer covers the team case.",
                 "Move to a remote endpoint behind the same out-port.", null, null, null,
-                List.of(), List.of(), List.of(new AdrId(ResourceId.of(ADR_1_IRI)))));
+                List.of(), List.of(), List.of(new AdrId(ResourceId.of(ADR_1_IRI))), List.of()));
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
         graph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);

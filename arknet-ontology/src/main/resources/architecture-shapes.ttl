@@ -33,7 +33,8 @@ ashapes:ADRShape
     sh:property ashapes:ADR-context ;
     sh:property ashapes:ADR-decision ;
     sh:property ashapes:ADR-consequences ;
-    sh:property ashapes:ADR-alternatives .
+    sh:property ashapes:ADR-alternatives ;
+    sh:property ashapes:ADR-relatedTo .
 
 ashapes:ADR-identifier
     a sh:PropertyShape ;
@@ -95,5 +96,16 @@ ashapes:ADR-alternatives
     sh:datatype xsd:string ;
     sh:message  "Best practice: An ADR should document considered alternatives (arkarch:adrAlternatives)."@en , "Best Practice: ADR sollte erwogene Alternativen (arkarch:adrAlternatives) dokumentieren."@de ;
     sh:severity sh:Warning .
+
+# Zero or more: a decision may relate to any number of peers, and most relate to
+# none - hence no sh:minCount and no sh:maxCount. Only the forward edge is ever
+# asserted, even though arkarch:relatedTo is an owl:SymmetricProperty.
+ashapes:ADR-relatedTo
+    a sh:PropertyShape ;
+    sh:path     arkarch:relatedTo ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkarch:ArchitectureDecisionRecord ;
+    sh:message  "An arkarch:relatedTo edge must point at another ADR (arkarch:ArchitectureDecisionRecord) identified by an IRI."@en , "Eine arkarch:relatedTo-Kante muss auf ein anderes ADR (arkarch:ArchitectureDecisionRecord) mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
 
 # END OF ARCHITECTURE SHAPES

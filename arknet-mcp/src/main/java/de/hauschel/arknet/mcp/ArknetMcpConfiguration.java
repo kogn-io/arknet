@@ -150,16 +150,19 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       ({@link KognioRdfContextRelationshipRepositoryFactory}) over the same shared dataset
  *       lifecycle - its own resource, not a field on either {@code BoundedContext}.</li>
  *   <li><strong>adr</strong> ({@link AdrMcpTools} over {@link AdrService} over an RDF-persisted
- *       ADR repository) - the five ADR tools ({@code adr_add}/{@code adr_list}/{@code adr_get}/
- *       {@code adr_set_status}/{@code adr_supersede}), assembled through
- *       {@link KognioRdfAdrRepositoryFactory}. {@code adr_add}'s two cross-BC code-to-identity
+ *       ADR repository) - the seven ADR tools ({@code adr_add}/{@code adr_list}/{@code adr_get}/
+ *       {@code adr_update}/{@code adr_set_status}/{@code adr_supersede}/{@code adr_delete}),
+ *       assembled through
+ *       {@link KognioRdfAdrRepositoryFactory}. {@code adr_add}'s and {@code adr_update}'s two
+ *       cross-BC code-to-identity
  *       resolutions are separate {@code KognioRdfRequirementLookup}/
  *       {@code KognioRdfBoundedContextLookup} beans over the same shared dataset lifecycle;
  *       {@code adr_get}/{@code adr_list}'s reverse direction (identity back to a displayable code)
  *       is the requirements hexagon's own {@link ResolveRequirements} and the bounded-context
  *       hexagon's own {@link ResolveBoundedContexts} in-port, wired straight into
- *       {@link AdrMcpTools} (ADR-008). Its third relation, {@code supersedes}, is self-referential
- *       and therefore resolved inside {@link AdrService} - no port is borrowed for it.</li>
+ *       {@link AdrMcpTools} (ADR-008). Its other two relations, {@code supersedes} and
+ *       {@code relatedTo}, are self-referential and therefore resolved inside {@link AdrService} -
+ *       no port is borrowed for either.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
  *       RDF-persisted registry) - the project tools ({@code project_add}/
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
@@ -648,8 +651,8 @@ public class ArknetMcpConfiguration {
     AdrMcpTools adrMcpTools(
             final AdrService service, final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
-        return new AdrMcpTools(service, service, service, service, service, service, service,
-                resolveRequirements, resolveBoundedContexts, projectResolver);
+        return new AdrMcpTools(service, service, service, service, service, service, service, service,
+                service, resolveRequirements, resolveBoundedContexts, projectResolver);
     }
 
     // --- Actor hexagon -----------------------------------------------------------

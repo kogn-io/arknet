@@ -12,15 +12,18 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
@@ -28,8 +31,11 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
+import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.RequirementRef;
@@ -53,26 +59,57 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code PROPOSED} a decision may become {@link AdrStatus#ACCEPTED} or {@link AdrStatus#REJECTED};
  * an accepted one may further become {@link AdrStatus#DEPRECATED}. {@link AdrStatus#SUPERSEDED} is
  * not a value this service ever writes - it stays derived-only from {@code adr_supersede}'s
- * {@code supersedes}/{@code supersededBy} reverse-read (see {@link Adr#supersede}).</p>
+ * {@code supersedes}/{@code supersededBy} reverse-read (see {@link Adr#supersede}).
+ * {@link #update} corrects an existing decision field by field, and the status decides how far it
+ * may reach: the prose and the decision date are only correctable while {@link AdrStatus#PROPOSED}
+ * and are refused with {@link AdrTextImmutableException} from {@link AdrStatus#ACCEPTED} on, while
+ * all three reference lists stay correctable in every status - completing a reference that
+ * could not exist at recording time states the same decision more fully instead of rewriting it, the
+ * same licence {@code adr_supersede} already takes against an accepted decision. That rule lives on
+ * {@link Adr#reviseText}/{@link Adr#reviseReferences}, not here; this service only fills the
+ * caller's untouched fields from the current state and hands the result to the same CAS helper every
+ * other write path uses. {@link #delete} is the one path that removes a decision instead of changing
+ * it, and it is staged by status as well - only a {@link AdrStatus#PROPOSED} one may go, because what
+ * this lifecycle protects is a decision and not a draft (Nygard); every other status is refused with
+ * {@link AdrNotDeletableException} and pointed at the path that fits it. While another decision
+ * points at it, the delete is refused outright with {@link AdrReferencedException} rather than
+ * orphaning that edge, and the code of a deleted decision stays out of circulation - {@link #nextCode}
+ * counts retained codes as used, so {@code ADR-7} never names two different decisions over a
+ * project's lifetime.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code adr_add} claims the same {@code ADR-N} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}, and every read-modify-write path
- * ({@link #accept}, {@link #reject}, {@link #deprecate}, {@link #supersede}) retries its whole round
- * trip via {@link AdrRepository#compareAndUpdate} whenever a concurrent writer commits in between - see
- * {@link #updateWithOptimisticRetry}. Neither race is visible to a well-formed caller; only
+ * ({@link #accept}, {@link #reject}, {@link #deprecate}, {@link #supersede}, {@link #update})
+ * retries its whole round trip via {@link AdrRepository#compareAndUpdate} whenever a concurrent
+ * writer commits in between - see {@link #updateWithOptimisticRetry}. Neither race is visible to a
+ * well-formed caller; only
  * sustained, pathological contention on the very same decision surfaces as
  * {@link AdrConcurrentlyModifiedException}. Parallel sessions of one user against one local store
  * are the normal case, not a remote/multi-writer concern (ADR-001).</p>
  *
- * <p><strong>Where each reference is resolved.</strong> The two cross-context codes are resolved
- * once, here, before anything is written - an unresolvable one must abort the whole
- * {@code adr_add} rather than leave a half-linked decision behind, which is also why resolution sits
- * <em>outside</em> the code-assignment retry: an unknown {@code FR-9} is not a code collision and
- * must not be retried. The self-referential {@code supersedes} target needs no lookup port at all:
- * it is this hexagon's own resource, resolved through {@link AdrRepository#findByCode}.</p>
+ * <p><strong>Where each reference is resolved.</strong> Every reference code is resolved once,
+ * here, before anything is written - an unresolvable one must abort the whole {@code adr_add} (or
+ * {@code adr_update}) rather than leave a half-linked decision behind, which is also why resolution
+ * sits <em>outside</em> the code-assignment and compare-and-set retries: an unknown {@code FR-9} is
+ * not a code collision and must not be retried. The two cross-context codes go through their
+ * dedicated lookup ports. The two self-referential relations - the {@code supersedes} target and
+ * every {@code relatedTo} peer - need no lookup port at all: they are this hexagon's own resources,
+ * resolved through {@link AdrRepository#findByCode}, and an unknown one is a plain
+ * {@link AdrNotFoundException} rather than a didactic cross-context rejection.</p>
+ *
+ * <p><strong>How {@code relatedTo} is read back.</strong> Only the forward edge is stored, so a
+ * decision's peers are the union of what it points at and what points at it (see
+ * {@link AdrRepository#findRelatedCodes}) - one merged, deduplicated, running-number-ordered list
+ * rather than two directions, because the relation is symmetric and its stored direction carries no
+ * meaning. {@link #detailOf} pays one extra reverse read for it; {@link #list} inverts its single
+ * full read in memory instead, exactly as it already does for {@code supersededBy}. Neither follows
+ * a peer's own edges onwards, which is what lets {@code relatedTo} carry the cycles it explicitly
+ * permits.</p>
  */
-public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr {
+public class AdrService
+        implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr,
+        DeleteAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -137,6 +174,10 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
                 .map(code -> new BoundedContextRef(boundedContextLookup.resolveByCode(projectId, code)))
                 .distinct()
                 .toList();
+        // The peer decisions are this hexagon's own resources, so they resolve through the
+        // repository rather than a lookup port - the same reasoning supersede() applies, and just
+        // as much outside the retry: an unknown ADR-9 is not a code collision.
+        List<AdrId> peers = resolvePeers(projectId, command.relatedToCodes());
         // Identity is opaque and stable, so it is minted once, outside the retry: only the business
         // code is recomputed when a concurrent adr_add claims the same candidate first. See
         // CodeAssignment for why that race exists and why it must retry rather than surface the
@@ -147,7 +188,7 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
                     AdrCode code = nextCode(projectId);
                     Adr adr = new Adr(id, code, command.name(), AdrStatus.PROPOSED, command.context(),
                             command.decision(), command.consequences(), command.alternatives(),
-                            command.decisionDate(), requirements, contexts, List.of());
+                            command.decisionDate(), requirements, contexts, List.of(), peers);
                     repository.create(projectId, adr);
                     return adr;
                 });
@@ -163,16 +204,22 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
         Map<AdrId, AdrCode> codes = new LinkedHashMap<>();
         all.forEach(adr -> codes.putIfAbsent(adr.id(), adr.code()));
         Map<AdrId, TreeSet<String>> supersededBy = new LinkedHashMap<>();
+        Map<AdrId, TreeSet<String>> relatedFrom = new LinkedHashMap<>();
         for (Adr adr : all) {
             for (AdrId superseded : adr.supersedes()) {
                 supersededBy.computeIfAbsent(superseded, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
                         .add(adr.code().value());
             }
+            for (AdrId peer : adr.relatedTo()) {
+                relatedFrom.computeIfAbsent(peer, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
+                        .add(adr.code().value());
+            }
         }
         return all.stream()
                 .map(adr -> new AdrDetail(adr, codesOf(adr.supersedes(), codes),
-                        supersededBy.getOrDefault(adr.id(), new TreeSet<>(CODE_BY_RUNNING_NUMBER)).stream()
-                                .map(AdrCode::new).toList()))
+                        sortedCodes(supersededBy.get(adr.id())),
+                        mergedRelatedCodes(codesOf(adr.relatedTo(), codes),
+                                sortedCodes(relatedFrom.get(adr.id())))))
                 .toList();
     }
 
@@ -205,6 +252,51 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
     }
 
     @Override
+    public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Objects.requireNonNull(correction, "correction");
+        // Resolution first, outside the retry, exactly as in add(): an unknown FR-9 or BC-9 is a
+        // didactic rejection of the whole call, never a race worth retrying. Null stays null here -
+        // it is the "leave this relation alone" signal, and an empty list is a deliberate clear.
+        List<RequirementRef> requirements = correction.addressesRequirementCodes() == null
+                ? null
+                : correction.addressesRequirementCodes().stream()
+                        .map(referenced -> new RequirementRef(requirementLookup.resolveByCode(projectId, referenced)))
+                        .distinct()
+                        .toList();
+        List<BoundedContextRef> contexts = correction.affectsContextCodes() == null
+                ? null
+                : correction.affectsContextCodes().stream()
+                        .map(referenced -> new BoundedContextRef(
+                                boundedContextLookup.resolveByCode(projectId, referenced)))
+                        .distinct()
+                        .toList();
+        // Self-reference is refused before the peer codes are even looked up, so a caller naming
+        // the decision itself is told exactly that rather than that "ADR-1" resolves - the same
+        // refusal, and the same wording, supersede() makes for the same shape of mistake.
+        if (correction.relatedToCodes() != null
+                && correction.relatedToCodes().stream().map(AdrCode::new).anyMatch(code::equals)) {
+            throw new IllegalArgumentException("an ADR must not be related to itself: " + code.value());
+        }
+        List<AdrId> peers = correction.relatedToCodes() == null
+                ? null
+                : resolvePeers(projectId, correction.relatedToCodes());
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, current -> current
+                .reviseText(
+                        correction.name() != null ? correction.name() : current.name(),
+                        correction.context() != null ? correction.context() : current.context(),
+                        correction.decision() != null ? correction.decision() : current.decision(),
+                        correction.consequences() != null ? correction.consequences() : current.consequences(),
+                        correction.alternatives() != null ? correction.alternatives() : current.alternatives(),
+                        correction.decisionDate() != null ? correction.decisionDate() : current.decisionDate())
+                .reviseReferences(
+                        requirements != null ? requirements : current.addressesRequirements(),
+                        contexts != null ? contexts : current.affectsContexts(),
+                        peers != null ? peers : current.relatedTo())));
+    }
+
+    @Override
     public AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
@@ -222,9 +314,48 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
                 updateWithOptimisticRetry(projectId, code, current -> current.supersede(supersededId)));
     }
 
+    @Override
+    public void delete(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        Adr adr = repository.findByCode(projectId, code)
+                .orElseThrow(() -> new AdrNotFoundException(projectId, code));
+        if (adr.status() != AdrStatus.PROPOSED) {
+            throw new AdrNotDeletableException(code, adr.status());
+        }
+        rejectIfReferenced(projectId, code, adr.id());
+        repository.delete(projectId, code);
+    }
+
     /**
-     * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate} and
-     * {@link #supersede}: reads the current decision and its concurrency token together via
+     * Refuses a delete while another decision still points at {@code id}, naming every referrer and
+     * the edge it points with. Both relations are this hexagon's own, so the two reverse reads
+     * {@code adr_get} already pays answer the question here too - no new port, and a message in the
+     * codes the caller typed rather than in bare identities.
+     *
+     * <p>This check is didactic, not the guard: it reads before the write transaction opens, so a
+     * reference committed in between would slip past it. {@link AdrRepository#delete} repeats it
+     * against its own transaction and raises the very same exception - what this one buys is that the
+     * common case is rejected with the concrete referrers in hand rather than by a race-free but
+     * later check.</p>
+     */
+    private void rejectIfReferenced(ProjectId projectId, AdrCode code, AdrId id) {
+        List<AdrReferencedException.Reference> references = Stream.concat(
+                repository.findSupersedingCodes(projectId, id).stream()
+                        .map(referrer -> new AdrReferencedException.Reference(
+                                referrer, AdrReferencedException.SUPERSEDES)),
+                repository.findRelatedCodes(projectId, id).stream()
+                        .map(referrer -> new AdrReferencedException.Reference(
+                                referrer, AdrReferencedException.RELATED_TO)))
+                .toList();
+        if (!references.isEmpty()) {
+            throw new AdrReferencedException(projectId, code, references);
+        }
+    }
+
+    /**
+     * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate},
+     * {@link #supersede} and {@link #update}: reads the current decision and its concurrency token together via
      * {@link AdrRepository#findCurrentByCode},
      * derives the next state via {@code mutation}, and writes it back via
      * {@link AdrRepository#compareAndUpdate} - retrying with a fresh read whenever a concurrent
@@ -234,8 +365,9 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
      * another's edge.
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as a
-     * no-op: accepting an already-accepted decision, or recording an already-recorded supersede,
-     * skips the write entirely - no revision, no moved head.</p>
+     * no-op: accepting an already-accepted decision, recording an already-recorded supersede, or
+     * correcting a field to the value it already holds skips the write entirely - no revision, no
+     * moved head.</p>
      *
      * @throws AdrNotFoundException             if no decision with {@code code} exists
      * @throws AdrConcurrentlyModifiedException if the write keeps losing the race across every retry
@@ -265,16 +397,56 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
 
     /**
      * Wraps one decision into the {@link AdrDetail} projection every driving port returns: its
-     * {@code supersedes} identities resolved to codes, plus the backward direction read from the
-     * store. Two cheap reads, and only on the single-decision paths - {@link #list} derives both
-     * directions from its one full read instead.
+     * {@code supersedes} and {@code relatedTo} identities resolved to codes in one lookup, plus the
+     * backward direction of each read from the store. Three cheap reads, and only on the
+     * single-decision paths - {@link #list} derives every direction from its one full read instead.
      */
     private AdrDetail detailOf(ProjectId projectId, Adr adr) {
-        Map<AdrId, AdrCode> codes = adr.supersedes().isEmpty()
+        List<AdrId> referenced = Stream.concat(adr.supersedes().stream(), adr.relatedTo().stream())
+                .distinct()
+                .toList();
+        Map<AdrId, AdrCode> codes = referenced.isEmpty()
                 ? Map.of()
-                : repository.findCodesByIds(projectId, adr.supersedes());
+                : repository.findCodesByIds(projectId, referenced);
         return new AdrDetail(adr, codesOf(adr.supersedes(), codes),
-                repository.findSupersedingCodes(projectId, adr.id()));
+                repository.findSupersedingCodes(projectId, adr.id()),
+                mergedRelatedCodes(codesOf(adr.relatedTo(), codes),
+                        repository.findRelatedCodes(projectId, adr.id())));
+    }
+
+    /**
+     * Unions a decision's own {@code relatedTo} codes with the codes of the decisions pointing back
+     * at it, deduplicated and ordered by running number - the single list {@link AdrDetail#relatedTo}
+     * promises. Deduplication is what makes a mutually declared pair ({@code A relatedTo B} and
+     * {@code B relatedTo A}, which nothing forbids) report each peer once instead of twice.
+     */
+    private static List<AdrCode> mergedRelatedCodes(List<AdrCode> forward, List<AdrCode> backward) {
+        TreeSet<String> merged = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        forward.forEach(code -> merged.add(code.value()));
+        backward.forEach(code -> merged.add(code.value()));
+        return merged.stream().map(AdrCode::new).toList();
+    }
+
+    /** Renders one in-memory inversion bucket as sorted codes; an absent bucket is an empty list. */
+    private static List<AdrCode> sortedCodes(TreeSet<String> codes) {
+        return codes == null ? List.of() : codes.stream().map(AdrCode::new).toList();
+    }
+
+    /**
+     * Resolves {@code relatedTo} business codes to this hexagon's own identities, rejecting an
+     * unknown one outright. Deliberately not a lookup port: unlike a requirement or a bounded
+     * context, a peer decision is a resource of this very hexagon, so {@link AdrRepository#findByCode}
+     * answers it and a miss is a plain {@link AdrNotFoundException} - the same choice
+     * {@link #supersede} made for its target.
+     */
+    private List<AdrId> resolvePeers(ProjectId projectId, List<String> codes) {
+        return codes.stream()
+                .map(AdrCode::new)
+                .distinct()
+                .map(peer -> repository.findByCode(projectId, peer)
+                        .map(Adr::id)
+                        .orElseThrow(() -> new AdrNotFoundException(projectId, peer)))
+                .toList();
     }
 
     /**
@@ -294,15 +466,26 @@ public class AdrService implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAd
     }
 
     /**
-     * Derives the next free business code in {@code projectId}: the highest running number currently
-     * in use, plus one (starting at 1).
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project has ever used, plus one (starting at 1).
+     *
+     * <p><strong>Ever used, not currently in use.</strong> The maximum runs over the living decisions
+     * <em>and</em> the codes {@link AdrRepository#findRetainedCodes} kept from deleted ones. Over the
+     * living ones alone, deleting the highest-numbered decision would let the maximum fall back and
+     * the next {@code adr_add} hand out that same number again - and a code that already appeared in
+     * a commit message or a note would then name something else entirely. Numbers are cheap; a
+     * re-used one is a false trail.</p>
      */
     private AdrCode nextCode(ProjectId projectId) {
-        int next = repository.findAll(projectId).stream()
+        int highestLiving = repository.findAll(projectId).stream()
                 .mapToInt(adr -> runningNumber(adr.code()))
                 .max()
-                .orElse(0) + 1;
-        return new AdrCode(CODE_PREFIX + "-" + next);
+                .orElse(0);
+        int highestRetained = repository.findRetainedCodes(projectId).stream()
+                .mapToInt(AdrService::runningNumber)
+                .max()
+                .orElse(0);
+        return new AdrCode(CODE_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
     }
 
     /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */
