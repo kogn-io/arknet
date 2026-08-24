@@ -70,7 +70,7 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.ACCEPTED,
                 "Forces and constraints.", "What was decided.", "Positive and negative consequences.",
-                "Options that were considered.", LocalDate.of(2026, 7, 1), List.of(), List.of(), List.of(), List.of());
+                "Options that were considered.", LocalDate.of(2026, 7, 1), List.of(), List.of(), null, List.of());
         final AdrCards cards = cardsFor(adr);
 
         final List<String> labels = cards.section(PROJECT, Glossary.empty()).cards().getFirst().blocks().stream()
@@ -89,7 +89,7 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(new RequirementRef(FR_1)), List.of(), List.of(), List.of());
+                List.of(new RequirementRef(FR_1)), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))),
@@ -104,7 +104,7 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(), List.of(new BoundedContextRef(BC_1)), List.of(), List.of());
+                List.of(), List.of(new BoundedContextRef(BC_1)), null, List.of());
         final AdrCards cards = new AdrCards(
                 projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(),
@@ -123,7 +123,7 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(new RequirementRef(FR_1)), List.of(new BoundedContextRef(BC_1)), List.of(), List.of());
+                List.of(new RequirementRef(FR_1)), List.of(new BoundedContextRef(BC_1)), null, List.of());
         final AdrCards cards = new AdrCards(
                 projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(),
@@ -144,11 +144,11 @@ class AdrCardsTest {
     void rendersSupersedesAndSupersededByAsRefsToTheOtherAdrsOwnId() {
         final Adr older = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Store data in files", AdrStatus.DEPRECATED,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), List.of(), List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
         final Adr newer = new Adr(
                 new AdrId(ADR_2_ID), new AdrCode("ADR-2"), "Use kognio-rdf", AdrStatus.ACCEPTED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(), List.of(), List.of(), List.of()).supersede(new AdrId(ADR_1_ID));
+                List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 projectId -> List.of(
                         new AdrDetail(older, List.of(), List.of(new AdrCode("ADR-2")), List.of()),
@@ -171,7 +171,7 @@ class AdrCardsTest {
     void fallsBackToTheCodeWhenTheSupersededAdrIsNoLongerInTheList() {
         final Adr adr = new Adr(
                 new AdrId(ADR_2_ID), new AdrCode("ADR-2"), "Use kognio-rdf", AdrStatus.ACCEPTED,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), List.of(), List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 projectId -> List.of(new AdrDetail(adr, List.of(new AdrCode("ADR-1")), List.of(), List.of())),
                 (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
@@ -247,7 +247,7 @@ class AdrCardsTest {
     private static Adr adr(final ResourceId id, final String code, final AdrStatus status) {
         return new Adr(
                 new AdrId(id), new AdrCode(code), "Use kognio-rdf", status,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), List.of(), List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
     }
 
     private static AdrCards cardsFor(final Adr adr) {
