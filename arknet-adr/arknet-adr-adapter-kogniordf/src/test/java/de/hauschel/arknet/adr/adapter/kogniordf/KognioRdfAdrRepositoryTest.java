@@ -1428,7 +1428,7 @@ class KognioRdfAdrRepositoryTest {
                 () -> repository.delete(PROJECT_A, successor.code()));
 
         assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
-                AdrReferencedException.SUPERSEDES)), thrown.references());
+                AdrReferencedException.SUPERSEDED_BY)), thrown.references());
         assertTrue(repository.findByCode(PROJECT_A, successor.code()).isPresent(),
                 "a rejected delete must leave the decision untouched");
         assertFalse(headsOf(successor.id().value().value()).isEmpty(),

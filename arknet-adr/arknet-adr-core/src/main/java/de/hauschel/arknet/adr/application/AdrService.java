@@ -372,12 +372,22 @@ public class AdrService
      * against its own transaction and raises the very same exception - what this one buys is that the
      * common case is rejected with the concrete referrers in hand rather than by a race-free but
      * later check.</p>
+     *
+     * <p><strong>Labelled {@code supersededBy}, the current write shape.</strong>
+     * {@link AdrRepository#findSupersessionReferrers} unions two sources - the current-model
+     * {@code arkarch:supersededBy} edge and a store-first (ADR-005) pre-#357
+     * {@code arkarch:supersedes} edge - into one flat list of codes, so a single label cannot be
+     * exactly right for both (kogn-io/arknet#359). {@code supersededBy} is chosen because it is the
+     * only shape any write path still produces; a legacy {@code supersedes} referrer, reachable only
+     * through store-first data, is the rare case this didactic pre-check may mislabel. The race-free
+     * backstop ({@link AdrRepository#delete}) does not share this limitation - it reads the two
+     * predicates separately and labels each correctly.</p>
      */
     private void rejectIfReferenced(ProjectId projectId, AdrCode code, AdrId id) {
         List<AdrReferencedException.Reference> references = Stream.concat(
                 repository.findSupersessionReferrers(projectId, id).stream()
                         .map(referrer -> new AdrReferencedException.Reference(
-                                referrer, AdrReferencedException.SUPERSEDES)),
+                                referrer, AdrReferencedException.SUPERSEDED_BY)),
                 repository.findRelatedCodes(projectId, id).stream()
                         .map(referrer -> new AdrReferencedException.Reference(
                                 referrer, AdrReferencedException.RELATED_TO)))

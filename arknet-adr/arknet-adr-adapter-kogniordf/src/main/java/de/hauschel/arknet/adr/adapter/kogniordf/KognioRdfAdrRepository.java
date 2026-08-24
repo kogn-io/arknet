@@ -455,7 +455,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         String target = SparqlTerms.iriRef(subjectIri);
         List<AdrReferencedException.Reference> references = new ArrayList<>();
         collectReferences(tx, target, SUPERSEDES_PROPERTY, AdrReferencedException.SUPERSEDES, references);
-        collectReferences(tx, target, SUPERSEDED_BY_PROPERTY, AdrReferencedException.SUPERSEDES, references);
+        collectReferences(tx, target, SUPERSEDED_BY_PROPERTY, AdrReferencedException.SUPERSEDED_BY, references);
         collectReferences(tx, target, RELATED_TO_PROPERTY, AdrReferencedException.RELATED_TO, references);
         if (!references.isEmpty()) {
             throw new AdrReferencedException(projectId, code, references);

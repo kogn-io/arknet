@@ -11,26 +11,42 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when {@code adr_delete} is asked to remove a decision that another decision still points at
- * via {@code arkarch:supersedes} or {@code arkarch:relatedTo}.
+ * via {@code arkarch:supersedes} (pre-#357 legacy shape), {@code arkarch:supersededBy}
+ * (kogn-io/arknet#357's current write shape) or {@code arkarch:relatedTo}.
  *
  * <p>Rejecting rather than deleting-and-leaving-the-edge-dangling follows the same line the glossary
  * and the actor register already draw ({@code TermReferencedException}/
  * {@code ActorReferencedException}): a dangling reference is never created on purpose here either,
- * so it is never created by deletion. What differs is who the referrers are - both relations point
- * back into this very hexagon, so the rejection can name the offending decisions by the codes a
- * caller typed rather than only the predicates involved.</p>
+ * so it is never created by deletion. What differs is who the referrers are - all three relations
+ * point back into this very hexagon, so the rejection can name the offending decisions by the codes
+ * a caller typed rather than only the predicates involved.</p>
  *
- * <p>The message is deliberately didactic about the remedy, and about the difference between the two
- * relations: a {@code relatedTo} edge is cleared with {@code adr_update} on the decision that names
- * this one, while a {@code supersedes} edge has no removal tool at all - it is written by
- * {@code adr_supersede} and goes away only with the superseding decision itself.</p>
+ * <p>The message is deliberately didactic about the remedy, and about the difference between the
+ * three relations: a {@code relatedTo} edge is cleared with {@code adr_update} on the decision that
+ * names this one; a {@code supersededBy} edge - the current write shape - has no removal tool at
+ * all, it goes away only with the <em>superseded</em> decision itself, the one the edge lives on
+ * (kogn-io/arknet#357 moved it there; kogn-io/arknet#359 fixed this remedy to name that decision
+ * instead of the superseding one it used to, back when the edge lived on the superseding decision's
+ * forward-only {@code supersedes} list); a store-first {@code supersedes} edge, where one still
+ * exists, follows the pre-#357 shape and goes away only with the <em>superseding</em> decision that
+ * carries it.</p>
  */
 public class AdrReferencedException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    /** The shorthand for {@code arkarch:supersedes} used in {@link Reference#predicate()}. */
+    /**
+     * The shorthand for the pre-#357 legacy {@code arkarch:supersedes} edge used in
+     * {@link Reference#predicate()} - a store-first record may still carry one, but nothing writes
+     * it any more (kogn-io/arknet#357).
+     */
     public static final String SUPERSEDES = "supersedes";
+
+    /**
+     * The shorthand for {@code arkarch:supersededBy} used in {@link Reference#predicate()} - the
+     * current write shape (kogn-io/arknet#357), living on the <em>superseded</em> decision.
+     */
+    public static final String SUPERSEDED_BY = "supersededBy";
 
     /** The shorthand for {@code arkarch:relatedTo} used in {@link Reference#predicate()}. */
     public static final String RELATED_TO = "relatedTo";
@@ -89,11 +105,18 @@ public class AdrReferencedException extends RuntimeException {
                 + " - remove those edges first: " + remedies(references);
     }
 
-    /** The per-relation remedy hints, in the order the two relations are named above. */
+    /** The per-relation remedy hints, in the order the three relations are named above. */
     private static String remedies(List<Reference> references) {
         StringBuilder hints = new StringBuilder();
         if (references.stream().anyMatch(reference -> RELATED_TO.equals(reference.predicate()))) {
             hints.append("adr_update on the decision that names this one clears its relatedTo edge");
+        }
+        if (references.stream().anyMatch(reference -> SUPERSEDED_BY.equals(reference.predicate()))) {
+            if (hints.length() > 0) {
+                hints.append("; ");
+            }
+            hints.append("a supersededBy edge has no removal tool - it goes away only with the "
+                    + "superseded decision itself");
         }
         if (references.stream().anyMatch(reference -> SUPERSEDES.equals(reference.predicate()))) {
             if (hints.length() > 0) {

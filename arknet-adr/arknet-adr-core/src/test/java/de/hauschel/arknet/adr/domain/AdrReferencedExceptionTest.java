@@ -29,13 +29,13 @@ class AdrReferencedExceptionTest {
     @Test
     void namesEveryReferrerWithTheEdgeItPointsWith() {
         AdrReferencedException thrown = new AdrReferencedException(PROJECT, CODE, List.of(
-                new Reference(new AdrCode("ADR-2"), AdrReferencedException.SUPERSEDES),
+                new Reference(new AdrCode("ADR-2"), AdrReferencedException.SUPERSEDED_BY),
                 new Reference(new AdrCode("ADR-3"), AdrReferencedException.RELATED_TO)));
 
         assertEquals(CODE, thrown.adrCode());
         assertEquals(PROJECT, thrown.projectId());
         assertEquals(2, thrown.references().size());
-        assertTrue(thrown.getMessage().contains("ADR-2 (supersedes)"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("ADR-2 (supersededBy)"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains("ADR-3 (relatedTo)"), thrown.getMessage());
     }
 
@@ -46,18 +46,38 @@ class AdrReferencedExceptionTest {
 
         assertTrue(relatedTo.getMessage().contains("adr_update"), relatedTo.getMessage());
         assertFalse(relatedTo.getMessage().contains("superseding decision"), relatedTo.getMessage());
+        assertFalse(relatedTo.getMessage().contains("superseded decision"), relatedTo.getMessage());
     }
 
     /**
-     * There is no tool that removes a {@code supersedes} edge, so the message must not invent one -
-     * it says what is true: that edge goes away with the superseding decision itself.
+     * There is no tool that removes a {@code supersededBy} edge - the current write shape
+     * (kogn-io/arknet#357), living on the <em>superseded</em> decision - so the message must not
+     * invent one, and it must name the decision the edge actually lives on rather than the one it
+     * points at (kogn-io/arknet#359: this used to say "superseding decision", true only back when
+     * the edge lived on the superseding decision's own forward-only {@code supersedes} list).
      */
     @Test
-    void doesNotClaimAToolForASupersedesEdge() {
+    void doesNotClaimAToolForASupersededByEdgeAndNamesTheSupersededDecision() {
+        AdrReferencedException supersededBy = new AdrReferencedException(PROJECT, CODE,
+                List.of(new Reference(new AdrCode("ADR-2"), AdrReferencedException.SUPERSEDED_BY)));
+
+        assertTrue(supersededBy.getMessage().contains("no removal tool"), supersededBy.getMessage());
+        assertTrue(supersededBy.getMessage().contains("superseded decision itself"), supersededBy.getMessage());
+        assertFalse(supersededBy.getMessage().contains("adr_update"), supersededBy.getMessage());
+    }
+
+    /**
+     * The mirror for the pre-#357 legacy {@code supersedes} shape, which still names the
+     * <em>superseding</em> decision as the one that must go - that edge lives on the superseding
+     * decision, unlike {@code supersededBy}.
+     */
+    @Test
+    void doesNotClaimAToolForASupersedesEdgeAndNamesTheSupersedingDecision() {
         AdrReferencedException supersedes = new AdrReferencedException(PROJECT, CODE,
                 List.of(new Reference(new AdrCode("ADR-2"), AdrReferencedException.SUPERSEDES)));
 
         assertTrue(supersedes.getMessage().contains("no removal tool"), supersedes.getMessage());
+        assertTrue(supersedes.getMessage().contains("superseding decision itself"), supersedes.getMessage());
         assertFalse(supersedes.getMessage().contains("adr_update"), supersedes.getMessage());
     }
 
