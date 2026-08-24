@@ -102,8 +102,8 @@ class AdrServiceConcurrencyTest {
      * the write now lands on the <em>superseded</em> decision, so two concurrent calls superseding
      * two <em>different</em> older decisions with the same successor no longer share any mutable
      * state at all (each writes its own record) - that scenario is covered instead by
-     * {@link #supersedeAccumulatesSeveralOlderDecisions()}-style sequential calls in
-     * {@code AdrServiceTest}. The race that remains reachable is two callers superseding the
+     * {@code AdrServiceTest#supersedeAccumulatesSeveralOlderDecisions()}-style sequential calls. The
+     * race that remains reachable is two callers superseding the
      * <em>same</em> older decision: the loser's compare-and-set fails against the winner's
      * already-committed head, retries with a fresh read, and finds the decision already SUPERSEDED -
      * so {@link de.hauschel.arknet.adr.domain.Adr#supersededBy(AdrId)}'s own ACCEPTED guard refuses

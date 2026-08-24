@@ -10,8 +10,10 @@ package de.hauschel.arknet.persistence;
  * {@code de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepository}) and the code that
  * <em>reads</em> them ({@code arknet-mcp}'s traceability read path,
  * {@code de.hauschel.arknet.mcp.trace.TraceabilityGraph}, which traverses
- * {@code addressesRequirement}/{@code affectsContext}/{@code supersedes} backwards for
- * {@code impact_analysis}).
+ * {@code addressesRequirement}/{@code affectsContext} backwards and, since kogn-io/arknet#357,
+ * {@code supersededBy} forwards for {@code impact_analysis} (the pre-#357
+ * {@code supersedes} shape, where store-first data still carries it, stays in the backward set
+ * this predicate used to sit in).
  *
  * <p>Same rationale as {@link ArkreqVocabulary} and {@link ArkdddVocabulary}: these are RDF
  * serialization constants, the literal IRI form of ontology predicates, classes and individuals.

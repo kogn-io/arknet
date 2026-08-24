@@ -299,7 +299,7 @@ public final class AdrMcpTools {
             + "status, so an edge to a requirement, bounded context or peer decision that did not "
             + "exist yet when the decision was made can still be completed: passing a list replaces "
             + "that relation wholesale, passing an empty list removes every edge of it, omitting it "
-            + "leaves it untouched. Status and the supersedes relation are not changed here - use "
+            + "leaves it untouched. Status and the supersededBy relation are not changed here - use "
             + "adr_set_status and adr_supersede.")
     public String update(
             final McpSyncRequestContext context,
