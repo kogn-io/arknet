@@ -57,15 +57,16 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * decision always starts {@link AdrStatus#PROPOSED} - {@code adr_add} takes no status, because a
  * decision recorded as already accepted would skip the transitions this lifecycle has. From
  * {@code PROPOSED} a decision may become {@link AdrStatus#ACCEPTED} or {@link AdrStatus#REJECTED};
- * an accepted one may further become {@link AdrStatus#DEPRECATED}. {@link AdrStatus#SUPERSEDED} is
- * not a value this service ever writes - it stays derived-only from {@code adr_supersede}'s
- * {@code supersedes}/{@code supersededBy} reverse-read (see {@link Adr#supersede}).
- * {@link #update} corrects an existing decision field by field, and the status decides how far it
+ * an accepted one may further become {@link AdrStatus#DEPRECATED} or - via {@code adr_supersede} -
+ * {@link AdrStatus#SUPERSEDED}, set together with {@link Adr#supersededBy()} on the <em>superseded</em>
+ * decision in one write (kogn-io/arknet#357; see {@link #supersede}). {@link #update} corrects an
+ * existing decision field by field, and the status decides how far it
  * may reach: the prose and the decision date are only correctable while {@link AdrStatus#PROPOSED}
  * and are refused with {@link AdrTextImmutableException} from {@link AdrStatus#ACCEPTED} on, while
  * all three reference lists stay correctable in every status - completing a reference that
  * could not exist at recording time states the same decision more fully instead of rewriting it, the
- * same licence {@code adr_supersede} already takes against an accepted decision. That rule lives on
+ * same licence {@link Adr#supersededBy(AdrId)} already takes against an accepted decision. That rule
+ * lives on
  * {@link Adr#reviseText}/{@link Adr#reviseReferences}, not here; this service only fills the
  * caller's untouched fields from the current state and hands the result to the same CAS helper every
  * other write path uses. {@link #delete} is the one path that removes a decision instead of changing
@@ -93,7 +94,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code adr_update}) rather than leave a half-linked decision behind, which is also why resolution
  * sits <em>outside</em> the code-assignment and compare-and-set retries: an unknown {@code FR-9} is
  * not a code collision and must not be retried. The two cross-context codes go through their
- * dedicated lookup ports. The two self-referential relations - the {@code supersedes} target and
+ * dedicated lookup ports. The two self-referential relations - the {@code adr_supersede} target and
  * every {@code relatedTo} peer - need no lookup port at all: they are this hexagon's own resources,
  * resolved through {@link AdrRepository#findByCode}, and an unknown one is a plain
  * {@link AdrNotFoundException} rather than a didactic cross-context rejection.</p>
@@ -103,9 +104,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@link AdrRepository#findRelatedCodes}) - one merged, deduplicated, running-number-ordered list
  * rather than two directions, because the relation is symmetric and its stored direction carries no
  * meaning. {@link #detailOf} pays one extra reverse read for it; {@link #list} inverts its single
- * full read in memory instead, exactly as it already does for {@code supersededBy}. Neither follows
- * a peer's own edges onwards, which is what lets {@code relatedTo} carry the cycles it explicitly
- * permits.</p>
+ * full read in memory instead, exactly as it already does for both supersession directions (plus one
+ * bulk read for any pre-#357 legacy edge, see {@link AdrRepository#findLegacySupersedesEdges}).
+ * Neither follows a peer's own edges onwards, which is what lets {@code relatedTo} carry the cycles
+ * it explicitly permits.</p>
  */
 public class AdrService
         implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr,
@@ -175,7 +177,7 @@ public class AdrService
                 .distinct()
                 .toList();
         // The peer decisions are this hexagon's own resources, so they resolve through the
-        // repository rather than a lookup port - the same reasoning supersede() applies, and just
+        // repository rather than a lookup port - the same reasoning supersededBy() applies, and just
         // as much outside the retry: an unknown ADR-9 is not a code collision.
         List<AdrId> peers = resolvePeers(projectId, command.relatedToCodes());
         // Identity is opaque and stable, so it is minted once, outside the retry: only the business
@@ -186,9 +188,11 @@ public class AdrService
         Adr created = CodeAssignment.createRetryingOnCodeCollision(
                 DuplicateAdrCodeException.class, () -> {
                     AdrCode code = nextCode(projectId);
+                    // supersededBy starts null: a decision is never recorded as already superseded,
+                    // it can only become so later via adr_supersede (kogn-io/arknet#357).
                     Adr adr = new Adr(id, code, command.name(), AdrStatus.PROPOSED, command.context(),
                             command.decision(), command.consequences(), command.alternatives(),
-                            command.decisionDate(), requirements, contexts, List.of(), peers);
+                            command.decisionDate(), requirements, contexts, null, peers);
                     repository.create(projectId, adr);
                     return adr;
                 });
@@ -199,28 +203,48 @@ public class AdrService
     public List<AdrDetail> list(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
         List<Adr> all = repository.findAll(projectId);
-        // Both directions come out of the one read: with every decision in hand, the forward edges
-        // can simply be inverted in memory - no reverse query, and no second round trip per row.
+        // One extra bulk read beyond findAll, for the pre-#357 legacy supersedes shape (see
+        // AdrRepository#findLegacySupersedesEdges) - everything else below stays in-memory, exactly
+        // as before this issue.
+        List<AdrRepository.LegacySupersession> legacy = repository.findLegacySupersedesEdges(projectId);
+        // Both current-model directions come out of the one findAll read: with every decision in
+        // hand, its single supersededBy field can simply be inverted in memory - no reverse query,
+        // and no second round trip per row. Keyed by business code (not AdrId) so the legacy pairs
+        // below, which the store only ever hands back as codes, merge into the very same maps.
         Map<AdrId, AdrCode> codes = new LinkedHashMap<>();
         all.forEach(adr -> codes.putIfAbsent(adr.id(), adr.code()));
-        Map<AdrId, TreeSet<String>> supersededBy = new LinkedHashMap<>();
+        Map<String, TreeSet<String>> supersedesCodes = new LinkedHashMap<>();
+        Map<String, TreeSet<String>> supersededByCodes = new LinkedHashMap<>();
         Map<AdrId, TreeSet<String>> relatedFrom = new LinkedHashMap<>();
         for (Adr adr : all) {
-            for (AdrId superseded : adr.supersedes()) {
-                supersededBy.computeIfAbsent(superseded, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
-                        .add(adr.code().value());
+            if (adr.supersededBy() != null) {
+                AdrCode supersedingCode = codes.get(adr.supersededBy());
+                if (supersedingCode != null) {
+                    addCode(supersededByCodes, adr.code().value(), supersedingCode.value());
+                    addCode(supersedesCodes, supersedingCode.value(), adr.code().value());
+                }
             }
             for (AdrId peer : adr.relatedTo()) {
                 relatedFrom.computeIfAbsent(peer, key -> new TreeSet<>(CODE_BY_RUNNING_NUMBER))
                         .add(adr.code().value());
             }
         }
+        for (AdrRepository.LegacySupersession pair : legacy) {
+            addCode(supersededByCodes, pair.supersededCode().value(), pair.supersedingCode().value());
+            addCode(supersedesCodes, pair.supersedingCode().value(), pair.supersededCode().value());
+        }
         return all.stream()
-                .map(adr -> new AdrDetail(adr, codesOf(adr.supersedes(), codes),
-                        sortedCodes(supersededBy.get(adr.id())),
+                .map(adr -> new AdrDetail(adr,
+                        sortedCodes(supersedesCodes.get(adr.code().value())),
+                        sortedCodes(supersededByCodes.get(adr.code().value())),
                         mergedRelatedCodes(codesOf(adr.relatedTo(), codes),
                                 sortedCodes(relatedFrom.get(adr.id())))))
                 .toList();
+    }
+
+    /** Adds {@code value} to the {@link TreeSet} bucket keyed by {@code key}, creating it if absent. */
+    private static void addCode(Map<String, TreeSet<String>> bucket, String key, String value) {
+        bucket.computeIfAbsent(key, ignored -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)).add(value);
     }
 
     @Override
@@ -304,14 +328,23 @@ public class AdrService
         if (code.equals(supersededCode)) {
             throw new IllegalArgumentException("an ADR must not supersede itself: " + code.value());
         }
-        // Resolved once, outside the retry loop: the superseded decision's identity does not depend
-        // on the superseding one's current state, and an unknown code must abort immediately and
-        // leave the superseding decision untouched.
-        AdrId supersededId = repository.findByCode(projectId, supersededCode)
-                .map(Adr::id)
-                .orElseThrow(() -> new AdrNotFoundException(projectId, supersededCode));
-        return detailOf(projectId,
-                updateWithOptimisticRetry(projectId, code, current -> current.supersede(supersededId)));
+        // The superseding decision is resolved and status-checked once, outside the retry loop:
+        // its identity and status do not depend on the superseded decision's current state, and an
+        // unknown code or a not-yet-ACCEPTED status must abort immediately, before the superseded
+        // decision - the one this call actually writes (kogn-io/arknet#357) - is touched at all.
+        Adr superseding = repository.findByCode(projectId, code)
+                .orElseThrow(() -> new AdrNotFoundException(projectId, code));
+        if (superseding.status() != AdrStatus.ACCEPTED) {
+            throw new IllegalStateException("ADR " + code.value()
+                    + " can only supersede another decision while ACCEPTED, was " + superseding.status());
+        }
+        AdrId supersedingId = superseding.id();
+        // The CAS retry now runs on the superseded code, not the superseding one: that is the
+        // record this write actually replaces. AdrStatus#ACCEPTED is enforced a second time inside
+        // the retried mutation itself (Adr#supersededBy), against whatever state each retry attempt
+        // re-reads.
+        return detailOf(projectId, updateWithOptimisticRetry(
+                projectId, supersededCode, current -> current.supersededBy(supersedingId)));
     }
 
     @Override
@@ -341,7 +374,7 @@ public class AdrService
      */
     private void rejectIfReferenced(ProjectId projectId, AdrCode code, AdrId id) {
         List<AdrReferencedException.Reference> references = Stream.concat(
-                repository.findSupersedingCodes(projectId, id).stream()
+                repository.findSupersessionReferrers(projectId, id).stream()
                         .map(referrer -> new AdrReferencedException.Reference(
                                 referrer, AdrReferencedException.SUPERSEDES)),
                 repository.findRelatedCodes(projectId, id).stream()
@@ -397,18 +430,17 @@ public class AdrService
 
     /**
      * Wraps one decision into the {@link AdrDetail} projection every driving port returns: its
-     * {@code supersedes} and {@code relatedTo} identities resolved to codes in one lookup, plus the
-     * backward direction of each read from the store. Three cheap reads, and only on the
-     * single-decision paths - {@link #list} derives every direction from its one full read instead.
+     * {@code relatedTo} identities resolved to codes in one lookup, plus both supersession
+     * directions and the backward direction of {@code relatedTo}, each read from the store. Four
+     * cheap reads, and only on the single-decision paths - {@link #list} derives every direction
+     * from its one full read (plus one bulk legacy read) instead.
      */
     private AdrDetail detailOf(ProjectId projectId, Adr adr) {
-        List<AdrId> referenced = Stream.concat(adr.supersedes().stream(), adr.relatedTo().stream())
-                .distinct()
-                .toList();
-        Map<AdrId, AdrCode> codes = referenced.isEmpty()
+        Map<AdrId, AdrCode> codes = adr.relatedTo().isEmpty()
                 ? Map.of()
-                : repository.findCodesByIds(projectId, referenced);
-        return new AdrDetail(adr, codesOf(adr.supersedes(), codes),
+                : repository.findCodesByIds(projectId, adr.relatedTo());
+        return new AdrDetail(adr,
+                repository.findSupersededCodes(projectId, adr.id()),
                 repository.findSupersedingCodes(projectId, adr.id()),
                 mergedRelatedCodes(codesOf(adr.relatedTo(), codes),
                         repository.findRelatedCodes(projectId, adr.id())));

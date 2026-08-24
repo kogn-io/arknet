@@ -14,16 +14,18 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p><strong>Self-referential, so no cross-context lookup.</strong> Unlike
  * {@code addressesRequirement}/{@code affectsContext}, whose targets live in neighbour hexagons and
- * therefore need a driven lookup port each, both ends of {@code arkarch:supersedes} are this
- * hexagon's own resources: the application service resolves the superseded code through its own
- * repository, and an unknown one is an ordinary
- * {@link de.hauschel.arknet.adr.domain.AdrNotFoundException} rather than a didactic cross-context
- * rejection.</p>
+ * therefore need a driven lookup port each, both ends of {@code arkarch:supersededBy} are this
+ * hexagon's own resources: the application service resolves both codes through its own repository,
+ * and an unknown one is an ordinary {@link de.hauschel.arknet.adr.domain.AdrNotFoundException}
+ * rather than a didactic cross-context rejection.</p>
  *
- * <p>Only the forward edge is written. The ontology's {@code arkarch:supersededBy} is declared
- * {@code owl:inverseOf arkarch:supersedes}, and deriving it is a reader's job - materialising it as
- * a second, independently maintained triple is exactly the drift this codebase avoids: nothing here
- * reasons over inverses, so the two would have to be kept in step by hand.</p>
+ * <p><strong>The write lands on the superseded decision, not the superseding one</strong>
+ * (kogn-io/arknet#357). {@code arkarch:supersededBy} is written on the superseded decision, together
+ * with its status transitioning to {@code Superseded}, in one write; the superseding decision's own
+ * record is not touched by this call at all, beyond being read to check it is
+ * {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED}. This tool's own parameter order
+ * ({@code code} first, {@code supersededCode} second) is unchanged by that flip - only which of the
+ * two records this port actually writes.</p>
  */
 public interface SupersedeAdr {
 
@@ -32,12 +34,21 @@ public interface SupersedeAdr {
      * Recording the same pair twice is an idempotent no-op.
      *
      * @param projectId      the project (architecture model) both decisions live in
-     * @param code           the superseding (newer) decision's code, e.g. {@code ADR-2}
-     * @param supersededCode the superseded (older) decision's code, e.g. {@code ADR-1}
-     * @return the superseding decision including the edge
+     * @param code           the superseding (newer) decision's code, e.g. {@code ADR-2}; must
+     *                       already be {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED}
+     * @param supersededCode the superseded (older) decision's code, e.g. {@code ADR-1}; must
+     *                       already be {@link de.hauschel.arknet.adr.domain.AdrStatus#ACCEPTED} (a
+     *                       decision that is not is refused, naming its own status)
+     * @return the superseded decision including the edge (not the superseding one)
      * @throws de.hauschel.arknet.adr.domain.AdrNotFoundException if either decision does not exist
      * @throws IllegalArgumentException                           if both codes name the same
      *                                                            decision
+     * @throws IllegalStateException                               if the superseding decision is
+     *                                                              not {@code ACCEPTED}, or if the
+     *                                                              superseded decision is not
+     *                                                              {@code ACCEPTED} (which includes
+     *                                                              already being superseded by a
+     *                                                              different decision)
      */
     AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode);
 }

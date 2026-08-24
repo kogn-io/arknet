@@ -29,19 +29,19 @@ package de.hauschel.arknet.persistence;
  * "the whole module" and "what the ADR context writes" coincide here - and the mirror is what makes
  * the drift test possible in the first place.</p>
  *
- * <p><strong>Why terms nothing writes are still named.</strong> {@link #SUPERSEDED_BY} is never
- * asserted by any tool: the codebase materialises no {@code owl:inverseOf} pair as a second
- * physical triple. The ADR out-adapter nevertheless names it - it must preserve such store-first
- * (ADR-005) edges across its replace-by-identity write instead of erasing them.
- * {@link #SUPERSEDED} is likewise named without being written: the shipped
- * {@code ashapes:ADR-status} shape admits it as a fifth lifecycle individual, but the Java
- * {@code AdrStatus} enum deliberately never implements it - {@code Superseded} stays derived-only
- * from the {@code supersedes}/{@code supersededBy} reverse-read, the same reasoning that keeps
- * {@code supersededBy} itself unmaterialised. The vocabulary mirrors what arknet ships, not what
- * the tools currently write. {@link #RELATED_TO} used to belong in this paragraph and no longer
- * does: {@code adr_add}/{@code adr_update} write it, and the same one-direction-only rule
- * {@code supersedes} follows applies to it although the ontology declares it an
- * {@code owl:SymmetricProperty}.</p>
+ * <p><strong>{@link #SUPERSEDED_BY} and {@link #SUPERSEDED} are real, written terms
+ * (kogn-io/arknet#357).</strong> {@code arkarch:supersededBy} is written on the
+ * <em>superseded</em> decision, together with its status transitioning to {@code Superseded}, in
+ * one write ({@code adr_supersede}) - the two are coupled by a bi-implication both {@code Adr}'s
+ * compact constructor and {@code architecture-shapes.ttl}'s
+ * {@code ashapes:ADR-supersededByImpliesSupersededStatus} enforce. {@link #SUPERSEDES} is the
+ * pre-#357 shape: nothing writes it any more, but the ADR out-adapter still reads it, so a
+ * project with decisions superseded before this issue keeps working - see
+ * {@code AdrRepository#findLegacySupersedesEdges}. {@link #RELATED_TO} follows the same
+ * one-direction-only rule {@link #SUPERSEDES} used to, although the ontology declares it an
+ * {@code owl:SymmetricProperty}: {@code adr_add}/{@code adr_update} write only the forward triple,
+ * and a reader sees both directions via a reverse read, never two hand-maintained triples for one
+ * fact.</p>
  */
 public final class ArkarchVocabulary {
 
@@ -65,10 +65,22 @@ public final class ArkarchVocabulary {
     /** {@code arkarch:decisionDate} - ADR -&gt; the date the decision was made ({@code xsd:date}). */
     public static final String DECISION_DATE = NAMESPACE + "decisionDate";
 
-    /** {@code arkarch:supersedes} - ADR -&gt; an older ADR this one replaces. */
+    /**
+     * {@code arkarch:supersedes} - ADR -&gt; an older ADR this one replaces. The pre-#357 shape: no
+     * tool writes this predicate any more (the written edge moved to {@link #SUPERSEDED_BY}, on the
+     * <em>superseded</em> decision), but the ADR out-adapter still reads a store-first record that
+     * still carries one, rather than dropping data no write ever touched.
+     */
     public static final String SUPERSEDES = NAMESPACE + "supersedes";
 
-    /** {@code arkarch:supersededBy} - ADR -&gt; the newer ADR replacing it ({@code owl:inverseOf} supersedes). */
+    /**
+     * {@code arkarch:supersededBy} - ADR -&gt; the newer ADR replacing it ({@code owl:inverseOf}
+     * {@link #SUPERSEDES}). Written on the <em>superseded</em> decision, together with its
+     * {@link #ADR_STATUS} transitioning to {@link #SUPERSEDED}, in one write (kogn-io/arknet#357,
+     * {@code adr_supersede}) - the two are coupled by a bi-implication enforced both in
+     * {@code Adr}'s compact constructor and by {@code architecture-shapes.ttl}'s
+     * {@code ashapes:ADR-supersededByImpliesSupersededStatus}.
+     */
     public static final String SUPERSEDED_BY = NAMESPACE + "supersededBy";
 
     /**
@@ -105,9 +117,8 @@ public final class ArkarchVocabulary {
     public static final String DEPRECATED = NAMESPACE + "Deprecated";
 
     /**
-     * {@code arkarch:Superseded} - replaced by a newer decision; shipped in the ontology, deliberately
-     * never written by {@code AdrStatus} - it stays derived-only from the
-     * {@code supersedes}/{@code supersededBy} reverse-read instead.
+     * {@code arkarch:Superseded} - replaced by a newer decision; a real {@code AdrStatus} value
+     * (kogn-io/arknet#357), set together with {@link #SUPERSEDED_BY} in one write.
      */
     public static final String SUPERSEDED = NAMESPACE + "Superseded";
 

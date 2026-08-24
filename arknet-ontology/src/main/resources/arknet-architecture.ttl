@@ -109,16 +109,17 @@ arkarch:decisionDate a owl:DatatypeProperty ;
 arkarch:supersedes a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  arkarch:ArchitectureDecisionRecord ;
-    rdfs:label  "supersedes"@en ;
-    rdfs:comment "Diese Entscheidung loest eine aeltere ab."@de .
+    rdfs:label  "supersedes"@en , "loest ab"@de ;
+    rdfs:comment "The pre-#357 write shape (kogn-io/arknet#357): no longer asserted by any tool, which writes arkarch:supersededBy on the superseded decision instead. Read back only, to keep a store-first record written before that change working."@en ,
+                 "Die Schreibform vor #357 (kogn-io/arknet#357): wird von keinem Werkzeug mehr geschrieben, das stattdessen arkarch:supersededBy an der abgeloesten Entscheidung setzt. Nur noch lesbar, damit ein vor der Aenderung geschriebener Bestands-Record funktionsfaehig bleibt."@de .
 
 arkarch:supersededBy a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  arkarch:ArchitectureDecisionRecord ;
     owl:inverseOf arkarch:supersedes ;
-    rdfs:label  "superseded by"@en ;
-    rdfs:comment "The newer decision that replaces this one. Inverse of supersedes."@en ,
-                 "Die neuere Entscheidung, die diese ersetzt. Inverse von supersedes."@de .
+    rdfs:label  "superseded by"@en , "abgeloest durch"@de ;
+    rdfs:comment "The newer decision that replaces this one. Inverse of supersedes. Written on the superseded decision itself, together with its status transitioning to Superseded, in one write (kogn-io/arknet#357)."@en ,
+                 "Die neuere Entscheidung, die diese ersetzt. Inverse von supersedes. Wird an der abgeloesten Entscheidung selbst gesetzt, zusammen mit ihrem Uebergang in den Status Superseded, in einem Schreibvorgang (kogn-io/arknet#357)."@de .
 
 arkarch:relatedTo a owl:ObjectProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;

@@ -4,6 +4,7 @@
 package de.hauschel.arknet.adr.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,7 +43,7 @@ class AdrTest {
 
         assertEquals(List.of(), adr.addressesRequirements());
         assertEquals(List.of(), adr.affectsContexts());
-        assertEquals(List.of(), adr.supersedes());
+        assertNull(adr.supersededBy());
         assertEquals(List.of(), adr.relatedTo());
     }
 
@@ -55,14 +56,47 @@ class AdrTest {
     }
 
     /**
-     * A decision that supersedes itself is a cycle of length one - the constructor rejects it rather
-     * than letting {@code adr_supersede}'s own guard be the only thing standing between a caller and
-     * an unreadable graph.
+     * A decision superseded by itself is a cycle of length one - the constructor rejects it rather
+     * than letting {@code Adr#supersededBy(AdrId)}'s own guard be the only thing standing between a
+     * caller and an unreadable graph. The self-check fires before the bi-implication checks below
+     * it, so the status handed in here does not even have to be consistent with a self-reference.
      */
     @Test
     void rejectsSupersedingItself() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, List.of(ID), null));
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, ID, null));
+    }
+
+    /**
+     * The bi-implication kogn-io/arknet#357 introduced: {@link AdrStatus#SUPERSEDED} without
+     * {@code supersededBy} is not a state this record can hold - mutation test: removing this half
+     * of the check would let a store-first record claim "superseded" without naming a successor.
+     */
+    @Test
+    void rejectsSupersededStatusWithoutSupersededByEdge() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, null, null));
+    }
+
+    /**
+     * The other half of the bi-implication: a {@code supersededBy} edge without status
+     * {@link AdrStatus#SUPERSEDED} is equally rejected - mutation test: removing this half would let
+     * a record claim a successor while a different status (e.g. still ACCEPTED) contradicts it.
+     */
+    @Test
+    void rejectsSupersededByEdgeWithoutSupersededStatus() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.ACCEPTED, "context", "decision", null, null, null, null, null, OTHER, null));
+    }
+
+    /** The one state the bi-implication actually permits together: both set, at once. */
+    @Test
+    void permitsSupersededStatusTogetherWithSupersededByEdge() {
+        Adr superseded = new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, OTHER, null);
+
+        assertEquals(AdrStatus.SUPERSEDED, superseded.status());
+        assertEquals(OTHER, superseded.supersededBy());
     }
 
     /**
@@ -146,21 +180,47 @@ class AdrTest {
         assertThrows(IllegalStateException.class, rejected::deprecate);
     }
 
+    /**
+     * The transition {@code adr_supersede} drives: an ACCEPTED decision superseded by another
+     * becomes SUPERSEDED with the edge set, and recording the very same successor again is an
+     * idempotent no-op.
+     */
     @Test
-    void supersedeAppendsAndIsIdempotent() {
-        Adr adr = adr("name", "context", "decision");
+    void supersededByTransitionsToSupersededAndIsIdempotent() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
-        Adr once = adr.supersede(OTHER);
+        Adr superseded = accepted.supersededBy(OTHER);
 
-        assertEquals(List.of(OTHER), once.supersedes());
-        assertSame(once, once.supersede(OTHER));
+        assertEquals(AdrStatus.SUPERSEDED, superseded.status());
+        assertEquals(OTHER, superseded.supersededBy());
+        assertSame(superseded, superseded.supersededBy(OTHER));
+    }
+
+    /**
+     * Only an ACCEPTED decision may be superseded - mutation test: removing this check would let a
+     * PROPOSED/REJECTED/DEPRECATED decision (or one already SUPERSEDED by a different successor)
+     * become superseded, exactly what {@code adr_supersede}'s own status gate is meant to prevent.
+     */
+    @Test
+    void supersededByThrowsWhenNotAccepted() {
+        Adr proposed = adr("name", "context", "decision");
+        Adr rejected = withStatus(AdrStatus.REJECTED);
+        Adr deprecated = withStatus(AdrStatus.DEPRECATED);
+        Adr alreadySuperseded = withStatus(AdrStatus.ACCEPTED).supersededBy(OTHER);
+
+        assertThrows(IllegalStateException.class, () -> proposed.supersededBy(OTHER));
+        assertThrows(IllegalStateException.class, () -> rejected.supersededBy(OTHER));
+        assertThrows(IllegalStateException.class, () -> deprecated.supersededBy(OTHER));
+        // A different successor than the one already recorded - not the idempotent no-op case.
+        assertThrows(IllegalStateException.class,
+                () -> alreadySuperseded.supersededBy(new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-3"))));
     }
 
     @Test
-    void supersedeRejectsItsOwnIdentity() {
-        Adr adr = adr("name", "context", "decision");
+    void supersededByRejectsItsOwnIdentity() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
-        assertThrows(IllegalArgumentException.class, () -> adr.supersede(ID));
+        assertThrows(IllegalArgumentException.class, () -> accepted.supersededBy(ID));
     }
 
     @Test
@@ -181,12 +241,14 @@ class AdrTest {
 
     /**
      * The rule this whole port exists to state: a decision in force records what was decided at the
-     * time, so its text is not editable. All three non-{@code PROPOSED} states are pinned, not just
-     * {@code ACCEPTED} - a rejected or deprecated decision is just as much a record of its own past.
+     * time, so its text is not editable. All four non-{@code PROPOSED} states are pinned, not just
+     * {@code ACCEPTED} - a rejected, deprecated or superseded decision is just as much a record of
+     * its own past.
      */
     @Test
     void reviseTextThrowsFromEveryStatusButProposed() {
-        for (AdrStatus status : List.of(AdrStatus.ACCEPTED, AdrStatus.REJECTED, AdrStatus.DEPRECATED)) {
+        for (AdrStatus status : List.of(AdrStatus.ACCEPTED, AdrStatus.REJECTED, AdrStatus.DEPRECATED,
+                AdrStatus.SUPERSEDED)) {
             Adr inForce = withStatus(status);
 
             AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
@@ -300,8 +362,15 @@ class AdrTest {
                 null, null, null, null, null, null, null);
     }
 
+    /**
+     * Builds a decision in {@code status}, satisfying the bi-implication for
+     * {@link AdrStatus#SUPERSEDED}: only that one status carries a non-{@code null}
+     * {@code supersededBy} (set to {@link #OTHER}), every other status carries {@code null} - the
+     * same rule {@link Adr}'s compact constructor enforces.
+     */
     private static Adr withStatus(AdrStatus status) {
+        AdrId supersededBy = status == AdrStatus.SUPERSEDED ? OTHER : null;
         return new Adr(ID, new AdrCode("ADR-1"), "name", status, "context", "decision",
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, supersededBy, null);
     }
 }

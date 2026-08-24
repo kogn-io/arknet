@@ -34,7 +34,8 @@ ashapes:ADRShape
     sh:property ashapes:ADR-decision ;
     sh:property ashapes:ADR-consequences ;
     sh:property ashapes:ADR-alternatives ;
-    sh:property ashapes:ADR-relatedTo .
+    sh:property ashapes:ADR-relatedTo ;
+    sh:property ashapes:ADR-supersededBy .
 
 ashapes:ADR-identifier
     a sh:PropertyShape ;
@@ -106,6 +107,44 @@ ashapes:ADR-relatedTo
     sh:nodeKind sh:IRI ;
     sh:class    arkarch:ArchitectureDecisionRecord ;
     sh:message  "An arkarch:relatedTo edge must point at another ADR (arkarch:ArchitectureDecisionRecord) identified by an IRI."@en , "Eine arkarch:relatedTo-Kante muss auf ein anderes ADR (arkarch:ArchitectureDecisionRecord) mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
+
+# At most one successor: a decision is superseded by exactly one newer decision
+# (kogn-io/arknet#357). Written on the superseded decision itself, together with
+# its status transitioning to Superseded - see ashapes:ADR-supersededByImpliesSupersededStatus
+# below for the bi-implication between the two.
+ashapes:ADR-supersededBy
+    a sh:PropertyShape ;
+    sh:path     arkarch:supersededBy ;
+    sh:maxCount 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkarch:ArchitectureDecisionRecord ;
+    sh:message  "An arkarch:supersededBy edge must point at exactly one other ADR (arkarch:ArchitectureDecisionRecord) identified by an IRI."@en , "Eine arkarch:supersededBy-Kante muss auf genau ein anderes ADR (arkarch:ArchitectureDecisionRecord) mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
+
+# Bi-implication: an ADR's status is Superseded if and only if its arkarch:supersededBy edge is
+# set - the two are written together in one call (adr_supersede) and must never be found apart.
+# Expressed as an anonymous sh:or/sh:not combination rather than the named PropertyShapes this
+# file otherwise sticks to: SHACL has no named-shape equivalent for a logical combinator, and the
+# nesting is exactly what expresses "both together, or neither" (verified against the real RDF4J
+# SHACL engine this project's write gate runs, kogn-io/arknet#357).
+# The violation this raises is reported against the ADR node itself (path=null in the report,
+# since sh:or has no single property to blame), so the message below is written to stand on its
+# own without a property name for context.
+ashapes:ADR-supersededByImpliesSupersededStatus
+    a sh:NodeShape ;
+    sh:targetClass arkarch:ArchitectureDecisionRecord ;
+    sh:or (
+        [
+            sh:property [ sh:path arkarch:supersededBy ; sh:maxCount 0 ] ;
+            sh:not [ sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Superseded ] ]
+        ]
+        [
+            sh:property [ sh:path arkarch:supersededBy ; sh:minCount 1 ] ;
+            sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Superseded ]
+        ]
+    ) ;
+    sh:message  "An ADR's status must be Superseded exactly when its arkarch:supersededBy edge is set - both together, or neither."@en , "Der Status einer ADR muss genau dann Superseded sein, wenn ihre arkarch:supersededBy-Kante gesetzt ist -- entweder beide zusammen oder keins von beiden."@de ;
     sh:severity sh:Violation .
 
 # END OF ARCHITECTURE SHAPES

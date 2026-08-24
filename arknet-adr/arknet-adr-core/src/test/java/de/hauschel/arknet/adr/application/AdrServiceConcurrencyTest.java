@@ -43,9 +43,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  *
  * <p><strong>Lost update.</strong> {@link AdrService#supersede}, {@link AdrService#accept} and
  * {@link AdrService#update} are read-modify-write round trips. Without the compare-and-set guard,
- * two racing {@code adr_supersede} calls on the same decision would silently lose one of the two
- * {@code arkarch:supersedes} edges, and an {@code adr_update} would restore whatever a concurrent
- * {@code adr_set_status} had just committed.</p>
+ * two racing {@code adr_supersede} calls on the same superseded decision would silently let the
+ * second overwrite the first's already-committed {@code arkarch:supersededBy} edge and status, and
+ * an {@code adr_update} would restore whatever a concurrent {@code adr_set_status} had just
+ * committed.</p>
  *
  * <p>Both races are reproduced deterministically, without real threads: an {@link AdrRepository}
  * decorator runs an "other caller"'s complete round trip exactly once, at the precise point where a
@@ -97,24 +98,38 @@ class AdrServiceConcurrencyTest {
     }
 
     /**
-     * Two concurrent {@code adr_supersede} calls on the same decision, superseding different older
-     * ones, must both survive: without the compare-and-set guard the second writer would blindly
-     * overwrite the first writer's already-committed edge.
+     * The lost-update race {@code adr_supersede} guards against changed shape with kogn-io/arknet#357:
+     * the write now lands on the <em>superseded</em> decision, so two concurrent calls superseding
+     * two <em>different</em> older decisions with the same successor no longer share any mutable
+     * state at all (each writes its own record) - that scenario is covered instead by
+     * {@link #supersedeAccumulatesSeveralOlderDecisions()}-style sequential calls in
+     * {@code AdrServiceTest}. The race that remains reachable is two callers superseding the
+     * <em>same</em> older decision: the loser's compare-and-set fails against the winner's
+     * already-committed head, retries with a fresh read, and finds the decision already SUPERSEDED -
+     * so {@link de.hauschel.arknet.adr.domain.Adr#supersededBy(AdrId)}'s own ACCEPTED guard refuses
+     * the retry cleanly (a real, informative failure) rather than silently overwriting the winner's
+     * edge or looping forever.
      */
     @Test
-    void concurrentSupersedeCallsForDifferentTargetsBothSurvive() {
-        AdrCode first = otherCaller.add(PROJECT, newAdr()).adr().code();
-        AdrCode second = otherCaller.add(PROJECT, newAdr()).adr().code();
-        AdrCode newest = otherCaller.add(PROJECT, newAdr()).adr().code();
+    void aSecondConcurrentSupersedeOnTheSameDecisionFailsCleanlyAfterTheFirstWins() {
+        AdrCode older = otherCaller.add(PROJECT, newAdr()).adr().code();
+        otherCaller.accept(PROJECT, older);
+        AdrCode winner = otherCaller.add(PROJECT, newAdr()).adr().code();
+        otherCaller.accept(PROJECT, winner);
+        AdrCode loserSuccessor = otherCaller.add(PROJECT, newAdr()).adr().code();
+        otherCaller.accept(PROJECT, loserSuccessor);
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
-                () -> otherCaller.supersede(PROJECT, newest, second));
+                () -> otherCaller.supersede(PROJECT, winner, older));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
 
-        List<AdrCode> result = underTest.supersede(PROJECT, newest, first).supersedes();
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> underTest.supersede(PROJECT, loserSuccessor, older));
 
-        assertEquals(2, result.size());
-        assertTrue(result.containsAll(List.of(first, second)));
-        assertEquals(2, store.findByCode(PROJECT, newest).orElseThrow().supersedes().size());
+        assertTrue(thrown.getMessage().contains("ACCEPTED"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains(older.value()), thrown.getMessage());
+        Adr stored = store.findByCode(PROJECT, older).orElseThrow();
+        assertEquals(AdrStatus.SUPERSEDED, stored.status());
+        assertEquals(winner, store.findSupersedingCodes(PROJECT, stored.id()).stream().findFirst().orElseThrow());
     }
 
     /**
@@ -235,6 +250,21 @@ class AdrServiceConcurrencyTest {
         @Override
         public List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId) {
             return delegate.findSupersedingCodes(projectId, supersededId);
+        }
+
+        @Override
+        public List<AdrCode> findSupersededCodes(ProjectId projectId, AdrId supersedingId) {
+            return delegate.findSupersededCodes(projectId, supersedingId);
+        }
+
+        @Override
+        public List<AdrCode> findSupersessionReferrers(ProjectId projectId, AdrId target) {
+            return delegate.findSupersessionReferrers(projectId, target);
+        }
+
+        @Override
+        public List<LegacySupersession> findLegacySupersedesEdges(ProjectId projectId) {
+            return delegate.findLegacySupersedesEdges(projectId);
         }
 
         @Override

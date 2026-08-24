@@ -190,20 +190,83 @@ public interface AdrRepository {
     Map<AdrId, AdrCode> findCodesByIds(ProjectId projectId, Collection<AdrId> ids);
 
     /**
-     * Reads the backward direction of {@code arkarch:supersedes}: the business codes of every
-     * decision whose {@code supersedes} edge points at {@code supersededId}.
+     * Reads the business codes of every decision that supersedes {@code supersededId} - what
+     * {@code supersededId}'s own {@link de.hauschel.arknet.adr.application.port.in.AdrDetail#supersededBy() supersededBy display} needs
+     * (kogn-io/arknet#357).
      *
-     * <p>This exists because the ontology's {@code arkarch:supersededBy} is <em>not</em> written as a
-     * second physical triple (see {@link de.hauschel.arknet.adr.application.port.in.SupersedeAdr}).
-     * A reverse read is the honest way to answer it - the same backward traversal
-     * {@code arknet-mcp}'s {@code TraceabilityGraph#dependents} performs over the very same
-     * predicate.</p>
+     * <p>Two sources, unioned: {@code supersededId}'s own {@code arkarch:supersededBy} field (the
+     * current write shape, an ordinary forward read on the decision itself), and a reverse read of
+     * the pre-#357 {@code arkarch:supersedes} triple a store-first record may still carry
+     * (written on the <em>superseding</em> decision, back when that direction was the one asserted).
+     * Nothing writes the legacy shape any more, but nothing migrates it away either - a project with
+     * decisions superseded before this issue keeps reading correctly. In the common case (every
+     * decision written under the current model) this returns at most one code, since
+     * {@code arkarch:supersededBy} carries {@code sh:maxCount 1}; the legacy source is what can make
+     * it more than one.</p>
      *
      * @param projectId    the project (architecture model) to read in
      * @param supersededId the identity of the decision to find the successors of
      * @return the superseding decisions' codes, sorted, never {@code null}
      */
     List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId);
+
+    /**
+     * Reads the business codes of every decision {@code supersedingId} supersedes - what
+     * {@code supersedingId}'s own {@link de.hauschel.arknet.adr.application.port.in.AdrDetail#supersedes() supersedes display} needs
+     * (kogn-io/arknet#357), the mirror of {@link #findSupersedingCodes}.
+     *
+     * <p>Two sources, unioned: a reverse read of every decision naming {@code supersedingId} in its
+     * own {@code arkarch:supersededBy} field (the current write shape - {@code supersedingId} is
+     * each such decision's successor), and {@code supersedingId}'s own pre-#357
+     * {@code arkarch:supersedes} triple, should a store-first record still carry one (written back
+     * when the superseding decision itself asserted the forward edge).</p>
+     *
+     * @param projectId      the project (architecture model) to read in
+     * @param supersedingId  the identity of the decision to find the predecessors of
+     * @return the superseded decisions' codes, sorted, never {@code null}
+     */
+    List<AdrCode> findSupersededCodes(ProjectId projectId, AdrId supersedingId);
+
+    /**
+     * Reads the business codes of every decision whose supersession edge - either direction, either
+     * write shape - names {@code target}: the current-model {@code arkarch:supersededBy} pointed at
+     * {@code target} (i.e. a decision {@code target} itself supersedes) or the pre-#357
+     * {@code arkarch:supersedes} pointed at {@code target} (i.e. a decision that names {@code target}
+     * as what it replaces). What {@code adr_delete}'s reference guard needs: either shape would leave
+     * a dangling edge behind if {@code target} disappeared, and the guard does not care which shape
+     * wrote it, only that removing {@code target} would orphan it.
+     *
+     * <p>Deliberately not the same read as {@link #findSupersedingCodes}/{@link #findSupersededCodes}:
+     * those each also read {@code target}'s <em>own</em> outgoing field to answer a display question
+     * ("who supersedes/does this decision supersede"), which is not a dangling-reference risk at all
+     * - that triple disappears together with {@code target} itself, harming nobody. This method reads
+     * only the two <em>external</em> reverse edges.</p>
+     *
+     * @param projectId the project (architecture model) to read in
+     * @param target    the identity of the decision a delete would remove
+     * @return the referencing decisions' codes, sorted, never {@code null}
+     */
+    List<AdrCode> findSupersessionReferrers(ProjectId projectId, AdrId target);
+
+    /**
+     * Reads every store-first (pre-#357) {@code arkarch:supersedes} edge still present in the
+     * project, as (superseding code, superseded code) pairs - the forward-only triple this hexagon
+     * used to write on the superseding decision before the edge moved onto the superseded decision's
+     * own {@code arkarch:supersededBy} field. Nothing writes this predicate any more, so every pair
+     * returned here is legacy data {@link de.hauschel.arknet.adr.application.AdrService#list} must
+     * keep folding into both supersession directions rather than silently dropping.
+     *
+     * <p>One bulk read for the whole project, not one query per decision - the same "single full
+     * read, everything else in memory" shape {@link #findAll} already gives {@code adr_list}.</p>
+     *
+     * @param projectId the project (architecture model) to read in
+     * @return every legacy pair, never {@code null}
+     */
+    List<LegacySupersession> findLegacySupersedesEdges(ProjectId projectId);
+
+    /** One pre-#357 {@code arkarch:supersedes} edge, as read back by {@link #findLegacySupersedesEdges}. */
+    record LegacySupersession(AdrCode supersedingCode, AdrCode supersededCode) {
+    }
 
     /**
      * Reads the backward direction of {@code arkarch:relatedTo}: the business codes of every

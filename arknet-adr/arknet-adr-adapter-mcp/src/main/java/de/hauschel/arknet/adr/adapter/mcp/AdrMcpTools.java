@@ -72,7 +72,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * {@code BoundedContextLookup} out-ports. Every rendering calls each borrowed port at most once,
  * batched across every reference involved; an id a port could not resolve simply falls back to the
  * bare IRI - {@link #format} never throws and never drops a reference. The two self-referential
- * relations, {@code supersedes} and {@code relatedTo}, need no borrowing at all: they point back
+ * relations, {@code supersededBy} and {@code relatedTo}, need no borrowing at all: they point back
  * into this very hexagon, so the application service resolves them and hands the codes over in
  * {@link AdrDetail} - {@code relatedTo} already merged into the one list a symmetric relation
  * deserves rather than split into two directions.</p>
@@ -361,10 +361,13 @@ public final class AdrMcpTools {
         // three transition ports (AcceptAdr/RejectAdr/DeprecateAdr) takes no target status of its
         // own - the caller-visible dispatch happens only here. AdrStatus.valueOf is parsed
         // defensively rather than let directly: PROPOSED is a real enum value that is simply not a
-        // legal target of this tool (you never transition into it), and SUPERSEDED is a real
-        // ontology value AdrStatus deliberately never implements at all (it stays derived-only from
-        // adr_supersede) - both, and anything unparseable, must reject with this method's own
-        // message, not the JDK's raw "No enum constant ...".
+        // legal target of this tool (you never transition into it) - it, and anything unparseable,
+        // must reject with this method's own message, not the JDK's raw "No enum constant ...".
+        // SUPERSEDED gets its own explicit branch rather than falling into that same default: it is
+        // a real, reachable target (kogn-io/arknet#357), just not one this tool sets - the lifecycle
+        // transition into it belongs to adr_supersede, which sets the status and the supersededBy
+        // edge together in one write, something this tool's bare target-status parameter cannot
+        // express (it names no successor).
         final AdrCode code = new AdrCode(id);
         AdrStatus target;
         try {
@@ -376,6 +379,9 @@ public final class AdrMcpTools {
             case ACCEPTED -> format(projectId, acceptAdr.accept(projectId, code));
             case REJECTED -> format(projectId, rejectAdr.reject(projectId, code));
             case DEPRECATED -> format(projectId, deprecateAdr.deprecate(projectId, code));
+            case SUPERSEDED -> throw new IllegalArgumentException(
+                    "adr_set_status does not set SUPERSEDED directly - it needs a successor decision, "
+                            + "which only adr_supersede can name; use adr_supersede instead");
             case null, default -> throw new IllegalArgumentException(
                     "adr_set_status only supports transitioning an ADR to ACCEPTED, REJECTED or "
                             + "DEPRECATED, not " + status);
@@ -383,9 +389,11 @@ public final class AdrMcpTools {
     }
 
     @McpTool(name = "adr_supersede", description = "Record that one architecture decision replaces an "
-            + "older one. Both must already exist. Only the forward arkarch:supersedes edge is "
-            + "written - the superseded decision reports it as 'superseded by' from a reverse read, "
-            + "not from a second stored triple. Recording the same pair twice is a no-op.")
+            + "older one. Both must already be ACCEPTED. Sets the older decision's status to "
+            + "SUPERSEDED and its supersededBy edge to the newer decision, together in one write - "
+            + "the older decision's own record is what this call returns. Recording the same pair "
+            + "twice is a no-op; naming a different successor for an already-superseded decision is "
+            + "refused.")
     public String supersede(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The superseding (newer) ADR identity, e.g. ADR-2")
@@ -408,9 +416,9 @@ public final class AdrMcpTools {
             + "it with adr_supersede, or mark it obsolete with adr_set_status DEPRECATED. REJECTED "
             + "cannot be deleted either, and is not a way to get rid of a record: it means the option "
             + "was considered and turned down, which is itself a decision worth keeping. The delete "
-            + "is refused while another decision still points at this one via supersedes or "
-            + "relatedTo; the refusal names those decisions. The freed code is NOT handed out again - "
-            + "the next adr_add continues above it.")
+            + "is refused while another decision still points at this one - naming it as its own "
+            + "successor (supersededBy), or via relatedTo; the refusal names those decisions. The "
+            + "freed code is NOT handed out again - the next adr_add continues above it.")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,

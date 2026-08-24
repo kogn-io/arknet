@@ -259,7 +259,7 @@ class AdrMcpToolsTest {
         ResourceId contextId = ResourceId.of("https://w3id.org/arknet/id/some-context");
         requirements.register(requirementId, new RequirementCode("FR-7"));
         contexts.register(contextId, new BoundedContextCode("BC-3"));
-        stub.nextDetail = detail(adrWith(List.of(requirementId), List.of(contextId), List.of()),
+        stub.nextDetail = detail(adrWith(List.of(requirementId), List.of(contextId), null),
                 List.of(), List.of());
 
         String rendered = adapter.get(null, "ADR-1", ANCHOR);
@@ -271,7 +271,7 @@ class AdrMcpToolsTest {
     @Test
     void formatFallsBackToTheBareIriWhenAReferenceCannotBeResolved() {
         ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-requirement");
-        stub.nextDetail = detail(adrWith(List.of(unresolvable), List.of(), List.of()), List.of(), List.of());
+        stub.nextDetail = detail(adrWith(List.of(unresolvable), List.of(), null), List.of(), List.of());
 
         String rendered = adapter.get(null, "ADR-1", ANCHOR);
 
@@ -283,7 +283,7 @@ class AdrMcpToolsTest {
         ResourceId duplicated = ResourceId.of("https://w3id.org/arknet/id/duplicated-requirement");
         requirements.register(duplicated, new RequirementCode("FR-7"));
         requirements.register(duplicated, new RequirementCode("FR-7"));
-        stub.nextDetail = detail(adrWith(List.of(duplicated), List.of(), List.of()), List.of(), List.of());
+        stub.nextDetail = detail(adrWith(List.of(duplicated), List.of(), null), List.of(), List.of());
 
         String rendered = adapter.get(null, "ADR-1", ANCHOR);
 
@@ -299,8 +299,8 @@ class AdrMcpToolsTest {
         requirements.register(requirementB, new RequirementCode("FR-2"));
         contexts.register(contextA, new BoundedContextCode("BC-1"));
         stub.allAdrs = List.of(
-                detail(adrWith(List.of(requirementA), List.of(contextA), List.of()), List.of(), List.of()),
-                detail(adrWith(List.of(requirementB), List.of(), List.of()), List.of(), List.of()));
+                detail(adrWith(List.of(requirementA), List.of(contextA), null), List.of(), List.of()),
+                detail(adrWith(List.of(requirementB), List.of(), null), List.of(), List.of()));
 
         String rendered = adapter.list(null, ANCHOR);
 
@@ -313,7 +313,7 @@ class AdrMcpToolsTest {
 
     @Test
     void listOfAdrsWithoutAnyReferencesDoesNotCallEitherResolver() {
-        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of()));
+        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of()));
 
         adapter.list(null, ANCHOR);
 
@@ -333,7 +333,7 @@ class AdrMcpToolsTest {
 
     @Test
     void getRendersBothSupersedesDirections() {
-        stub.nextDetail = detail(adrWith(List.of(), List.of(), List.of()),
+        stub.nextDetail = detail(adrWith(List.of(), List.of(), null),
                 List.of(new AdrCode("ADR-0")), List.of(new AdrCode("ADR-9")));
 
         String rendered = adapter.get(null, "ADR-1", ANCHOR);
@@ -348,7 +348,7 @@ class AdrMcpToolsTest {
      */
     @Test
     void getRendersTheMergedRelatedToList() {
-        stub.nextDetail = detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of(),
+        stub.nextDetail = detail(adrWith(List.of(), List.of(), null), List.of(), List.of(),
                 List.of(new AdrCode("ADR-3"), new AdrCode("ADR-4")));
 
         String rendered = adapter.get(null, "ADR-1", ANCHOR);
@@ -358,7 +358,7 @@ class AdrMcpToolsTest {
 
     @Test
     void listRendersRelatedToInline() {
-        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of(),
+        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of(),
                 List.of(new AdrCode("ADR-3"))));
 
         String rendered = adapter.list(null, ANCHOR);
@@ -369,7 +369,7 @@ class AdrMcpToolsTest {
     /** Absent optional fields are omitted entirely rather than printed empty. */
     @Test
     void formatOmitsFieldsTheDecisionDoesNotCarry() {
-        stub.nextDetail = detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+        stub.nextDetail = detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
 
         String rendered = adapter.get(null, "ADR-1", ANCHOR);
 
@@ -428,10 +428,11 @@ class AdrMcpToolsTest {
     @Test
     void setStatusRejectionMessageNamesTheTargetInsteadOfLeakingTheRawEnumFailure() {
         // PROPOSED is a real AdrStatus value that is simply not a legal target of this tool (you
-        // never transition into it via adr_set_status). SUPERSEDED is a real ashapes:ADR-status
-        // value AdrStatus deliberately never implements at all. A completely unknown string must be
-        // rejected the same way as both. None of the three may surface AdrStatus.valueOf's raw
-        // "No enum constant ..." message.
+        // never transition into it via adr_set_status). SUPERSEDED is a real, reachable
+        // AdrStatus value (kogn-io/arknet#357) this tool still refuses, but with its own explicit
+        // message pointing at adr_supersede rather than falling into the generic default branch. A
+        // completely unknown string must be rejected the same way PROPOSED is. None of the three may
+        // surface AdrStatus.valueOf's raw "No enum constant ..." message.
         IllegalArgumentException proposed = assertThrows(IllegalArgumentException.class,
                 () -> adapter.setStatus(null, "ADR-1", "PROPOSED", ANCHOR));
         assertTrue(proposed.getMessage().contains("ACCEPTED"), proposed.getMessage());
@@ -439,7 +440,7 @@ class AdrMcpToolsTest {
 
         IllegalArgumentException superseded = assertThrows(IllegalArgumentException.class,
                 () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", ANCHOR));
-        assertTrue(superseded.getMessage().contains("ACCEPTED"), superseded.getMessage());
+        assertTrue(superseded.getMessage().contains("adr_supersede"), superseded.getMessage());
         assertFalse(superseded.getMessage().contains("No enum constant"), superseded.getMessage());
 
         IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
@@ -581,12 +582,12 @@ class AdrMcpToolsTest {
     }
 
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
-            List<AdrId> supersedes) {
+            AdrId supersededBy) {
         return new Adr(ID, new AdrCode("ADR-1"), "Use an embedded triple store", AdrStatus.PROPOSED,
                 "Why this was needed", "What was decided", null, null, null,
                 requirementIds.stream().map(RequirementRef::new).toList(),
                 contextIds.stream().map(BoundedContextRef::new).toList(),
-                supersedes, List.of());
+                supersededBy, List.of());
     }
 
     private static AdrDetail detail(Adr adr, List<AdrCode> supersedes, List<AdrCode> supersededBy) {
@@ -625,7 +626,7 @@ class AdrMcpToolsTest {
             lastProjectId = projectId;
             Adr adr = new Adr(ID, new AdrCode("ADR-1"), command.name(), AdrStatus.PROPOSED,
                     command.context(), command.decision(), command.consequences(), command.alternatives(),
-                    command.decisionDate(), List.of(), List.of(), List.of(), List.of());
+                    command.decisionDate(), List.of(), List.of(), null, List.of());
             return new AdrDetail(adr, List.of(), List.of(), List.of());
         }
 
@@ -634,7 +635,7 @@ class AdrMcpToolsTest {
             lastUpdatedCode = code;
             lastCorrection = correction;
             lastProjectId = projectId;
-            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+            return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
@@ -650,26 +651,26 @@ class AdrMcpToolsTest {
         @Override
         public AdrDetail accept(ProjectId projectId, AdrCode code) {
             lastAcceptedCode = code;
-            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+            return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
         public AdrDetail reject(ProjectId projectId, AdrCode code) {
             lastRejectedCode = code;
-            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+            return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
         public AdrDetail deprecate(ProjectId projectId, AdrCode code) {
             lastDeprecatedCode = code;
-            return detail(adrWith(List.of(), List.of(), List.of()), List.of(), List.of());
+            return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
         public AdrDetail supersede(ProjectId projectId, AdrCode code, AdrCode supersededCode) {
             lastSupersedingCode = code;
             lastSupersededCode = supersededCode;
-            return detail(adrWith(List.of(), List.of(), List.of()), List.of(supersededCode), List.of());
+            return detail(adrWith(List.of(), List.of(), null), List.of(supersededCode), List.of());
         }
 
         @Override

@@ -58,6 +58,14 @@ class InMemoryAdrRepository implements AdrRepository {
     private final Map<AdrId, String> headByIdentity = new LinkedHashMap<>();
     private final Map<ProjectId, List<AdrCode>> retainedByProject = new LinkedHashMap<>();
 
+    /**
+     * Store-first (pre-#357) {@code arkarch:supersedes} pairs, seeded directly by
+     * {@link #seedLegacySupersession} rather than reachable through any {@link AdrService} in-port -
+     * exactly as a real project's legacy data would be, having been written before this issue existed
+     * rather than through {@code adr_supersede}.
+     */
+    private final Map<ProjectId, List<LegacySupersession>> legacyByProject = new LinkedHashMap<>();
+
     @Override
     public void create(ProjectId projectId, Adr adr) {
         Map<AdrId, Adr> adrs = byProject.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
@@ -138,15 +146,88 @@ class InMemoryAdrRepository implements AdrRepository {
         return Map.copyOf(codes);
     }
 
+    /**
+     * Two sources, unioned, mirroring {@code KognioRdfAdrRepository}: {@code supersededId}'s own
+     * current-model {@link Adr#supersededBy()} field, and every legacy pair whose
+     * {@link LegacySupersession#supersededCode()} names it.
+     */
     @Override
     public List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId) {
-        return byProject.getOrDefault(projectId, Map.of()).values().stream()
-                .filter(adr -> adr.supersedes().contains(supersededId))
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> supersededId.equals(adr.id()) && adr.supersededBy() != null)
+                .map(adr -> codeOf(projectId, adr.supersededBy()))
+                .filter(Objects::nonNull)
+                .forEach(codes::add);
+        String supersededCode = codeOf(projectId, supersededId);
+        legacyByProject.getOrDefault(projectId, List.of()).stream()
+                .filter(pair -> pair.supersededCode().value().equals(supersededCode))
+                .forEach(pair -> codes.add(pair.supersedingCode().value()));
+        return codes.stream().map(AdrCode::new).toList();
+    }
+
+    /**
+     * The mirror of {@link #findSupersedingCodes}: a reverse read of every decision naming
+     * {@code supersedingId} in its own current-model {@link Adr#supersededBy()} field, unioned with
+     * every legacy pair whose {@link LegacySupersession#supersedingCode()} names it.
+     */
+    @Override
+    public List<AdrCode> findSupersededCodes(ProjectId projectId, AdrId supersedingId) {
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> supersedingId.equals(adr.supersededBy()))
                 .map(adr -> adr.code().value())
-                .collect(java.util.stream.Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
-                .stream()
-                .map(AdrCode::new)
-                .toList();
+                .forEach(codes::add);
+        String supersedingCode = codeOf(projectId, supersedingId);
+        legacyByProject.getOrDefault(projectId, List.of()).stream()
+                .filter(pair -> pair.supersedingCode().value().equals(supersedingCode))
+                .forEach(pair -> codes.add(pair.supersededCode().value()));
+        return codes.stream().map(AdrCode::new).toList();
+    }
+
+    /**
+     * The two external reverse edges only (mirrors {@code KognioRdfAdrRepository}), both with
+     * {@code target} as the <em>object</em> of the edge - deliberately not a delegation to
+     * {@link #findSupersededCodes}, whose legacy branch runs the opposite direction (it treats its
+     * argument as the superseding decision, this method treats {@code target} as what is
+     * referenced): a current-model decision naming {@code target} as its own successor, or a legacy
+     * pair naming {@code target} as what it (legacy-)supersedes.
+     */
+    @Override
+    public List<AdrCode> findSupersessionReferrers(ProjectId projectId, AdrId target) {
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> target.equals(adr.supersededBy()))
+                .map(adr -> adr.code().value())
+                .forEach(codes::add);
+        String targetCode = codeOf(projectId, target);
+        legacyByProject.getOrDefault(projectId, List.of()).stream()
+                .filter(pair -> pair.supersededCode().value().equals(targetCode))
+                .forEach(pair -> codes.add(pair.supersedingCode().value()));
+        return codes.stream().map(AdrCode::new).toList();
+    }
+
+    @Override
+    public List<LegacySupersession> findLegacySupersedesEdges(ProjectId projectId) {
+        return List.copyOf(legacyByProject.getOrDefault(projectId, List.of()));
+    }
+
+    /**
+     * Seeds a store-first (pre-#357) {@code arkarch:supersedes} pair - what
+     * {@code KognioRdfAdrRepository#findLegacySupersedesEdges} would read back from a project that
+     * still carries decisions superseded before this issue. Both codes are business labels only; the
+     * decisions they name need not even exist in this fake, mirroring the real read path's tolerance
+     * of a dangling legacy edge.
+     */
+    void seedLegacySupersession(ProjectId projectId, AdrCode supersedingCode, AdrCode supersededCode) {
+        legacyByProject.computeIfAbsent(projectId, key -> new ArrayList<>())
+                .add(new LegacySupersession(supersedingCode, supersededCode));
+    }
+
+    /** Looks {@code id} up directly (this fake keys its inner map by identity) and returns its code. */
+    private String codeOf(ProjectId projectId, AdrId id) {
+        Adr adr = byProject.getOrDefault(projectId, Map.of()).get(id);
+        return adr == null ? null : adr.code().value();
     }
 
     @Override

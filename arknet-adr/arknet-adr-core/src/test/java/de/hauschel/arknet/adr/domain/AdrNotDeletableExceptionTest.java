@@ -46,6 +46,21 @@ class AdrNotDeletableExceptionTest {
         assertTrue(thrown.getMessage().contains("already marked obsolete"), thrown.getMessage());
     }
 
+    /**
+     * kogn-io/arknet#357's fifth status gets its own remedy text rather than falling through - a
+     * decision already replaced by a successor is told that, not pointed at {@code adr_supersede}
+     * again (which is how it got here) or at {@code adr_set_status DEPRECATED} (which no longer
+     * applies to it).
+     */
+    @Test
+    void aSupersededDecisionIsToldItAlreadyHasASuccessor() {
+        AdrNotDeletableException thrown = new AdrNotDeletableException(CODE, AdrStatus.SUPERSEDED);
+
+        assertEquals(AdrStatus.SUPERSEDED, thrown.status());
+        assertTrue(thrown.getMessage().contains("already been replaced"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("created by mistake"), thrown.getMessage());
+    }
+
     /** A proposal is deletable, so constructing this refusal for one is a caller bug, not a message. */
     @Test
     void refusesToBeConstructedForAProposedDecision() {

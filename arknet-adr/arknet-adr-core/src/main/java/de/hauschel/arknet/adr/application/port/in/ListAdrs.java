@@ -17,9 +17,11 @@ public interface ListAdrs {
     /**
      * Returns all architecture decisions currently recorded in the given project.
      *
-     * <p>Both directions of {@code supersedes} come for free here: with every decision in hand, the
-     * implementing service inverts the forward edges in memory rather than issuing the reverse query
-     * {@link GetAdr} needs for a single decision.</p>
+     * <p>Both current-model supersession directions come for free here: with every decision in hand,
+     * the implementing service inverts each one's {@code supersededBy} field in memory rather than
+     * issuing the reverse query {@link GetAdr} needs for a single decision - plus one bulk read of
+     * any pre-#357 legacy {@code arkarch:supersedes} edge still present, folded into the same two
+     * directions.</p>
      *
      * @param projectId the project (architecture model) to list decisions from
      * @return all decisions, never {@code null}

@@ -92,23 +92,23 @@ class KognioRdfAdrRepositoryTest {
     }
 
     private static Adr adr(AdrCode code) {
-        return adr(freshId(), code, AdrStatus.PROPOSED, null, null, null, List.of(), List.of(), List.of());
+        return adr(freshId(), code, AdrStatus.PROPOSED, null, null, null, List.of(), List.of(), null);
     }
 
     private static Adr adr(AdrId id, AdrCode code, AdrStatus status, String consequences, String alternatives,
             LocalDate decisionDate, List<RequirementRef> requirements, List<BoundedContextRef> contexts,
-            List<AdrId> supersedes) {
+            AdrId supersededBy) {
         return adr(id, code, status, consequences, alternatives, decisionDate, requirements, contexts,
-                supersedes, List.of());
+                supersededBy, List.of());
     }
 
     private static Adr adr(AdrId id, AdrCode code, AdrStatus status, String consequences, String alternatives,
             LocalDate decisionDate, List<RequirementRef> requirements, List<BoundedContextRef> contexts,
-            List<AdrId> supersedes, List<AdrId> relatedTo) {
+            AdrId supersededBy, List<AdrId> relatedTo) {
         return new Adr(id, code, "Use an embedded triple store", status,
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                consequences, alternatives, decisionDate, requirements, contexts, supersedes, relatedTo);
+                consequences, alternatives, decisionDate, requirements, contexts, supersededBy, relatedTo);
     }
 
     @Test
@@ -127,7 +127,7 @@ class KognioRdfAdrRepositoryTest {
         Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED,
                 "The store becomes a single point of failure for the model.",
                 "A remote SPARQL endpoint; rejected because a single-user client must work offline.",
-                LocalDate.of(2026, 7, 31), List.of(), List.of(), List.of());
+                LocalDate.of(2026, 7, 31), List.of(), List.of(), null);
 
         repository.create(PROJECT_A, created);
         Adr found = repository.findByCode(PROJECT_A, new AdrCode("ADR-1")).orElseThrow();
@@ -156,7 +156,7 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void createsAndFindsAdrWithRejectedStatus() {
         Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.REJECTED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
 
         repository.create(PROJECT_A, created);
         Optional<Adr> found = repository.findByCode(PROJECT_A, new AdrCode("ADR-1"));
@@ -173,7 +173,7 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void createsAndFindsAdrWithDeprecatedStatus() {
         Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.DEPRECATED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
 
         repository.create(PROJECT_A, created);
         Optional<Adr> found = repository.findByCode(PROJECT_A, new AdrCode("ADR-1"));
@@ -187,10 +187,89 @@ class KognioRdfAdrRepositoryTest {
         }
     }
 
+    /**
+     * Round-trip for kogn-io/arknet#357's fifth status, now a real, writable value: SUPERSEDED
+     * writes together with its {@code supersededBy} edge and reads back as both.
+     */
+    @Test
+    void createsAndFindsAdrWithSupersededStatus() {
+        Adr successor = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, successor);
+        Adr created = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), successor.id());
+
+        repository.create(PROJECT_A, created);
+        Optional<Adr> found = repository.findByCode(PROJECT_A, new AdrCode("ADR-2"));
+
+        assertEquals(Optional.of(created), found);
+        assertEquals(AdrStatus.SUPERSEDED, found.orElseThrow().status());
+        assertEquals(successor.id(), found.orElseThrow().supersededBy());
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + created.id().value().value() + "> <"
+                + ArkarchVocabulary.ADR_STATUS + "> <" + ArkarchVocabulary.SUPERSEDED + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    /**
+     * A store-first (ADR-005) {@code arkarch:adrStatus} value the gate's {@code sh:in} list admits
+     * but {@link de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepository} cannot decode
+     * (there is none left, now that all five lifecycle individuals are decoded) is simulated with a
+     * value the shape does not even admit, the only way left to reach the unresolvable branch: the
+     * read is skipped with a {@code WARN} rather than crashing the whole listing - the same fate an
+     * unresolvable status has always had, only reachable through a different door since
+     * kogn-io/arknet#357 closed the {@code Superseded} gap.
+     */
+    @Test
+    void findAllSkipsADecisionWithAnUnresolvableStatusRatherThanCrashing() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+        AdrId unresolvable = freshId();
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + unresolvable.value().value() + "> a <"
+                + ArkarchVocabulary.ADR_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"ADR-2\" ; "
+                + "<https://w3id.org/arknet/core#name> \"Unresolvable\" ; <" + ArkarchVocabulary.ADR_STATUS
+                + "> <https://w3id.org/arknet/architecture#NotAKnownStatus> ; <"
+                + ArkarchVocabulary.ADR_CONTEXT + "> \"Enough context text\" ; <"
+                + ArkarchVocabulary.ADR_DECISION + "> \"Enough decision text\" } }");
+
+        List<Adr> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new AdrCode("ADR-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).isEmpty());
+    }
+
+    /**
+     * The bi-implication kogn-io/arknet#357 introduces (status SUPERSEDED if and only if
+     * {@code supersededBy} is set) is enforced twice: at write time by {@link Adr}'s compact
+     * constructor and {@code architecture-shapes.ttl}'s
+     * {@code ashapes:ADR-supersededByImpliesSupersededStatus}, and read-time tolerance for data the
+     * gate never validated - a store-first record whose {@code adrStatus} and {@code supersededBy}
+     * disagree is skipped with a {@code WARN}, the same graceful degradation an unresolvable status
+     * gets, rather than crashing the whole read the way an unguarded domain constructor call would.
+     */
+    @Test
+    void findAllSkipsADecisionWhoseStoreFirstStatusContradictsItsSupersededByEdge() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+        AdrId inconsistent = freshId();
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + inconsistent.value().value() + "> a <"
+                + ArkarchVocabulary.ADR_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"ADR-2\" ; "
+                + "<https://w3id.org/arknet/core#name> \"Inconsistent\" ; <" + ArkarchVocabulary.ADR_STATUS
+                + "> <" + ArkarchVocabulary.ACCEPTED + "> ; <" + ArkarchVocabulary.ADR_CONTEXT
+                + "> \"Enough context text\" ; <" + ArkarchVocabulary.ADR_DECISION
+                + "> \"Enough decision text\" ; <" + ArkarchVocabulary.SUPERSEDED_BY + "> <"
+                + inconsistent.value().value() + "> } }");
+
+        List<Adr> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new AdrCode("ADR-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).isEmpty());
+    }
+
     @Test
     void compareAndUpdateTransitionsToRejected() {
         Adr original = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.reject());
@@ -202,7 +281,7 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void compareAndUpdateTransitionsToDeprecated() {
         Adr original = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.deprecate());
@@ -229,10 +308,10 @@ class KognioRdfAdrRepositoryTest {
         AdrId id = freshId();
         repository.create(PROJECT_A,
                 adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null, List.of(), List.of(),
-                        List.of()));
+                        null));
 
         Adr sameIdentity = adr(id, new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
 
         assertThrows(ResourceAlreadyExistsException.class, () -> repository.create(PROJECT_A, sameIdentity));
     }
@@ -250,7 +329,7 @@ class KognioRdfAdrRepositoryTest {
     void compareAndUpdateReplacesAnExistingAdr() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept());
@@ -288,6 +367,119 @@ class KognioRdfAdrRepositoryTest {
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 
+    // ---- ashapes:ADR-supersededBy + the bi-implication, driven directly against the real gate ----
+
+    /**
+     * {@code sh:maxCount 1} on {@code ashapes:ADR-supersededBy}, isolated from the bi-implication:
+     * both successors are plain valid ADRs, and the subject's own status is SUPERSEDED with (at
+     * least) one edge present, so {@code ashapes:ADR-supersededByImpliesSupersededStatus} conforms
+     * (its {@code minCount 1} branch only asks for at least one edge) and only the standalone
+     * {@code maxCount 1} property shape fires. The spike this issue verified with
+     * (kogn-io/arknet#357) left this case vacuous - conflated with a bi-implication violation
+     * because it paired two {@code supersededBy} values with an {@code Accepted} status - this test
+     * does not.
+     */
+    @Test
+    void writeRejectsMoreThanOneSupersededByEdgeIsolatedFromTheBiImplication() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI successorA = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI successorB = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.SUPERSEDED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.SUPERSEDED_BY), successorA);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.SUPERSEDED_BY), successorB);
+        Graph assertedContext = rdf.createGraph();
+        merge(assertedContext, minimalCandidate(rdf, successorA, "ADR-2", ArkarchVocabulary.ACCEPTED));
+        merge(assertedContext, minimalCandidate(rdf, successorB, "ADR-3", ArkarchVocabulary.ACCEPTED));
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate, assertedContext));
+    }
+
+    /** {@code ashapes:ADR-supersededBy} carries {@code sh:class}, exactly like {@code ADR-relatedTo}. */
+    @Test
+    void writeRejectsASupersededByEdgeToSomethingThatIsNotAnAdr() {
+        AdrId dangling = freshId();
+        Adr related = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), dangling);
+
+        assertThrows(WriteConstraintViolationException.class, () -> repository.create(PROJECT_A, related));
+
+        assertTrue(repository.findAll(PROJECT_A).isEmpty());
+    }
+
+    /**
+     * The bi-implication itself, driven directly against the real RDF4J SHACL engine this project's
+     * write gate runs (the spike kogn-io/arknet#357 verified it with, made permanent here): all four
+     * combinations of {@code supersededBy} set/unset and status Superseded/not.
+     */
+    @Test
+    void gateConformsWhenSupersededByIsSetAndStatusIsSuperseded() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI successor = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.SUPERSEDED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.SUPERSEDED_BY), successor);
+        Graph assertedContext = minimalCandidate(rdf, successor, "ADR-2", ArkarchVocabulary.ACCEPTED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        gate.enforce(candidate, assertedContext);
+    }
+
+    @Test
+    void gateViolatesWhenSupersededByIsSetButStatusIsNotSuperseded() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI successor = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.ACCEPTED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.SUPERSEDED_BY), successor);
+        Graph assertedContext = minimalCandidate(rdf, successor, "ADR-2", ArkarchVocabulary.ACCEPTED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate, assertedContext));
+    }
+
+    @Test
+    void gateViolatesWhenStatusIsSupersededButSupersededByIsNotSet() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.SUPERSEDED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
+    @Test
+    void gateConformsWhenNeitherSupersededByNorSupersededStatusIsSet() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.ACCEPTED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        gate.enforce(candidate);
+    }
+
+    /**
+     * Builds the six triples every ADR candidate needs to pass {@code ashapes:ADRShape}'s
+     * {@code sh:Violation} property shapes (type, identifier, name, status, context, decision) -
+     * shared by the direct-gate tests above so each states only what it varies.
+     */
+    private static Graph minimalCandidate(RDF rdf, IRI subject, String code, String statusIri) {
+        Graph candidate = rdf.createGraph();
+        candidate.add(subject, VocabRdf.TYPE, rdf.createIRI(ArkarchVocabulary.ADR_TYPE));
+        candidate.add(subject, rdf.createIRI("http://purl.org/dc/terms/identifier"), rdf.createLiteral(code));
+        candidate.add(subject, rdf.createIRI("https://w3id.org/arknet/core#name"), rdf.createLiteral("A decision"));
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.ADR_STATUS), rdf.createIRI(statusIri));
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.ADR_CONTEXT), rdf.createLiteral("Enough context text"));
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.ADR_DECISION), rdf.createLiteral("Enough decision text"));
+        return candidate;
+    }
+
+    /** Copies every triple of {@code source} into {@code target} - {@link Graph} has no {@code addAll}. */
+    private static void merge(Graph target, Graph source) {
+        source.stream().forEach(target::add);
+    }
+
     /**
      * {@code ashapes:ADR-consequences}/{@code ADR-alternatives} are {@code sh:Warning}, not
      * {@code sh:Violation}: a decision recorded while it is still being argued has neither yet, and
@@ -301,42 +493,43 @@ class KognioRdfAdrRepositoryTest {
     }
 
     @Test
-    void writePersistsAllThreeRelationsAndReadsThemBack() {
+    void writePersistsAllFourRelationsAndReadsThemBack() {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
         BoundedContextRef contextRef = new BoundedContextRef(ResourceId.of("https://w3id.org/arknet/id/bc-1"));
-        AdrId superseded = freshId();
-        Adr created = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(requirement), List.of(contextRef), List.of(superseded));
+        Adr successor = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, successor);
+        Adr created = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(requirement), List.of(contextRef), successor.id());
 
         repository.create(PROJECT_A, created);
         Adr found = repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).orElseThrow();
 
         assertEquals(List.of(requirement), found.addressesRequirements());
         assertEquals(List.of(contextRef), found.affectsContexts());
-        assertEquals(List.of(superseded), found.supersedes());
+        assertEquals(successor.id(), found.supersededBy());
     }
 
     /**
-     * The forward edge is asserted, its {@code owl:inverseOf} partner deliberately is not: nothing in
-     * this codebase materialises an inverse as a second physical triple. A reader that wants the
-     * backward direction gets it from {@link AdrRepository#findSupersedingCodes}, not from a stored
-     * {@code arkarch:supersededBy}.
+     * The forward edge (kogn-io/arknet#357: written on the <em>superseded</em> decision) is
+     * asserted, its {@code owl:inverseOf} partner {@code arkarch:supersedes} - the pre-#357 shape -
+     * is never written by this adapter: nothing here materialises both directions of an
+     * {@code owl:inverseOf} pair as physical triples. A reader that wants the forward direction from
+     * the superseding decision's side gets it from {@link AdrRepository#findSupersedingCodes}, which
+     * reads {@code supersededBy} directly rather than a stored {@code arkarch:supersedes}.
      */
     @Test
-    void writeAssertsOnlyTheForwardSupersedesTripleNeverItsInverse() {
-        AdrId supersededId = freshId();
-        Adr superseded = adr(supersededId, new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
-                List.of(), List.of(), List.of());
-        repository.create(PROJECT_A, superseded);
-        Adr superseding = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(supersededId));
+    void writeAssertsOnlyTheSupersededByTripleNeverTheLegacySupersedesShape() {
+        Adr superseding = adr(new AdrCode("ADR-2"));
         repository.create(PROJECT_A, superseding);
+        AdrId supersededId = freshId();
+        Adr superseded = adr(supersededId, new AdrCode("ADR-1"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), superseding.id());
+        repository.create(PROJECT_A, superseded);
 
-        String inverseAsk = "ASK { GRAPH <" + ADR_GRAPH + "> { ?s <"
-                + ArkarchVocabulary.SUPERSEDED_BY + "> ?o } }";
+        String legacyAsk = "ASK { GRAPH <" + ADR_GRAPH + "> { ?s <" + ArkarchVocabulary.SUPERSEDES + "> ?o } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertFalse(handle.sparqlQuery().ask(inverseAsk),
-                    "arkarch:supersededBy must never be written as a second physical triple");
+            assertFalse(handle.sparqlQuery().ask(legacyAsk),
+                    "arkarch:supersedes (pre-#357) must never be written by this adapter");
         }
         assertEquals(List.of(new AdrCode("ADR-2")), repository.findSupersedingCodes(PROJECT_A, supersededId));
     }
@@ -350,17 +543,24 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * Codes must sort by their parsed running number, not by {@link String}'s natural (lexicographic)
-     * order - which would put {@code ADR-10}/{@code ADR-11} before {@code ADR-2}/{@code ADR-3}.
+     * Since kogn-io/arknet#357 a live decision has at most one successor - {@code supersededBy}
+     * carries {@code sh:maxCount 1}, and it lives on the superseded decision's own single field, so
+     * more than one entry can only come from the pre-#357 legacy shape (several decisions each still
+     * asserting their own {@code arkarch:supersedes} at the same target, store-first data this
+     * adapter no longer writes but still reads back). Codes must sort by their parsed running
+     * number, not by {@link String}'s natural (lexicographic) order - which would put
+     * {@code ADR-10}/{@code ADR-11} before {@code ADR-2}/{@code ADR-3}.
      */
     @Test
-    void findSupersedingCodesSortsByRunningNumberNotLexicographically() {
+    void findSupersedingCodesSortsLegacyEntriesByRunningNumberNotLexicographically() {
         Adr superseded = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, superseded);
 
         for (String code : List.of("ADR-11", "ADR-2", "ADR-10", "ADR-3")) {
-            repository.create(PROJECT_A, adr(freshId(), new AdrCode(code), AdrStatus.PROPOSED, null, null, null,
-                    List.of(), List.of(), List.of(superseded.id())));
+            AdrId legacyId = freshId();
+            repository.create(PROJECT_A, adr(legacyId, new AdrCode(code), AdrStatus.PROPOSED, null, null, null,
+                    List.of(), List.of(), null));
+            insertLegacySupersedes(legacyId, superseded.id());
         }
 
         assertEquals(
@@ -377,17 +577,101 @@ class KognioRdfAdrRepositoryTest {
      * {@code equals} - so without a tie-breaker one of the two codes would be silently dropped.
      */
     @Test
-    void findSupersedingCodesKeepsBothEntriesWhenTheirRunningNumbersCollide() {
+    void findSupersedingCodesKeepsBothLegacyEntriesWhenTheirRunningNumbersCollide() {
         Adr superseded = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, superseded);
 
         for (String code : List.of("ADR-1x", "ADR-2y")) {
-            repository.create(PROJECT_A, adr(freshId(), new AdrCode(code), AdrStatus.PROPOSED, null, null, null,
-                    List.of(), List.of(), List.of(superseded.id())));
+            AdrId legacyId = freshId();
+            repository.create(PROJECT_A, adr(legacyId, new AdrCode(code), AdrStatus.PROPOSED, null, null, null,
+                    List.of(), List.of(), null));
+            insertLegacySupersedes(legacyId, superseded.id());
         }
 
         assertEquals(List.of(new AdrCode("ADR-1x"), new AdrCode("ADR-2y")),
                 repository.findSupersedingCodes(PROJECT_A, superseded.id()));
+    }
+
+    /**
+     * {@link AdrRepository#findSupersedingCodes} unions the current-model forward read (the
+     * superseded decision's own {@code supersededBy} field) with a reverse read of the pre-#357
+     * legacy {@code arkarch:supersedes} shape - the "Altbestands-Auffang" this issue introduces
+     * (kogn-io/arknet#357): neither source alone would surface a decision superseded by both a
+     * current-model successor and a still-present legacy pointer.
+     */
+    @Test
+    void findSupersedingCodesUnionsTheCurrentModelEdgeWithALegacyOne() {
+        Adr currentSuccessor = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, currentSuccessor);
+        Adr superseded = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), currentSuccessor.id());
+        repository.create(PROJECT_A, superseded);
+        AdrId legacySuccessorId = freshId();
+        repository.create(PROJECT_A, adr(legacySuccessorId, new AdrCode("ADR-3"), AdrStatus.PROPOSED,
+                null, null, null, List.of(), List.of(), null));
+        insertLegacySupersedes(legacySuccessorId, superseded.id());
+
+        assertEquals(List.of(new AdrCode("ADR-2"), new AdrCode("ADR-3")),
+                repository.findSupersedingCodes(PROJECT_A, superseded.id()));
+    }
+
+    /**
+     * The mirror of {@link #findSupersedingCodesUnionsTheCurrentModelEdgeWithALegacyOne}: which
+     * decisions {@code supersedingId} supersedes, unioning a reverse read of every decision naming
+     * it in their own current-model {@code supersededBy} field with {@code supersedingId}'s own
+     * pre-#357 legacy {@code arkarch:supersedes} triple.
+     */
+    @Test
+    void findSupersededCodesUnionsTheCurrentModelEdgeWithALegacyOne() {
+        Adr supersedingAdr = adr(new AdrCode("ADR-3"));
+        repository.create(PROJECT_A, supersedingAdr);
+        Adr currentPredecessor = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), supersedingAdr.id());
+        repository.create(PROJECT_A, currentPredecessor);
+        Adr legacyPredecessor = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, legacyPredecessor);
+        insertLegacySupersedes(supersedingAdr.id(), legacyPredecessor.id());
+
+        assertEquals(List.of(new AdrCode("ADR-1"), new AdrCode("ADR-2")),
+                repository.findSupersededCodes(PROJECT_A, supersedingAdr.id()));
+    }
+
+    @Test
+    void findSupersededCodesIsEmptyForADecisionThatSupersedesNothing() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created);
+
+        assertEquals(List.of(), repository.findSupersededCodes(PROJECT_A, created.id()));
+    }
+
+    /**
+     * {@link AdrRepository#findLegacySupersedesEdges} is the bulk read {@code AdrService#list}
+     * relies on instead of a reverse query per decision - one call for the whole project.
+     */
+    @Test
+    void findLegacySupersedesEdgesReadsEveryPreIssue357Pair() {
+        Adr a = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, a);
+        Adr b = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, b);
+        Adr c = adr(new AdrCode("ADR-3"));
+        repository.create(PROJECT_A, c);
+        insertLegacySupersedes(b.id(), a.id());
+        insertLegacySupersedes(c.id(), b.id());
+
+        assertEquals(
+                List.of(new AdrRepository.LegacySupersession(new AdrCode("ADR-2"), new AdrCode("ADR-1")),
+                        new AdrRepository.LegacySupersession(new AdrCode("ADR-3"), new AdrCode("ADR-2"))),
+                repository.findLegacySupersedesEdges(PROJECT_A).stream()
+                        .sorted((left, right) -> left.supersedingCode().value().compareTo(right.supersedingCode().value()))
+                        .toList());
+    }
+
+    @Test
+    void findLegacySupersedesEdgesIsEmptyWhenNothingUsesTheLegacyShape() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+
+        assertEquals(List.of(), repository.findLegacySupersedesEdges(PROJECT_A));
     }
 
     @Test
@@ -409,57 +693,92 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * Replace-by-identity regression: an update must carry the earlier reference edges along rather
-     * than dropping them - this is what the application service's {@code accept}/{@code supersede}
-     * rely on.
+     * Replace-by-identity regression: correcting a decision's references must carry both its
+     * {@code addressesRequirement} edge and its {@code supersededBy} edge (kogn-io/arknet#357 - now
+     * an ordinary field of {@link Adr}, no special preservation logic needed for it any more) along
+     * rather than dropping either.
      */
     @Test
-    void compareAndUpdatePreservesAndExtendsTheRelationEdges() {
+    void compareAndUpdatePreservesTheSupersededByEdgeWhileExtendingAnotherRelation() {
+        Adr successor = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, successor);
         AdrId id = freshId();
-        AdrId supersededA = freshId();
-        RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
-        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(requirement), List.of(), List.of(supersededA));
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), successor.id());
         repository.create(PROJECT_A, original);
 
-        AdrId supersededB = freshId();
-        Adr extended = original.supersede(supersededB).accept();
+        RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
+        Adr extended = original.reviseReferences(List.of(requirement), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), extended);
 
         Adr found = repository.findByCode(PROJECT_A, original.code()).orElseThrow();
-        // Compared as a set: the read path orders reference edges by target IRI (RDF has no
-        // intrinsic statement order), so the two freshly minted UUID identities come back in
-        // whichever order they happen to sort - not in the order they were written.
-        assertEquals(Set.of(supersededA, supersededB), Set.copyOf(found.supersedes()));
+        assertEquals(successor.id(), found.supersededBy());
         assertEquals(List.of(requirement), found.addressesRequirements());
-        assertEquals(AdrStatus.ACCEPTED, found.status());
+        assertEquals(AdrStatus.SUPERSEDED, found.status());
     }
 
     /**
-     * {@code arkarch:supersededBy} has no field on {@link Adr} at all - it is reachable only
-     * store-first (ADR-005). A replace-by-identity write must carry it along instead of silently
-     * erasing it, the same preservation the bounded-context adapter performs for
-     * {@code arkddd:hasAggregate}. {@code arkarch:relatedTo} deliberately no longer belongs in this
-     * test: it is a field of the record now, so it travels inside the candidate graph rather than
-     * around it - see {@link #compareAndUpdateKeepsARelatedToEdgeTheRecordStillCarries}.
+     * {@code arkarch:supersedes} (the pre-#357 legacy shape) has no field on {@link Adr} at all - it
+     * is reachable only store-first (ADR-005). A replace-by-identity write must carry it along
+     * instead of silently erasing it - the "Altbestands-Auffang" this issue introduces, the same
+     * preservation the bounded-context adapter performs for {@code arkddd:hasAggregate}.
+     * {@code arkarch:relatedTo}/{@code arkarch:supersededBy} deliberately no longer belong in this
+     * test: both are fields of the record now, so they travel inside the candidate graph rather than
+     * around it.
      */
     @Test
-    void compareAndUpdatePreservesAStoreFirstSupersededByEdge() {
+    void compareAndUpdatePreservesAStoreFirstLegacySupersedesEdge() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
+
+        String legacySupersedesIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        insertLegacySupersedes(id, legacySupersedesIri);
+
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept());
+
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.SUPERSEDES + "> <" + legacySupersedesIri + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertTrue(handle.sparqlQuery().ask(ask));
+        }
+    }
+
+    /**
+     * The other half of the lesson from kogn-io/arknet#357: now that {@code arkarch:supersededBy} is
+     * a real field of {@link Adr}, it must <em>not</em> survive a write that no longer carries it -
+     * the same field a store-first record's stray edge used to be silently re-attached past the gate
+     * on every unrelated write, which made it unclearable. A domain object without the field simply
+     * omits the triple from its candidate graph, and the replace-by-identity delete-then-rewrite
+     * removes whatever the previous write left.
+     *
+     * <p>The head is read via raw SPARQL ({@link #headsOf}) rather than {@link #currentHeadOf}: a
+     * store-first {@code supersededBy} on a decision whose status is not {@code Superseded}
+     * violates the bi-implication {@link Adr}'s constructor enforces, and
+     * {@code KognioRdfAdrRepository}'s read path treats that the same way it treats an
+     * undecodable status - {@code WARN} and skip the decision - so materialising it through the
+     * domain path at this exact moment would itself report "not found".</p>
+     */
+    @Test
+    void compareAndUpdateDropsAStoreFirstSupersededByEdgeTheRecordNoLongerCarries() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), null);
+        repository.create(PROJECT_A, original);
+        String headBeforeTheStoreFirstEdit = headsOf(id.value().value()).get(0);
 
         String supersededByIri = "https://w3id.org/arknet/id/" + UUID.randomUUID();
         update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.SUPERSEDED_BY + "> <" + supersededByIri + "> } }");
 
-        repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), original.accept());
+        repository.compareAndUpdate(PROJECT_A, headBeforeTheStoreFirstEdit, original.accept());
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.SUPERSEDED_BY + "> <" + supersededByIri + "> } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertTrue(handle.sparqlQuery().ask(ask));
+            assertFalse(handle.sparqlQuery().ask(ask),
+                    "a store-first supersededBy edge the record no longer carries must not survive a write");
         }
     }
 
@@ -468,7 +787,7 @@ class KognioRdfAdrRepositoryTest {
         Adr peer = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, peer);
         Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(peer.id()));
+                List.of(), List.of(), null, List.of(peer.id()));
 
         repository.create(PROJECT_A, related);
 
@@ -494,7 +813,7 @@ class KognioRdfAdrRepositoryTest {
         Adr peer = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, peer);
         Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(peer.id()));
+                List.of(), List.of(), null, List.of(peer.id()));
         repository.create(PROJECT_A, related);
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + peer.id().value().value() + "> <"
@@ -516,7 +835,7 @@ class KognioRdfAdrRepositoryTest {
         Adr peer = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, peer);
         Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(peer.id()));
+                List.of(), List.of(), null, List.of(peer.id()));
         repository.create(PROJECT_A, related);
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(related.code()), related.accept());
@@ -532,7 +851,7 @@ class KognioRdfAdrRepositoryTest {
         Adr peer = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, peer);
         Adr related = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(peer.id()));
+                List.of(), List.of(), null, List.of(peer.id()));
         repository.create(PROJECT_A, related);
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(related.code()),
@@ -546,10 +865,10 @@ class KognioRdfAdrRepositoryTest {
         Adr target = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, target);
         Adr referencingA = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(target.id()));
+                List.of(), List.of(), null, List.of(target.id()));
         repository.create(PROJECT_A, referencingA);
         Adr referencingB = adr(freshId(), new AdrCode("ADR-10"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(target.id()));
+                List.of(), List.of(), null, List.of(target.id()));
         repository.create(PROJECT_A, referencingB);
 
         // Ordered by running number, not lexicographically - ADR-10 must not sort before ADR-2.
@@ -568,7 +887,7 @@ class KognioRdfAdrRepositoryTest {
     void refusesARelatedToEdgeToSomethingThatIsNotAnAdr() {
         AdrId dangling = freshId();
         Adr related = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(dangling));
+                List.of(), List.of(), null, List.of(dangling));
 
         assertThrows(WriteConstraintViolationException.class, () -> repository.create(PROJECT_A, related));
 
@@ -586,7 +905,7 @@ class KognioRdfAdrRepositoryTest {
     void compareAndUpdateDropsABlankNodeRelatedToEdge() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
 
         update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
@@ -611,7 +930,7 @@ class KognioRdfAdrRepositoryTest {
     void compareAndUpdatePreservesABlankNodeAddressesRequirementEdge() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
 
         update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
@@ -751,22 +1070,24 @@ class KognioRdfAdrRepositoryTest {
      */
     @Test
     void compareAndUpdateRejectsAStaleHeadAndWritesNothing() {
+        Adr winner = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, winner);
+        Adr loser = adr(new AdrCode("ADR-3"));
+        repository.create(PROJECT_A, loser);
         AdrId id = freshId();
-        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of());
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, original);
         String staleHead = currentHeadOf(original.code());
 
-        AdrId supersededByWinner = freshId();
-        repository.compareAndUpdate(PROJECT_A, staleHead, original.supersede(supersededByWinner));
+        repository.compareAndUpdate(PROJECT_A, staleHead, original.supersededBy(winner.id()));
 
-        AdrId supersededByLoser = freshId();
-        Adr byTheLoser = original.supersede(supersededByLoser);
+        Adr byTheLoser = original.supersededBy(loser.id());
         assertThrows(AdrConcurrentlyModifiedException.class,
                 () -> repository.compareAndUpdate(PROJECT_A, staleHead, byTheLoser));
 
-        assertEquals(List.of(supersededByWinner),
-                repository.findByCode(PROJECT_A, original.code()).orElseThrow().supersedes());
+        assertEquals(winner.id(),
+                repository.findByCode(PROJECT_A, original.code()).orElseThrow().supersededBy());
         assertEquals(2, revisionsOf(id.value().value()).size(),
                 "the rejected write must not have recorded a revision");
     }
@@ -776,7 +1097,7 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void deleteRemovesEveryTripleOfTheDecision() {
         Adr created = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, "Some consequences",
-                "Some alternatives", LocalDate.of(2026, 8, 23), List.of(), List.of(), List.of());
+                "Some alternatives", LocalDate.of(2026, 8, 23), List.of(), List.of(), null);
         repository.create(PROJECT_A, created);
 
         repository.delete(PROJECT_A, created.code());
@@ -801,7 +1122,7 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void deleteRejectsADecisionThatIsNoLongerProposed() {
         Adr accepted = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null);
         repository.create(PROJECT_A, accepted);
 
         AdrNotDeletableException thrown = assertThrows(AdrNotDeletableException.class,
@@ -831,11 +1152,15 @@ class KognioRdfAdrRepositoryTest {
      */
     @Test
     void deleteTombstonesTheLastRevisionAndRemovesTheHead() {
+        Adr peer = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, peer);
         Adr created = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, created);
         String subject = created.id().value().value();
+        // A second write that leaves the decision PROPOSED (delete's own status check runs next),
+        // so the revision chain has more than one entry to tombstone correctly.
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(created.code()),
-                created.supersede(freshId()));
+                created.reviseReferences(List.of(), List.of(), List.of(peer.id())));
         String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, created.code());
@@ -917,24 +1242,54 @@ class KognioRdfAdrRepositoryTest {
      * The race-free half of the reference check: the application service asks before the write
      * transaction opens, this one asks inside it. Pinned against real triples, and for both
      * relations, because they are what a rejection has to name.
+     *
+     * <p>Names the delete-candidate {@code X} as <em>another</em> decision's successor
+     * (kogn-io/arknet#357: {@code Y.supersededBy = X}, i.e. {@code X} supersedes {@code Y}) - the
+     * external edge that would dangle if {@code X} disappeared. {@code X}'s own outgoing field (were
+     * it superseded itself) is deliberately not what this test protects: that triple would vanish
+     * with {@code X} harmlessly, which is also why {@code X} stays PROPOSED here rather than
+     * SUPERSEDED - a superseded decision could never reach this check to begin with, since
+     * {@code delete}'s own status guard runs first.</p>
      */
     @Test
-    void deleteRejectsADecisionAnotherOneSupersedes() {
-        Adr superseded = adr(new AdrCode("ADR-1"));
-        repository.create(PROJECT_A, superseded);
-        Adr successor = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(superseded.id()));
+    void deleteRejectsADecisionAnotherOneNamesAsItsSuccessor() {
+        Adr successor = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, successor);
+        Adr predecessor = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.SUPERSEDED, null, null, null,
+                List.of(), List.of(), successor.id());
+        repository.create(PROJECT_A, predecessor);
 
         AdrReferencedException thrown = assertThrows(AdrReferencedException.class,
-                () -> repository.delete(PROJECT_A, superseded.code()));
+                () -> repository.delete(PROJECT_A, successor.code()));
 
         assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
                 AdrReferencedException.SUPERSEDES)), thrown.references());
-        assertTrue(repository.findByCode(PROJECT_A, superseded.code()).isPresent(),
+        assertTrue(repository.findByCode(PROJECT_A, successor.code()).isPresent(),
                 "a rejected delete must leave the decision untouched");
-        assertFalse(headsOf(superseded.id().value().value()).isEmpty(),
+        assertFalse(headsOf(successor.id().value().value()).isEmpty(),
                 "a rejected delete must not tombstone anything");
+    }
+
+    /**
+     * The pre-#357 legacy shape protects a delete-candidate exactly the same way: a store-first
+     * {@code arkarch:supersedes} triple naming it is an external edge too, and would dangle just the
+     * same if the candidate disappeared.
+     */
+    @Test
+    void deleteRejectsADecisionALegacySupersedesTripleStillNames() {
+        Adr target = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, target);
+        Adr legacyReferrer = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, legacyReferrer);
+        insertLegacySupersedes(legacyReferrer.id(), target.id());
+
+        AdrReferencedException thrown = assertThrows(AdrReferencedException.class,
+                () -> repository.delete(PROJECT_A, target.code()));
+
+        assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
+                AdrReferencedException.SUPERSEDES)), thrown.references());
+        assertTrue(repository.findByCode(PROJECT_A, target.code()).isPresent(),
+                "a rejected delete must leave the decision untouched");
     }
 
     @Test
@@ -942,7 +1297,7 @@ class KognioRdfAdrRepositoryTest {
         Adr peer = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, peer);
         Adr naming = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.PROPOSED, null, null, null,
-                List.of(), List.of(), List.of(), List.of(peer.id()));
+                List.of(), List.of(), null, List.of(peer.id()));
         repository.create(PROJECT_A, naming);
 
         AdrReferencedException thrown = assertThrows(AdrReferencedException.class,
@@ -957,6 +1312,21 @@ class KognioRdfAdrRepositoryTest {
     /** The head a caller would observe right now - what a well-behaved compare-and-set passes. */
     private String currentHeadOf(AdrCode code) {
         return repository.findCurrentByCode(PROJECT_A, code).orElseThrow().head();
+    }
+
+    /**
+     * Store-first-simulates the pre-#357 {@code arkarch:supersedes} shape: {@code supersedingId}
+     * supersedes {@code supersededId}, written directly rather than through any tool - exactly how a
+     * project's legacy data would still carry it. Bypasses the SHACL gate entirely, as any raw
+     * store-first edit does.
+     */
+    private void insertLegacySupersedes(AdrId supersedingId, AdrId supersededId) {
+        insertLegacySupersedes(supersedingId, supersededId.value().value());
+    }
+
+    private void insertLegacySupersedes(AdrId supersedingId, String supersededIri) {
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + supersedingId.value().value() + "> <"
+                + ArkarchVocabulary.SUPERSEDES + "> <" + supersededIri + "> } }");
     }
 
     private void update(String sparqlUpdate) {

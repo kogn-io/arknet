@@ -4,7 +4,6 @@
 package de.hauschel.arknet.adr.domain;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -18,7 +17,7 @@ import java.util.Objects;
  * instances are immutable and their collections are defensively copied.</p>
  *
  * <p><strong>Every edge lives inside the record.</strong> All four relations
- * ({@code addressesRequirement}, {@code affectsContext}, {@code supersedes}, {@code relatedTo}) are
+ * ({@code addressesRequirement}, {@code affectsContext}, {@code supersededBy}, {@code relatedTo}) are
  * part of the decision's own state rather than side edges: the out-adapter persists a decision by
  * replacing its triples wholesale, so an edge kept outside this record would be silently dropped by
  * the next write - the lesson the requirements and bounded-context contexts already paid for.</p>
@@ -54,11 +53,14 @@ import java.util.Objects;
  * @param affectsContexts       the bounded contexts this decision affects; maps to
  *                              {@code arkarch:affectsContext}, {@code 0..n}, same rules as
  *                              {@code addressesRequirements}
- * @param supersedes            the older decisions this one replaces; maps to
- *                              {@code arkarch:supersedes}, {@code 0..n}. Only this direction is
- *                              ever asserted as a triple - the ontology's {@code owl:inverseOf}
- *                              partner {@code arkarch:supersededBy} is left to a reader (or a
- *                              reasoner), never written a second time by hand
+ * @param supersededBy          the identity of the newer decision that replaces this one, or
+ *                              {@code null} if none does; maps to {@code arkarch:supersededBy}
+ *                              (kogn-io/arknet#357 moved the written edge here, off the superseding
+ *                              decision's old forward-only {@code supersedes} list). Coupled to
+ *                              {@link #status} by a bi-implication this record's compact constructor
+ *                              enforces: non-{@code null} if and only if {@code status} is
+ *                              {@link AdrStatus#SUPERSEDED} - see {@link #supersededBy(AdrId)}, the
+ *                              only way to set both together
  * @param relatedTo             the peer decisions this one cross-references ("see also"); maps to
  *                              {@code arkarch:relatedTo}, {@code 0..n}. Only this direction is ever
  *                              asserted as a triple, although the ontology declares the property an
@@ -82,7 +84,7 @@ public record Adr(
         LocalDate decisionDate,
         List<RequirementRef> addressesRequirements,
         List<BoundedContextRef> affectsContexts,
-        List<AdrId> supersedes,
+        AdrId supersededBy,
         List<AdrId> relatedTo) {
 
     public Adr {
@@ -94,7 +96,6 @@ public record Adr(
         Objects.requireNonNull(decision, "decision");
         addressesRequirements = addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
         affectsContexts = affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
-        supersedes = supersedes == null ? List.of() : List.copyOf(supersedes);
         relatedTo = relatedTo == null ? List.of() : List.copyOf(relatedTo);
         requireNotBlank(name, "name");
         requireNotBlank(context, "context");
@@ -107,13 +108,25 @@ public record Adr(
         }
         requireNoDuplicates(addressesRequirements, "addressesRequirements");
         requireNoDuplicates(affectsContexts, "affectsContexts");
-        requireNoDuplicates(supersedes, "supersedes");
         requireNoDuplicates(relatedTo, "relatedTo");
-        if (supersedes.contains(id)) {
-            throw new IllegalArgumentException("an ADR must not supersede itself");
-        }
         if (relatedTo.contains(id)) {
             throw new IllegalArgumentException("an ADR must not be related to itself");
+        }
+        if (supersededBy != null && supersededBy.equals(id)) {
+            throw new IllegalArgumentException("an ADR must not supersede itself");
+        }
+        // The bi-implication kogn-io/arknet#357 introduced: SUPERSEDED and supersededBy are set
+        // only ever together, never one without the other - the same invariant
+        // architecture-shapes.ttl's ashapes:ADR-supersededByImpliesSupersededStatus enforces a
+        // second time at the write gate.
+        if (status == AdrStatus.SUPERSEDED && supersededBy == null) {
+            throw new IllegalArgumentException(
+                    "status SUPERSEDED requires supersededBy to be set: " + code.value());
+        }
+        if (status != AdrStatus.SUPERSEDED && supersededBy != null) {
+            throw new IllegalArgumentException(
+                    "supersededBy may only be set when status is SUPERSEDED, was " + status
+                            + ": " + code.value());
         }
     }
 
@@ -140,7 +153,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be accepted while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
     /**
@@ -162,16 +175,17 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be rejected while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.REJECTED, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
     /**
      * Deprecates this decision, advancing it from {@link AdrStatus#ACCEPTED} to
      * {@link AdrStatus#DEPRECATED} - an obsolete decision without a successor (as opposed to one
-     * superseded by a newer decision, which {@link #supersede} records without touching this field).
-     * Calling this on an already {@link AdrStatus#DEPRECATED} decision is a no-op, returning
-     * {@code this} unchanged. Called on a {@link AdrStatus#PROPOSED} or {@link AdrStatus#REJECTED}
-     * decision it throws instead: only a decision that was actually in force can become obsolete.
+     * superseded by a newer decision, which {@link #supersededBy(AdrId)} records on the superseded
+     * decision itself). Calling this on an already {@link AdrStatus#DEPRECATED} decision is a no-op,
+     * returning {@code this} unchanged. Called on a {@link AdrStatus#PROPOSED} or
+     * {@link AdrStatus#REJECTED} decision it throws instead: only a decision that was actually in
+     * force can become obsolete.
      *
      * @return the deprecated decision, or {@code this} if it was already deprecated
      * @throws IllegalStateException if this decision is {@link AdrStatus#PROPOSED} or
@@ -185,32 +199,50 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be deprecated while ACCEPTED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.DEPRECATED, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
     /**
-     * Records that this decision supersedes {@code superseded}. Superseding the same decision twice
-     * is an idempotent no-op, returning {@code this} unchanged.
+     * Records that this decision has been superseded by {@code supersedingId}, advancing it from
+     * {@link AdrStatus#ACCEPTED} to {@link AdrStatus#SUPERSEDED} and setting {@link #supersededBy} in
+     * the very same step (kogn-io/arknet#357). The two can only ever change together: the compact
+     * constructor enforces the bi-implication, so there is no way to reach one without the other
+     * through this method.
      *
-     * <p>Only the forward edge is recorded. The superseded decision's own {@link #status} is
-     * deliberately left untouched: {@code arkarch:Superseded} is not a value {@link AdrStatus}
-     * implements at all - it stays derived-only from this very edge (a reverse-read), and inventing a
-     * transition to a status value that does not exist would be worse than stating the relation once
-     * and letting a reader derive the rest.</p>
+     * <p><strong>Lives on the superseded decision, not the superseding one.</strong> Before this
+     * issue, the superseding decision alone carried a forward-only {@code supersedes} edge and the
+     * superseded decision's own status stayed untouched; the edge has since moved onto the record it
+     * actually describes - a decision knows itself that it has been replaced, the same way it knows
+     * it has been accepted or deprecated.</p>
      *
-     * @param superseded the identity of the decision this one replaces
-     * @return the decision including the edge, or {@code this} if it was already recorded
-     * @throws IllegalArgumentException if {@code superseded} is this decision's own identity
+     * <p>Idempotent for the very same successor: calling this again with the {@code supersedingId} it
+     * already holds is a no-op, returning {@code this} unchanged - the same idempotency
+     * {@link #accept()}/{@link #reject()}/{@link #deprecate()} give their own terminal transition.
+     * Naming a <em>different</em> successor while already superseded is refused rather than silently
+     * replacing the edge, for the same reason {@code sh:maxCount 1} on {@code arkarch:supersededBy}
+     * gives a decision at most one successor: falling through to the status check below, it is
+     * rejected as "was SUPERSEDED", the correction path being a policy decision this record does not
+     * make for itself.</p>
+     *
+     * @param supersedingId the identity of the decision that replaces this one
+     * @return the superseded decision, or {@code this} if it was already recorded as superseded by
+     *         the very same successor
+     * @throws IllegalStateException    if this decision is not currently {@link AdrStatus#ACCEPTED}
+     *                                  (which includes already being {@link AdrStatus#SUPERSEDED} by
+     *                                  a different successor)
+     * @throws IllegalArgumentException if {@code supersedingId} is this decision's own identity
      */
-    public Adr supersede(AdrId superseded) {
-        Objects.requireNonNull(superseded, "superseded");
-        if (supersedes.contains(superseded)) {
+    public Adr supersededBy(AdrId supersedingId) {
+        Objects.requireNonNull(supersedingId, "supersedingId");
+        if (supersedingId.equals(supersededBy)) {
             return this;
         }
-        List<AdrId> extended = new ArrayList<>(supersedes);
-        extended.add(superseded);
-        return new Adr(id, code, name, status, context, decision, consequences, alternatives, decisionDate,
-                addressesRequirements, affectsContexts, extended, relatedTo);
+        if (status != AdrStatus.ACCEPTED) {
+            throw new IllegalStateException("an ADR can only be superseded while ACCEPTED, was "
+                    + status + ": " + code.value());
+        }
+        return new Adr(id, code, name, AdrStatus.SUPERSEDED, context, decision, consequences, alternatives,
+                decisionDate, addressesRequirements, affectsContexts, supersedingId, relatedTo);
     }
 
     /**
@@ -222,7 +254,7 @@ public record Adr(
      * {@link AdrStatus#ACCEPTED}, {@link AdrStatus#REJECTED} or {@link AdrStatus#DEPRECATED} it is a
      * record of what was decided at the time, and rewriting it erases the history an ADR exists to
      * keep (Nygard). The correction path from there is a successor decision plus
-     * {@link #supersede(AdrId)}, which is what {@link AdrTextImmutableException} tells the caller.
+     * {@link #supersededBy(AdrId)}, which is what {@link AdrTextImmutableException} tells the caller.
      * The status is checked here, in the domain, rather than in the SHACL write gate: a shape
      * validates one graph state, not a transition between two, so "this text must not have changed"
      * is not expressible there at all.</p>
@@ -261,7 +293,7 @@ public record Adr(
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, alternatives,
-                decisionDate, addressesRequirements, affectsContexts, supersedes, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
     /**
@@ -273,8 +305,8 @@ public record Adr(
      * completes a reference that could not be written when the decision was recorded, because the
      * requirement, bounded context or peer decision it points at did not exist yet. Freezing these
      * along with the prose would leave a decision in force permanently unable to state what it
-     * applies to. The precedent is already in this record: {@link #supersede(AdrId)} writes into an
-     * accepted decision's {@code supersedes} for exactly the same reason.</p>
+     * applies to. The precedent is already in this record: {@link #supersededBy(AdrId)} writes into
+     * an accepted decision's {@code supersededBy} for exactly the same reason.</p>
      *
      * <p>Every argument is a replacement, not an addition: an empty (or {@code null}) list clears
      * that relation, mirroring the compact constructor's own {@code null}-to-empty normalisation.
@@ -300,7 +332,7 @@ public record Adr(
             return this;
         }
         return new Adr(id, code, name, status, context, decision, consequences, alternatives,
-                decisionDate, requirements, contexts, supersedes, peers);
+                decisionDate, requirements, contexts, supersededBy, peers);
     }
 
     private static void requireNotBlank(String value, String field) {
