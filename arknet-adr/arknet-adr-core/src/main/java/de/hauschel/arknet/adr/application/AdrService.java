@@ -63,7 +63,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * decision in one write (kogn-io/arknet#357; see {@link #supersede}). {@link #update} corrects an
  * existing decision field by field, and the status decides how far it
  * may reach: the prose and the decision date are only correctable while {@link AdrStatus#PROPOSED}
- * and are refused with {@link AdrTextImmutableException} from {@link AdrStatus#ACCEPTED} on, while
+ * and are refused with {@link AdrTextImmutableException} in every other status, while
  * all three reference lists stay correctable in every status - completing a reference that
  * could not exist at recording time states the same decision more fully instead of rewriting it, the
  * same licence {@link Adr#supersededBy(AdrId)} already takes against an accepted decision. That rule

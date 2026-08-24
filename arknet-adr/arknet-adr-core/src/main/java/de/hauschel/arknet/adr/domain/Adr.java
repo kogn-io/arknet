@@ -137,16 +137,17 @@ public record Adr(
      * Advances this decision from {@link AdrStatus#PROPOSED} to {@link AdrStatus#ACCEPTED}. Calling
      * this on an already {@link AdrStatus#ACCEPTED} decision is a no-op, returning {@code this}
      * unchanged, so a caller never has to check the current status first. Called on a
-     * {@link AdrStatus#REJECTED} or {@link AdrStatus#DEPRECATED} decision it throws instead of
-     * resurrecting it: silently reviving a rejected or deprecated decision back to accepted would be
-     * wrong now that those are real terminal-ish states, not merely unimplemented ones. This is the
-     * rule itself, not a generic setter: a richer lifecycle would extend this method rather than
-     * reintroduce a caller-supplied target status - the same shape {@code Requirement#accept()}
-     * settled on.
+     * {@link AdrStatus#REJECTED}, {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED}
+     * decision it throws instead of resurrecting it: silently reviving one of those back to accepted
+     * would be wrong now that all three are real terminal states, not merely unimplemented ones -
+     * and for {@link AdrStatus#SUPERSEDED} it would additionally strand the {@link #supersededBy}
+     * edge the compact constructor ties to that status. This is the rule itself, not a generic
+     * setter: a richer lifecycle would extend this method rather than reintroduce a caller-supplied
+     * target status - the same shape {@code Requirement#accept()} settled on.
      *
      * @return the accepted decision, or {@code this} if it was already accepted
-     * @throws IllegalStateException if this decision is {@link AdrStatus#REJECTED} or
-     *                                {@link AdrStatus#DEPRECATED}
+     * @throws IllegalStateException if this decision is {@link AdrStatus#REJECTED},
+     *                                {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED}
      */
     public Adr accept() {
         if (status == AdrStatus.ACCEPTED) {
@@ -162,13 +163,14 @@ public record Adr(
     /**
      * Rejects this decision, advancing it from {@link AdrStatus#PROPOSED} to
      * {@link AdrStatus#REJECTED}. Calling this on an already {@link AdrStatus#REJECTED} decision is a
-     * no-op, returning {@code this} unchanged. Called on an {@link AdrStatus#ACCEPTED} or
-     * {@link AdrStatus#DEPRECATED} decision it throws instead: an accepted or deprecated decision was
-     * never merely proposed, and rejecting it retroactively would misrepresent its own history.
+     * no-op, returning {@code this} unchanged. Called on an {@link AdrStatus#ACCEPTED},
+     * {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED} decision it throws instead: each
+     * of those was in force at some point rather than merely proposed, and rejecting it
+     * retroactively would misrepresent its own history.
      *
      * @return the rejected decision, or {@code this} if it was already rejected
-     * @throws IllegalStateException if this decision is {@link AdrStatus#ACCEPTED} or
-     *                                {@link AdrStatus#DEPRECATED}
+     * @throws IllegalStateException if this decision is {@link AdrStatus#ACCEPTED},
+     *                                {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED}
      */
     public Adr reject() {
         if (status == AdrStatus.REJECTED) {
@@ -187,12 +189,16 @@ public record Adr(
      * superseded by a newer decision, which {@link #supersededBy(AdrId)} records on the superseded
      * decision itself). Calling this on an already {@link AdrStatus#DEPRECATED} decision is a no-op,
      * returning {@code this} unchanged. Called on a {@link AdrStatus#PROPOSED} or
-     * {@link AdrStatus#REJECTED} decision it throws instead: only a decision that was actually in
-     * force can become obsolete.
+     * {@link AdrStatus#REJECTED} decision it throws instead: neither was ever in force, and only a
+     * decision that was can become obsolete. Called on a {@link AdrStatus#SUPERSEDED} decision it
+     * throws as well, for the opposite reason: that decision <em>was</em> in force, but it has
+     * already reached a terminal state that says more than {@code DEPRECATED} does - downgrading it
+     * would have to drop the {@link #supersededBy} edge the compact constructor ties to
+     * {@code SUPERSEDED}, trading a named successor for a bare "obsolete".
      *
      * @return the deprecated decision, or {@code this} if it was already deprecated
-     * @throws IllegalStateException if this decision is {@link AdrStatus#PROPOSED} or
-     *                                {@link AdrStatus#REJECTED}
+     * @throws IllegalStateException if this decision is {@link AdrStatus#PROPOSED},
+     *                                {@link AdrStatus#REJECTED} or {@link AdrStatus#SUPERSEDED}
      */
     public Adr deprecate() {
         if (status == AdrStatus.DEPRECATED) {
@@ -253,11 +259,12 @@ public record Adr(
      * {@code adr_update}'s text fields.
      *
      * <p><strong>The text of a decision in force is not editable.</strong> Correcting the wording of
-     * a decision only stays honest while it is still {@link AdrStatus#PROPOSED}; once it is
-     * {@link AdrStatus#ACCEPTED}, {@link AdrStatus#REJECTED} or {@link AdrStatus#DEPRECATED} it is a
-     * record of what was decided at the time, and rewriting it erases the history an ADR exists to
-     * keep (Nygard). The correction path from there is a successor decision plus
-     * {@link #supersededBy(AdrId)}, which is what {@link AdrTextImmutableException} tells the caller.
+     * a decision only stays honest while it is still {@link AdrStatus#PROPOSED}; in any of the other
+     * four states it is a record of what was decided at the time, and rewriting it erases the
+     * history an ADR exists to keep (Nygard). The correction is recorded as a decision of its own
+     * from there - linked with {@link #supersededBy(AdrId)} where that method accepts it, which is
+     * {@link AdrStatus#ACCEPTED} alone; {@link AdrTextImmutableException} names the path that fits
+     * each of the four statuses rather than promising an edge the domain would refuse.
      * The status is checked here, in the domain, rather than in the SHACL write gate: a shape
      * validates one graph state, not a transition between two, so "this text must not have changed"
      * is not expressible there at all.</p>

@@ -4,6 +4,7 @@
 package de.hauschel.arknet.adr.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -256,8 +257,45 @@ class AdrTest {
 
             assertEquals(status, thrown.status());
             assertEquals(new AdrCode("ADR-1"), thrown.adrCode());
-            assertTrue(thrown.getMessage().contains("adr_supersede"), thrown.getMessage());
+            assertTrue(thrown.getMessage().contains("adr_add"), thrown.getMessage());
         }
+    }
+
+    /**
+     * The refusal has to name a path the domain would actually accept. Only an {@code ACCEPTED}
+     * decision may be linked with {@code adr_supersede} - {@link Adr#supersededBy(AdrId)} refuses
+     * every other status (kogn-io/arknet#357) - so pointing a rejected, deprecated or already
+     * superseded record at that tool would send the caller into a second rejection.
+     */
+    @Test
+    void reviseTextOffersSupersedeOnlyWhereSupersedeWouldBeAccepted() {
+        assertTrue(assertThrows(AdrTextImmutableException.class,
+                () -> withStatus(AdrStatus.ACCEPTED)
+                        .reviseText("Better name", "context", "decision", null, null, null))
+                .getMessage().contains("adr_supersede"));
+
+        for (AdrStatus terminal : List.of(AdrStatus.REJECTED, AdrStatus.DEPRECATED,
+                AdrStatus.SUPERSEDED)) {
+            Adr record = withStatus(terminal);
+
+            String message = assertThrows(AdrTextImmutableException.class,
+                    () -> record.reviseText("Better name", "context", "decision", null, null, null))
+                    .getMessage();
+
+            assertFalse(message.contains("link it with adr_supersede"), message);
+            assertTrue(message.contains("adr_add"), message);
+        }
+    }
+
+    /**
+     * A {@code PROPOSED} decision's text is correctable, so this exception cannot describe it -
+     * constructing it anyway is a bug in the caller, not a domain outcome. Same guard as
+     * {@link AdrNotDeletableException}.
+     */
+    @Test
+    void textImmutableExceptionRefusesToDescribeAProposedDecision() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new AdrTextImmutableException(new AdrCode("ADR-1"), AdrStatus.PROPOSED));
     }
 
     /**

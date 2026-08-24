@@ -33,13 +33,15 @@ import de.hauschel.arknet.kernel.ProjectId;
  * {@link String}s and three of them adjacent {@code List<String>}s, puts every caller one silent
  * transposition away from writing the wrong field.</p>
  *
- * <p><strong>The text is only correctable while {@link AdrStatus#PROPOSED}.</strong> From
- * {@link AdrStatus#ACCEPTED} on (and likewise {@link AdrStatus#REJECTED}/
- * {@link AdrStatus#DEPRECATED}) a change to {@code name}/{@code context}/{@code decision}/
+ * <p><strong>The text is only correctable while {@link AdrStatus#PROPOSED}.</strong> In any of the
+ * other four statuses a change to {@code name}/{@code context}/{@code decision}/
  * {@code consequences}/{@code alternatives}/{@code decisionDate} is refused with
- * {@link AdrTextImmutableException}, whose message points at {@code adr_supersede}: a decision in
- * force is a record of what was decided at the time, and correcting it runs through a successor
- * rather than an edit (Nygard). A call that would set a field to the value it already holds changes
+ * {@link AdrTextImmutableException}, whose message names the path that fits the status it was raised
+ * in: a decision in force is a record of what was decided at the time, and correcting it runs
+ * through a decision of its own rather than an edit (Nygard) - linked with {@code adr_supersede}
+ * from {@link AdrStatus#ACCEPTED}, which is the only status that edge accepts, and recorded
+ * standalone from {@link AdrStatus#REJECTED}/{@link AdrStatus#DEPRECATED}/
+ * {@link AdrStatus#SUPERSEDED}. A call that would set a field to the value it already holds changes
  * nothing and is therefore accepted in any status - it is a no-op, not a text change.</p>
  *
  * <p><strong>The three reference lists are the deliberate exception and stay correctable in every
