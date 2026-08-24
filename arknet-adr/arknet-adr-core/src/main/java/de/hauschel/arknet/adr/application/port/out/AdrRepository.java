@@ -12,8 +12,10 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
+import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -140,16 +142,18 @@ public interface AdrRepository {
     /**
      * Deletes the decision identified by {@code code}, and every triple it carries in this hexagon's
      * own named graph, from the project. Whether the decision may be deleted at all - its status,
-     * and whether anything still points at it - is decided above this port; what this port adds is
-     * the guarantee that the check and the removal share one atomic view of the store, so a
-     * reference written between the two cannot slip through: an implementation therefore repeats the
-     * reference check against its own write transaction and rejects with
-     * {@link AdrReferencedException} there too.
+     * and whether anything still points at it - is decided above this port first; what this port
+     * adds is the guarantee that both checks and the removal share one atomic view of the store, so
+     * a status change or a reference written between the two cannot slip through: an implementation
+     * therefore repeats both the status check and the reference check against its own write
+     * transaction, rejecting with {@link AdrNotDeletableException} or {@link AdrReferencedException}
+     * there too.
      *
      * @param projectId the project (architecture model) the decision lives in
      * @param code      the ADR code, e.g. {@code ADR-1}
-     * @throws AdrNotFoundException   if no decision with this code exists
-     * @throws AdrReferencedException if another decision still points at it
+     * @throws AdrNotFoundException     if no decision with this code exists
+     * @throws AdrNotDeletableException if the decision is no longer {@link AdrStatus#PROPOSED}
+     * @throws AdrReferencedException   if another decision still points at it
      */
     void delete(ProjectId projectId, AdrCode code);
 

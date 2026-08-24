@@ -41,6 +41,7 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
@@ -321,11 +322,14 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * used to be preserved alongside it and deliberately no longer is: it is a field of {@link Adr}
      * now, so the candidate graph carries every edge that should survive - preserving it on top
      * would make {@code adr_update}'s "clear this relation" instruction impossible to carry out.</li>
-     * <li>{@code addressesRequirement}/{@code affectsContext}/{@code supersedes}/{@code relatedTo}
-     * edges whose target is not an IRI - the read paths can never surface those, since
-     * {@link ResourceId} cannot represent a blank node, so a round trip through the domain object
-     * would drop them (the same preservation the requirements adapter does for
-     * {@code arkreq:usesTerm}).</li>
+     * <li>{@code addressesRequirement}/{@code affectsContext}/{@code supersedes} edges whose target
+     * is not an IRI - the read paths can never surface those, since {@link ResourceId} cannot
+     * represent a blank node, so a round trip through the domain object would drop them (the same
+     * preservation the requirements adapter does for {@code arkreq:usesTerm}). {@code relatedTo} is
+     * deliberately left out of this list: {@code ashapes:ADR-relatedTo} shapes it
+     * {@code sh:nodeKind sh:IRI} with {@code sh:Violation}, so a blank-node target is exactly what
+     * the shape forbids - re-attaching one past the gate would write back the very state a
+     * full-store validation flags as broken.</li>
      * </ul>
      */
     private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
@@ -333,7 +337,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         String selectPreserved = "SELECT ?p ?o WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } "
                 + "FILTER( ?p = <" + SUPERSEDED_BY_PROPERTY + "> "
                 + "|| ( ?p IN (<" + ADDRESSES_REQUIREMENT_PROPERTY + ">, <" + AFFECTS_CONTEXT_PROPERTY
-                + ">, <" + SUPERSEDES_PROPERTY + ">, <" + RELATED_TO_PROPERTY
+                + ">, <" + SUPERSEDES_PROPERTY
                 + ">) && !isIRI(?o) ) ) }";
         String deleteExisting = "DELETE WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } }";
 
@@ -363,10 +367,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * Deletes the decision identified by {@code code}, and every triple it carries in
      * {@link #ADR_GRAPH}, from the project. Resolves the subject by code outside any transaction
      * (mirroring {@link #findByCode}'s own read), then hands the whole check-and-delete to
-     * {@link WriteFunnel#delete}: {@link #rejectIfReferenced} runs first, inside the funnel's own
-     * write transaction, so the check and the removal share one atomic snapshot and a
-     * {@code relatedTo} edge written in between cannot slip through. Only once nothing points at the
-     * decision does the body remove the subject's triples wholesale.
+     * {@link WriteFunnel#delete}: {@link #rejectIfNotProposed} and {@link #rejectIfReferenced} run
+     * first, inside the funnel's own write transaction, so both checks and the removal share one
+     * atomic snapshot and a status change or a {@code relatedTo} edge written in between cannot slip
+     * through. Only once the decision is still {@code PROPOSED} and nothing points at it does the
+     * body remove the subject's triples wholesale.
      *
      * <p><strong>The business code outlives the resource.</strong> The funnel's tombstone
      * (ADR-013/ADR-014) keeps the revision chain but records no code of its own - it writes
@@ -398,10 +403,29 @@ public class KognioRdfAdrRepository implements AdrRepository {
         funnel.delete(dataset, ADR_GRAPH, subjectIriString,
                 () -> new AdrNotFoundException(projectId, code),
                 tx -> {
+                    rejectIfNotProposed(tx, code, subjectIriString);
                     rejectIfReferenced(tx, projectId, code, subjectIriString);
                     retainCode(tx, subjectIriString, code);
                     tx.update("DELETE WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } }");
                 });
+    }
+
+    /**
+     * Rejects the delete, without touching a single triple, unless {@code subjectIri} is still
+     * {@link AdrStatus#PROPOSED}. Runs inside the live write transaction {@link WriteFunnel#delete}
+     * hands its {@code body}, so this - unlike the application service's own didactic pre-check in
+     * {@code AdrService#delete} - is the race-free one: a status transition committed between that
+     * pre-check and this transaction (e.g. a concurrent {@code adr_set_status ACCEPTED}) is read here
+     * and rejected instead of silently deleting a decision that has since been made.
+     */
+    private void rejectIfNotProposed(DatasetTx tx, AdrCode code, String subjectIri) {
+        String subject = SparqlTerms.iriRef(subjectIri);
+        String query = "SELECT ?status WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + subject + " <" + STATUS_PROPERTY + "> ?status } }";
+        AdrStatus status = tx.select(query).findFirst().map(KognioRdfAdrRepository::statusOf).orElse(null);
+        if (status != AdrStatus.PROPOSED) {
+            throw new AdrNotDeletableException(code, status);
+        }
     }
 
     /**

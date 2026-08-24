@@ -40,6 +40,7 @@ import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
+import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
@@ -575,14 +576,14 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * The blank-node counterpart for {@code arkarch:relatedTo}: the edge is a field of the record
-     * now, but {@link ResourceId} still cannot represent a blank node, so a store-first edge onto one
-     * never reaches the domain object and would be erased by the next write unless the write path
-     * captures and re-attaches it. Re-attachment happens inside the transaction, past the gate, which
-     * is why {@code ashapes:ADR-relatedTo}'s {@code sh:nodeKind sh:IRI} does not stand in its way.
+     * Unlike {@code addressesRequirement}/{@code affectsContext}/{@code supersedes},
+     * {@code arkarch:relatedTo} does not preserve a blank-node target across a write:
+     * {@code ashapes:ADR-relatedTo} shapes it {@code sh:nodeKind sh:IRI} with {@code sh:Violation},
+     * so a blank-node edge is exactly the state a full-store validation flags as broken - the write
+     * path drops it instead of re-attaching it past the gate.
      */
     @Test
-    void compareAndUpdatePreservesABlankNodeRelatedToEdge() {
+    void compareAndUpdateDropsABlankNodeRelatedToEdge() {
         AdrId id = freshId();
         Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
                 List.of(), List.of(), List.of());
@@ -596,7 +597,7 @@ class KognioRdfAdrRepositoryTest {
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
                 + ArkarchVocabulary.RELATED_TO + "> ?target FILTER(isBlank(?target)) } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
-            assertTrue(handle.sparqlQuery().ask(ask));
+            assertFalse(handle.sparqlQuery().ask(ask));
         }
     }
 
@@ -788,6 +789,29 @@ class KognioRdfAdrRepositoryTest {
     @Test
     void deleteRejectsAnUnknownCode() {
         assertThrows(AdrNotFoundException.class, () -> repository.delete(PROJECT_A, new AdrCode("ADR-9")));
+    }
+
+    /**
+     * The race-free half of the status check: the application service asks before the write
+     * transaction opens ({@code AdrService#delete}), this one asks inside it - a status transition
+     * committed in that gap (e.g. a concurrent {@code adr_set_status ACCEPTED}) must not slip past
+     * it. Pinned directly against the adapter, the only way to exercise this half without the
+     * service's own pre-check intercepting first.
+     */
+    @Test
+    void deleteRejectsADecisionThatIsNoLongerProposed() {
+        Adr accepted = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.ACCEPTED, null, null, null,
+                List.of(), List.of(), List.of());
+        repository.create(PROJECT_A, accepted);
+
+        AdrNotDeletableException thrown = assertThrows(AdrNotDeletableException.class,
+                () -> repository.delete(PROJECT_A, accepted.code()));
+
+        assertEquals(AdrStatus.ACCEPTED, thrown.status());
+        assertTrue(repository.findByCode(PROJECT_A, accepted.code()).isPresent(),
+                "a rejected delete must leave the decision untouched");
+        assertFalse(headsOf(accepted.id().value().value()).isEmpty(),
+                "a rejected delete must not tombstone anything");
     }
 
     @Test

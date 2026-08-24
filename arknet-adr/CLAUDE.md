@@ -61,6 +61,7 @@ Beide Regeln leben auf `Adr#reviseText()`/`Adr#reviseReferences()`, nicht im Ser
 Gepatcht wird feldweise: `null` heisst "unveraendert lassen" und ist nie ein Loesch-Signal.
 Fuer die drei Kanten-Listen ist der Unterschied `null`/leer dagegen bedeutungstragend (`null` = unveraendert, leere Liste = alle Kanten entfernen, nicht-leere Liste = Wholesale-Ersatz), darum normalisiert `AdrCorrection`s Compact Constructor `null` als einziger im BC **nicht** auf `List.of()`.
 Die Referenz-Codes loest `AdrService#update` wie `#add` **vor** der Retry-Schleife auf; der Rest laeuft ueber denselben `updateWithOptimisticRetry`-CAS-Helfer.
+*Befund, nicht behoben:* die Peer-Aufloesung fuer `relatedTo` liest ausserhalb jeder Transaktion -- loescht ein konkurrenter `adr_delete` das Ziel zwischen Aufloesung und Commit, schreibt `adr_update` eine Kante auf eine tote IRI, und jeder weitere Write am verweisenden Record scheitert danach am Gate (`ashapes:ADR-relatedTo`). Wiederherstellbar nur ueber `adr_update ... relatedTo=[]`, was auch die uebrigen `relatedTo`-Kanten mit wegwirft. Nachgehalten in #356.
 
 **Loeschen ist eine Ausnahme, kein Lifecycle-Schritt** (`adr_delete`, `DeleteAdr`).
 Loeschbar ist ausschliesslich ein `PROPOSED`-Record: `adr_delete` macht ein versehentliches `adr_add` rueckgaengig (Dublette, Entwurf am falschen Ort), es beendet keine Entscheidung.
@@ -88,7 +89,8 @@ Grund: die `supersedes`- und `relatedTo`-Identitaeten sind opak, ihre Anzeige-Co
 
 **Out-Adapter.** Ein Named Graph `https://w3id.org/arknet/model/adr`; alle Praedikat-/Typ-/Individuen-IRIs aus `ArkarchVocabulary` (`arknet-persistence-support`).
 Anders als `ArkreqVocabulary`/`ArkdddVocabulary`, deren Scope bewusst nur die modul-uebergreifend duplizierten Praedikate umfasst, spiegelt `ArkarchVocabulary` sein **ganzes** (ADR-only) Ontologie-Modul -- die Bauart von `ArkprovVocabulary`/`ArkprjVocabulary`, und erst sie macht den beidseitigen Abgleich `ArchitectureVocabularyMatchesOntologyTest` (arknet-architecture-tests) moeglich.
-`replaceTriples` bewahrt ueber den replace-by-identity-Write hinweg: **alle** `arkarch:supersededBy`-Kanten (kein Domain-Feld, nur store-first erreichbar -- dieselbe Rolle wie `arkddd:hasAggregate` bei bc) sowie Nicht-IRI-Ziele von `addressesRequirement`/`affectsContext`/`supersedes`/`relatedTo` (Blank Nodes, die `ResourceId` nicht darstellen kann, dieselbe Bewahrungslogik wie bei den anderen BCs).
+`replaceTriples` bewahrt ueber den replace-by-identity-Write hinweg: **alle** `arkarch:supersededBy`-Kanten (kein Domain-Feld, nur store-first erreichbar -- dieselbe Rolle wie `arkddd:hasAggregate` bei bc) sowie Nicht-IRI-Ziele von `addressesRequirement`/`affectsContext`/`supersedes` (Blank Nodes, die `ResourceId` nicht darstellen kann, dieselbe Bewahrungslogik wie bei den anderen BCs).
+`relatedTo` ist von dieser Bewahrung ausgenommen: `ashapes:ADR-relatedTo` shaped es `sh:nodeKind sh:IRI` mit `sh:Violation`, ein Blank-Node-Ziel ist also genau der Zustand, den die Shape verbietet -- ein store-first eingefuegtes bleibt darum ab dem naechsten Write weg statt past den Gate re-attached zu werden.
 Beide Faelle mit Regressionstest.
 Die Lese-Pfade gruppieren pro Subject und waehlen deterministisch den zuerst gesehenen Wert mit `WARN` bei kollabierten Mehrwerten: ausser `dcterms:identifier` und `adrStatus` traegt keine ADR-Property-Shape ein durchsetzbares `sh:maxCount`.
 `FILTER(isIRI(?s))` schuetzt gegen ein store-first Blank-Node-Subject.

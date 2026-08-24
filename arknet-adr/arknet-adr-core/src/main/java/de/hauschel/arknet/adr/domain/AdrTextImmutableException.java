@@ -18,10 +18,11 @@ import java.util.Objects;
  * therefore a successor decision linked with {@code adr_supersede}, not an edit - which is what this
  * exception's message tells the caller, so the rule teaches rather than merely blocks.</p>
  *
- * <p>The two reference relations ({@code addressesRequirement}, {@code affectsContext}) are
- * deliberately <em>not</em> covered by this rule and never raise it: completing a reference that
- * could not be written when the decision was made (because the referenced resource did not exist
- * yet) records the same decision more fully instead of changing it.</p>
+ * <p>The three reference relations ({@code addressesRequirement}, {@code affectsContext},
+ * {@code relatedTo}) are deliberately <em>not</em> covered by this rule and never raise it:
+ * completing a reference that could not be written when the decision was made (because the
+ * referenced resource did not exist yet) records the same decision more fully instead of changing
+ * it.</p>
  */
 public class AdrTextImmutableException extends IllegalStateException {
 
