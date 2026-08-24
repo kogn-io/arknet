@@ -28,6 +28,10 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
 
+import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools.ConsequenceCorrectionInput;
+import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools.ConsideredOptionCorrectionInput;
+import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools.NewConsequenceInput;
+import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools.NewConsideredOptionInput;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
@@ -47,6 +51,10 @@ import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
+import de.hauschel.arknet.adr.domain.Consequence;
+import de.hauschel.arknet.adr.domain.ConsequenceType;
+import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
@@ -61,9 +69,8 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 /**
  * Scaffold-level check that the adapter declares exactly the seven ADR tools and guards its in-port
  * dependencies, plus the reference-display-resolution contract ({@link ResolveRequirements},
- * {@link ResolveBoundedContexts}, ADR-008): renders the resolved business codes, falls back to the
- * bare IRI for an id it cannot resolve, and never issues more than one batch call per port per
- * rendering.
+ * {@link ResolveBoundedContexts}, ADR-008) and the structured consequence/considered-option input
+ * translation (kogn-io/arknet#357).
  */
 class AdrMcpToolsTest {
 
@@ -72,15 +79,9 @@ class AdrMcpToolsTest {
     private static final ProjectId PROJECT = new ProjectId("test-project");
     private static final String ANCHOR = "/home/dev/projects/test-project";
 
-    /**
-     * Stands in for the project registry (ADR-016): exactly one registered anchor, and a hard failure
-     * for anything else. Rejecting the unknown case rather than resolving it is what makes
-     * {@link #routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone} mean anything - a stub
-     * that answered every anchor would pass whether the parameter was honoured or ignored.
-     */
     private static final ProjectResolver PROJECTS = anchor -> {
         if (ANCHOR.equals(anchor)) {
-            return new ResolvedProject(PROJECT, null);
+            return new ResolvedProject(PROJECT, "en");
         }
         throw new UnresolvedProjectAnchorException(anchor, "no project registered for '" + anchor + "'");
     };
@@ -92,29 +93,20 @@ class AdrMcpToolsTest {
             new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
                     contexts, PROJECTS);
 
-    /**
-     * ADR-016 decision 2: the explicit tool parameter is a full second delivery path, open to a client
-     * that cannot set the transport header - not a fallback for when the header is missing. Passing it
-     * here with a {@code null} context is exactly that client's situation.
-     */
     @Test
     void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
         String created = adapter.add(null, "A title", "Why this was needed", "What was decided",
-                null, null, null, null, null, null, ANCHOR);
+                null, null, null, null, null, null, null, ANCHOR);
 
         assertTrue(created.contains("ADR-1"), created);
         assertEquals(PROJECT, stub.lastProjectId);
     }
 
-    /**
-     * The counterpart: no anchor at all is a caller error, never a route to a default project
-     * (ADR-016 decision 3).
-     */
     @Test
     void rejectsACallThatCarriesNoAnchorAtAll() {
         assertThrows(UnresolvedProjectAnchorException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, null, null, null, null, null));
+                        null, null, null, null, null, null, null, null));
     }
 
     @Test
@@ -180,15 +172,21 @@ class AdrMcpToolsTest {
     @Test
     void addPassesTheFieldsThroughAndRendersThem() {
         String rendered = adapter.add(null, "Use an embedded triple store", "Why this was needed",
-                "What was decided", "What follows", "What else was considered", "2026-07-31",
-                List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
+                "What was decided",
+                List.of(new NewConsequenceInput("Faster reads", "POSITIVE")),
+                List.of(new NewConsideredOptionInput("Adopt library X", "Well understood", "CHOSEN")),
+                "2026-07-31", "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals("Use an embedded triple store", stub.lastAddCommand.name());
         assertEquals("Why this was needed", stub.lastAddCommand.context());
         assertEquals("What was decided", stub.lastAddCommand.decision());
-        assertEquals("What follows", stub.lastAddCommand.consequences());
-        assertEquals("What else was considered", stub.lastAddCommand.alternatives());
+        assertEquals(1, stub.lastAddCommand.consequences().size());
+        assertEquals("Faster reads", stub.lastAddCommand.consequences().get(0).statement());
+        assertEquals(ConsequenceType.POSITIVE, stub.lastAddCommand.consequences().get(0).type());
+        assertEquals(1, stub.lastAddCommand.consideredOptions().size());
+        assertEquals(OptionOutcome.CHOSEN, stub.lastAddCommand.consideredOptions().get(0).outcome());
         assertEquals(LocalDate.of(2026, 7, 31), stub.lastAddCommand.decisionDate());
+        assertEquals("en", stub.lastAddCommand.language());
         assertEquals(List.of("FR-1"), stub.lastAddCommand.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastAddCommand.affectsContextCodes());
         assertEquals(List.of("ADR-3"), stub.lastAddCommand.relatedToCodes());
@@ -199,42 +197,34 @@ class AdrMcpToolsTest {
 
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
-        adapter.add(null, "A title", "Why this was needed", "What was decided", "  ", "", "  ",
-                null, null, null, ANCHOR);
+        adapter.add(null, "A title", "Why this was needed", "What was decided", null, null, "  ",
+                "  ", null, null, null, ANCHOR);
 
-        assertEquals(null, stub.lastAddCommand.consequences());
-        assertEquals(null, stub.lastAddCommand.alternatives());
+        assertEquals(List.of(), stub.lastAddCommand.consequences());
+        assertEquals(List.of(), stub.lastAddCommand.consideredOptions());
         assertEquals(null, stub.lastAddCommand.decisionDate());
+        assertEquals(null, stub.lastAddCommand.language());
     }
 
-    /**
-     * A malformed date is rejected loudly: silently recording a decision without the date its caller
-     * believed it had given would be a quiet data loss.
-     */
     @Test
     void addRejectsAMalformedDecisionDate() {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, "31.07.2026", null, null, null, ANCHOR));
+                        null, null, "31.07.2026", null, null, null, null, ANCHOR));
     }
 
     /**
      * Reproduces #186 at the layer the bug actually lived in: Spring AI's
      * {@link SyncMcpToolMethodCallback} renders the deepest exception in a thrown exception's
-     * {@code getCause()} chain, not the exception actually thrown. {@link #addRejectsAMalformedDecisionDate}
-     * cannot catch this - it asserts on {@code getMessage()} of the exception actually thrown, not on
-     * what a caller behind the real callback receives. This test drives that real callback instead,
-     * over the exact production {@code parseDate} translation in {@link AdrMcpTools#add}.
+     * {@code getCause()} chain, not the exception actually thrown - driven here over the real
+     * production {@code parseDate} translation in {@link AdrMcpTools#add}.
      */
     @Test
     void malformedDecisionDateRemedyReachesTheMcpCaller() throws NoSuchMethodException {
         final Method method = AdrMcpTools.class.getMethod("add", McpSyncRequestContext.class, String.class,
-                String.class, String.class, String.class, String.class, String.class, List.class,
+                String.class, String.class, List.class, List.class, String.class, String.class, List.class,
                 List.class, List.class, String.class);
         final SyncMcpToolMethodCallback callback = new SyncMcpToolMethodCallback(ReturnMode.TEXT, method, adapter);
-        // Never actually invoked: the explicit projectAnchor parameter below short-circuits
-        // resolveProject before it would read anything off the context/exchange. Only its
-        // non-nullness matters - DefaultMcpSyncRequestContext asserts that eagerly on construction.
         final McpSyncServerExchange exchange = new McpSyncServerExchange(null);
 
         final CallToolResult result = callback.apply(exchange, new CallToolRequest("adr_add", Map.of(
@@ -251,10 +241,23 @@ class AdrMcpToolsTest {
                 .reduce((a, b) -> a + b)
                 .orElseThrow();
         assertTrue(text.contains("decisionDate must be an ISO-8601 date"), text);
-        // Distinguishes the composed remedy from the raw JDK DateTimeParseException message, which
-        // names the index it choked on instead of the expected format - the exact text that used to
-        // win when the parse failure was chained as this exception's cause.
         assertFalse(text.contains("could not be parsed"), text);
+    }
+
+    @Test
+    void addRejectsAnUnknownConsequenceType() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
+                        List.of(new NewConsequenceInput("text", "NOT_A_TYPE")), null, null, "en",
+                        null, null, null, ANCHOR));
+    }
+
+    @Test
+    void addRejectsAnUnknownOptionOutcome() {
+        assertThrows(IllegalArgumentException.class,
+                () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
+                        null, List.of(new NewConsideredOptionInput("A", "r", "MAYBE")), null, "en",
+                        null, null, null, ANCHOR));
     }
 
     @Test
@@ -266,7 +269,7 @@ class AdrMcpToolsTest {
         stub.nextDetail = detail(adrWith(List.of(requirementId), List.of(contextId), null),
                 List.of(), List.of());
 
-        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertTrue(rendered.contains("addresses: FR-7"), rendered);
         assertTrue(rendered.contains("affects: BC-3"), rendered);
@@ -277,7 +280,7 @@ class AdrMcpToolsTest {
         ResourceId unresolvable = ResourceId.of("https://w3id.org/arknet/id/unknown-requirement");
         stub.nextDetail = detail(adrWith(List.of(unresolvable), List.of(), null), List.of(), List.of());
 
-        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertTrue(rendered.contains("addresses: https://w3id.org/arknet/id/unknown-requirement"), rendered);
     }
@@ -289,9 +292,28 @@ class AdrMcpToolsTest {
         requirements.register(duplicated, new RequirementCode("FR-7"));
         stub.nextDetail = detail(adrWith(List.of(duplicated), List.of(), null), List.of(), List.of());
 
-        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertTrue(rendered.contains("addresses: FR-7"), rendered);
+    }
+
+    /** Consequences/considered options are rendered as their own field, one line per entry. */
+    @Test
+    void formatRendersConsequencesAndConsideredOptions() {
+        Adr base = adrWith(List.of(), List.of(), null);
+        Adr withChildren = new Adr(base.id(), base.code(), base.name(), base.status(), base.context(),
+                base.decision(), List.of(new Consequence(1, "Faster reads", ConsequenceType.POSITIVE)),
+                List.of(new ConsideredOption(1, "Adopt library X", "Well understood", OptionOutcome.CHOSEN)),
+                base.decisionDate(), base.addressesRequirements(), base.affectsContexts(), base.supersededBy(),
+                base.relatedTo());
+        stub.nextDetail = detail(withChildren, List.of(), List.of());
+
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
+
+        assertTrue(rendered.contains("consequences:"), rendered);
+        assertTrue(rendered.contains("Faster reads"), rendered);
+        assertTrue(rendered.contains("considered options:"), rendered);
+        assertTrue(rendered.contains("Adopt library X"), rendered);
     }
 
     @Test
@@ -306,7 +328,7 @@ class AdrMcpToolsTest {
                 detail(adrWith(List.of(requirementA), List.of(contextA), null), List.of(), List.of()),
                 detail(adrWith(List.of(requirementB), List.of(), null), List.of(), List.of()));
 
-        String rendered = adapter.list(null, ANCHOR);
+        String rendered = adapter.list(null, null, ANCHOR);
 
         assertEquals(1, requirements.callCount());
         assertEquals(1, contexts.callCount());
@@ -319,7 +341,7 @@ class AdrMcpToolsTest {
     void listOfAdrsWithoutAnyReferencesDoesNotCallEitherResolver() {
         stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of()));
 
-        adapter.list(null, ANCHOR);
+        adapter.list(null, null, ANCHOR);
 
         assertEquals(0, requirements.callCount());
         assertEquals(0, contexts.callCount());
@@ -327,7 +349,7 @@ class AdrMcpToolsTest {
 
     @Test
     void listRendersEmptyProjectAsAnExplicitMarker() {
-        assertEquals("(no ADRs)", adapter.list(null, ANCHOR));
+        assertEquals("(no ADRs)", adapter.list(null, null, ANCHOR));
     }
 
     /**
@@ -372,7 +394,7 @@ class AdrMcpToolsTest {
 
     @Test
     void getRendersUnknownAdrMessage() {
-        assertTrue(adapter.get(null, "ADR-99", ANCHOR).contains("ADR not found: ADR-99"));
+        assertTrue(adapter.get(null, "ADR-99", null, ANCHOR).contains("ADR not found: ADR-99"));
     }
 
     @Test
@@ -380,22 +402,18 @@ class AdrMcpToolsTest {
         stub.nextDetail = detail(adrWith(List.of(), List.of(), null),
                 List.of(new AdrCode("ADR-0")), List.of(new AdrCode("ADR-9")));
 
-        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertTrue(rendered.contains("supersedes: ADR-0"), rendered);
         assertTrue(rendered.contains("superseded by: ADR-9"), rendered);
     }
 
-    /**
-     * The codes arrive ready-merged in {@link AdrDetail} - one list, not two directions, because the
-     * relation is symmetric - so the adapter borrows no port for them and only has to render them.
-     */
     @Test
     void getRendersTheMergedRelatedToList() {
         stub.nextDetail = detail(adrWith(List.of(), List.of(), null), List.of(), List.of(),
                 List.of(new AdrCode("ADR-3"), new AdrCode("ADR-4")));
 
-        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertTrue(rendered.contains("related to: ADR-3, ADR-4"), rendered);
     }
@@ -405,19 +423,19 @@ class AdrMcpToolsTest {
         stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of(),
                 List.of(new AdrCode("ADR-3"))));
 
-        String rendered = adapter.list(null, ANCHOR);
+        String rendered = adapter.list(null, null, ANCHOR);
 
         assertTrue(rendered.contains("[related to: ADR-3]"), rendered);
     }
 
-    /** Absent optional fields are omitted entirely rather than printed empty. */
     @Test
     void formatOmitsFieldsTheDecisionDoesNotCarry() {
         stub.nextDetail = detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
 
-        String rendered = adapter.get(null, "ADR-1", ANCHOR);
+        String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertFalse(rendered.contains("consequences:"), rendered);
+        assertFalse(rendered.contains("considered options:"), rendered);
         assertFalse(rendered.contains("decided:"), rendered);
         assertFalse(rendered.contains("addresses:"), rendered);
         assertFalse(rendered.contains("supersedes:"), rendered);
@@ -448,10 +466,6 @@ class AdrMcpToolsTest {
         assertTrue(rendered.contains("ADR-1"), rendered);
     }
 
-    /**
-     * A target is case-insensitive and trimmed, same as before REJECTED/DEPRECATED existed - proven
-     * here for REJECTED so the parsing path is not assumed to still work untested.
-     */
     @Test
     void setStatusIsCaseInsensitiveAndTrimmed() {
         adapter.setStatus(null, "ADR-1", "  rejected  ", ANCHOR);
@@ -471,12 +485,6 @@ class AdrMcpToolsTest {
 
     @Test
     void setStatusRejectionMessageNamesTheTargetInsteadOfLeakingTheRawEnumFailure() {
-        // PROPOSED is a real AdrStatus value that is simply not a legal target of this tool (you
-        // never transition into it via adr_set_status). SUPERSEDED is a real, reachable
-        // AdrStatus value (kogn-io/arknet#357) this tool still refuses, but with its own explicit
-        // message pointing at adr_supersede rather than falling into the generic default branch. A
-        // completely unknown string must be rejected the same way PROPOSED is. None of the three may
-        // surface AdrStatus.valueOf's raw "No enum constant ..." message.
         IllegalArgumentException proposed = assertThrows(IllegalArgumentException.class,
                 () -> adapter.setStatus(null, "ADR-1", "PROPOSED", ANCHOR));
         assertTrue(proposed.getMessage().contains("ACCEPTED"), proposed.getMessage());
@@ -510,11 +518,6 @@ class AdrMcpToolsTest {
         assertEquals("Deleted: ADR-1", rendered);
     }
 
-    /**
-     * The refusals a caller of {@code adr_delete} runs into have to arrive as text they can act on,
-     * not as a bare "no": the status refusal names the tool that fits the status instead, and the
-     * reference refusal names the decisions in the way.
-     */
     @Test
     void deletePropagatesTheDidacticRefusalsUnchanged() {
         stub.deleteFailure = new AdrNotDeletableException(new AdrCode("ADR-1"), AdrStatus.REJECTED);
@@ -532,12 +535,6 @@ class AdrMcpToolsTest {
         assertTrue(referenced.getMessage().contains("adr_update"), referenced.getMessage());
     }
 
-    /**
-     * The two tool descriptions that carry the {@code REJECTED} lesson: rejecting a decision is a
-     * verdict on the option, not a way to remove a record recorded by accident. A caller reads the
-     * description before the exception, so the distinction has to be there and not only in the
-     * refusal.
-     */
     @Test
     void theToolDescriptionsSayWhatRejectedMeansAndWhatDeleteIsFor() {
         String delete = descriptionOf("delete");
@@ -551,7 +548,6 @@ class AdrMcpToolsTest {
         assertTrue(setStatus.contains("adr_delete"), setStatus);
     }
 
-    /** The {@link McpTool} description declared on one of this adapter's tool methods. */
     private String descriptionOf(String methodName) {
         return Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .filter(method -> method.getName().equals(methodName))
@@ -565,53 +561,50 @@ class AdrMcpToolsTest {
     @Test
     void updatePassesEveryFieldThroughToTheInPort() {
         adapter.update(null, "ADR-1", "A better title", "Sharper context", "Sharper decision",
-                "What follows", "What else was considered", "2026-08-23", List.of("FR-1"),
-                List.of("BC-1"), List.of("ADR-3"), ANCHOR);
+                List.of(new NewConsequenceInput("New one", "NEGATIVE")),
+                List.of(new ConsequenceCorrectionInput(1, "Corrected", "POSITIVE")),
+                List.of(new NewConsideredOptionInput("New option", "reason", "REJECTED")),
+                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")),
+                "2026-08-23", "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastUpdatedCode);
         assertEquals("A better title", stub.lastCorrection.name());
         assertEquals("Sharper context", stub.lastCorrection.context());
         assertEquals("Sharper decision", stub.lastCorrection.decision());
-        assertEquals("What follows", stub.lastCorrection.consequences());
-        assertEquals("What else was considered", stub.lastCorrection.alternatives());
+        assertEquals(1, stub.lastCorrection.newConsequences().size());
+        assertEquals(1, stub.lastCorrection.consequenceCorrections().size());
+        assertEquals(1, stub.lastCorrection.newConsideredOptions().size());
+        assertEquals(1, stub.lastCorrection.consideredOptionCorrections().size());
         assertEquals(LocalDate.of(2026, 8, 23), stub.lastCorrection.decisionDate());
+        assertEquals("en", stub.lastCorrection.language());
         assertEquals(List.of("FR-1"), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastCorrection.affectsContextCodes());
         assertEquals(List.of("ADR-3"), stub.lastCorrection.relatedToCodes());
     }
 
-    /**
-     * A blank string is what an MCP client sends for "I am not touching this", so it has to reach the
-     * port as {@code null} - the port's own sentinel for "leave it as it is". Anything else would
-     * turn an omitted field into an attempted (and, for a mandatory field, invalid) write.
-     */
     @Test
     void updateNormalisesBlankFieldsToTheLeaveItUnchangedSentinel() {
-        adapter.update(null, "ADR-1", "  ", "", "   ", " ", "", "  ", null, null, null, ANCHOR);
+        adapter.update(null, "ADR-1", "  ", "", "   ", null, null, null, null, "  ", "  ",
+                null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.name());
         assertNull(stub.lastCorrection.context());
         assertNull(stub.lastCorrection.decision());
-        assertNull(stub.lastCorrection.consequences());
-        assertNull(stub.lastCorrection.alternatives());
         assertNull(stub.lastCorrection.decisionDate());
+        assertNull(stub.lastCorrection.language());
     }
 
-    /**
-     * The tri-state of the two reference lists has to survive the adapter untouched: an omitted list
-     * arrives as {@code null} ("leave the relation alone"), an empty one as an empty list ("remove
-     * every edge"). Collapsing the two here would make the clear unreachable from MCP.
-     */
     @Test
     void updateKeepsTheReferenceListsTriStateApart() {
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null, ANCHOR);
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null,
+                null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.addressesRequirementCodes());
         assertNull(stub.lastCorrection.affectsContextCodes());
         assertNull(stub.lastCorrection.relatedToCodes());
 
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, List.of(), List.of(),
-                List.of(), ANCHOR);
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null,
+                List.of(), List.of(), List.of(), ANCHOR);
 
         assertEquals(List.of(), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of(), stub.lastCorrection.affectsContextCodes());
@@ -621,8 +614,8 @@ class AdrMcpToolsTest {
     @Test
     void updateRejectsAMalformedDecisionDate() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "ADR-1", null, null, null, null, null, "23.08.2026",
-                        null, null, null, ANCHOR));
+                () -> adapter.update(null, "ADR-1", null, null, null, null, null, null, null,
+                        "23.08.2026", null, null, null, null, ANCHOR));
     }
 
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
@@ -657,7 +650,6 @@ class AdrMcpToolsTest {
         private AdrCode lastSupersedingCode;
         private AdrCode lastSupersededCode;
         private AdrCode lastDeletedCode;
-        /** The failure the next {@link #delete} raises instead of succeeding, if a test set one. */
         private RuntimeException deleteFailure;
         private AdrDetail nextDetail;
         private List<AdrDetail> allAdrs = List.of();
@@ -669,17 +661,17 @@ class AdrMcpToolsTest {
         private ProjectId lastProjectId;
 
         @Override
-        public AdrDetail add(ProjectId projectId, NewAdr command) {
+        public AdrDetail add(ProjectId projectId, NewAdr command, String defaultLanguage) {
             lastAddCommand = command;
             lastProjectId = projectId;
             Adr adr = new Adr(ID, new AdrCode("ADR-1"), command.name(), AdrStatus.PROPOSED,
-                    command.context(), command.decision(), command.consequences(), command.alternatives(),
+                    command.context(), command.decision(), List.of(), List.of(),
                     command.decisionDate(), List.of(), List.of(), null, List.of());
             return new AdrDetail(adr, List.of(), List.of(), List.of());
         }
 
         @Override
-        public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction) {
+        public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction, String defaultLanguage) {
             lastUpdatedCode = code;
             lastCorrection = correction;
             lastProjectId = projectId;
@@ -687,7 +679,7 @@ class AdrMcpToolsTest {
         }
 
         @Override
-        public List<AdrDetail> list(ProjectId projectId) {
+        public List<AdrDetail> list(ProjectId projectId, String displayLocale) {
             return allAdrs;
         }
 
@@ -698,7 +690,7 @@ class AdrMcpToolsTest {
         }
 
         @Override
-        public Optional<AdrDetail> get(ProjectId projectId, AdrCode code) {
+        public Optional<AdrDetail> get(ProjectId projectId, AdrCode code, String displayLocale) {
             return Optional.ofNullable(nextDetail);
         }
 
@@ -737,11 +729,6 @@ class AdrMcpToolsTest {
         }
     }
 
-    /**
-     * Fake {@link ResolveRequirements}: resolves only what was registered, counts its own invocations
-     * so tests can pin the "at most one batch call" invariant, and - like the real port - never throws
-     * for an id it cannot resolve.
-     */
     private static final class RecordingResolveRequirements implements ResolveRequirements {
 
         private final List<ResolvedRequirement> known = new ArrayList<>();
@@ -763,7 +750,6 @@ class AdrMcpToolsTest {
         }
     }
 
-    /** The bounded-context counterpart of {@link RecordingResolveRequirements}. */
     private static final class RecordingResolveBoundedContexts implements ResolveBoundedContexts {
 
         private final List<ResolvedBoundedContext> known = new ArrayList<>();

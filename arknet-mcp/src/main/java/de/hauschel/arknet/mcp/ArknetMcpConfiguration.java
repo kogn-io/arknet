@@ -598,8 +598,9 @@ public class ArknetMcpConfiguration {
     // --- ADR hexagon -----------------------------------------------------------
 
     @Bean
-    AdrRepository adrRepository(final DatasetLifecycle datasetLifecycle, final DisplayLocale displayLocale) {
-        return KognioRdfAdrRepositoryFactory.over(datasetLifecycle, displayLocale);
+    AdrRepository adrRepository(final DatasetLifecycle datasetLifecycle, final ResourceIdFactory resourceIdFactory,
+            final DisplayLocale displayLocale) {
+        return KognioRdfAdrRepositoryFactory.over(datasetLifecycle, resourceIdFactory, displayLocale);
     }
 
     /**

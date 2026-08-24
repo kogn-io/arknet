@@ -128,7 +128,7 @@ class ModelViewsTest {
                 new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
-                new AdrCards(projectId -> List.of(adrDetail()),
+                new AdrCards((projectId, displayLocale) -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
                 new ActorCards(projectId -> List.of(actor())));
 
@@ -179,7 +179,7 @@ class ModelViewsTest {
     }
 
     private static AdrCards emptyAdrCards() {
-        return new AdrCards(projectId -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
+        return new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
     }
 
     private static Actor actor() {
