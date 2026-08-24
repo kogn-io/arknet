@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
+import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
@@ -149,6 +150,42 @@ class AdrServiceTest {
         assertEquals(new AdrCode("ADR-1"), inOther.adr().code());
         assertEquals(1, service.list(PROJECT).size());
         assertEquals(1, service.list(other).size());
+    }
+
+    /**
+     * Mutation-tests {@code nextCode}'s reliance on {@link AdrRepository#findAllCodes} rather than
+     * {@link AdrRepository#findAll} (kogn-io/arknet#359): revert {@code nextCode} back to deriving
+     * its maximum from {@code findAll} and this goes red - the seeded {@code ADR-2} holds the
+     * project's highest number but is invisible to {@code findAll}, exactly as a real store-first
+     * status/{@code supersededBy} disagreement would make it, so {@code add} would recompute
+     * {@code ADR-2} again instead of {@code ADR-3} and collide with a code that is still very much
+     * assigned.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(PROJECT, newAdr());
+        repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
+
+        AdrDetail third = service.add(PROJECT, newAdr());
+
+        assertEquals(new AdrCode("ADR-3"), third.adr().code());
+    }
+
+    @Test
+    void skippedCountIsZeroWhenNothingWasSkipped() {
+        service.add(PROJECT, newAdr());
+
+        assertEquals(0, service.skippedCount(PROJECT));
+    }
+
+    @Test
+    void skippedCountReportsEveryCodeFindAllCouldNotMaterialise() {
+        service.add(PROJECT, newAdr());
+        repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
+        repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-3"));
+
+        assertEquals(2, service.skippedCount(PROJECT));
+        assertEquals(0, service.skippedCount(new ProjectId("other")));
     }
 
     @Test

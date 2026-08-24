@@ -31,6 +31,7 @@ import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
@@ -88,7 +89,7 @@ class AdrMcpToolsTest {
     private final RecordingResolveRequirements requirements = new RecordingResolveRequirements();
     private final RecordingResolveBoundedContexts contexts = new RecordingResolveBoundedContexts();
     private final AdrMcpTools adapter =
-            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
                     contexts, PROJECTS);
 
     /**
@@ -132,44 +133,47 @@ class AdrMcpToolsTest {
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, requirements, contexts,
+                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, stub, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, requirements,
+                        contexts, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
                         PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, requirements, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
-                        PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
                         PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
                         requirements, contexts, null));
     }
 
@@ -324,6 +328,31 @@ class AdrMcpToolsTest {
     @Test
     void listRendersEmptyProjectAsAnExplicitMarker() {
         assertEquals("(no ADRs)", adapter.list(null, ANCHOR));
+    }
+
+    /**
+     * kogn-io/arknet#359: a store-first (ADR-005) status/{@code supersededBy} anomaly used to be
+     * visible only as a {@code WARN} log line, so a caller of {@code adr_list} could not tell a
+     * genuinely empty project from one silently missing decisions. The note makes the count visible
+     * in the tool's own output.
+     */
+    @Test
+    void listAppendsANoteWhenDecisionsWereSkipped() {
+        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of()));
+        stub.nextSkippedCount = 2;
+
+        String rendered = adapter.list(null, ANCHOR);
+
+        assertTrue(rendered.contains("2 decisions skipped"), rendered);
+    }
+
+    @Test
+    void listNotesSkippedDecisionsEvenWhenNothingElseIsListable() {
+        stub.nextSkippedCount = 1;
+
+        String rendered = adapter.list(null, ANCHOR);
+
+        assertTrue(rendered.contains("1 decision skipped"), rendered);
     }
 
     @Test
@@ -599,9 +628,9 @@ class AdrMcpToolsTest {
         return new AdrDetail(adr, supersedes, supersededBy, relatedTo);
     }
 
-    /** Structural stub implementing the eight driving in-ports. */
+    /** Structural stub implementing the nine driving in-ports. */
     private static final class Stub
-            implements AddAdr, ListAdrs, GetAdr, UpdateAdr, AcceptAdr, RejectAdr, DeprecateAdr,
+            implements AddAdr, ListAdrs, CountSkippedAdrs, GetAdr, UpdateAdr, AcceptAdr, RejectAdr, DeprecateAdr,
             SupersedeAdr, DeleteAdr {
 
         private NewAdr lastAddCommand;
@@ -617,6 +646,8 @@ class AdrMcpToolsTest {
         private RuntimeException deleteFailure;
         private AdrDetail nextDetail;
         private List<AdrDetail> allAdrs = List.of();
+        /** What {@link #skippedCount} answers next - {@code 0} unless a test sets otherwise. */
+        private int nextSkippedCount;
         /** Records which project the adapter routed to, so a test can assert the routing itself. */
         private ProjectId lastProjectId;
 
@@ -641,6 +672,11 @@ class AdrMcpToolsTest {
         @Override
         public List<AdrDetail> list(ProjectId projectId) {
             return allAdrs;
+        }
+
+        @Override
+        public int skippedCount(ProjectId projectId) {
+            return nextSkippedCount;
         }
 
         @Override

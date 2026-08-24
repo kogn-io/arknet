@@ -22,6 +22,7 @@ import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
@@ -98,6 +99,7 @@ public final class AdrMcpTools {
 
     private final AddAdr addAdr;
     private final ListAdrs listAdrs;
+    private final CountSkippedAdrs countSkippedAdrs;
     private final GetAdr getAdr;
     private final UpdateAdr updateAdr;
     private final AcceptAdr acceptAdr;
@@ -110,11 +112,13 @@ public final class AdrMcpTools {
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its nine driving in-ports, the two borrowed display ports and the
+     * Creates the adapter with its ten driving in-ports, the two borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
      * @param listAdrs               in-port backing {@code adr_list}
+     * @param countSkippedAdrs       in-port backing the skipped-decision note {@code adr_list} appends
+     *                               to its own output (kogn-io/arknet#359)
      * @param getAdr                 in-port backing {@code adr_get}
      * @param updateAdr              in-port backing {@code adr_update}
      * @param acceptAdr              in-port backing {@code adr_set_status}'s {@code ACCEPTED} target
@@ -132,6 +136,7 @@ public final class AdrMcpTools {
     public AdrMcpTools(
             final AddAdr addAdr,
             final ListAdrs listAdrs,
+            final CountSkippedAdrs countSkippedAdrs,
             final GetAdr getAdr,
             final UpdateAdr updateAdr,
             final AcceptAdr acceptAdr,
@@ -144,6 +149,7 @@ public final class AdrMcpTools {
             final ProjectResolver projects) {
         this.addAdr = Objects.requireNonNull(addAdr, "addAdr");
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
+        this.countSkippedAdrs = Objects.requireNonNull(countSkippedAdrs, "countSkippedAdrs");
         this.getAdr = Objects.requireNonNull(getAdr, "getAdr");
         this.updateAdr = Objects.requireNonNull(updateAdr, "updateAdr");
         this.acceptAdr = Objects.requireNonNull(acceptAdr, "acceptAdr");
@@ -242,15 +248,28 @@ public final class AdrMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final List<AdrDetail> all = listAdrs.list(projectId);
+        final int skipped = countSkippedAdrs.skippedCount(projectId);
         if (all.isEmpty()) {
-            return "(no ADRs)";
+            return skipped == 0 ? "(no ADRs)" : skippedNote(skipped) + "\n(no other ADRs)";
         }
         // One batch resolution per borrowed port across every decision, not one per decision.
         final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirementsFor(projectId, all);
         final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContextsFor(projectId, all);
-        return all.stream()
+        final String lines = all.stream()
                 .map(detail -> summaryLine(detail, requirements, contexts))
                 .collect(Collectors.joining("\n"));
+        return skipped == 0 ? lines : lines + "\n" + skippedNote(skipped);
+    }
+
+    /**
+     * The note appended to {@code adr_list} whenever {@link CountSkippedAdrs#skippedCount} is nonzero
+     * (kogn-io/arknet#359) - a store-first (ADR-005) status/{@code supersededBy} anomaly used to be
+     * visible only as a {@code WARN} log line an MCP caller never sees; this puts the same count in
+     * the tool's own output instead.
+     */
+    private static String skippedNote(final int skipped) {
+        return "(" + skipped + (skipped == 1 ? " decision" : " decisions")
+                + " skipped: unresolvable store-first status or supersededBy data - see server logs)";
     }
 
     @McpTool(name = "adr_get", description = "Fetch a single architecture decision by its identity "

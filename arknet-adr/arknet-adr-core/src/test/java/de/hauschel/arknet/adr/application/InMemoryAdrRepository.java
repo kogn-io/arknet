@@ -23,6 +23,7 @@ import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * In-memory test double for {@link AdrRepository}.
@@ -65,6 +66,16 @@ class InMemoryAdrRepository implements AdrRepository {
      * rather than through {@code adr_supersede}.
      */
     private final Map<ProjectId, List<LegacySupersession>> legacyByProject = new LinkedHashMap<>();
+
+    /**
+     * Identity-to-code pairs seeded by {@link #seedUnmaterialisableCode} - deliberately absent from
+     * {@link #byProject}, so {@link #findAll} never sees them, while {@link #findAllCodes} and
+     * {@link #findCodesByIds} both do. What lets a test simulate the real out-adapter's store-first
+     * (ADR-005) read-time skip without a real store: a decision this hexagon considers alive, whose
+     * code and identity are both assigned, but that cannot be materialised into an {@link Adr} right
+     * now (kogn-io/arknet#359).
+     */
+    private final Map<ProjectId, Map<AdrId, AdrCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Adr adr) {
@@ -137,12 +148,56 @@ class InMemoryAdrRepository implements AdrRepository {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 
+    /**
+     * Every stored decision's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
+     * latter simulating what the real out-adapter's own store-first (ADR-005) read-time skip would
+     * otherwise hide from {@link #findAll} alone (kogn-io/arknet#359).
+     */
+    @Override
+    public List<AdrCode> findAllCodes(ProjectId projectId) {
+        List<AdrCode> codes = new ArrayList<>(
+                byProject.getOrDefault(projectId, Map.of()).values().stream().map(Adr::code).toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, Map.of()).values());
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will, under a fresh,
+     * otherwise-unused identity - simulating a decision the real out-adapter's read-time tolerance
+     * skips (an unrecognised status, or a store-first status/{@code supersededBy} disagreement,
+     * kogn-io/arknet#357) without needing a real store to reproduce that skip in (kogn-io/arknet#359).
+     * Use {@link #seedUnmaterialisableCode(ProjectId, AdrId, AdrCode)} instead when a test needs to
+     * name that identity too (e.g. as another decision's {@code supersededBy} target).
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, AdrCode code) {
+        seedUnmaterialisableCode(projectId,
+                new AdrId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID())), code);
+    }
+
+    /**
+     * Seeds a code (and the identity behind it) that {@link #findAllCodes} and
+     * {@link #findCodesByIds} both report but {@link #findAll} never will - see
+     * {@link #seedUnmaterialisableCode(ProjectId, AdrCode)} for why.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, AdrId id, AdrCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new LinkedHashMap<>()).put(id, code);
+    }
+
     @Override
     public Map<AdrId, AdrCode> findCodesByIds(ProjectId projectId, Collection<AdrId> ids) {
         Map<AdrId, AdrCode> codes = new LinkedHashMap<>();
         byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(adr -> ids.contains(adr.id()))
                 .forEach(adr -> codes.put(adr.id(), adr.code()));
+        // Mirrors the real out-adapter: findCodesByIds resolves identity to code straight off the
+        // mandatory identifier/type pair, which nothing this fake simulates as "unmaterialisable"
+        // ever lacks - so an id seeded via seedUnmaterialisableCode still resolves here, exactly the
+        // fallback AdrService#list depends on (kogn-io/arknet#359).
+        unmaterialisableByProject.getOrDefault(projectId, Map.of()).forEach((id, code) -> {
+            if (ids.contains(id)) {
+                codes.putIfAbsent(id, code);
+            }
+        });
         return Map.copyOf(codes);
     }
 

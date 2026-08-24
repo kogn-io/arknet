@@ -140,6 +140,31 @@ public interface AdrRepository {
     List<Adr> findAll(ProjectId projectId);
 
     /**
+     * Returns the business code of every decision recorded in a project, read independently of
+     * whether that decision can currently be materialised into an {@link Adr} - unlike
+     * {@link #findAll}, a decision this hexagon's own read-time tolerance skips (an unrecognised
+     * {@code adrStatus}, or a store-first (ADR-005) {@code adrStatus}/{@code supersededBy}
+     * disagreement, kogn-io/arknet#357) still counts here.
+     *
+     * <p><strong>Why this exists (kogn-io/arknet#359).</strong>
+     * {@link de.hauschel.arknet.adr.application.AdrService#nextCode} derives the next free
+     * {@code ADR-N} from the highest running number ever used. Deriving it from {@link #findAll}
+     * alone would make that number depend on whether the highest-numbered decision happens to be
+     * materialisable right now - a decision skipped by {@link #findAll} is still alive and its code
+     * still assigned, so {@code findAll} silently omitting it would let {@code nextCode} recompute
+     * and hand the very same number out again, which the next {@link #create} then rejects as a
+     * {@link DuplicateAdrCodeException} on every retry: not a transient collision {@code adr_add}
+     * can recover from, a permanently dead number. This method reads only the mandatory
+     * {@code dcterms:identifier}/type pair, nothing a status decode or a bi-implication check could
+     * ever skip, so the number it feeds into {@code nextCode} does not depend on materialisability at
+     * all.</p>
+     *
+     * @param projectId the project (architecture model) to read codes from
+     * @return every recorded decision's business code, never {@code null}
+     */
+    List<AdrCode> findAllCodes(ProjectId projectId);
+
+    /**
      * Deletes the decision identified by {@code code}, and every triple it carries in this hexagon's
      * own named graph, from the project. Whether the decision may be deleted at all - its status,
      * and whether anything still points at it - is decided above this port first; what this port

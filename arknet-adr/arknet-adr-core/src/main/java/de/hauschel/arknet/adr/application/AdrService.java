@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
@@ -110,8 +111,8 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * it explicitly permits.</p>
  */
 public class AdrService
-        implements AddAdr, ListAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr, UpdateAdr,
-        DeleteAdr {
+        implements AddAdr, ListAdrs, CountSkippedAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr,
+        UpdateAdr, DeleteAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -501,16 +502,28 @@ public class AdrService
      * Derives the next free business code in {@code projectId}: the highest running number the
      * project has ever used, plus one (starting at 1).
      *
-     * <p><strong>Ever used, not currently in use.</strong> The maximum runs over the living decisions
-     * <em>and</em> the codes {@link AdrRepository#findRetainedCodes} kept from deleted ones. Over the
-     * living ones alone, deleting the highest-numbered decision would let the maximum fall back and
-     * the next {@code adr_add} hand out that same number again - and a code that already appeared in
-     * a commit message or a note would then name something else entirely. Numbers are cheap; a
-     * re-used one is a false trail.</p>
+     * <p><strong>Ever used, not currently in use.</strong> The maximum runs over every recorded
+     * decision's code <em>and</em> the codes {@link AdrRepository#findRetainedCodes} kept from
+     * deleted ones. Over the living ones alone, deleting the highest-numbered decision would let the
+     * maximum fall back and the next {@code adr_add} hand out that same number again - and a code
+     * that already appeared in a commit message or a note would then name something else
+     * entirely. Numbers are cheap; a re-used one is a false trail.</p>
+     *
+     * <p><strong>{@link AdrRepository#findAllCodes}, not {@link AdrRepository#findAll}
+     * (kogn-io/arknet#359).</strong> A living decision can still be skipped by {@link #list}/
+     * {@link AdrRepository#findAll} - a store-first (ADR-005) status/{@code supersededBy}
+     * disagreement, or an unrecognised status - without ceasing to exist or freeing its code. Deriving
+     * the maximum from {@code findAll} would let such a decision's number be recomputed and handed
+     * out again the moment it holds the project's highest number, and every retry of that collision
+     * recomputes the very same number, so {@link CodeAssignment#createRetryingOnCodeCollision} cannot
+     * retry its way out - {@code adr_add} would be dead for the project rather than merely racing.
+     * {@code findAllCodes} reads only the mandatory identifier/type pair, which no read-time
+     * tolerance ever skips, so the number this method derives never depends on whether an existing
+     * decision happens to be materialisable right now.</p>
      */
     private AdrCode nextCode(ProjectId projectId) {
-        int highestLiving = repository.findAll(projectId).stream()
-                .mapToInt(adr -> runningNumber(adr.code()))
+        int highestLiving = repository.findAllCodes(projectId).stream()
+                .mapToInt(AdrService::runningNumber)
                 .max()
                 .orElse(0);
         int highestRetained = repository.findRetainedCodes(projectId).stream()
@@ -518,6 +531,19 @@ public class AdrService
                 .max()
                 .orElse(0);
         return new AdrCode(CODE_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
+    }
+
+    @Override
+    public int skippedCount(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+        // findAllCodes never skips a recorded decision (see its own javadoc); findAll is exactly the
+        // subset list() can materialise. The difference is what list() silently dropped. Clamped at
+        // zero rather than trusted blindly: two separate, unsynchronised reads could in principle
+        // observe a decision created in between and briefly overcount findAllCodes relative to
+        // findAll, and a negative "skipped" count would be a worse signal than a merely stale zero.
+        int total = repository.findAllCodes(projectId).size();
+        int materialised = repository.findAll(projectId).size();
+        return Math.max(0, total - materialised);
     }
 
     /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */

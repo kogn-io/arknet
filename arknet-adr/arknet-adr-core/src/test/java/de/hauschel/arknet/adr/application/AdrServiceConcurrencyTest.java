@@ -50,10 +50,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  *
  * <p>Both races are reproduced deterministically, without real threads: an {@link AdrRepository}
  * decorator runs an "other caller"'s complete round trip exactly once, at the precise point where a
- * concurrent writer's commit would land - after the first {@code findAll} (which the code
- * computation reads) for the code race, after the first {@code findCurrentByCode} for the lost
- * update. That pins the exact interleaving instead of relying on thread scheduling, which would make
- * these tests flaky.</p>
+ * concurrent writer's commit would land - after the first {@code findAllCodes} (which the code
+ * computation reads, kogn-io/arknet#359) for the code race, after the first {@code findCurrentByCode}
+ * for the lost update. That pins the exact interleaving instead of relying on thread scheduling,
+ * which would make these tests flaky.</p>
  */
 class AdrServiceConcurrencyTest {
 
@@ -85,8 +85,8 @@ class AdrServiceConcurrencyTest {
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
-        RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(PROJECT, newAdr()));
+        RaceOnFirstFindAllCodesRepository racing =
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(PROJECT, newAdr()));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
 
         Adr result = underTest.add(PROJECT, newAdr()).adr();
@@ -243,6 +243,11 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
+        public List<AdrCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
+        }
+
+        @Override
         public Map<AdrId, AdrCode> findCodesByIds(ProjectId projectId, Collection<AdrId> ids) {
             return delegate.findCodesByIds(projectId, ids);
         }
@@ -284,23 +289,25 @@ class AdrServiceConcurrencyTest {
     }
 
     /**
-     * Runs {@code injection} exactly once, synchronously, right after the first {@link #findAll} call
-     * returns - the code computation reads via {@code findAll}, so this simulates a concurrent
-     * {@code adr_add} committing between this caller's code computation and its own {@code create}.
+     * Runs {@code injection} exactly once, synchronously, right after the first
+     * {@link #findAllCodes} call returns - {@code nextCode} reads via {@code findAllCodes} rather
+     * than {@code findAll} (kogn-io/arknet#359, see {@link AdrRepository#findAllCodes}'s own
+     * javadoc), so this simulates a concurrent {@code adr_add} committing between this caller's code
+     * computation and its own {@code create}.
      */
-    private static final class RaceOnFirstFindAllRepository extends DelegatingRepository {
+    private static final class RaceOnFirstFindAllCodesRepository extends DelegatingRepository {
 
         private final Runnable injection;
         private boolean injected;
 
-        RaceOnFirstFindAllRepository(AdrRepository delegate, Runnable injection) {
+        RaceOnFirstFindAllCodesRepository(AdrRepository delegate, Runnable injection) {
             super(delegate);
             this.injection = injection;
         }
 
         @Override
-        public List<Adr> findAll(ProjectId projectId) {
-            List<Adr> result = delegate.findAll(projectId);
+        public List<AdrCode> findAllCodes(ProjectId projectId) {
+            List<AdrCode> result = delegate.findAllCodes(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();

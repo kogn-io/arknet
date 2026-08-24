@@ -638,6 +638,32 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
     }
 
+    /**
+     * Reads every recorded decision's business code straight off {@code dcterms:identifier}, without
+     * joining a single one of the optional or scalar fields {@link #adrWhereBody} requires and
+     * {@link AdrAssembly#toAdr} can therefore reject - the whole point (kogn-io/arknet#359, see
+     * {@link AdrRepository#findAllCodes}'s own javadoc). Deduplicated, since a store-first subject
+     * could in principle carry two {@code dcterms:identifier} triples ({@code ashapes:ADR-identifier}
+     * enforces {@code sh:maxCount 1} only at write time); {@link #nextCode} only ever wants the
+     * highest running number, so which of two identical duplicates survives does not matter.
+     */
+    @Override
+    public List<AdrCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + "?s a <" + ADR_TYPE + "> . ?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "FILTER(isIRI(?s)) } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(AdrCode::new)
+                    .toList();
+        }
+    }
+
     @Override
     public Map<AdrId, AdrCode> findCodesByIds(ProjectId projectId, Collection<AdrId> ids) {
         Objects.requireNonNull(projectId, "projectId");
