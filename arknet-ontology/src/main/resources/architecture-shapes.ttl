@@ -279,7 +279,7 @@ ashapes:ADR-supersededBy
 # status Superseded (kogn-io/arknet#357/#359). The converse - status Superseded implies the edge is
 # present - is deliberately left to the domain layer (Adr's compact constructor refuses to build an
 # instance where the two disagree) and to the read-time tolerance in
-# KognioRdfAdrRepository#AdrAssembly's toAdr (a store-first record that still manages to disagree is
+# KognioRdfAdrRepository#toAdrOrNull (a store-first record that still manages to disagree is
 # skipped with a WARN rather than crashing the read); no legitimate write path can reach this gate
 # with that half broken, so this shape does not need to guard it too.
 #

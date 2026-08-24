@@ -363,7 +363,7 @@ class AdrMcpToolsTest {
         stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of()));
         stub.nextSkippedCount = 2;
 
-        String rendered = adapter.list(null, ANCHOR);
+        String rendered = adapter.list(null, null, ANCHOR);
 
         assertTrue(rendered.contains("2 decisions skipped"), rendered);
     }
@@ -372,7 +372,7 @@ class AdrMcpToolsTest {
     void listNotesSkippedDecisionsEvenWhenNothingElseIsListable() {
         stub.nextSkippedCount = 1;
 
-        String rendered = adapter.list(null, ANCHOR);
+        String rendered = adapter.list(null, null, ANCHOR);
 
         assertTrue(rendered.contains("1 decision skipped"), rendered);
     }
@@ -387,7 +387,7 @@ class AdrMcpToolsTest {
         stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of()),
                 detail(adrWith(List.of(), List.of(), null), List.of(), List.of()));
 
-        adapter.list(null, ANCHOR);
+        adapter.list(null, null, ANCHOR);
 
         assertEquals(2, stub.lastMaterialisedCount);
     }
