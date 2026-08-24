@@ -23,8 +23,11 @@ public interface ListAdrs {
      * any pre-#357 legacy {@code arkarch:supersedes} edge still present, folded into the same two
      * directions.</p>
      *
-     * @param projectId the project (architecture model) to list decisions from
+     * @param projectId     the project (architecture model) to list decisions from
+     * @param displayLocale a BCP-47 language tag overriding which candidate of a multilingual field
+     *                      is selected for every decision, or {@code null}/blank to use the
+     *                      project's own configured display preference
      * @return all decisions, never {@code null}
      */
-    List<AdrDetail> list(ProjectId projectId);
+    List<AdrDetail> list(ProjectId projectId, String displayLocale);
 }

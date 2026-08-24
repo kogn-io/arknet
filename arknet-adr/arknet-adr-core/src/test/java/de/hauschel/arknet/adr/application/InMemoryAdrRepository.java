@@ -7,10 +7,12 @@ import java.util.Collection;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 
@@ -59,6 +61,22 @@ class InMemoryAdrRepository implements AdrRepository {
     private final Map<ProjectId, List<AdrCode>> retainedByProject = new LinkedHashMap<>();
 
     /**
+     * Simplified language bookkeeping (kogn-io/arknet#357): unlike the real out-adapter, this fake
+     * never actually stores separate RDF literals per language - it only tracks which tags a caller
+     * has written for {@code name}/{@code context}/{@code decision} (accumulated across writes, the
+     * same "preserved forever unless overwritten" behaviour the real preservation mechanism gives),
+     * and the tag currently associated with each field/position - just enough for
+     * {@code AdrServiceTest} to exercise the service's touched/pass-through and
+     * new-language-variant policy without a real triple store.
+     */
+    private final Map<AdrId, Set<String>> nameContextDecisionLanguagesByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, String> nameLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, String> contextLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, String> decisionLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, Map<Integer, String>> consequenceLanguageByIdentity = new LinkedHashMap<>();
+    private final Map<AdrId, Map<Integer, String>> optionLanguageByIdentity = new LinkedHashMap<>();
+
+    /**
      * Store-first (pre-#357) {@code arkarch:supersedes} pairs, seeded directly by
      * {@link #seedLegacySupersession} rather than reachable through any {@link AdrService} in-port -
      * exactly as a real project's legacy data would be, having been written before this issue existed
@@ -67,7 +85,7 @@ class InMemoryAdrRepository implements AdrRepository {
     private final Map<ProjectId, List<LegacySupersession>> legacyByProject = new LinkedHashMap<>();
 
     @Override
-    public void create(ProjectId projectId, Adr adr) {
+    public void create(ProjectId projectId, Adr adr, String language) {
         Map<AdrId, Adr> adrs = byProject.computeIfAbsent(projectId, k -> new LinkedHashMap<>());
         if (adrs.containsKey(adr.id())) {
             throw new ResourceAlreadyExistsException(projectId, adr.id().value());
@@ -77,10 +95,25 @@ class InMemoryAdrRepository implements AdrRepository {
         }
         adrs.put(adr.id(), adr);
         headByIdentity.put(adr.id(), UUID.randomUUID().toString());
+        if (language != null) {
+            nameContextDecisionLanguagesByIdentity.put(adr.id(), new LinkedHashSet<>(Set.of(language)));
+        }
+        nameLanguageByIdentity.put(adr.id(), language);
+        contextLanguageByIdentity.put(adr.id(), language);
+        decisionLanguageByIdentity.put(adr.id(), language);
+        Map<Integer, String> consequenceTags = new LinkedHashMap<>();
+        adr.consequences().forEach(c -> consequenceTags.put(c.position(), language));
+        consequenceLanguageByIdentity.put(adr.id(), consequenceTags);
+        Map<Integer, String> optionTags = new LinkedHashMap<>();
+        adr.consideredOptions().forEach(o -> optionTags.put(o.position(), language));
+        optionLanguageByIdentity.put(adr.id(), optionTags);
     }
 
     @Override
-    public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated) {
+    public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+            String nameLanguage, String contextLanguage, String decisionLanguage,
+            Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
+            String defaultLanguage) {
         Map<AdrId, Adr> adrs = byProject.getOrDefault(projectId, Map.of());
         if (!adrs.containsKey(updated.id())) {
             throw new AdrNotFoundException(projectId, updated.code());
@@ -90,6 +123,22 @@ class InMemoryAdrRepository implements AdrRepository {
         }
         adrs.put(updated.id(), updated);
         headByIdentity.put(updated.id(), UUID.randomUUID().toString());
+        Set<String> languages = nameContextDecisionLanguagesByIdentity
+                .computeIfAbsent(updated.id(), key -> new LinkedHashSet<>());
+        if (nameLanguage != null) {
+            languages.add(nameLanguage);
+        }
+        if (contextLanguage != null) {
+            languages.add(contextLanguage);
+        }
+        if (decisionLanguage != null) {
+            languages.add(decisionLanguage);
+        }
+        nameLanguageByIdentity.put(updated.id(), nameLanguage);
+        contextLanguageByIdentity.put(updated.id(), contextLanguage);
+        decisionLanguageByIdentity.put(updated.id(), decisionLanguage);
+        consequenceLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(consequenceLanguageByPosition));
+        optionLanguageByIdentity.put(updated.id(), new LinkedHashMap<>(optionLanguageByPosition));
     }
 
     /**
@@ -120,7 +169,7 @@ class InMemoryAdrRepository implements AdrRepository {
     }
 
     @Override
-    public Optional<Adr> findByCode(ProjectId projectId, AdrCode code) {
+    public Optional<Adr> findByCode(ProjectId projectId, AdrCode code, String displayLocale) {
         return byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(adr -> adr.code().equals(code))
                 .findFirst();
@@ -128,12 +177,17 @@ class InMemoryAdrRepository implements AdrRepository {
 
     @Override
     public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
-        return findByCode(projectId, code)
-                .map(adr -> new CurrentAdr(adr, headByIdentity.get(adr.id())));
+        return findByCode(projectId, code, null)
+                .map(adr -> new CurrentAdr(adr, headByIdentity.get(adr.id()),
+                        nameLanguageByIdentity.get(adr.id()), contextLanguageByIdentity.get(adr.id()),
+                        decisionLanguageByIdentity.get(adr.id()),
+                        nameContextDecisionLanguagesByIdentity.getOrDefault(adr.id(), Set.of()),
+                        consequenceLanguageByIdentity.getOrDefault(adr.id(), Map.of()),
+                        optionLanguageByIdentity.getOrDefault(adr.id(), Map.of())));
     }
 
     @Override
-    public List<Adr> findAll(ProjectId projectId) {
+    public List<Adr> findAll(ProjectId projectId, String displayLocale) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 

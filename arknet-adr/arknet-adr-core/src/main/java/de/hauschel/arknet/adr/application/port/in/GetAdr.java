@@ -18,9 +18,13 @@ public interface GetAdr {
     /**
      * Looks up an architecture decision by its business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the decision in
-     * @param code      the ADR code, e.g. {@code ADR-1}
+     * @param projectId     the project (architecture model) to look up the decision in
+     * @param code          the ADR code, e.g. {@code ADR-1}
+     * @param displayLocale a BCP-47 language tag overriding which candidate of a multilingual field
+     *                      ({@code name}, {@code context}, {@code decision}, each consequence
+     *                      statement, each option's name/rationale) is selected, or {@code null}/blank
+     *                      to use the project's own configured display preference
      * @return the decision if present, otherwise {@link Optional#empty()}
      */
-    Optional<AdrDetail> get(ProjectId projectId, AdrCode code);
+    Optional<AdrDetail> get(ProjectId projectId, AdrCode code, String displayLocale);
 }

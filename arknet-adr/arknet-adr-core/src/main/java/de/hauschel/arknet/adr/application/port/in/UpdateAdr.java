@@ -11,6 +11,10 @@ import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
+import de.hauschel.arknet.adr.domain.ConsequenceCorrection;
+import de.hauschel.arknet.adr.domain.ConsideredOptionCorrection;
+import de.hauschel.arknet.adr.domain.NewConsequence;
+import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
@@ -29,18 +33,24 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p><strong>One correction object rather than a parameter list.</strong> The correction travels as
  * a single {@link AdrCorrection}, built through {@link AdrCorrection#builder()}, exactly as
  * {@link AddAdr} takes one {@code NewAdr} and for the same reason {@code UpdateUseCase} adopted the
- * shape: a flat list of nine mostly-{@code null} arguments, five of them adjacent
- * {@link String}s and three of them adjacent {@code List<String>}s, puts every caller one silent
+ * shape: a flat list of mostly-{@code null}/empty arguments puts every caller one silent
  * transposition away from writing the wrong field.</p>
  *
- * <p><strong>The text is only correctable while {@link AdrStatus#PROPOSED}.</strong> From
+ * <p><strong>{@code name}/{@code context}/{@code decision} are correctable while {@link
+ * AdrStatus#PROPOSED}, or to add a language they never had (kogn-io/arknet#357).</strong> From
  * {@link AdrStatus#ACCEPTED} on (and likewise {@link AdrStatus#REJECTED}/
- * {@link AdrStatus#DEPRECATED}) a change to {@code name}/{@code context}/{@code decision}/
- * {@code consequences}/{@code alternatives}/{@code decisionDate} is refused with
+ * {@link AdrStatus#DEPRECATED}) a change to an <em>existing</em> language variant of {@code name}/
+ * {@code context}/{@code decision}/{@code decisionDate} is refused with
  * {@link AdrTextImmutableException}, whose message points at {@code adr_supersede}: a decision in
  * force is a record of what was decided at the time, and correcting it runs through a successor
- * rather than an edit (Nygard). A call that would set a field to the value it already holds changes
- * nothing and is therefore accepted in any status - it is a no-op, not a text change.</p>
+ * rather than an edit (Nygard). A call that genuinely adds a translation - a language none of the
+ * three fields carries yet - is exempt from that gate; see {@code Adr#reviseText}'s javadoc for the
+ * exact rule and why it is one flag for the whole call, not per field. A call that would set a field
+ * to the value it already holds changes nothing and is therefore accepted in any status - it is a
+ * no-op, not a text change. {@code newConsequences}/{@code newConsideredOptions} (appending) are
+ * likewise unlocked in every status; {@code consequenceCorrections}/{@code consideredOptionCorrections}
+ * (in-place) are locked like {@code name}/{@code context}/{@code decision} but without that
+ * new-language exemption - see {@code Adr#withConsequenceCorrections}'s javadoc for why.</p>
  *
  * <p><strong>The three reference lists are the deliberate exception and stay correctable in every
  * status.</strong> Adding an {@code addressesRequirement}, {@code affectsContext} or
@@ -65,10 +75,16 @@ public interface UpdateAdr {
      * Updates the decision identified by {@code code} within a project, leaving any
      * {@code null}/omitted field of {@code correction} unchanged.
      *
-     * @param projectId  the project (architecture model) the decision lives in
-     * @param code       the decision's business code, e.g. {@code ADR-1}
-     * @param correction the fields to correct, built via {@link AdrCorrection#builder()}; every
-     *                   field it leaves unset stays as it is
+     * @param projectId       the project (architecture model) the decision lives in
+     * @param code            the decision's business code, e.g. {@code ADR-1}
+     * @param correction      the fields to correct, built via {@link AdrCorrection#builder()}; every
+     *                        field it leaves unset stays as it is
+     * @param defaultLanguage the target project's configured default language, canonicalized - the
+     *                        fallback {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}
+     *                        uses when {@code correction.language()} is {@code null} and this call
+     *                        actually touches a multilingual field; a project with neither rejects
+     *                        the call only then (issue #258) - a correction touching no multilingual
+     *                        field never needs one
      * @return the corrected decision, in the same {@link AdrDetail} projection every driving port of
      *         this hexagon returns
      * @throws AdrNotFoundException             if no decision with {@code code} exists in
@@ -89,7 +105,7 @@ public interface UpdateAdr {
      *                                          against a concurrent writer across every retry
      *                                          attempt
      */
-    AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction);
+    AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction, String defaultLanguage);
 
     /**
      * The fields one {@code adr_update} call corrects - every one of them optional, {@code null}
@@ -109,12 +125,27 @@ public interface UpdateAdr {
      * @param context                   the corrected forces and constraints, or {@code null} to
      *                                  leave them unchanged
      * @param decision                  the corrected decision, or {@code null} to leave it unchanged
-     * @param consequences              the corrected consequences, or {@code null} to leave them
-     *                                  unchanged - never a signal to remove an already-recorded one
-     * @param alternatives              the corrected considered options, or {@code null} to leave
-     *                                  them unchanged - same rule as {@code consequences}
+     * @param newConsequences           consequences to append (kogn-io/arknet#357), or {@code null}/
+     *                                  empty for none - never a way to remove an already-recorded
+     *                                  one; always allowed, in every status (see
+     *                                  {@link de.hauschel.arknet.adr.domain.Adr#withAppendedConsequences})
+     * @param consequenceCorrections    text/type corrections for existing consequences, addressed by
+     *                                  position, or {@code null}/empty for none; only allowed while
+     *                                  {@link AdrStatus#PROPOSED} (see
+     *                                  {@link de.hauschel.arknet.adr.domain.Adr#withConsequenceCorrections})
+     * @param newConsideredOptions      options to append, or {@code null}/empty for none - same
+     *                                  always-allowed rule as {@code newConsequences}
+     * @param consideredOptionCorrections corrections for existing options, addressed by position, or
+     *                                  {@code null}/empty for none - same {@link AdrStatus#PROPOSED}-only
+     *                                  rule as {@code consequenceCorrections}
      * @param decisionDate              the corrected decision date, or {@code null} to leave it
-     *                                  unchanged - same rule again
+     *                                  unchanged
+     * @param language                  the BCP-47 language tag every multilingual text this call
+     *                                  touches is written under (a corrected {@code name}/
+     *                                  {@code context}/{@code decision}, an appended or corrected
+     *                                  consequence/option text); {@code null} resolves to the target
+     *                                  project's configured default language, or is rejected if it
+     *                                  has none and a multilingual field is actually touched
      * @param addressesRequirementCodes business codes of the requirements this decision should
      *                                  address going forward, e.g. {@code FR-1}, replacing the
      *                                  existing edges wholesale; an empty list clears them all,
@@ -131,14 +162,22 @@ public interface UpdateAdr {
             String name,
             String context,
             String decision,
-            String consequences,
-            String alternatives,
+            List<NewConsequence> newConsequences,
+            List<ConsequenceCorrection> consequenceCorrections,
+            List<NewConsideredOption> newConsideredOptions,
+            List<ConsideredOptionCorrection> consideredOptionCorrections,
             LocalDate decisionDate,
+            String language,
             List<String> addressesRequirementCodes,
             List<String> affectsContextCodes,
             List<String> relatedToCodes) {
 
         public AdrCorrection {
+            newConsequences = newConsequences == null ? List.of() : List.copyOf(newConsequences);
+            consequenceCorrections = consequenceCorrections == null ? List.of() : List.copyOf(consequenceCorrections);
+            newConsideredOptions = newConsideredOptions == null ? List.of() : List.copyOf(newConsideredOptions);
+            consideredOptionCorrections =
+                    consideredOptionCorrections == null ? List.of() : List.copyOf(consideredOptionCorrections);
             addressesRequirementCodes =
                     addressesRequirementCodes == null ? null : List.copyOf(addressesRequirementCodes);
             affectsContextCodes = affectsContextCodes == null ? null : List.copyOf(affectsContextCodes);
@@ -161,9 +200,12 @@ public interface UpdateAdr {
             private String name;
             private String context;
             private String decision;
-            private String consequences;
-            private String alternatives;
+            private List<NewConsequence> newConsequences;
+            private List<ConsequenceCorrection> consequenceCorrections;
+            private List<NewConsideredOption> newConsideredOptions;
+            private List<ConsideredOptionCorrection> consideredOptionCorrections;
             private LocalDate decisionDate;
+            private String language;
             private List<String> addressesRequirementCodes;
             private List<String> affectsContextCodes;
             private List<String> relatedToCodes;
@@ -189,21 +231,42 @@ public interface UpdateAdr {
                 return this;
             }
 
-            /** @param value see {@link AdrCorrection#consequences()} @return this builder */
-            public Builder consequences(String value) {
-                this.consequences = value;
+            /** @param value see {@link AdrCorrection#newConsequences()} @return this builder */
+            public Builder newConsequences(List<NewConsequence> value) {
+                this.newConsequences = value;
                 return this;
             }
 
-            /** @param value see {@link AdrCorrection#alternatives()} @return this builder */
-            public Builder alternatives(String value) {
-                this.alternatives = value;
+            /** @param value see {@link AdrCorrection#consequenceCorrections()} @return this builder */
+            public Builder consequenceCorrections(List<ConsequenceCorrection> value) {
+                this.consequenceCorrections = value;
+                return this;
+            }
+
+            /** @param value see {@link AdrCorrection#newConsideredOptions()} @return this builder */
+            public Builder newConsideredOptions(List<NewConsideredOption> value) {
+                this.newConsideredOptions = value;
+                return this;
+            }
+
+            /**
+             * @param value see {@link AdrCorrection#consideredOptionCorrections()}
+             * @return this builder
+             */
+            public Builder consideredOptionCorrections(List<ConsideredOptionCorrection> value) {
+                this.consideredOptionCorrections = value;
                 return this;
             }
 
             /** @param value see {@link AdrCorrection#decisionDate()} @return this builder */
             public Builder decisionDate(LocalDate value) {
                 this.decisionDate = value;
+                return this;
+            }
+
+            /** @param value see {@link AdrCorrection#language()} @return this builder */
+            public Builder language(String value) {
+                this.language = value;
                 return this;
             }
 
@@ -230,8 +293,9 @@ public interface UpdateAdr {
 
             /** @return the correction collected so far */
             public AdrCorrection build() {
-                return new AdrCorrection(name, context, decision, consequences, alternatives,
-                        decisionDate, addressesRequirementCodes, affectsContextCodes, relatedToCodes);
+                return new AdrCorrection(name, context, decision, newConsequences, consequenceCorrections,
+                        newConsideredOptions, consideredOptionCorrections, decisionDate, language,
+                        addressesRequirementCodes, affectsContextCodes, relatedToCodes);
             }
         }
     }
