@@ -32,9 +32,11 @@ package de.hauschel.arknet.persistence;
  * <p><strong>{@link #SUPERSEDED_BY} and {@link #SUPERSEDED} are real, written terms
  * (kogn-io/arknet#357).</strong> {@code arkarch:supersededBy} is written on the
  * <em>superseded</em> decision, together with its status transitioning to {@code Superseded}, in
- * one write ({@code adr_supersede}) - the two are coupled by a bi-implication both {@code Adr}'s
- * compact constructor and {@code architecture-shapes.ttl}'s
- * {@code ashapes:ADR-supersededByImpliesSupersededStatus} enforce. {@link #SUPERSEDES} is the
+ * one write ({@code adr_supersede}) - the two are coupled by a bi-implication {@code Adr}'s
+ * compact constructor enforces in full; {@code architecture-shapes.ttl}'s
+ * {@code ashapes:ADR-supersededByRequiresSupersededStatus} enforces only the
+ * {@code supersededBy}-implies-{@code Superseded} half of it a second time at the write gate
+ * (kogn-io/arknet#359). {@link #SUPERSEDES} is the
  * pre-#357 shape: nothing writes it any more, but the ADR out-adapter still reads it, so a
  * project with decisions superseded before this issue keeps working - see
  * {@code AdrRepository#findLegacySupersedesEdges}. {@link #RELATED_TO} follows the same
@@ -77,9 +79,12 @@ public final class ArkarchVocabulary {
      * {@code arkarch:supersededBy} - ADR -&gt; the newer ADR replacing it ({@code owl:inverseOf}
      * {@link #SUPERSEDES}). Written on the <em>superseded</em> decision, together with its
      * {@link #ADR_STATUS} transitioning to {@link #SUPERSEDED}, in one write (kogn-io/arknet#357,
-     * {@code adr_supersede}) - the two are coupled by a bi-implication enforced both in
-     * {@code Adr}'s compact constructor and by {@code architecture-shapes.ttl}'s
-     * {@code ashapes:ADR-supersededByImpliesSupersededStatus}.
+     * {@code adr_supersede}) - the two are coupled by a bi-implication {@code Adr}'s compact
+     * constructor enforces in full; {@code architecture-shapes.ttl}'s
+     * {@code ashapes:ADR-supersededByRequiresSupersededStatus} enforces only the
+     * {@code supersededBy}-implies-{@code Superseded} half of it a second time at the write gate
+     * (kogn-io/arknet#359: the converse cannot be a node shape without also firing on the
+     * validation-only peer copies a {@code relatedTo}/{@code supersededBy} write asserts).
      */
     public static final String SUPERSEDED_BY = NAMESPACE + "supersededBy";
 

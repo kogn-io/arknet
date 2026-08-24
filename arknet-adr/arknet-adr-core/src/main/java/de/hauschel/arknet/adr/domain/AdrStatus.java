@@ -16,8 +16,11 @@ package de.hauschel.arknet.adr.domain;
  * <p><strong>{@link #SUPERSEDED} is a real status, coupled to a real edge (kogn-io/arknet#357).</strong>
  * It is set together with {@link Adr#supersededBy()} in the very same write - the compact
  * constructor of {@link Adr} enforces the bi-implication (status is {@code SUPERSEDED} if and only
- * if {@code supersededBy} is set) as a domain invariant, and {@code architecture-shapes.ttl} enforces
- * the same rule a second time at the write gate. Before this issue, {@code SUPERSEDED} stayed
+ * if {@code supersededBy} is set) as a domain invariant, and {@code architecture-shapes.ttl}
+ * enforces one direction of the same rule (edge set implies {@code SUPERSEDED}) a second time at
+ * the write gate; the converse stays domain-only, since a node shape checking it would also fire on
+ * the validation-only peer copies a write asserts for a {@code relatedTo}/{@code supersededBy}
+ * target (kogn-io/arknet#359). Before this issue, {@code SUPERSEDED} stayed
  * derived-only from a {@code supersedes}/{@code supersededBy} reverse-read and this codebase
  * materialised neither status nor edge as a second, independently maintained signal; that reasoning
  * inverted once the edge itself moved onto the superseded decision's own record ({@link Adr#supersededBy}

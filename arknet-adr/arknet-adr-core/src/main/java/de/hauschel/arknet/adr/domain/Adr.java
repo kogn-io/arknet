@@ -116,9 +116,12 @@ public record Adr(
             throw new IllegalArgumentException("an ADR must not supersede itself");
         }
         // The bi-implication kogn-io/arknet#357 introduced: SUPERSEDED and supersededBy are set
-        // only ever together, never one without the other - the same invariant
-        // architecture-shapes.ttl's ashapes:ADR-supersededByImpliesSupersededStatus enforces a
-        // second time at the write gate.
+        // only ever together, never one without the other. architecture-shapes.ttl's
+        // ashapes:ADR-supersededByRequiresSupersededStatus enforces only one direction of it a
+        // second time at the write gate (supersededBy set implies status SUPERSEDED) - this compact
+        // constructor is the only place the converse (status SUPERSEDED implies supersededBy set)
+        // is enforced at write time at all, since a node shape targeting every ADR would also fire
+        // on the validation-only peer copies the gate never should (kogn-io/arknet#359).
         if (status == AdrStatus.SUPERSEDED && supersededBy == null) {
             throw new IllegalArgumentException(
                     "status SUPERSEDED requires supersededBy to be set: " + code.value());

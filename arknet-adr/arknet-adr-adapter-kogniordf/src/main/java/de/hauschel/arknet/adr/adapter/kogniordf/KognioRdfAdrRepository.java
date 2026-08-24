@@ -988,8 +988,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
          * throw on.</li>
          * <li>{@code status}/{@code supersededBy} disagree with the bi-implication
          * (kogn-io/arknet#357) {@link Adr}'s compact constructor enforces - a store-first record can
-         * set {@code arkarch:adrStatus Superseded} without the edge, or the edge without that status,
-         * neither of which the gate can retroactively catch for data it never validated.</li>
+         * set {@code arkarch:adrStatus Superseded} without the edge, or the edge without that status.
+         * The gate never retroactively catches either half for data it never validated, and since
+         * kogn-io/arknet#359 it does not even try to catch the "{@code Superseded} without the edge"
+         * half going forward: {@code ashapes:ADR-supersededByRequiresSupersededStatus} checks only
+         * the other direction, on purpose (see that shape's own comment), so this read-time check is
+         * the sole backstop for that half, not a second line of defence behind the gate.</li>
          * </ul>
          */
         private Adr toAdr(List<RequirementRef> requirements, List<BoundedContextRef> contexts,

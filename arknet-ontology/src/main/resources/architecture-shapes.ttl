@@ -111,8 +111,8 @@ ashapes:ADR-relatedTo
 
 # At most one successor: a decision is superseded by exactly one newer decision
 # (kogn-io/arknet#357). Written on the superseded decision itself, together with
-# its status transitioning to Superseded - see ashapes:ADR-supersededByImpliesSupersededStatus
-# below for the bi-implication between the two.
+# its status transitioning to Superseded - see ashapes:ADR-supersededByRequiresSupersededStatus
+# below for the one direction of that pairing checked here at write time.
 ashapes:ADR-supersededBy
     a sh:PropertyShape ;
     sh:path     arkarch:supersededBy ;
@@ -122,29 +122,43 @@ ashapes:ADR-supersededBy
     sh:message  "An arkarch:supersededBy edge must point at exactly one other ADR (arkarch:ArchitectureDecisionRecord) identified by an IRI."@en , "Eine arkarch:supersededBy-Kante muss auf genau ein anderes ADR (arkarch:ArchitectureDecisionRecord) mit IRI zeigen."@de ;
     sh:severity sh:Violation .
 
-# Bi-implication: an ADR's status is Superseded if and only if its arkarch:supersededBy edge is
-# set - the two are written together in one call (adr_supersede) and must never be found apart.
-# Expressed as an anonymous sh:or/sh:not combination rather than the named PropertyShapes this
-# file otherwise sticks to: SHACL has no named-shape equivalent for a logical combinator, and the
-# nesting is exactly what expresses "both together, or neither" (verified against the real RDF4J
-# SHACL engine this project's write gate runs, kogn-io/arknet#357).
-# The violation this raises is reported against the ADR node itself (path=null in the report,
-# since sh:or has no single property to blame), so the message below is written to stand on its
-# own without a property name for context.
-ashapes:ADR-supersededByImpliesSupersededStatus
+# One direction only, not a bi-implication: an arkarch:supersededBy edge, when present, implies
+# status Superseded (kogn-io/arknet#357/#359). The converse - status Superseded implies the edge is
+# present - is deliberately left to the domain layer (Adr's compact constructor refuses to build an
+# instance where the two disagree) and to the read-time tolerance in
+# KognioRdfAdrRepository#AdrAssembly's toAdr (a store-first record that still manages to disagree is
+# skipped with a WARN rather than crashing the read); no legitimate write path can reach this gate
+# with that half broken, so this shape does not need to guard it too.
+#
+# A true bi-implication targeting every arkarch:ArchitectureDecisionRecord node would also fire on
+# the validation-only assertedContext copies KognioRdfAdrRepository#crossReferenceAssertedContext
+# builds for a relatedTo peer or a supersededBy target: those copies never carry
+# arkarch:supersededBy at all (the FILTER list that builds them does not include it), so a peer that
+# is itself Superseded would look like "Superseded without the edge" in the validated graph and trip
+# the reverse direction - blocking every further write on whatever names it via relatedTo or
+# supersededBy, permanently once a chain of two supersessions is involved (measured against RDF4J
+# 6.0.0, kogn-io/arknet#359). The direction kept here cannot suffer that: an assertedContext copy
+# never carries supersededBy, so its sh:maxCount 0 disjunct always holds and this shape conforms
+# regardless of the copy's own status.
+#
+# The tempting alternative - adding arkarch:supersededBy to crossReferenceAssertedContext's FILTER
+# list, so a peer's own edge is copied along with it - does not fix this: it only moves the
+# violation onto ashapes:ADR-supersededBy's sh:class constraint, because the copied edge's target is
+# then itself untyped in the validated graph (the same outward cascade
+# KognioRdfAdrRepository's class javadoc already warns against for asserting more than the five
+# mandatory fields a peer/target needs).
+#
+# The violation this raises is reported against the ADR node itself (path=null in the report, since
+# sh:or has no single property to blame), so the message below stands on its own without a property
+# name for context.
+ashapes:ADR-supersededByRequiresSupersededStatus
     a sh:NodeShape ;
     sh:targetClass arkarch:ArchitectureDecisionRecord ;
     sh:or (
-        [
-            sh:property [ sh:path arkarch:supersededBy ; sh:maxCount 0 ] ;
-            sh:not [ sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Superseded ] ]
-        ]
-        [
-            sh:property [ sh:path arkarch:supersededBy ; sh:minCount 1 ] ;
-            sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Superseded ]
-        ]
+        [ sh:property [ sh:path arkarch:supersededBy ; sh:maxCount 0 ] ]
+        [ sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Superseded ] ]
     ) ;
-    sh:message  "An ADR's status must be Superseded exactly when its arkarch:supersededBy edge is set - both together, or neither."@en , "Der Status einer ADR muss genau dann Superseded sein, wenn ihre arkarch:supersededBy-Kante gesetzt ist -- entweder beide zusammen oder keins von beiden."@de ;
+    sh:message  "An ADR's status must be Superseded whenever its arkarch:supersededBy edge is set."@en , "Der Status einer ADR muss Superseded sein, sobald ihre arkarch:supersededBy-Kante gesetzt ist."@de ;
     sh:severity sh:Violation .
 
 # END OF ARCHITECTURE SHAPES

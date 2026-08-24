@@ -240,9 +240,11 @@ class KognioRdfAdrRepositoryTest {
 
     /**
      * The bi-implication kogn-io/arknet#357 introduces (status SUPERSEDED if and only if
-     * {@code supersededBy} is set) is enforced twice: at write time by {@link Adr}'s compact
-     * constructor and {@code architecture-shapes.ttl}'s
-     * {@code ashapes:ADR-supersededByImpliesSupersededStatus}, and read-time tolerance for data the
+     * {@code supersededBy} is set) is enforced at write time only for the direction
+     * {@code architecture-shapes.ttl}'s {@code ashapes:ADR-supersededByRequiresSupersededStatus}
+     * checks ({@code supersededBy} set implies status SUPERSEDED - {@link Adr}'s compact constructor
+     * enforces the full bi-implication, this write gate only half of it, kogn-io/arknet#359). This
+     * test's direction (SUPERSEDED without the edge) reaches only read-time tolerance for data the
      * gate never validated - a store-first record whose {@code adrStatus} and {@code supersededBy}
      * disagree is skipped with a {@code WARN}, the same graceful degradation an unresolvable status
      * gets, rather than crashing the whole read the way an unguarded domain constructor call would.
@@ -367,17 +369,18 @@ class KognioRdfAdrRepositoryTest {
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 
-    // ---- ashapes:ADR-supersededBy + the bi-implication, driven directly against the real gate ----
+    // ---- ashapes:ADR-supersededBy + ashapes:ADR-supersededByRequiresSupersededStatus, driven ----
+    // ---- directly against the real gate ----
 
     /**
-     * {@code sh:maxCount 1} on {@code ashapes:ADR-supersededBy}, isolated from the bi-implication:
-     * both successors are plain valid ADRs, and the subject's own status is SUPERSEDED with (at
-     * least) one edge present, so {@code ashapes:ADR-supersededByImpliesSupersededStatus} conforms
-     * (its {@code minCount 1} branch only asks for at least one edge) and only the standalone
-     * {@code maxCount 1} property shape fires. The spike this issue verified with
-     * (kogn-io/arknet#357) left this case vacuous - conflated with a bi-implication violation
-     * because it paired two {@code supersededBy} values with an {@code Accepted} status - this test
-     * does not.
+     * {@code sh:maxCount 1} on {@code ashapes:ADR-supersededBy}, isolated from the one-directional
+     * implication shape: both successors are plain valid ADRs, and the subject's own status is
+     * SUPERSEDED with (at least) one edge present, so
+     * {@code ashapes:ADR-supersededByRequiresSupersededStatus} conforms (its second disjunct only
+     * asks for status {@code Superseded}, which holds) and only the standalone {@code maxCount 1}
+     * property shape fires. The spike this issue verified with (kogn-io/arknet#357) left this case
+     * vacuous - conflated with an implication violation because it paired two {@code supersededBy}
+     * values with an {@code Accepted} status - this test does not.
      */
     @Test
     void writeRejectsMoreThanOneSupersededByEdgeIsolatedFromTheBiImplication() {
@@ -409,9 +412,11 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * The bi-implication itself, driven directly against the real RDF4J SHACL engine this project's
-     * write gate runs (the spike kogn-io/arknet#357 verified it with, made permanent here): all four
-     * combinations of {@code supersededBy} set/unset and status Superseded/not.
+     * The one direction {@code ashapes:ADR-supersededByRequiresSupersededStatus} actually enforces,
+     * driven directly against the real RDF4J SHACL engine this project's write gate runs (the spike
+     * kogn-io/arknet#357 verified it with, made permanent here, narrowed to one direction by
+     * kogn-io/arknet#359): {@code supersededBy} set forces status {@code Superseded}, in both
+     * possible statuses.
      */
     @Test
     void gateConformsWhenSupersededByIsSetAndStatusIsSuperseded() {
@@ -439,14 +444,30 @@ class KognioRdfAdrRepositoryTest {
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate, assertedContext));
     }
 
+    /**
+     * The converse direction ("status {@code Superseded} implies {@code supersededBy} set")
+     * deliberately no longer conforms-or-violates at this shape at all (kogn-io/arknet#359):
+     * {@code ashapes:ADR-supersededByRequiresSupersededStatus} checks only the direction pinned by
+     * {@link #gateViolatesWhenSupersededByIsSetButStatusIsNotSuperseded} above. A node shape checking
+     * this converse too would also fire on the validation-only {@code assertedContext} copies
+     * {@code KognioRdfAdrRepository#crossReferenceAssertedContext} builds for a {@code relatedTo}
+     * peer or a {@code supersededBy} target, which never carry the edge at all - a peer that is
+     * itself {@code Superseded} would look exactly like this candidate and permanently block every
+     * write naming it (measured against RDF4J 6.0.0, kogn-io/arknet#359). This half of the
+     * bi-implication is enforced purely in the domain: {@link Adr}'s compact constructor refuses to
+     * construct this very state, and {@code KognioRdfAdrRepository}'s read path skips a store-first
+     * record that still manages to reach it. Renamed from
+     * {@code gateViolatesWhenStatusIsSupersededButSupersededByIsNotSet}, which pinned the pre-#359
+     * (buggy) behaviour this test now pins the fix for.
+     */
     @Test
-    void gateViolatesWhenStatusIsSupersededButSupersededByIsNotSet() {
+    void gateConformsWhenStatusIsSupersededButSupersededByIsNotSet() {
         RDF rdf = new SimpleRdf();
         IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
         Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.SUPERSEDED);
 
         ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
-        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+        gate.enforce(candidate);
     }
 
     @Test
@@ -457,6 +478,150 @@ class KognioRdfAdrRepositoryTest {
 
         ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         gate.enforce(candidate);
+    }
+
+    /**
+     * S2 from the kogn-io/arknet#359 review: a {@code relatedTo} peer that is itself
+     * {@code Superseded} must not block a write naming it. Direct-gate reproduction of the P0 bug:
+     * the peer's assertedContext copy never carries {@code supersededBy} (only the five mandatory
+     * scalar fields plus type are copied, see
+     * {@code KognioRdfAdrRepository#crossReferenceAssertedContext}), so under the pre-#359
+     * bi-implication shape this candidate would violate even though nothing about the candidate
+     * itself is wrong - the peer's own successor lives in an entirely different write.
+     */
+    @Test
+    void gateConformsWhenARelatedToPeerIsItselfSuperseded() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI peer = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.ACCEPTED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.RELATED_TO), peer);
+        // The peer's own assertedContext copy: Superseded, but - like every such copy - without the
+        // supersededBy edge that made it so (crossReferenceAssertedContext never copies that field).
+        Graph assertedContext = minimalCandidate(rdf, peer, "ADR-2", ArkarchVocabulary.SUPERSEDED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        gate.enforce(candidate, assertedContext);
+    }
+
+    /**
+     * S3 from the kogn-io/arknet#359 review: a supersession chain, A supersededBy B and B itself
+     * Superseded (by some C outside this candidate graph entirely) - the exact shape of the
+     * permanently-blocked-decision bug. B's assertedContext copy carries the same "Superseded without
+     * the edge" appearance S2 does, for the same reason.
+     */
+    @Test
+    void gateConformsWhenTheSupersedingDecisionIsItselfSuperseded() {
+        RDF rdf = new SimpleRdf();
+        IRI a = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI b = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, a, "ADR-1", ArkarchVocabulary.SUPERSEDED);
+        candidate.add(a, rdf.createIRI(ArkarchVocabulary.SUPERSEDED_BY), b);
+        Graph assertedContext = minimalCandidate(rdf, b, "ADR-2", ArkarchVocabulary.SUPERSEDED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        gate.enforce(candidate, assertedContext);
+    }
+
+    // ---- kogn-io/arknet#359 P0 regression: the gap left by the two adapter tests that used to ----
+    // ---- leave a Superseded successor/peer untested, driven through the full create/compareAndUpdate ----
+    // ---- write path (real gate, real crossReferenceAssertedContext) rather than the gate directly ----
+
+    /**
+     * The supersession-chain half of the P0 bug: {@code adr_supersede(B, A)} then
+     * {@code adr_supersede(C, B)} both go through, and a <em>further</em> write on {@code A} - here,
+     * completing an {@code addressesRequirement} edge, always correctable regardless of status - must
+     * still go through too. Before kogn-io/arknet#359's fix, {@code A}'s own write asserted {@code B}
+     * as its {@code supersededBy} target; {@code crossReferenceAssertedContext}'s copy of {@code B}
+     * never carries {@code B}'s own {@code supersededBy} edge (to {@code C}), so {@code B} looked like
+     * "Superseded without the edge" to the old bi-implication shape and every further write on
+     * {@code A} was refused - permanently, since nothing can un-supersede {@code B} back to
+     * {@code Accepted} either.
+     */
+    @Test
+    void furtherWriteOnADecisionSucceedsAfterItsSuccessorIsItselfSuperseded() {
+        Adr a = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, a);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(a.code()), a.accept());
+        Adr b = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, b);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(b.code()), b.accept());
+        Adr c = adr(new AdrCode("ADR-3"));
+        repository.create(PROJECT_A, c);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(c.code()), c.accept());
+
+        // adr_supersede(B, A): A becomes SUPERSEDED, supersededBy = B.
+        Adr acceptedA = repository.findByCode(PROJECT_A, a.code()).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(a.code()), acceptedA.supersededBy(b.id()));
+        // adr_supersede(C, B): B becomes SUPERSEDED, supersededBy = C - B is now itself superseded.
+        Adr acceptedB = repository.findByCode(PROJECT_A, b.code()).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(b.code()), acceptedB.supersededBy(c.id()));
+
+        // A further write on A, referencing B (Superseded) as its own successor.
+        Adr supersededA = repository.findByCode(PROJECT_A, a.code()).orElseThrow();
+        RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
+        Adr correctedA = supersededA.reviseReferences(List.of(requirement), List.of(), List.of());
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(a.code()), correctedA);
+
+        assertEquals(List.of(requirement),
+                repository.findByCode(PROJECT_A, a.code()).orElseThrow().addressesRequirements());
+    }
+
+    /**
+     * The {@code relatedTo}-peer half of the P0 bug: once a {@code relatedTo} peer is itself
+     * superseded, every further write on the record naming it must still go through - before the fix,
+     * the peer's assertedContext copy looked like "Superseded without the edge" the same way a
+     * superseded successor did, and refused every subsequent write on {@code referencing}.
+     */
+    @Test
+    void writeOnADecisionSucceedsWhenARelatedToPeerIsItselfSuperseded() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(peer.code()), peer.accept());
+        Adr successor = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, successor);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(successor.code()), successor.accept());
+        Adr referencing = adr(freshId(), new AdrCode("ADR-3"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), null, List.of(peer.id()));
+        repository.create(PROJECT_A, referencing);
+
+        // peer becomes SUPERSEDED only after referencing already names it via relatedTo.
+        Adr acceptedPeer = repository.findByCode(PROJECT_A, peer.code()).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(peer.code()), acceptedPeer.supersededBy(successor.id()));
+
+        // A further write on referencing (still PROPOSED, so its text is correctable too) must not be
+        // blocked by peer's own, unrelated Superseded status.
+        Adr currentReferencing = repository.findByCode(PROJECT_A, referencing.code()).orElseThrow();
+        Adr corrected = currentReferencing.reviseText(currentReferencing.name(), "Updated context here",
+                currentReferencing.decision(), null, null, null);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(referencing.code()), corrected);
+
+        assertEquals("Updated context here",
+                repository.findByCode(PROJECT_A, referencing.code()).orElseThrow().context());
+    }
+
+    /**
+     * The other direction of the same {@code relatedTo}-peer bug: {@code adr_add} of a brand-new
+     * decision that names an already-superseded peer must go through on its very first write, not
+     * only on a later correction.
+     */
+    @Test
+    void addSucceedsWhenNamingAnAlreadySupersededDecisionInRelatedTo() {
+        Adr peer = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, peer);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(peer.code()), peer.accept());
+        Adr successor = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, successor);
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(successor.code()), successor.accept());
+        Adr acceptedPeer = repository.findByCode(PROJECT_A, peer.code()).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(peer.code()), acceptedPeer.supersededBy(successor.id()));
+
+        Adr newReferencer = adr(freshId(), new AdrCode("ADR-3"), AdrStatus.PROPOSED, null, null, null,
+                List.of(), List.of(), null, List.of(peer.id()));
+        repository.create(PROJECT_A, newReferencer);
+
+        assertEquals(List.of(peer.id()),
+                repository.findByCode(PROJECT_A, newReferencer.code()).orElseThrow().relatedTo());
     }
 
     /**
