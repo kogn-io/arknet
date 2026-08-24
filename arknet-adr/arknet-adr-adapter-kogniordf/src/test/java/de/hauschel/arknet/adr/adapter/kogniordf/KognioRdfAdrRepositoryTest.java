@@ -236,6 +236,14 @@ class KognioRdfAdrRepositoryTest {
         assertEquals(1, all.size());
         assertEquals(new AdrCode("ADR-1"), all.get(0).code());
         assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).isEmpty());
+        // The skipped decision still owns its number: findAllCodes reads dcterms:identifier without
+        // joining a single field toAdr could reject, which is what keeps adr_add working for a
+        // project holding such a record (kogn-io/arknet#359).
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new AdrCode("ADR-2")));
+        // ... and the same identity still resolves to that code, which is what adr_list's successor
+        // fallback and adr_get's relatedTo display are built on.
+        assertEquals(Map.of(unresolvable, new AdrCode("ADR-2")),
+                repository.findCodesByIds(PROJECT_A, List.of(unresolvable)));
     }
 
     /**
@@ -266,6 +274,84 @@ class KognioRdfAdrRepositoryTest {
         assertEquals(1, all.size());
         assertEquals(new AdrCode("ADR-1"), all.get(0).code());
         assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new AdrCode("ADR-2")));
+        assertEquals(Map.of(inconsistent, new AdrCode("ADR-2")),
+                repository.findCodesByIds(PROJECT_A, List.of(inconsistent)));
+    }
+
+    /**
+     * The third rejection {@link Adr}'s compact constructor raises - {@code supersededBy} naming the
+     * decision itself - reaches the read path too, and unlike the other two no shape stands in its
+     * way at write time either ({@code ashapes:ADR-supersededBy} constrains count, node kind and
+     * class, never disjointness with the subject). Paired with {@code arkarch:adrStatus Superseded}
+     * it even satisfies the bi-implication, so this is the one self-reference that would otherwise
+     * reach the constructor and take down every read of the project (kogn-io/arknet#359).
+     */
+    @Test
+    void findAllSkipsADecisionWhoseSupersededByEdgePointsAtItself() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+        AdrId selfSuperseding = freshId();
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + selfSuperseding.value().value() + "> a <"
+                + ArkarchVocabulary.ADR_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"ADR-2\" ; "
+                + "<https://w3id.org/arknet/core#name> \"Self-superseding\" ; <" + ArkarchVocabulary.ADR_STATUS
+                + "> <" + ArkarchVocabulary.SUPERSEDED + "> ; <" + ArkarchVocabulary.ADR_CONTEXT
+                + "> \"Enough context text\" ; <" + ArkarchVocabulary.ADR_DECISION
+                + "> \"Enough decision text\" ; <" + ArkarchVocabulary.SUPERSEDED_BY + "> <"
+                + selfSuperseding.value().value() + "> } }");
+
+        List<Adr> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new AdrCode("ADR-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new AdrCode("ADR-2")));
+    }
+
+    /**
+     * The same self-reference through {@code arkarch:relatedTo} - rejected by {@link Adr}'s compact
+     * constructor since before kogn-io/arknet#359, and just as uncaught by
+     * {@code ashapes:ADR-relatedTo} - is skipped the same way rather than crashing the listing.
+     */
+    @Test
+    void findAllSkipsADecisionRelatedToItself() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+        AdrId selfRelated = freshId();
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + selfRelated.value().value() + "> a <"
+                + ArkarchVocabulary.ADR_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"ADR-2\" ; "
+                + "<https://w3id.org/arknet/core#name> \"Self-related\" ; <" + ArkarchVocabulary.ADR_STATUS
+                + "> <" + ArkarchVocabulary.ACCEPTED + "> ; <" + ArkarchVocabulary.ADR_CONTEXT
+                + "> \"Enough context text\" ; <" + ArkarchVocabulary.ADR_DECISION
+                + "> \"Enough decision text\" ; <" + ArkarchVocabulary.RELATED_TO + "> <"
+                + selfRelated.value().value() + "> } }");
+
+        List<Adr> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new AdrCode("ADR-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2")).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new AdrCode("ADR-2")));
+    }
+
+    /**
+     * What {@link AdrRepository#findAllCodes} exists for (kogn-io/arknet#359), pinned against the
+     * real store: the query joins the type and {@code dcterms:identifier} and nothing else, so a
+     * code stays taken even by a subject {@link AdrRepository#findAll} cannot materialise at all.
+     * Deliberately the leanest such subject there is - no name, no status, no context, no decision -
+     * which every mandatory join of the listing read already drops; any field joined into this query
+     * later (the tempting "the code alone is not enough") would fail here rather than silently hand
+     * the number out twice.
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")));
+        AdrId bare = freshId();
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + bare.value().value() + "> a <"
+                + ArkarchVocabulary.ADR_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"ADR-2\" } }");
+
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new AdrCode("ADR-2")));
+        assertEquals(Map.of(bare, new AdrCode("ADR-2")),
+                repository.findCodesByIds(PROJECT_A, List.of(bare)));
     }
 
     @Test

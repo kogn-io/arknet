@@ -1020,6 +1020,13 @@ public class KognioRdfAdrRepository implements AdrRepository {
          * half going forward: {@code ashapes:ADR-supersededByRequiresSupersededStatus} checks only
          * the other direction, on purpose (see that shape's own comment), so this read-time check is
          * the sole backstop for that half, not a second line of defence behind the gate.</li>
+         * <li>{@code supersededBy} or {@code relatedTo} points at the decision itself - the two
+         * self-reference rejections {@link Adr}'s compact constructor raises. No shape catches
+         * either ({@code ashapes:ADR-supersededBy} and {@code ashapes:ADR-relatedTo} constrain node
+         * kind and class - and count, in supersededBy's case - never disjointness with the
+         * subject), so a store-first record can carry {@code <A> arkarch:supersededBy <A>}; together
+         * with {@code arkarch:adrStatus Superseded} that even satisfies the bi-implication above and
+         * would otherwise reach the constructor unchanged.</li>
          * </ul>
          */
         private Adr toAdr(List<RequirementRef> requirements, List<BoundedContextRef> contexts,
@@ -1032,6 +1039,16 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 LOG.warn("ADR {}: status {} is inconsistent with its supersededBy edge ({}), "
                                 + "skipping this decision",
                         id.value().value(), status, supersededBy == null ? "absent" : "present");
+                return null;
+            }
+            if (supersededBy != null && supersededBy.equals(id)) {
+                LOG.warn("ADR {}: supersededBy points at the decision itself, skipping this decision",
+                        id.value().value());
+                return null;
+            }
+            if (relatedTo.contains(id)) {
+                LOG.warn("ADR {}: relatedTo contains the decision itself, skipping this decision",
+                        id.value().value());
                 return null;
             }
             return new Adr(id, code,
