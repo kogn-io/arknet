@@ -13,7 +13,8 @@
 #    - ContextMap, tactical DDD          → parked/arknet-ddd_parked.ttl
 #    - Actors                            → arknet-actor.ttl
 #    - Processes, Steps, State Machines  → parked/arknet-process.ttl
-#    - ISO 42010, Views, ADRs           → parked/arknet-architecture.ttl
+#    - Architecture Decision Records     → arknet-architecture.ttl (live, arknet-adr)
+#    - remaining ISO 42010 (Views, ...)  → parked/arknet-architecture_parked.ttl
 #    - Technical layer (Service, API)    → arknet-tech.ttl
 #    - GDPR / Privacy                   → parked/arknet-privacy.ttl
 ##############################################################################
@@ -49,9 +50,9 @@
 
 arknet:name
     a owl:DatatypeProperty ;
-    rdfs:range   xsd:string ;
+    rdfs:range   rdfs:Literal ;
     rdfs:label   "name"@en ;
-    rdfs:comment "Der menschenlesbare Name eines Konzepts."@de .
+    rdfs:comment "Der menschenlesbare Name eines Konzepts. rdfs:Literal statt xsd:string, da manche Konsumenten (z.B. arkarch:ConsideredOption) mehrsprachig sprachgetaggte Literale schreiben; ein einzelnes ungetaggtes xsd:string bleibt ein legales rdfs:Literal, die Weitung ist rueckwaertskompatibel."@de .
 
 arknet:description
     a owl:DatatypeProperty ;
@@ -85,5 +86,11 @@ arknet:qualityAttribute
     rdfs:range   xsd:string ;
     rdfs:label   "quality attribute"@en ;
     rdfs:comment "Qualitaetsattribut (z.B. availability:99.9, latency:<50ms)."@de .
+
+arknet:position
+    a owl:DatatypeProperty ;
+    rdfs:range   xsd:integer ;
+    rdfs:label   "position"@en , "Position"@de ;
+    rdfs:comment "The 1-based, gap-free technical ordering of a child resource within its parent's list (never a caller-facing business identity). Deliberately carries no rdfs:domain, the same domain-agnostic shape arkreq:position already had as the only property of the requirements module without one -- this is that property's honest namespace, moved (kogn-io/arknet#357). arkreq:position itself is untouched and stays in place until the target-cut migration (issue #352); new child resources (e.g. arkarch:Consequence, arkarch:ConsideredOption) use this one instead."@en , "Die 1-basierte, luecken- und duplikatfreie technische Reihenfolge einer Kind-Ressource innerhalb der Liste ihres Elternteils (nie eine vom Aufrufer sichtbare Business-Identitaet). Bewusst ohne rdfs:domain, dieselbe domaenen-agnostische Form, die arkreq:position als einzige Property des Requirements-Moduls ohne eine solche bereits hatte -- dies ist deren ehrlicher Namespace, umgezogen (kogn-io/arknet#357). arkreq:position selbst bleibt unangetastet, bis der Zielschnitt (Issue #352) es nachzieht; neue Kind-Ressourcen (z.B. arkarch:Consequence, arkarch:ConsideredOption) nutzen stattdessen dieses hier."@de .
 
 # END OF CORE ONTOLOGY
