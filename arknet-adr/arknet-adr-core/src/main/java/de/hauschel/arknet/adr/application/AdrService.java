@@ -10,8 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.UnaryOperator;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
@@ -38,9 +40,16 @@ import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
+import de.hauschel.arknet.adr.domain.Consequence;
+import de.hauschel.arknet.adr.domain.ConsequenceCorrection;
+import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.ConsideredOptionCorrection;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
+import de.hauschel.arknet.adr.domain.NewConsequence;
+import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 
@@ -61,23 +70,58 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * an accepted one may further become {@link AdrStatus#DEPRECATED} or - via {@code adr_supersede} -
  * {@link AdrStatus#SUPERSEDED}, set together with {@link Adr#supersededBy()} on the <em>superseded</em>
  * decision in one write (kogn-io/arknet#357; see {@link #supersede}). {@link #update} corrects an
- * existing decision field by field, and the status decides how far it
- * may reach: the prose and the decision date are only correctable while {@link AdrStatus#PROPOSED}
- * and are refused with {@link AdrTextImmutableException} in every other status, while
- * all three reference lists stay correctable in every status - completing a reference that
- * could not exist at recording time states the same decision more fully instead of rewriting it, the
- * same licence {@link Adr#supersededBy(AdrId)} already takes against an accepted decision. That rule
- * lives on
- * {@link Adr#reviseText}/{@link Adr#reviseReferences}, not here; this service only fills the
- * caller's untouched fields from the current state and hands the result to the same CAS helper every
- * other write path uses. {@link #delete} is the one path that removes a decision instead of changing
- * it, and it is staged by status as well - only a {@link AdrStatus#PROPOSED} one may go, because what
- * this lifecycle protects is a decision and not a draft (Nygard); every other status is refused with
- * {@link AdrNotDeletableException} and pointed at the path that fits it. While another decision
- * points at it, the delete is refused outright with {@link AdrReferencedException} rather than
- * orphaning that edge, and the code of a deleted decision stays out of circulation - {@link #nextCode}
- * counts retained codes as used, so {@code ADR-7} never names two different decisions over a
- * project's lifetime.</p>
+ * existing decision field by field - see {@link Adr#reviseText}/{@link Adr#withConsequenceCorrections}/
+ * {@link Adr#withConsideredOptionCorrections}/{@link Adr#reviseReferences} for the exact per-field
+ * rules; this service only fills the caller's untouched fields from the current state, resolves the
+ * language each touched multilingual field is written under, and hands the result to the same CAS
+ * helper every other write path uses. {@link #delete} is the one path that removes a decision instead
+ * of changing it, and it is staged by status as well - only a {@link AdrStatus#PROPOSED} one may go,
+ * because what this lifecycle protects is a decision and not a draft (Nygard); every other status is
+ * refused with {@link AdrNotDeletableException} and pointed at the path that fits it. While another
+ * decision points at it, the delete is refused outright with {@link AdrReferencedException} rather
+ * than orphaning that edge, and the code of a deleted decision stays out of circulation -
+ * {@link #nextCode} counts retained codes as used, so {@code ADR-7} never names two different
+ * decisions over a project's lifetime.</p>
+ *
+ * <p><strong>Consequences and considered options (kogn-io/arknet#357).</strong> {@code adr_add}
+ * takes both as lists of structured drafts ({@link NewConsequence}/{@link NewConsideredOption}),
+ * numbered {@code 1..n} in call order - see {@link #toPositionedConsequences}/
+ * {@link #toPositionedConsideredOptions}, mirroring
+ * {@code RequirementService#toPositionedAcceptanceCriteria} (issue #266). {@code adr_update} can
+ * append further ones in any status, and correct an existing position's content only while
+ * {@link AdrStatus#PROPOSED} - the exact rules live on {@link Adr#withAppendedConsequences}/
+ * {@link Adr#withConsequenceCorrections} (and their {@code ConsideredOption} counterparts), not
+ * here.</p>
+ *
+ * <p><strong>Language.</strong> {@code name}/{@code context}/{@code decision}, every consequence's
+ * {@code statement} and every considered option's {@code name}/{@code rationale} may each legally
+ * carry several language-tagged variants. Unlike the requirements bounded context's per-field
+ * {@code language} arguments, {@code adr_add}/{@code adr_update} take a single {@code language} for
+ * the whole call (mirroring {@code req_add}'s, not {@code req_update}'s, shape) - a deliberate
+ * simplification, since one decision is authored in one language at a time far more often than one
+ * requirement's title and description are corrected in two different languages within the same call.
+ * A field/position this call does not touch always round-trips under the exact tag it already
+ * carried ({@link AdrRepository.CurrentAdr#nameLanguage()}/{@code contextLanguage}/
+ * {@code decisionLanguage}/{@code consequenceLanguageByPosition}/{@code optionLanguageByPosition}) -
+ * a scoped no-op at the store, never a retag, the same principle
+ * {@code RequirementService#resolveTouchedLanguage} follows. A field/position this call does touch
+ * resolves a language via {@link LanguageTag#resolveWriteLanguage} only when the write actually needs
+ * one (issue #258: {@code accept}/{@code reject}/{@code deprecate}/{@code supersede} never touch any
+ * multilingual field and therefore never demand a {@code defaultLanguage} the project may not have).</p>
+ *
+ * <p><strong>The fine-grained text-immutability exemption is call-scoped, not field-scoped
+ * (kogn-io/arknet#357).</strong> Because one {@code language} argument governs the whole call, this
+ * service computes a single {@code newLanguageVariant} boolean per {@code update} call: whether the
+ * resolved write language is entirely absent from
+ * {@link AdrRepository.CurrentAdr#nameContextDecisionLanguages()} (the union of every language tag
+ * currently present across {@code name}/{@code context}/{@code decision}). If so, the whole call is
+ * exempt from {@link Adr#reviseText}'s status gate for every field it touches - a call that is really
+ * adding a translation. If the resolved language is already used by even one of the three fields, the
+ * whole call is treated as editing existing content and is not exempt for any of them. See
+ * {@link Adr#reviseText}'s own javadoc for the full rule and the trade-off this simplification makes.
+ * Appending a consequence/considered option is never gated at all (any status); correcting an
+ * existing one in place is gated exactly like {@code name}/{@code context}/{@code decision}, but
+ * without this exemption - see {@link Adr#withConsequenceCorrections}'s javadoc for why.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #add} recomputes its next code against a fresh read
  * whenever a concurrent {@code adr_add} claims the same {@code ADR-N} first, via
@@ -164,7 +208,7 @@ public class AdrService
     }
 
     @Override
-    public AdrDetail add(ProjectId projectId, NewAdr command) {
+    public AdrDetail add(ProjectId projectId, NewAdr command, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(command, "command");
         // Resolution first, outside the retry: an unknown or ambiguous reference is a didactic
@@ -181,6 +225,11 @@ public class AdrService
         // repository rather than a lookup port - the same reasoning supersededBy() applies, and just
         // as much outside the retry: an unknown ADR-9 is not a code collision.
         List<AdrId> peers = resolvePeers(projectId, command.relatedToCodes());
+        // A brand-new decision is written entirely in one language: resolved once, outside the
+        // retry, and applied uniformly to name/context/decision and every consequence/option text.
+        String language = LanguageTag.resolveWriteLanguage(command.language(), defaultLanguage);
+        List<Consequence> consequences = toPositionedConsequences(command.consequences());
+        List<ConsideredOption> consideredOptions = toPositionedConsideredOptions(command.consideredOptions());
         // Identity is opaque and stable, so it is minted once, outside the retry: only the business
         // code is recomputed when a concurrent adr_add claims the same candidate first. See
         // CodeAssignment for why that race exists and why it must retry rather than surface the
@@ -192,18 +241,38 @@ public class AdrService
                     // supersededBy starts null: a decision is never recorded as already superseded,
                     // it can only become so later via adr_supersede (kogn-io/arknet#357).
                     Adr adr = new Adr(id, code, command.name(), AdrStatus.PROPOSED, command.context(),
-                            command.decision(), command.consequences(), command.alternatives(),
-                            command.decisionDate(), requirements, contexts, null, peers);
-                    repository.create(projectId, adr);
+                            command.decision(), consequences, consideredOptions, command.decisionDate(),
+                            requirements, contexts, null, peers);
+                    repository.create(projectId, adr, language);
                     return adr;
                 });
         return detailOf(projectId, created);
     }
 
+    /** Numbers freshly authored consequences {@code 1..n} in call order (mirrors requirements #266). */
+    private static List<Consequence> toPositionedConsequences(List<NewConsequence> drafts) {
+        List<Consequence> consequences = new ArrayList<>();
+        int position = 1;
+        for (NewConsequence draft : drafts) {
+            consequences.add(new Consequence(position++, draft.statement(), draft.type()));
+        }
+        return consequences;
+    }
+
+    /** {@link #toPositionedConsequences} for considered options. */
+    private static List<ConsideredOption> toPositionedConsideredOptions(List<NewConsideredOption> drafts) {
+        List<ConsideredOption> options = new ArrayList<>();
+        int position = 1;
+        for (NewConsideredOption draft : drafts) {
+            options.add(new ConsideredOption(position++, draft.name(), draft.rationale(), draft.outcome()));
+        }
+        return options;
+    }
+
     @Override
-    public List<AdrDetail> list(ProjectId projectId) {
+    public List<AdrDetail> list(ProjectId projectId, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
-        List<Adr> all = repository.findAll(projectId);
+        List<Adr> all = repository.findAll(projectId, displayLocale);
         // One extra bulk read beyond findAll, for the pre-#357 legacy supersedes shape (see
         // AdrRepository#findLegacySupersedesEdges) - everything else below stays in-memory, exactly
         // as before this issue.
@@ -261,35 +330,40 @@ public class AdrService
     }
 
     @Override
-    public Optional<AdrDetail> get(ProjectId projectId, AdrCode code) {
+    public Optional<AdrDetail> get(ProjectId projectId, AdrCode code, String displayLocale) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return repository.findByCode(projectId, code).map(adr -> detailOf(projectId, adr));
+        return repository.findByCode(projectId, code, displayLocale).map(adr -> detailOf(projectId, adr));
     }
 
     @Override
     public AdrDetail accept(ProjectId projectId, AdrCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, Adr::accept));
+        // accept() never touches any multilingual field - null language/defaultLanguage is safe
+        // even on a project that has one configured, since resolution is never reached (issue #258).
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
+                Set.of(), Set.of(), null, null, current -> current.value().accept()));
     }
 
     @Override
     public AdrDetail reject(ProjectId projectId, AdrCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, Adr::reject));
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
+                Set.of(), Set.of(), null, null, current -> current.value().reject()));
     }
 
     @Override
     public AdrDetail deprecate(ProjectId projectId, AdrCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, Adr::deprecate));
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
+                Set.of(), Set.of(), null, null, current -> current.value().deprecate()));
     }
 
     @Override
-    public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction) {
+    public AdrDetail update(ProjectId projectId, AdrCode code, AdrCorrection correction, String defaultLanguage) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(correction, "correction");
@@ -319,18 +393,52 @@ public class AdrService
         List<AdrId> peers = correction.relatedToCodes() == null
                 ? null
                 : resolvePeers(projectId, correction.relatedToCodes());
-        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, current -> current
-                .reviseText(
-                        correction.name() != null ? correction.name() : current.name(),
-                        correction.context() != null ? correction.context() : current.context(),
-                        correction.decision() != null ? correction.decision() : current.decision(),
-                        correction.consequences() != null ? correction.consequences() : current.consequences(),
-                        correction.alternatives() != null ? correction.alternatives() : current.alternatives(),
-                        correction.decisionDate() != null ? correction.decisionDate() : current.decisionDate())
-                .reviseReferences(
-                        requirements != null ? requirements : current.addressesRequirements(),
-                        contexts != null ? contexts : current.affectsContexts(),
-                        peers != null ? peers : current.relatedTo())));
+        boolean nameTouched = correction.name() != null;
+        boolean contextTouched = correction.context() != null;
+        boolean decisionTouched = correction.decision() != null;
+        Set<Integer> touchedConsequencePositions = correction.consequenceCorrections().stream()
+                .map(ConsequenceCorrection::position)
+                .collect(Collectors.toUnmodifiableSet());
+        Set<Integer> touchedOptionPositions = correction.consideredOptionCorrections().stream()
+                .map(ConsideredOptionCorrection::position)
+                .collect(Collectors.toUnmodifiableSet());
+        Adr updated = updateWithOptimisticRetry(projectId, code, nameTouched, contextTouched, decisionTouched,
+                touchedConsequencePositions, touchedOptionPositions, correction.language(), defaultLanguage,
+                current -> current.value()
+                        .reviseText(
+                                correction.name() != null ? correction.name() : current.value().name(),
+                                correction.context() != null ? correction.context() : current.value().context(),
+                                correction.decision() != null ? correction.decision() : current.value().decision(),
+                                correction.decisionDate() != null
+                                        ? correction.decisionDate() : current.value().decisionDate(),
+                                newLanguageVariant(current, correction.language(), defaultLanguage,
+                                        nameTouched || contextTouched || decisionTouched))
+                        .withAppendedConsequences(correction.newConsequences())
+                        .withConsequenceCorrections(projectId, correction.consequenceCorrections())
+                        .withAppendedConsideredOptions(correction.newConsideredOptions())
+                        .withConsideredOptionCorrections(projectId, correction.consideredOptionCorrections())
+                        .reviseReferences(
+                                requirements != null ? requirements : current.value().addressesRequirements(),
+                                contexts != null ? contexts : current.value().affectsContexts(),
+                                peers != null ? peers : current.value().relatedTo()));
+        return detailOf(projectId, updated);
+    }
+
+    /**
+     * Whether {@code language} (or, if {@code null}, {@code defaultLanguage}) names a language tag
+     * entirely absent from {@code current}'s {@code name}/{@code context}/{@code decision} - the
+     * single, call-scoped flag {@link Adr#reviseText} uses to decide whether this call is exempt from
+     * its status gate. Resolved lazily: only when {@code textTouched} says this call actually names
+     * one of the three fields, so a call that leaves all three alone (e.g. one only appending a
+     * consequence) never demands a {@code defaultLanguage} the project may not have.
+     */
+    private static boolean newLanguageVariant(AdrRepository.CurrentAdr current, String language,
+            String defaultLanguage, boolean textTouched) {
+        if (!textTouched) {
+            return false;
+        }
+        String resolved = LanguageTag.resolveWriteLanguage(language, defaultLanguage);
+        return !current.nameContextDecisionLanguages().contains(resolved);
     }
 
     @Override
@@ -355,21 +463,23 @@ public class AdrService
         // mutation below therefore re-reads and re-checks the superseding decision's status on every
         // retry attempt instead, against whatever state that attempt actually observes - cheap
         // (single lookup by code) relative to the class of inconsistency it closes.
-        AdrId supersedingId = repository.findByCode(projectId, code)
+        AdrId supersedingId = repository.findByCode(projectId, code, null)
                 .orElseThrow(() -> new AdrNotFoundException(projectId, code))
                 .id();
-        return detailOf(projectId, updateWithOptimisticRetry(projectId, supersededCode, current -> {
+        // Never touches any multilingual field.
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, supersededCode, false, false, false,
+                Set.of(), Set.of(), null, null, current -> {
             // Idempotency first, before the fresh status check below: Adr#supersededBy would take
             // this very same early return internally, but taking it here too means recording the
             // same pair a second time never depends on the superseding decision's current status -
             // only pairing with a genuinely new successor does. Without this, a superseding decision
             // that became DEPRECATED/SUPERSEDED after its first, already-recorded adr_supersede would
             // turn a promised no-op into a failure.
-            if (supersedingId.equals(current.supersededBy())) {
-                return current;
+            if (supersedingId.equals(current.value().supersededBy())) {
+                return current.value();
             }
             requireSupersedingIsAccepted(projectId, code);
-            return current.supersededBy(supersedingId);
+            return current.value().supersededBy(supersedingId);
         }));
     }
 
@@ -389,7 +499,7 @@ public class AdrService
      * CAS token on the superseding decision, an out-port change) - see kogn-io/arknet#359.</p>
      */
     private void requireSupersedingIsAccepted(ProjectId projectId, AdrCode code) {
-        AdrStatus status = repository.findByCode(projectId, code)
+        AdrStatus status = repository.findByCode(projectId, code, null)
                 .orElseThrow(() -> new AdrNotFoundException(projectId, code))
                 .status();
         if (status != AdrStatus.ACCEPTED) {
@@ -402,7 +512,7 @@ public class AdrService
     public void delete(ProjectId projectId, AdrCode code) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
-        Adr adr = repository.findByCode(projectId, code)
+        Adr adr = repository.findByCode(projectId, code, null)
                 .orElseThrow(() -> new AdrNotFoundException(projectId, code));
         if (adr.status() != AdrStatus.PROPOSED) {
             throw new AdrNotDeletableException(code, adr.status());
@@ -449,36 +559,65 @@ public class AdrService
 
     /**
      * Read-modify-write helper behind {@link #accept}, {@link #reject}, {@link #deprecate},
-     * {@link #supersede} and {@link #update}: reads the current decision and its concurrency token together via
-     * {@link AdrRepository#findCurrentByCode},
-     * derives the next state via {@code mutation}, and writes it back via
-     * {@link AdrRepository#compareAndUpdate} - retrying with a fresh read whenever a concurrent
-     * writer commits a change in between. This is the guard the bounded-context and requirements
-     * contexts had to retrofit; building it in from the start is what
-     * keeps two parallel {@code adr_supersede} calls on the same decision from silently losing one
-     * another's edge.
+     * {@link #supersede} and {@link #update}: reads the current decision and its concurrency token
+     * together via {@link AdrRepository#findCurrentByCode}, derives the next state via
+     * {@code mutation}, resolves the language each touched field/position is written under, and
+     * writes the result back via {@link AdrRepository#compareAndUpdate} - retrying with a fresh read
+     * whenever a concurrent writer commits a change in between. This is the guard the
+     * bounded-context and requirements contexts had to retrofit; building it in from the start is
+     * what keeps two parallel {@code adr_supersede} calls on the same decision from silently losing
+     * one another's edge.
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as a
      * no-op: accepting an already-accepted decision, recording an already-recorded supersede, or
      * correcting a field to the value it already holds skips the write entirely - no revision, no
      * moved head.</p>
      *
+     * @param nameTouched                   whether this call itself names {@code name}; an untouched
+     *                                      field's language always passes through {@code current}'s
+     *                                      own tag rather than resolving a fresh one
+     * @param contextTouched                {@code nameTouched}'s counterpart for {@code context}
+     * @param decisionTouched               {@code nameTouched}'s counterpart for {@code decision}
+     * @param touchedConsequencePositions   the positions this call's own {@code
+     *                                      consequenceCorrections} name - a newly appended position
+     *                                      (absent from {@code current} entirely) always resolves
+     *                                      fresh regardless of this set
+     * @param touchedOptionPositions        {@code touchedConsequencePositions}'s counterpart for
+     *                                      {@code consideredOptionCorrections}
+     * @param language                      the call's own language argument, or {@code null}
+     * @param defaultLanguage               the project's configured fallback, or {@code null} -
+     *                                      resolved together with {@code language} only when a
+     *                                      touched field/position actually needs it (issue #258)
      * @throws AdrNotFoundException             if no decision with {@code code} exists
      * @throws AdrConcurrentlyModifiedException if the write keeps losing the race across every retry
      *                                          attempt
      */
-    private Adr updateWithOptimisticRetry(
-            ProjectId projectId, AdrCode code, UnaryOperator<Adr> mutation) {
+    private Adr updateWithOptimisticRetry(ProjectId projectId, AdrCode code, boolean nameTouched,
+            boolean contextTouched, boolean decisionTouched, Set<Integer> touchedConsequencePositions,
+            Set<Integer> touchedOptionPositions, String language, String defaultLanguage,
+            Function<AdrRepository.CurrentAdr, Adr> mutation) {
         AdrConcurrentlyModifiedException lastConflict = null;
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             AdrRepository.CurrentAdr current = repository.findCurrentByCode(projectId, code)
                     .orElseThrow(() -> new AdrNotFoundException(projectId, code));
-            Adr updated = mutation.apply(current.value());
+            Adr updated = mutation.apply(current);
             if (updated.equals(current.value())) {
                 return current.value();
             }
+            String nameLanguage = touchedLanguage(nameTouched, current.nameLanguage(), language, defaultLanguage);
+            String contextLanguage =
+                    touchedLanguage(contextTouched, current.contextLanguage(), language, defaultLanguage);
+            String decisionLanguage =
+                    touchedLanguage(decisionTouched, current.decisionLanguage(), language, defaultLanguage);
+            Map<Integer, String> consequenceLanguageByPosition = positionLanguages(
+                    updated.consequences().stream().map(Consequence::position).toList(),
+                    current.consequenceLanguageByPosition(), touchedConsequencePositions, language, defaultLanguage);
+            Map<Integer, String> optionLanguageByPosition = positionLanguages(
+                    updated.consideredOptions().stream().map(ConsideredOption::position).toList(),
+                    current.optionLanguageByPosition(), touchedOptionPositions, language, defaultLanguage);
             try {
-                repository.compareAndUpdate(projectId, current.head(), updated);
+                repository.compareAndUpdate(projectId, current.head(), updated, nameLanguage, contextLanguage,
+                        decisionLanguage, consequenceLanguageByPosition, optionLanguageByPosition, defaultLanguage);
                 return updated;
             } catch (AdrConcurrentlyModifiedException e) {
                 // A concurrent writer replaced the decision between our read and our write - retry
@@ -487,6 +626,36 @@ public class AdrService
             }
         }
         throw lastConflict;
+    }
+
+    /**
+     * The BCP-47 tag a scalar field ({@code name}/{@code context}/{@code decision}) is written
+     * under: freshly resolved via {@link LanguageTag#resolveWriteLanguage} when {@code touched},
+     * otherwise {@code currentLanguage} unchanged (a scoped no-op, not a retag).
+     */
+    private static String touchedLanguage(
+            boolean touched, String currentLanguage, String language, String defaultLanguage) {
+        return touched ? LanguageTag.resolveWriteLanguage(language, defaultLanguage) : currentLanguage;
+    }
+
+    /**
+     * The BCP-47 tag each position in {@code positions} is written under: a position absent from
+     * {@code currentLanguageByPosition} (a newly appended consequence/option) always resolves fresh;
+     * an existing position named in {@code touchedPositions} (this call's own corrections) also
+     * resolves fresh; every other existing position round-trips under the tag
+     * {@code currentLanguageByPosition} already carried for it.
+     */
+    private static Map<Integer, String> positionLanguages(List<Integer> positions,
+            Map<Integer, String> currentLanguageByPosition, Set<Integer> touchedPositions, String language,
+            String defaultLanguage) {
+        Map<Integer, String> result = new LinkedHashMap<>();
+        for (Integer position : positions) {
+            boolean isNewPosition = !currentLanguageByPosition.containsKey(position);
+            result.put(position, isNewPosition || touchedPositions.contains(position)
+                    ? LanguageTag.resolveWriteLanguage(language, defaultLanguage)
+                    : currentLanguageByPosition.get(position));
+        }
+        return result;
     }
 
     /**
@@ -536,7 +705,7 @@ public class AdrService
         return codes.stream()
                 .map(AdrCode::new)
                 .distinct()
-                .map(peer -> repository.findByCode(projectId, peer)
+                .map(peer -> repository.findByCode(projectId, peer, null)
                         .map(Adr::id)
                         .orElseThrow(() -> new AdrNotFoundException(projectId, peer)))
                 .toList();

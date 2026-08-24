@@ -29,8 +29,11 @@ public interface ListAdrs {
      * <p>Silently shorter than the project's true decision count whenever {@link CountSkippedAdrs}
      * reports a nonzero value for the same project - see there for why.</p>
      *
-     * @param projectId the project (architecture model) to list decisions from
+     * @param projectId     the project (architecture model) to list decisions from
+     * @param displayLocale a BCP-47 language tag overriding which candidate of a multilingual field
+     *                      is selected for every decision, or {@code null}/blank to use the
+     *                      project's own configured display preference
      * @return all decisions, never {@code null}
      */
-    List<AdrDetail> list(ProjectId projectId);
+    List<AdrDetail> list(ProjectId projectId, String displayLocale);
 }

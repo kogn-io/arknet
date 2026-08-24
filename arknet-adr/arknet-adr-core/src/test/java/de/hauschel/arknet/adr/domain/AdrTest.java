@@ -15,6 +15,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 
 /** Invariants and transition rules of the {@link Adr} value object. */
@@ -22,6 +23,7 @@ class AdrTest {
 
     private static final AdrId ID = new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-1"));
     private static final AdrId OTHER = new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-2"));
+    private static final ProjectId PROJECT = new ProjectId("test-project");
 
     @Test
     void rejectsBlankMandatoryText() {
@@ -31,17 +33,11 @@ class AdrTest {
     }
 
     @Test
-    void rejectsBlankOptionalTextWhenPresent() {
-        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", "  ", null, null, null, null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, "  ", null, null, null, null, null));
-    }
-
-    @Test
     void normalisesNullCollectionsToEmpty() {
         Adr adr = adr("name", "context", "decision");
 
+        assertEquals(List.of(), adr.consequences());
+        assertEquals(List.of(), adr.consideredOptions());
         assertEquals(List.of(), adr.addressesRequirements());
         assertEquals(List.of(), adr.affectsContexts());
         assertNull(adr.supersededBy());
@@ -56,41 +52,24 @@ class AdrTest {
                 AdrStatus.PROPOSED, "context", "decision", null, null, null, List.of(ref, ref), null, null, null));
     }
 
-    /**
-     * A decision superseded by itself is a cycle of length one - the constructor rejects it rather
-     * than letting {@code Adr#supersededBy(AdrId)}'s own guard be the only thing standing between a
-     * caller and an unreadable graph. The self-check fires before the bi-implication checks below
-     * it, so the status handed in here does not even have to be consistent with a self-reference.
-     */
     @Test
     void rejectsSupersedingItself() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
                 AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, ID, null));
     }
 
-    /**
-     * The bi-implication kogn-io/arknet#357 introduced: {@link AdrStatus#SUPERSEDED} without
-     * {@code supersededBy} is not a state this record can hold - mutation test: removing this half
-     * of the check would let a store-first record claim "superseded" without naming a successor.
-     */
     @Test
     void rejectsSupersededStatusWithoutSupersededByEdge() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
                 AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, null, null));
     }
 
-    /**
-     * The other half of the bi-implication: a {@code supersededBy} edge without status
-     * {@link AdrStatus#SUPERSEDED} is equally rejected - mutation test: removing this half would let
-     * a record claim a successor while a different status (e.g. still ACCEPTED) contradicts it.
-     */
     @Test
     void rejectsSupersededByEdgeWithoutSupersededStatus() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
                 AdrStatus.ACCEPTED, "context", "decision", null, null, null, null, null, OTHER, null));
     }
 
-    /** The one state the bi-implication actually permits together: both set, at once. */
     @Test
     void permitsSupersededStatusTogetherWithSupersededByEdge() {
         Adr superseded = new Adr(ID, new AdrCode("ADR-1"), "name",
@@ -100,11 +79,6 @@ class AdrTest {
         assertEquals(OTHER, superseded.supersededBy());
     }
 
-    /**
-     * A "see also" edge onto the decision itself says nothing, and the merged reading of the
-     * relation (see {@code AdrDetail}) would report the decision as its own peer. Refused in the
-     * constructor rather than only in the service, exactly as superseding itself is.
-     */
     @Test
     void rejectsBeingRelatedToItself() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
@@ -119,6 +93,190 @@ class AdrTest {
                 List.of(OTHER, OTHER)));
     }
 
+    // --- consequences / considered options (kogn-io/arknet#357) ---------------
+
+    @Test
+    void rejectsAGapInConsequencePositions() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(2, "text", ConsequenceType.NEUTRAL)), null, null, null, null, null, null));
+    }
+
+    @Test
+    void rejectsADuplicateConsequencePosition() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(1, "a", ConsequenceType.POSITIVE),
+                        new Consequence(1, "b", ConsequenceType.NEGATIVE)),
+                null, null, null, null, null, null));
+    }
+
+    @Test
+    void rejectsAGapInConsideredOptionPositions() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(2, "name", "rationale", OptionOutcome.REJECTED)),
+                null, null, null, null, null));
+    }
+
+    /** An empty consequence/considered-option list is legal - both are optional, unlike acceptanceCriterion. */
+    @Test
+    void permitsEmptyConsequenceAndConsideredOptionLists() {
+        Adr adr = adr("name", "context", "decision");
+
+        assertEquals(List.of(), adr.consequences());
+        assertEquals(List.of(), adr.consideredOptions());
+    }
+
+    /**
+     * At most one considered option may be {@link OptionOutcome#CHOSEN} - the domain-level half of
+     * the invariant the SHACL {@code sh:qualifiedValueShape}/{@code sh:qualifiedMaxCount} enforces a
+     * second time at the write gate (kogn-io/arknet#357). Mutation test: removing this check would
+     * let two options both claim to be the decision's actual outcome.
+     */
+    @Test
+    void rejectsMoreThanOneChosenConsideredOption() {
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "B", "r2", OptionOutcome.CHOSEN)),
+                null, null, null, null, null));
+    }
+
+    @Test
+    void permitsExactlyOneChosenConsideredOptionAmongSeveral() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "B", "r2", OptionOutcome.REJECTED)),
+                null, null, null, null, null);
+
+        assertEquals(2, adr.consideredOptions().size());
+    }
+
+    @Test
+    void permitsZeroChosenConsideredOptions() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)),
+                null, null, null, null, null);
+
+        assertEquals(1, adr.consideredOptions().size());
+    }
+
+    @Test
+    void withAppendedConsequencesNumbersContinuingFromTheCurrentHighestPosition() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(1, "first", ConsequenceType.POSITIVE)), null, null, null, null, null, null);
+
+        Adr appended = adr.withAppendedConsequences(
+                List.of(new NewConsequence("second", ConsequenceType.NEGATIVE)));
+
+        assertEquals(List.of(
+                new Consequence(1, "first", ConsequenceType.POSITIVE),
+                new Consequence(2, "second", ConsequenceType.NEGATIVE)), appended.consequences());
+    }
+
+    /** Appending is never gated by status - a later-discovered consequence completes the record. */
+    @Test
+    void withAppendedConsequencesWorksOnAnAcceptedDecision() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+
+        Adr appended = accepted.withAppendedConsequences(
+                List.of(new NewConsequence("discovered later", ConsequenceType.NEGATIVE)));
+
+        assertEquals(List.of(new Consequence(1, "discovered later", ConsequenceType.NEGATIVE)),
+                appended.consequences());
+        assertEquals(AdrStatus.ACCEPTED, appended.status());
+    }
+
+    @Test
+    void withConsequenceCorrectionsPatchesOnlyTheNamedPositionWhileProposed() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL),
+                        new Consequence(2, "other", ConsequenceType.NEGATIVE)),
+                null, null, null, null, null, null);
+
+        Adr patched = adr.withConsequenceCorrections(PROJECT,
+                List.of(new ConsequenceCorrection(1, "sharper", ConsequenceType.POSITIVE)));
+
+        assertEquals(List.of(
+                new Consequence(1, "sharper", ConsequenceType.POSITIVE),
+                new Consequence(2, "other", ConsequenceType.NEGATIVE)), patched.consequences());
+    }
+
+    @Test
+    void withConsequenceCorrectionsThrowsForAnUnknownPosition() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+
+        assertThrows(ConsequencePositionNotFoundException.class, () -> adr.withConsequenceCorrections(PROJECT,
+                List.of(new ConsequenceCorrection(9, "x", ConsequenceType.NEUTRAL))));
+    }
+
+    /**
+     * Deliberately narrower than {@link Adr#reviseText}: correcting an *existing* consequence is
+     * locked once the decision is no longer PROPOSED, with no new-language exemption. Mutation test:
+     * removing this status guard turns a rejected correction into a silently accepted one.
+     */
+    @Test
+    void withConsequenceCorrectionsThrowsOnAnAcceptedDecision() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+
+        assertThrows(AdrTextImmutableException.class, () -> accepted.withConsequenceCorrections(PROJECT,
+                List.of(new ConsequenceCorrection(1, "rewritten", ConsequenceType.POSITIVE))));
+    }
+
+    /** A correction that changes nothing is a no-op in any status - mirrors {@code reviseText}. */
+    @Test
+    void withConsequenceCorrectionsIsANoOpWhenNothingChangesEvenWhenAccepted() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+
+        Adr result = accepted.withConsequenceCorrections(PROJECT,
+                List.of(new ConsequenceCorrection(1, "draft", ConsequenceType.NEUTRAL)));
+
+        assertSame(accepted, result);
+    }
+
+    @Test
+    void withAppendedConsideredOptionsWorksOnAnAcceptedDecision() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+
+        Adr appended = accepted.withAppendedConsideredOptions(
+                List.of(new NewConsideredOption("Discovered", "found later", OptionOutcome.REJECTED)));
+
+        assertEquals(List.of(new ConsideredOption(1, "Discovered", "found later", OptionOutcome.REJECTED)),
+                appended.consideredOptions());
+    }
+
+    /** Appending must still keep the at-most-one-Chosen invariant. */
+    @Test
+    void withAppendedConsideredOptionsRejectsASecondChosenOption() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN)), null, null, null, null, null);
+
+        assertThrows(IllegalArgumentException.class, () -> adr.withAppendedConsideredOptions(
+                List.of(new NewConsideredOption("B", "r2", OptionOutcome.CHOSEN))));
+    }
+
+    @Test
+    void withConsideredOptionCorrectionsThrowsOnAnAcceptedDecision() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+
+        assertThrows(AdrTextImmutableException.class, () -> accepted.withConsideredOptionCorrections(PROJECT,
+                List.of(new ConsideredOptionCorrection(1, "A", "rewritten", OptionOutcome.CHOSEN))));
+    }
+
+    @Test
+    void withConsideredOptionCorrectionsThrowsForAnUnknownPosition() {
+        Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+
+        assertThrows(ConsideredOptionPositionNotFoundException.class, () -> adr.withConsideredOptionCorrections(
+                PROJECT, List.of(new ConsideredOptionCorrection(9, "x", "y", OptionOutcome.REJECTED))));
+    }
+
     @Test
     void acceptTransitionsOnceAndIsIdempotent() {
         Adr proposed = adr("name", "context", "decision");
@@ -129,11 +287,6 @@ class AdrTest {
         assertSame(accepted, accepted.accept());
     }
 
-    /**
-     * Accepting a rejected or deprecated decision would silently resurrect it - now that those are
-     * real terminal-ish states, {@code accept()} must refuse rather than accept from anywhere but
-     * {@code PROPOSED}.
-     */
     @Test
     void acceptThrowsFromRejectedOrDeprecated() {
         Adr rejected = withStatus(AdrStatus.REJECTED);
@@ -181,11 +334,6 @@ class AdrTest {
         assertThrows(IllegalStateException.class, rejected::deprecate);
     }
 
-    /**
-     * The transition {@code adr_supersede} drives: an ACCEPTED decision superseded by another
-     * becomes SUPERSEDED with the edge set, and recording the very same successor again is an
-     * idempotent no-op.
-     */
     @Test
     void supersededByTransitionsToSupersededAndIsIdempotent() {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
@@ -197,11 +345,6 @@ class AdrTest {
         assertSame(superseded, superseded.supersededBy(OTHER));
     }
 
-    /**
-     * Only an ACCEPTED decision may be superseded - mutation test: removing this check would let a
-     * PROPOSED/REJECTED/DEPRECATED decision (or one already SUPERSEDED by a different successor)
-     * become superseded, exactly what {@code adr_supersede}'s own status gate is meant to prevent.
-     */
     @Test
     void supersededByThrowsWhenNotAccepted() {
         Adr proposed = adr("name", "context", "decision");
@@ -212,7 +355,6 @@ class AdrTest {
         assertThrows(IllegalStateException.class, () -> proposed.supersededBy(OTHER));
         assertThrows(IllegalStateException.class, () -> rejected.supersededBy(OTHER));
         assertThrows(IllegalStateException.class, () -> deprecated.supersededBy(OTHER));
-        // A different successor than the one already recorded - not the idempotent no-op case.
         assertThrows(IllegalStateException.class,
                 () -> alreadySuperseded.supersededBy(new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-3"))));
     }
@@ -229,31 +371,28 @@ class AdrTest {
         Adr proposed = adr("name", "context", "decision");
 
         Adr revised = proposed.reviseText("Better name", "Sharper context", "Sharper decision",
-                "What follows", "What else was weighed", LocalDate.of(2026, 8, 23));
+                LocalDate.of(2026, 8, 23), false);
 
         assertEquals("Better name", revised.name());
         assertEquals("Sharper context", revised.context());
         assertEquals("Sharper decision", revised.decision());
-        assertEquals("What follows", revised.consequences());
-        assertEquals("What else was weighed", revised.alternatives());
         assertEquals(LocalDate.of(2026, 8, 23), revised.decisionDate());
         assertEquals(AdrStatus.PROPOSED, revised.status());
     }
 
     /**
      * The rule this whole port exists to state: a decision in force records what was decided at the
-     * time, so its text is not editable. All four non-{@code PROPOSED} states are pinned, not just
-     * {@code ACCEPTED} - a rejected, deprecated or superseded decision is just as much a record of
-     * its own past.
+     * time, so an existing-language text is not editable. All four non-{@code PROPOSED} states are
+     * pinned.
      */
     @Test
-    void reviseTextThrowsFromEveryStatusButProposed() {
+    void reviseTextThrowsFromEveryStatusButProposedForASameLanguageChange() {
         for (AdrStatus status : List.of(AdrStatus.ACCEPTED, AdrStatus.REJECTED, AdrStatus.DEPRECATED,
                 AdrStatus.SUPERSEDED)) {
             Adr inForce = withStatus(status);
 
             AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
-                    () -> inForce.reviseText("Better name", "context", "decision", null, null, null));
+                    () -> inForce.reviseText("Better name", "context", "decision", null, false));
 
             assertEquals(status, thrown.status());
             assertEquals(new AdrCode("ADR-1"), thrown.adrCode());
@@ -271,7 +410,7 @@ class AdrTest {
     void reviseTextOffersSupersedeOnlyWhereSupersedeWouldBeAccepted() {
         assertTrue(assertThrows(AdrTextImmutableException.class,
                 () -> withStatus(AdrStatus.ACCEPTED)
-                        .reviseText("Better name", "context", "decision", null, null, null))
+                        .reviseText("Better name", "context", "decision", null, false))
                 .getMessage().contains("adr_supersede"));
 
         for (AdrStatus terminal : List.of(AdrStatus.REJECTED, AdrStatus.DEPRECATED,
@@ -279,7 +418,7 @@ class AdrTest {
             Adr record = withStatus(terminal);
 
             String message = assertThrows(AdrTextImmutableException.class,
-                    () -> record.reviseText("Better name", "context", "decision", null, null, null))
+                    () -> record.reviseText("Better name", "context", "decision", null, false))
                     .getMessage();
 
             assertFalse(message.contains("link it with adr_supersede"), message);
@@ -299,34 +438,46 @@ class AdrTest {
     }
 
     /**
+     * kogn-io/arknet#357: a call that genuinely adds a language none of the three fields carries yet
+     * is exempt from the status gate, even on a decision already in force - it makes the decision
+     * accessible in a new language, it does not change what was decided. Mutation test: removing the
+     * {@code newLanguageVariant} branch in {@code reviseText} turns this into an unexpected throw.
+     */
+    @Test
+    void reviseTextAllowsANewLanguageVariantEvenWhenAccepted() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+
+        Adr revised = accepted.reviseText("Ein neuer Titel", "context", "decision", null, true);
+
+        assertEquals("Ein neuer Titel", revised.name());
+        assertEquals(AdrStatus.ACCEPTED, revised.status());
+    }
+
+    /**
      * Load-bearing, not a convenience: a correction that only touches the references travels through
      * {@code reviseText} with every text value unchanged, so a no-op must pass in any status - if it
      * threw, correcting an accepted decision's edges would be impossible.
+     *
+     * <p>The mirror image: {@code newLanguageVariant=true} does not blanket-exempt every call - a
+     * decisionDate change bundled into the same call is still gated (decisionDate carries no
+     * language of its own, so it is treated like any other changed scalar).
      */
     @Test
     void reviseTextIsANoOpWithIdenticalValuesEvenWhenAccepted() {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
-        assertSame(accepted, accepted.reviseText("name", "context", "decision", null, null, null));
+        assertSame(accepted, accepted.reviseText("name", "context", "decision", null, false));
+        assertSame(accepted, accepted.reviseText("name", "context", "decision", null, true));
     }
 
-    /**
-     * The status is checked <em>after</em> the comparison, so an accepted decision handed an invalid
-     * value is refused for the reason the call could never succeed (immutable), not for the value.
-     */
     @Test
     void reviseTextReportsImmutabilityRatherThanTheInvalidValueWhenAccepted() {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
         assertThrows(AdrTextImmutableException.class,
-                () -> accepted.reviseText("  ", "context", "decision", null, null, null));
+                () -> accepted.reviseText("  ", "context", "decision", null, false));
     }
 
-    /**
-     * The deliberate exception to the immutability rule: an edge that could not be written when the
-     * decision was recorded stays completable afterwards, in every status - the same licence
-     * {@code supersede} already takes.
-     */
     @Test
     void reviseReferencesReplacesInEveryStatusIncludingAccepted() {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
@@ -343,11 +494,6 @@ class AdrTest {
         }
     }
 
-    /**
-     * {@code relatedTo} is not text: it names a peer decision, and the peer may well have been
-     * recorded after this decision was accepted. Freezing the edge with the prose would leave a
-     * decision in force permanently unable to point at it.
-     */
     @Test
     void reviseReferencesSetsAndClearsRelatedToInEveryStatusIncludingAccepted() {
         for (AdrStatus status : AdrStatus.values()) {
@@ -403,8 +549,7 @@ class AdrTest {
     /**
      * Builds a decision in {@code status}, satisfying the bi-implication for
      * {@link AdrStatus#SUPERSEDED}: only that one status carries a non-{@code null}
-     * {@code supersededBy} (set to {@link #OTHER}), every other status carries {@code null} - the
-     * same rule {@link Adr}'s compact constructor enforces.
+     * {@code supersededBy} (set to {@link #OTHER}), every other status carries {@code null}.
      */
     private static Adr withStatus(AdrStatus status) {
         AdrId supersededBy = status == AdrStatus.SUPERSEDED ? OTHER : null;

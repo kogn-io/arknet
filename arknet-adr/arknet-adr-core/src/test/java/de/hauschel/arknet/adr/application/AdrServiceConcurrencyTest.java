@@ -86,14 +86,14 @@ class AdrServiceConcurrencyTest {
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllCodesRepository racing =
-                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(PROJECT, newAdr()));
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(PROJECT, newAdr(), "en"));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
 
-        Adr result = underTest.add(PROJECT, newAdr()).adr();
+        Adr result = underTest.add(PROJECT, newAdr(), "en").adr();
 
         assertEquals(new AdrCode("ADR-2"), result.code());
-        assertEquals(2, store.findAll(PROJECT).size());
-        assertTrue(store.findAll(PROJECT).stream().map(Adr::code).toList()
+        assertEquals(2, store.findAll(PROJECT, null).size());
+        assertTrue(store.findAll(PROJECT, null).stream().map(Adr::code).toList()
                 .containsAll(List.of(new AdrCode("ADR-1"), new AdrCode("ADR-2"))));
     }
 
@@ -112,11 +112,11 @@ class AdrServiceConcurrencyTest {
      */
     @Test
     void aSecondConcurrentSupersedeOnTheSameDecisionFailsCleanlyAfterTheFirstWins() {
-        AdrCode older = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode older = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         otherCaller.accept(PROJECT, older);
-        AdrCode winner = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode winner = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         otherCaller.accept(PROJECT, winner);
-        AdrCode loserSuccessor = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode loserSuccessor = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         otherCaller.accept(PROJECT, loserSuccessor);
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.supersede(PROJECT, winner, older));
@@ -127,7 +127,7 @@ class AdrServiceConcurrencyTest {
 
         assertTrue(thrown.getMessage().contains("ACCEPTED"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains(older.value()), thrown.getMessage());
-        Adr stored = store.findByCode(PROJECT, older).orElseThrow();
+        Adr stored = store.findByCode(PROJECT, older, null).orElseThrow();
         assertEquals(AdrStatus.SUPERSEDED, stored.status());
         assertEquals(winner, store.findSupersedingCodes(PROJECT, stored.id()).stream().findFirst().orElseThrow());
     }
@@ -139,7 +139,7 @@ class AdrServiceConcurrencyTest {
      */
     @Test
     void acceptGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
-        AdrCode code = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         AdrService underTest =
                 new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts);
 
@@ -152,7 +152,7 @@ class AdrServiceConcurrencyTest {
      */
     @Test
     void acceptingAnAlreadyAcceptedAdrWritesNothingEvenUnderPermanentContention() {
-        AdrCode code = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         otherCaller.accept(PROJECT, code);
         AdrService underTest =
                 new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts);
@@ -170,7 +170,7 @@ class AdrServiceConcurrencyTest {
      */
     @Test
     void concurrentUpdateRetriesAgainstTheOtherWritersCommitInsteadOfOverwritingIt() {
-        AdrCode code = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         RaceOnFirstReadRepository racing =
                 new RaceOnFirstReadRepository(store, () -> otherCaller.accept(PROJECT, code));
         AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
@@ -178,11 +178,11 @@ class AdrServiceConcurrencyTest {
         // A reference-only correction, because the text of an accepted decision is immutable - and
         // by the time this write lands, the other caller has already accepted it.
         Adr result = underTest.update(PROJECT, code,
-                AdrCorrection.builder().affectsContextCodes(List.of("BC-1")).build()).adr();
+                AdrCorrection.builder().affectsContextCodes(List.of("BC-1")).build(), "en").adr();
 
         assertEquals(AdrStatus.ACCEPTED, result.status());
         assertEquals(List.of(new BoundedContextRef(BC_1)), result.affectsContexts());
-        Adr stored = store.findByCode(PROJECT, code).orElseThrow();
+        Adr stored = store.findByCode(PROJECT, code, null).orElseThrow();
         assertEquals(AdrStatus.ACCEPTED, stored.status());
         assertEquals(List.of(new BoundedContextRef(BC_1)), stored.affectsContexts());
     }
@@ -196,9 +196,9 @@ class AdrServiceConcurrencyTest {
      */
     @Test
     void supersedeRefusesWhenTheSupersedingDecisionIsDeprecatedInTheWindowBeforeItsOwnWrite() {
-        AdrCode superseding = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode superseding = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         otherCaller.accept(PROJECT, superseding);
-        AdrCode superseded = otherCaller.add(PROJECT, newAdr()).adr().code();
+        AdrCode superseded = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         otherCaller.accept(PROJECT, superseded);
         RaceOnFirstFindByCodeRepository racing = new RaceOnFirstFindByCodeRepository(store,
                 () -> otherCaller.deprecate(PROJECT, superseding));
@@ -209,7 +209,7 @@ class AdrServiceConcurrencyTest {
 
         assertTrue(thrown.getMessage().contains("DEPRECATED"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains(superseding.value()), thrown.getMessage());
-        Adr stored = store.findByCode(PROJECT, superseded).orElseThrow();
+        Adr stored = store.findByCode(PROJECT, superseded, null).orElseThrow();
         assertEquals(AdrStatus.ACCEPTED, stored.status(),
                 "the refused write must leave the decision that would have been superseded untouched");
     }
@@ -218,7 +218,7 @@ class AdrServiceConcurrencyTest {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                null, null, null, null, null, null);
+                null, null, null, "en", null, null, null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -245,18 +245,22 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public void create(ProjectId projectId, Adr adr) {
-            delegate.create(projectId, adr);
+        public void create(ProjectId projectId, Adr adr, String language) {
+            delegate.create(projectId, adr, language);
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated) {
-            delegate.compareAndUpdate(projectId, expectedHead, updated);
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+                String nameLanguage, String contextLanguage, String decisionLanguage,
+                Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
+                String defaultLanguage) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, nameLanguage, contextLanguage,
+                    decisionLanguage, consequenceLanguageByPosition, optionLanguageByPosition, defaultLanguage);
         }
 
         @Override
-        public Optional<Adr> findByCode(ProjectId projectId, AdrCode code) {
-            return delegate.findByCode(projectId, code);
+        public Optional<Adr> findByCode(ProjectId projectId, AdrCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
         }
 
         @Override
@@ -265,8 +269,8 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public List<Adr> findAll(ProjectId projectId) {
-            return delegate.findAll(projectId);
+        public List<Adr> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
         }
 
         @Override
@@ -389,8 +393,8 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public Optional<Adr> findByCode(ProjectId projectId, AdrCode code) {
-            Optional<Adr> result = delegate.findByCode(projectId, code);
+        public Optional<Adr> findByCode(ProjectId projectId, AdrCode code, String displayLocale) {
+            Optional<Adr> result = delegate.findByCode(projectId, code, displayLocale);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -407,9 +411,12 @@ class AdrServiceConcurrencyTest {
         }
 
         @Override
-        public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated) {
+        public void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+                String nameLanguage, String contextLanguage, String decisionLanguage,
+                Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
+                String defaultLanguage) {
             // Still enforce "must exist", same as the real contract - only ever report a conflict.
-            delegate.findByCode(projectId, updated.code())
+            delegate.findByCode(projectId, updated.code(), null)
                     .orElseThrow(() -> new AdrNotFoundException(projectId, updated.code()));
             throw new AdrConcurrentlyModifiedException(projectId, updated.code());
         }

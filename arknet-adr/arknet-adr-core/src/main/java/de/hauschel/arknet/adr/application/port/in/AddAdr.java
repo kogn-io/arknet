@@ -6,6 +6,8 @@ package de.hauschel.arknet.adr.application.port.in;
 import java.time.LocalDate;
 import java.util.List;
 
+import de.hauschel.arknet.adr.domain.NewConsequence;
+import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
@@ -31,11 +33,15 @@ public interface AddAdr {
      * Adds a new architecture decision, initially {@link de.hauschel.arknet.adr.domain.AdrStatus
      * #PROPOSED}.
      *
-     * @param projectId the project (architecture model) to add the decision to
-     * @param command   the data describing the decision to record
+     * @param projectId       the project (architecture model) to add the decision to
+     * @param command         the data describing the decision to record
+     * @param defaultLanguage the target project's configured default language, canonicalized - the
+     *                        fallback {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}
+     *                        uses when {@code command.language()} is {@code null}; a project with
+     *                        neither rejects the call (issue #258)
      * @return the persisted decision including its assigned identity and code
      */
-    AdrDetail add(ProjectId projectId, NewAdr command);
+    AdrDetail add(ProjectId projectId, NewAdr command, String defaultLanguage);
 
     /**
      * Input data for {@link #add(ProjectId, NewAdr)}.
@@ -48,10 +54,19 @@ public interface AddAdr {
      * @param name                      the decision's title
      * @param context                   why the decision was necessary - forces and constraints
      * @param decision                  what was decided
-     * @param consequences              the decision's consequences; optional (may be {@code null})
-     * @param alternatives              the considered but rejected options; optional (may be
-     *                                  {@code null})
+     * @param consequences              the decision's consequences, each its own positioned
+     *                                  {@link NewConsequence} (kogn-io/arknet#357, replacing the
+     *                                  pre-#357 flat string); optional, may be {@code null} or empty
+     * @param consideredOptions         the options considered while making the decision, each its
+     *                                  own positioned {@link NewConsideredOption}; optional, may be
+     *                                  {@code null} or empty. At most one may carry
+     *                                  {@link de.hauschel.arknet.adr.domain.OptionOutcome#CHOSEN}
      * @param decisionDate              the day the decision was made; optional (may be {@code null})
+     * @param language                  the BCP-47 language tag every multilingual text this call
+     *                                  writes ({@code name}, {@code context}, {@code decision}, every
+     *                                  consequence's statement, every option's name/rationale) is
+     *                                  recorded under; {@code null} resolves to the target project's
+     *                                  configured default language, or is rejected if it has none
      * @param addressesRequirementCodes business codes of the requirements this decision addresses,
      *                                  e.g. {@code FR-1}; may be {@code null} or empty
      * @param affectsContextCodes       business codes of the bounded contexts this decision affects,
@@ -66,14 +81,17 @@ public interface AddAdr {
             String name,
             String context,
             String decision,
-            String consequences,
-            String alternatives,
+            List<NewConsequence> consequences,
+            List<NewConsideredOption> consideredOptions,
             LocalDate decisionDate,
+            String language,
             List<String> addressesRequirementCodes,
             List<String> affectsContextCodes,
             List<String> relatedToCodes) {
 
         public NewAdr {
+            consequences = consequences == null ? List.of() : List.copyOf(consequences);
+            consideredOptions = consideredOptions == null ? List.of() : List.copyOf(consideredOptions);
             addressesRequirementCodes =
                     addressesRequirementCodes == null ? List.of() : List.copyOf(addressesRequirementCodes);
             affectsContextCodes = affectsContextCodes == null ? List.of() : List.copyOf(affectsContextCodes);
