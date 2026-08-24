@@ -86,7 +86,22 @@ class ArchitectureVocabularyMatchesOntologyTest {
                 ArkarchVocabulary.ACCEPTED,
                 ArkarchVocabulary.REJECTED,
                 ArkarchVocabulary.DEPRECATED,
-                ArkarchVocabulary.SUPERSEDED), declared,
+                ArkarchVocabulary.SUPERSEDED,
+                ArkarchVocabulary.CONSEQUENCE_TYPE_CLASS,
+                ArkarchVocabulary.CONSEQUENCE,
+                ArkarchVocabulary.CONSEQUENCE_STATEMENT,
+                ArkarchVocabulary.CONSEQUENCE_TYPE_PROPERTY,
+                ArkarchVocabulary.CONSEQUENCE_TYPE,
+                ArkarchVocabulary.POSITIVE,
+                ArkarchVocabulary.NEGATIVE,
+                ArkarchVocabulary.NEUTRAL,
+                ArkarchVocabulary.CONSIDERED_OPTION_TYPE_CLASS,
+                ArkarchVocabulary.CONSIDERED_OPTION,
+                ArkarchVocabulary.OPTION_RATIONALE,
+                ArkarchVocabulary.OPTION_OUTCOME_PROPERTY,
+                ArkarchVocabulary.OPTION_OUTCOME,
+                ArkarchVocabulary.CHOSEN,
+                ArkarchVocabulary.OPTION_REJECTED), declared,
                 "arknet-architecture.ttl and ArkarchVocabulary must describe the same vocabulary");
     }
 
@@ -164,5 +179,46 @@ class ArchitectureVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkarchVocabulary.SUPERSEDED_BY), OWL.INVERSEOF,
                 iri(ArkarchVocabulary.SUPERSEDES)),
                 "arkarch:supersededBy must be owl:inverseOf arkarch:supersedes");
+    }
+
+    /**
+     * Exactly three consequence-type individuals, no more (kogn-io/arknet#357) - the same bracket
+     * {@link #theOntologyDeclaresExactlyTheFiveLifecycleIndividuals} puts around {@code ADRStatus}
+     * and {@code ProjectVocabularyMatchesOntologyTest} puts around its three anchor types. A
+     * dedicated test rather than folding this into that one: {@code arkarch:ConsequenceType} and
+     * {@code arkarch:OptionOutcome} (see below) are two more individual-bearing classes this module
+     * shipped alongside {@code ADRStatus}, each with its own closed set the SHACL {@code sh:in} list
+     * and the Java {@link de.hauschel.arknet.adr.domain.ConsequenceType}/
+     * {@link de.hauschel.arknet.adr.domain.OptionOutcome} enums must not silently drift from - one
+     * combined assertion across three unrelated classes would name the wrong class on failure.
+     */
+    @Test
+    void theOntologyDeclaresExactlyTheThreeConsequenceTypeIndividuals() {
+        Set<String> individuals = ontology.filter(null, RDF.TYPE, iri(ArkarchVocabulary.CONSEQUENCE_TYPE))
+                .subjects().stream()
+                .map(Resource::stringValue)
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of(
+                ArkarchVocabulary.POSITIVE,
+                ArkarchVocabulary.NEGATIVE,
+                ArkarchVocabulary.NEUTRAL), individuals,
+                "arkarch:ConsequenceType must have exactly the three individuals the Consequence "
+                        + "shape's sh:in admits");
+    }
+
+    /** {@link #theOntologyDeclaresExactlyTheThreeConsequenceTypeIndividuals} for {@code OptionOutcome}. */
+    @Test
+    void theOntologyDeclaresExactlyTheTwoOptionOutcomeIndividuals() {
+        Set<String> individuals = ontology.filter(null, RDF.TYPE, iri(ArkarchVocabulary.OPTION_OUTCOME))
+                .subjects().stream()
+                .map(Resource::stringValue)
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of(
+                ArkarchVocabulary.CHOSEN,
+                ArkarchVocabulary.OPTION_REJECTED), individuals,
+                "arkarch:OptionOutcome must have exactly the two individuals the ConsideredOption "
+                        + "shape's sh:in admits");
     }
 }
