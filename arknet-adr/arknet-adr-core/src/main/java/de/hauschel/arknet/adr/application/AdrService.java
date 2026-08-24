@@ -220,6 +220,18 @@ public class AdrService
         for (Adr adr : all) {
             if (adr.supersededBy() != null) {
                 AdrCode supersedingCode = codes.get(adr.supersededBy());
+                if (supersedingCode == null) {
+                    // The successor is not among the decisions findAll materialised - it exists
+                    // (this decision's own supersededBy field names it) but findAll's own read-time
+                    // tolerance skipped it (an unrecognised status, or a store-first status/
+                    // supersededBy disagreement of its own, kogn-io/arknet#357). detailOf pays a
+                    // fresh identity-to-code lookup for exactly this case (via findCodesByIds) rather
+                    // than dropping the edge - falling back to the very same lookup here is what
+                    // keeps adr_list from reporting a different edge than adr_get for the same
+                    // decision (kogn-io/arknet#359).
+                    supersedingCode =
+                            repository.findCodesByIds(projectId, List.of(adr.supersededBy())).get(adr.supersededBy());
+                }
                 if (supersedingCode != null) {
                     addCode(supersededByCodes, adr.code().value(), supersedingCode.value());
                     addCode(supersedesCodes, supersedingCode.value(), adr.code().value());

@@ -503,6 +503,32 @@ class AdrServiceTest {
     }
 
     /**
+     * {@code adr_list} and {@code adr_get} must not disagree about the same edge (kogn-io/arknet#359):
+     * {@code list()} inverts {@code supersededBy} in memory over its one {@code findAll} read, which
+     * silently omits a successor the out-adapter's own read-time tolerance could not materialise
+     * (kogn-io/arknet#357) - {@code detailOf} (backing {@code adr_get}) never has this problem, since
+     * it resolves the very same identity through a dedicated {@code findCodesByIds} call instead.
+     * Mutation test: dropping the fallback lookup in {@code list()} makes this decision's
+     * {@code supersededBy} come back empty instead of naming {@code ADR-9}.
+     */
+    @Test
+    void listFallsBackToACodeLookupWhenTheSuccessorWasSkippedByFindAll() {
+        AdrId phantomSuccessorId = new AdrId(ResourceId.of("https://w3id.org/arknet/id/phantom-successor"));
+        repository.seedUnmaterialisableCode(PROJECT, phantomSuccessorId, new AdrCode("ADR-9"));
+        Adr superseded = new Adr(new AdrId(ResourceId.of("https://w3id.org/arknet/id/superseded-1")),
+                new AdrCode("ADR-1"), "Title", AdrStatus.SUPERSEDED, "Some context here", "Some decision here",
+                null, null, null, List.of(), List.of(), phantomSuccessorId, List.of());
+        repository.create(PROJECT, superseded);
+
+        List<AdrDetail> all = service.list(PROJECT);
+
+        AdrDetail detail = all.stream()
+                .filter(candidate -> candidate.adr().code().equals(new AdrCode("ADR-1")))
+                .findFirst().orElseThrow();
+        assertEquals(List.of(new AdrCode("ADR-9")), detail.supersededBy());
+    }
+
+    /**
      * {@code supersededBy} must sort by parsed running number, not by {@link String}'s natural
      * (lexicographic) order - which would put {@code ADR-10}/{@code ADR-11} before {@code ADR-2}
      * through {@code ADR-9} once a project passes ten decisions.
