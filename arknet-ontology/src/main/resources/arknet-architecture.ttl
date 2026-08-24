@@ -34,6 +34,7 @@
 
 @prefix arkarch: <https://w3id.org/arknet/architecture#> .
 @prefix arkddd:  <https://w3id.org/arknet/ddd#> .
+@prefix arknet:  <https://w3id.org/arknet/core#> .
 @prefix arkreq:  <https://w3id.org/arknet/requirements#> .
 @prefix owl:     <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -50,6 +51,7 @@
 
 <https://w3id.org/arknet/architecture>
     a owl:Ontology ;
+    owl:imports      <https://w3id.org/arknet/core> ;
     owl:imports      <https://w3id.org/arknet/ddd> ;
     owl:imports      <https://w3id.org/arknet/requirements> ;
     dcterms:title    "arknet Architecture Ontology"@en ;
@@ -75,27 +77,110 @@ arkarch:ArchitectureDecisionRecord a owl:Class ;
 
 arkarch:adrContext a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "context"@en ;
-    rdfs:comment "Warum musste diese Entscheidung getroffen werden? Kraefte und Rahmenbedingungen."@de .
+    rdfs:comment "Warum musste diese Entscheidung getroffen werden? Kraefte und Rahmenbedingungen. rdfs:Literal statt xsd:string, mehrsprachig (kogn-io/arknet#357)."@de .
 
 arkarch:adrDecision a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
-    rdfs:range  xsd:string ;
+    rdfs:range  rdfs:Literal ;
     rdfs:label  "decision"@en ;
-    rdfs:comment "Die getroffene Entscheidung."@de .
+    rdfs:comment "Die getroffene Entscheidung. rdfs:Literal statt xsd:string, mehrsprachig (kogn-io/arknet#357)."@de .
 
 arkarch:adrConsequences a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  xsd:string ;
     rdfs:label  "consequences"@en ;
-    rdfs:comment "Positive und negative Folgen der Entscheidung."@de .
+    rdfs:comment "Positive und negative Folgen der Entscheidung, als einzelner Freitext. Die Schreibform vor kogn-io/arknet#357: kein Werkzeug schreibt dieses Praedikat mehr (siehe arkarch:consequence), aber ein Bestands-Record traegt es noch weiterhin lesend/bewahrend."@de .
 
 arkarch:adrAlternatives a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
     rdfs:range  xsd:string ;
     rdfs:label  "considered options"@en , "erwogene Alternativen"@de ;
-    rdfs:comment "Erwogene, aber verworfene Optionen mit kurzer Begruendung (MADR: Considered Options)."@de .
+    rdfs:comment "Erwogene, aber verworfene Optionen mit kurzer Begruendung (MADR: Considered Options), als einzelner Freitext. Die Schreibform vor kogn-io/arknet#357: kein Werkzeug schreibt dieses Praedikat mehr (siehe arkarch:consideredOption), aber ein Bestands-Record traegt es noch weiterhin lesend/bewahrend."@de .
+
+# -- Consequence (kogn-io/arknet#357: own resource, replacing the pre-#357 flat adrConsequences) ---
+
+arkarch:Consequence a owl:Class ;
+    rdfs:label   "Consequence"@en , "Konsequenz"@de ;
+    rdfs:comment "Eine einzelne positive, negative oder neutrale Folge einer Architekturentscheidung, mit technischer Position (analog arkreq:AcceptanceCriterion, issue #266)."@de .
+
+arkarch:consequence a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:Consequence ;
+    rdfs:label  "consequence"@en , "Konsequenz"@de ;
+    rdfs:comment "Verweist auf eine einzelne Konsequenz der Entscheidung. 0..n, optional (best practice, keine Pflicht)."@de .
+
+arkarch:consequenceStatement a owl:DatatypeProperty ;
+    rdfs:domain arkarch:Consequence ;
+    rdfs:range  rdfs:Literal ;
+    rdfs:label  "consequence statement"@en , "Konsequenz-Aussage"@de ;
+    rdfs:comment "Der Text der Konsequenz. Mehrsprachig (sh:uniqueLang), rdfs:Literal statt xsd:string."@de .
+
+arkarch:consequenceType a owl:ObjectProperty ;
+    rdfs:domain arkarch:Consequence ;
+    rdfs:range  arkarch:ConsequenceType ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "consequence type"@en , "Konsequenz-Typ"@de ;
+    rdfs:comment "Ob die Konsequenz positiv, negativ oder neutral ist."@de .
+
+arkarch:ConsequenceType a owl:Class ;
+    rdfs:label   "Consequence Type"@en , "Konsequenz-Typ"@de ;
+    rdfs:comment "Die Art einer Konsequenz: positiv, negativ oder neutral."@de .
+
+arkarch:Positive a owl:NamedIndividual , arkarch:ConsequenceType ;
+    rdfs:label "Positive"@en , "Positiv"@de ;
+    rdfs:comment "Eine vorteilhafte Konsequenz."@de .
+
+arkarch:Negative a owl:NamedIndividual , arkarch:ConsequenceType ;
+    rdfs:label "Negative"@en , "Negativ"@de ;
+    rdfs:comment "Eine nachteilige Konsequenz."@de .
+
+arkarch:Neutral a owl:NamedIndividual , arkarch:ConsequenceType ;
+    rdfs:label "Neutral"@en , "Neutral"@de ;
+    rdfs:comment "Weder eindeutig vorteilhaft noch nachteilig; auch der Typ, den der Lesepfad einer unklassifizierten Bestands-Konsequenz (arkarch:adrConsequences) zuweist."@de .
+
+# -- ConsideredOption (kogn-io/arknet#357: own resource, replacing the pre-#357 flat adrAlternatives)
+
+arkarch:ConsideredOption a owl:Class ;
+    rdfs:label   "Considered Option"@en , "Erwogene Option"@de ;
+    rdfs:comment "Eine einzelne waehrend der Entscheidung erwogene Option -- gewaehlt oder verworfen -- mit technischer Position (analog arkreq:AcceptanceCriterion, issue #266). Macht auch die gewaehlte Option modellierbar (MADR Decision Outcome), nicht nur die verworfenen wie die Vorgaenger-Form arkarch:adrAlternatives."@de .
+
+arkarch:consideredOption a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  arkarch:ConsideredOption ;
+    rdfs:label  "considered option"@en , "Erwogene Option"@de ;
+    rdfs:comment "Verweist auf eine einzelne erwogene Option. 0..n, optional (best practice, keine Pflicht). Hoechstens eine je Entscheidung darf arkarch:optionOutcome arkarch:Chosen tragen."@de .
+
+arkarch:optionRationale a owl:DatatypeProperty ;
+    rdfs:domain arkarch:ConsideredOption ;
+    rdfs:range  rdfs:Literal ;
+    rdfs:label  "option rationale"@en , "Options-Begruendung"@de ;
+    rdfs:comment "Die Begruendung, warum die Option gewaehlt oder verworfen wurde. Mehrsprachig (sh:uniqueLang), rdfs:Literal statt xsd:string."@de .
+
+arkarch:optionOutcome a owl:ObjectProperty ;
+    rdfs:domain arkarch:ConsideredOption ;
+    rdfs:range  arkarch:OptionOutcome ;
+    a owl:FunctionalProperty ;
+    rdfs:label  "option outcome"@en , "Options-Ergebnis"@de ;
+    rdfs:comment "Ob die Option gewaehlt oder verworfen wurde."@de .
+
+arkarch:OptionOutcome a owl:Class ;
+    rdfs:label   "Option Outcome"@en , "Options-Ergebnis"@de ;
+    rdfs:comment "Das Ergebnis einer erwogenen Option: gewaehlt oder verworfen."@de .
+
+arkarch:Chosen a owl:NamedIndividual , arkarch:OptionOutcome ;
+    rdfs:label "Chosen"@en , "Gewaehlt"@de ;
+    rdfs:comment "Die tatsaechlich gewaehlte Option (MADR Decision Outcome). Hoechstens eine je Entscheidung."@de .
+
+# Named arkarch:OptionRejected, not arkarch:Rejected: that IRI already denotes the unrelated
+# ADRStatus individual ("die Entscheidung selbst wurde abgelehnt") -- reusing it here would make one
+# individual play two different roles under two different owl:NamedIndividual classes
+# (kogn-io/arknet#357, deviation from the issue's literal "Chosen/Rejected" wording, noted in the
+# PR description).
+arkarch:OptionRejected a owl:NamedIndividual , arkarch:OptionOutcome ;
+    rdfs:label "Rejected"@en , "Verworfen"@de ;
+    rdfs:comment "Eine erwogene, aber verworfene Option."@de .
 
 arkarch:decisionDate a owl:DatatypeProperty ;
     rdfs:domain arkarch:ArchitectureDecisionRecord ;
