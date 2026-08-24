@@ -27,10 +27,11 @@ import de.hauschel.arknet.kernel.ProjectId;
  * accident is undone here, not by rejecting it.</p>
  *
  * <p><strong>Referential integrity is refused, not repaired.</strong> While another decision points
- * at this one - via {@code arkarch:supersedes} or {@code arkarch:relatedTo} - the delete is rejected
- * with {@link AdrReferencedException} rather than silently orphaning that edge, the same line
- * {@code term_delete}/{@code actor_delete} draw for their own referrers. Both relations point back
- * into this very hexagon, so the rejection can name the decisions concerned by their codes.</p>
+ * at this one - naming it as its own successor via {@code arkarch:supersededBy}, or via
+ * {@code arkarch:relatedTo} - the delete is rejected with {@link AdrReferencedException} rather than
+ * silently orphaning that edge, the same line {@code term_delete}/{@code actor_delete} draw for their
+ * own referrers. Both relations point back into this very hexagon, so the rejection can name the
+ * decisions concerned by their codes.</p>
  *
  * <p><strong>The code is not handed out again.</strong> Deleting {@code ADR-7} does not free the
  * number 7: a code that already appeared in a commit message or a note must not come back naming

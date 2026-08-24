@@ -22,6 +22,7 @@ import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
 import de.hauschel.arknet.adr.application.port.in.GetAdr;
@@ -72,7 +73,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * {@code BoundedContextLookup} out-ports. Every rendering calls each borrowed port at most once,
  * batched across every reference involved; an id a port could not resolve simply falls back to the
  * bare IRI - {@link #format} never throws and never drops a reference. The two self-referential
- * relations, {@code supersedes} and {@code relatedTo}, need no borrowing at all: they point back
+ * relations, {@code supersededBy} and {@code relatedTo}, need no borrowing at all: they point back
  * into this very hexagon, so the application service resolves them and hands the codes over in
  * {@link AdrDetail} - {@code relatedTo} already merged into the one list a symmetric relation
  * deserves rather than split into two directions.</p>
@@ -98,6 +99,7 @@ public final class AdrMcpTools {
 
     private final AddAdr addAdr;
     private final ListAdrs listAdrs;
+    private final CountSkippedAdrs countSkippedAdrs;
     private final GetAdr getAdr;
     private final UpdateAdr updateAdr;
     private final AcceptAdr acceptAdr;
@@ -110,11 +112,13 @@ public final class AdrMcpTools {
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its nine driving in-ports, the two borrowed display ports and the
+     * Creates the adapter with its ten driving in-ports, the two borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
      * @param listAdrs               in-port backing {@code adr_list}
+     * @param countSkippedAdrs       in-port backing the skipped-decision note {@code adr_list} appends
+     *                               to its own output (kogn-io/arknet#359)
      * @param getAdr                 in-port backing {@code adr_get}
      * @param updateAdr              in-port backing {@code adr_update}
      * @param acceptAdr              in-port backing {@code adr_set_status}'s {@code ACCEPTED} target
@@ -132,6 +136,7 @@ public final class AdrMcpTools {
     public AdrMcpTools(
             final AddAdr addAdr,
             final ListAdrs listAdrs,
+            final CountSkippedAdrs countSkippedAdrs,
             final GetAdr getAdr,
             final UpdateAdr updateAdr,
             final AcceptAdr acceptAdr,
@@ -144,6 +149,7 @@ public final class AdrMcpTools {
             final ProjectResolver projects) {
         this.addAdr = Objects.requireNonNull(addAdr, "addAdr");
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
+        this.countSkippedAdrs = Objects.requireNonNull(countSkippedAdrs, "countSkippedAdrs");
         this.getAdr = Objects.requireNonNull(getAdr, "getAdr");
         this.updateAdr = Objects.requireNonNull(updateAdr, "updateAdr");
         this.acceptAdr = Objects.requireNonNull(acceptAdr, "acceptAdr");
@@ -242,15 +248,30 @@ public final class AdrMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final List<AdrDetail> all = listAdrs.list(projectId);
+        // all.size() is the materialised subset this call already holds - handed over so the count
+        // does not re-read the whole decision graph behind adr_list's back (kogn-io/arknet#359).
+        final int skipped = countSkippedAdrs.skippedCount(projectId, all.size());
         if (all.isEmpty()) {
-            return "(no ADRs)";
+            return skipped == 0 ? "(no ADRs)" : skippedNote(skipped) + "\n(no other ADRs)";
         }
         // One batch resolution per borrowed port across every decision, not one per decision.
         final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirementsFor(projectId, all);
         final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContextsFor(projectId, all);
-        return all.stream()
+        final String lines = all.stream()
                 .map(detail -> summaryLine(detail, requirements, contexts))
                 .collect(Collectors.joining("\n"));
+        return skipped == 0 ? lines : lines + "\n" + skippedNote(skipped);
+    }
+
+    /**
+     * The note appended to {@code adr_list} whenever {@link CountSkippedAdrs#skippedCount} is nonzero
+     * (kogn-io/arknet#359) - a store-first (ADR-005) status/{@code supersededBy} anomaly used to be
+     * visible only as a {@code WARN} log line an MCP caller never sees; this puts the same count in
+     * the tool's own output instead.
+     */
+    private static String skippedNote(final int skipped) {
+        return "(" + skipped + (skipped == 1 ? " decision" : " decisions")
+                + " skipped: unresolvable store-first status or supersededBy data - see server logs)";
     }
 
     @McpTool(name = "adr_get", description = "Fetch a single architecture decision by its identity "
@@ -273,14 +294,16 @@ public final class AdrMcpTools {
             + "Every field except the identity is optional - omit (or leave blank) what should stay "
             + "as it is; omitting a field never removes it. The text fields (name, adrContext, "
             + "decision, consequences, alternatives, decisionDate) can only be corrected while the "
-            + "decision is PROPOSED: from ACCEPTED on (and likewise REJECTED/DEPRECATED) a text "
-            + "change is refused, because a decision in force records what was decided at the time - "
-            + "record the correction as a new decision with adr_add and link it with adr_supersede "
-            + "instead. The three reference lists are the exception and stay correctable in EVERY "
+            + "decision is PROPOSED: in every other status a text change is refused, because a "
+            + "decision in force records what was decided at the time - record the correction as a "
+            + "new decision with adr_add, linked with adr_supersede while the corrected decision is "
+            + "ACCEPTED (the only status that edge accepts) and standalone from "
+            + "REJECTED/DEPRECATED/SUPERSEDED. The three reference lists are the exception and stay "
+            + "correctable in EVERY "
             + "status, so an edge to a requirement, bounded context or peer decision that did not "
             + "exist yet when the decision was made can still be completed: passing a list replaces "
             + "that relation wholesale, passing an empty list removes every edge of it, omitting it "
-            + "leaves it untouched. Status and the supersedes relation are not changed here - use "
+            + "leaves it untouched. Status and the supersededBy relation are not changed here - use "
             + "adr_set_status and adr_supersede.")
     public String update(
             final McpSyncRequestContext context,
@@ -361,10 +384,13 @@ public final class AdrMcpTools {
         // three transition ports (AcceptAdr/RejectAdr/DeprecateAdr) takes no target status of its
         // own - the caller-visible dispatch happens only here. AdrStatus.valueOf is parsed
         // defensively rather than let directly: PROPOSED is a real enum value that is simply not a
-        // legal target of this tool (you never transition into it), and SUPERSEDED is a real
-        // ontology value AdrStatus deliberately never implements at all (it stays derived-only from
-        // adr_supersede) - both, and anything unparseable, must reject with this method's own
-        // message, not the JDK's raw "No enum constant ...".
+        // legal target of this tool (you never transition into it) - it, and anything unparseable,
+        // must reject with this method's own message, not the JDK's raw "No enum constant ...".
+        // SUPERSEDED gets its own explicit branch rather than falling into that same default: it is
+        // a real, reachable target (kogn-io/arknet#357), just not one this tool sets - the lifecycle
+        // transition into it belongs to adr_supersede, which sets the status and the supersededBy
+        // edge together in one write, something this tool's bare target-status parameter cannot
+        // express (it names no successor).
         final AdrCode code = new AdrCode(id);
         AdrStatus target;
         try {
@@ -376,6 +402,9 @@ public final class AdrMcpTools {
             case ACCEPTED -> format(projectId, acceptAdr.accept(projectId, code));
             case REJECTED -> format(projectId, rejectAdr.reject(projectId, code));
             case DEPRECATED -> format(projectId, deprecateAdr.deprecate(projectId, code));
+            case SUPERSEDED -> throw new IllegalArgumentException(
+                    "adr_set_status does not set SUPERSEDED directly - it needs a successor decision, "
+                            + "which only adr_supersede can name; use adr_supersede instead");
             case null, default -> throw new IllegalArgumentException(
                     "adr_set_status only supports transitioning an ADR to ACCEPTED, REJECTED or "
                             + "DEPRECATED, not " + status);
@@ -383,9 +412,11 @@ public final class AdrMcpTools {
     }
 
     @McpTool(name = "adr_supersede", description = "Record that one architecture decision replaces an "
-            + "older one. Both must already exist. Only the forward arkarch:supersedes edge is "
-            + "written - the superseded decision reports it as 'superseded by' from a reverse read, "
-            + "not from a second stored triple. Recording the same pair twice is a no-op.")
+            + "older one. Both must already be ACCEPTED. Sets the older decision's status to "
+            + "SUPERSEDED and its supersededBy edge to the newer decision, together in one write - "
+            + "the older decision's own record is what this call returns. Recording the same pair "
+            + "twice is a no-op; naming a different successor for an already-superseded decision is "
+            + "refused.")
     public String supersede(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The superseding (newer) ADR identity, e.g. ADR-2")
@@ -404,13 +435,16 @@ public final class AdrMcpTools {
             + "triple it carries - the whole resource goes away, this is not a field correction. "
             + "Only a PROPOSED decision can be deleted: this tool undoes a record created by mistake "
             + "(a duplicate, a draft that belongs elsewhere). From ACCEPTED on the record stays, "
-            + "because what was decided is exactly what a decision record exists to keep - supersede "
-            + "it with adr_supersede, or mark it obsolete with adr_set_status DEPRECATED. REJECTED "
-            + "cannot be deleted either, and is not a way to get rid of a record: it means the option "
-            + "was considered and turned down, which is itself a decision worth keeping. The delete "
-            + "is refused while another decision still points at this one via supersedes or "
-            + "relatedTo; the refusal names those decisions. The freed code is NOT handed out again - "
-            + "the next adr_add continues above it.")
+            + "because what was decided is exactly what a decision record exists to keep: an "
+            + "ACCEPTED decision is superseded with adr_supersede or marked obsolete with "
+            + "adr_set_status DEPRECATED, while a REJECTED, DEPRECATED or SUPERSEDED one simply "
+            + "stays as it is - neither of those two paths is open there, and the refusal names "
+            + "the one that fits the status. REJECTED in particular is not a way to get rid of a "
+            + "record: it means the option was considered and turned down, which is itself a "
+            + "decision worth keeping. The delete "
+            + "is refused while another decision still points at this one - naming it as its own "
+            + "successor (supersededBy), or via relatedTo; the refusal names those decisions. The "
+            + "freed code is NOT handed out again - the next adr_add continues above it.")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,

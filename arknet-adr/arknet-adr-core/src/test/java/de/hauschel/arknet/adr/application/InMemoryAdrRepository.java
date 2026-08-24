@@ -23,6 +23,7 @@ import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ResourceId;
 
 /**
  * In-memory test double for {@link AdrRepository}.
@@ -57,6 +58,24 @@ class InMemoryAdrRepository implements AdrRepository {
     private final Map<ProjectId, Map<AdrId, Adr>> byProject = new LinkedHashMap<>();
     private final Map<AdrId, String> headByIdentity = new LinkedHashMap<>();
     private final Map<ProjectId, List<AdrCode>> retainedByProject = new LinkedHashMap<>();
+
+    /**
+     * Store-first (pre-#357) {@code arkarch:supersedes} pairs, seeded directly by
+     * {@link #seedLegacySupersession} rather than reachable through any {@link AdrService} in-port -
+     * exactly as a real project's legacy data would be, having been written before this issue existed
+     * rather than through {@code adr_supersede}.
+     */
+    private final Map<ProjectId, List<LegacySupersession>> legacyByProject = new LinkedHashMap<>();
+
+    /**
+     * Identity-to-code pairs seeded by {@link #seedUnmaterialisableCode} - deliberately absent from
+     * {@link #byProject}, so {@link #findAll} never sees them, while {@link #findAllCodes} and
+     * {@link #findCodesByIds} both do. What lets a test simulate the real out-adapter's store-first
+     * (ADR-005) read-time skip without a real store: a decision this hexagon considers alive, whose
+     * code and identity are both assigned, but that cannot be materialised into an {@link Adr} right
+     * now (kogn-io/arknet#359).
+     */
+    private final Map<ProjectId, Map<AdrId, AdrCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Adr adr) {
@@ -129,24 +148,141 @@ class InMemoryAdrRepository implements AdrRepository {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
     }
 
+    /**
+     * Every stored decision's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
+     * latter simulating what the real out-adapter's own store-first (ADR-005) read-time skip would
+     * otherwise hide from {@link #findAll} alone (kogn-io/arknet#359).
+     */
+    @Override
+    public List<AdrCode> findAllCodes(ProjectId projectId) {
+        List<AdrCode> codes = new ArrayList<>(
+                byProject.getOrDefault(projectId, Map.of()).values().stream().map(Adr::code).toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, Map.of()).values());
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will, under a fresh,
+     * otherwise-unused identity - simulating a decision the real out-adapter's read-time tolerance
+     * skips (an unrecognised status, or a store-first status/{@code supersededBy} disagreement,
+     * kogn-io/arknet#357) without needing a real store to reproduce that skip in (kogn-io/arknet#359).
+     * Use {@link #seedUnmaterialisableCode(ProjectId, AdrId, AdrCode)} instead when a test needs to
+     * name that identity too (e.g. as another decision's {@code supersededBy} target).
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, AdrCode code) {
+        seedUnmaterialisableCode(projectId,
+                new AdrId(ResourceId.of("https://w3id.org/arknet/id/" + UUID.randomUUID())), code);
+    }
+
+    /**
+     * Seeds a code (and the identity behind it) that {@link #findAllCodes} and
+     * {@link #findCodesByIds} both report but {@link #findAll} never will - see
+     * {@link #seedUnmaterialisableCode(ProjectId, AdrCode)} for why.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, AdrId id, AdrCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new LinkedHashMap<>()).put(id, code);
+    }
+
     @Override
     public Map<AdrId, AdrCode> findCodesByIds(ProjectId projectId, Collection<AdrId> ids) {
         Map<AdrId, AdrCode> codes = new LinkedHashMap<>();
         byProject.getOrDefault(projectId, Map.of()).values().stream()
                 .filter(adr -> ids.contains(adr.id()))
                 .forEach(adr -> codes.put(adr.id(), adr.code()));
+        // Mirrors the real out-adapter: findCodesByIds resolves identity to code straight off the
+        // mandatory identifier/type pair, which nothing this fake simulates as "unmaterialisable"
+        // ever lacks - so an id seeded via seedUnmaterialisableCode still resolves here, exactly the
+        // fallback AdrService#list depends on (kogn-io/arknet#359).
+        unmaterialisableByProject.getOrDefault(projectId, Map.of()).forEach((id, code) -> {
+            if (ids.contains(id)) {
+                codes.putIfAbsent(id, code);
+            }
+        });
         return Map.copyOf(codes);
     }
 
+    /**
+     * Two sources, unioned, mirroring {@code KognioRdfAdrRepository}: {@code supersededId}'s own
+     * current-model {@link Adr#supersededBy()} field, and every legacy pair whose
+     * {@link LegacySupersession#supersededCode()} names it.
+     */
     @Override
     public List<AdrCode> findSupersedingCodes(ProjectId projectId, AdrId supersededId) {
-        return byProject.getOrDefault(projectId, Map.of()).values().stream()
-                .filter(adr -> adr.supersedes().contains(supersededId))
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> supersededId.equals(adr.id()) && adr.supersededBy() != null)
+                .map(adr -> codeOf(projectId, adr.supersededBy()))
+                .filter(Objects::nonNull)
+                .forEach(codes::add);
+        String supersededCode = codeOf(projectId, supersededId);
+        legacyByProject.getOrDefault(projectId, List.of()).stream()
+                .filter(pair -> pair.supersededCode().value().equals(supersededCode))
+                .forEach(pair -> codes.add(pair.supersedingCode().value()));
+        return codes.stream().map(AdrCode::new).toList();
+    }
+
+    /**
+     * The mirror of {@link #findSupersedingCodes}: a reverse read of every decision naming
+     * {@code supersedingId} in its own current-model {@link Adr#supersededBy()} field, unioned with
+     * every legacy pair whose {@link LegacySupersession#supersedingCode()} names it.
+     */
+    @Override
+    public List<AdrCode> findSupersededCodes(ProjectId projectId, AdrId supersedingId) {
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> supersedingId.equals(adr.supersededBy()))
                 .map(adr -> adr.code().value())
-                .collect(java.util.stream.Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
-                .stream()
-                .map(AdrCode::new)
-                .toList();
+                .forEach(codes::add);
+        String supersedingCode = codeOf(projectId, supersedingId);
+        legacyByProject.getOrDefault(projectId, List.of()).stream()
+                .filter(pair -> pair.supersedingCode().value().equals(supersedingCode))
+                .forEach(pair -> codes.add(pair.supersededCode().value()));
+        return codes.stream().map(AdrCode::new).toList();
+    }
+
+    /**
+     * The two external reverse edges only (mirrors {@code KognioRdfAdrRepository}), both with
+     * {@code target} as the <em>object</em> of the edge - deliberately not a delegation to
+     * {@link #findSupersededCodes}, whose legacy branch runs the opposite direction (it treats its
+     * argument as the superseding decision, this method treats {@code target} as what is
+     * referenced): a current-model decision naming {@code target} as its own successor, or a legacy
+     * pair naming {@code target} as what it (legacy-)supersedes.
+     */
+    @Override
+    public List<AdrCode> findSupersessionReferrers(ProjectId projectId, AdrId target) {
+        TreeSet<String> codes = new TreeSet<>(CODE_BY_RUNNING_NUMBER);
+        byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .filter(adr -> target.equals(adr.supersededBy()))
+                .map(adr -> adr.code().value())
+                .forEach(codes::add);
+        String targetCode = codeOf(projectId, target);
+        legacyByProject.getOrDefault(projectId, List.of()).stream()
+                .filter(pair -> pair.supersededCode().value().equals(targetCode))
+                .forEach(pair -> codes.add(pair.supersedingCode().value()));
+        return codes.stream().map(AdrCode::new).toList();
+    }
+
+    @Override
+    public List<LegacySupersession> findLegacySupersedesEdges(ProjectId projectId) {
+        return List.copyOf(legacyByProject.getOrDefault(projectId, List.of()));
+    }
+
+    /**
+     * Seeds a store-first (pre-#357) {@code arkarch:supersedes} pair - what
+     * {@code KognioRdfAdrRepository#findLegacySupersedesEdges} would read back from a project that
+     * still carries decisions superseded before this issue. Both codes are business labels only; the
+     * decisions they name need not even exist in this fake, mirroring the real read path's tolerance
+     * of a dangling legacy edge.
+     */
+    void seedLegacySupersession(ProjectId projectId, AdrCode supersedingCode, AdrCode supersededCode) {
+        legacyByProject.computeIfAbsent(projectId, key -> new ArrayList<>())
+                .add(new LegacySupersession(supersedingCode, supersededCode));
+    }
+
+    /** Looks {@code id} up directly (this fake keys its inner map by identity) and returns its code. */
+    private String codeOf(ProjectId projectId, AdrId id) {
+        Adr adr = byProject.getOrDefault(projectId, Map.of()).get(id);
+        return adr == null ? null : adr.code().value();
     }
 
     @Override

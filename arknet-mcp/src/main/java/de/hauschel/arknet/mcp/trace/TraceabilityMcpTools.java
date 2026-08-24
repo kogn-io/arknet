@@ -108,8 +108,9 @@ public final class TraceabilityMcpTools {
             description = "What is transitively affected if the given resource changes: follows"
                     + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises, oslc_rm:constrainedBy,"
                     + " arkddd:ubiquitousLanguageTerm/upstream/downstream and"
-                    + " arkarch:addressesRequirement/affectsContext/supersedes backwards (who"
-                    + " references this) to every reachable requirement, term, use case, constraint,"
+                    + " arkarch:addressesRequirement/affectsContext backwards (who references this)"
+                    + " and arkarch:supersededBy forwards (from a superseded decision to its"
+                    + " successor) to every reachable requirement, term, use case, constraint,"
                     + " bounded context, context relationship or architecture decision. The id is a CURIE"
                     + " (e.g. req:FR-1) or a full IRI; as a convenience a bare business id (e.g. FR-1) is"
                     + " resolved via dcterms:identifier.",

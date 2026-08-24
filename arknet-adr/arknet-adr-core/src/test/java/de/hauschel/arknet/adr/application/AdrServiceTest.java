@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
+import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
@@ -74,7 +75,7 @@ class AdrServiceTest {
         assertEquals(new AdrCode("ADR-1"), added.adr().code());
         assertEquals(AdrStatus.PROPOSED, added.adr().status());
         assertEquals("Use an embedded triple store", added.adr().name());
-        assertEquals(List.of(), added.adr().supersedes());
+        assertNull(added.adr().supersededBy());
         assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code()).orElseThrow());
     }
 
@@ -149,6 +150,60 @@ class AdrServiceTest {
         assertEquals(new AdrCode("ADR-1"), inOther.adr().code());
         assertEquals(1, service.list(PROJECT).size());
         assertEquals(1, service.list(other).size());
+    }
+
+    /**
+     * Mutation-tests {@code nextCode}'s reliance on {@link AdrRepository#findAllCodes} rather than
+     * {@link AdrRepository#findAll} (kogn-io/arknet#359): revert {@code nextCode} back to deriving
+     * its maximum from {@code findAll} and this goes red - the seeded {@code ADR-2} holds the
+     * project's highest number but is invisible to {@code findAll}, exactly as a real store-first
+     * status/{@code supersededBy} disagreement would make it, so {@code add} would recompute
+     * {@code ADR-2} again instead of {@code ADR-3} and collide with a code that is still very much
+     * assigned.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(PROJECT, newAdr());
+        repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
+
+        AdrDetail third = service.add(PROJECT, newAdr());
+
+        assertEquals(new AdrCode("ADR-3"), third.adr().code());
+    }
+
+    @Test
+    void skippedCountIsZeroWhenNothingWasSkipped() {
+        service.add(PROJECT, newAdr());
+
+        assertEquals(0, service.skippedCount(PROJECT, service.list(PROJECT).size()));
+    }
+
+    @Test
+    void skippedCountReportsEveryCodeFindAllCouldNotMaterialise() {
+        service.add(PROJECT, newAdr());
+        repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
+        repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-3"));
+
+        assertEquals(2, service.skippedCount(PROJECT, service.list(PROJECT).size()));
+        assertEquals(0, service.skippedCount(new ProjectId("other"), 0));
+    }
+
+    /**
+     * The caller's count and this read are two unsynchronised observations: a decision recorded in
+     * between makes the code list the longer one, and a negative "skipped" would be a worse signal
+     * than a merely stale zero.
+     */
+    @Test
+    void skippedCountClampsAtZeroWhenTheCallerSawMoreThanTheCodeListHolds() {
+        service.add(PROJECT, newAdr());
+
+        assertEquals(0, service.skippedCount(PROJECT, 5));
+    }
+
+    /** A negative count is a bug in the caller, not a store anomaly to be silently clamped away. */
+    @Test
+    void skippedCountRefusesANegativeMaterialisedCount() {
+        assertThrows(IllegalArgumentException.class, () -> service.skippedCount(PROJECT, -1));
     }
 
     @Test
@@ -265,67 +320,163 @@ class AdrServiceTest {
         assertEquals(new AdrCode("ADR-42"), ex.adrCode());
     }
 
+    /**
+     * The write lands on the superseded decision (kogn-io/arknet#357): its status becomes
+     * SUPERSEDED and its supersededBy edge names the successor, in one write - the superseding
+     * decision's own record is left untouched by this call.
+     */
     @Test
-    void supersedeRecordsTheForwardEdgeAndReportsBothDirections() {
-        AdrCode older = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode newer = service.add(PROJECT, newAdr()).adr().code();
+    void supersedeWritesTheSupersededDecisionsStatusAndEdge() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
 
-        AdrDetail superseding = service.supersede(PROJECT, newer, older);
+        AdrDetail superseded = service.supersede(PROJECT, newer, older);
 
+        assertEquals(older, superseded.adr().code());
+        assertEquals(AdrStatus.SUPERSEDED, superseded.adr().status());
+        assertEquals(List.of(newer), superseded.supersededBy());
+        assertEquals(List.of(), superseded.supersedes());
+        AdrDetail superseding = service.get(PROJECT, newer).orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, superseding.adr().status());
         assertEquals(List.of(older), superseding.supersedes());
         assertEquals(List.of(), superseding.supersededBy());
-        AdrDetail superseded = service.get(PROJECT, older).orElseThrow();
-        assertEquals(List.of(), superseded.supersedes());
-        assertEquals(List.of(newer), superseded.supersededBy());
     }
 
     /**
-     * The backward direction is derived, never stored: nothing writes an
-     * {@code arkarch:supersededBy} triple, so the superseded decision's own aggregate must stay
-     * untouched by the operation.
+     * The superseding decision's own aggregate is read (to check its status) but never written by
+     * this call - only the superseded decision's compare-and-set path is exercised.
      */
     @Test
-    void supersedeLeavesTheSupersededAdrsOwnStateUntouched() {
-        AdrCode older = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode newer = service.add(PROJECT, newAdr()).adr().code();
-        Adr before = repository.findByCode(PROJECT, older).orElseThrow();
+    void supersedeLeavesTheSupersedingAdrsOwnStateUntouched() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        Adr before = repository.findByCode(PROJECT, newer).orElseThrow();
 
         service.supersede(PROJECT, newer, older);
 
-        assertEquals(before, repository.findByCode(PROJECT, older).orElseThrow());
+        assertEquals(before, repository.findByCode(PROJECT, newer).orElseThrow());
     }
 
     @Test
     void supersedeIsIdempotent() {
-        AdrCode older = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode newer = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
         service.supersede(PROJECT, newer, older);
 
         AdrDetail again = service.supersede(PROJECT, newer, older);
 
-        assertEquals(List.of(older), again.supersedes());
+        assertEquals(AdrStatus.SUPERSEDED, again.adr().status());
+        assertEquals(List.of(newer), again.supersededBy());
     }
 
+    /**
+     * Idempotency must not depend on the superseding decision's current status (kogn-io/arknet#359):
+     * recording the very same pair a second time is a no-op {@link AdrService#supersede} takes before
+     * it ever re-reads and re-checks the superseding decision - so it stays a no-op even once that
+     * decision has since moved on (here to DEPRECATED, reached the only way it legitimately can once
+     * it has already superseded something). Mutation test: checking the superseding decision's status
+     * before the idempotency short-circuit, instead of after, would turn this promised no-op into a
+     * spurious {@link IllegalStateException}.
+     */
+    @Test
+    void supersedeStaysIdempotentAfterTheSupersedingDecisionIsLaterDeprecated() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        service.supersede(PROJECT, newer, older);
+        service.deprecate(PROJECT, newer);
+
+        AdrDetail again = service.supersede(PROJECT, newer, older);
+
+        assertEquals(AdrStatus.SUPERSEDED, again.adr().status());
+        assertEquals(List.of(newer), again.supersededBy());
+        assertEquals(AdrStatus.DEPRECATED, service.get(PROJECT, newer).orElseThrow().adr().status());
+    }
+
+    /** One successor may supersede several older decisions, each individually. */
     @Test
     void supersedeAccumulatesSeveralOlderDecisions() {
-        AdrCode first = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode second = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode newest = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode first = acceptedAdr();
+        AdrCode second = acceptedAdr();
+        AdrCode newest = acceptedAdr();
 
         service.supersede(PROJECT, newest, first);
-        AdrDetail superseding = service.supersede(PROJECT, newest, second);
+        service.supersede(PROJECT, newest, second);
 
-        assertEquals(List.of(first, second), superseding.supersedes());
+        assertEquals(List.of(first, second), service.get(PROJECT, newest).orElseThrow().supersedes());
     }
 
     @Test
     void supersedeRejectsAnUnknownSupersededCodeAndWritesNothing() {
-        AdrCode newer = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode newer = acceptedAdr();
 
         assertThrows(AdrNotFoundException.class,
                 () -> service.supersede(PROJECT, newer, new AdrCode("ADR-99")));
 
         assertEquals(List.of(), service.get(PROJECT, newer).orElseThrow().supersedes());
+    }
+
+    @Test
+    void supersedeRejectsAnUnknownSupersedingCodeAndWritesNothing() {
+        AdrCode older = acceptedAdr();
+
+        assertThrows(AdrNotFoundException.class,
+                () -> service.supersede(PROJECT, new AdrCode("ADR-99"), older));
+
+        assertEquals(AdrStatus.ACCEPTED, service.get(PROJECT, older).orElseThrow().adr().status());
+    }
+
+    /**
+     * Only an ACCEPTED decision may supersede another - mutation test: removing this check would
+     * let a PROPOSED (or REJECTED/DEPRECATED/SUPERSEDED) decision supersede an older one before it
+     * was itself ever accepted.
+     */
+    @Test
+    void supersedeRejectsWhenTheSupersedingDecisionIsNotAccepted() {
+        AdrCode older = acceptedAdr();
+        AdrCode proposedNewer = service.add(PROJECT, newAdr()).adr().code();
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> service.supersede(PROJECT, proposedNewer, older));
+
+        assertTrue(thrown.getMessage().contains(proposedNewer.value()), thrown.getMessage());
+        assertEquals(AdrStatus.ACCEPTED, service.get(PROJECT, older).orElseThrow().adr().status());
+    }
+
+    /**
+     * Only an ACCEPTED decision may be superseded - mutation test: removing this check (which lives
+     * on {@code Adr#supersededBy}, exercised here through the service) would let a PROPOSED decision
+     * be marked SUPERSEDED without ever having been ACCEPTED.
+     */
+    @Test
+    void supersedeRejectsWhenTheSupersededDecisionIsNotAccepted() {
+        AdrCode newer = acceptedAdr();
+        AdrCode proposedOlder = service.add(PROJECT, newAdr()).adr().code();
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> service.supersede(PROJECT, newer, proposedOlder));
+
+        assertTrue(thrown.getMessage().contains(proposedOlder.value()), thrown.getMessage());
+        assertEquals(AdrStatus.PROPOSED, service.get(PROJECT, proposedOlder).orElseThrow().adr().status());
+    }
+
+    /** A decision already superseded by one successor cannot be superseded again by a different one. */
+    @Test
+    void supersedeRejectsANewSuccessorForAnAlreadySupersededDecision() {
+        AdrCode older = acceptedAdr();
+        AdrCode firstSuccessor = acceptedAdr();
+        AdrCode secondSuccessor = acceptedAdr();
+        service.supersede(PROJECT, firstSuccessor, older);
+
+        assertThrows(IllegalStateException.class, () -> service.supersede(PROJECT, secondSuccessor, older));
+
+        assertEquals(List.of(firstSuccessor), service.get(PROJECT, older).orElseThrow().supersededBy());
+    }
+
+    /** Adds a decision and accepts it in one step - the precondition every supersede test needs. */
+    private AdrCode acceptedAdr() {
+        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        service.accept(PROJECT, code);
+        return code;
     }
 
     @Test
@@ -337,32 +488,28 @@ class AdrServiceTest {
 
     /**
      * Regression guard for the replace-by-identity write path: the out-adapter persists a decision by
-     * wiping and re-writing its triples, so an accept after a supersede - and vice versa - must carry
-     * the earlier change along rather than silently dropping it.
+     * wiping and re-writing its triples, so correcting the superseded decision's references
+     * afterwards - allowed in every status - must carry its SUPERSEDED status and supersededBy edge
+     * along rather than silently dropping either.
      */
     @Test
-    void acceptPreservesTheSupersedesEdgeAndTheCrossContextReferences() {
-        AdrCode older = service.add(PROJECT, newAdr()).adr().code();
-        AdrDetail newer = service.add(PROJECT, new NewAdr("Newer", "Context of the newer decision",
-                "Decision of the newer one", "Some consequences", "Some options",
-                LocalDate.of(2026, 7, 31), List.of("FR-1"), List.of("BC-1"), null));
-        service.supersede(PROJECT, newer.adr().code(), older);
+    void updatePreservesTheSupersededByEdgeAndStatusOfASupersededDecision() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        service.supersede(PROJECT, newer, older);
 
-        AdrDetail accepted = service.accept(PROJECT, newer.adr().code());
+        Adr updated = service.update(PROJECT, older,
+                AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
 
-        assertEquals(AdrStatus.ACCEPTED, accepted.adr().status());
-        assertEquals(List.of(older), accepted.supersedes());
-        assertEquals(List.of(new RequirementRef(FR_1)), accepted.adr().addressesRequirements());
-        assertEquals(List.of(new BoundedContextRef(BC_1)), accepted.adr().affectsContexts());
-        assertEquals("Some consequences", accepted.adr().consequences());
-        assertEquals(LocalDate.of(2026, 7, 31), accepted.adr().decisionDate());
+        assertEquals(AdrStatus.SUPERSEDED, updated.status());
+        assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
     }
 
     /** {@code adr_list} derives both supersedes directions from its single full read. */
     @Test
     void listReportsBothSupersedesDirectionsWithoutAnyExtraRead() {
-        AdrCode older = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode newer = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
         service.supersede(PROJECT, newer, older);
 
         List<AdrDetail> all = service.list(PROJECT);
@@ -374,16 +521,51 @@ class AdrServiceTest {
     }
 
     /**
+     * {@code adr_list} and {@code adr_get} must not disagree about the same edge (kogn-io/arknet#359):
+     * {@code list()} inverts {@code supersededBy} in memory over its one {@code findAll} read, which
+     * silently omits a successor the out-adapter's own read-time tolerance could not materialise
+     * (kogn-io/arknet#357) - {@code detailOf} (backing {@code adr_get}) never has this problem, since
+     * it resolves the very same identity through a dedicated {@code findCodesByIds} call instead.
+     * Mutation test: dropping the fallback lookup in {@code list()} makes this decision's
+     * {@code supersededBy} come back empty instead of naming {@code ADR-9}.
+     */
+    @Test
+    void listFallsBackToACodeLookupWhenTheSuccessorWasSkippedByFindAll() {
+        AdrId phantomSuccessorId = new AdrId(ResourceId.of("https://w3id.org/arknet/id/phantom-successor"));
+        repository.seedUnmaterialisableCode(PROJECT, phantomSuccessorId, new AdrCode("ADR-9"));
+        Adr superseded = new Adr(new AdrId(ResourceId.of("https://w3id.org/arknet/id/superseded-1")),
+                new AdrCode("ADR-1"), "Title", AdrStatus.SUPERSEDED, "Some context here", "Some decision here",
+                null, null, null, List.of(), List.of(), phantomSuccessorId, List.of());
+        repository.create(PROJECT, superseded);
+
+        List<AdrDetail> all = service.list(PROJECT);
+
+        AdrDetail detail = all.stream()
+                .filter(candidate -> candidate.adr().code().equals(new AdrCode("ADR-1")))
+                .findFirst().orElseThrow();
+        assertEquals(List.of(new AdrCode("ADR-9")), detail.supersededBy());
+    }
+
+    /**
      * {@code supersededBy} must sort by parsed running number, not by {@link String}'s natural
      * (lexicographic) order - which would put {@code ADR-10}/{@code ADR-11} before {@code ADR-2}
      * through {@code ADR-9} once a project passes ten decisions.
+     */
+    /**
+     * Since kogn-io/arknet#357 a live decision has at most one successor ({@code supersededBy}
+     * carries {@code sh:maxCount 1}), so more than one entry in {@code supersededBy} can only come
+     * from the pre-#357 legacy shape - several decisions each still asserting their own
+     * {@code arkarch:supersedes} at {@code target} (a state a store-first write, not
+     * {@code adr_supersede}, could have left behind). {@link AdrRepository#findLegacySupersedesEdges}
+     * is what folds those in; this test seeds ten such pairs directly, bypassing the service exactly
+     * as store-first data would have arrived.
      */
     @Test
     void listSortsSupersededByRunningNumberNotLexicographically() {
         AdrCode target = service.add(PROJECT, newAdr()).adr().code();
         for (int i = 0; i < 10; i++) {
             AdrCode superseding = service.add(PROJECT, newAdr()).adr().code();
-            service.supersede(PROJECT, superseding, target);
+            repository.seedLegacySupersession(PROJECT, superseding, target);
         }
 
         AdrDetail targetDetail = service.list(PROJECT).stream()
@@ -564,7 +746,7 @@ class AdrServiceTest {
         AdrCode target = service.add(PROJECT, newAdr()).adr().code();
         for (int i = 0; i < 10; i++) {
             AdrCode superseding = service.add(PROJECT, newAdr()).adr().code();
-            service.supersede(PROJECT, superseding, target);
+            repository.seedLegacySupersession(PROJECT, superseding, target);
         }
 
         AdrDetail targetDetail = service.get(PROJECT, target).orElseThrow();
@@ -587,22 +769,12 @@ class AdrServiceTest {
      */
     @Test
     void listKeepsBothSupersededByEntriesWhenTheirRunningNumbersCollide() {
-        AdrId targetId = new AdrId(resourceIdFactory.newId());
-        Adr target = new Adr(targetId, new AdrCode("ADR-1"), "Target", AdrStatus.ACCEPTED,
-                "Some context here", "Some decision here", null, null, null, List.of(), List.of(), List.of(),
-                List.of());
-        repository.create(PROJECT, target);
-        Adr supersedingA = new Adr(new AdrId(resourceIdFactory.newId()), new AdrCode("ADR-1x"), "A",
-                AdrStatus.PROPOSED, "Context of A here", "Decision A", null, null, null, List.of(), List.of(),
-                List.of(targetId), List.of());
-        repository.create(PROJECT, supersedingA);
-        Adr supersedingB = new Adr(new AdrId(resourceIdFactory.newId()), new AdrCode("ADR-2y"), "B",
-                AdrStatus.PROPOSED, "Context of B here", "Decision B", null, null, null, List.of(), List.of(),
-                List.of(targetId), List.of());
-        repository.create(PROJECT, supersedingB);
+        AdrCode target = service.add(PROJECT, newAdr()).adr().code();
+        repository.seedLegacySupersession(PROJECT, new AdrCode("ADR-1x"), target);
+        repository.seedLegacySupersession(PROJECT, new AdrCode("ADR-2y"), target);
 
         AdrDetail targetDetail = service.list(PROJECT).stream()
-                .filter(d -> d.adr().code().equals(target.code())).findFirst().orElseThrow();
+                .filter(d -> d.adr().code().equals(target)).findFirst().orElseThrow();
 
         assertEquals(List.of(new AdrCode("ADR-1x"), new AdrCode("ADR-2y")), targetDetail.supersededBy());
     }
@@ -811,21 +983,36 @@ class AdrServiceTest {
     }
 
     /**
-     * A superseded decision may well still be PROPOSED - {@code adr_supersede} does not touch its
-     * status - so the incoming edge is what has to stop the delete, and the refusal has to name the
-     * decision holding it.
+     * Since kogn-io/arknet#357 a decision reachable through {@code adr_supersede} is never PROPOSED
+     * any more when this check runs - the superseding decision must already be ACCEPTED, and the
+     * superseded one becomes SUPERSEDED in the very same write - so the status check in
+     * {@link AdrService#delete} refuses it first. What is left reachable for a PROPOSED decision is
+     * store-first (ADR-005) data: a legacy {@code arkarch:supersedes} edge naming it, written before
+     * this issue rather than through the service. This test seeds exactly that, bypassing the
+     * service the same way store-first data would have arrived.
+     *
+     * <p><strong>Known imprecision, accepted rather than hidden (kogn-io/arknet#359).</strong>
+     * {@link AdrService#rejectIfReferenced} labels every referrer {@code supersededBy}, the only
+     * shape any write path still produces -
+     * {@code de.hauschel.arknet.adr.application.port.out.AdrRepository#findSupersessionReferrers}
+     * unions the current-model edge with this legacy one into a single list this didactic pre-check
+     * cannot split without a dedicated port method. The rejection therefore names this test's legacy
+     * referrer with the same {@code supersededBy} label a current-model one would get - wrong for
+     * this one rare, store-first-only case, but the race-free backstop
+     * ({@code AdrRepository#delete}) reads the two predicates separately and gets it right, which is
+     * what actually stops the delete.</p>
      */
     @Test
-    void deleteRefusesADecisionAnotherOneSupersedes() {
+    void deleteRefusesAProposedDecisionALegacySupersedesEdgeStillNames() {
         AdrCode superseded = service.add(PROJECT, newAdr()).adr().code();
         AdrCode successor = service.add(PROJECT, newAdr()).adr().code();
-        service.supersede(PROJECT, successor, superseded);
+        repository.seedLegacySupersession(PROJECT, successor, superseded);
 
         AdrReferencedException thrown =
                 assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, superseded));
 
         assertEquals(List.of(new AdrReferencedException.Reference(successor,
-                AdrReferencedException.SUPERSEDES)), thrown.references());
+                AdrReferencedException.SUPERSEDED_BY)), thrown.references());
         assertTrue(thrown.getMessage().contains(successor.value()), thrown.getMessage());
         assertTrue(service.get(PROJECT, superseded).isPresent(), "a refused delete must leave the decision");
     }

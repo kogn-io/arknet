@@ -160,7 +160,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code adr_get}/{@code adr_list}'s reverse direction (identity back to a displayable code)
  *       is the requirements hexagon's own {@link ResolveRequirements} and the bounded-context
  *       hexagon's own {@link ResolveBoundedContexts} in-port, wired straight into
- *       {@link AdrMcpTools} (ADR-008). Its other two relations, {@code supersedes} and
+ *       {@link AdrMcpTools} (ADR-008). Its other two relations, {@code supersededBy} and
  *       {@code relatedTo}, are self-referential and therefore resolved inside {@link AdrService} -
  *       no port is borrowed for either.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
@@ -644,7 +644,7 @@ public class ArknetMcpConfiguration {
      * {@code adr_list} can render an addressed requirement's or an affected context's business code
      * instead of a bare IRI (ADR-008). This wires an In-Adapter to two <em>different</em> hexagons'
      * In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem anderen BC"
-     * precision in CLAUDE.md. The third relation, {@code supersedes}, points back into the ADR
+     * precision in CLAUDE.md. The third relation, {@code supersededBy}, points back into the ADR
      * hexagon itself and is resolved by {@link AdrService}, so it needs no borrowed port at all.
      */
     @Bean
@@ -652,7 +652,7 @@ public class ArknetMcpConfiguration {
             final AdrService service, final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
         return new AdrMcpTools(service, service, service, service, service, service, service, service,
-                service, resolveRequirements, resolveBoundedContexts, projectResolver);
+                service, service, resolveRequirements, resolveBoundedContexts, projectResolver);
     }
 
     // --- Actor hexagon -----------------------------------------------------------

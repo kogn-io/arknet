@@ -37,7 +37,8 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * -&gt; BoundedContext, issue #293), {@code oslc_rm:constrainedBy} (Requirement/UseCase -&gt;
  * Constraint, issue #223/#329), the three ADR edges
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
- * (ADR -&gt; BoundedContext) and {@code arkarch:supersedes} (ADR -&gt; ADR, issue #69), and the
+ * (ADR -&gt; BoundedContext) and {@code arkarch:supersededBy} (ADR -&gt; ADR, written on the
+ * superseded decision, issue #69/kogn-io/arknet#357), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context
  * prose ({@code dcterms:description}/{@code arkreq:acceptanceCriterion}, {@link
@@ -119,6 +120,22 @@ public final class TraceabilityGraph {
     // ADR out-adapter serializes them with, and a rename cannot silently desync the two sides.
     private static final String ADDRESSES_REQUIREMENT = ArkarchVocabulary.ADDRESSES_REQUIREMENT;
     private static final String AFFECTS_CONTEXT = ArkarchVocabulary.AFFECTS_CONTEXT;
+
+    /**
+     * {@code arkarch:supersededBy} - ADR -&gt; ADR, written on the <em>superseded</em> decision
+     * (kogn-io/arknet#357 moved the written edge here, off the superseding decision's old
+     * forward-only {@code arkarch:supersedes}). {@link #dependents(String)} therefore follows this
+     * one <em>forwards</em>, unlike every other predicate in {@link #DEPENDENT_EDGE_PREDICATES} -
+     * see {@link #FORWARD_DEPENDENT_EDGE_PREDICATES}.
+     */
+    private static final String SUPERSEDED_BY = ArkarchVocabulary.SUPERSEDED_BY;
+
+    /**
+     * {@code arkarch:supersedes} - the pre-#357 write shape: no tool asserts it any more, but a
+     * store-first record may still carry it, and {@link #dependents(String)} keeps following it
+     * backwards (in {@link #DEPENDENT_EDGE_PREDICATES}) so such a record's successor stays reachable
+     * the same way it always was.
+     */
     private static final String SUPERSEDES = ArkarchVocabulary.SUPERSEDES;
 
     // arkddd:BoundedContext below is, unlike arkreq:acceptanceCriterion/arkddd:domainVision above,
@@ -159,20 +176,24 @@ public final class TraceabilityGraph {
      * {@code arkreq:Step} back to its owning use case - a step itself is never reported (see
      * {@link #dependents(String)}).
      *
-     * <p>The three {@code arkarch:} edges are here because an architecture decision is exactly the
+     * <p>The three {@code arkarch:} edges here are because an architecture decision is exactly the
      * kind of artifact "what breaks if this changes" is asked about: change a requirement and the
      * decision that addresses it is affected; change a bounded context and the decision affecting it
-     * is; supersede a decision and its successor is. Only {@code arkarch:supersedes} is listed for
-     * the ADR-to-ADR relation, never its {@code owl:inverseOf} partner {@code supersededBy} - that
-     * one is never asserted as a triple, so listing it would traverse an edge no writer produces
-     * (issue #69). {@code arkarch:relatedTo} stays out on purpose: a symmetric "see also" cross-link
+     * is. {@code arkarch:supersedes} is the pre-#357 write shape - no tool asserts it any more, but a
+     * store-first record may still carry it, and this backward read is what keeps such a record's
+     * successor reachable. {@code arkarch:supersededBy}, the current write shape, is deliberately
+     * <strong>not</strong> in this backward-followed set: kogn-io/arknet#357 moved that edge onto the
+     * <em>superseded</em> decision, so "the successor is affected when the superseded decision
+     * changes" is now a <em>forward</em> traversal - see {@link #FORWARD_DEPENDENT_EDGE_PREDICATES}
+     * and {@link #dependents(String)}. {@code arkarch:relatedTo} stays out on purpose: a symmetric
+     * "see also" cross-link
      * would make every related decision reachable from every other one and turn an impact report
      * into a cluster dump. {@code oslc_rm:constrainedBy} (Requirement/UseCase -&gt; Constraint,
      * issue #223/#329) joins the set for the same reason as {@code usesTerm}: a changed or removed
      * Constraint should surface the requirements/use cases bound by it in
      * {@code impact_analysis}. {@code arkddd:upstream}/
      * {@code arkddd:downstream} (ContextRelationship -&gt; BoundedContext, issue #293) join for the
-     * same reason as the three {@code arkarch:} edges: a recorded context-map relationship is
+     * same reason as the two {@code arkarch:} edges: a recorded context-map relationship is
      * exactly the kind of artifact whose classification needs re-checking when either bounded
      * context it names changes, so both directions are listed here - a ContextRelationship is
      * reported as affected whichever of its two bounded contexts changed, unlike {@code
@@ -185,8 +206,19 @@ public final class TraceabilityGraph {
      */
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
-            UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT, SUPERSEDES,
-            CONSTRAINED_BY);
+            UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
+            CONSTRAINED_BY, SUPERSEDES);
+
+    /**
+     * The predicates {@link #dependents(String)} follows <em>forwards</em> instead - the target of
+     * the edge is what is affected, not the subject that carries it. The single member,
+     * {@code arkarch:supersededBy}, is the kogn-io/arknet#357 exception to
+     * {@link #DEPENDENT_EDGE_PREDICATES}'s uniform backward direction: the edge is written on the
+     * <em>superseded</em> decision, pointing at its successor, so "the successor is affected when
+     * the superseded decision changes" is reached by following the edge the way it was typed, not
+     * against it.
+     */
+    private static final Set<String> FORWARD_DEPENDENT_EDGE_PREDICATES = Set.of(SUPERSEDED_BY);
 
     private final Map<String, List<Triple>> outgoingBySubject;
     private final Map<String, List<Triple>> incomingByObject;
@@ -615,8 +647,13 @@ public final class TraceabilityGraph {
 
     /**
      * Transitive "who references this" closure: every resource reachable by following
-     * {@link #DEPENDENT_EDGE_PREDICATES} backwards from {@code targetIri} - i.e. what is
-     * affected when {@code targetIri} changes.
+     * {@link #DEPENDENT_EDGE_PREDICATES} backwards, or {@link #FORWARD_DEPENDENT_EDGE_PREDICATES}
+     * forwards, from {@code targetIri} - i.e. what is affected when {@code targetIri} changes.
+     * Superseding a decision affects its successor either way the edge happens to be typed
+     * (kogn-io/arknet#357): a live decision names its own {@code supersededBy}
+     * ({@link #FORWARD_DEPENDENT_EDGE_PREDICATES}), while any pre-#357 store-first record still
+     * asserting the old {@code arkarch:supersedes} shape is reached backwards, alongside every
+     * other {@link #DEPENDENT_EDGE_PREDICATES} member.
      *
      * <p>{@code arkreq:Step} nodes are traversed <em>through</em> (the
      * {@code mainStep}/{@code extensionStep} hop needs them to reach the owning use case) but
@@ -639,17 +676,32 @@ public final class TraceabilityGraph {
                 if (!DEPENDENT_EDGE_PREDICATES.contains(triple.predicate())) {
                     continue;
                 }
-                String subject = triple.subject();
-                if (!frontier.add(subject)) {
+                addDependent(triple.subject(), frontier, queue, reported);
+            }
+            for (Triple triple : outgoingBySubject.getOrDefault(current, List.of())) {
+                if (!FORWARD_DEPENDENT_EDGE_PREDICATES.contains(triple.predicate())
+                        || !(triple.object() instanceof RdfNode.Resource resourceObject)) {
                     continue;
                 }
-                queue.add(subject);
-                if (!isType(subject, STEP_TYPE)) {
-                    reported.add(subject);
-                }
+                addDependent(resourceObject.iri(), frontier, queue, reported);
             }
         }
         return List.copyOf(reported);
+    }
+
+    /**
+     * Adds {@code candidate} to the traversal's frontier/queue/reported set, unless it was already
+     * visited - shared by {@link #dependents(String)}'s backward and forward hops so both follow
+     * exactly the same "visit once, report once, skip a {@code arkreq:Step}" rule.
+     */
+    private void addDependent(String candidate, Set<String> frontier, Deque<String> queue, Set<String> reported) {
+        if (!frontier.add(candidate)) {
+            return;
+        }
+        queue.add(candidate);
+        if (!isType(candidate, STEP_TYPE)) {
+            reported.add(candidate);
+        }
     }
 
     /**

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
@@ -63,6 +64,9 @@ class TraceabilityGraphAdrEdgesTest {
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-adr-bc-1";
     private static final String ADR_1_IRI = "https://w3id.org/arknet/id/trace-adr-adr-1";
     private static final String ADR_2_IRI = "https://w3id.org/arknet/id/trace-adr-adr-2";
+    private static final String ADR_3_IRI = "https://w3id.org/arknet/id/trace-adr-adr-3";
+    private static final String ADR_4_IRI = "https://w3id.org/arknet/id/trace-adr-adr-4";
+    private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
 
     @TempDir
     Path storageDir;
@@ -88,19 +92,46 @@ class TraceabilityGraphAdrEdgesTest {
                 new BoundedContextId(ResourceId.of(BC_1_IRI)), new BoundedContextCode("BC-1"), "Ordering",
                 "Wir verarbeiten Bestellungen.", null, null, List.of()));
 
-        // ADR-1 addresses FR-1 and affects BC-1; ADR-2 supersedes ADR-1.
+        // ADR-2 (the successor) must exist before ADR-1 is written: ashapes:ADR-supersededBy
+        // carries sh:class arkarch:ArchitectureDecisionRecord, and the write gate's asserted
+        // context for that constraint is read from the store, not from the candidate being
+        // written - so the successor has to be committed first.
+        adrs.create(PROJECT, new Adr(
+                new AdrId(ResourceId.of(ADR_2_IRI)), new AdrCode("ADR-2"), "Swap the store",
+                AdrStatus.ACCEPTED, "The embedded store no longer covers the team case.",
+                "Move to a remote endpoint behind the same out-port.", null, null, null,
+                List.of(), List.of(), null, List.of()));
+        // ADR-1 addresses FR-1 and affects BC-1; ADR-2 supersedes ADR-1 (kogn-io/arknet#357: the
+        // supersededBy edge - and the SUPERSEDED status it is coupled to - is written on the
+        // superseded decision, ADR-1, pointing at its successor ADR-2).
         adrs.create(PROJECT, new Adr(
                 new AdrId(ResourceId.of(ADR_1_IRI)), new AdrCode("ADR-1"), "Use an embedded triple store",
-                AdrStatus.ACCEPTED, "A single-user client must work without a server.",
+                AdrStatus.SUPERSEDED, "A single-user client must work without a server.",
                 "Use kognio-rdf behind an out-port.", null, null, null,
                 List.of(new RequirementRef(ResourceId.of(FR_1_IRI))),
                 List.of(new BoundedContextRef(ResourceId.of(BC_1_IRI))),
-                List.of(), List.of()));
+                new AdrId(ResourceId.of(ADR_2_IRI)), List.of()));
+
+        // ADR-4 legacy-supersedes ADR-3 (pre-#357 shape, store-first only - no tool writes it any
+        // more): a raw triple, inserted directly rather than through any repository, the same way
+        // store-first data would have arrived before this issue.
         adrs.create(PROJECT, new Adr(
-                new AdrId(ResourceId.of(ADR_2_IRI)), new AdrCode("ADR-2"), "Swap the store",
-                AdrStatus.PROPOSED, "The embedded store no longer covers the team case.",
-                "Move to a remote endpoint behind the same out-port.", null, null, null,
-                List.of(), List.of(), List.of(new AdrId(ResourceId.of(ADR_1_IRI))), List.of()));
+                new AdrId(ResourceId.of(ADR_3_IRI)), new AdrCode("ADR-3"), "Store data in files",
+                AdrStatus.DEPRECATED, "An earlier storage choice.",
+                "Use plain files behind an out-port.", null, null, null,
+                List.of(), List.of(), null, List.of()));
+        adrs.create(PROJECT, new Adr(
+                new AdrId(ResourceId.of(ADR_4_IRI)), new AdrCode("ADR-4"), "Swap to files, then back",
+                AdrStatus.PROPOSED, "The file-based approach did not scale either.",
+                "Revisit the embedded triple store.", null, null, null,
+                List.of(), List.of(), null, List.of()));
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + ADR_4_IRI
+                        + "> <https://w3id.org/arknet/architecture#supersedes> <" + ADR_3_IRI + "> } }");
+                return null;
+            });
+        }
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
         graph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
@@ -139,6 +170,16 @@ class TraceabilityGraphAdrEdgesTest {
     @Test
     void dependentsOfTheSupersedingAdrAreEmpty() {
         assertThat(graph.dependents(ADR_2_IRI)).isEmpty();
+    }
+
+    /**
+     * The pre-#357 legacy shape stays reachable backwards, exactly as the current-model edge is
+     * reachable forwards in {@link #dependentsOfASupersededAdrReachItsSuccessor()}: a store-first
+     * {@code arkarch:supersedes} triple still lets a changed predecessor reach its successor.
+     */
+    @Test
+    void dependentsOfALegacySupersededAdrReachItsSuccessor() {
+        assertThat(graph.dependents(ADR_3_IRI)).containsExactly(ADR_4_IRI);
     }
 
     /** The digest names decisions by their business code, never by their opaque IRI. */

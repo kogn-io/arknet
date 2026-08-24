@@ -29,7 +29,8 @@ import java.util.Objects;
  *                   Optional (may be {@code null}). Only this forward direction is ever
  *                   asserted as a triple - {@code skos:narrower} is left to a reader, never
  *                   written a second time by hand, mirroring the ADR bounded context's
- *                   {@code supersedes}/{@code supersededBy} pair
+ *                   {@code relatedTo} pair (a decision's own edge plus a reverse read for the
+ *                   other direction)
  */
 public record Term(TermId id, TermCode code, String prefLabel, String definition, TermCode broader) {
 

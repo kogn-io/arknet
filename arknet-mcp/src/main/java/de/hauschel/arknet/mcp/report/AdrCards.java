@@ -29,9 +29,11 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * <p>Status becomes a badge; context, decision, consequences and alternatives - the MADR shape
  * this component records a decision in - become their own prose blocks rather than four
  * indistinguishable {@code arkarch:adr*} literals. {@link ListAdrs} already inverts the
- * self-referential {@code arkarch:supersedes} edge into both directions and merges the equally
- * self-referential, symmetric {@code arkarch:relatedTo} edge into one list ({@link AdrDetail}), so
- * this class only has to turn the resolved {@link AdrCode}s it hands back into {@link Ref}s.</p>
+ * self-referential {@code arkarch:supersededBy} edge (kogn-io/arknet#357: written on the superseded
+ * decision, folding in any pre-#357 legacy {@code arkarch:supersedes} edge too) into both directions
+ * and merges the equally self-referential, symmetric {@code arkarch:relatedTo} edge into one list
+ * ({@link AdrDetail}), so this class only has to turn the resolved {@link AdrCode}s it hands back
+ * into {@link Ref}s.</p>
  *
  * <p><strong>Two borrowed ports, one relation resolved locally.</strong> {@code
  * addressesRequirement} and {@code affectsContext} point into neighbour hexagons, so their

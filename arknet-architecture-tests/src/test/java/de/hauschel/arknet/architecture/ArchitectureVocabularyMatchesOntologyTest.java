@@ -38,13 +38,13 @@ import de.hauschel.arknet.persistence.ArkarchVocabulary;
  * seam {@code ProvenanceVocabularyMatchesOntologyTest}/{@code ProjectVocabularyMatchesOntologyTest}
  * guard for their modules.</p>
  *
- * <p><strong>One asymmetry the shapes file rather than this test guards.</strong> The SHACL shape
- * {@code ashapes:ADR-status} admits all five lifecycle individuals while the Java {@code AdrStatus}
- * enum implements only {@code Proposed}/{@code Accepted}/{@code Rejected}/{@code Deprecated} (#91).
- * {@code Superseded} is deliberately left out - it stays derived-only from the
- * {@code supersedes}/{@code supersededBy} reverse-read rather than a fifth status value, so
- * {@link ArkarchVocabulary} names all five and this test holds it against all five - a vocabulary
- * constant is a serialization fact, not a claim that a tool writes it.</p>
+ * <p><strong>The five lifecycle individuals are no longer asymmetric (kogn-io/arknet#357).</strong>
+ * The SHACL shape {@code ashapes:ADR-status} admits all five, and the Java {@code AdrStatus} enum
+ * now implements all five too - {@code Superseded} joined {@code Proposed}/{@code Accepted}/
+ * {@code Rejected}/{@code Deprecated} (#91) once the {@code supersededBy} edge moved onto the
+ * superseded decision itself, making the status a real write rather than a derived-only
+ * reverse-read. {@link ArkarchVocabulary} names all five and this test holds it against all five,
+ * exactly as before - only the reason a tool writes every one of them changed.</p>
  */
 class ArchitectureVocabularyMatchesOntologyTest {
 
@@ -151,13 +151,16 @@ class ArchitectureVocabularyMatchesOntologyTest {
     }
 
     /**
-     * {@code supersededBy} is declared the inverse of {@code supersedes} - which is precisely why the
-     * ADR context asserts only the forward triple and derives the backward direction by a reverse
-     * read. If the ontology stopped saying so, that derivation would be an invention rather than a
-     * reading of the shipped vocabulary.
+     * {@code supersededBy} is declared the inverse of {@code supersedes} - unchanged by
+     * kogn-io/arknet#357, even though which direction is actually <em>written</em> flipped: the
+     * adapter now asserts {@code supersededBy} itself (on the superseded decision) and reads a
+     * store-first record's pre-#357 {@code supersedes} triple back through this very
+     * {@code owl:inverseOf} relationship, rather than the other way around as before. Either
+     * direction, the declaration is what makes deriving one from the other a reading of the shipped
+     * vocabulary instead of an invention.
      */
     @Test
-    void theOntologyDeclaresSupersededByAsTheInverseTheAdapterNeverWrites() {
+    void theOntologyDeclaresSupersededByAsTheInverseOfSupersedes() {
         assertTrue(ontology.contains(iri(ArkarchVocabulary.SUPERSEDED_BY), OWL.INVERSEOF,
                 iri(ArkarchVocabulary.SUPERSEDES)),
                 "arkarch:supersededBy must be owl:inverseOf arkarch:supersedes");

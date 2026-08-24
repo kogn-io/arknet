@@ -69,7 +69,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * {@code ADR-1}), the generic {@code arknet:name} literal, the {@code arkarch:adrStatus} individual,
  * the {@code arkarch:adrContext}/{@code arkarch:adrDecision} literals, the optional
  * {@code adrConsequences}/{@code adrAlternatives}/{@code decisionDate} literals, plus zero or more
- * {@code addressesRequirement}, {@code affectsContext}, {@code supersedes} and {@code relatedTo}
+ * {@code addressesRequirement}, {@code affectsContext}, {@code supersededBy} and {@code relatedTo}
  * edges. Every predicate
  * and type IRI comes from the shared {@link ArkarchVocabulary}, the same constants
  * {@code arknet-mcp}'s traceability read path traverses - a rename cannot desync the two sides. This
@@ -105,18 +105,19 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * on either predicate - it carries no property shape for them at all - so neither needs a
  * validation-only asserted context.</p>
  *
- * <p><strong>Validation-only asserted context for {@code relatedTo}.</strong> The one reference
- * predicate that <em>does</em> carry a constraint is {@code ashapes:ADR-relatedTo}
- * ({@code sh:nodeKind sh:IRI} plus {@code sh:class arkarch:ArchitectureDecisionRecord}), and the
- * peer decision's own triples live in its own already-committed write, not in this candidate graph.
- * {@link #relatedToAssertedContext} therefore hands the gate a validation-only copy of each peer's
- * mandatory fields - never persisted, the pattern {@code KognioRdfRequirementRepository} uses for
- * {@code oslc_rm:constrainedBy}. A bare type triple would not do here: {@code ashapes:ADRShape}
+ * <p><strong>Validation-only asserted context for {@code relatedTo} and {@code supersededBy}.</strong>
+ * Both reference predicates that carry a {@code sh:class} constraint - {@code ashapes:ADR-relatedTo}
+ * and {@code ashapes:ADR-supersededBy} (kogn-io/arknet#357), each {@code sh:nodeKind sh:IRI} plus
+ * {@code sh:class arkarch:ArchitectureDecisionRecord} - point at a peer/successor decision whose own
+ * triples live in its own already-committed write, not in this candidate graph.
+ * {@link #crossReferenceAssertedContext} therefore hands the gate a validation-only copy of each such
+ * target's mandatory fields - never persisted, the pattern {@code KognioRdfRequirementRepository}
+ * uses for {@code oslc_rm:constrainedBy}. A bare type triple would not do here: {@code ashapes:ADRShape}
  * targets {@code arkarch:ArchitectureDecisionRecord} and lives in this very shapes file, so
- * asserting the peer's type alone would make the gate validate a peer stripped of its name, status,
- * context and decision and refuse the write. Only the fields those five {@code sh:Violation} shapes
- * constrain are copied: pulling the peer's own reference edges across would demand the peer's peers
- * be typed too, and so on outwards.</p>
+ * asserting the target's type alone would make the gate validate a decision stripped of its name,
+ * status, context and decision and refuse the write. Only the fields those five {@code sh:Violation}
+ * shapes constrain are copied: pulling the target's own reference edges across would demand its
+ * peers be typed too, and so on outwards.</p>
  *
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the architecture SHACL shapes before the write transaction opens, throw
@@ -210,7 +211,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         Graph graph = buildCandidateGraph(subjectIri, adr);
 
         funnel.create(new DatasetId(projectId.value()), ADR_GRAPH, subjectIriString,
-                adr.code().value(), graph, relatedToAssertedContext(projectId, adr),
+                adr.code().value(), graph, crossReferenceAssertedContext(projectId, adr),
                 () -> new ResourceAlreadyExistsException(projectId, adr.id().value()),
                 () -> new DuplicateAdrCodeException(projectId, adr.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false));
@@ -228,7 +229,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
         Graph graph = buildCandidateGraph(subjectIri, updated);
 
         funnel.compareAndUpdate(new DatasetId(projectId.value()), ADR_GRAPH, subjectIriString,
-                expectedHead, graph, relatedToAssertedContext(projectId, updated),
+                expectedHead, graph, crossReferenceAssertedContext(projectId, updated),
                 () -> new AdrNotFoundException(projectId, updated.code()),
                 () -> new AdrConcurrentlyModifiedException(projectId, updated.code()),
                 tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true));
@@ -265,8 +266,9 @@ public class KognioRdfAdrRepository implements AdrRepository {
         for (BoundedContextRef ref : adr.affectsContexts()) {
             graph.add(subjectIri, rdf.createIRI(AFFECTS_CONTEXT_PROPERTY), rdf.createIRI(ref.value().value()));
         }
-        for (AdrId superseded : adr.supersedes()) {
-            graph.add(subjectIri, rdf.createIRI(SUPERSEDES_PROPERTY), rdf.createIRI(superseded.value().value()));
+        if (adr.supersededBy() != null) {
+            graph.add(subjectIri, rdf.createIRI(SUPERSEDED_BY_PROPERTY),
+                    rdf.createIRI(adr.supersededBy().value().value()));
         }
         // Forward direction only, although arkarch:relatedTo is an owl:SymmetricProperty: nothing
         // here reasons over symmetry, and the peer's mirror triple would be a second hand-maintained
@@ -278,20 +280,25 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     /**
-     * Collects the validation-only triples {@code ashapes:ADR-relatedTo}'s
-     * {@code sh:class arkarch:ArchitectureDecisionRecord} constraint needs to be satisfiable: for
-     * each peer, its type plus the five fields {@code ashapes:ADRShape}'s {@code sh:Violation}
-     * property shapes require (identifier, name, status, context, decision). Deliberately nothing
-     * else - see the class javadoc for why a bare type triple is too little and the peer's whole
-     * subject too much. Never persisted; the gate merges it into the validated data for one call.
+     * Collects the validation-only triples both {@code ashapes:ADR-relatedTo} and
+     * {@code ashapes:ADR-supersededBy}'s {@code sh:class arkarch:ArchitectureDecisionRecord}
+     * constraints need to be satisfiable: for each {@code relatedTo} peer and the
+     * {@code supersededBy} target (kogn-io/arknet#357), its type plus the five fields
+     * {@code ashapes:ADRShape}'s {@code sh:Violation} property shapes require (identifier, name,
+     * status, context, decision). Deliberately nothing else - see the class javadoc for why a bare
+     * type triple is too little and the peer's whole subject too much. Never persisted; the gate
+     * merges it into the validated data for one call.
      */
-    private Graph relatedToAssertedContext(ProjectId projectId, Adr adr) {
+    private Graph crossReferenceAssertedContext(ProjectId projectId, Adr adr) {
         Graph assertedContext = rdf.createGraph();
-        if (adr.relatedTo().isEmpty()) {
+        List<AdrId> peers = adr.supersededBy() == null
+                ? adr.relatedTo()
+                : Stream.concat(adr.relatedTo().stream(), Stream.of(adr.supersededBy())).distinct().toList();
+        if (peers.isEmpty()) {
             return assertedContext;
         }
         // ResourceId#of validated IRIREF-safety at construction, so every peer IRI is safe to embed.
-        String values = adr.relatedTo().stream()
+        String values = peers.stream()
                 .map(peer -> SparqlTerms.iriRef(peer.value().value()))
                 .distinct()
                 .collect(Collectors.joining(" "));
@@ -314,30 +321,31 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * store-first (ADR-005) decision carries them along instead of erasing them:
      *
      * <ul>
-     * <li><strong>All</strong> {@code arkarch:supersededBy} edges, regardless of target kind:
-     * {@link Adr} has no field for it, because it is the {@code owl:inverseOf} partner this codebase
-     * deliberately never asserts itself (see {@code SupersedeAdr}). It is reachable only store-first
-     * and would otherwise be lost on the very next {@code adr_set_status} call. The same reasoning
-     * the bounded-context adapter applies to {@code arkddd:hasAggregate}. {@code arkarch:relatedTo}
-     * used to be preserved alongside it and deliberately no longer is: it is a field of {@link Adr}
-     * now, so the candidate graph carries every edge that should survive - preserving it on top
-     * would make {@code adr_update}'s "clear this relation" instruction impossible to carry out.</li>
-     * <li>{@code addressesRequirement}/{@code affectsContext}/{@code supersedes} edges whose target
-     * is not an IRI - the read paths can never surface those, since {@link ResourceId} cannot
-     * represent a blank node, so a round trip through the domain object would drop them (the same
-     * preservation the requirements adapter does for {@code arkreq:usesTerm}). {@code relatedTo} is
-     * deliberately left out of this list: {@code ashapes:ADR-relatedTo} shapes it
-     * {@code sh:nodeKind sh:IRI} with {@code sh:Violation}, so a blank-node target is exactly what
-     * the shape forbids - re-attaching one past the gate would write back the very state a
-     * full-store validation flags as broken.</li>
+     * <li><strong>All</strong> {@code arkarch:supersedes} edges, regardless of target kind
+     * (kogn-io/arknet#357): {@link Adr} carries no field for this pre-#357 predicate any more - the
+     * written edge moved onto {@link Adr#supersededBy()}, on the <em>superseded</em> decision - so a
+     * store-first record still asserting the old forward-only {@code arkarch:supersedes} shape would
+     * otherwise lose it on its very next write through this adapter.
+     * {@code arkarch:supersededBy} used to be preserved this way and deliberately no longer is: it is
+     * a field of {@link Adr} now, so the candidate graph carries every edge that should survive -
+     * preserving it on top would make {@code adr_supersede}'s own write (and any correction of it)
+     * impossible to carry out, the same reasoning that dropped {@code arkarch:relatedTo} from this
+     * list once it became a field.</li>
+     * <li>{@code addressesRequirement}/{@code affectsContext} edges whose target is not an IRI - the
+     * read paths can never surface those, since {@link ResourceId} cannot represent a blank node, so
+     * a round trip through the domain object would drop them (the same preservation the requirements
+     * adapter does for {@code arkreq:usesTerm}). {@code relatedTo}/{@code supersededBy} are
+     * deliberately left out of this list: {@code ashapes:ADR-relatedTo}/{@code ashapes:ADR-supersededBy}
+     * both shape their target {@code sh:nodeKind sh:IRI} with {@code sh:Violation}, so a blank-node
+     * target is exactly what the shape forbids - re-attaching one past the gate would write back the
+     * very state a full-store validation flags as broken.</li>
      * </ul>
      */
     private void replaceTriples(DatasetTx tx, IRI graphIri, IRI subjectIri, String subject, Graph graph,
             boolean exists) {
         String selectPreserved = "SELECT ?p ?o WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } "
-                + "FILTER( ?p = <" + SUPERSEDED_BY_PROPERTY + "> "
+                + "FILTER( ?p = <" + SUPERSEDES_PROPERTY + "> "
                 + "|| ( ?p IN (<" + ADDRESSES_REQUIREMENT_PROPERTY + ">, <" + AFFECTS_CONTEXT_PROPERTY
-                + ">, <" + SUPERSEDES_PROPERTY
                 + ">) && !isIRI(?o) ) ) }";
         String deleteExisting = "DELETE WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " ?p ?o } }";
 
@@ -430,21 +438,24 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
     /**
      * Rejects the delete, without touching a single triple, while another decision still points at
-     * {@code subjectIri} via {@code arkarch:supersedes} or {@code arkarch:relatedTo}, naming every
-     * referrer by its business code. Runs inside the live write transaction
-     * {@link WriteFunnel#delete} hands its {@code body}, so this - unlike the application service's
-     * own didactic pre-check - is the race-free one.
+     * {@code subjectIri} via {@code arkarch:supersedes} (pre-#357 legacy), {@code arkarch:supersededBy}
+     * (kogn-io/arknet#357's current shape - {@code subjectIri} is that decision's own successor) or
+     * {@code arkarch:relatedTo}, naming every referrer by its business code. Runs inside the live
+     * write transaction {@link WriteFunnel#delete} hands its {@code body}, so this - unlike the
+     * application service's own didactic pre-check ({@link de.hauschel.arknet.adr.application.AdrService
+     * #rejectIfReferenced}, backed by {@link #findSupersessionReferrers}) - is the race-free one.
      *
      * <p>Scoped to {@link #ADR_GRAPH} rather than searched across every named graph the way the
-     * glossary's and the actor register's checks are: both relations run decision-to-decision, are
-     * written by this adapter alone and are read back from this one graph by
-     * {@link #findSupersedingCodes}/{@link #findRelatedCodes}. Widening the search here and nowhere
-     * else would refuse a delete over an edge no read path of this hexagon ever surfaces.</p>
+     * glossary's and the actor register's checks are: all three predicates run decision-to-decision,
+     * are written by this adapter alone and are read back from this one graph by
+     * {@link #findSupersessionReferrers}/{@link #findRelatedCodes}. Widening the search here and
+     * nowhere else would refuse a delete over an edge no read path of this hexagon ever surfaces.</p>
      */
     private void rejectIfReferenced(DatasetTx tx, ProjectId projectId, AdrCode code, String subjectIri) {
         String target = SparqlTerms.iriRef(subjectIri);
         List<AdrReferencedException.Reference> references = new ArrayList<>();
         collectReferences(tx, target, SUPERSEDES_PROPERTY, AdrReferencedException.SUPERSEDES, references);
+        collectReferences(tx, target, SUPERSEDED_BY_PROPERTY, AdrReferencedException.SUPERSEDED_BY, references);
         collectReferences(tx, target, RELATED_TO_PROPERTY, AdrReferencedException.RELATED_TO, references);
         if (!references.isEmpty()) {
             throw new AdrReferencedException(projectId, code, references);
@@ -453,9 +464,9 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
     /**
      * Collects the codes of every decision pointing at {@code target} with one predicate, sorted by
-     * running number and deduplicated for the same two reasons {@link #findSupersedingCodes} sorts
-     * and deduplicates: RDF has no intrinsic statement order, and a referrer carrying two identifier
-     * triples would otherwise be named twice in one rejection message.
+     * running number and deduplicated for the same two reasons {@link #findSupersessionReferrers}
+     * sorts and deduplicates: RDF has no intrinsic statement order, and a referrer carrying two
+     * identifier triples would otherwise be named twice in one rejection message.
      */
     private static void collectReferences(DatasetTx tx, String target, String predicate, String shorthand,
             List<AdrReferencedException.Reference> into) {
@@ -584,9 +595,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
                                     id -> new RequirementRef(id)),
                             readRefs(handle.sparqlQuery()::select, subject, AFFECTS_CONTEXT_PROPERTY,
                                     id -> new BoundedContextRef(id)),
-                            readRefs(handle.sparqlQuery()::select, subject, SUPERSEDES_PROPERTY, AdrId::new),
+                            firstRefOrNull(handle.sparqlQuery()::select, subject, SUPERSEDED_BY_PROPERTY,
+                                    entry.getKey()),
                             readRefs(handle.sparqlQuery()::select, subject, RELATED_TO_PROPERTY, AdrId::new));
-                    return new CurrentAdr(adr, assembly.head());
+                    // toAdr returns null when adrStatus could not be decoded (see #toAdr) - null
+                    // here, rather than Optional.map wrapping a CurrentAdr around a null Adr.
+                    return adr == null ? null : new CurrentAdr(adr, assembly.head());
                 });
     }
 
@@ -603,8 +617,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     ADDRESSES_REQUIREMENT_PROPERTY, id -> new RequirementRef(id));
             Map<String, List<BoundedContextRef>> contexts = readRefsBySubject(handle,
                     AFFECTS_CONTEXT_PROPERTY, id -> new BoundedContextRef(id));
-            Map<String, List<AdrId>> supersedes = readRefsBySubject(handle,
-                    SUPERSEDES_PROPERTY, AdrId::new);
+            Map<String, List<AdrId>> supersededBy = readRefsBySubject(handle,
+                    SUPERSEDED_BY_PROPERTY, AdrId::new);
             Map<String, List<AdrId>> relatedTo = readRefsBySubject(handle,
                     RELATED_TO_PROPERTY, AdrId::new);
 
@@ -614,8 +628,38 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     .map(entry -> entry.getValue().toAdr(
                             requirements.getOrDefault(entry.getKey(), List.of()),
                             contexts.getOrDefault(entry.getKey(), List.of()),
-                            supersedes.getOrDefault(entry.getKey(), List.of()),
+                            firstOrNull(entry.getKey(), SUPERSEDED_BY_PROPERTY,
+                                    supersededBy.getOrDefault(entry.getKey(), List.of())),
                             relatedTo.getOrDefault(entry.getKey(), List.of())))
+                    // toAdr returns null when adrStatus could not be decoded (see #toAdr) - that one
+                    // decision is skipped rather than taking the whole listing down with it.
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
+    }
+
+    /**
+     * Reads every recorded decision's business code straight off {@code dcterms:identifier}, without
+     * joining a single one of the optional or scalar fields {@link #adrWhereBody} requires and
+     * {@link AdrAssembly#toAdr} can therefore reject - the whole point (kogn-io/arknet#359, see
+     * {@link AdrRepository#findAllCodes}'s own javadoc). Deduplicated, since a store-first subject
+     * could in principle carry two {@code dcterms:identifier} triples ({@code ashapes:ADR-identifier}
+     * enforces {@code sh:maxCount 1} only at write time); {@link #nextCode} only ever wants the
+     * highest running number, so which of two identical duplicates survives does not matter.
+     */
+    @Override
+    public List<AdrCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + "?s a <" + ADR_TYPE + "> . ?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "FILTER(isIRI(?s)) } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(AdrCode::new)
                     .toList();
         }
     }
@@ -654,9 +698,17 @@ public class KognioRdfAdrRepository implements AdrRepository {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(supersededId, "supersededId");
 
+        String subject = SparqlTerms.iriRef(supersededId.value().value());
+        // Two sources, unioned (kogn-io/arknet#357): supersededId's own current-model
+        // arkarch:supersededBy field (a forward read on the decision itself), and a reverse read of
+        // the pre-#357 arkarch:supersedes triple a store-first record may still carry, written on
+        // the superseding decision back when that direction was the one asserted.
         String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
-                + "?s <" + SUPERSEDES_PROPERTY + "> " + SparqlTerms.iriRef(supersededId.value().value()) + " . "
-                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
+                + "{ " + subject + " <" + SUPERSEDED_BY_PROPERTY + "> ?successor . "
+                + "?successor <" + IDENTIFIER_PROPERTY + "> ?identifier } "
+                + "UNION "
+                + "{ ?predecessor <" + SUPERSEDES_PROPERTY + "> " + subject + " . "
+                + "?predecessor <" + IDENTIFIER_PROPERTY + "> ?identifier } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             // Sorted by running number (not String's lexicographic order - "ADR-10" would otherwise
@@ -667,6 +719,80 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
                     .stream()
                     .map(AdrCode::new)
+                    .toList();
+        }
+    }
+
+    @Override
+    public List<AdrCode> findSupersededCodes(ProjectId projectId, AdrId supersedingId) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(supersedingId, "supersedingId");
+
+        String subject = SparqlTerms.iriRef(supersedingId.value().value());
+        // The mirror of findSupersedingCodes: a reverse read of every decision naming
+        // supersedingId in its own current-model arkarch:supersededBy field, unioned with
+        // supersedingId's own pre-#357 arkarch:supersedes triple, should a store-first record still
+        // carry one.
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + "{ ?predecessor <" + SUPERSEDED_BY_PROPERTY + "> " + subject + " . "
+                + "?predecessor <" + IDENTIFIER_PROPERTY + "> ?identifier } "
+                + "UNION "
+                + "{ " + subject + " <" + SUPERSEDES_PROPERTY + "> ?predecessor . "
+                + "?predecessor <" + IDENTIFIER_PROPERTY + "> ?identifier } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
+                    .stream()
+                    .map(AdrCode::new)
+                    .toList();
+        }
+    }
+
+    @Override
+    public List<AdrCode> findSupersessionReferrers(ProjectId projectId, AdrId target) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(target, "target");
+
+        String subject = SparqlTerms.iriRef(target.value().value());
+        // The two external reverse edges only: a decision naming target as what it (legacy-)
+        // supersedes, or a decision naming target as its own (current-model) successor. target's own
+        // outgoing edges (its own supersededBy field, or a legacy supersedes triple it might still
+        // carry) are deliberately excluded - see the port javadoc for why those are not a
+        // dangling-reference risk.
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + "{ ?s <" + SUPERSEDES_PROPERTY + "> " + subject + " . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier } "
+                + "UNION "
+                + "{ ?s <" + SUPERSEDED_BY_PROPERTY + "> " + subject + " . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier } } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
+                    .stream()
+                    .map(AdrCode::new)
+                    .toList();
+        }
+    }
+
+    @Override
+    public List<LegacySupersession> findLegacySupersedesEdges(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?supersedingIdentifier ?supersededIdentifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
+                + "?superseding <" + SUPERSEDES_PROPERTY + "> ?superseded . "
+                + "?superseding <" + IDENTIFIER_PROPERTY + "> ?supersedingIdentifier . "
+                + "?superseded <" + IDENTIFIER_PROPERTY + "> ?supersededIdentifier } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> new LegacySupersession(
+                            new AdrCode(literalOf(row, "supersedingIdentifier").getLexicalForm()),
+                            new AdrCode(literalOf(row, "supersededIdentifier").getLexicalForm())))
+                    .distinct()
                     .toList();
         }
     }
@@ -722,7 +848,8 @@ public class KognioRdfAdrRepository implements AdrRepository {
                                     id -> new RequirementRef(id)),
                             readRefs(handle.sparqlQuery()::select, subject, AFFECTS_CONTEXT_PROPERTY,
                                     id -> new BoundedContextRef(id)),
-                            readRefs(handle.sparqlQuery()::select, subject, SUPERSEDES_PROPERTY, AdrId::new),
+                            firstRefOrNull(handle.sparqlQuery()::select, subject, SUPERSEDED_BY_PROPERTY,
+                                    entry.getKey()),
                             readRefs(handle.sparqlQuery()::select, subject, RELATED_TO_PROPERTY, AdrId::new));
                 });
     }
@@ -764,6 +891,36 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 .map(row -> wrap.apply(ResourceId.of(iriOf(row, "target").getIRIString())))
                 .distinct()
                 .toList();
+    }
+
+    /**
+     * Reads {@code arkarch:supersededBy} as the single, nullable value it is (kogn-io/arknet#357):
+     * {@code null} if the subject carries none, the sole value if it carries one. A store-first
+     * subject carrying more than one - {@code ashapes:ADR-supersededBy}'s {@code sh:maxCount 1} is
+     * enforceable only at write time, never against data the gate never saw - is collapsed to the
+     * first (ordered by target IRI, same as {@link #readRefs}) with a {@code WARN}, the same
+     * first-seen-wins deterministic choice {@link AdrAssembly#firstDistinct} makes for a
+     * multi-valued literal field.
+     */
+    private static AdrId firstRefOrNull(Function<String, Stream<BindingSet>> selectFn, String subject,
+            String predicate, String subjectIri) {
+        return firstOrNull(subjectIri, predicate, readRefs(selectFn, subject, predicate, AdrId::new));
+    }
+
+    /**
+     * Collapses a predicate's collected values to the first (or {@code null} if none), logging a
+     * {@code WARN} when more than one distinct value was found - shared by {@link #firstRefOrNull}
+     * (single-decision reads) and {@link #findAll} (which already has its bulk-read values in hand).
+     */
+    private static AdrId firstOrNull(String subjectIri, String predicate, List<AdrId> values) {
+        if (values.isEmpty()) {
+            return null;
+        }
+        if (values.size() > 1) {
+            LOG.warn("ADR {}: predicate '{}' had {} distinct values, returning the first",
+                    subjectIri, predicate, values.size());
+        }
+        return values.get(0);
     }
 
     /** Bulk variant of {@link #readRefs}: every decision's edges on one predicate in one query. */
@@ -809,7 +966,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
         private void addCandidatesFrom(BindingSet row) {
             add("name", literalOrNull(row, "name"));
-            add("status", statusOf(row));
+            addStatus(row);
             add("context", literalOrNull(row, "context"));
             add("decision", literalOrNull(row, "decision"));
             add("consequences", literalOrNull(row, "consequences"));
@@ -818,23 +975,91 @@ public class KognioRdfAdrRepository implements AdrRepository {
             add("head", headOf(row));
         }
 
+        /**
+         * Collects the {@code status} candidate, logging a {@code WARN} and contributing nothing
+         * when the row's {@code arkarch:adrStatus} value is not one of the four decoded lifecycle
+         * individuals (see {@link #statusFromIri}) - never letting an unrecognised IRI reach
+         * {@link Adr}'s constructor as a {@code null} status, which would throw and take the whole
+         * read down with it. {@link #toAdr} treats "no status candidate at all" as the signal to
+         * skip this one decision instead.
+         */
+        private void addStatus(BindingSet row) {
+            row.getValue("status").filter(IRI.class::isInstance).ifPresent(value -> {
+                String iri = ((IRI) value).getIRIString();
+                AdrStatus status = statusFromIri(iri);
+                if (status == null) {
+                    LOG.warn("ADR {}: unrecognised arkarch:adrStatus '{}', skipping this decision",
+                            id.value().value(), iri);
+                    return;
+                }
+                add("status", status);
+            });
+        }
+
         private void add(String field, Object value) {
             if (value != null) {
                 candidates.computeIfAbsent(field, key -> new ArrayList<>()).add(value);
             }
         }
 
+        /**
+         * Materialises the collected candidates into an {@link Adr}, or {@code null} if either half
+         * of the store-first read cannot satisfy {@link Adr}'s own invariants - the same "skip this
+         * decision" outcome, for the same reason, in both cases: a store-first (ADR-005) anomaly the
+         * SHACL gate only ever guarded at write time must not take an entire read down with it.
+         *
+         * <ul>
+         * <li>{@code arkarch:adrStatus} never resolved to a decoded value (see {@link #addStatus}) -
+         * the same gap {@link Adr}'s {@code Objects.requireNonNull(status, "status")} would otherwise
+         * throw on.</li>
+         * <li>{@code status}/{@code supersededBy} disagree with the bi-implication
+         * (kogn-io/arknet#357) {@link Adr}'s compact constructor enforces - a store-first record can
+         * set {@code arkarch:adrStatus Superseded} without the edge, or the edge without that status.
+         * The gate never retroactively catches either half for data it never validated, and since
+         * kogn-io/arknet#359 it does not even try to catch the "{@code Superseded} without the edge"
+         * half going forward: {@code ashapes:ADR-supersededByRequiresSupersededStatus} checks only
+         * the other direction, on purpose (see that shape's own comment), so this read-time check is
+         * the sole backstop for that half, not a second line of defence behind the gate.</li>
+         * <li>{@code supersededBy} or {@code relatedTo} points at the decision itself - the two
+         * self-reference rejections {@link Adr}'s compact constructor raises. No shape catches
+         * either ({@code ashapes:ADR-supersededBy} and {@code ashapes:ADR-relatedTo} constrain node
+         * kind and class - and count, in supersededBy's case - never disjointness with the
+         * subject), so a store-first record can carry {@code <A> arkarch:supersededBy <A>}; together
+         * with {@code arkarch:adrStatus Superseded} that even satisfies the bi-implication above and
+         * would otherwise reach the constructor unchanged.</li>
+         * </ul>
+         */
         private Adr toAdr(List<RequirementRef> requirements, List<BoundedContextRef> contexts,
-                List<AdrId> supersedes, List<AdrId> relatedTo) {
+                AdrId supersededBy, List<AdrId> relatedTo) {
+            AdrStatus status = (AdrStatus) firstDistinct("status");
+            if (status == null) {
+                return null;
+            }
+            if ((status == AdrStatus.SUPERSEDED) != (supersededBy != null)) {
+                LOG.warn("ADR {}: status {} is inconsistent with its supersededBy edge ({}), "
+                                + "skipping this decision",
+                        id.value().value(), status, supersededBy == null ? "absent" : "present");
+                return null;
+            }
+            if (supersededBy != null && supersededBy.equals(id)) {
+                LOG.warn("ADR {}: supersededBy points at the decision itself, skipping this decision",
+                        id.value().value());
+                return null;
+            }
+            if (relatedTo.contains(id)) {
+                LOG.warn("ADR {}: relatedTo contains the decision itself, skipping this decision",
+                        id.value().value());
+                return null;
+            }
             return new Adr(id, code,
                     (String) firstDistinct("name"),
-                    (AdrStatus) firstDistinct("status"),
+                    status,
                     (String) firstDistinct("context"),
                     (String) firstDistinct("decision"),
                     (String) firstDistinct("consequences"),
                     (String) firstDistinct("alternatives"),
                     (LocalDate) firstDistinct("decisionDate"),
-                    requirements, contexts, supersedes, relatedTo);
+                    requirements, contexts, supersededBy, relatedTo);
         }
 
         /** The concurrency token collected alongside the scalar fields by {@link #readSingleWithHead}. */
@@ -877,14 +1102,17 @@ public class KognioRdfAdrRepository implements AdrRepository {
             case ACCEPTED -> ArkarchVocabulary.ACCEPTED;
             case REJECTED -> ArkarchVocabulary.REJECTED;
             case DEPRECATED -> ArkarchVocabulary.DEPRECATED;
+            case SUPERSEDED -> ArkarchVocabulary.SUPERSEDED;
         };
     }
 
     /**
-     * Maps a lifecycle individual back to the Java enum, or {@code null} for the one
-     * shipped-but-unimplemented value ({@code Superseded}) and for anything else. A {@code null}
-     * makes {@link Adr}'s constructor reject the row rather than silently mislabel a decision - the
-     * honest outcome while {@link AdrStatus} covers a deliberate subset of the ontology.
+     * Maps a lifecycle individual back to the Java enum, or {@code null} for anything unrecognised.
+     * A {@code null} here is no longer reached by {@link Adr}'s constructor at all
+     * (kogn-io/arknet#357): {@link AdrAssembly#addStatus} intercepts it first, logs a {@code WARN}
+     * and skips the one decision rather than letting an unresolvable status take an entire read
+     * down with it - the same store-first-tolerant shape {@link #decisionDateOf} already gives an
+     * unparseable {@code arkarch:decisionDate}.
      */
     private static AdrStatus statusFromIri(String iri) {
         if (ArkarchVocabulary.PROPOSED.equals(iri)) {
@@ -898,6 +1126,9 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
         if (ArkarchVocabulary.DEPRECATED.equals(iri)) {
             return AdrStatus.DEPRECATED;
+        }
+        if (ArkarchVocabulary.SUPERSEDED.equals(iri)) {
+            return AdrStatus.SUPERSEDED;
         }
         return null;
     }
