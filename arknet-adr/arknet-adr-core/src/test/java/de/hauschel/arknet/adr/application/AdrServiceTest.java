@@ -351,6 +351,29 @@ class AdrServiceTest {
         assertEquals(List.of(newer), again.supersededBy());
     }
 
+    /**
+     * Idempotency must not depend on the superseding decision's current status (kogn-io/arknet#359):
+     * recording the very same pair a second time is a no-op {@link AdrService#supersede} takes before
+     * it ever re-reads and re-checks the superseding decision - so it stays a no-op even once that
+     * decision has since moved on (here to DEPRECATED, reached the only way it legitimately can once
+     * it has already superseded something). Mutation test: checking the superseding decision's status
+     * before the idempotency short-circuit, instead of after, would turn this promised no-op into a
+     * spurious {@link IllegalStateException}.
+     */
+    @Test
+    void supersedeStaysIdempotentAfterTheSupersedingDecisionIsLaterDeprecated() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        service.supersede(PROJECT, newer, older);
+        service.deprecate(PROJECT, newer);
+
+        AdrDetail again = service.supersede(PROJECT, newer, older);
+
+        assertEquals(AdrStatus.SUPERSEDED, again.adr().status());
+        assertEquals(List.of(newer), again.supersededBy());
+        assertEquals(AdrStatus.DEPRECATED, service.get(PROJECT, newer).orElseThrow().adr().status());
+    }
+
     /** One successor may supersede several older decisions, each individually. */
     @Test
     void supersedeAccumulatesSeveralOlderDecisions() {

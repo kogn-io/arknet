@@ -187,6 +187,33 @@ class AdrServiceConcurrencyTest {
         assertEquals(List.of(new BoundedContextRef(BC_1)), stored.affectsContexts());
     }
 
+    /**
+     * TOCTOU regression (kogn-io/arknet#359): the superseding decision's ACCEPTED status can change
+     * in the window between {@link AdrService#supersede}'s one-time identity lookup and its own
+     * write. Reproduced deterministically the same way the two races above are: an "other caller"
+     * deprecates the superseding decision synchronously, right after the very read whose staleness
+     * this bug depends on.
+     */
+    @Test
+    void supersedeRefusesWhenTheSupersedingDecisionIsDeprecatedInTheWindowBeforeItsOwnWrite() {
+        AdrCode superseding = otherCaller.add(PROJECT, newAdr()).adr().code();
+        otherCaller.accept(PROJECT, superseding);
+        AdrCode superseded = otherCaller.add(PROJECT, newAdr()).adr().code();
+        otherCaller.accept(PROJECT, superseded);
+        RaceOnFirstFindByCodeRepository racing = new RaceOnFirstFindByCodeRepository(store,
+                () -> otherCaller.deprecate(PROJECT, superseding));
+        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> underTest.supersede(PROJECT, superseding, superseded));
+
+        assertTrue(thrown.getMessage().contains("DEPRECATED"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains(superseding.value()), thrown.getMessage());
+        Adr stored = store.findByCode(PROJECT, superseded).orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, stored.status(),
+                "the refused write must leave the decision that would have been superseded untouched");
+    }
+
     private static NewAdr newAdr() {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",
@@ -336,6 +363,34 @@ class AdrServiceConcurrencyTest {
         @Override
         public Optional<CurrentAdr> findCurrentByCode(ProjectId projectId, AdrCode code) {
             Optional<CurrentAdr> result = delegate.findCurrentByCode(projectId, code);
+            if (!injected) {
+                injected = true;
+                injection.run();
+            }
+            return result;
+        }
+    }
+
+    /**
+     * Runs {@code injection} exactly once, synchronously, right after the first {@link #findByCode}
+     * call returns - {@link AdrService#supersede} makes exactly one such call, resolving the
+     * superseding decision's identity, before it ever enters the retry loop that writes the
+     * superseded one; this simulates a concurrent writer changing the superseding decision's own
+     * status in the window right after that read.
+     */
+    private static final class RaceOnFirstFindByCodeRepository extends DelegatingRepository {
+
+        private final Runnable injection;
+        private boolean injected;
+
+        RaceOnFirstFindByCodeRepository(AdrRepository delegate, Runnable injection) {
+            super(delegate);
+            this.injection = injection;
+        }
+
+        @Override
+        public Optional<Adr> findByCode(ProjectId projectId, AdrCode code) {
+            Optional<Adr> result = delegate.findByCode(projectId, code);
             if (!injected) {
                 injected = true;
                 injection.run();

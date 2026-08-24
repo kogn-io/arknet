@@ -329,23 +329,54 @@ public class AdrService
         if (code.equals(supersededCode)) {
             throw new IllegalArgumentException("an ADR must not supersede itself: " + code.value());
         }
-        // The superseding decision is resolved and status-checked once, outside the retry loop:
-        // its identity and status do not depend on the superseded decision's current state, and an
-        // unknown code or a not-yet-ACCEPTED status must abort immediately, before the superseded
-        // decision - the one this call actually writes (kogn-io/arknet#357) - is touched at all.
-        Adr superseding = repository.findByCode(projectId, code)
-                .orElseThrow(() -> new AdrNotFoundException(projectId, code));
-        if (superseding.status() != AdrStatus.ACCEPTED) {
+        // Only the superseding decision's identity is resolved once, outside the retry loop: an
+        // unknown code must abort immediately, and identity is stable for a given code - it cannot
+        // itself go stale the way status can. Its ACCEPTED status is deliberately NOT checked here
+        // (kogn-io/arknet#359): a check before the loop only ever sees the state at the moment this
+        // call started, and the superseding decision can be deprecated or superseded itself in the
+        // window between that read and this call's own write - reachable through nothing more exotic
+        // than an ordinary concurrent adr_set_status/adr_supersede on it, no store-first edit needed.
+        // Landing this call's write regardless would violate the very port contract it is meant to
+        // enforce ({@code SupersedeAdr}: "must already be ACCEPTED") without anything in the store
+        // ever rejecting it - and if the superseding decision itself later becomes SUPERSEDED, it
+        // would couple straight into the P0 kogn-io/arknet#359 fixed elsewhere in this issue. The
+        // mutation below therefore re-reads and re-checks the superseding decision's status on every
+        // retry attempt instead, against whatever state that attempt actually observes - cheap
+        // (single lookup by code) relative to the class of inconsistency it closes.
+        AdrId supersedingId = repository.findByCode(projectId, code)
+                .orElseThrow(() -> new AdrNotFoundException(projectId, code))
+                .id();
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, supersededCode, current -> {
+            // Idempotency first, before the fresh status check below: Adr#supersededBy would take
+            // this very same early return internally, but taking it here too means recording the
+            // same pair a second time never depends on the superseding decision's current status -
+            // only pairing with a genuinely new successor does. Without this, a superseding decision
+            // that became DEPRECATED/SUPERSEDED after its first, already-recorded adr_supersede would
+            // turn a promised no-op into a failure.
+            if (supersedingId.equals(current.supersededBy())) {
+                return current;
+            }
+            requireSupersedingIsAccepted(projectId, code);
+            return current.supersededBy(supersedingId);
+        }));
+    }
+
+    /**
+     * Re-reads the superseding decision by its business code and refuses unless it is currently
+     * {@link AdrStatus#ACCEPTED} - the per-attempt half of {@link #supersede}'s status check
+     * (kogn-io/arknet#359). {@code code} is known to resolve at this point (the identity was already
+     * looked up once in {@link #supersede} before entering the retry), but the status behind it is
+     * re-read fresh on every call so a concurrent transition landing in the window this method closes
+     * is always seen before this call's own write, never after.
+     */
+    private void requireSupersedingIsAccepted(ProjectId projectId, AdrCode code) {
+        AdrStatus status = repository.findByCode(projectId, code)
+                .orElseThrow(() -> new AdrNotFoundException(projectId, code))
+                .status();
+        if (status != AdrStatus.ACCEPTED) {
             throw new IllegalStateException("ADR " + code.value()
-                    + " can only supersede another decision while ACCEPTED, was " + superseding.status());
+                    + " can only supersede another decision while ACCEPTED, was " + status);
         }
-        AdrId supersedingId = superseding.id();
-        // The CAS retry now runs on the superseded code, not the superseding one: that is the
-        // record this write actually replaces. AdrStatus#ACCEPTED is enforced a second time inside
-        // the retried mutation itself (Adr#supersededBy), against whatever state each retry attempt
-        // re-reads.
-        return detailOf(projectId, updateWithOptimisticRetry(
-                projectId, supersededCode, current -> current.supersededBy(supersedingId)));
     }
 
     @Override
