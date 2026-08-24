@@ -201,8 +201,10 @@ public interface AdrRepository {
 
     /**
      * Resolves opaque decision identities to their business codes, in one store round-trip (not one
-     * per id) - what turns {@link Adr#supersedes()}'s bare identities into something a human can
-     * re-type.
+     * per id) - what turns bare identities into something a human can re-type. Two callers today:
+     * {@link Adr#relatedTo()}'s peer list, and the successor of a decision whose
+     * {@link Adr#supersededBy()} target {@link #findAll} skipped, which {@code AdrService#list}
+     * falls back to this lookup for rather than dropping the edge (kogn-io/arknet#359).
      *
      * <p>Never rejects: an id that resolves to nothing in the project is simply absent from the
      * result, the same contract a sibling hexagon's {@code ResolveTerms}/{@code ResolveRequirements}

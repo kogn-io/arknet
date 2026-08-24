@@ -378,8 +378,15 @@ public class AdrService
      * {@link AdrStatus#ACCEPTED} - the per-attempt half of {@link #supersede}'s status check
      * (kogn-io/arknet#359). {@code code} is known to resolve at this point (the identity was already
      * looked up once in {@link #supersede} before entering the retry), but the status behind it is
-     * re-read fresh on every call so a concurrent transition landing in the window this method closes
-     * is always seen before this call's own write, never after.
+     * re-read fresh on every attempt, so a concurrent transition landing before that read is always
+     * seen rather than written over.
+     *
+     * <p>This narrows the window rather than closing it: the CAS token this call holds belongs to
+     * the <em>superseded</em> decision, not to the superseding one re-read here, so a successor that
+     * is deprecated or superseded between this read and the attempt's own write still lets that
+     * write land. The outcome there is a legal supersession chain rather than a refusal, which is
+     * why the remainder is left open instead of being pulled into the write transaction (a second
+     * CAS token on the superseding decision, an out-port change) - see kogn-io/arknet#359.</p>
      */
     private void requireSupersedingIsAccepted(ProjectId projectId, AdrCode code) {
         AdrStatus status = repository.findByCode(projectId, code)
