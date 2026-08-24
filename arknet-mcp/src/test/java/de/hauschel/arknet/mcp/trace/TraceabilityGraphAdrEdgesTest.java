@@ -81,7 +81,8 @@ class TraceabilityGraphAdrEdgesTest {
                 KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
         BoundedContextRepository boundedContexts = KognioRdfBoundedContextRepositoryFactory.over(
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
-        AdrRepository adrs = KognioRdfAdrRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+        AdrRepository adrs =
+                KognioRdfAdrRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
 
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
@@ -100,7 +101,7 @@ class TraceabilityGraphAdrEdgesTest {
                 new AdrId(ResourceId.of(ADR_2_IRI)), new AdrCode("ADR-2"), "Swap the store",
                 AdrStatus.ACCEPTED, "The embedded store no longer covers the team case.",
                 "Move to a remote endpoint behind the same out-port.", null, null, null,
-                List.of(), List.of(), null, List.of()));
+                List.of(), List.of(), null, List.of()), "de");
         // ADR-1 addresses FR-1 and affects BC-1; ADR-2 supersedes ADR-1 (kogn-io/arknet#357: the
         // supersededBy edge - and the SUPERSEDED status it is coupled to - is written on the
         // superseded decision, ADR-1, pointing at its successor ADR-2).
@@ -110,7 +111,7 @@ class TraceabilityGraphAdrEdgesTest {
                 "Use kognio-rdf behind an out-port.", null, null, null,
                 List.of(new RequirementRef(ResourceId.of(FR_1_IRI))),
                 List.of(new BoundedContextRef(ResourceId.of(BC_1_IRI))),
-                new AdrId(ResourceId.of(ADR_2_IRI)), List.of()));
+                new AdrId(ResourceId.of(ADR_2_IRI)), List.of()), "de");
 
         // ADR-4 legacy-supersedes ADR-3 (pre-#357 shape, store-first only - no tool writes it any
         // more): a raw triple, inserted directly rather than through any repository, the same way
@@ -119,12 +120,12 @@ class TraceabilityGraphAdrEdgesTest {
                 new AdrId(ResourceId.of(ADR_3_IRI)), new AdrCode("ADR-3"), "Store data in files",
                 AdrStatus.DEPRECATED, "An earlier storage choice.",
                 "Use plain files behind an out-port.", null, null, null,
-                List.of(), List.of(), null, List.of()));
+                List.of(), List.of(), null, List.of()), "de");
         adrs.create(PROJECT, new Adr(
                 new AdrId(ResourceId.of(ADR_4_IRI)), new AdrCode("ADR-4"), "Swap to files, then back",
                 AdrStatus.PROPOSED, "The file-based approach did not scale either.",
                 "Revisit the embedded triple store.", null, null, null,
-                List.of(), List.of(), null, List.of()));
+                List.of(), List.of(), null, List.of()), "de");
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + ADR_4_IRI
