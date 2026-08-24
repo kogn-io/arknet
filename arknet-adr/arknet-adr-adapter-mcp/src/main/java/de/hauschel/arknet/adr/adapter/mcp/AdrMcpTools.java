@@ -248,7 +248,9 @@ public final class AdrMcpTools {
             final String projectAnchor) {
         final ProjectId projectId = resolveProject(context, projectAnchor);
         final List<AdrDetail> all = listAdrs.list(projectId);
-        final int skipped = countSkippedAdrs.skippedCount(projectId);
+        // all.size() is the materialised subset this call already holds - handed over so the count
+        // does not re-read the whole decision graph behind adr_list's back (kogn-io/arknet#359).
+        final int skipped = countSkippedAdrs.skippedCount(projectId, all.size());
         if (all.isEmpty()) {
             return skipped == 0 ? "(no ADRs)" : skippedNote(skipped) + "\n(no other ADRs)";
         }

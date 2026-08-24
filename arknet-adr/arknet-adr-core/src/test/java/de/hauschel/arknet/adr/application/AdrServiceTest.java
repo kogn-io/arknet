@@ -175,7 +175,7 @@ class AdrServiceTest {
     void skippedCountIsZeroWhenNothingWasSkipped() {
         service.add(PROJECT, newAdr());
 
-        assertEquals(0, service.skippedCount(PROJECT));
+        assertEquals(0, service.skippedCount(PROJECT, service.list(PROJECT).size()));
     }
 
     @Test
@@ -184,8 +184,26 @@ class AdrServiceTest {
         repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
         repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-3"));
 
-        assertEquals(2, service.skippedCount(PROJECT));
-        assertEquals(0, service.skippedCount(new ProjectId("other")));
+        assertEquals(2, service.skippedCount(PROJECT, service.list(PROJECT).size()));
+        assertEquals(0, service.skippedCount(new ProjectId("other"), 0));
+    }
+
+    /**
+     * The caller's count and this read are two unsynchronised observations: a decision recorded in
+     * between makes the code list the longer one, and a negative "skipped" would be a worse signal
+     * than a merely stale zero.
+     */
+    @Test
+    void skippedCountClampsAtZeroWhenTheCallerSawMoreThanTheCodeListHolds() {
+        service.add(PROJECT, newAdr());
+
+        assertEquals(0, service.skippedCount(PROJECT, 5));
+    }
+
+    /** A negative count is a bug in the caller, not a store anomaly to be silently clamped away. */
+    @Test
+    void skippedCountRefusesANegativeMaterialisedCount() {
+        assertThrows(IllegalArgumentException.class, () -> service.skippedCount(PROJECT, -1));
     }
 
     @Test

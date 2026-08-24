@@ -587,16 +587,19 @@ public class AdrService
     }
 
     @Override
-    public int skippedCount(ProjectId projectId) {
+    public int skippedCount(ProjectId projectId, int materialisedCount) {
         Objects.requireNonNull(projectId, "projectId");
-        // findAllCodes never skips a recorded decision (see its own javadoc); findAll is exactly the
-        // subset list() can materialise. The difference is what list() silently dropped. Clamped at
-        // zero rather than trusted blindly: two separate, unsynchronised reads could in principle
-        // observe a decision created in between and briefly overcount findAllCodes relative to
-        // findAll, and a negative "skipped" count would be a worse signal than a merely stale zero.
+        if (materialisedCount < 0) {
+            throw new IllegalArgumentException("materialisedCount must not be negative: " + materialisedCount);
+        }
+        // findAllCodes never skips a recorded decision (see its own javadoc); the count the caller
+        // hands in is exactly the subset its own list() could materialise. The difference is what
+        // list() silently dropped. Clamped at zero rather than trusted blindly: the caller's read and
+        // this one are unsynchronised, so a decision created in between would briefly overcount
+        // findAllCodes against it, and a negative "skipped" count would be a worse signal than a
+        // merely stale zero.
         int total = repository.findAllCodes(projectId).size();
-        int materialised = repository.findAll(projectId).size();
-        return Math.max(0, total - materialised);
+        return Math.max(0, total - materialisedCount);
     }
 
     /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */

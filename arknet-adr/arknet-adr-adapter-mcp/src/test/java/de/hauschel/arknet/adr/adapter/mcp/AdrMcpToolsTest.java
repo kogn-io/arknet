@@ -355,6 +355,21 @@ class AdrMcpToolsTest {
         assertTrue(rendered.contains("1 decision skipped"), rendered);
     }
 
+    /**
+     * The note must not cost a second full read of the decision graph: {@code adr_list} already holds
+     * the materialised decisions when it asks, so it hands their number over rather than letting the
+     * in-port rediscover it (kogn-io/arknet#359).
+     */
+    @Test
+    void listHandsTheAlreadyMaterialisedCountToTheSkippedCountPort() {
+        stub.allAdrs = List.of(detail(adrWith(List.of(), List.of(), null), List.of(), List.of()),
+                detail(adrWith(List.of(), List.of(), null), List.of(), List.of()));
+
+        adapter.list(null, ANCHOR);
+
+        assertEquals(2, stub.lastMaterialisedCount);
+    }
+
     @Test
     void getRendersUnknownAdrMessage() {
         assertTrue(adapter.get(null, "ADR-99", ANCHOR).contains("ADR not found: ADR-99"));
@@ -648,6 +663,8 @@ class AdrMcpToolsTest {
         private List<AdrDetail> allAdrs = List.of();
         /** What {@link #skippedCount} answers next - {@code 0} unless a test sets otherwise. */
         private int nextSkippedCount;
+        /** The materialised count {@code adr_list} handed over, so a test can assert it was reused. */
+        private int lastMaterialisedCount = -1;
         /** Records which project the adapter routed to, so a test can assert the routing itself. */
         private ProjectId lastProjectId;
 
@@ -675,7 +692,8 @@ class AdrMcpToolsTest {
         }
 
         @Override
-        public int skippedCount(ProjectId projectId) {
+        public int skippedCount(ProjectId projectId, int materialisedCount) {
+            lastMaterialisedCount = materialisedCount;
             return nextSkippedCount;
         }
 

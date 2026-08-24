@@ -27,8 +27,18 @@ public interface CountSkippedAdrs {
      * through {@code adr_add}/{@code adr_update}/{@code adr_supersede} - the gap is reachable only
      * through a store-first edit that bypassed the SHACL write gate entirely.
      *
-     * @param projectId the project (architecture model) to count skipped decisions in
+     * <p><strong>The caller passes in what it already read.</strong> The count is the difference
+     * between every recorded decision and the subset {@link ListAdrs#list} could materialise, and the
+     * caller is holding that subset by the time it asks - so it hands over its size rather than
+     * making this port read the whole decision graph a second time just to rediscover it. Reading it
+     * here would double the cost of the hexagon's most expensive read path for a note that is
+     * {@code 0} in every project written through these tools.</p>
+     *
+     * @param projectId          the project (architecture model) to count skipped decisions in
+     * @param materialisedCount  how many decisions the caller's own {@link ListAdrs#list} returned
+     *                           for the same project, immediately before this call
      * @return the number of decisions {@link ListAdrs#list} silently omitted, {@code 0} if none
+     * @throws IllegalArgumentException if {@code materialisedCount} is negative
      */
-    int skippedCount(ProjectId projectId);
+    int skippedCount(ProjectId projectId, int materialisedCount);
 }
