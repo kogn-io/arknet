@@ -1010,11 +1010,11 @@ class AdrServiceTest {
     }
 
     /**
-     * Deliberately narrower than {@code name}/{@code context}/{@code decision}: correcting an
-     * *existing* consequence (as opposed to appending a new one) is locked once the decision is no
-     * longer PROPOSED, with no new-language exemption - see {@code Adr#withConsequenceCorrections}'s
-     * javadoc for why. Mutation test: removing the status guard in
-     * {@code Adr#withConsequenceCorrections} turns this into an unexpected pass.
+     * Correcting an *existing* consequence's wording in the very language it already carries (this
+     * call names no {@code language}, so it resolves to the same {@code DEFAULT_LANGUAGE} the
+     * consequence was written under) is locked once the decision is no longer PROPOSED - it is an
+     * edit, not a translation, so the new-language exemption does not apply. Mutation test: removing
+     * the status guard in {@code Adr#withConsequenceCorrections} turns this into an unexpected pass.
      */
     @Test
     void updateRejectsCorrectingAnExistingConsequenceOnAnAcceptedDecision() {
@@ -1025,6 +1025,90 @@ class AdrServiceTest {
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
                 .consequenceCorrections(List.of(new ConsequenceCorrection(1, "Rewritten", ConsequenceType.POSITIVE)))
+                .build()));
+    }
+
+    /**
+     * kogn-io/arknet#357's follow-up: a consequence correction that writes a language the position
+     * never carried is exempt from the status gate, even on an accepted decision - it translates an
+     * already-decided consequence, it does not change what was decided. Mutation test: removing
+     * {@code AdrService#newLanguageVariantPositions}'s exemption, or the branch in
+     * {@code Adr#withConsequenceCorrections} that honours it, turns this into an unexpected throw.
+     */
+    @Test
+    void updateAllowsANewLanguageConsequenceCorrectionOnAnAcceptedDecision() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .consequenceCorrections(
+                        List.of(new ConsequenceCorrection(1, "Entwurfsformulierung", ConsequenceType.NEUTRAL)))
+                .language("de")
+                .build()).adr();
+
+        assertEquals(List.of(new Consequence(1, "Entwurfsformulierung", ConsequenceType.NEUTRAL)),
+                updated.consequences());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
+    /**
+     * The mirror image: writing a new language does not exempt a bundled {@code type} change - a
+     * consequence's classification is a judgement about the decision, not a fact of its wording, so
+     * it is gated regardless of language.
+     */
+    @Test
+    void updateRejectsAConsequenceTypeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
+                .consequenceCorrections(
+                        List.of(new ConsequenceCorrection(1, "Entwurfsformulierung", ConsequenceType.POSITIVE)))
+                .language("de")
+                .build()));
+    }
+
+    /** {@code ConsideredOption}'s counterpart of the new-language-consequence-correction pair above. */
+    @Test
+    void updateAllowsANewLanguageConsideredOptionCorrectionOnAnAcceptedDecision() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                null, DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .consideredOptionCorrections(List.of(
+                        new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
+                                1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)))
+                .language("de")
+                .build()).adr();
+
+        assertEquals(List.of(new ConsideredOption(1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)),
+                updated.consideredOptions());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
+    /**
+     * The mirror image for {@code ConsideredOption}: writing a new language does not exempt a bundled
+     * {@code outcome} change - whether an option was chosen or rejected is a judgement about the
+     * decision, not a fact of its wording.
+     */
+    @Test
+    void updateRejectsAnOptionOutcomeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                null, DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
+                .consideredOptionCorrections(List.of(
+                        new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
+                                1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)))
+                .language("de")
                 .build()));
     }
 

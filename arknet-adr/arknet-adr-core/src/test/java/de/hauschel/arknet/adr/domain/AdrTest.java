@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -196,7 +197,7 @@ class AdrTest {
                 null, null, null, null, null, null);
 
         Adr patched = adr.withConsequenceCorrections(PROJECT,
-                List.of(new ConsequenceCorrection(1, "sharper", ConsequenceType.POSITIVE)));
+                List.of(new ConsequenceCorrection(1, "sharper", ConsequenceType.POSITIVE)), Set.of());
 
         assertEquals(List.of(
                 new Consequence(1, "sharper", ConsequenceType.POSITIVE),
@@ -209,13 +210,14 @@ class AdrTest {
                 List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
 
         assertThrows(ConsequencePositionNotFoundException.class, () -> adr.withConsequenceCorrections(PROJECT,
-                List.of(new ConsequenceCorrection(9, "x", ConsequenceType.NEUTRAL))));
+                List.of(new ConsequenceCorrection(9, "x", ConsequenceType.NEUTRAL)), Set.of()));
     }
 
     /**
-     * Deliberately narrower than {@link Adr#reviseText}: correcting an *existing* consequence is
-     * locked once the decision is no longer PROPOSED, with no new-language exemption. Mutation test:
-     * removing this status guard turns a rejected correction into a silently accepted one.
+     * Correcting an *existing* consequence's wording in a language it already carries is locked once
+     * the decision is no longer PROPOSED - {@code newLanguageVariantPositions} is empty, so position 1
+     * is not exempt. Mutation test: removing this status guard turns a rejected correction into a
+     * silently accepted one.
      */
     @Test
     void withConsequenceCorrectionsThrowsOnAnAcceptedDecision() {
@@ -223,7 +225,41 @@ class AdrTest {
                 List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
 
         assertThrows(AdrTextImmutableException.class, () -> accepted.withConsequenceCorrections(PROJECT,
-                List.of(new ConsequenceCorrection(1, "rewritten", ConsequenceType.POSITIVE))));
+                List.of(new ConsequenceCorrection(1, "rewritten", ConsequenceType.POSITIVE)), Set.of()));
+    }
+
+    /**
+     * kogn-io/arknet#357's follow-up: a correction that only changes {@code statement} at a position
+     * named in {@code newLanguageVariantPositions} is exempt from the status gate, even on an accepted
+     * decision - it adds a translation, it does not change what was decided. Mutation test: removing
+     * the exemption branch in {@code withConsequenceCorrections} turns this into an unexpected throw.
+     */
+    @Test
+    void withConsequenceCorrectionsAllowsANewLanguageVariantEvenWhenAccepted() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+
+        Adr patched = accepted.withConsequenceCorrections(PROJECT,
+                List.of(new ConsequenceCorrection(1, "Entwurf", ConsequenceType.NEUTRAL)), Set.of(1));
+
+        assertEquals(List.of(new Consequence(1, "Entwurf", ConsequenceType.NEUTRAL)), patched.consequences());
+        assertEquals(AdrStatus.ACCEPTED, patched.status());
+    }
+
+    /**
+     * The mirror image: a position in {@code newLanguageVariantPositions} does not exempt a
+     * {@code type} change bundled into the same correction - classifying a consequence as
+     * positive/negative/neutral is a judgement about the decision, not a fact of its wording, so a
+     * type change is gated regardless of language. Mutation test: dropping the {@code typeChanged}
+     * check turns this into an unexpected pass.
+     */
+    @Test
+    void withConsequenceCorrectionsRejectsATypeChangeEvenWithANewLanguageVariant() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+
+        assertThrows(AdrTextImmutableException.class, () -> accepted.withConsequenceCorrections(PROJECT,
+                List.of(new ConsequenceCorrection(1, "Entwurf", ConsequenceType.POSITIVE)), Set.of(1)));
     }
 
     /** A correction that changes nothing is a no-op in any status - mirrors {@code reviseText}. */
@@ -233,7 +269,7 @@ class AdrTest {
                 List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
 
         Adr result = accepted.withConsequenceCorrections(PROJECT,
-                List.of(new ConsequenceCorrection(1, "draft", ConsequenceType.NEUTRAL)));
+                List.of(new ConsequenceCorrection(1, "draft", ConsequenceType.NEUTRAL)), Set.of());
 
         assertSame(accepted, result);
     }
@@ -259,13 +295,18 @@ class AdrTest {
                 List.of(new NewConsideredOption("B", "r2", OptionOutcome.CHOSEN))));
     }
 
+    /**
+     * Correcting an *existing* option's wording in a language it already carries is locked once the
+     * decision is no longer PROPOSED - {@code newLanguageVariantPositions} is empty, so position 1 is
+     * not exempt (this correction also changes {@code outcome}, which would gate it regardless).
+     */
     @Test
     void withConsideredOptionCorrectionsThrowsOnAnAcceptedDecision() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
                 List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
 
         assertThrows(AdrTextImmutableException.class, () -> accepted.withConsideredOptionCorrections(PROJECT,
-                List.of(new ConsideredOptionCorrection(1, "A", "rewritten", OptionOutcome.CHOSEN))));
+                List.of(new ConsideredOptionCorrection(1, "A", "rewritten", OptionOutcome.CHOSEN)), Set.of()));
     }
 
     @Test
@@ -274,7 +315,40 @@ class AdrTest {
                 List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
 
         assertThrows(ConsideredOptionPositionNotFoundException.class, () -> adr.withConsideredOptionCorrections(
-                PROJECT, List.of(new ConsideredOptionCorrection(9, "x", "y", OptionOutcome.REJECTED))));
+                PROJECT, List.of(new ConsideredOptionCorrection(9, "x", "y", OptionOutcome.REJECTED)), Set.of()));
+    }
+
+    /**
+     * kogn-io/arknet#357's follow-up, {@code ConsideredOption}'s counterpart to
+     * {@code withConsequenceCorrectionsAllowsANewLanguageVariantEvenWhenAccepted}: a correction that
+     * only changes {@code name}/{@code rationale} at a position named in
+     * {@code newLanguageVariantPositions} is exempt, even on an accepted decision.
+     */
+    @Test
+    void withConsideredOptionCorrectionsAllowsANewLanguageVariantEvenWhenAccepted() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+
+        Adr patched = accepted.withConsideredOptionCorrections(PROJECT,
+                List.of(new ConsideredOptionCorrection(1, "Ein A", "r1-de", OptionOutcome.REJECTED)), Set.of(1));
+
+        assertEquals(List.of(new ConsideredOption(1, "Ein A", "r1-de", OptionOutcome.REJECTED)),
+                patched.consideredOptions());
+        assertEquals(AdrStatus.ACCEPTED, patched.status());
+    }
+
+    /**
+     * The mirror image: a position in {@code newLanguageVariantPositions} does not exempt an
+     * {@code outcome} change - whether an option was chosen or rejected is a judgement about the
+     * decision, not a fact of its wording.
+     */
+    @Test
+    void withConsideredOptionCorrectionsRejectsAnOutcomeChangeEvenWithANewLanguageVariant() {
+        Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+
+        assertThrows(AdrTextImmutableException.class, () -> accepted.withConsideredOptionCorrections(PROJECT,
+                List.of(new ConsideredOptionCorrection(1, "Ein A", "r1-de", OptionOutcome.CHOSEN)), Set.of(1)));
     }
 
     @Test
