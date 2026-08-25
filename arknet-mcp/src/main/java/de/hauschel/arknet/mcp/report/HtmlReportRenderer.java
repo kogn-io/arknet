@@ -400,10 +400,12 @@ public final class HtmlReportRenderer {
             }
             case Block.Bullets bullets -> {
                 html.append("                <ul class=\"bullets\">\n");
+                final Map<Integer, SubResource> bulletSources =
+                        sources.bullets().getOrDefault(bullets.label(), Map.of());
                 for (final BulletItem item : bullets.items()) {
                     final String rendered = renderText(item.text(), carded, subjects);
-                    final Optional<LangVariants> variants = itemVariants(
-                            sources.bullets().get(item.position()), item.text().text(), displayLocale);
+                    final Optional<LangVariants> variants =
+                            itemVariants(bulletSources.get(item.position()), item.text().text(), displayLocale);
                     html.append("                  <li>").append(langSwitchable(rendered, variants))
                             .append("</li>\n");
                 }
@@ -562,26 +564,31 @@ public final class HtmlReportRenderer {
     }
 
     /**
-     * The store sub-resources behind a card's positioned items, keyed by that position: the
-     * {@code arkreq:Step}s of a use case's main flow, and - sharing one map, because no resource
-     * carries both edges - the extensions of a use case or the acceptance criteria of a
-     * requirement, whichever the card holds.
+     * The store sub-resources behind a card's positioned items: the {@code arkreq:Step}s of a
+     * use case's main flow, keyed by position, and every {@link Block.Bullets} list the card may
+     * show, keyed first by that block's own {@link Block#label() label} and then by position.
      *
-     * <p>Sharing the bullet map is what keeps the card's own type out of the renderer: which
-     * kind of sub-resource a bullet list shows follows from the edges the card's resource
-     * actually has, not from knowing that this card is a use case and that one a requirement -
-     * exactly the domain knowledge {@link Block}'s shape-only vocabulary exists to keep out
-     * (issue #319).</p>
-     *
-     * <p>Both maps are per card, not per block: {@code bullets} assumes a card shows at most one
-     * {@link Block.Bullets} list, which is what {@link RequirementCards} and {@link UseCaseCards}
-     * emit today. A card with a second bullet list would match both against this one table, and
-     * only the text comparison in {@link #languageVariants} would still tell them apart.</p>
+     * <p>Keying {@code bullets} by label rather than sharing one flat position table is what
+     * keeps two {@link Block.Bullets} lists on the same card - the extensions of a use case, the
+     * acceptance criteria of a requirement, or any future pair sharing one card - from being
+     * matched against each other's positions (issue #358: before this, a second bullet list
+     * would either collide with the first's positions or, if the two happened not to collide,
+     * silently borrow the wrong sub-resource). The label is a fixed, shared constant between a
+     * card builder ({@link RequirementCards#ACCEPTANCE_CRITERIA_LABEL}, {@link
+     * UseCaseCards#EXTENSIONS_LABEL}) and this renderer, not a guess back from the rendered text -
+     * the same "known key beats a text-equality guess" choice {@link #itemVariants} already makes
+     * over {@link #languageVariants} for a single item. The card's own type still never reaches
+     * this renderer: which edges feed which label is this class's own, already-hardcoded
+     * knowledge (see the class-level note on {@link #MAIN_STEP_EDGE} and friends), and {@link
+     * Block}'s shape-only vocabulary is untouched (issue #319).</p>
      *
      * @param flow    main-flow steps by their 1-based position
-     * @param bullets extensions or acceptance criteria by their 1-based position
+     * @param bullets every bullets list's sub-resources, keyed by the list's own label and then
+     *                by the item's 1-based position; a label with no known source (e.g. a plain
+     *                {@link Block.Bullets#plain} list with no positioned sub-resources of its own)
+     *                is simply absent, and a lookup miss falls back to an empty map
      */
-    private record LangSources(Map<Integer, SubResource> flow, Map<Integer, SubResource> bullets) {
+    private record LangSources(Map<Integer, SubResource> flow, Map<String, Map<Integer, SubResource>> bullets) {
 
         /** For a card the snapshot holds no resource for, or one with no positioned items. */
         private static final LangSources NONE = new LangSources(Map.of(), Map.of());
@@ -606,10 +613,14 @@ public final class HtmlReportRenderer {
         }
         final Map<Integer, List<SubResource>> flow = new LinkedHashMap<>();
         collectPositioned(card, bySubject, MAIN_STEP_EDGE, STEP_TEXT, flow);
-        final Map<Integer, List<SubResource>> bullets = new LinkedHashMap<>();
-        collectPositioned(card, bySubject, EXTENSION_STEP_EDGE, STEP_TEXT, bullets);
-        collectPositioned(card, bySubject, ACCEPTANCE_CRITERION_EDGE, CRITERION_TEXT, bullets);
-        return new LangSources(unambiguous(flow), unambiguous(bullets));
+        final Map<Integer, List<SubResource>> extensions = new LinkedHashMap<>();
+        collectPositioned(card, bySubject, EXTENSION_STEP_EDGE, STEP_TEXT, extensions);
+        final Map<Integer, List<SubResource>> acceptanceCriteria = new LinkedHashMap<>();
+        collectPositioned(card, bySubject, ACCEPTANCE_CRITERION_EDGE, CRITERION_TEXT, acceptanceCriteria);
+        final Map<String, Map<Integer, SubResource>> bullets = new LinkedHashMap<>();
+        bullets.put(UseCaseCards.EXTENSIONS_LABEL, unambiguous(extensions));
+        bullets.put(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, unambiguous(acceptanceCriteria));
+        return new LangSources(unambiguous(flow), bullets);
     }
 
     /** Adds every sub-resource {@code card} reaches through {@code edge} under its own position. */
