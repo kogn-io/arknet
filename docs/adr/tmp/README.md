@@ -69,6 +69,13 @@ beim Review zu pruefen ist.
 2. **Nummerierung beim Umzug.** Die `neu-NN`-Nummern sind Platzhalter. Zu entscheiden: durchweg
    neu nummerieren (dann zeigen Issues #344/#345 ins Leere und muessen angepasst werden) oder
    die Nummern der uebernommenen Records halten und nur die ersetzten neu vergeben.
+   **Dogfooding-Befund (2026-08-24):** in einer Store-Kopie dieses Satzes (Wegwerf-Projekt
+   `arknet-adr-zielsatz`) wurden ADR-020/021/023 entgegen dieser Abwaegung doch neu
+   durchnummeriert -- ihr Fliesstext zeigte danach auf Nummern, die im Store nicht existierten.
+   Der Fix brauchte drei zusaetzliche Records (Supersede statt Korrektur, weil ACCEPTED-Text
+   gesperrt ist). Das ist kein Beweis fuer die echte Migration, aber ein konkreter Beleg dafuer,
+   dass "Halten" den Fehler von vornherein vermeidet, den "durchweg neu nummerieren" hier
+   tatsaechlich erzeugt hat.
 3. **PR #330.** Er traegt ADR-020/021/022/023. Da 022 faellt, 020/021/023 aber bleiben und
    #344/#345 an ihnen haengen: entweder den PR ohne ADR-022 mergen, oder ihn vollstaendig
    mergen und ADR-022 unmittelbar danach durch neu-03 abloesen.
