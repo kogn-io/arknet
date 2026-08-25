@@ -153,6 +153,55 @@ class KognioRdfAdrRepositoryMultilingualTest {
     }
 
     /**
+     * Review finding of kogn-io/arknet#365: a store record whose existing tag carries a
+     * non-canonical case (e.g. {@code "EN"} instead of {@code "en"}) must still be recognised as
+     * the very same language by {@link AdrRepository.CurrentAdr#nameContextDecisionLanguages()}/
+     * {@code consequenceLanguagesByPosition()} - otherwise a same-language correction on an
+     * {@link AdrStatus#ACCEPTED} decision would misread as a brand-new translation and slip past
+     * {@code AdrService}'s per-field/per-position lock, since {@code AdrService} always compares
+     * against {@link de.hauschel.arknet.kernel.LanguageTag#resolveWriteLanguage}'s canonicalized
+     * output.
+     */
+    @Test
+    void allLanguageTagsCanonicalizeANonCanonicalTagCaseFromTheStore() {
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"),
+                List.of(new Consequence(1, "English wording", ConsequenceType.NEUTRAL)), List.of());
+        repository.create(PROJECT, original, "en");
+        String selectChild = "SELECT ?c WHERE { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
+                + ArkarchVocabulary.CONSEQUENCE + "> ?c } }";
+        String childIri;
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
+            childIri = handle.sparqlQuery().select(selectChild).findFirst().orElseThrow()
+                    .getValue("c").orElseThrow().toString();
+        }
+        // Simulates a legacy record: the name and the consequence-1 statement each carry a
+        // non-canonical tag case, written directly at the triple level (bypassing
+        // LanguageTag#resolveWriteLanguage, which every real write path routes through).
+        update("DELETE { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/core#name> ?old } } "
+                + "INSERT { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/core#name> \"Use an embedded triple store\"@EN } } "
+                + "WHERE { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value()
+                + "> <https://w3id.org/arknet/core#name> ?old } }");
+        update("DELETE { GRAPH <" + ADR_GRAPH + "> { <" + childIri + "> <" + ArkarchVocabulary.CONSEQUENCE_STATEMENT
+                + "> ?old } } "
+                + "INSERT { GRAPH <" + ADR_GRAPH + "> { <" + childIri + "> <"
+                + ArkarchVocabulary.CONSEQUENCE_STATEMENT + "> \"English wording\"@EN } } "
+                + "WHERE { GRAPH <" + ADR_GRAPH + "> { <" + childIri + "> <" + ArkarchVocabulary.CONSEQUENCE_STATEMENT
+                + "> ?old } }");
+
+        AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, original.code()).orElseThrow();
+
+        assertTrue(current.nameContextDecisionLanguages().contains("en"),
+                "a non-canonical stored tag case must still surface as the canonical \"en\"");
+        assertEquals(Set.of("en"), current.nameContextDecisionLanguages());
+        assertTrue(current.consequenceLanguagesByPosition().get(1).contains("en"),
+                "a non-canonical stored tag case must still surface as the canonical \"en\"");
+        assertEquals(Set.of("en"), current.consequenceLanguagesByPosition().get(1));
+    }
+
+    /**
      * A store-first (pre-#357) {@code arkarch:adrConsequences} literal, on a decision with no
      * structured {@code arkarch:consequence} children, is synthesised into a single {@code NEUTRAL}
      * consequence at position 1 for display - and survives a replacing write untouched, since it is

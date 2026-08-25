@@ -405,8 +405,11 @@ public final class AdrMcpTools {
             + "edge accepts), or recorded as a standalone new decision from REJECTED/DEPRECATED/"
             + "SUPERSEDED. newConsequences/newConsideredOptions append and are allowed in every "
             + "status; consequenceCorrections/consideredOptionCorrections correct an existing entry "
-            + "by position and are PROPOSED-only, with no translation exemption. The three reference "
-            + "lists stay correctable in EVERY status: passing a list replaces that relation "
+            + "by position and carry the same per-position translation exemption: writing a language "
+            + "that position never carried yet is allowed in every status, correcting the wording of a "
+            + "language that position already carries is PROPOSED-only, and changing consequenceType/"
+            + "optionOutcome is never exempt regardless of language once no longer PROPOSED. The three "
+            + "reference lists stay correctable in EVERY status: passing a list replaces that relation "
             + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
             + "untouched. Status and the supersededBy relation are not changed here - use "
             + "adr_set_status and adr_supersede.")

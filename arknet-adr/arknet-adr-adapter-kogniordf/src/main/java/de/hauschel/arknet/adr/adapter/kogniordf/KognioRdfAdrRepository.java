@@ -744,8 +744,12 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private Set<String> allLanguageTags(DatasetHandle handle, String subject, String predicateIri) {
         String query = "SELECT ?o WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
         Set<String> tags = new LinkedHashSet<>();
-        handle.sparqlQuery().select(query)
-                .forEach(row -> literalOf(row, "o").getLanguageTag().ifPresent(tags::add));
+        handle.sparqlQuery().select(query).forEach(row -> {
+            String tag = canonicalizeLenient(literalOf(row, "o").getLanguageTag().orElse(null));
+            if (tag != null) {
+                tags.add(tag);
+            }
+        });
         return tags;
     }
 
@@ -790,8 +794,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
         Map<Integer, Set<String>> byPosition = new LinkedHashMap<>();
         handle.sparqlQuery().select(query).forEach(row -> {
             int position = Integer.parseInt(literalOf(row, "position").getLexicalForm());
-            literalOf(row, "text").getLanguageTag().ifPresent(tag ->
-                    byPosition.computeIfAbsent(position, key -> new LinkedHashSet<>()).add(tag));
+            String tag = canonicalizeLenient(literalOf(row, "text").getLanguageTag().orElse(null));
+            if (tag != null) {
+                byPosition.computeIfAbsent(position, key -> new LinkedHashSet<>()).add(tag);
+            }
         });
         return byPosition;
     }

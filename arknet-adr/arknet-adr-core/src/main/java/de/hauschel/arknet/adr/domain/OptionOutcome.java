@@ -7,7 +7,7 @@ package de.hauschel.arknet.adr.domain;
  * Whether a {@link ConsideredOption} of an {@link Adr} was chosen or rejected.
  *
  * <p>Mirrors the two {@code arkarch:OptionOutcome} individuals ({@code arkarch:Chosen}/
- * {@code arkarch:Rejected}, kogn-io/arknet#357). Unlike {@link ConsequenceType}, this field is
+ * {@code arkarch:OptionRejected}, kogn-io/arknet#357). Unlike {@link ConsequenceType}, this field is
  * nullable on {@link ConsideredOption}: the out-adapter's legacy-literal fallback synthesises an
  * option with no outcome at all for a store-first (ADR-005) {@code arkarch:adrAlternatives} string
  * that predates this structured resource (see {@link ConsideredOption}'s javadoc) - there is no
