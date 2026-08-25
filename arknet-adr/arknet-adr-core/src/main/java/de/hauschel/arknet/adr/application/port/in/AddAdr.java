@@ -3,7 +3,6 @@
 
 package de.hauschel.arknet.adr.application.port.in;
 
-import java.time.LocalDate;
 import java.util.List;
 
 import de.hauschel.arknet.adr.domain.NewConsequence;
@@ -61,7 +60,6 @@ public interface AddAdr {
      *                                  own positioned {@link NewConsideredOption}; optional, may be
      *                                  {@code null} or empty. At most one may carry
      *                                  {@link de.hauschel.arknet.adr.domain.OptionOutcome#CHOSEN}
-     * @param decisionDate              the day the decision was made; optional (may be {@code null})
      * @param language                  the BCP-47 language tag every multilingual text this call
      *                                  writes ({@code name}, {@code context}, {@code decision}, every
      *                                  consequence's statement, every option's name/rationale) is
@@ -83,7 +81,6 @@ public interface AddAdr {
             String decision,
             List<NewConsequence> consequences,
             List<NewConsideredOption> consideredOptions,
-            LocalDate decisionDate,
             String language,
             List<String> addressesRequirementCodes,
             List<String> affectsContextCodes,

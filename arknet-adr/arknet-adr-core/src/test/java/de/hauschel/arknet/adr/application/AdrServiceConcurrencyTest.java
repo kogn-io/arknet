@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,8 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 class AdrServiceConcurrencyTest {
 
     private static final ProjectId PROJECT = new ProjectId("test-project");
+    /** These tests race writes, not dates - the clock only has to be a clock. */
+    private static final Clock CLOCK = Clock.systemUTC();
     private static final ResourceId BC_1 = ResourceId.of("https://w3id.org/arknet/id/bc-1");
 
     private InMemoryAdrRepository store;
@@ -80,14 +83,14 @@ class AdrServiceConcurrencyTest {
         requirements = new InMemoryReferenceLookups.Requirements();
         contexts = new InMemoryReferenceLookups.BoundedContexts();
         contexts.register("BC-1", BC_1);
-        otherCaller = new AdrService(store, resourceIdFactory, requirements, contexts);
+        otherCaller = new AdrService(store, resourceIdFactory, requirements, contexts, CLOCK);
     }
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
         RaceOnFirstFindAllCodesRepository racing =
                 new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(PROJECT, newAdr(), "en"));
-        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
+        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, CLOCK);
 
         Adr result = underTest.add(PROJECT, newAdr(), "en").adr();
 
@@ -113,14 +116,14 @@ class AdrServiceConcurrencyTest {
     @Test
     void aSecondConcurrentSupersedeOnTheSameDecisionFailsCleanlyAfterTheFirstWins() {
         AdrCode older = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, older);
+        otherCaller.accept(PROJECT, older, null);
         AdrCode winner = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, winner);
+        otherCaller.accept(PROJECT, winner, null);
         AdrCode loserSuccessor = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, loserSuccessor);
+        otherCaller.accept(PROJECT, loserSuccessor, null);
         RaceOnFirstReadRepository racing = new RaceOnFirstReadRepository(store,
                 () -> otherCaller.supersede(PROJECT, winner, older));
-        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
+        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, CLOCK);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
                 () -> underTest.supersede(PROJECT, loserSuccessor, older));
@@ -141,9 +144,9 @@ class AdrServiceConcurrencyTest {
     void acceptGivesUpAfterExhaustingRetriesAgainstPermanentContention() {
         AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         AdrService underTest =
-                new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts);
+                new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts, CLOCK);
 
-        assertThrows(AdrConcurrentlyModifiedException.class, () -> underTest.accept(PROJECT, code));
+        assertThrows(AdrConcurrentlyModifiedException.class, () -> underTest.accept(PROJECT, code, null));
     }
 
     /**
@@ -153,11 +156,11 @@ class AdrServiceConcurrencyTest {
     @Test
     void acceptingAnAlreadyAcceptedAdrWritesNothingEvenUnderPermanentContention() {
         AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, code);
+        otherCaller.accept(PROJECT, code, null);
         AdrService underTest =
-                new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts);
+                new AdrService(new AlwaysConflictingRepository(store), resourceIdFactory, requirements, contexts, CLOCK);
 
-        assertEquals(AdrStatus.ACCEPTED, underTest.accept(PROJECT, code).adr().status());
+        assertEquals(AdrStatus.ACCEPTED, underTest.accept(PROJECT, code, null).adr().status());
     }
 
     /**
@@ -172,8 +175,8 @@ class AdrServiceConcurrencyTest {
     void concurrentUpdateRetriesAgainstTheOtherWritersCommitInsteadOfOverwritingIt() {
         AdrCode code = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
         RaceOnFirstReadRepository racing =
-                new RaceOnFirstReadRepository(store, () -> otherCaller.accept(PROJECT, code));
-        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
+                new RaceOnFirstReadRepository(store, () -> otherCaller.accept(PROJECT, code, null));
+        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, CLOCK);
 
         // A reference-only correction, because the text of an accepted decision is immutable - and
         // by the time this write lands, the other caller has already accepted it.
@@ -197,12 +200,12 @@ class AdrServiceConcurrencyTest {
     @Test
     void supersedeRefusesWhenTheSupersedingDecisionIsDeprecatedInTheWindowBeforeItsOwnWrite() {
         AdrCode superseding = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, superseding);
+        otherCaller.accept(PROJECT, superseding, null);
         AdrCode superseded = otherCaller.add(PROJECT, newAdr(), "en").adr().code();
-        otherCaller.accept(PROJECT, superseded);
+        otherCaller.accept(PROJECT, superseded, null);
         RaceOnFirstFindByCodeRepository racing = new RaceOnFirstFindByCodeRepository(store,
                 () -> otherCaller.deprecate(PROJECT, superseding));
-        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts);
+        AdrService underTest = new AdrService(racing, resourceIdFactory, requirements, contexts, CLOCK);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
                 () -> underTest.supersede(PROJECT, superseding, superseded));
@@ -218,7 +221,7 @@ class AdrServiceConcurrencyTest {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                null, null, null, "en", null, null, null);
+                null, null, "en", null, null, null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

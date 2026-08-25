@@ -3,6 +3,8 @@
 
 package de.hauschel.arknet.adr.application;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -70,7 +72,19 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code PROPOSED} a decision may become {@link AdrStatus#ACCEPTED} or {@link AdrStatus#REJECTED};
  * an accepted one may further become {@link AdrStatus#DEPRECATED} or - via {@code adr_supersede} -
  * {@link AdrStatus#SUPERSEDED}, set together with {@link Adr#supersededBy()} on the <em>superseded</em>
- * decision in one write (kogn-io/arknet#357; see {@link #supersede}). {@link #update} corrects an
+ * decision in one write (kogn-io/arknet#357; see {@link #supersede}).</p>
+ *
+ * <p><strong>The decision date is stamped by the transition, never typed in (kogn-io/arknet#374).</strong>
+ * {@link #add} always records {@code decisionDate} as {@code null} and {@link #update} cannot reach
+ * the field at all; {@link #accept}/{@link #reject} set it, from {@code decidedOn} when the caller
+ * names a day and from {@link #clock} otherwise. The rule this buys is one the old free-form field
+ * could only ask for: a {@link AdrStatus#PROPOSED} decision - expressly one that has not been made -
+ * can no longer carry a date claiming it was, and no caller has to remember to leave the field
+ * empty until it is. {@code decidedOn} covers the one case where today is the wrong answer: a
+ * decision genuinely made earlier and only now entered. {@link #deprecate}/{@link #supersede} leave
+ * the date alone - both act on a decision that <em>was</em> made, and neither un-makes it.</p>
+ *
+ * <p>{@link #update} corrects an
  * existing decision field by field - see {@link Adr#reviseText}/{@link Adr#withConsequenceCorrections}/
  * {@link Adr#withConsideredOptionCorrections}/{@link Adr#reviseReferences} for the exact per-field
  * rules; this service only fills the caller's untouched fields from the current state, resolves the
@@ -192,6 +206,7 @@ public class AdrService
     private final ResourceIdFactory resourceIdFactory;
     private final RequirementLookup requirementLookup;
     private final BoundedContextLookup boundedContextLookup;
+    private final Clock clock;
 
     /**
      * Creates the service.
@@ -203,13 +218,18 @@ public class AdrService
      *                             (must not be {@code null})
      * @param boundedContextLookup resolves a human-typed bounded-context code to its opaque identity
      *                             (must not be {@code null})
+     * @param clock                supplies the day {@link #accept}/{@link #reject} stamp onto a
+     *                             decision when the caller names none (must not be {@code null});
+     *                             injected rather than read ambiently so a test can pin the stamped
+     *                             date instead of asserting against whatever day it happens to run
      */
     public AdrService(AdrRepository repository, ResourceIdFactory resourceIdFactory,
-            RequirementLookup requirementLookup, BoundedContextLookup boundedContextLookup) {
+            RequirementLookup requirementLookup, BoundedContextLookup boundedContextLookup, Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.requirementLookup = Objects.requireNonNull(requirementLookup, "requirementLookup");
         this.boundedContextLookup = Objects.requireNonNull(boundedContextLookup, "boundedContextLookup");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     @Override
@@ -245,8 +265,11 @@ public class AdrService
                     AdrCode code = nextCode(projectId);
                     // supersededBy starts null: a decision is never recorded as already superseded,
                     // it can only become so later via adr_supersede (kogn-io/arknet#357).
+                    // decisionDate starts null and can only start null: a PROPOSED decision has not
+                    // been made yet, so there is no day to name. adr_set_status stamps it at the
+                    // transition that actually decides (kogn-io/arknet#374).
                     Adr adr = new Adr(id, code, command.name(), AdrStatus.PROPOSED, command.context(),
-                            command.decision(), consequences, consideredOptions, command.decisionDate(),
+                            command.decision(), consequences, consideredOptions, null,
                             requirements, contexts, null, peers);
                     repository.create(projectId, adr, language);
                     return adr;
@@ -342,21 +365,23 @@ public class AdrService
     }
 
     @Override
-    public AdrDetail accept(ProjectId projectId, AdrCode code) {
+    public AdrDetail accept(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        LocalDate stamp = decidedOn != null ? decidedOn : LocalDate.now(clock);
         // accept() never touches any multilingual field - null language/defaultLanguage is safe
         // even on a project that has one configured, since resolution is never reached (issue #258).
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), null, null, current -> current.value().accept()));
+                Set.of(), Set.of(), null, null, current -> current.value().accept(stamp)));
     }
 
     @Override
-    public AdrDetail reject(ProjectId projectId, AdrCode code) {
+    public AdrDetail reject(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(code, "code");
+        LocalDate stamp = decidedOn != null ? decidedOn : LocalDate.now(clock);
         return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
-                Set.of(), Set.of(), null, null, current -> current.value().reject()));
+                Set.of(), Set.of(), null, null, current -> current.value().reject(stamp)));
     }
 
     @Override
@@ -414,8 +439,6 @@ public class AdrService
                                 correction.name() != null ? correction.name() : current.value().name(),
                                 correction.context() != null ? correction.context() : current.value().context(),
                                 correction.decision() != null ? correction.decision() : current.value().decision(),
-                                correction.decisionDate() != null
-                                        ? correction.decisionDate() : current.value().decisionDate(),
                                 newLanguageVariant(current, correction.language(), defaultLanguage,
                                         nameTouched || contextTouched || decisionTouched))
                         .withAppendedConsequences(correction.newConsequences())

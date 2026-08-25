@@ -308,9 +308,6 @@ public final class AdrMcpTools {
                     + "name, a rationale and an outcome (CHOSEN or REJECTED) - at most one may be "
                     + "CHOSEN. Optional.", required = false)
             final List<NewConsideredOptionInput> consideredOptions,
-            @McpToolParam(description = "The day the decision was made, as ISO-8601 yyyy-MM-dd "
-                    + "(optional)", required = false)
-            final String decisionDate,
             @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
             final String language,
             @McpToolParam(description = "Business codes of the requirements this decision addresses, "
@@ -329,7 +326,7 @@ public final class AdrMcpTools {
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrDetail created = addAdr.add(project.id(), new NewAdr(name, adrContext, decision,
-                toNewConsequences(consequences), toNewConsideredOptions(consideredOptions), parseDate(decisionDate),
+                toNewConsequences(consequences), toNewConsideredOptions(consideredOptions),
                 blankToNull(language), addressesRequirements, affectsContexts, relatedTo),
                 project.defaultLanguage());
         return format(project, created);
@@ -436,9 +433,6 @@ public final class AdrMcpTools {
             @McpToolParam(description = "Corrections for existing considered options, addressed by "
                     + "position (optional; only while PROPOSED)", required = false)
             final List<ConsideredOptionCorrectionInput> consideredOptionCorrections,
-            @McpToolParam(description = "The corrected decision date, as ISO-8601 yyyy-MM-dd "
-                    + "(optional; unchanged if omitted)", required = false)
-            final String decisionDate,
             @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
             final String language,
             @McpToolParam(description = "Business codes of the requirements this decision should "
@@ -465,7 +459,6 @@ public final class AdrMcpTools {
                 .consequenceCorrections(toConsequenceCorrections(consequenceCorrections))
                 .newConsideredOptions(toNewConsideredOptions(newConsideredOptions))
                 .consideredOptionCorrections(toConsideredOptionCorrections(consideredOptionCorrections))
-                .decisionDate(parseDate(decisionDate))
                 .language(blankToNull(language))
                 .addressesRequirementCodes(addressesRequirements)
                 .affectsContextCodes(affectsContexts)
@@ -482,16 +475,27 @@ public final class AdrMcpTools {
             + "was considered and turned down - a record worth keeping, because it is what stops the "
             + "same option coming back a year later. It is NOT the way to get rid of a decision "
             + "recorded by mistake: use adr_delete for that, which removes a PROPOSED decision "
-            + "outright.")
+            + "outright. Moving to ACCEPTED or REJECTED also records the decision date - this is "
+            + "the only place it is ever set, because that is the moment the decision is made; pass "
+            + "decidedOn only for a decision that was really made on an earlier day.")
     public String setStatus(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
             @McpToolParam(description = "Target status: ACCEPTED, REJECTED or DEPRECATED")
             final String status,
+            @McpToolParam(description = "The day the decision was actually made, as ISO-8601 "
+                    + "yyyy-MM-dd. Optional and rarely needed: omit it and today is recorded, which "
+                    + "is right whenever the decision is being made now. Pass it only when recording "
+                    + "a decision that was genuinely taken earlier and is only now being entered. "
+                    + "Not accepted together with DEPRECATED, which does not make a decision but "
+                    + "retires one that was already made - its date stays as it was.",
+                    required = false)
+            final String decidedOn,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
+        final LocalDate decisionDay = parseDate(decidedOn);
         AdrStatus target;
         try {
             target = AdrStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
@@ -499,9 +503,20 @@ public final class AdrMcpTools {
             target = null;
         }
         return switch (target) {
-            case ACCEPTED -> format(project, acceptAdr.accept(project.id(), code));
-            case REJECTED -> format(project, rejectAdr.reject(project.id(), code));
-            case DEPRECATED -> format(project, deprecateAdr.deprecate(project.id(), code));
+            case ACCEPTED -> format(project, acceptAdr.accept(project.id(), code, decisionDay));
+            case REJECTED -> format(project, rejectAdr.reject(project.id(), code, decisionDay));
+            // Refused rather than ignored: a caller passing a date here means it to land somewhere,
+            // and DEPRECATED has nowhere to put it - the decision's own date belongs to the day it
+            // was accepted, and deprecating does not re-decide anything.
+            case DEPRECATED -> {
+                if (decisionDay != null) {
+                    throw new IllegalArgumentException(
+                            "decidedOn only applies to ACCEPTED or REJECTED - deprecating a decision "
+                                    + "does not make one, and leaves the date it was accepted on "
+                                    + "untouched");
+                }
+                yield format(project, deprecateAdr.deprecate(project.id(), code));
+            }
             case SUPERSEDED -> throw new IllegalArgumentException(
                     "adr_set_status does not set SUPERSEDED directly - it needs a successor decision, "
                             + "which only adr_supersede can name; use adr_supersede instead");
@@ -688,7 +703,7 @@ public final class AdrMcpTools {
             return LocalDate.parse(trimmed.trim());
         } catch (DateTimeParseException e) {
             final IllegalArgumentException translated = new IllegalArgumentException(
-                    "decisionDate must be an ISO-8601 date (yyyy-MM-dd), was: " + trimmed);
+                    "decidedOn must be an ISO-8601 date (yyyy-MM-dd), was: " + trimmed);
             translated.addSuppressed(e);
             throw translated;
         }

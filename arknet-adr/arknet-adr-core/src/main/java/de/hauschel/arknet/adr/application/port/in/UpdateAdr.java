@@ -3,7 +3,6 @@
 
 package de.hauschel.arknet.adr.application.port.in;
 
-import java.time.LocalDate;
 import java.util.List;
 
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -18,9 +17,16 @@ import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.kernel.ProjectId;
 
 /**
- * Driving port: correct an already-recorded architecture decision - its prose, its decision date
- * and/or its three reference lists - leaving {@code status} and {@code supersedes} to their own
- * ports ({@code adr_set_status}, {@code adr_supersede}).
+ * Driving port: correct an already-recorded architecture decision - its prose and/or its three
+ * reference lists - leaving {@code status} and {@code supersedes} to their own ports
+ * ({@code adr_set_status}, {@code adr_supersede}).
+ *
+ * <p><strong>The decision date is not correctable here, by design (kogn-io/arknet#374).</strong> It
+ * is not authored text but a fact about the transition that produced it, so {@code adr_set_status}
+ * stamps it when the decision is actually made and nothing else writes it - see
+ * {@link AcceptAdr}/{@link RejectAdr}. Before #374 it travelled with the prose through this port,
+ * which let a still-{@link AdrStatus#PROPOSED} decision carry a date for a day on which nothing had
+ * been decided, with no way of ever clearing it again.</p>
  *
  * <p>Backs the tool {@code adr_update}. Every field of the {@link AdrCorrection} this port takes is
  * optional: {@code null} leaves it unchanged, so a caller can fix a typo in the context without
@@ -39,7 +45,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p><strong>{@code name}/{@code context}/{@code decision} are correctable while {@link
  * AdrStatus#PROPOSED}, or to add a language they never had (kogn-io/arknet#357).</strong> In any of
  * the other four statuses a change to an <em>existing</em> language variant of {@code name}/
- * {@code context}/{@code decision}/{@code decisionDate} is refused with
+ * {@code context}/{@code decision} is refused with
  * {@link AdrTextImmutableException}, whose message names the path that fits the status it was raised
  * in: a decision in force is a record of what was decided at the time, and correcting it runs
  * through a decision of its own rather than an edit (Nygard) - linked with {@code adr_supersede}
@@ -144,8 +150,6 @@ public interface UpdateAdr {
      * @param consideredOptionCorrections corrections for existing options, addressed by position, or
      *                                  {@code null}/empty for none - same {@link AdrStatus#PROPOSED}-only
      *                                  rule as {@code consequenceCorrections}
-     * @param decisionDate              the corrected decision date, or {@code null} to leave it
-     *                                  unchanged
      * @param language                  the BCP-47 language tag every multilingual text this call
      *                                  touches is written under (a corrected {@code name}/
      *                                  {@code context}/{@code decision}, an appended or corrected
@@ -172,7 +176,6 @@ public interface UpdateAdr {
             List<ConsequenceCorrection> consequenceCorrections,
             List<NewConsideredOption> newConsideredOptions,
             List<ConsideredOptionCorrection> consideredOptionCorrections,
-            LocalDate decisionDate,
             String language,
             List<String> addressesRequirementCodes,
             List<String> affectsContextCodes,
@@ -210,7 +213,6 @@ public interface UpdateAdr {
             private List<ConsequenceCorrection> consequenceCorrections;
             private List<NewConsideredOption> newConsideredOptions;
             private List<ConsideredOptionCorrection> consideredOptionCorrections;
-            private LocalDate decisionDate;
             private String language;
             private List<String> addressesRequirementCodes;
             private List<String> affectsContextCodes;
@@ -264,12 +266,6 @@ public interface UpdateAdr {
                 return this;
             }
 
-            /** @param value see {@link AdrCorrection#decisionDate()} @return this builder */
-            public Builder decisionDate(LocalDate value) {
-                this.decisionDate = value;
-                return this;
-            }
-
             /** @param value see {@link AdrCorrection#language()} @return this builder */
             public Builder language(String value) {
                 this.language = value;
@@ -300,7 +296,7 @@ public interface UpdateAdr {
             /** @return the correction collected so far */
             public AdrCorrection build() {
                 return new AdrCorrection(name, context, decision, newConsequences, consequenceCorrections,
-                        newConsideredOptions, consideredOptionCorrections, decisionDate, language,
+                        newConsideredOptions, consideredOptionCorrections, language,
                         addressesRequirementCodes, affectsContextCodes, relatedToCodes);
             }
         }

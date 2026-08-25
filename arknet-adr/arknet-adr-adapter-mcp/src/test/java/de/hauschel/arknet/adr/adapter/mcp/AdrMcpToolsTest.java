@@ -10,12 +10,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -96,7 +99,7 @@ class AdrMcpToolsTest {
     @Test
     void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
         String created = adapter.add(null, "A title", "Why this was needed", "What was decided",
-                null, null, null, null, null, null, null, ANCHOR);
+                null, null, null, null, null, null, ANCHOR);
 
         assertTrue(created.contains("ADR-1"), created);
         assertEquals(PROJECT, stub.lastProjectId);
@@ -106,7 +109,7 @@ class AdrMcpToolsTest {
     void rejectsACallThatCarriesNoAnchorAtAll() {
         assertThrows(UnresolvedProjectAnchorException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, null, null, null, null, null, null));
+                        null, null, null, null, null, null, null));
     }
 
     @Test
@@ -174,8 +177,7 @@ class AdrMcpToolsTest {
         String rendered = adapter.add(null, "Use an embedded triple store", "Why this was needed",
                 "What was decided",
                 List.of(new NewConsequenceInput("Faster reads", "POSITIVE")),
-                List.of(new NewConsideredOptionInput("Adopt library X", "Well understood", "CHOSEN")),
-                "2026-07-31", "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
+                List.of(new NewConsideredOptionInput("Adopt library X", "Well understood", "CHOSEN")), "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals("Use an embedded triple store", stub.lastAddCommand.name());
         assertEquals("Why this was needed", stub.lastAddCommand.context());
@@ -185,53 +187,51 @@ class AdrMcpToolsTest {
         assertEquals(ConsequenceType.POSITIVE, stub.lastAddCommand.consequences().get(0).type());
         assertEquals(1, stub.lastAddCommand.consideredOptions().size());
         assertEquals(OptionOutcome.CHOSEN, stub.lastAddCommand.consideredOptions().get(0).outcome());
-        assertEquals(LocalDate.of(2026, 7, 31), stub.lastAddCommand.decisionDate());
         assertEquals("en", stub.lastAddCommand.language());
         assertEquals(List.of("FR-1"), stub.lastAddCommand.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastAddCommand.affectsContextCodes());
         assertEquals(List.of("ADR-3"), stub.lastAddCommand.relatedToCodes());
         assertTrue(rendered.contains("ADR-1"), rendered);
         assertTrue(rendered.contains("[PROPOSED]"), rendered);
-        assertTrue(rendered.contains("decided: 2026-07-31"), rendered);
+        // Nothing decided yet, so nothing to date (kogn-io/arknet#374).
+        assertFalse(rendered.contains("decided:"), rendered);
     }
 
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
-        adapter.add(null, "A title", "Why this was needed", "What was decided", null, null, "  ",
+        adapter.add(null, "A title", "Why this was needed", "What was decided", null, null,
                 "  ", null, null, null, ANCHOR);
 
         assertEquals(List.of(), stub.lastAddCommand.consequences());
         assertEquals(List.of(), stub.lastAddCommand.consideredOptions());
-        assertEquals(null, stub.lastAddCommand.decisionDate());
         assertEquals(null, stub.lastAddCommand.language());
     }
 
     @Test
-    void addRejectsAMalformedDecisionDate() {
+    void setStatusRejectsAMalformedDecidedOn() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, "31.07.2026", null, null, null, null, ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "ACCEPTED", "31.07.2026", ANCHOR));
     }
 
     /**
      * Reproduces #186 at the layer the bug actually lived in: Spring AI's
      * {@link SyncMcpToolMethodCallback} renders the deepest exception in a thrown exception's
      * {@code getCause()} chain, not the exception actually thrown - driven here over the real
-     * production {@code parseDate} translation in {@link AdrMcpTools#add}.
+     * production {@code parseDate} translation, which since kogn-io/arknet#374 sits in
+     * {@link AdrMcpTools#setStatus} rather than {@code add}: that is now the one tool taking a date
+     * at all, so it is the one place the #186 rendering can still bite.
      */
     @Test
     void malformedDecisionDateRemedyReachesTheMcpCaller() throws NoSuchMethodException {
-        final Method method = AdrMcpTools.class.getMethod("add", McpSyncRequestContext.class, String.class,
-                String.class, String.class, List.class, List.class, String.class, String.class, List.class,
-                List.class, List.class, String.class);
+        final Method method = AdrMcpTools.class.getMethod("setStatus", McpSyncRequestContext.class,
+                String.class, String.class, String.class, String.class);
         final SyncMcpToolMethodCallback callback = new SyncMcpToolMethodCallback(ReturnMode.TEXT, method, adapter);
         final McpSyncServerExchange exchange = new McpSyncServerExchange(null);
 
-        final CallToolResult result = callback.apply(exchange, new CallToolRequest("adr_add", Map.of(
-                "name", "A title",
-                "adrContext", "Why this was needed",
-                "decision", "What was decided",
-                "decisionDate", "31.07.2026",
+        final CallToolResult result = callback.apply(exchange, new CallToolRequest("adr_set_status", Map.of(
+                "id", "ADR-1",
+                "status", "ACCEPTED",
+                "decidedOn", "31.07.2026",
                 "projectAnchor", ANCHOR)));
 
         final String text = result.content().stream()
@@ -240,7 +240,7 @@ class AdrMcpToolsTest {
                 .map(TextContent::text)
                 .reduce((a, b) -> a + b)
                 .orElseThrow();
-        assertTrue(text.contains("decisionDate must be an ISO-8601 date"), text);
+        assertTrue(text.contains("decidedOn must be an ISO-8601 date"), text);
         assertFalse(text.contains("could not be parsed"), text);
     }
 
@@ -248,7 +248,7 @@ class AdrMcpToolsTest {
     void addRejectsAnUnknownConsequenceType() {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        List.of(new NewConsequenceInput("text", "NOT_A_TYPE")), null, null, "en",
+                        List.of(new NewConsequenceInput("text", "NOT_A_TYPE")), null, "en",
                         null, null, null, ANCHOR));
     }
 
@@ -256,7 +256,7 @@ class AdrMcpToolsTest {
     void addRejectsAnUnknownOptionOutcome() {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, List.of(new NewConsideredOptionInput("A", "r", "MAYBE")), null, "en",
+                        null, List.of(new NewConsideredOptionInput("A", "r", "MAYBE")), "en",
                         null, null, null, ANCHOR));
     }
 
@@ -444,7 +444,7 @@ class AdrMcpToolsTest {
 
     @Test
     void setStatusAcceptsTheAcceptedTransition() {
-        String rendered = adapter.setStatus(null, "ADR-1", "ACCEPTED", ANCHOR);
+        String rendered = adapter.setStatus(null, "ADR-1", "ACCEPTED", null, ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastAcceptedCode);
         assertTrue(rendered.contains("ADR-1"), rendered);
@@ -452,7 +452,7 @@ class AdrMcpToolsTest {
 
     @Test
     void setStatusAcceptsTheRejectedTransition() {
-        String rendered = adapter.setStatus(null, "ADR-1", "REJECTED", ANCHOR);
+        String rendered = adapter.setStatus(null, "ADR-1", "REJECTED", null, ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastRejectedCode);
         assertTrue(rendered.contains("ADR-1"), rendered);
@@ -460,15 +460,57 @@ class AdrMcpToolsTest {
 
     @Test
     void setStatusAcceptsTheDeprecatedTransition() {
-        String rendered = adapter.setStatus(null, "ADR-1", "DEPRECATED", ANCHOR);
+        String rendered = adapter.setStatus(null, "ADR-1", "DEPRECATED", null, ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastDeprecatedCode);
         assertTrue(rendered.contains("ADR-1"), rendered);
     }
 
+    /**
+     * The transition is the only place a decision date is ever written (kogn-io/arknet#374), so the
+     * one thing this adapter owes the in-port is that an explicitly named day travels - and that
+     * omitting it hands over {@code null}, which is the service's signal to stamp today rather than
+     * a value this adapter invents.
+     */
+    @Test
+    void setStatusPassesAnExplicitlyNamedDecisionDayThrough() {
+        adapter.setStatus(null, "ADR-1", "ACCEPTED", "2024-03-11", ANCHOR);
+
+        assertEquals(LocalDate.of(2024, 3, 11), stub.lastDecidedOn);
+
+        adapter.setStatus(null, "ADR-1", "REJECTED", "2024-03-12", ANCHOR);
+
+        assertEquals(LocalDate.of(2024, 3, 12), stub.lastDecidedOn);
+    }
+
+    @Test
+    void setStatusHandsOverNullWhenNoDayIsNamed() {
+        adapter.setStatus(null, "ADR-1", "ACCEPTED", null, ANCHOR);
+
+        assertNull(stub.lastDecidedOn);
+
+        adapter.setStatus(null, "ADR-1", "ACCEPTED", "   ", ANCHOR);
+
+        assertNull(stub.lastDecidedOn);
+    }
+
+    /**
+     * Refused rather than quietly ignored: deprecating retires a decision that was already made, so
+     * a date passed here has nowhere to land - and silently dropping it would leave the caller
+     * believing a day was recorded.
+     */
+    @Test
+    void setStatusRefusesADecisionDayOnTheDeprecatedTransition() {
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> adapter.setStatus(null, "ADR-1", "DEPRECATED", "2024-03-11", ANCHOR));
+
+        assertTrue(thrown.getMessage().contains("ACCEPTED"), thrown.getMessage());
+        assertNull(stub.lastDeprecatedCode);
+    }
+
     @Test
     void setStatusIsCaseInsensitiveAndTrimmed() {
-        adapter.setStatus(null, "ADR-1", "  rejected  ", ANCHOR);
+        adapter.setStatus(null, "ADR-1", "  rejected  ", null, ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastRejectedCode);
     }
@@ -476,27 +518,27 @@ class AdrMcpToolsTest {
     @Test
     void setStatusRejectsAnyOtherTargetStatus() {
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "PROPOSED", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "PROPOSED", null, ANCHOR));
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", null, ANCHOR));
         assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", null, ANCHOR));
     }
 
     @Test
     void setStatusRejectionMessageNamesTheTargetInsteadOfLeakingTheRawEnumFailure() {
         IllegalArgumentException proposed = assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "PROPOSED", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "PROPOSED", null, ANCHOR));
         assertTrue(proposed.getMessage().contains("ACCEPTED"), proposed.getMessage());
         assertFalse(proposed.getMessage().contains("No enum constant"), proposed.getMessage());
 
         IllegalArgumentException superseded = assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "SUPERSEDED", null, ANCHOR));
         assertTrue(superseded.getMessage().contains("adr_supersede"), superseded.getMessage());
         assertFalse(superseded.getMessage().contains("No enum constant"), superseded.getMessage());
 
         IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
-                () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", ANCHOR));
+                () -> adapter.setStatus(null, "ADR-1", "NOT_A_STATUS", null, ANCHOR));
         assertTrue(unknown.getMessage().contains("ACCEPTED"), unknown.getMessage());
         assertFalse(unknown.getMessage().contains("No enum constant"), unknown.getMessage());
     }
@@ -564,8 +606,7 @@ class AdrMcpToolsTest {
                 List.of(new NewConsequenceInput("New one", "NEGATIVE")),
                 List.of(new ConsequenceCorrectionInput(1, "Corrected", "POSITIVE")),
                 List.of(new NewConsideredOptionInput("New option", "reason", "REJECTED")),
-                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")),
-                "2026-08-23", "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
+                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")), "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastUpdatedCode);
         assertEquals("A better title", stub.lastCorrection.name());
@@ -575,7 +616,6 @@ class AdrMcpToolsTest {
         assertEquals(1, stub.lastCorrection.consequenceCorrections().size());
         assertEquals(1, stub.lastCorrection.newConsideredOptions().size());
         assertEquals(1, stub.lastCorrection.consideredOptionCorrections().size());
-        assertEquals(LocalDate.of(2026, 8, 23), stub.lastCorrection.decisionDate());
         assertEquals("en", stub.lastCorrection.language());
         assertEquals(List.of("FR-1"), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastCorrection.affectsContextCodes());
@@ -584,26 +624,25 @@ class AdrMcpToolsTest {
 
     @Test
     void updateNormalisesBlankFieldsToTheLeaveItUnchangedSentinel() {
-        adapter.update(null, "ADR-1", "  ", "", "   ", null, null, null, null, "  ", "  ",
+        adapter.update(null, "ADR-1", "  ", "", "   ", null, null, null, null, "  ",
                 null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.name());
         assertNull(stub.lastCorrection.context());
         assertNull(stub.lastCorrection.decision());
-        assertNull(stub.lastCorrection.decisionDate());
         assertNull(stub.lastCorrection.language());
     }
 
     @Test
     void updateKeepsTheReferenceListsTriStateApart() {
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null,
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
                 null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.addressesRequirementCodes());
         assertNull(stub.lastCorrection.affectsContextCodes());
         assertNull(stub.lastCorrection.relatedToCodes());
 
-        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null, null,
+        adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
                 List.of(), List.of(), List.of(), ANCHOR);
 
         assertEquals(List.of(), stub.lastCorrection.addressesRequirementCodes());
@@ -611,11 +650,32 @@ class AdrMcpToolsTest {
         assertEquals(List.of(), stub.lastCorrection.relatedToCodes());
     }
 
+    /**
+     * Replaces the former {@code updateRejectsAMalformedDecisionDate}, whose subject is gone:
+     * {@code adr_update} no longer takes a date to malform. What is worth pinning instead is the
+     * promise kogn-io/arknet#374 actually makes to a calling agent - the date is offered by exactly
+     * one tool, the one that makes the decision. An agent choosing a tool reads this schema, so a
+     * date reappearing on {@code adr_add}/{@code adr_update} would invite the very call the issue
+     * set out to make impossible, whatever the domain then does with it.
+     */
     @Test
-    void updateRejectsAMalformedDecisionDate() {
-        assertThrows(IllegalArgumentException.class,
-                () -> adapter.update(null, "ADR-1", null, null, null, null, null, null, null,
-                        "23.08.2026", null, null, null, null, ANCHOR));
+    void onlySetStatusOffersADateAcrossTheWholeToolSurface() {
+        Map<String, List<String>> dateParametersByTool = Arrays.stream(AdrMcpTools.class.getDeclaredMethods())
+                .filter(m -> m.getAnnotation(McpTool.class) != null)
+                .collect(Collectors.toMap(
+                        m -> m.getAnnotation(McpTool.class).name(),
+                        m -> Arrays.stream(m.getParameters())
+                                .filter(parameter -> parameter.getName().toLowerCase(Locale.ROOT).contains("date")
+                                        || parameter.getName().toLowerCase(Locale.ROOT).contains("decidedon"))
+                                .map(Parameter::getName)
+                                .toList()));
+
+        assertEquals(List.of("decidedOn"), dateParametersByTool.get("adr_set_status"));
+        dateParametersByTool.forEach((tool, dateParameters) -> {
+            if (!"adr_set_status".equals(tool)) {
+                assertEquals(List.of(), dateParameters, tool + " must not take a date");
+            }
+        });
     }
 
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
@@ -645,6 +705,8 @@ class AdrMcpToolsTest {
         private AdrCorrection lastCorrection;
         private AdrCode lastUpdatedCode;
         private AdrCode lastAcceptedCode;
+        /** The day {@code adr_set_status} handed over, so a test can assert it travelled at all. */
+        private LocalDate lastDecidedOn;
         private AdrCode lastRejectedCode;
         private AdrCode lastDeprecatedCode;
         private AdrCode lastSupersedingCode;
@@ -666,7 +728,7 @@ class AdrMcpToolsTest {
             lastProjectId = projectId;
             Adr adr = new Adr(ID, new AdrCode("ADR-1"), command.name(), AdrStatus.PROPOSED,
                     command.context(), command.decision(), List.of(), List.of(),
-                    command.decisionDate(), List.of(), List.of(), null, List.of());
+                    null, List.of(), List.of(), null, List.of());
             return new AdrDetail(adr, List.of(), List.of(), List.of());
         }
 
@@ -695,14 +757,16 @@ class AdrMcpToolsTest {
         }
 
         @Override
-        public AdrDetail accept(ProjectId projectId, AdrCode code) {
+        public AdrDetail accept(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
             lastAcceptedCode = code;
+            lastDecidedOn = decidedOn;
             return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override
-        public AdrDetail reject(ProjectId projectId, AdrCode code) {
+        public AdrDetail reject(ProjectId projectId, AdrCode code, LocalDate decidedOn) {
             lastRejectedCode = code;
+            lastDecidedOn = decidedOn;
             return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
