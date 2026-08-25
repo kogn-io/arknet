@@ -27,6 +27,15 @@ Details/Start: `arknet-mcp/CLAUDE.md`, `README.md`.
 
 - Java 25+ (`release 25`; io.kogn.rdf ist Java-25-gebaut), Maven Multi-Module
 - Bauen/Testen: shell-`mvn` (default JDK 25); JDT-MCP kann `--release 25` (noch) nicht
+- Lokaler Vollbuild: `mvn -T 1C clean install` -- Reaktor parallel je Kern, gemessen ca. 20-25%
+  schneller als seriell (2 Laeufe gruen, keine Kollision), aber begrenzt durch eine tiefe
+  Modulkette: `arknet-mcp` haengt von fast allen anderen Modulen ab und dominiert mit >2 Min
+  allein den kritischen Pfad, egal wie parallel der Rest laeuft. `*RealStoreConcurrencyTest` u.a.
+  nutzen durchweg `@TempDir`, kein Verzeichnis-Lock zwischen Modul-Forks. Gilt nur lokal, nicht
+  fuer CI (`test.yml` bleibt bei seriellem `mvn -B verify` -- verschraenkte Logs waeren dort
+  teurer als die gesparte Zeit).
+- `clean` ist kein Reflex: nur nach Rebase/modulübergreifendem Umbau noetig (stale .class-Referenzen
+  auf umbenannte/entfernte Typen), nicht nach gewoehnlicher Textaenderung -- `mvn install` reicht.
 - RDF4J 6.x (Triple Store + SHACL Sail)
 - AsciidoctorJ + asciidoctor-diagram (AsciiDoc → HTML/PDF)
 - PlantUML (Diagramme)
