@@ -32,6 +32,13 @@ import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.AdrTextImmutableException;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
+import de.hauschel.arknet.adr.domain.Consequence;
+import de.hauschel.arknet.adr.domain.ConsequenceCorrection;
+import de.hauschel.arknet.adr.domain.ConsequenceType;
+import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.NewConsequence;
+import de.hauschel.arknet.adr.domain.NewConsideredOption;
+import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -39,9 +46,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
 
 /**
  * Policy tests for {@link AdrService}: identity minting, code assignment, listing, lookup, the
- * accept transition, field-wise correction, both directions of the supersedes relation and the
- * status- and reference-staged delete, exercised against an in-memory fake repository, two fake
- * lookups and a deterministic fake {@link ResourceIdFactory}.
+ * accept transition, field-wise correction (including the structured consequence/considered-option
+ * lists and the fine-grained multilingual text lock, kogn-io/arknet#357), both directions of the
+ * supersedes relation and the status- and reference-staged delete, exercised against an in-memory
+ * fake repository, two fake lookups and a deterministic fake {@link ResourceIdFactory}.
  */
 class AdrServiceTest {
 
@@ -49,6 +57,7 @@ class AdrServiceTest {
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
     private static final ResourceId NFR_2 = ResourceId.of("https://w3id.org/arknet/id/nfr-2");
     private static final ResourceId BC_1 = ResourceId.of("https://w3id.org/arknet/id/bc-1");
+    private static final String DEFAULT_LANGUAGE = "en";
 
     private InMemoryAdrRepository repository;
     private FakeResourceIdFactory resourceIdFactory;
@@ -68,33 +77,68 @@ class AdrServiceTest {
         service = new AdrService(repository, resourceIdFactory, requirements, contexts);
     }
 
+    private AdrDetail add(NewAdr command) {
+        return service.add(PROJECT, command, DEFAULT_LANGUAGE);
+    }
+
+    private List<AdrDetail> list(ProjectId projectId) {
+        return service.list(projectId, null);
+    }
+
+    private java.util.Optional<AdrDetail> get(ProjectId projectId, AdrCode code) {
+        return service.get(projectId, code, null);
+    }
+
+    private AdrDetail update(AdrCode code, AdrCorrection correction) {
+        return service.update(PROJECT, code, correction, DEFAULT_LANGUAGE);
+    }
+
     @Test
     void addAssignsFirstBusinessCodeAndStartsProposed() {
-        AdrDetail added = service.add(PROJECT, newAdr());
+        AdrDetail added = add(newAdr());
 
         assertEquals(new AdrCode("ADR-1"), added.adr().code());
         assertEquals(AdrStatus.PROPOSED, added.adr().status());
         assertEquals("Use an embedded triple store", added.adr().name());
         assertNull(added.adr().supersededBy());
-        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code()).orElseThrow());
+        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code(), null).orElseThrow());
     }
 
     @Test
-    void addAcceptsOptionalTextFieldsAsNull() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, null));
+    void addAcceptsOptionalFieldsAsNullOrEmpty() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null, null));
 
-        assertNull(added.adr().consequences());
-        assertNull(added.adr().alternatives());
+        assertEquals(List.of(), added.adr().consequences());
+        assertEquals(List.of(), added.adr().consideredOptions());
         assertNull(added.adr().decisionDate());
         assertEquals(List.of(), added.adr().addressesRequirements());
         assertEquals(List.of(), added.adr().affectsContexts());
     }
 
     @Test
+    void addAcceptsStructuredConsequencesAndConsideredOptions() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Faster reads", ConsequenceType.POSITIVE),
+                        new NewConsequence("More operational complexity", ConsequenceType.NEGATIVE)),
+                List.of(new NewConsideredOption("Adopt library X", "Well understood", OptionOutcome.CHOSEN),
+                        new NewConsideredOption("Build in-house", "Too slow", OptionOutcome.REJECTED)),
+                null, DEFAULT_LANGUAGE, null, null, null));
+
+        assertEquals(List.of(
+                new Consequence(1, "Faster reads", ConsequenceType.POSITIVE),
+                new Consequence(2, "More operational complexity", ConsequenceType.NEGATIVE)),
+                added.adr().consequences());
+        assertEquals(List.of(
+                new ConsideredOption(1, "Adopt library X", "Well understood", OptionOutcome.CHOSEN),
+                new ConsideredOption(2, "Build in-house", "Too slow", OptionOutcome.REJECTED)),
+                added.adr().consideredOptions());
+    }
+
+    @Test
     void addResolvesCrossContextReferencesToOpaqueIdentities() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, LocalDate.of(2026, 7, 31),
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, LocalDate.of(2026, 7, 31), DEFAULT_LANGUAGE,
                 List.of("FR-1", "NFR-2"), List.of("BC-1"), null));
 
         assertEquals(List.of(new RequirementRef(FR_1), new RequirementRef(NFR_2)),
@@ -109,25 +153,25 @@ class AdrServiceTest {
      */
     @Test
     void addPropagatesTheLookupFailureForAnUnknownReferenceAndWritesNothing() {
-        assertThrows(NoSuchElementException.class, () -> service.add(PROJECT,
+        assertThrows(NoSuchElementException.class, () -> add(
                 new NewAdr("Title", "Some context here", "Some decision here", null, null, null,
-                        List.of("FR-99"), null, null)));
+                        DEFAULT_LANGUAGE, List.of("FR-99"), null, null)));
 
-        assertTrue(service.list(PROJECT).isEmpty());
+        assertTrue(list(PROJECT).isEmpty());
     }
 
     @Test
     void addDeduplicatesRepeatedReferenceCodes() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, List.of("FR-1", "FR-1"), null, null));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, List.of("FR-1", "FR-1"), null, null));
 
         assertEquals(List.of(new RequirementRef(FR_1)), added.adr().addressesRequirements());
     }
 
     @Test
     void addMintsAFreshOpaqueIdentityViaTheFactory() {
-        AdrDetail first = service.add(PROJECT, newAdr());
-        AdrDetail second = service.add(PROJECT, newAdr());
+        AdrDetail first = add(newAdr());
+        AdrDetail second = add(newAdr());
 
         assertNotEquals(first.adr().id(), second.adr().id());
         assertEquals(2, resourceIdFactory.mintedCount());
@@ -135,21 +179,21 @@ class AdrServiceTest {
 
     @Test
     void addNumbersRunSequentially() {
-        assertEquals(new AdrCode("ADR-1"), service.add(PROJECT, newAdr()).adr().code());
-        assertEquals(new AdrCode("ADR-2"), service.add(PROJECT, newAdr()).adr().code());
-        assertEquals(new AdrCode("ADR-3"), service.add(PROJECT, newAdr()).adr().code());
+        assertEquals(new AdrCode("ADR-1"), add(newAdr()).adr().code());
+        assertEquals(new AdrCode("ADR-2"), add(newAdr()).adr().code());
+        assertEquals(new AdrCode("ADR-3"), add(newAdr()).adr().code());
     }
 
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
-        service.add(PROJECT, newAdr());
+        add(newAdr());
 
-        AdrDetail inOther = service.add(other, newAdr());
+        AdrDetail inOther = service.add(other, newAdr(), DEFAULT_LANGUAGE);
 
         assertEquals(new AdrCode("ADR-1"), inOther.adr().code());
-        assertEquals(1, service.list(PROJECT).size());
-        assertEquals(1, service.list(other).size());
+        assertEquals(1, list(PROJECT).size());
+        assertEquals(1, list(other).size());
     }
 
     /**
@@ -163,28 +207,28 @@ class AdrServiceTest {
      */
     @Test
     void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
-        service.add(PROJECT, newAdr());
+        add(newAdr());
         repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
 
-        AdrDetail third = service.add(PROJECT, newAdr());
+        AdrDetail third = add(newAdr());
 
         assertEquals(new AdrCode("ADR-3"), third.adr().code());
     }
 
     @Test
     void skippedCountIsZeroWhenNothingWasSkipped() {
-        service.add(PROJECT, newAdr());
+        add(newAdr());
 
-        assertEquals(0, service.skippedCount(PROJECT, service.list(PROJECT).size()));
+        assertEquals(0, service.skippedCount(PROJECT, list(PROJECT).size()));
     }
 
     @Test
     void skippedCountReportsEveryCodeFindAllCouldNotMaterialise() {
-        service.add(PROJECT, newAdr());
+        add(newAdr());
         repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-2"));
         repository.seedUnmaterialisableCode(PROJECT, new AdrCode("ADR-3"));
 
-        assertEquals(2, service.skippedCount(PROJECT, service.list(PROJECT).size()));
+        assertEquals(2, service.skippedCount(PROJECT, list(PROJECT).size()));
         assertEquals(0, service.skippedCount(new ProjectId("other"), 0));
     }
 
@@ -195,7 +239,7 @@ class AdrServiceTest {
      */
     @Test
     void skippedCountClampsAtZeroWhenTheCallerSawMoreThanTheCodeListHolds() {
-        service.add(PROJECT, newAdr());
+        add(newAdr());
 
         assertEquals(0, service.skippedCount(PROJECT, 5));
     }
@@ -208,10 +252,10 @@ class AdrServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        service.add(PROJECT, new NewAdr("A", "Context of A here", "Decision A", null, null, null, null, null, null));
-        service.add(PROJECT, new NewAdr("B", "Context of B here", "Decision B", null, null, null, null, null, null));
+        add(new NewAdr("A", "Context of A here", "Decision A", null, null, null, DEFAULT_LANGUAGE, null, null, null));
+        add(new NewAdr("B", "Context of B here", "Decision B", null, null, null, DEFAULT_LANGUAGE, null, null, null));
 
-        List<AdrDetail> all = service.list(PROJECT);
+        List<AdrDetail> all = list(PROJECT);
 
         assertEquals(2, all.size());
         assertEquals("A", all.get(0).adr().name());
@@ -220,30 +264,30 @@ class AdrServiceTest {
 
     @Test
     void getReturnsPersistedAdr() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
 
-        assertTrue(service.get(PROJECT, code).isPresent());
-        assertEquals("Use an embedded triple store", service.get(PROJECT, code).orElseThrow().adr().name());
+        assertTrue(get(PROJECT, code).isPresent());
+        assertEquals("Use an embedded triple store", get(PROJECT, code).orElseThrow().adr().name());
     }
 
     @Test
     void getIsEmptyForUnknownCode() {
-        assertFalse(service.get(PROJECT, new AdrCode("ADR-99")).isPresent());
+        assertFalse(get(PROJECT, new AdrCode("ADR-99")).isPresent());
     }
 
     @Test
     void acceptTransitionsFromProposedToAccepted() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
 
         AdrDetail accepted = service.accept(PROJECT, code);
 
         assertEquals(AdrStatus.ACCEPTED, accepted.adr().status());
-        assertEquals(AdrStatus.ACCEPTED, service.get(PROJECT, code).orElseThrow().adr().status());
+        assertEquals(AdrStatus.ACCEPTED, get(PROJECT, code).orElseThrow().adr().status());
     }
 
     @Test
     void acceptingAnAlreadyAcceptedAdrIsANoOp() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
 
         AdrDetail again = service.accept(PROJECT, code);
@@ -262,17 +306,17 @@ class AdrServiceTest {
 
     @Test
     void rejectTransitionsFromProposedToRejected() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
 
         AdrDetail rejected = service.reject(PROJECT, code);
 
         assertEquals(AdrStatus.REJECTED, rejected.adr().status());
-        assertEquals(AdrStatus.REJECTED, service.get(PROJECT, code).orElseThrow().adr().status());
+        assertEquals(AdrStatus.REJECTED, get(PROJECT, code).orElseThrow().adr().status());
     }
 
     @Test
     void rejectingAnAlreadyRejectedAdrIsANoOp() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.reject(PROJECT, code);
 
         AdrDetail again = service.reject(PROJECT, code);
@@ -291,18 +335,18 @@ class AdrServiceTest {
 
     @Test
     void deprecateTransitionsFromAcceptedToDeprecated() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
 
         AdrDetail deprecated = service.deprecate(PROJECT, code);
 
         assertEquals(AdrStatus.DEPRECATED, deprecated.adr().status());
-        assertEquals(AdrStatus.DEPRECATED, service.get(PROJECT, code).orElseThrow().adr().status());
+        assertEquals(AdrStatus.DEPRECATED, get(PROJECT, code).orElseThrow().adr().status());
     }
 
     @Test
     void deprecatingAnAlreadyDeprecatedAdrIsANoOp() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
         service.deprecate(PROJECT, code);
 
@@ -336,7 +380,7 @@ class AdrServiceTest {
         assertEquals(AdrStatus.SUPERSEDED, superseded.adr().status());
         assertEquals(List.of(newer), superseded.supersededBy());
         assertEquals(List.of(), superseded.supersedes());
-        AdrDetail superseding = service.get(PROJECT, newer).orElseThrow();
+        AdrDetail superseding = get(PROJECT, newer).orElseThrow();
         assertEquals(AdrStatus.ACCEPTED, superseding.adr().status());
         assertEquals(List.of(older), superseding.supersedes());
         assertEquals(List.of(), superseding.supersededBy());
@@ -350,11 +394,11 @@ class AdrServiceTest {
     void supersedeLeavesTheSupersedingAdrsOwnStateUntouched() {
         AdrCode older = acceptedAdr();
         AdrCode newer = acceptedAdr();
-        Adr before = repository.findByCode(PROJECT, newer).orElseThrow();
+        Adr before = repository.findByCode(PROJECT, newer, null).orElseThrow();
 
         service.supersede(PROJECT, newer, older);
 
-        assertEquals(before, repository.findByCode(PROJECT, newer).orElseThrow());
+        assertEquals(before, repository.findByCode(PROJECT, newer, null).orElseThrow());
     }
 
     @Test
@@ -389,7 +433,7 @@ class AdrServiceTest {
 
         assertEquals(AdrStatus.SUPERSEDED, again.adr().status());
         assertEquals(List.of(newer), again.supersededBy());
-        assertEquals(AdrStatus.DEPRECATED, service.get(PROJECT, newer).orElseThrow().adr().status());
+        assertEquals(AdrStatus.DEPRECATED, get(PROJECT, newer).orElseThrow().adr().status());
     }
 
     /** One successor may supersede several older decisions, each individually. */
@@ -402,7 +446,7 @@ class AdrServiceTest {
         service.supersede(PROJECT, newest, first);
         service.supersede(PROJECT, newest, second);
 
-        assertEquals(List.of(first, second), service.get(PROJECT, newest).orElseThrow().supersedes());
+        assertEquals(List.of(first, second), get(PROJECT, newest).orElseThrow().supersedes());
     }
 
     @Test
@@ -412,7 +456,7 @@ class AdrServiceTest {
         assertThrows(AdrNotFoundException.class,
                 () -> service.supersede(PROJECT, newer, new AdrCode("ADR-99")));
 
-        assertEquals(List.of(), service.get(PROJECT, newer).orElseThrow().supersedes());
+        assertEquals(List.of(), get(PROJECT, newer).orElseThrow().supersedes());
     }
 
     @Test
@@ -422,7 +466,7 @@ class AdrServiceTest {
         assertThrows(AdrNotFoundException.class,
                 () -> service.supersede(PROJECT, new AdrCode("ADR-99"), older));
 
-        assertEquals(AdrStatus.ACCEPTED, service.get(PROJECT, older).orElseThrow().adr().status());
+        assertEquals(AdrStatus.ACCEPTED, get(PROJECT, older).orElseThrow().adr().status());
     }
 
     /**
@@ -433,13 +477,13 @@ class AdrServiceTest {
     @Test
     void supersedeRejectsWhenTheSupersedingDecisionIsNotAccepted() {
         AdrCode older = acceptedAdr();
-        AdrCode proposedNewer = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode proposedNewer = add(newAdr()).adr().code();
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
                 () -> service.supersede(PROJECT, proposedNewer, older));
 
         assertTrue(thrown.getMessage().contains(proposedNewer.value()), thrown.getMessage());
-        assertEquals(AdrStatus.ACCEPTED, service.get(PROJECT, older).orElseThrow().adr().status());
+        assertEquals(AdrStatus.ACCEPTED, get(PROJECT, older).orElseThrow().adr().status());
     }
 
     /**
@@ -450,13 +494,13 @@ class AdrServiceTest {
     @Test
     void supersedeRejectsWhenTheSupersededDecisionIsNotAccepted() {
         AdrCode newer = acceptedAdr();
-        AdrCode proposedOlder = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode proposedOlder = add(newAdr()).adr().code();
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
                 () -> service.supersede(PROJECT, newer, proposedOlder));
 
         assertTrue(thrown.getMessage().contains(proposedOlder.value()), thrown.getMessage());
-        assertEquals(AdrStatus.PROPOSED, service.get(PROJECT, proposedOlder).orElseThrow().adr().status());
+        assertEquals(AdrStatus.PROPOSED, get(PROJECT, proposedOlder).orElseThrow().adr().status());
     }
 
     /** A decision already superseded by one successor cannot be superseded again by a different one. */
@@ -469,19 +513,19 @@ class AdrServiceTest {
 
         assertThrows(IllegalStateException.class, () -> service.supersede(PROJECT, secondSuccessor, older));
 
-        assertEquals(List.of(firstSuccessor), service.get(PROJECT, older).orElseThrow().supersededBy());
+        assertEquals(List.of(firstSuccessor), get(PROJECT, older).orElseThrow().supersededBy());
     }
 
     /** Adds a decision and accepts it in one step - the precondition every supersede test needs. */
     private AdrCode acceptedAdr() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
         return code;
     }
 
     @Test
     void supersedeRejectsSelfReference() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
 
         assertThrows(IllegalArgumentException.class, () -> service.supersede(PROJECT, code, code));
     }
@@ -498,7 +542,7 @@ class AdrServiceTest {
         AdrCode newer = acceptedAdr();
         service.supersede(PROJECT, newer, older);
 
-        Adr updated = service.update(PROJECT, older,
+        Adr updated = update(older,
                 AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
 
         assertEquals(AdrStatus.SUPERSEDED, updated.status());
@@ -512,7 +556,7 @@ class AdrServiceTest {
         AdrCode newer = acceptedAdr();
         service.supersede(PROJECT, newer, older);
 
-        List<AdrDetail> all = service.list(PROJECT);
+        List<AdrDetail> all = list(PROJECT);
 
         AdrDetail olderDetail = all.stream().filter(d -> d.adr().code().equals(older)).findFirst().orElseThrow();
         AdrDetail newerDetail = all.stream().filter(d -> d.adr().code().equals(newer)).findFirst().orElseThrow();
@@ -536,9 +580,9 @@ class AdrServiceTest {
         Adr superseded = new Adr(new AdrId(ResourceId.of("https://w3id.org/arknet/id/superseded-1")),
                 new AdrCode("ADR-1"), "Title", AdrStatus.SUPERSEDED, "Some context here", "Some decision here",
                 null, null, null, List.of(), List.of(), phantomSuccessorId, List.of());
-        repository.create(PROJECT, superseded);
+        repository.create(PROJECT, superseded, "en");
 
-        List<AdrDetail> all = service.list(PROJECT);
+        List<AdrDetail> all = service.list(PROJECT, null);
 
         AdrDetail detail = all.stream()
                 .filter(candidate -> candidate.adr().code().equals(new AdrCode("ADR-1")))
@@ -547,28 +591,19 @@ class AdrServiceTest {
     }
 
     /**
-     * {@code supersededBy} must sort by parsed running number, not by {@link String}'s natural
-     * (lexicographic) order - which would put {@code ADR-10}/{@code ADR-11} before {@code ADR-2}
-     * through {@code ADR-9} once a project passes ten decisions.
-     */
-    /**
      * Since kogn-io/arknet#357 a live decision has at most one successor ({@code supersededBy}
      * carries {@code sh:maxCount 1}), so more than one entry in {@code supersededBy} can only come
-     * from the pre-#357 legacy shape - several decisions each still asserting their own
-     * {@code arkarch:supersedes} at {@code target} (a state a store-first write, not
-     * {@code adr_supersede}, could have left behind). {@link AdrRepository#findLegacySupersedesEdges}
-     * is what folds those in; this test seeds ten such pairs directly, bypassing the service exactly
-     * as store-first data would have arrived.
+     * from the pre-#357 legacy shape.
      */
     @Test
     void listSortsSupersededByRunningNumberNotLexicographically() {
-        AdrCode target = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode target = add(newAdr()).adr().code();
         for (int i = 0; i < 10; i++) {
-            AdrCode superseding = service.add(PROJECT, newAdr()).adr().code();
+            AdrCode superseding = add(newAdr()).adr().code();
             repository.seedLegacySupersession(PROJECT, superseding, target);
         }
 
-        AdrDetail targetDetail = service.list(PROJECT).stream()
+        AdrDetail targetDetail = list(PROJECT).stream()
                 .filter(d -> d.adr().code().equals(target)).findFirst().orElseThrow();
 
         assertEquals(
@@ -583,10 +618,11 @@ class AdrServiceTest {
 
     @Test
     void addResolvesRelatedToCodesAgainstThisHexagonsOwnDecisions() {
-        AdrDetail peer = service.add(PROJECT, newAdr());
+        AdrDetail peer = add(newAdr());
 
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, List.of(peer.adr().code().value())));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null,
+                List.of(peer.adr().code().value())));
 
         assertEquals(List.of(peer.adr().id()), added.adr().relatedTo());
         assertEquals(List.of(peer.adr().code()), added.relatedTo());
@@ -594,14 +630,14 @@ class AdrServiceTest {
 
     @Test
     void updateSetsAndClearsRelatedTo() {
-        AdrDetail peer = service.add(PROJECT, newAdr());
-        AdrDetail added = service.add(PROJECT, newAdr());
+        AdrDetail peer = add(newAdr());
+        AdrDetail added = add(newAdr());
 
-        Adr linked = service.update(PROJECT, added.adr().code(), AdrCorrection.builder()
+        Adr linked = update(added.adr().code(), AdrCorrection.builder()
                 .relatedToCodes(List.of(peer.adr().code().value())).build()).adr();
         assertEquals(List.of(peer.adr().id()), linked.relatedTo());
 
-        Adr cleared = service.update(PROJECT, added.adr().code(),
+        Adr cleared = update(added.adr().code(),
                 AdrCorrection.builder().relatedToCodes(List.of()).build()).adr();
         assertEquals(List.of(), cleared.relatedTo());
     }
@@ -609,11 +645,12 @@ class AdrServiceTest {
     /** The tri-state again: an omitted list leaves the peers alone rather than wiping them. */
     @Test
     void updateLeavesRelatedToUntouchedWhenTheListIsNotGiven() {
-        AdrDetail peer = service.add(PROJECT, newAdr());
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, List.of(peer.adr().code().value())));
+        AdrDetail peer = add(newAdr());
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null,
+                List.of(peer.adr().code().value())));
 
-        Adr updated = service.update(PROJECT, added.adr().code(),
+        Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().name("Another title").build()).adr();
 
         assertEquals(List.of(peer.adr().id()), updated.relatedTo());
@@ -625,40 +662,37 @@ class AdrServiceTest {
      */
     @Test
     void addRejectsAnUnknownRelatedCodeBeforeWritingAnything() {
-        assertThrows(AdrNotFoundException.class, () -> service.add(PROJECT,
+        assertThrows(AdrNotFoundException.class, () -> add(
                 new NewAdr("Title", "Some context here", "Some decision here", null, null, null,
-                        null, null, List.of("ADR-9"))));
+                        DEFAULT_LANGUAGE, null, null, List.of("ADR-9"))));
 
-        assertTrue(service.list(PROJECT).isEmpty());
+        assertTrue(list(PROJECT).isEmpty());
     }
 
     @Test
     void updateRejectsAnUnknownRelatedCodeBeforeWritingAnything() {
-        AdrDetail added = service.add(PROJECT, newAdr());
+        AdrDetail added = add(newAdr());
 
-        assertThrows(AdrNotFoundException.class, () -> service.update(PROJECT, added.adr().code(),
+        assertThrows(AdrNotFoundException.class, () -> update(added.adr().code(),
                 AdrCorrection.builder().name("Another title").relatedToCodes(List.of("ADR-9")).build()));
 
-        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code()).orElseThrow());
+        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code(), null).orElseThrow());
     }
 
     /**
-     * Same refusal, same wording as {@code adr_supersede}'s: a decision is not its own peer. The
-     * service refuses it before it even looks the code up, so the message names the offending code -
-     * the record's own constructor would otherwise catch it later, without being able to say which
-     * code the caller typed.
+     * Same refusal, same wording as {@code adr_supersede}'s: a decision is not its own peer.
      */
     @Test
     void updateRejectsRelatingADecisionToItselfBeforeWritingAnything() {
-        AdrDetail added = service.add(PROJECT, newAdr());
+        AdrDetail added = add(newAdr());
 
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> service.update(PROJECT, added.adr().code(), AdrCorrection.builder()
+                () -> update(added.adr().code(), AdrCorrection.builder()
                         .name("Another title")
                         .relatedToCodes(List.of(added.adr().code().value())).build()));
 
         assertTrue(thrown.getMessage().contains(added.adr().code().value()), thrown.getMessage());
-        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code()).orElseThrow());
+        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code(), null).orElseThrow());
     }
 
     /**
@@ -667,59 +701,61 @@ class AdrServiceTest {
      */
     @Test
     void getMergesTheBackwardDirectionIntoTheOneRelatedToList() {
-        AdrDetail peer = service.add(PROJECT, newAdr());
-        AdrDetail naming = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, List.of(peer.adr().code().value())));
+        AdrDetail peer = add(newAdr());
+        AdrDetail naming = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null,
+                List.of(peer.adr().code().value())));
 
         assertEquals(List.of(peer.adr().code()),
-                service.get(PROJECT, naming.adr().code()).orElseThrow().relatedTo());
+                get(PROJECT, naming.adr().code()).orElseThrow().relatedTo());
         assertEquals(List.of(naming.adr().code()),
-                service.get(PROJECT, peer.adr().code()).orElseThrow().relatedTo());
+                get(PROJECT, peer.adr().code()).orElseThrow().relatedTo());
     }
 
     /** {@code list} inverts its one full read in memory and must land on the same answer. */
     @Test
     void listMergesRelatedToExactlyAsGetDoes() {
-        AdrDetail peer = service.add(PROJECT, newAdr());
-        AdrDetail naming = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, List.of(peer.adr().code().value())));
+        AdrDetail peer = add(newAdr());
+        AdrDetail naming = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null,
+                List.of(peer.adr().code().value())));
 
-        List<AdrDetail> all = service.list(PROJECT);
+        List<AdrDetail> all = list(PROJECT);
 
-        assertEquals(service.get(PROJECT, peer.adr().code()).orElseThrow().relatedTo(),
+        assertEquals(get(PROJECT, peer.adr().code()).orElseThrow().relatedTo(),
                 detailOf(all, peer.adr().code()).relatedTo());
-        assertEquals(service.get(PROJECT, naming.adr().code()).orElseThrow().relatedTo(),
+        assertEquals(get(PROJECT, naming.adr().code()).orElseThrow().relatedTo(),
                 detailOf(all, naming.adr().code()).relatedTo());
     }
 
     /**
      * A mutually declared pair is legal - {@code relatedTo} permits cycles, unlike
-     * {@code supersedes}. Merging must therefore terminate and report each peer once, not twice:
-     * both reads are one step, never a traversal.
+     * {@code supersedes}. Merging must therefore terminate and report each peer once, not twice.
      */
     @Test
     void aMutualRelatedToPairTerminatesAndReportsEachPeerOnce() {
-        AdrDetail first = service.add(PROJECT, newAdr());
-        AdrDetail second = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, List.of(first.adr().code().value())));
-        service.update(PROJECT, first.adr().code(), AdrCorrection.builder()
+        AdrDetail first = add(newAdr());
+        AdrDetail second = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null,
+                List.of(first.adr().code().value())));
+        update(first.adr().code(), AdrCorrection.builder()
                 .relatedToCodes(List.of(second.adr().code().value())).build());
 
         assertEquals(List.of(second.adr().code()),
-                service.get(PROJECT, first.adr().code()).orElseThrow().relatedTo());
+                get(PROJECT, first.adr().code()).orElseThrow().relatedTo());
         assertEquals(List.of(first.adr().code()),
-                service.get(PROJECT, second.adr().code()).orElseThrow().relatedTo());
+                get(PROJECT, second.adr().code()).orElseThrow().relatedTo());
         assertEquals(List.of(second.adr().code()),
-                detailOf(service.list(PROJECT), first.adr().code()).relatedTo());
+                detailOf(list(PROJECT), first.adr().code()).relatedTo());
     }
 
     /** Ordering is by running number, the same rule {@code supersededBy} follows. */
     @Test
     void relatedToIsSortedByRunningNumberNotLexicographically() {
-        AdrDetail target = service.add(PROJECT, newAdr());
+        AdrDetail target = add(newAdr());
         for (int i = 0; i < 10; i++) {
-            service.add(PROJECT, new NewAdr("Title", "Some context here", "Some decision here",
-                    null, null, null, null, null, List.of(target.adr().code().value())));
+            add(new NewAdr("Title", "Some context here", "Some decision here",
+                    null, null, null, DEFAULT_LANGUAGE, null, null, List.of(target.adr().code().value())));
         }
 
         assertEquals(
@@ -727,29 +763,22 @@ class AdrServiceTest {
                         new AdrCode("ADR-5"), new AdrCode("ADR-6"), new AdrCode("ADR-7"),
                         new AdrCode("ADR-8"), new AdrCode("ADR-9"), new AdrCode("ADR-10"),
                         new AdrCode("ADR-11")),
-                service.get(PROJECT, target.adr().code()).orElseThrow().relatedTo());
+                get(PROJECT, target.adr().code()).orElseThrow().relatedTo());
     }
 
     private static AdrDetail detailOf(List<AdrDetail> all, AdrCode code) {
         return all.stream().filter(detail -> detail.adr().code().equals(code)).findFirst().orElseThrow();
     }
 
-    /**
-     * Regression for #189: {@code get} (unlike {@code list}) derives {@code supersededBy} through
-     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#findSupersedingCodes} rather
-     * than {@code AdrService}'s own comparator, so it exercises the repository's own sort order. The
-     * in-memory test fake must sort by parsed running number, not by {@link String}'s natural
-     * (lexicographic) order, the same contract {@code KognioRdfAdrRepository} honours.
-     */
     @Test
     void getSortsSupersededByRunningNumberNotLexicographically() {
-        AdrCode target = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode target = add(newAdr()).adr().code();
         for (int i = 0; i < 10; i++) {
-            AdrCode superseding = service.add(PROJECT, newAdr()).adr().code();
+            AdrCode superseding = add(newAdr()).adr().code();
             repository.seedLegacySupersession(PROJECT, superseding, target);
         }
 
-        AdrDetail targetDetail = service.get(PROJECT, target).orElseThrow();
+        AdrDetail targetDetail = get(PROJECT, target).orElseThrow();
 
         assertEquals(
                 List.of(new AdrCode("ADR-2"), new AdrCode("ADR-3"), new AdrCode("ADR-4"),
@@ -759,21 +788,13 @@ class AdrServiceTest {
                 targetDetail.supersededBy());
     }
 
-    /**
-     * Regression for #187: two distinct, non-standard store-first (ADR-005) codes that both parse to
-     * the same running number (unparseable, hence 0 - see {@code AdrService#runningNumber}) must not
-     * collide in the {@code supersededBy} {@link java.util.TreeSet}. A comparator ordering only by
-     * parsed running number is inconsistent with {@link AdrCode#equals}, and a {@link java.util.TreeSet}
-     * dedupes by comparator, not by {@code equals} - so without a tie-breaker one of the two entries
-     * would be silently dropped.
-     */
     @Test
     void listKeepsBothSupersededByEntriesWhenTheirRunningNumbersCollide() {
-        AdrCode target = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode target = add(newAdr()).adr().code();
         repository.seedLegacySupersession(PROJECT, new AdrCode("ADR-1x"), target);
         repository.seedLegacySupersession(PROJECT, new AdrCode("ADR-2y"), target);
 
-        AdrDetail targetDetail = service.list(PROJECT).stream()
+        AdrDetail targetDetail = list(PROJECT).stream()
                 .filter(d -> d.adr().code().equals(target)).findFirst().orElseThrow();
 
         assertEquals(List.of(new AdrCode("ADR-1x"), new AdrCode("ADR-2y")), targetDetail.supersededBy());
@@ -781,18 +802,21 @@ class AdrServiceTest {
 
     @Test
     void updatePatchesOnlyTheNamedFieldAndLeavesEveryOtherAlone() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", "What follows", "What else", LocalDate.of(2026, 7, 31),
-                List.of("FR-1"), List.of("BC-1"), null));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here",
+                List.of(new NewConsequence("What follows", ConsequenceType.NEUTRAL)),
+                List.of(new NewConsideredOption("Option", "What else", OptionOutcome.REJECTED)),
+                LocalDate.of(2026, 7, 31), DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null));
 
-        Adr updated = service.update(PROJECT, added.adr().code(),
+        Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().decision("A sharper decision").build()).adr();
 
         assertEquals("A sharper decision", updated.decision());
         assertEquals("Title", updated.name());
         assertEquals("Some context here", updated.context());
-        assertEquals("What follows", updated.consequences());
-        assertEquals("What else", updated.alternatives());
+        assertEquals(List.of(new Consequence(1, "What follows", ConsequenceType.NEUTRAL)), updated.consequences());
+        assertEquals(List.of(new ConsideredOption(1, "Option", "What else", OptionOutcome.REJECTED)),
+                updated.consideredOptions());
         assertEquals(LocalDate.of(2026, 7, 31), updated.decisionDate());
         assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
         assertEquals(List.of(new BoundedContextRef(BC_1)), updated.affectsContexts());
@@ -800,30 +824,24 @@ class AdrServiceTest {
         assertEquals(added.adr().code(), updated.code());
     }
 
-    /**
-     * The tri-state of both reference lists: {@code null} is "leave this relation alone", not "clear
-     * it" - conflating the two would silently wipe every edge of a decision whose caller only meant
-     * to fix a typo.
-     */
     @Test
     void updateLeavesBothReferenceRelationsUntouchedWhenNeitherListIsGiven() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, List.of("FR-1"), List.of("BC-1"), null));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null));
 
-        Adr updated = service.update(PROJECT, added.adr().code(),
+        Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().name("Another title").build()).adr();
 
         assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
         assertEquals(List.of(new BoundedContextRef(BC_1)), updated.affectsContexts());
     }
 
-    /** The other half of the tri-state: an empty list is the explicit signal to remove every edge. */
     @Test
     void updateClearsAReferenceRelationWhenGivenAnEmptyList() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, List.of("FR-1"), List.of("BC-1"), null));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null));
 
-        Adr updated = service.update(PROJECT, added.adr().code(),
+        Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().addressesRequirementCodes(List.of()).build()).adr();
 
         assertEquals(List.of(), updated.addressesRequirements());
@@ -832,44 +850,35 @@ class AdrServiceTest {
 
     @Test
     void updateReplacesAReferenceRelationWholesale() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, List.of("FR-1"), null, null));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, List.of("FR-1"), null, null));
 
-        Adr updated = service.update(PROJECT, added.adr().code(),
+        Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().addressesRequirementCodes(List.of("NFR-2")).build()).adr();
 
         assertEquals(List.of(new RequirementRef(NFR_2)), updated.addressesRequirements());
     }
 
-    /**
-     * Resolution sits outside the retry and before any write, exactly as in {@code add}: an unknown
-     * code must abort the whole call and leave the decision exactly as it was.
-     */
     @Test
     void updateRejectsAnUnknownReferenceCodeBeforeWritingAnything() {
-        AdrDetail added = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, List.of("FR-1"), null, null));
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, List.of("FR-1"), null, null));
 
-        assertThrows(NoSuchElementException.class, () -> service.update(PROJECT, added.adr().code(),
+        assertThrows(NoSuchElementException.class, () -> update(added.adr().code(),
                 AdrCorrection.builder().name("Another title")
                         .addressesRequirementCodes(List.of("FR-99")).build()));
-        assertThrows(NoSuchElementException.class, () -> service.update(PROJECT, added.adr().code(),
+        assertThrows(NoSuchElementException.class, () -> update(added.adr().code(),
                 AdrCorrection.builder().affectsContextCodes(List.of("BC-99")).build()));
 
-        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code()).orElseThrow());
+        assertEquals(added.adr(), repository.findByCode(PROJECT, added.adr().code(), null).orElseThrow());
     }
 
-    /**
-     * The deliberate exception to the immutability rule (see {@link Adr#reviseReferences}): an edge
-     * to a resource that did not exist when the decision was accepted is still completable
-     * afterwards.
-     */
     @Test
     void updateCorrectsTheReferencesOfAnAcceptedDecision() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
 
-        Adr updated = service.update(PROJECT, code,
+        Adr updated = update(code,
                 AdrCorrection.builder().addressesRequirementCodes(List.of("FR-1")).build()).adr();
 
         assertEquals(List.of(new RequirementRef(FR_1)), updated.addressesRequirements());
@@ -877,33 +886,73 @@ class AdrServiceTest {
     }
 
     /**
-     * The rule itself, at the service boundary: correcting the prose of a decision already in force
-     * is refused and nothing is written - the caller is pointed at {@code adr_supersede} instead.
+     * The rule itself, at the service boundary: correcting an existing language variant of the prose
+     * of a decision already in force is refused and nothing is written - the caller is pointed at
+     * {@code adr_supersede} instead. Uses the same {@code DEFAULT_LANGUAGE} the decision was created
+     * under, so this is a same-language edit, not a new variant.
      */
     @Test
-    void updateRejectsATextChangeOnAnAcceptedDecisionAndWritesNothing() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+    void updateRejectsASameLanguageTextChangeOnAnAcceptedDecisionAndWritesNothing() {
+        AdrCode code = add(newAdr()).adr().code();
         Adr accepted = service.accept(PROJECT, code).adr();
 
         AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
-                () -> service.update(PROJECT, code,
-                        AdrCorrection.builder().name("A rewritten title").build()));
+                () -> update(code, AdrCorrection.builder().name("A rewritten title").build()));
 
         assertEquals(AdrStatus.ACCEPTED, thrown.status());
-        assertEquals(accepted, repository.findByCode(PROJECT, code).orElseThrow());
+        assertEquals(accepted, repository.findByCode(PROJECT, code, null).orElseThrow());
+    }
+
+    /**
+     * The kogn-io/arknet#357 exemption: a call that writes {@code name}/{@code context}/
+     * {@code decision} under a language none of the three fields carries yet is exempt from the
+     * immutability gate even though the decision is already ACCEPTED - it adds a translation, it
+     * does not change what was decided. Mutation test: removing the {@code newLanguageVariant}
+     * exemption in {@code Adr#reviseText} turns this green test into an unexpected
+     * {@link AdrTextImmutableException}.
+     */
+    @Test
+    void updateAllowsANewLanguageVariantOfTheTitleOnAnAcceptedDecision() {
+        AdrCode code = add(newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        AdrDetail updated = service.update(PROJECT, code,
+                AdrCorrection.builder().name("Einen eingebetteten Triple Store verwenden")
+                        .language("de").build(),
+                DEFAULT_LANGUAGE);
+
+        assertEquals("Einen eingebetteten Triple Store verwenden", updated.adr().name());
+        assertEquals(AdrStatus.ACCEPTED, updated.adr().status());
+    }
+
+    /**
+     * The mirror image of the previous test: correcting the SAME language ({@code DEFAULT_LANGUAGE},
+     * already carried) on an accepted decision is still refused - the exemption only ever applies to
+     * a genuinely new language, never a same-language edit dressed up with an explicit
+     * {@code language} argument that happens to match what is already there.
+     */
+    @Test
+    void updateRejectsExplicitlyReassertingTheSameLanguageOnAnAcceptedDecision() {
+        AdrCode code = add(newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
+                () -> service.update(PROJECT, code, AdrCorrection.builder()
+                        .name("A rewritten title").language(DEFAULT_LANGUAGE).build(), DEFAULT_LANGUAGE));
+
+        assertEquals(AdrStatus.ACCEPTED, thrown.status());
     }
 
     /**
      * A reference-only correction of an accepted decision still travels through {@code reviseText}
-     * with every text value unchanged - that path must stay a no-op rather than a rejection, or the
-     * exception above would swallow the exception this rule deliberately grants.
+     * with every text value unchanged - that path must stay a no-op rather than a rejection.
      */
     @Test
     void updateAcceptsACorrectionThatRestatesTheTextOfAnAcceptedDecisionUnchanged() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         Adr accepted = service.accept(PROJECT, code).adr();
 
-        Adr updated = service.update(PROJECT, code, AdrCorrection.builder()
+        Adr updated = update(code, AdrCorrection.builder()
                 .name(accepted.name())
                 .addressesRequirementCodes(List.of("FR-1"))
                 .build()).adr();
@@ -913,20 +962,179 @@ class AdrServiceTest {
 
     @Test
     void updateRejectsAnUnknownCode() {
-        assertThrows(AdrNotFoundException.class, () -> service.update(PROJECT, new AdrCode("ADR-9"),
+        assertThrows(AdrNotFoundException.class, () -> update(new AdrCode("ADR-9"),
                 AdrCorrection.builder().name("Another title").build()));
+    }
+
+    // --- consequence/considered-option correction (kogn-io/arknet#357) --------
+
+    @Test
+    void updateAppendsConsequencesInAnyStatusIncludingAccepted() {
+        AdrCode code = add(newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        Adr updated = update(code, AdrCorrection.builder()
+                .newConsequences(List.of(new NewConsequence("Discovered later", ConsequenceType.NEGATIVE)))
+                .build()).adr();
+
+        assertEquals(List.of(new Consequence(1, "Discovered later", ConsequenceType.NEGATIVE)),
+                updated.consequences());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
+    @Test
+    void updateAppendsConsideredOptionsInAnyStatusIncludingAccepted() {
+        AdrCode code = add(newAdr()).adr().code();
+        service.accept(PROJECT, code);
+
+        Adr updated = update(code, AdrCorrection.builder()
+                .newConsideredOptions(List.of(
+                        new NewConsideredOption("Discovered option", "Found later", OptionOutcome.REJECTED)))
+                .build()).adr();
+
+        assertEquals(List.of(new ConsideredOption(1, "Discovered option", "Found later", OptionOutcome.REJECTED)),
+                updated.consideredOptions());
+    }
+
+    @Test
+    void updateCorrectsAConsequenceWhilePROPOSEDByPosition() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .consequenceCorrections(List.of(new ConsequenceCorrection(1, "Sharper wording", ConsequenceType.POSITIVE)))
+                .build()).adr();
+
+        assertEquals(List.of(new Consequence(1, "Sharper wording", ConsequenceType.POSITIVE)),
+                updated.consequences());
+    }
+
+    /**
+     * Correcting an *existing* consequence's wording in the very language it already carries (this
+     * call names no {@code language}, so it resolves to the same {@code DEFAULT_LANGUAGE} the
+     * consequence was written under) is locked once the decision is no longer PROPOSED - it is an
+     * edit, not a translation, so the new-language exemption does not apply. Mutation test: removing
+     * the status guard in {@code Adr#withConsequenceCorrections} turns this into an unexpected pass.
+     */
+    @Test
+    void updateRejectsCorrectingAnExistingConsequenceOnAnAcceptedDecision() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
+                .consequenceCorrections(List.of(new ConsequenceCorrection(1, "Rewritten", ConsequenceType.POSITIVE)))
+                .build()));
+    }
+
+    /**
+     * kogn-io/arknet#357's follow-up: a consequence correction that writes a language the position
+     * never carried is exempt from the status gate, even on an accepted decision - it translates an
+     * already-decided consequence, it does not change what was decided. Mutation test: removing
+     * {@code AdrService#newLanguageVariantPositions}'s exemption, or the branch in
+     * {@code Adr#withConsequenceCorrections} that honours it, turns this into an unexpected throw.
+     */
+    @Test
+    void updateAllowsANewLanguageConsequenceCorrectionOnAnAcceptedDecision() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .consequenceCorrections(
+                        List.of(new ConsequenceCorrection(1, "Entwurfsformulierung", ConsequenceType.NEUTRAL)))
+                .language("de")
+                .build()).adr();
+
+        assertEquals(List.of(new Consequence(1, "Entwurfsformulierung", ConsequenceType.NEUTRAL)),
+                updated.consequences());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
+    /**
+     * The mirror image: writing a new language does not exempt a bundled {@code type} change - a
+     * consequence's classification is a judgement about the decision, not a fact of its wording, so
+     * it is gated regardless of language.
+     */
+    @Test
+    void updateRejectsAConsequenceTypeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
+                .consequenceCorrections(
+                        List.of(new ConsequenceCorrection(1, "Entwurfsformulierung", ConsequenceType.POSITIVE)))
+                .language("de")
+                .build()));
+    }
+
+    /** {@code ConsideredOption}'s counterpart of the new-language-consequence-correction pair above. */
+    @Test
+    void updateAllowsANewLanguageConsideredOptionCorrectionOnAnAcceptedDecision() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                null, DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        Adr updated = update(added.adr().code(), AdrCorrection.builder()
+                .consideredOptionCorrections(List.of(
+                        new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
+                                1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)))
+                .language("de")
+                .build()).adr();
+
+        assertEquals(List.of(new ConsideredOption(1, "Option A (de)", "Begruendung A", OptionOutcome.REJECTED)),
+                updated.consideredOptions());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
+    /**
+     * The mirror image for {@code ConsideredOption}: writing a new language does not exempt a bundled
+     * {@code outcome} change - whether an option was chosen or rejected is a judgement about the
+     * decision, not a fact of its wording.
+     */
+    @Test
+    void updateRejectsAnOptionOutcomeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                null, DEFAULT_LANGUAGE, null, null, null));
+        service.accept(PROJECT, added.adr().code());
+
+        assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
+                .consideredOptionCorrections(List.of(
+                        new de.hauschel.arknet.adr.domain.ConsideredOptionCorrection(
+                                1, "Option A (de)", "Begruendung A", OptionOutcome.CHOSEN)))
+                .language("de")
+                .build()));
+    }
+
+    @Test
+    void updateCorrectionOfAnUnknownConsequencePositionIsRejected() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
+                List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null, null,
+                DEFAULT_LANGUAGE, null, null, null));
+
+        assertThrows(de.hauschel.arknet.adr.domain.ConsequencePositionNotFoundException.class,
+                () -> update(added.adr().code(), AdrCorrection.builder()
+                        .consequenceCorrections(List.of(new ConsequenceCorrection(9, "x", ConsequenceType.NEUTRAL)))
+                        .build()));
     }
 
     // --- delete ---------------------------------------------------------------
 
     @Test
     void deleteRemovesAProposedDecision() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
 
         service.delete(PROJECT, code);
 
-        assertTrue(service.get(PROJECT, code).isEmpty());
-        assertTrue(service.list(PROJECT).isEmpty());
+        assertTrue(get(PROJECT, code).isEmpty());
+        assertTrue(list(PROJECT).isEmpty());
     }
 
     @Test
@@ -934,13 +1142,9 @@ class AdrServiceTest {
         assertThrows(AdrNotFoundException.class, () -> service.delete(PROJECT, new AdrCode("ADR-9")));
     }
 
-    /**
-     * The staging itself: an accepted decision is a record of what was decided, so it stays - and the
-     * refusal names the successor path rather than only saying no.
-     */
     @Test
     void deleteRefusesAnAcceptedDecisionAndPointsAtSupersede() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
 
         AdrNotDeletableException thrown =
@@ -948,17 +1152,12 @@ class AdrServiceTest {
 
         assertEquals(AdrStatus.ACCEPTED, thrown.status());
         assertTrue(thrown.getMessage().contains("adr_supersede"), thrown.getMessage());
-        assertTrue(service.get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+        assertTrue(get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
     }
 
-    /**
-     * The point of the whole staging (see {@code DeleteAdr}): "considered and turned down" is a
-     * decision with value, so REJECTED is as undeletable as ACCEPTED - and must not become the
-     * back door for getting rid of a record either.
-     */
     @Test
     void deleteRefusesARejectedDecisionBecauseTurningAnOptionDownIsItselfADecision() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.reject(PROJECT, code);
 
         AdrNotDeletableException thrown =
@@ -966,12 +1165,12 @@ class AdrServiceTest {
 
         assertEquals(AdrStatus.REJECTED, thrown.status());
         assertTrue(thrown.getMessage().contains("considered and turned down"), thrown.getMessage());
-        assertTrue(service.get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+        assertTrue(get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
     }
 
     @Test
     void deleteRefusesADeprecatedDecision() {
-        AdrCode code = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode code = add(newAdr()).adr().code();
         service.accept(PROJECT, code);
         service.deprecate(PROJECT, code);
 
@@ -979,7 +1178,7 @@ class AdrServiceTest {
                 assertThrows(AdrNotDeletableException.class, () -> service.delete(PROJECT, code));
 
         assertEquals(AdrStatus.DEPRECATED, thrown.status());
-        assertTrue(service.get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
+        assertTrue(get(PROJECT, code).isPresent(), "a refused delete must leave the decision");
     }
 
     /**
@@ -1004,8 +1203,8 @@ class AdrServiceTest {
      */
     @Test
     void deleteRefusesAProposedDecisionALegacySupersedesEdgeStillNames() {
-        AdrCode superseded = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode successor = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode superseded = add(newAdr()).adr().code();
+        AdrCode successor = add(newAdr()).adr().code();
         repository.seedLegacySupersession(PROJECT, successor, superseded);
 
         AdrReferencedException thrown =
@@ -1014,19 +1213,14 @@ class AdrServiceTest {
         assertEquals(List.of(new AdrReferencedException.Reference(successor,
                 AdrReferencedException.SUPERSEDED_BY)), thrown.references());
         assertTrue(thrown.getMessage().contains(successor.value()), thrown.getMessage());
-        assertTrue(service.get(PROJECT, superseded).isPresent(), "a refused delete must leave the decision");
+        assertTrue(get(PROJECT, superseded).isPresent(), "a refused delete must leave the decision");
     }
 
-    /**
-     * The other incoming edge, and the one a caller can actually clear: only the forward direction of
-     * {@code relatedTo} is stored, so the peer named by somebody else has to be protected by a
-     * reverse read - and the refusal points at {@code adr_update} for it.
-     */
     @Test
     void deleteRefusesADecisionAnotherOneIsRelatedTo() {
-        AdrCode peer = service.add(PROJECT, newAdr()).adr().code();
-        service.add(PROJECT, new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, null, null, null, List.of(peer.value())));
+        AdrCode peer = add(newAdr()).adr().code();
+        add(new NewAdr("Title", "Some context here", "Some decision here",
+                null, null, null, DEFAULT_LANGUAGE, null, null, List.of(peer.value())));
 
         AdrReferencedException thrown =
                 assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, peer));
@@ -1034,58 +1228,48 @@ class AdrServiceTest {
         assertEquals(List.of(new AdrReferencedException.Reference(new AdrCode("ADR-2"),
                 AdrReferencedException.RELATED_TO)), thrown.references());
         assertTrue(thrown.getMessage().contains("adr_update"), thrown.getMessage());
-        assertTrue(service.get(PROJECT, peer).isPresent(), "a refused delete must leave the decision");
+        assertTrue(get(PROJECT, peer).isPresent(), "a refused delete must leave the decision");
     }
 
-    /**
-     * The decision that carries the edge is free to go: only the <em>incoming</em> direction leaves a
-     * dangling reference behind, so a decision that merely names others is deletable.
-     */
     @Test
     void deleteAllowsADecisionThatOnlyPointsAtOthers() {
-        AdrCode peer = service.add(PROJECT, newAdr()).adr().code();
-        AdrCode naming = service.add(PROJECT, new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, null, null, null, List.of(peer.value())))
+        AdrCode peer = add(newAdr()).adr().code();
+        AdrCode naming = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, null, DEFAULT_LANGUAGE, null, null, List.of(peer.value())))
                 .adr().code();
 
         service.delete(PROJECT, naming);
 
-        assertTrue(service.get(PROJECT, naming).isEmpty());
-        assertTrue(service.get(PROJECT, peer).isPresent());
+        assertTrue(get(PROJECT, naming).isEmpty());
+        assertTrue(get(PROJECT, peer).isPresent());
     }
 
-    /**
-     * The numbering must not fall back over a delete: {@code ADR-2} may already stand for something
-     * in a commit message or a note, so the next decision is {@code ADR-3} even though nothing
-     * carries the number 2 any more.
-     */
     @Test
     void deleteDoesNotFreeTheCodeForTheNextDecision() {
-        service.add(PROJECT, newAdr());
-        AdrCode second = service.add(PROJECT, newAdr()).adr().code();
+        add(newAdr());
+        AdrCode second = add(newAdr()).adr().code();
         assertEquals(new AdrCode("ADR-2"), second);
 
         service.delete(PROJECT, second);
-        AdrCode next = service.add(PROJECT, newAdr()).adr().code();
+        AdrCode next = add(newAdr()).adr().code();
 
         assertEquals(new AdrCode("ADR-3"), next);
     }
 
-    /** Retained codes are per project, exactly as the living ones are. */
     @Test
     void retainedCodesDoNotLeakIntoAnotherProjectsNumbering() {
         ProjectId other = new ProjectId("other-project");
-        service.add(PROJECT, newAdr());
+        add(newAdr());
         service.delete(PROJECT, new AdrCode("ADR-1"));
 
-        assertEquals(new AdrCode("ADR-1"), service.add(other, newAdr()).adr().code());
+        assertEquals(new AdrCode("ADR-1"), service.add(other, newAdr(), DEFAULT_LANGUAGE).adr().code());
     }
 
     private static NewAdr newAdr() {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                null, null, null, null, null, null);
+                null, null, null, DEFAULT_LANGUAGE, null, null, null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

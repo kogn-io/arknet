@@ -60,11 +60,85 @@ public final class ArkarchVocabulary {
     /** {@code arkarch:adrDecision} - ADR -&gt; what was decided. */
     public static final String ADR_DECISION = NAMESPACE + "adrDecision";
 
-    /** {@code arkarch:adrConsequences} - ADR -&gt; the decision's positive and negative consequences. */
+    /**
+     * {@code arkarch:adrConsequences} - ADR -&gt; the decision's positive and negative consequences,
+     * as a single flat string. The pre-#357 shape: no tool writes this predicate any more (see
+     * {@link #CONSEQUENCE}), but the ADR out-adapter still reads a store-first record that still
+     * carries one, synthesising a single {@code NEUTRAL} {@code arkarch:Consequence} from it (never
+     * persisted) rather than losing the information.
+     */
     public static final String ADR_CONSEQUENCES = NAMESPACE + "adrConsequences";
 
-    /** {@code arkarch:adrAlternatives} - ADR -&gt; the considered but rejected options (MADR). */
+    /**
+     * {@code arkarch:adrAlternatives} - ADR -&gt; the considered but rejected options (MADR), as a
+     * single flat string. The pre-#357 shape: no tool writes this predicate any more (see
+     * {@link #CONSIDERED_OPTION}), but the ADR out-adapter still reads a store-first record that
+     * still carries one, synthesising a single outcome-less {@code arkarch:ConsideredOption} from it.
+     */
     public static final String ADR_ALTERNATIVES = NAMESPACE + "adrAlternatives";
+
+    /**
+     * {@code arkarch:Consequence} - a single positive, negative or neutral consequence of a decision,
+     * its own resource (kogn-io/arknet#357, replacing the pre-#357 flat {@link #ADR_CONSEQUENCES}
+     * string) - mirrors {@code arkreq:AcceptanceCriterion} (issue #266).
+     */
+    public static final String CONSEQUENCE_TYPE_CLASS = NAMESPACE + "Consequence";
+
+    /** {@code arkarch:consequence} - ADR -&gt; one of its {@link #CONSEQUENCE_TYPE_CLASS} resources. */
+    public static final String CONSEQUENCE = NAMESPACE + "consequence";
+
+    /** {@code arkarch:consequenceStatement} - Consequence -&gt; its multilingual text. */
+    public static final String CONSEQUENCE_STATEMENT = NAMESPACE + "consequenceStatement";
+
+    /** {@code arkarch:consequenceType} - Consequence -&gt; one of the three {@link #CONSEQUENCE_TYPE} individuals. */
+    public static final String CONSEQUENCE_TYPE_PROPERTY = NAMESPACE + "consequenceType";
+
+    /** {@code arkarch:ConsequenceType} - the class of the three consequence-type individuals below. */
+    public static final String CONSEQUENCE_TYPE = NAMESPACE + "ConsequenceType";
+
+    /** {@code arkarch:Positive} - a beneficial consequence. */
+    public static final String POSITIVE = NAMESPACE + "Positive";
+
+    /** {@code arkarch:Negative} - a detrimental consequence. */
+    public static final String NEGATIVE = NAMESPACE + "Negative";
+
+    /**
+     * {@code arkarch:Neutral} - neither clearly beneficial nor detrimental; also the type the
+     * out-adapter's legacy-literal fallback assigns an unclassified pre-#357 consequence.
+     */
+    public static final String NEUTRAL = NAMESPACE + "Neutral";
+
+    /**
+     * {@code arkarch:ConsideredOption} - a single option considered while making a decision, its own
+     * resource (kogn-io/arknet#357, replacing the pre-#357 flat {@link #ADR_ALTERNATIVES} string) -
+     * mirrors {@link #CONSEQUENCE_TYPE_CLASS} in shape.
+     */
+    public static final String CONSIDERED_OPTION_TYPE_CLASS = NAMESPACE + "ConsideredOption";
+
+    /** {@code arkarch:consideredOption} - ADR -&gt; one of its {@link #CONSIDERED_OPTION_TYPE_CLASS} resources. */
+    public static final String CONSIDERED_OPTION = NAMESPACE + "consideredOption";
+
+    /** {@code arkarch:optionRationale} - ConsideredOption -&gt; its multilingual reasoning text. */
+    public static final String OPTION_RATIONALE = NAMESPACE + "optionRationale";
+
+    /** {@code arkarch:optionOutcome} - ConsideredOption -&gt; one of the two {@link #OPTION_OUTCOME} individuals. */
+    public static final String OPTION_OUTCOME_PROPERTY = NAMESPACE + "optionOutcome";
+
+    /** {@code arkarch:OptionOutcome} - the class of the two option-outcome individuals below. */
+    public static final String OPTION_OUTCOME = NAMESPACE + "OptionOutcome";
+
+    /** {@code arkarch:Chosen} - the option that was actually picked; at most one per decision. */
+    public static final String CHOSEN = NAMESPACE + "Chosen";
+
+    /**
+     * {@code arkarch:OptionRejected} - an option that was considered and turned down. Deliberately
+     * not named {@code arkarch:Rejected}: that IRI already denotes the unrelated
+     * {@link #REJECTED} {@code ADRStatus} individual ("the decision itself was rejected while
+     * still proposed") - the issue's literal wording ("Chosen/Rejected") would have collided one
+     * individual across two different {@code owl:NamedIndividual} classes, so this name was chosen
+     * instead (kogn-io/arknet#357, deviation noted in the PR description).
+     */
+    public static final String OPTION_REJECTED = NAMESPACE + "OptionRejected";
 
     /** {@code arkarch:decisionDate} - ADR -&gt; the date the decision was made ({@code xsd:date}). */
     public static final String DECISION_DATE = NAMESPACE + "decisionDate";

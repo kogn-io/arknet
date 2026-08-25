@@ -15,6 +15,8 @@ import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
+import de.hauschel.arknet.adr.domain.Consequence;
+import de.hauschel.arknet.adr.domain.ConsideredOption;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
@@ -81,7 +83,7 @@ public final class AdrCards {
      */
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
-        final List<AdrDetail> all = adrs.list(projectId);
+        final List<AdrDetail> all = adrs.list(projectId, null);
         final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirements(projectId, all);
         final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContexts(projectId, all);
         final Map<AdrCode, String> idsByCode = all.stream()
@@ -106,8 +108,8 @@ public final class AdrCards {
         final List<Block> blocks = new ArrayList<>();
         blocks.add(Block.Prose.plain("Context", adr.context()));
         blocks.add(Block.Prose.plain("Decision", adr.decision()));
-        addIfPresent(blocks, "Consequences", adr.consequences());
-        addIfPresent(blocks, "Alternatives", adr.alternatives());
+        addConsequences(blocks, adr.consequences());
+        addConsideredOptions(blocks, adr.consideredOptions());
         if (adr.decisionDate() != null) {
             blocks.add(Block.Prose.plain("Decision date", adr.decisionDate().toString()));
         }
@@ -157,10 +159,49 @@ public final class AdrCards {
         return Ref.of(code.value(), iri != null ? iri : code.value());
     }
 
-    private static void addIfPresent(final List<Block> blocks, final String label, final String value) {
-        if (value != null && !value.isBlank()) {
-            blocks.add(Block.Prose.plain(label, value));
+    /**
+     * Renders {@code consequences} (kogn-io/arknet#357) as a single {@link Block.Bullets} list, one
+     * item per structured consequence - the existing bullets mechanism already carries exactly one
+     * list per card without a language-switch regression (see {@link HtmlReportRenderer}'s
+     * {@code LangSources} javadoc). {@link Block.Bullets#plain} numbers items by list order, which
+     * matches this list's own {@code arknet:position} order. A legacy-only decision (the flat
+     * {@code arkarch:adrConsequences} literal, synthesised by the out-adapter as one {@code NEUTRAL}
+     * entry) renders identically - a single bullet - so there is no visible regression against the
+     * pre-#357 report.
+     *
+     * <p><strong>Not yet a second list.</strong> Rendering considered options as their own bullets
+     * list too is deliberately deferred to issue #358, which reworks {@code HtmlReportRenderer}'s
+     * language-switch to support more than one {@link Block.Bullets} per card; see
+     * {@link #addConsideredOptions} for the conservative {@link Block.Prose} it uses instead in the
+     * meantime.</p>
+     */
+    private static void addConsequences(final List<Block> blocks, final List<Consequence> consequences) {
+        if (consequences.isEmpty()) {
+            return;
         }
+        final List<String> lines = consequences.stream()
+                .map(c -> "[%s] %s".formatted(c.type(), c.statement()))
+                .toList();
+        blocks.add(Block.Bullets.plain("Consequences", lines));
+    }
+
+    /**
+     * Renders {@code consideredOptions} (kogn-io/arknet#357) as one merged {@link Block.Prose}
+     * block, exactly as the pre-#357 flat {@code arkarch:adrAlternatives} literal was rendered -
+     * deliberately conservative rather than a second {@link Block.Bullets} list: see
+     * {@link #addConsequences}'s javadoc for why a second list is issue #358's job, not this one's.
+     * Unlike the pre-#357 literal (rejected options only), this now also shows the {@code CHOSEN}
+     * option, since {@link ConsideredOption} makes the MADR "Decision Outcome" representable at
+     * all.
+     */
+    private static void addConsideredOptions(final List<Block> blocks, final List<ConsideredOption> options) {
+        if (options.isEmpty()) {
+            return;
+        }
+        final String merged = options.stream()
+                .map(o -> "[%s] %s - %s".formatted(o.outcome() == null ? "?" : o.outcome(), o.name(), o.rationale()))
+                .collect(Collectors.joining("\n"));
+        blocks.add(Block.Prose.plain("Considered options", merged));
     }
 
     /**

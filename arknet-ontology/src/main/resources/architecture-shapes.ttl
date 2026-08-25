@@ -34,6 +34,11 @@ ashapes:ADRShape
     sh:property ashapes:ADR-decision ;
     sh:property ashapes:ADR-consequences ;
     sh:property ashapes:ADR-alternatives ;
+    sh:property ashapes:ADR-consequence ;
+    sh:property ashapes:ADR-consequence-class ;
+    sh:property ashapes:ADR-consideredOption ;
+    sh:property ashapes:ADR-consideredOption-class ;
+    sh:property ashapes:ADR-consideredOption-atMostOneChosen ;
     sh:property ashapes:ADR-relatedTo ;
     sh:property ashapes:ADR-supersededBy .
 
@@ -47,12 +52,17 @@ ashapes:ADR-identifier
     sh:message  "An ADR needs exactly one dcterms:identifier (e.g. ADR-0007)."@en , "ADR braucht genau eine dcterms:identifier (z.B. ADR-0007)."@de ;
     sh:severity sh:Violation .
 
+# sh:datatype was dropped and sh:uniqueLang added when name/context/decision became multilingual
+# (kogn-io/arknet#357): a language-tagged literal is rdf:langString, not xsd:string, and a plain
+# untagged one remains legal alongside it. minCount and uniqueLang share sh:Violation severity, so
+# unlike ADR-consequence/ADR-consideredOption below they stay one PropertyShape each (mirrors
+# rshapes:Requirement-title).
 ashapes:ADR-name
     a sh:PropertyShape ;
     sh:path     arknet:name ;
     sh:minCount 1 ;
-    sh:datatype xsd:string ;
-    sh:message  "An ADR needs an arknet:name (title of the decision)."@en , "ADR braucht einen arknet:name (Titel der Entscheidung)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "An ADR needs an arknet:name (title of the decision). sh:uniqueLang allows at most one arknet:name per non-empty language tag."@en , "ADR braucht einen arknet:name (Titel der Entscheidung). sh:uniqueLang erlaubt hoechstens einen arknet:name je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-status
@@ -69,24 +79,27 @@ ashapes:ADR-context
     a sh:PropertyShape ;
     sh:path     arkarch:adrContext ;
     sh:minCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?)."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "An ADR must have an arkarch:adrContext (why was the decision necessary?). sh:uniqueLang allows at most one arkarch:adrContext per non-empty language tag."@en , "ADR muss einen arkarch:adrContext haben (warum war die Entscheidung noetig?). sh:uniqueLang erlaubt hoechstens einen arkarch:adrContext je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
 ashapes:ADR-decision
     a sh:PropertyShape ;
     sh:path     arkarch:adrDecision ;
     sh:minCount 1 ;
-    sh:datatype xsd:string ;
     sh:minLength 5 ;
-    sh:message  "An ADR must have an arkarch:adrDecision (what was decided?)."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?)."@de ;
+    sh:uniqueLang true ;
+    sh:message  "An ADR must have an arkarch:adrDecision (what was decided?). sh:uniqueLang allows at most one arkarch:adrDecision per non-empty language tag."@en , "ADR muss eine arkarch:adrDecision haben (was wurde entschieden?). sh:uniqueLang erlaubt hoechstens eine arkarch:adrDecision je nicht-leerem Sprach-Tag."@de ;
     sh:severity sh:Violation .
 
+# The pre-#357 flat shapes: no tool writes arkarch:adrConsequences/adrAlternatives any more (see
+# arkarch:consequence/arkarch:consideredOption below), but a store-first record may still carry
+# one, preserved past the gate by the out-adapter (never re-validated) - kept here unchanged so a
+# write of such a record does not itself become illegal.
 ashapes:ADR-consequences
     a sh:PropertyShape ;
     sh:path     arkarch:adrConsequences ;
-    sh:minCount 1 ;
     sh:datatype xsd:string ;
     sh:message  "Best practice: An ADR should document arkarch:adrConsequences (consequences of the decision)."@en , "Best Practice: ADR sollte arkarch:adrConsequences dokumentieren (Folgen der Entscheidung)."@de ;
     sh:severity sh:Warning .
@@ -97,6 +110,146 @@ ashapes:ADR-alternatives
     sh:datatype xsd:string ;
     sh:message  "Best practice: An ADR should document considered alternatives (arkarch:adrAlternatives)."@en , "Best Practice: ADR sollte erwogene Alternativen (arkarch:adrAlternatives) dokumentieren."@de ;
     sh:severity sh:Warning .
+
+# Consequence/ConsideredOption (kogn-io/arknet#357): each edge needs two severities on the same
+# path - a best-practice sh:Warning presence check (an ADR need not document either, mirroring the
+# pre-#357 flat shapes' own sh:Warning minCount above) and a sh:Violation structural check (IF one
+# is present, it must be a well-formed edge to the right resource type). One PropertyShape carries
+# only one severity, so - mirroring rshapes:UseCase-goal + UseCase-goal-uniqueLang's split, which
+# uses the same "one path, two severities" pattern for a different pair of constraints - each edge
+# gets two named PropertyShapes instead.
+ashapes:ADR-consequence
+    a sh:PropertyShape ;
+    sh:path     arkarch:consequence ;
+    sh:minCount 1 ;
+    sh:message  "Best practice: An ADR should document at least one arkarch:consequence."@en , "Best Practice: ADR sollte mindestens eine arkarch:consequence dokumentieren."@de ;
+    sh:severity sh:Warning .
+
+ashapes:ADR-consequence-class
+    a sh:PropertyShape ;
+    sh:path     arkarch:consequence ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkarch:Consequence ;
+    sh:message  "An arkarch:consequence edge must point at an arkarch:Consequence resource, identified by an IRI."@en , "Eine arkarch:consequence-Kante muss auf eine arkarch:Consequence-Ressource mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ADR-consideredOption
+    a sh:PropertyShape ;
+    sh:path     arkarch:consideredOption ;
+    sh:minCount 1 ;
+    sh:message  "Best practice: An ADR should document at least one arkarch:consideredOption."@en , "Best Practice: ADR sollte mindestens eine arkarch:consideredOption dokumentieren."@de ;
+    sh:severity sh:Warning .
+
+ashapes:ADR-consideredOption-class
+    a sh:PropertyShape ;
+    sh:path     arkarch:consideredOption ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkarch:ConsideredOption ;
+    sh:message  "An arkarch:consideredOption edge must point at an arkarch:ConsideredOption resource, identified by an IRI."@en , "Eine arkarch:consideredOption-Kante muss auf eine arkarch:ConsideredOption-Ressource mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
+
+# At most one considered option may be the chosen one (kogn-io/arknet#357) - verified against the
+# real RDF4J SHACL engine this project's write gate runs (spike, arknet-wt-spike-shacl). Nailed down
+# a second time, unconditionally, in Adr's own compact constructor: SHACL only guards a store-first
+# (ADR-005) write, never a direct edit that bypasses the gate.
+ashapes:ADR-consideredOption-atMostOneChosen
+    a sh:PropertyShape ;
+    sh:path     arkarch:consideredOption ;
+    sh:qualifiedValueShape [
+        sh:property [ sh:path arkarch:optionOutcome ; sh:hasValue arkarch:Chosen ; sh:minCount 1 ]
+    ] ;
+    sh:qualifiedMaxCount 1 ;
+    sh:message  "At most one arkarch:consideredOption may have arkarch:optionOutcome arkarch:Chosen."@en , "Hoechstens eine arkarch:consideredOption darf arkarch:optionOutcome arkarch:Chosen tragen."@de ;
+    sh:severity sh:Violation .
+
+##############################################################################
+#  CONSEQUENCE SHAPES  (kogn-io/arknet#357 -- own resource, mirrors the
+#  ACCEPTANCE CRITERION SHAPES of requirements-shapes.ttl, issue #266)
+##############################################################################
+
+ashapes:ConsequenceShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:Consequence ;
+    sh:property ashapes:Consequence-position ;
+    sh:property ashapes:Consequence-statement ;
+    sh:property ashapes:Consequence-type .
+
+ashapes:Consequence-position
+    a sh:PropertyShape ;
+    sh:path     arknet:position ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 1 ;
+    sh:message  "A Consequence needs exactly one arknet:position (1-based order, >= 1)."@en , "Consequence braucht genau eine arknet:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:Consequence-statement
+    a sh:PropertyShape ;
+    sh:path     arkarch:consequenceStatement ;
+    sh:minCount 1 ;
+    sh:minLength 5 ;
+    sh:uniqueLang true ;
+    sh:message  "A Consequence needs at least one arkarch:consequenceStatement (min. 5 characters). sh:uniqueLang allows at most one per non-empty language tag."@en , "Consequence braucht mindestens eine arkarch:consequenceStatement (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
+    sh:severity sh:Violation .
+
+ashapes:Consequence-type
+    a sh:PropertyShape ;
+    sh:path     arkarch:consequenceType ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in       ( arkarch:Positive arkarch:Negative arkarch:Neutral ) ;
+    sh:message  "A Consequence needs exactly one arkarch:consequenceType (Positive | Negative | Neutral)."@en , "Consequence braucht genau einen arkarch:consequenceType (Positive | Negative | Neutral)."@de ;
+    sh:severity sh:Violation .
+
+##############################################################################
+#  CONSIDERED OPTION SHAPES  (kogn-io/arknet#357)
+##############################################################################
+
+ashapes:ConsideredOptionShape
+    a sh:NodeShape ;
+    sh:targetClass arkarch:ConsideredOption ;
+    sh:property ashapes:ConsideredOption-name ;
+    sh:property ashapes:ConsideredOption-position ;
+    sh:property ashapes:ConsideredOption-rationale ;
+    sh:property ashapes:ConsideredOption-outcome .
+
+ashapes:ConsideredOption-name
+    a sh:PropertyShape ;
+    sh:path     arknet:name ;
+    sh:minCount 1 ;
+    sh:minLength 1 ;
+    sh:uniqueLang true ;
+    sh:message  "A ConsideredOption needs at least one arknet:name. sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens einen arknet:name. sh:uniqueLang erlaubt hoechstens einen je nicht-leerem Sprach-Tag."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ConsideredOption-position
+    a sh:PropertyShape ;
+    sh:path     arknet:position ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 1 ;
+    sh:message  "A ConsideredOption needs exactly one arknet:position (1-based order, >= 1)."@en , "ConsideredOption braucht genau eine arknet:position (1-basierte Ordnung, >= 1)."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ConsideredOption-rationale
+    a sh:PropertyShape ;
+    sh:path     arkarch:optionRationale ;
+    sh:minCount 1 ;
+    sh:minLength 5 ;
+    sh:uniqueLang true ;
+    sh:message  "A ConsideredOption needs at least one arkarch:optionRationale (min. 5 characters). sh:uniqueLang allows at most one per non-empty language tag."@en , "ConsideredOption braucht mindestens eine arkarch:optionRationale (min. 5 Zeichen). sh:uniqueLang erlaubt hoechstens eine je nicht-leerem Sprach-Tag."@de ;
+    sh:severity sh:Violation .
+
+ashapes:ConsideredOption-outcome
+    a sh:PropertyShape ;
+    sh:path     arkarch:optionOutcome ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in       ( arkarch:Chosen arkarch:OptionRejected ) ;
+    sh:message  "A ConsideredOption needs exactly one arkarch:optionOutcome (Chosen | Rejected)."@en , "ConsideredOption braucht genau ein arkarch:optionOutcome (Chosen | Rejected)."@de ;
+    sh:severity sh:Violation .
 
 # Zero or more: a decision may relate to any number of peers, and most relate to
 # none - hence no sh:minCount and no sh:maxCount. Only the forward edge is ever
@@ -126,7 +279,7 @@ ashapes:ADR-supersededBy
 # status Superseded (kogn-io/arknet#357/#359). The converse - status Superseded implies the edge is
 # present - is deliberately left to the domain layer (Adr's compact constructor refuses to build an
 # instance where the two disagree) and to the read-time tolerance in
-# KognioRdfAdrRepository#AdrAssembly's toAdr (a store-first record that still manages to disagree is
+# KognioRdfAdrRepository#toAdrOrNull (a store-first record that still manages to disagree is
 # skipped with a WARN rather than crashing the read); no legitimate write path can reach this gate
 # with that half broken, so this shape does not need to guard it too.
 #

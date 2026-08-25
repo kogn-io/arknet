@@ -4,9 +4,15 @@
 package de.hauschel.arknet.adr.domain;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
+import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * A single architecture decision under management: a documented decision with its context, the
@@ -22,55 +28,14 @@ import java.util.Objects;
  * replacing its triples wholesale, so an edge kept outside this record would be silently dropped by
  * the next write - the lesson the requirements and bounded-context contexts already paid for.</p>
  *
- * @param id                    opaque, unchanging identity of this decision (never a business
- *                              label); minted once by a
- *                              {@link de.hauschel.arknet.kernel.ResourceIdFactory} and stable
- *                              across relabelling
- * @param code                  human-readable business label (e.g. {@code ADR-1}); maps to
- *                              {@code dcterms:identifier}
- * @param name                  the decision's title; maps to {@code arknet:name} and is required by
- *                              the ADR SHACL shape
- * @param status                lifecycle status; maps to {@code arkarch:adrStatus} and is required
- *                              by the shape. Never {@code null}
- * @param context               why the decision was necessary - forces and constraints; maps to
- *                              {@code arkarch:adrContext}, required by the shape
- * @param decision              what was decided; maps to {@code arkarch:adrDecision}, required by
- *                              the shape
- * @param consequences          the decision's positive and negative consequences; maps to
- *                              {@code arkarch:adrConsequences}, a {@code sh:Warning}-only (best
- *                              practice) property. Optional, may be {@code null}
- * @param alternatives          the considered but rejected options (MADR "Considered Options");
- *                              maps to {@code arkarch:adrAlternatives}, also
- *                              {@code sh:Warning}-only. Optional, may be {@code null}
- * @param decisionDate          the day the decision was made; maps to
- *                              {@code arkarch:decisionDate}. Optional, may be {@code null} - the
- *                              shape places no constraint on it at all, and a proposed decision has
- *                              no date yet
- * @param addressesRequirements the requirements this decision addresses; maps to
- *                              {@code arkarch:addressesRequirement}, {@code 0..n}, held as bare
- *                              identity references (never {@code null} or containing duplicates; a
- *                              {@code null} argument is normalised to an empty list)
- * @param affectsContexts       the bounded contexts this decision affects; maps to
- *                              {@code arkarch:affectsContext}, {@code 0..n}, same rules as
- *                              {@code addressesRequirements}
- * @param supersededBy          the identity of the newer decision that replaces this one, or
- *                              {@code null} if none does; maps to {@code arkarch:supersededBy}
- *                              (kogn-io/arknet#357 moved the written edge here, off the superseding
- *                              decision's old forward-only {@code supersedes} list). Coupled to
- *                              {@link #status} by a bi-implication this record's compact constructor
- *                              enforces: non-{@code null} if and only if {@code status} is
- *                              {@link AdrStatus#SUPERSEDED} - see {@link #supersededBy(AdrId)}, the
- *                              only way to set both together
- * @param relatedTo             the peer decisions this one cross-references ("see also"); maps to
- *                              {@code arkarch:relatedTo}, {@code 0..n}. Only this direction is ever
- *                              asserted as a triple, although the ontology declares the property an
- *                              {@code owl:SymmetricProperty}: nothing here reasons over symmetry,
- *                              and two hand-maintained triples for one relation are exactly the
- *                              drift risk this codebase avoids - which is also why the relation is
- *                              unranked rather than directional, and why a reader is handed one
- *                              merged list (see {@code AdrDetail}) instead of two. Never
- *                              {@code null} or containing duplicates (a {@code null} argument is
- *                              normalised to an empty list), and never this decision's own identity
+ * <p><strong>Consequences and considered options are structured resources (kogn-io/arknet#357),
+ * not flat strings.</strong> {@link #consequences()}/{@link #consideredOptions()} replace the
+ * pre-#357 free-text {@code arkarch:adrConsequences}/{@code arkarch:adrAlternatives} literals with
+ * lists of own, positioned {@link Consequence}/{@link ConsideredOption} resources - mirroring
+ * {@code de.hauschel.arknet.req.domain.Requirement#acceptanceCriteria()} (issue #266), the precedent
+ * for this exact shape. Both lists may legally be empty (unlike {@code acceptanceCriteria}, which
+ * {@code Requirement} requires at least one of): the pre-#357 fields were {@code sh:Warning}-only
+ * best practice, never mandatory, and this change does not raise that bar.</p>
  */
 public record Adr(
         AdrId id,
@@ -79,8 +44,8 @@ public record Adr(
         AdrStatus status,
         String context,
         String decision,
-        String consequences,
-        String alternatives,
+        List<Consequence> consequences,
+        List<ConsideredOption> consideredOptions,
         LocalDate decisionDate,
         List<RequirementRef> addressesRequirements,
         List<BoundedContextRef> affectsContexts,
@@ -94,17 +59,22 @@ public record Adr(
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(decision, "decision");
+        consequences = consequences == null ? List.of() : List.copyOf(consequences);
+        consideredOptions = consideredOptions == null ? List.of() : List.copyOf(consideredOptions);
         addressesRequirements = addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
         affectsContexts = affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
         relatedTo = relatedTo == null ? List.of() : List.copyOf(relatedTo);
         requireNotBlank(name, "name");
         requireNotBlank(context, "context");
         requireNotBlank(decision, "decision");
-        if (consequences != null && consequences.isBlank()) {
-            throw new IllegalArgumentException("consequences must not be blank when present");
-        }
-        if (alternatives != null && alternatives.isBlank()) {
-            throw new IllegalArgumentException("alternatives must not be blank when present");
+        requireConsecutivePositions(consequences.stream().map(Consequence::position).toList(), "consequences");
+        requireConsecutivePositions(
+                consideredOptions.stream().map(ConsideredOption::position).toList(), "consideredOptions");
+        long chosenCount = consideredOptions.stream().filter(option -> option.outcome() == OptionOutcome.CHOSEN)
+                .count();
+        if (chosenCount > 1) {
+            throw new IllegalArgumentException(
+                    "at most one considered option may be CHOSEN, was " + chosenCount + ": " + code.value());
         }
         requireNoDuplicates(addressesRequirements, "addressesRequirements");
         requireNoDuplicates(affectsContexts, "affectsContexts");
@@ -156,7 +126,7 @@ public record Adr(
         if (status != AdrStatus.PROPOSED) {
             throw new IllegalStateException("an ADR can only be accepted while PROPOSED, was " + status);
         }
-        return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, alternatives,
+        return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, consideredOptions,
                 decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
@@ -179,7 +149,7 @@ public record Adr(
         if (status != AdrStatus.PROPOSED) {
             throw new IllegalStateException("an ADR can only be rejected while PROPOSED, was " + status);
         }
-        return new Adr(id, code, name, AdrStatus.REJECTED, context, decision, consequences, alternatives,
+        return new Adr(id, code, name, AdrStatus.REJECTED, context, decision, consequences, consideredOptions,
                 decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
@@ -207,7 +177,7 @@ public record Adr(
         if (status != AdrStatus.ACCEPTED) {
             throw new IllegalStateException("an ADR can only be deprecated while ACCEPTED, was " + status);
         }
-        return new Adr(id, code, name, AdrStatus.DEPRECATED, context, decision, consequences, alternatives,
+        return new Adr(id, code, name, AdrStatus.DEPRECATED, context, decision, consequences, consideredOptions,
                 decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
@@ -217,21 +187,6 @@ public record Adr(
      * the very same step (kogn-io/arknet#357). The two can only ever change together: the compact
      * constructor enforces the bi-implication, so there is no way to reach one without the other
      * through this method.
-     *
-     * <p><strong>Lives on the superseded decision, not the superseding one.</strong> Before this
-     * issue, the superseding decision alone carried a forward-only {@code supersedes} edge and the
-     * superseded decision's own status stayed untouched; the edge has since moved onto the record it
-     * actually describes - a decision knows itself that it has been replaced, the same way it knows
-     * it has been accepted or deprecated.</p>
-     *
-     * <p>Idempotent for the very same successor: calling this again with the {@code supersedingId} it
-     * already holds is a no-op, returning {@code this} unchanged - the same idempotency
-     * {@link #accept()}/{@link #reject()}/{@link #deprecate()} give their own terminal transition.
-     * Naming a <em>different</em> successor while already superseded is refused rather than silently
-     * replacing the edge, for the same reason {@code sh:maxCount 1} on {@code arkarch:supersededBy}
-     * gives a decision at most one successor: falling through to the status check below, it is
-     * rejected as "was SUPERSEDED", the correction path being a policy decision this record does not
-     * make for itself.</p>
      *
      * @param supersedingId the identity of the decision that replaces this one
      * @return the superseded decision, or {@code this} if it was already recorded as superseded by
@@ -250,59 +205,306 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be superseded while ACCEPTED, was "
                     + status + ": " + code.value());
         }
-        return new Adr(id, code, name, AdrStatus.SUPERSEDED, context, decision, consequences, alternatives,
+        return new Adr(id, code, name, AdrStatus.SUPERSEDED, context, decision, consequences, consideredOptions,
                 decisionDate, addressesRequirements, affectsContexts, supersedingId, relatedTo);
     }
 
     /**
-     * Returns this decision with its prose and decision date corrected - the rule behind
-     * {@code adr_update}'s text fields.
+     * Returns this decision with {@code name}/{@code context}/{@code decision}/{@code decisionDate}
+     * corrected - the rule behind {@code adr_update}'s flagship text fields.
      *
-     * <p><strong>The text of a decision in force is not editable.</strong> Correcting the wording of
-     * a decision only stays honest while it is still {@link AdrStatus#PROPOSED}; in any of the other
-     * four states it is a record of what was decided at the time, and rewriting it erases the
-     * history an ADR exists to keep (Nygard). The correction is recorded as a decision of its own
-     * from there - linked with {@link #supersededBy(AdrId)} where that method accepts it, which is
-     * {@link AdrStatus#ACCEPTED} alone; {@link AdrTextImmutableException} names the path that fits
-     * each of the four statuses rather than promising an edge the domain would refuse.
-     * The status is checked here, in the domain, rather than in the SHACL write gate: a shape
-     * validates one graph state, not a transition between two, so "this text must not have changed"
-     * is not expressible there at all.</p>
+     * <p><strong>The text of a decision in force is not editable - except to add a language it never
+     * had.</strong> Before kogn-io/arknet#357 this was a single, per-field rule: correcting the
+     * wording only stayed honest while still {@link AdrStatus#PROPOSED}; in any of the other four
+     * states it is a record of what was decided at the time, and rewriting it erases the history an
+     * ADR exists to keep (Nygard). Since these three fields became multilingual, the rule is finer, per
+     * language variant rather than per field: recording a <em>translation</em> of an already-accepted
+     * decision does not change what was decided, it makes the same decision accessible in a language
+     * it was not recorded in - so {@code newLanguageVariant} exempts it from the status gate.
+     * Correcting the wording <em>already</em> on record in a given language is still what it always
+     * was: a decision in force is a record of what was decided at the time, and rewriting that record
+     * erases the history an ADR exists to keep (Nygard). The correction is recorded as a decision of
+     * its own from there - linked with {@link #supersededBy(AdrId)} where that method accepts it,
+     * which is {@link AdrStatus#ACCEPTED} alone; {@link AdrTextImmutableException} names the path that
+     * fits each of the four statuses rather than promising an edge the domain would refuse. The status
+     * is checked here, in the domain, rather than in the SHACL write gate: a shape validates one graph
+     * state, not a transition between two, so "this text must not have changed" is not expressible
+     * there at all.</p>
      *
-     * <p><strong>Order matters: compare first, then check the status.</strong> A call that changes
+     * <p><strong>{@link #consequences()}/{@link #consideredOptions()} carry the same exemption, at a
+     * finer grain.</strong> {@link #withConsequenceCorrections}/{@link #withConsideredOptionCorrections}
+     * apply it per position rather than per call - see those methods' javadoc for the exact rule and
+     * why the granularity differs from this method's single call-wide flag.</p>
+     *
+     * <p><strong>{@code newLanguageVariant} is one flag for the whole call, not per field.</strong>
+     * {@code adr_add}/{@code adr_update} take a single {@code language} argument for the entire call
+     * (mirroring {@code req_add}'s - not the more granular per-field {@code req_update} - shape),
+     * so the caller (the application service) computes one boolean: whether the resolved write
+     * language is already used by <em>any</em> of {@code name}/{@code context}/{@code decision}. A
+     * call that genuinely adds a still-unused language to all three is exempt for all three; a call
+     * that reuses a language already present on even one of them is not exempt for any - the
+     * simplification this trades away is a single call mixing a genuinely new language for one field
+     * with a same-language edit of another, which {@code adr_update}'s one-language-per-call shape
+     * makes an unusual thing to attempt in the first place.</p>
+     *
+     * <p><strong>Order matters: compare first, then check eligibility.</strong> A call that changes
      * nothing is a no-op returning {@code this} - in <em>any</em> status, without throwing. That is
      * load-bearing rather than a convenience: a caller correcting only the references travels the
      * very same path (see {@link #reviseReferences}), so a correction that leaves the text alone must
-     * not be refused just because the decision is accepted. Comparing before checking also keeps the
-     * failure honest for an accepted decision handed an invalid value: it is refused as immutable -
-     * the reason the call could never succeed - rather than as blank, which is what building the
-     * replacement first would report.</p>
+     * not be refused just because the decision is accepted.</p>
      *
-     * @param name         the corrected title
-     * @param context      the corrected forces and constraints
-     * @param decision     the corrected decision
-     * @param consequences the corrected consequences, or {@code null} for none
-     * @param alternatives the corrected considered options, or {@code null} for none
-     * @param decisionDate the corrected decision date, or {@code null} for none
+     * @param name              the corrected title
+     * @param context           the corrected forces and constraints
+     * @param decision          the corrected decision
+     * @param decisionDate      the corrected decision date, or {@code null} for none
+     * @param newLanguageVariant whether the language this call writes under is new to all three
+     *                          fields - see this method's own javadoc
      * @return the corrected decision, or {@code this} if every value already matched
-     * @throws AdrTextImmutableException if any value differs and this decision is no longer
+     * @throws AdrTextImmutableException if a field's value differs, {@code newLanguageVariant} is
+     *                                   {@code false}, and this decision is no longer
      *                                   {@link AdrStatus#PROPOSED}
      * @throws IllegalArgumentException  if a corrected value violates this record's own invariants
      */
-    public Adr reviseText(String name, String context, String decision, String consequences,
-            String alternatives, LocalDate decisionDate) {
+    public Adr reviseText(String name, String context, String decision, LocalDate decisionDate,
+            boolean newLanguageVariant) {
         if (Objects.equals(this.name, name)
                 && Objects.equals(this.context, context)
                 && Objects.equals(this.decision, decision)
-                && Objects.equals(this.consequences, consequences)
-                && Objects.equals(this.alternatives, alternatives)
                 && Objects.equals(this.decisionDate, decisionDate)) {
             return this;
         }
-        if (status != AdrStatus.PROPOSED) {
+        boolean anyFieldChanged = !Objects.equals(this.name, name)
+                || !Objects.equals(this.context, context)
+                || !Objects.equals(this.decision, decision);
+        if (anyFieldChanged && !newLanguageVariant && status != AdrStatus.PROPOSED) {
             throw new AdrTextImmutableException(code, status);
         }
-        return new Adr(id, code, name, status, context, decision, consequences, alternatives,
+        return new Adr(id, code, name, status, context, decision, consequences, consideredOptions,
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+    }
+
+    /**
+     * Returns this decision with {@code newConsequences} appended to {@link #consequences()}, numbered
+     * continuing from the current highest position - mirrors
+     * {@code Requirement#withAppendedAcceptanceCriteria} exactly.
+     *
+     * <p><strong>Unlike {@link #reviseText}, never gated by status.</strong> A newly discovered
+     * consequence completes the record rather than rewriting it - the same licence the three
+     * reference lists already have via {@link #reviseReferences} (a later-completed reference states
+     * the decision more fully instead of changing what was decided), and the natural extension of it:
+     * noticing a consequence after the fact is discovering information, not un-deciding anything.</p>
+     *
+     * @param newConsequences the consequences to append, in order; {@code null} or empty is a no-op
+     *                        returning {@code this} unchanged
+     * @return a new decision with the additional consequences appended
+     */
+    public Adr withAppendedConsequences(List<NewConsequence> newConsequences) {
+        if (newConsequences == null || newConsequences.isEmpty()) {
+            return this;
+        }
+        List<Consequence> appended = new ArrayList<>(consequences);
+        int nextPosition = consequences.size() + 1;
+        for (NewConsequence draft : newConsequences) {
+            appended.add(new Consequence(nextPosition++, draft.statement(), draft.type()));
+        }
+        return new Adr(id, code, name, status, context, decision, appended, consideredOptions,
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+    }
+
+    /**
+     * Returns this decision with {@code corrections} applied to {@link #consequences()} by position -
+     * correcting only each matched consequence's {@code statement}/{@code type} and leaving every
+     * unmatched consequence and every other field of this decision untouched. Mirrors
+     * {@code Requirement#withAcceptanceCriteriaTextPatches} (issue #266): the safe, non-reorder
+     * in-place pattern - a consequence's position is its only identity, and letting it shift would
+     * misattach an already-written language variant to the wrong consequence on the next read,
+     * exactly the reasoning the requirements precedent gives for its own acceptance criteria and
+     * which transfers here unchanged.
+     *
+     * <p><strong>Carries {@link #reviseText}'s new-language exemption, at the granularity of a
+     * position rather than a whole call.</strong> A correction that only changes {@code statement} -
+     * never {@code type} - at a position named in {@code newLanguageVariantPositions} is exempt from
+     * the {@link AdrStatus#PROPOSED} gate, for the same reason a translation of {@code name}/
+     * {@code context}/{@code decision} is: it makes an already-decided consequence accessible in a
+     * language it was not recorded in, it does not change what was decided. A correction that also
+     * changes {@code type} is never exempt, regardless of language: the classification of a
+     * consequence as positive/negative/neutral is a judgement about the decision, not a fact of its
+     * wording, so translating the statement can never carry a type change past the gate for free.
+     * Correcting an existing language variant's wording - the position is not in
+     * {@code newLanguageVariantPositions} - is gated exactly as before this exemption existed.</p>
+     *
+     * <p><strong>Per position, not per call - the finer of {@link #reviseText}'s two possible
+     * shapes.</strong> {@code reviseText} uses one flag for the whole call because {@code name}/
+     * {@code context}/{@code decision} are three fields of the very same call-scoped
+     * {@code language} argument, with no per-field identity finer than the call to hang a flag on.
+     * A correction here already carries its own identity - {@code position} - and the caller (
+     * {@code AdrService}) already computes a per-position language state to fill
+     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#compareAndUpdate}'s
+     * {@code consequenceLanguageByPosition} map, so a per-position exemption costs nothing beyond
+     * what the write path already builds - unlike the call-wide shape {@code reviseText} settled for
+     * where no such per-field state exists. The alternative considered - one flag for the whole call,
+     * mirroring {@code reviseText} exactly - was rejected as an unnecessary loss of precision: it
+     * would refuse a call that genuinely translates one position while also, in the very same call,
+     * correcting a same-language typo in another.</p>
+     *
+     * @param projectId   the project the correction is issued against, for the exception message only
+     * @param corrections corrections for individual existing consequences, addressed by their
+     *                    {@code position}; never {@code null}
+     * @param newLanguageVariantPositions the positions, among those named in {@code corrections},
+     *                    whose {@code statement} this call writes in a language the position did not
+     *                    already carry - computed by the caller from
+     *                    {@link de.hauschel.arknet.adr.application.port.out.AdrRepository.CurrentAdr#consequenceLanguagesByPosition()};
+     *                    {@code null} or empty exempts nothing, the pre-exemption behaviour
+     * @return a new decision with the corrected consequences
+     * @throws ConsequencePositionNotFoundException if a correction names a position no consequence in
+     *                                               {@link #consequences()} carries
+     * @throws AdrTextImmutableException             if a correction changes an existing consequence in
+     *                                               a way that is not exempt and this decision is no
+     *                                               longer {@link AdrStatus#PROPOSED}
+     */
+    public Adr withConsequenceCorrections(ProjectId projectId, List<ConsequenceCorrection> corrections,
+            Set<Integer> newLanguageVariantPositions) {
+        Objects.requireNonNull(corrections, "corrections");
+        Set<Integer> exemptPositions = newLanguageVariantPositions == null ? Set.of() : newLanguageVariantPositions;
+        if (corrections.isEmpty()) {
+            return this;
+        }
+        Map<Integer, ConsequenceCorrection> byPosition = new LinkedHashMap<>();
+        for (ConsequenceCorrection correction : corrections) {
+            byPosition.put(correction.position(), correction);
+        }
+        boolean[] changed = {false};
+        boolean[] gateViolated = {false};
+        List<Consequence> patched = consequences.stream()
+                .map(current -> {
+                    ConsequenceCorrection correction = byPosition.remove(current.position());
+                    if (correction == null) {
+                        return current;
+                    }
+                    Consequence revised = new Consequence(current.position(), correction.statement(),
+                            correction.type());
+                    if (!revised.equals(current)) {
+                        changed[0] = true;
+                        boolean typeChanged = current.type() != correction.type();
+                        boolean textOnlyNewLanguage = !typeChanged
+                                && !Objects.equals(current.statement(), correction.statement())
+                                && exemptPositions.contains(current.position());
+                        if (!textOnlyNewLanguage) {
+                            gateViolated[0] = true;
+                        }
+                    }
+                    return revised;
+                })
+                .toList();
+        if (!byPosition.isEmpty()) {
+            int unmatchedPosition = byPosition.keySet().iterator().next();
+            throw new ConsequencePositionNotFoundException(projectId, code, unmatchedPosition);
+        }
+        if (!changed[0]) {
+            return this;
+        }
+        if (gateViolated[0] && status != AdrStatus.PROPOSED) {
+            throw new AdrTextImmutableException(code, status);
+        }
+        return new Adr(id, code, name, status, context, decision, patched, consideredOptions,
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+    }
+
+    /**
+     * {@link #withAppendedConsequences} for {@link #consideredOptions()}. Never gated by status, for
+     * the same reason.
+     *
+     * @param newOptions the options to append, in order; {@code null} or empty is a no-op returning
+     *                   {@code this} unchanged
+     * @return a new decision with the additional options appended
+     * @throws IllegalArgumentException if the result would carry more than one
+     *                                  {@link OptionOutcome#CHOSEN} option
+     */
+    public Adr withAppendedConsideredOptions(List<NewConsideredOption> newOptions) {
+        if (newOptions == null || newOptions.isEmpty()) {
+            return this;
+        }
+        List<ConsideredOption> appended = new ArrayList<>(consideredOptions);
+        int nextPosition = consideredOptions.size() + 1;
+        for (NewConsideredOption draft : newOptions) {
+            appended.add(new ConsideredOption(nextPosition++, draft.name(), draft.rationale(), draft.outcome()));
+        }
+        return new Adr(id, code, name, status, context, decision, consequences, appended,
+                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+    }
+
+    /**
+     * {@link #withConsequenceCorrections} for {@link #consideredOptions()} - same in-place-only
+     * pattern, same per-position new-language exemption. {@code name}/{@code rationale} are this
+     * type's text fields (both governed by the one tag a position carries, mirroring
+     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#compareAndUpdate}'s
+     * {@code optionLanguageByPosition}); {@code outcome} is the non-text field that, like
+     * {@link Consequence#type()}, is never exempt - whether an option was chosen or rejected is a
+     * judgement about the decision, not a fact of its wording.
+     *
+     * @param projectId   the project the correction is issued against, for the exception message only
+     * @param corrections corrections for individual existing options, addressed by their
+     *                    {@code position}; never {@code null}
+     * @param newLanguageVariantPositions the positions, among those named in {@code corrections},
+     *                    whose {@code name}/{@code rationale} this call writes in a language the
+     *                    position did not already carry - computed by the caller from
+     *                    {@link de.hauschel.arknet.adr.application.port.out.AdrRepository.CurrentAdr#optionLanguagesByPosition()};
+     *                    {@code null} or empty exempts nothing, the pre-exemption behaviour
+     * @return a new decision with the corrected options
+     * @throws ConsideredOptionPositionNotFoundException if a correction names a position no option in
+     *                                                    {@link #consideredOptions()} carries
+     * @throws AdrTextImmutableException                 if a correction changes an existing option in
+     *                                                    a way that is not exempt and this decision is
+     *                                                    no longer {@link AdrStatus#PROPOSED}
+     * @throws IllegalArgumentException                  if the result would carry more than one
+     *                                                    {@link OptionOutcome#CHOSEN} option
+     */
+    public Adr withConsideredOptionCorrections(ProjectId projectId, List<ConsideredOptionCorrection> corrections,
+            Set<Integer> newLanguageVariantPositions) {
+        Objects.requireNonNull(corrections, "corrections");
+        Set<Integer> exemptPositions = newLanguageVariantPositions == null ? Set.of() : newLanguageVariantPositions;
+        if (corrections.isEmpty()) {
+            return this;
+        }
+        Map<Integer, ConsideredOptionCorrection> byPosition = new LinkedHashMap<>();
+        for (ConsideredOptionCorrection correction : corrections) {
+            byPosition.put(correction.position(), correction);
+        }
+        boolean[] changed = {false};
+        boolean[] gateViolated = {false};
+        List<ConsideredOption> patched = consideredOptions.stream()
+                .map(current -> {
+                    ConsideredOptionCorrection correction = byPosition.remove(current.position());
+                    if (correction == null) {
+                        return current;
+                    }
+                    ConsideredOption revised = new ConsideredOption(current.position(), correction.name(),
+                            correction.rationale(), correction.outcome());
+                    if (!revised.equals(current)) {
+                        changed[0] = true;
+                        boolean outcomeChanged = current.outcome() != correction.outcome();
+                        boolean textChanged = !Objects.equals(current.name(), correction.name())
+                                || !Objects.equals(current.rationale(), correction.rationale());
+                        boolean textOnlyNewLanguage = !outcomeChanged && textChanged
+                                && exemptPositions.contains(current.position());
+                        if (!textOnlyNewLanguage) {
+                            gateViolated[0] = true;
+                        }
+                    }
+                    return revised;
+                })
+                .toList();
+        if (!byPosition.isEmpty()) {
+            int unmatchedPosition = byPosition.keySet().iterator().next();
+            throw new ConsideredOptionPositionNotFoundException(projectId, code, unmatchedPosition);
+        }
+        if (!changed[0]) {
+            return this;
+        }
+        if (gateViolated[0] && status != AdrStatus.PROPOSED) {
+            throw new AdrTextImmutableException(code, status);
+        }
+        return new Adr(id, code, name, status, context, decision, consequences, patched,
                 decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
@@ -341,7 +543,7 @@ public record Adr(
                 && peers.equals(this.relatedTo)) {
             return this;
         }
-        return new Adr(id, code, name, status, context, decision, consequences, alternatives,
+        return new Adr(id, code, name, status, context, decision, consequences, consideredOptions,
                 decisionDate, requirements, contexts, supersededBy, peers);
     }
 
@@ -354,6 +556,26 @@ public record Adr(
     private static void requireNoDuplicates(List<?> values, String field) {
         if (new HashSet<>(values).size() != values.size()) {
             throw new IllegalArgumentException(field + " must not contain duplicate entries");
+        }
+    }
+
+    /**
+     * Enforces that positions are gap-free, duplicate-free and ascending: the element at index
+     * {@code i} must carry position {@code i + 1}. Legal for an empty list (unlike
+     * {@code Requirement#requireConsecutiveAcceptanceCriterionPositions}, which its caller never
+     * invokes on one): {@link #consequences()}/{@link #consideredOptions()} are optional, best-practice
+     * lists, not a mandatory one.
+     */
+    private static void requireConsecutivePositions(List<Integer> positions, String field) {
+        for (int i = 0; i < positions.size(); i++) {
+            int expected = i + 1;
+            int actual = positions.get(i);
+            if (actual != expected) {
+                throw new IllegalArgumentException(
+                        field + " positions must be gap-free, duplicate-free and ascending "
+                                + "(1.." + positions.size() + "); expected position " + expected
+                                + " at index " + i + " but was " + actual);
+            }
         }
     }
 }

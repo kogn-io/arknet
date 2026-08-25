@@ -64,23 +64,33 @@ class AdrCardsTest {
         assertThat(labels).containsExactly("Context", "Decision");
     }
 
-    /** Optional MADR fields present on the ADR must render, each under its own label. */
+    /**
+     * Optional MADR fields present on the ADR must render, each under its own label -
+     * consequences as a {@link Block.Bullets} list (kogn-io/arknet#357, Vorentscheidung 3: the
+     * existing single-bullets-list mechanism, no report restructuring here - see issue #358),
+     * considered options as one merged {@link Block.Prose} block, conservatively unchanged from
+     * the pre-#357 rendering shape.
+     */
     @Test
     void rendersOptionalFieldsWhenPresent() {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.ACCEPTED,
-                "Forces and constraints.", "What was decided.", "Positive and negative consequences.",
-                "Options that were considered.", LocalDate.of(2026, 7, 1), List.of(), List.of(), null, List.of());
+                "Forces and constraints.", "What was decided.",
+                List.of(new de.hauschel.arknet.adr.domain.Consequence(1, "Positive and negative consequences.",
+                        de.hauschel.arknet.adr.domain.ConsequenceType.NEUTRAL)),
+                List.of(new de.hauschel.arknet.adr.domain.ConsideredOption(1, "Option A",
+                        "Options that were considered.", de.hauschel.arknet.adr.domain.OptionOutcome.REJECTED)),
+                LocalDate.of(2026, 7, 1), List.of(), List.of(), null, List.of());
         final AdrCards cards = cardsFor(adr);
 
         final List<String> labels = cards.section(PROJECT, Glossary.empty()).cards().getFirst().blocks().stream()
                 .map(Block::label).toList();
 
-        assertThat(labels).containsExactly("Context", "Decision", "Consequences", "Alternatives", "Decision date");
-        assertThat(blockOf(cards, "Consequences")).isEqualTo(
-                Block.Prose.plain("Consequences", "Positive and negative consequences."));
-        assertThat(blockOf(cards, "Alternatives")).isEqualTo(
-                Block.Prose.plain("Alternatives", "Options that were considered."));
+        assertThat(labels).containsExactly(
+                "Context", "Decision", "Consequences", "Considered options", "Decision date");
+        assertThat(blockOf(cards, "Consequences")).isInstanceOf(Block.Bullets.class);
+        assertThat(blockOf(cards, "Considered options")).isEqualTo(Block.Prose.plain("Considered options",
+                "[REJECTED] Option A - Options that were considered."));
         assertThat(blockOf(cards, "Decision date")).isEqualTo(Block.Prose.plain("Decision date", "2026-07-01"));
     }
 
@@ -91,7 +101,7 @@ class AdrCardsTest {
                 "Forces and constraints.", "What was decided.", null, null, null,
                 List.of(new RequirementRef(FR_1)), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
+                (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))),
                 (projectId, ids) -> List.of());
 
@@ -106,7 +116,7 @@ class AdrCardsTest {
                 "Forces and constraints.", "What was decided.", null, null, null,
                 List.of(), List.of(new BoundedContextRef(BC_1)), null, List.of());
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
+                (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(),
                 (projectId, ids) -> List.of(new ResolvedBoundedContext(BC_1, new BoundedContextCode("BC-1"))));
 
@@ -125,7 +135,7 @@ class AdrCardsTest {
                 "Forces and constraints.", "What was decided.", null, null, null,
                 List.of(new RequirementRef(FR_1)), List.of(new BoundedContextRef(BC_1)), null, List.of());
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
+                (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(),
                 (projectId, ids) -> List.of());
 
@@ -150,7 +160,7 @@ class AdrCardsTest {
                 "Forces and constraints.", "What was decided.", null, null, null,
                 List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(
+                (projectId, displayLocale) -> List.of(
                         new AdrDetail(older, List.of(), List.of(new AdrCode("ADR-2")), List.of()),
                         new AdrDetail(newer, List.of(new AdrCode("ADR-1")), List.of(), List.of())),
                 (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
@@ -173,7 +183,7 @@ class AdrCardsTest {
                 new AdrId(ADR_2_ID), new AdrCode("ADR-2"), "Use kognio-rdf", AdrStatus.ACCEPTED,
                 "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(new AdrDetail(adr, List.of(new AdrCode("ADR-1")), List.of(), List.of())),
+                (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(new AdrCode("ADR-1")), List.of(), List.of())),
                 (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
 
         assertThat(cards.section(PROJECT, Glossary.empty()).cards().getFirst().blocks()).contains(
@@ -187,7 +197,7 @@ class AdrCardsTest {
     @Test
     void rendersRelatedToAsRefsToTheOtherAdrsOwnId() {
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(
+                (projectId, displayLocale) -> List.of(
                         new AdrDetail(adr(ADR_1_ID, "ADR-1", AdrStatus.ACCEPTED), List.of(), List.of(),
                                 List.of(new AdrCode("ADR-2"))),
                         new AdrDetail(adr(ADR_2_ID, "ADR-2", AdrStatus.ACCEPTED), List.of(), List.of(),
@@ -205,7 +215,7 @@ class AdrCardsTest {
     @Test
     void ordersCardsByBusinessCode() {
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(
+                (projectId, displayLocale) -> List.of(
                         new AdrDetail(adr(ADR_2_ID, "ADR-2", AdrStatus.PROPOSED), List.of(), List.of(), List.of()),
                         new AdrDetail(adr(ADR_1_ID, "ADR-1", AdrStatus.PROPOSED), List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
@@ -222,7 +232,7 @@ class AdrCardsTest {
     @Test
     void ordersCardsByBusinessCodeNumericallyNotLexicographically() {
         final AdrCards cards = new AdrCards(
-                projectId -> List.of(
+                (projectId, displayLocale) -> List.of(
                         new AdrDetail(adr(ADR_2_ID, "ADR-2", AdrStatus.PROPOSED), List.of(), List.of(), List.of()),
                         new AdrDetail(adr(ADR_10_ID, "ADR-10", AdrStatus.PROPOSED), List.of(), List.of(), List.of()),
                         new AdrDetail(adr(ADR_1_ID, "ADR-1", AdrStatus.PROPOSED), List.of(), List.of(), List.of())),
@@ -252,7 +262,7 @@ class AdrCardsTest {
 
     private static AdrCards cardsFor(final Adr adr) {
         return new AdrCards(
-                projectId -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
+                (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
     }
 

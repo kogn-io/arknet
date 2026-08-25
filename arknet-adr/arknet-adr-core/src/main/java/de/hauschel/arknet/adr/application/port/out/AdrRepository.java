@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -51,13 +52,17 @@ public interface AdrRepository {
      * @throws DuplicateAdrCodeException      if another decision already carries this decision's
      *                                        {@link AdrCode} - identity collision and business-label
      *                                        collision are distinct failure modes
+     * @param language  the BCP-47 language tag {@code adr}'s multilingual text ({@code name},
+     *                  {@code context}, {@code decision}, every consequence statement, every
+     *                  considered-option name/rationale) is written under; {@code null} writes an
+     *                  untagged literal
      * @throws RuntimeException if {@code adr} violates a SHACL write constraint. The concrete
      *                          signal type is deliberately not fixed by this port: a real
      *                          implementation's {@code WriteConstraintViolationException} lives
      *                          in {@code arknet-persistence-support}, a module
      *                          {@code arknet-adr-core} must not depend on.
      */
-    void create(ProjectId projectId, Adr adr);
+    void create(ProjectId projectId, Adr adr, String language);
 
     /**
      * Replaces an existing decision by identity, but only if its current concurrency token still
@@ -82,6 +87,27 @@ public interface AdrRepository {
      *                     expects no revision to exist yet
      * @param updated      the decision to store in place of the current one, if its head still
      *                     matches {@code expectedHead}
+     * @param nameLanguage     the BCP-47 tag {@code updated.name()} is written under - the resolved
+     *                         write language if this call touches {@code name}, or the tag it is
+     *                         already stored under (from {@link CurrentAdr#nameLanguage()}) if not,
+     *                         so an untouched field is never silently retagged
+     * @param contextLanguage  {@code contextLanguage}'s counterpart for {@code updated.context()}
+     * @param decisionLanguage {@code contextLanguage}'s counterpart for {@code updated.decision()}
+     * @param consequenceLanguageByPosition the BCP-47 tag each entry of
+     *                         {@code updated.consequences()} is written under, keyed by
+     *                         {@code position} - every position needs an entry (the whole subject is
+     *                         rewritten, touched or not), each following the same touched/pass-through
+     *                         rule as {@code nameLanguage}
+     * @param optionLanguageByPosition {@code consequenceLanguageByPosition}'s counterpart for
+     *                         {@code updated.consideredOptions()} - one shared tag per position
+     *                         governs both {@link de.hauschel.arknet.adr.domain.ConsideredOption#name()}
+     *                         and {@link de.hauschel.arknet.adr.domain.ConsideredOption#rationale()},
+     *                         since a caller writes both together in practice (deliberate
+     *                         simplification against two independent per-field maps)
+     * @param defaultLanguage  the target project's configured default language, canonicalized, or
+     *                         {@code null} if it has none - drives the issue #258 sweep of a stale
+     *                         untagged sibling literal, exactly as
+     *                         {@code KognioRdfRequirementRepository#compareAndUpdate}'s own parameter
      * @throws AdrNotFoundException              if no decision with this identity exists at all
      * @throws AdrConcurrentlyModifiedException if {@code expectedHead} no longer matches the stored
      *                                          decision's current head - a concurrent write raced
@@ -92,16 +118,22 @@ public interface AdrRepository {
      *                          in {@code arknet-persistence-support}, a module
      *                          {@code arknet-adr-core} must not depend on.
      */
-    void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated);
+    void compareAndUpdate(ProjectId projectId, String expectedHead, Adr updated,
+            String nameLanguage, String contextLanguage, String decisionLanguage,
+            Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
+            String defaultLanguage);
 
     /**
      * Finds a decision by its human-readable business code within a project.
      *
-     * @param projectId the project (architecture model) to look up the decision in
-     * @param code      the ADR code (e.g. {@code ADR-1})
+     * @param projectId     the project (architecture model) to look up the decision in
+     * @param code          the ADR code (e.g. {@code ADR-1})
+     * @param displayLocale a BCP-47 language tag overriding which candidate of a multilingual field
+     *                      is selected, or {@code null}/blank to use this adapter's own configured
+     *                      display preference
      * @return the decision if present, otherwise {@link Optional#empty()}
      */
-    Optional<Adr> findByCode(ProjectId projectId, AdrCode code);
+    Optional<Adr> findByCode(ProjectId projectId, AdrCode code, String displayLocale);
 
     /**
      * Reads a decision's current state together with its concurrency token (recorded by the last
@@ -127,17 +159,69 @@ public interface AdrRepository {
      * A decision's state paired with its current concurrency token (an opaque string, or
      * {@code null} if no write has ever been recorded for this decision), as read together by
      * {@link #findCurrentByCode}.
+     *
+     * @param value                     the decision itself
+     * @param head                      the concurrency token, or {@code null}
+     * @param nameLanguage              the BCP-47 tag of the currently displayed {@code arknet:name}
+     *                                  literal, for pass-through into {@link #compareAndUpdate} when
+     *                                  a write leaves {@code name} untouched
+     * @param contextLanguage           {@code nameLanguage}'s counterpart for {@code arkarch:adrContext}
+     * @param decisionLanguage          {@code nameLanguage}'s counterpart for {@code arkarch:adrDecision}
+     * @param nameContextDecisionLanguages the union of every language tag currently present across
+     *                                  {@code name}/{@code context}/{@code decision} (not just the
+     *                                  displayed candidate) - what
+     *                                  {@link de.hauschel.arknet.adr.application.AdrService} checks a
+     *                                  write's resolved language against to decide whether it adds a
+     *                                  genuinely new variant (see {@code Adr#reviseText}'s javadoc)
+     * @param consequenceLanguageByPosition the BCP-47 tag of the currently displayed
+     *                                  {@code arkarch:consequenceStatement} at each existing position,
+     *                                  for the same touched/pass-through purpose as {@code nameLanguage}
+     * @param optionLanguageByPosition  {@code consequenceLanguageByPosition}'s counterpart for
+     *                                  {@code arknet:name}/{@code arkarch:optionRationale} of each
+     *                                  existing considered option
+     * @param consequenceLanguagesByPosition the union of every language tag currently present on
+     *                                  {@code arkarch:consequenceStatement} at each existing position
+     *                                  (not just the displayed candidate {@code consequenceLanguageByPosition}
+     *                                  carries) - {@code consequenceLanguageByPosition}'s counterpart to
+     *                                  {@code nameContextDecisionLanguages}, what
+     *                                  {@code AdrService} checks a consequence correction's resolved
+     *                                  write language against to decide, per position, whether it adds
+     *                                  a genuinely new variant (see
+     *                                  {@code Adr#withConsequenceCorrections}'s javadoc)
+     * @param optionLanguagesByPosition {@code consequenceLanguagesByPosition}'s counterpart for each
+     *                                  existing considered option's {@code arknet:name}/
+     *                                  {@code arkarch:optionRationale}
      */
-    record CurrentAdr(Adr value, String head) {
+    record CurrentAdr(Adr value, String head, String nameLanguage, String contextLanguage,
+            String decisionLanguage, Set<String> nameContextDecisionLanguages,
+            Map<Integer, String> consequenceLanguageByPosition, Map<Integer, String> optionLanguageByPosition,
+            Map<Integer, Set<String>> consequenceLanguagesByPosition,
+            Map<Integer, Set<String>> optionLanguagesByPosition) {
+
+        public CurrentAdr {
+            nameContextDecisionLanguages =
+                    nameContextDecisionLanguages == null ? Set.of() : Set.copyOf(nameContextDecisionLanguages);
+            consequenceLanguageByPosition =
+                    consequenceLanguageByPosition == null ? Map.of() : Map.copyOf(consequenceLanguageByPosition);
+            optionLanguageByPosition =
+                    optionLanguageByPosition == null ? Map.of() : Map.copyOf(optionLanguageByPosition);
+            consequenceLanguagesByPosition =
+                    consequenceLanguagesByPosition == null ? Map.of() : Map.copyOf(consequenceLanguagesByPosition);
+            optionLanguagesByPosition =
+                    optionLanguagesByPosition == null ? Map.of() : Map.copyOf(optionLanguagesByPosition);
+        }
     }
 
     /**
      * Returns all decisions stored in a project.
      *
-     * @param projectId the project (architecture model) to list decisions from
+     * @param projectId     the project (architecture model) to list decisions from
+     * @param displayLocale a BCP-47 language tag overriding which candidate of a multilingual field
+     *                      is selected for every decision, or {@code null}/blank to use this
+     *                      adapter's own configured display preference
      * @return all decisions, never {@code null}
      */
-    List<Adr> findAll(ProjectId projectId);
+    List<Adr> findAll(ProjectId projectId, String displayLocale);
 
     /**
      * Returns the business code of every decision recorded in a project, read independently of

@@ -23,6 +23,7 @@ import io.kogn.rdf.terms.SimpleRdf;
 
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.kernel.DisplayLocale;
+import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.WriteFunnel;
 
@@ -49,33 +50,45 @@ public final class KognioRdfAdrRepositoryFactory {
      * Creates a persistent, RDF4J-backed ADR repository storing its datasets under
      * {@code storageDir}, wired for the given display language.
      *
-     * @param storageDir    the directory the embedded RDF store persists into
-     * @param displayLocale the display-language preference for SHACL violation messages
+     * @param storageDir        the directory the embedded RDF store persists into
+     * @param resourceIdFactory mints the opaque IRI of each derived consequence/considered-option
+     *                          resource (kogn-io/arknet#357) - the same kernel-owned scheme every
+     *                          other out-adapter's derived child resources use
+     * @param displayLocale     the display-language preference for SHACL violation messages and for
+     *                          selecting which candidate of a multilingual field the read paths
+     *                          surface
      * @return a ready-to-use {@link AdrRepository}
      */
-    public static AdrRepository persistent(Path storageDir, DisplayLocale displayLocale) {
+    public static AdrRepository persistent(
+            Path storageDir, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
         Objects.requireNonNull(storageDir, "storageDir");
         DatasetLifecycle lifecycle =
                 new DatasetLifecycleRdf4j(DatasetStoreConfig.persistentDefault(), storageDir);
-        return over(lifecycle, displayLocale);
+        return over(lifecycle, resourceIdFactory, displayLocale);
     }
 
     /**
      * Assembles an ADR repository over an already-created dataset lifecycle, wired with the
      * architecture SHACL write-gate and an explicit display language. Used by
-     * {@link #persistent(Path, DisplayLocale)} and directly by tests that supply their own (e.g.
-     * in-memory) lifecycle.
+     * {@link #persistent(Path, ResourceIdFactory, DisplayLocale)} and directly by tests that supply
+     * their own (e.g. in-memory) lifecycle.
      *
-     * @param lifecycle     the kognio-rdf dataset lifecycle to acquire datasets from
-     * @param displayLocale the display-language preference for SHACL violation messages
+     * @param lifecycle         the kognio-rdf dataset lifecycle to acquire datasets from
+     * @param resourceIdFactory mints the opaque IRI of each derived consequence/considered-option
+     *                          resource (kogn-io/arknet#357)
+     * @param displayLocale     the display-language preference for SHACL violation messages and for
+     *                          selecting which candidate of a multilingual field the read paths
+     *                          surface
      * @return a ready-to-use {@link AdrRepository}
      */
-    public static AdrRepository over(DatasetLifecycle lifecycle, DisplayLocale displayLocale) {
+    public static AdrRepository over(
+            DatasetLifecycle lifecycle, ResourceIdFactory resourceIdFactory, DisplayLocale displayLocale) {
         Objects.requireNonNull(lifecycle, "lifecycle");
+        Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         Objects.requireNonNull(displayLocale, "displayLocale");
         WriteFunnel funnel = new WriteFunnel(lifecycle, buildGate(displayLocale),
                 WriteFunnel.DEFAULT_WRITE_CONFLICT);
-        return new KognioRdfAdrRepository(lifecycle, funnel);
+        return new KognioRdfAdrRepository(lifecycle, resourceIdFactory, displayLocale, funnel);
     }
 
     /**

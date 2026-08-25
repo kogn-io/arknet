@@ -3,6 +3,9 @@
 
 package de.hauschel.arknet.adr.adapter.mcp;
 
+import static de.hauschel.arknet.adr.adapter.mcp.ToolArguments.blankToNull;
+import static de.hauschel.arknet.adr.adapter.mcp.ToolArguments.effectiveDisplayLocale;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -34,11 +37,20 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
+import de.hauschel.arknet.adr.domain.Consequence;
+import de.hauschel.arknet.adr.domain.ConsequenceCorrection;
+import de.hauschel.arknet.adr.domain.ConsequenceType;
+import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.ConsideredOptionCorrection;
+import de.hauschel.arknet.adr.domain.NewConsequence;
+import de.hauschel.arknet.adr.domain.NewConsideredOption;
+import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
@@ -51,42 +63,30 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  *
  * <p>This adapter belongs to the ADR hexagon (symmetric to the out-adapter
  * {@code arknet-adr-adapter-kogniordf}). Tools are declared Spring-AI-style via
- * {@link McpTool}/{@link McpToolParam} on plain methods - the tool name, description and JSON input
- * schema are derived from the annotations and method signature, not hand-written. This adapter does
- * <strong>not</strong> bootstrap an MCP server or wire any transport; that remains the concern of
- * the composition root (arknet-mcp).</p>
+ * {@link McpTool}/{@link McpToolParam} on plain methods.</p>
  *
- * <p><strong>Identity vs. code.</strong> Every tool takes an ADR identity as a plain {@code String} -
- * what a human types, e.g. {@code ADR-1} - and maps it to an {@link AdrCode}, never to the opaque
- * {@link de.hauschel.arknet.adr.domain.AdrId}. The identity itself is a store-internal detail that
- * never needs to cross the MCP boundary; responses render the code back to the caller, not the
- * underlying resource identity.</p>
+ * <p><strong>Consequences and considered options (kogn-io/arknet#357).</strong> Both travel as
+ * listed parameters of {@code adr_add}/{@code adr_update} - never their own {@code adr_add_option}
+ * tool (decided in the issue) - via the small input records {@link NewConsequenceInput}/
+ * {@link ConsequenceCorrectionInput}/{@link NewConsideredOptionInput}/
+ * {@link ConsideredOptionCorrectionInput}, each converted to the matching domain type here. Their
+ * {@code type}/{@code outcome} fields arrive as plain strings (parsed case-insensitively against
+ * {@link ConsequenceType}/{@link OptionOutcome}) rather than a generated enum schema, mirroring how
+ * {@code adr_set_status}'s own {@code status} argument is parsed.</p>
+ *
+ * <p><strong>Language (kogn-io/arknet#357).</strong> {@code adr_add}/{@code adr_update} take a
+ * single {@code language} argument for the whole call - see {@code AdrService}'s class javadoc for
+ * why this is deliberately coarser than the requirements bounded context's per-field arguments.
+ * {@code adr_get}/{@code adr_list} take {@code displayLocale}, merged with the resolved project's
+ * own default language exactly as {@code req_get}/{@code req_list} do.</p>
  *
  * <p><strong>Reference display resolution (ADR-008).</strong> {@link RequirementRef}/
  * {@link BoundedContextRef} carry a referenced resource's opaque subject identity, not its business
- * code - but a human who typed {@code FR-1} into {@code adr_add} expects to see {@code FR-1} again,
- * not a raw IRI they cannot re-type. This adapter is the gate into the ADR hexagon, not part of its
- * core, so it may borrow driving ports of <em>different</em> hexagons ({@link ResolveRequirements},
- * owned by requirements; {@link ResolveBoundedContexts}, owned by bounded-context) to answer that
- * purely for display - the ADR core itself still never depends on those modules, and
- * {@code adr_add}'s own write path still resolves via the decoupled {@code RequirementLookup}/
- * {@code BoundedContextLookup} out-ports. Every rendering calls each borrowed port at most once,
- * batched across every reference involved; an id a port could not resolve simply falls back to the
- * bare IRI - {@link #format} never throws and never drops a reference. The two self-referential
- * relations, {@code supersededBy} and {@code relatedTo}, need no borrowing at all: they point back
- * into this very hexagon, so the application service resolves them and hands the codes over in
- * {@link AdrDetail} - {@code relatedTo} already merged into the one list a symmetric relation
- * deserves rather than split into two directions.</p>
+ * code - resolved for display via the borrowed {@link ResolveRequirements}/
+ * {@link ResolveBoundedContexts} ports, batched across every reference involved.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a {@link ProjectId} routing
- * key. arknet-mcp runs as one shared server for every project on the machine, so there is no single
- * injected project: each tool call resolves its own project from the request's anchor, carried in
- * the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}. The framework hands this
- * adapter that context as an {@link McpSyncRequestContext} parameter - a framework type, excluded
- * from the generated tool input schema, so it is not a caller-facing argument. The anchor is looked
- * up in the project registry (ADR-016): it arrives opaque, is matched whole against what was
- * registered, and either hits exactly one project or fails with an error message naming the possible
- * remedies.</p>
+ * key, resolved per call from the request's anchor (ADR-016).</p>
  */
 public final class AdrMcpTools {
 
@@ -96,6 +96,13 @@ public final class AdrMcpTools {
                     + "client that cannot set that header - most callers should omit this and let "
                     + "their transport identify the project. Must be an anchor already registered for "
                     + "the project; project_list shows what is registered.";
+
+    private static final String LANGUAGE_DESCRIPTION =
+            "BCP-47 language tag every multilingual text this call writes (name, adrContext, "
+                    + "decision, and any consequence/considered-option text) is recorded under. "
+                    + "Optional - falls back to the target project's configured default language, "
+                    + "and is only required at all when this call actually writes a multilingual "
+                    + "field.";
 
     private final AddAdr addAdr;
     private final ListAdrs listAdrs;
@@ -163,11 +170,104 @@ public final class AdrMcpTools {
     }
 
     /**
-     * Extracts the calling client's project anchor from the per-call transport context - the value
-     * the server's context extractor placed there off the request header (ADR-016). Null-tolerant on
-     * every hop: a call without a context, without a transport context, or without the key resolves
-     * to {@code null}, which is a caller error rather than a route to a default.
+     * One consequence to append via {@code adr_add}/{@code adr_update}.
+     *
+     * @param statement the consequence text
+     * @param type      {@code POSITIVE}, {@code NEGATIVE} or {@code NEUTRAL} (case-insensitive)
      */
+    public record NewConsequenceInput(String statement, String type) {
+    }
+
+    /**
+     * A correction of an existing consequence, addressed by its position.
+     *
+     * @param position  the 1-based position of the consequence to correct
+     * @param statement the corrected consequence text
+     * @param type      the corrected type, {@code POSITIVE}, {@code NEGATIVE} or {@code NEUTRAL}
+     */
+    public record ConsequenceCorrectionInput(int position, String statement, String type) {
+    }
+
+    /**
+     * One considered option to append via {@code adr_add}/{@code adr_update}.
+     *
+     * @param name      the short option name
+     * @param rationale why it was chosen or rejected
+     * @param outcome   {@code CHOSEN} or {@code REJECTED} (case-insensitive) - at most one option
+     *                  per decision may be {@code CHOSEN}
+     */
+    public record NewConsideredOptionInput(String name, String rationale, String outcome) {
+    }
+
+    /**
+     * A correction of an existing considered option, addressed by its position.
+     *
+     * @param position  the 1-based position of the option to correct
+     * @param name      the corrected option name
+     * @param rationale the corrected rationale
+     * @param outcome   the corrected outcome, {@code CHOSEN} or {@code REJECTED}
+     */
+    public record ConsideredOptionCorrectionInput(int position, String name, String rationale, String outcome) {
+    }
+
+    private static ConsequenceType parseConsequenceType(final String value) {
+        try {
+            return ConsequenceType.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new IllegalArgumentException(
+                    "consequence type must be POSITIVE, NEGATIVE or NEUTRAL, was: " + value);
+        }
+    }
+
+    private static OptionOutcome parseOptionOutcome(final String value) {
+        try {
+            return OptionOutcome.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new IllegalArgumentException("option outcome must be CHOSEN or REJECTED, was: " + value);
+        }
+    }
+
+    private static List<NewConsequence> toNewConsequences(final List<NewConsequenceInput> inputs) {
+        if (inputs == null) {
+            return null;
+        }
+        return inputs.stream()
+                .map(input -> new NewConsequence(input.statement(), parseConsequenceType(input.type())))
+                .toList();
+    }
+
+    private static List<ConsequenceCorrection> toConsequenceCorrections(
+            final List<ConsequenceCorrectionInput> inputs) {
+        if (inputs == null) {
+            return null;
+        }
+        return inputs.stream()
+                .map(input -> new ConsequenceCorrection(
+                        input.position(), input.statement(), parseConsequenceType(input.type())))
+                .toList();
+    }
+
+    private static List<NewConsideredOption> toNewConsideredOptions(final List<NewConsideredOptionInput> inputs) {
+        if (inputs == null) {
+            return null;
+        }
+        return inputs.stream()
+                .map(input -> new NewConsideredOption(
+                        input.name(), input.rationale(), parseOptionOutcome(input.outcome())))
+                .toList();
+    }
+
+    private static List<ConsideredOptionCorrection> toConsideredOptionCorrections(
+            final List<ConsideredOptionCorrectionInput> inputs) {
+        if (inputs == null) {
+            return null;
+        }
+        return inputs.stream()
+                .map(input -> new ConsideredOptionCorrection(
+                        input.position(), input.name(), input.rationale(), parseOptionOutcome(input.outcome())))
+                .toList();
+    }
+
     private static String contextAnchor(final McpSyncRequestContext context) {
         if (context == null) {
             return null;
@@ -177,26 +277,22 @@ public final class AdrMcpTools {
         return anchor == null ? null : anchor.toString();
     }
 
-    /**
-     * Resolves the project this call targets: the explicit {@code projectAnchor} parameter if the
-     * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
-     * delivery paths are open to every MCP client). Neither present is a caller error; there is no
-     * default project and no fallback to a server-side working directory (decision 3).
-     */
-    private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
+    private ResolvedProject resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;
-        return projects.resolve(explicit != null ? explicit : contextAnchor(context)).id();
+        return projects.resolve(explicit != null ? explicit : contextAnchor(context));
     }
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "adr_add", description = "Record a new architecture decision (context, decision, "
             + "consequences, considered options) as an ADR. It starts out PROPOSED; accept it later "
-            + "with adr_set_status. It can already name the requirements it addresses, the bounded "
-            + "contexts it affects and the peer decisions it is related to; all three stay "
-            + "correctable with adr_update. The assigned code runs ADR-1, ADR-2, ... per project and "
-            + "is unrelated to the numbering of any markdown decision records the repository may "
-            + "also keep.")
+            + "with adr_set_status. Consequences and considered options are each a list of "
+            + "structured entries (statement+type / name+rationale+outcome) - at most one considered "
+            + "option may have outcome CHOSEN. It can already name the requirements it addresses, "
+            + "the bounded contexts it affects and the peer decisions it is related to; all fields "
+            + "stay correctable with adr_update. The assigned code runs ADR-1, ADR-2, ... per "
+            + "project and is unrelated to the numbering of any markdown decision records the "
+            + "repository may also keep.")
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The decision's title, e.g. 'Use an embedded triple store'")
@@ -205,15 +301,18 @@ public final class AdrMcpTools {
                     + "(min. 5 characters)")
             final String adrContext,
             @McpToolParam(description = "What was decided (min. 5 characters)") final String decision,
-            @McpToolParam(description = "Positive and negative consequences of the decision (optional)",
-                    required = false)
-            final String consequences,
-            @McpToolParam(description = "Considered but rejected options, with a short rationale each "
-                    + "(optional)", required = false)
-            final String alternatives,
+            @McpToolParam(description = "Consequences of the decision, each with a statement and a "
+                    + "type (POSITIVE, NEGATIVE or NEUTRAL). Optional.", required = false)
+            final List<NewConsequenceInput> consequences,
+            @McpToolParam(description = "Options considered while making the decision, each with a "
+                    + "name, a rationale and an outcome (CHOSEN or REJECTED) - at most one may be "
+                    + "CHOSEN. Optional.", required = false)
+            final List<NewConsideredOptionInput> consideredOptions,
             @McpToolParam(description = "The day the decision was made, as ISO-8601 yyyy-MM-dd "
                     + "(optional)", required = false)
             final String decisionDate,
+            @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
+            final String language,
             @McpToolParam(description = "Business codes of the requirements this decision addresses, "
                     + "e.g. [\"FR-1\", \"NFR-2\"]. Each must already exist (create it with req_add "
                     + "first). Optional.", required = false)
@@ -224,18 +323,16 @@ public final class AdrMcpTools {
             final List<String> affectsContexts,
             @McpToolParam(description = "Business codes of other decisions this one is related to "
                     + "('see also'), e.g. [\"ADR-3\"]. Each must already exist and must not be this "
-                    + "decision itself. The relation reads both ways for a reader, but only this "
-                    + "direction is stored - so a decision recorded later names the earlier one, and "
-                    + "adr_update completes the link the other way round when needed. Optional.",
-                    required = false)
+                    + "decision itself. Optional.", required = false)
             final List<String> relatedTo,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
-        final AdrDetail created = addAdr.add(projectId, new NewAdr(name, adrContext, decision,
-                blankToNull(consequences), blankToNull(alternatives), parseDate(decisionDate),
-                addressesRequirements, affectsContexts, relatedTo));
-        return format(projectId, created);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final AdrDetail created = addAdr.add(project.id(), new NewAdr(name, adrContext, decision,
+                toNewConsequences(consequences), toNewConsideredOptions(consideredOptions), parseDate(decisionDate),
+                blankToNull(language), addressesRequirements, affectsContexts, relatedTo),
+                project.defaultLanguage());
+        return format(project, created);
     }
 
     @McpTool(name = "adr_list", description = "List all recorded architecture decisions, one compact "
@@ -244,19 +341,23 @@ public final class AdrMcpTools {
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String list(
             final McpSyncRequestContext context,
+            @McpToolParam(description = "BCP-47 language tag overriding which candidate of a "
+                    + "multilingual field is shown; falls back to the project's configured default "
+                    + "language.", required = false)
+            final String displayLocale,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
-        final List<AdrDetail> all = listAdrs.list(projectId);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final List<AdrDetail> all = listAdrs.list(project.id(), effectiveDisplayLocale(project, displayLocale));
         // all.size() is the materialised subset this call already holds - handed over so the count
         // does not re-read the whole decision graph behind adr_list's back (kogn-io/arknet#359).
-        final int skipped = countSkippedAdrs.skippedCount(projectId, all.size());
+        final int skipped = countSkippedAdrs.skippedCount(project.id(), all.size());
         if (all.isEmpty()) {
             return skipped == 0 ? "(no ADRs)" : skippedNote(skipped) + "\n(no other ADRs)";
         }
         // One batch resolution per borrowed port across every decision, not one per decision.
-        final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirementsFor(projectId, all);
-        final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContextsFor(projectId, all);
+        final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirementsFor(project.id(), all);
+        final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContextsFor(project.id(), all);
         final String lines = all.stream()
                 .map(detail -> summaryLine(detail, requirements, contexts))
                 .collect(Collectors.joining("\n"));
@@ -275,35 +376,42 @@ public final class AdrMcpTools {
     }
 
     @McpTool(name = "adr_get", description = "Fetch a single architecture decision by its identity "
-            + "(e.g. ADR-1), including its full context/decision/consequences text, both "
-            + "directions of the supersedes relation, and every decision it is related to.",
-            annotations = @McpTool.McpAnnotations(readOnlyHint = true))
+            + "(e.g. ADR-1), including its full context/decision/consequences/considered-options "
+            + "text, both directions of the supersedes relation, and every decision it is related "
+            + "to.", annotations = @McpTool.McpAnnotations(readOnlyHint = true))
     public String get(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
+            @McpToolParam(description = "BCP-47 language tag overriding which candidate of a "
+                    + "multilingual field is shown; falls back to the project's configured default "
+                    + "language.", required = false)
+            final String displayLocale,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
-        return getAdr.get(projectId, code)
-                .map(detail -> format(projectId, detail))
+        return getAdr.get(project.id(), code, effectiveDisplayLocale(project, displayLocale))
+                .map(detail -> format(project, detail))
                 .orElse("ADR not found: " + code.value());
     }
 
     @McpTool(name = "adr_update", description = "Correct an already-recorded architecture decision. "
-            + "Every field except the identity is optional - omit (or leave blank) what should stay "
-            + "as it is; omitting a field never removes it. The text fields (name, adrContext, "
-            + "decision, consequences, alternatives, decisionDate) can only be corrected while the "
-            + "decision is PROPOSED: in every other status a text change is refused, because a "
-            + "decision in force records what was decided at the time - record the correction as a "
-            + "new decision with adr_add, linked with adr_supersede while the corrected decision is "
-            + "ACCEPTED (the only status that edge accepts) and standalone from "
-            + "REJECTED/DEPRECATED/SUPERSEDED. The three reference lists are the exception and stay "
-            + "correctable in EVERY "
-            + "status, so an edge to a requirement, bounded context or peer decision that did not "
-            + "exist yet when the decision was made can still be completed: passing a list replaces "
-            + "that relation wholesale, passing an empty list removes every edge of it, omitting it "
-            + "leaves it untouched. Status and the supersededBy relation are not changed here - use "
+            + "Every field except the identity is optional - omit (or leave blank/empty) what should "
+            + "stay as it is; omitting a field never removes it. name/adrContext/decision can only "
+            + "be corrected while the decision is PROPOSED, UNLESS the call writes a language none "
+            + "of the three fields carries yet (a translation) - that is allowed in every status. "
+            + "Correcting an existing language variant instead is refused with a status-specific "
+            + "remedy: linked with adr_supersede while the decision is ACCEPTED (the only status that "
+            + "edge accepts), or recorded as a standalone new decision from REJECTED/DEPRECATED/"
+            + "SUPERSEDED. newConsequences/newConsideredOptions append and are allowed in every "
+            + "status; consequenceCorrections/consideredOptionCorrections correct an existing entry "
+            + "by position and carry the same per-position translation exemption: writing a language "
+            + "that position never carried yet is allowed in every status, correcting the wording of a "
+            + "language that position already carries is PROPOSED-only, and changing consequenceType/"
+            + "optionOutcome is never exempt regardless of language once no longer PROPOSED. The three "
+            + "reference lists stay correctable in EVERY status: passing a list replaces that relation "
+            + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
+            + "untouched. Status and the supersededBy relation are not changed here - use "
             + "adr_set_status and adr_supersede.")
     public String update(
             final McpSyncRequestContext context,
@@ -311,57 +419,60 @@ public final class AdrMcpTools {
             @McpToolParam(description = "The corrected title (optional; unchanged if omitted)",
                     required = false)
             final String name,
-            @McpToolParam(description = "The corrected forces and constraints - why the decision was "
-                    + "necessary (optional; unchanged if omitted, min. 5 characters)", required = false)
+            @McpToolParam(description = "The corrected forces and constraints (optional; unchanged "
+                    + "if omitted, min. 5 characters)", required = false)
             final String adrContext,
             @McpToolParam(description = "The corrected decision (optional; unchanged if omitted, "
                     + "min. 5 characters)", required = false)
             final String decision,
-            @McpToolParam(description = "The corrected consequences (optional; unchanged if omitted - "
-                    + "omitting does not remove an already-recorded one)", required = false)
-            final String consequences,
-            @McpToolParam(description = "The corrected considered but rejected options (optional; "
-                    + "unchanged if omitted)", required = false)
-            final String alternatives,
+            @McpToolParam(description = "Consequences to append (optional; never removes an "
+                    + "already-recorded one)", required = false)
+            final List<NewConsequenceInput> newConsequences,
+            @McpToolParam(description = "Text/type corrections for existing consequences, addressed "
+                    + "by position (optional; only while PROPOSED)", required = false)
+            final List<ConsequenceCorrectionInput> consequenceCorrections,
+            @McpToolParam(description = "Considered options to append (optional)", required = false)
+            final List<NewConsideredOptionInput> newConsideredOptions,
+            @McpToolParam(description = "Corrections for existing considered options, addressed by "
+                    + "position (optional; only while PROPOSED)", required = false)
+            final List<ConsideredOptionCorrectionInput> consideredOptionCorrections,
             @McpToolParam(description = "The corrected decision date, as ISO-8601 yyyy-MM-dd "
                     + "(optional; unchanged if omitted)", required = false)
             final String decisionDate,
+            @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
+            final String language,
             @McpToolParam(description = "Business codes of the requirements this decision should "
-                    + "address going forward, e.g. [\"FR-1\", \"NFR-2\"], replacing the existing ones "
-                    + "wholesale. Each must already exist. Pass an empty list to remove all of them; "
-                    + "omit to leave them unchanged. Correctable in every status.", required = false)
+                    + "address going forward, replacing the existing ones wholesale. Pass an empty "
+                    + "list to remove all of them; omit to leave them unchanged. Correctable in "
+                    + "every status.", required = false)
             final List<String> addressesRequirements,
             @McpToolParam(description = "Business codes of the bounded contexts this decision should "
-                    + "affect going forward, e.g. [\"BC-1\"], replacing the existing ones wholesale. "
-                    + "Each must already exist. Pass an empty list to remove all of them; omit to "
-                    + "leave them unchanged. Correctable in every status.", required = false)
+                    + "affect going forward, with the same tri-state as addressesRequirements. "
+                    + "Correctable in every status.", required = false)
             final List<String> affectsContexts,
             @McpToolParam(description = "Business codes of the decisions this one should be related "
-                    + "to going forward, e.g. [\"ADR-3\"], replacing the existing ones wholesale. "
-                    + "Each must already exist and none may be this decision itself. Pass an empty "
-                    + "list to remove all of them; omit to leave them unchanged. Correctable in "
-                    + "every status - this is where a decision names a peer that was recorded after "
-                    + "it.", required = false)
+                    + "to going forward, with the same tri-state again. Correctable in every "
+                    + "status.", required = false)
             final List<String> relatedTo,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
-        // Blank collapses to null - "leave this field alone" - for every text field, exactly as in
-        // adr_add. The two lists are handed over as they arrive: unlike a blank string, an empty
-        // list is a meaningful, distinct instruction here (clear the relation), so it must not be
-        // normalised away.
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCorrection correction = AdrCorrection.builder()
                 .name(blankToNull(name))
                 .context(blankToNull(adrContext))
                 .decision(blankToNull(decision))
-                .consequences(blankToNull(consequences))
-                .alternatives(blankToNull(alternatives))
+                .newConsequences(toNewConsequences(newConsequences))
+                .consequenceCorrections(toConsequenceCorrections(consequenceCorrections))
+                .newConsideredOptions(toNewConsideredOptions(newConsideredOptions))
+                .consideredOptionCorrections(toConsideredOptionCorrections(consideredOptionCorrections))
                 .decisionDate(parseDate(decisionDate))
+                .language(blankToNull(language))
                 .addressesRequirementCodes(addressesRequirements)
                 .affectsContextCodes(affectsContexts)
                 .relatedToCodes(relatedTo)
                 .build();
-        return format(projectId, updateAdr.update(projectId, new AdrCode(id), correction));
+        return format(project,
+                updateAdr.update(project.id(), new AdrCode(id), correction, project.defaultLanguage()));
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
@@ -379,18 +490,7 @@ public final class AdrMcpTools {
             final String status,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
-        // The tool's external "status" parameter mirrors req_set_status's surface, but each of the
-        // three transition ports (AcceptAdr/RejectAdr/DeprecateAdr) takes no target status of its
-        // own - the caller-visible dispatch happens only here. AdrStatus.valueOf is parsed
-        // defensively rather than let directly: PROPOSED is a real enum value that is simply not a
-        // legal target of this tool (you never transition into it) - it, and anything unparseable,
-        // must reject with this method's own message, not the JDK's raw "No enum constant ...".
-        // SUPERSEDED gets its own explicit branch rather than falling into that same default: it is
-        // a real, reachable target (kogn-io/arknet#357), just not one this tool sets - the lifecycle
-        // transition into it belongs to adr_supersede, which sets the status and the supersededBy
-        // edge together in one write, something this tool's bare target-status parameter cannot
-        // express (it names no successor).
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
         AdrStatus target;
         try {
@@ -399,9 +499,9 @@ public final class AdrMcpTools {
             target = null;
         }
         return switch (target) {
-            case ACCEPTED -> format(projectId, acceptAdr.accept(projectId, code));
-            case REJECTED -> format(projectId, rejectAdr.reject(projectId, code));
-            case DEPRECATED -> format(projectId, deprecateAdr.deprecate(projectId, code));
+            case ACCEPTED -> format(project, acceptAdr.accept(project.id(), code));
+            case REJECTED -> format(project, rejectAdr.reject(project.id(), code));
+            case DEPRECATED -> format(project, deprecateAdr.deprecate(project.id(), code));
             case SUPERSEDED -> throw new IllegalArgumentException(
                     "adr_set_status does not set SUPERSEDED directly - it needs a successor decision, "
                             + "which only adr_supersede can name; use adr_supersede instead");
@@ -425,10 +525,10 @@ public final class AdrMcpTools {
             final String supersededId,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrDetail updated =
-                supersedeAdr.supersede(projectId, new AdrCode(id), new AdrCode(supersededId));
-        return format(projectId, updated);
+                supersedeAdr.supersede(project.id(), new AdrCode(id), new AdrCode(supersededId));
+        return format(project, updated);
     }
 
     @McpTool(name = "adr_delete", description = "Delete a recorded architecture decision and every "
@@ -450,24 +550,20 @@ public final class AdrMcpTools {
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
             @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
             final String projectAnchor) {
-        final ProjectId projectId = resolveProject(context, projectAnchor);
+        final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrCode code = new AdrCode(id);
-        deleteAdr.delete(projectId, code);
+        deleteAdr.delete(project.id(), code);
         return "Deleted: " + code.value();
     }
 
     // --- Rendering ------------------------------------------------------------
 
     /** Renders a single decision in full, resolving its own references in one batch call per port. */
-    private String format(final ProjectId projectId, final AdrDetail detail) {
+    private String format(final ResolvedProject project, final AdrDetail detail) {
         final List<AdrDetail> one = List.of(detail);
-        return fullText(detail, resolveRequirementsFor(projectId, one), resolveContextsFor(projectId, one));
+        return fullText(detail, resolveRequirementsFor(project.id(), one), resolveContextsFor(project.id(), one));
     }
 
-    /**
-     * The compact one-liner {@code adr_list} returns per decision: everything a reader needs to pick
-     * which decision to fetch, without any of the long prose that would drown a list of twenty.
-     */
     private static String summaryLine(final AdrDetail detail,
             final Map<ResourceId, ResolvedRequirement> requirements,
             final Map<ResourceId, ResolvedBoundedContext> contexts) {
@@ -481,11 +577,6 @@ public final class AdrMcpTools {
         return line.toString();
     }
 
-    /**
-     * The multi-line rendering every single-decision tool returns: header line plus one indented line
-     * per populated field. Absent optional fields are omitted entirely rather than printed empty -
-     * a decision without considered options should not claim to have an empty list of them.
-     */
     private static String fullText(final AdrDetail detail,
             final Map<ResourceId, ResolvedRequirement> requirements,
             final Map<ResourceId, ResolvedBoundedContext> contexts) {
@@ -493,8 +584,8 @@ public final class AdrMcpTools {
                 detail.adr().code().value(), detail.adr().status(), detail.adr().name()));
         appendField(out, "context", detail.adr().context());
         appendField(out, "decision", detail.adr().decision());
-        appendField(out, "consequences", detail.adr().consequences());
-        appendField(out, "alternatives", detail.adr().alternatives());
+        appendField(out, "consequences", joinOrNull(consequenceLines(detail.adr().consequences())));
+        appendField(out, "considered options", joinOrNull(optionLines(detail.adr().consideredOptions())));
         appendField(out, "decided", detail.adr().decisionDate() == null
                 ? null : detail.adr().decisionDate().toString());
         appendField(out, "addresses", joinOrNull(requirementCodes(detail, requirements)));
@@ -503,6 +594,21 @@ public final class AdrMcpTools {
         appendField(out, "superseded by", joinOrNull(codeValues(detail.supersededBy())));
         appendField(out, "related to", joinOrNull(codeValues(detail.relatedTo())));
         return out.toString();
+    }
+
+    /** One rendered line per consequence: {@code [position] TYPE: statement}. */
+    private static List<String> consequenceLines(final List<Consequence> consequences) {
+        return consequences.stream()
+                .map(c -> "[%d] %s: %s".formatted(c.position(), c.type(), c.statement()))
+                .toList();
+    }
+
+    /** One rendered line per considered option: {@code [position] OUTCOME name - rationale}. */
+    private static List<String> optionLines(final List<ConsideredOption> options) {
+        return options.stream()
+                .map(o -> "[%d] %s %s - %s".formatted(
+                        o.position(), o.outcome() == null ? "?" : o.outcome(), o.name(), o.rationale()))
+                .toList();
     }
 
     private static void appendField(final StringBuilder out, final String label, final String value) {
@@ -525,7 +631,6 @@ public final class AdrMcpTools {
         return codes.stream().map(AdrCode::value).toList();
     }
 
-    /** One reference rendering: its resolved business code, or its bare IRI as a fallback. */
     private static List<String> requirementCodes(final AdrDetail detail,
             final Map<ResourceId, ResolvedRequirement> resolved) {
         final List<String> rendered = new ArrayList<>();
@@ -546,14 +651,6 @@ public final class AdrMcpTools {
         return rendered;
     }
 
-    /**
-     * Batch-resolves every requirement referenced by {@code details} in exactly one call to
-     * {@link ResolveRequirements#resolveExisting} - the union of all their {@link RequirementRef}s,
-     * deduplicated, not one call per decision and not one per reference. Missing ids are simply
-     * absent from the returned map, which the renderers treat as "fall back to the IRI". The merge
-     * function keeps the first entry for a duplicate key rather than throwing, so an implementation
-     * returning two projections for one identity cannot turn a display concern into an exception.
-     */
     private Map<ResourceId, ResolvedRequirement> resolveRequirementsFor(
             final ProjectId projectId, final List<AdrDetail> details) {
         final ResourceId[] ids = details.stream()
@@ -568,7 +665,6 @@ public final class AdrMcpTools {
                 .collect(Collectors.toMap(ResolvedRequirement::id, r -> r, (first, second) -> first));
     }
 
-    /** The bounded-context counterpart of {@link #resolveRequirementsFor}, with identical batching. */
     private Map<ResourceId, ResolvedBoundedContext> resolveContextsFor(
             final ProjectId projectId, final List<AdrDetail> details) {
         final ResourceId[] ids = details.stream()
@@ -583,11 +679,6 @@ public final class AdrMcpTools {
                 .collect(Collectors.toMap(ResolvedBoundedContext::id, c -> c, (first, second) -> first));
     }
 
-    /**
-     * Parses the optional ISO-8601 decision date. A malformed value is rejected loudly rather than
-     * dropped: silently recording a decision without the date its caller believed it had given is
-     * worse than making them retype it.
-     */
     private static LocalDate parseDate(final String value) {
         final String trimmed = blankToNull(value);
         if (trimmed == null) {
@@ -596,19 +687,10 @@ public final class AdrMcpTools {
         try {
             return LocalDate.parse(trimmed.trim());
         } catch (DateTimeParseException e) {
-            // Deliberately not passed as this exception's cause: Spring AI's MCP tool callback
-            // renders the deepest exception in the getCause() chain, not this one - chaining e here
-            // would let the JDK's raw parse message win over this composed, actionable one (#186,
-            // same trap as #137). Kept as a suppressed exception instead, so the original is still
-            // on the stack trace without being able to win the walk.
             final IllegalArgumentException translated = new IllegalArgumentException(
                     "decisionDate must be an ISO-8601 date (yyyy-MM-dd), was: " + trimmed);
             translated.addSuppressed(e);
             throw translated;
         }
-    }
-
-    private static String blankToNull(final String value) {
-        return (value == null || value.isBlank()) ? null : value;
     }
 }
