@@ -115,11 +115,23 @@ public record Adr(
      * setter: a richer lifecycle would extend this method rather than reintroduce a caller-supplied
      * target status - the same shape {@code Requirement#accept()} settled on.
      *
+     * <p><strong>This is where {@link #decisionDate} is set, and the only place it can be
+     * (kogn-io/arknet#374).</strong> The date a decision was made and the act of making it are one
+     * event, so the transition stamps the date rather than letting a caller type it in beforehand:
+     * before this method runs the decision is {@link AdrStatus#PROPOSED} - expressly not decided yet
+     * - and a date on it would name a day that does not exist. Recording a decision made earlier
+     * (one taken before it was ever entered here) is what {@code decidedOn} is for; the application
+     * service passes today's date when the caller names none. A no-op accept of an already-accepted
+     * decision keeps the date it was accepted on rather than restamping it - the decision was made
+     * once.</p>
+     *
+     * @param decidedOn the day the decision was made
      * @return the accepted decision, or {@code this} if it was already accepted
      * @throws IllegalStateException if this decision is {@link AdrStatus#REJECTED},
      *                                {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED}
      */
-    public Adr accept() {
+    public Adr accept(LocalDate decidedOn) {
+        Objects.requireNonNull(decidedOn, "decidedOn");
         if (status == AdrStatus.ACCEPTED) {
             return this;
         }
@@ -127,7 +139,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be accepted while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decidedOn, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
     /**
@@ -138,11 +150,18 @@ public record Adr(
      * of those was in force at some point rather than merely proposed, and rejecting it
      * retroactively would misrepresent its own history.
      *
+     * <p>Stamps {@link #decisionDate} exactly as {@link #accept(LocalDate)} does, and for the same
+     * reason (kogn-io/arknet#374): turning an option down is a decision that was made on a day, not
+     * an absence of one - which is why {@link AdrStatus#REJECTED} is a record worth keeping at
+     * all.</p>
+     *
+     * @param decidedOn the day the decision to reject was made
      * @return the rejected decision, or {@code this} if it was already rejected
      * @throws IllegalStateException if this decision is {@link AdrStatus#ACCEPTED},
      *                                {@link AdrStatus#DEPRECATED} or {@link AdrStatus#SUPERSEDED}
      */
-    public Adr reject() {
+    public Adr reject(LocalDate decidedOn) {
+        Objects.requireNonNull(decidedOn, "decidedOn");
         if (status == AdrStatus.REJECTED) {
             return this;
         }
@@ -150,7 +169,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be rejected while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.REJECTED, context, decision, consequences, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decidedOn, addressesRequirements, affectsContexts, supersededBy, relatedTo);
     }
 
     /**
@@ -210,8 +229,12 @@ public record Adr(
     }
 
     /**
-     * Returns this decision with {@code name}/{@code context}/{@code decision}/{@code decisionDate}
-     * corrected - the rule behind {@code adr_update}'s flagship text fields.
+     * Returns this decision with {@code name}/{@code context}/{@code decision} corrected - the rule
+     * behind {@code adr_update}'s flagship text fields.
+     *
+     * <p><strong>{@link #decisionDate} is deliberately not among them (kogn-io/arknet#374).</strong>
+     * It is not authored text at all but a fact about the transition that produced it, so it is
+     * stamped by {@link #accept(LocalDate)}/{@link #reject(LocalDate)} and never corrected here.
      *
      * <p><strong>The text of a decision in force is not editable - except to add a language it never
      * had.</strong> Before kogn-io/arknet#357 this was a single, per-field rule: correcting the
@@ -256,7 +279,6 @@ public record Adr(
      * @param name              the corrected title
      * @param context           the corrected forces and constraints
      * @param decision          the corrected decision
-     * @param decisionDate      the corrected decision date, or {@code null} for none
      * @param newLanguageVariant whether the language this call writes under is new to all three
      *                          fields - see this method's own javadoc
      * @return the corrected decision, or {@code this} if every value already matched
@@ -265,18 +287,13 @@ public record Adr(
      *                                   {@link AdrStatus#PROPOSED}
      * @throws IllegalArgumentException  if a corrected value violates this record's own invariants
      */
-    public Adr reviseText(String name, String context, String decision, LocalDate decisionDate,
-            boolean newLanguageVariant) {
+    public Adr reviseText(String name, String context, String decision, boolean newLanguageVariant) {
         if (Objects.equals(this.name, name)
                 && Objects.equals(this.context, context)
-                && Objects.equals(this.decision, decision)
-                && Objects.equals(this.decisionDate, decisionDate)) {
+                && Objects.equals(this.decision, decision)) {
             return this;
         }
-        boolean anyFieldChanged = !Objects.equals(this.name, name)
-                || !Objects.equals(this.context, context)
-                || !Objects.equals(this.decision, decision);
-        if (anyFieldChanged && !newLanguageVariant && status != AdrStatus.PROPOSED) {
+        if (!newLanguageVariant && status != AdrStatus.PROPOSED) {
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, consideredOptions,

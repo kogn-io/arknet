@@ -4,6 +4,7 @@
 package de.hauschel.arknet.mcp;
 
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -630,12 +631,19 @@ public class ArknetMcpConfiguration {
         return new de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfBoundedContextLookup(datasetLifecycle);
     }
 
+    /**
+     * The clock supplies the day {@code adr_set_status} stamps onto a decision it accepts or rejects
+     * (kogn-io/arknet#374). System default zone rather than UTC: the date recorded is the one the
+     * person making the decision would write down, and this is a local single-user client (ADR-001),
+     * not a service serving callers in other zones.
+     */
     @Bean
     AdrService adrService(
             final AdrRepository repository, final ResourceIdFactory resourceIdFactory,
             final de.hauschel.arknet.adr.application.port.out.RequirementLookup adrRequirementLookup,
             final BoundedContextLookup adrBoundedContextLookup) {
-        return new AdrService(repository, resourceIdFactory, adrRequirementLookup, adrBoundedContextLookup);
+        return new AdrService(repository, resourceIdFactory, adrRequirementLookup, adrBoundedContextLookup,
+                Clock.systemDefaultZone());
     }
 
     /**

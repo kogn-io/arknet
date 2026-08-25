@@ -25,6 +25,8 @@ class AdrTest {
     private static final AdrId ID = new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-1"));
     private static final AdrId OTHER = new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-2"));
     private static final ProjectId PROJECT = new ProjectId("test-project");
+    /** A fixed day, so a stamped decision date is asserted against a value and not against "today". */
+    private static final LocalDate DECIDED_ON = LocalDate.of(2026, 8, 23);
 
     @Test
     void rejectsBlankMandatoryText() {
@@ -355,10 +357,44 @@ class AdrTest {
     void acceptTransitionsOnceAndIsIdempotent() {
         Adr proposed = adr("name", "context", "decision");
 
-        Adr accepted = proposed.accept();
+        Adr accepted = proposed.accept(DECIDED_ON);
 
         assertEquals(AdrStatus.ACCEPTED, accepted.status());
-        assertSame(accepted, accepted.accept());
+        assertSame(accepted, accepted.accept(DECIDED_ON));
+    }
+
+    /**
+     * The invariant kogn-io/arknet#374 buys: a decision has no date until it is one. Before the
+     * transition nothing can have put a date there ({@code adr_add}/{@code adr_update} no longer
+     * carry the field at all), and the transition itself is what records it.
+     */
+    @Test
+    void acceptStampsTheDecisionDateOnADecisionThatHadNone() {
+        Adr proposed = adr("name", "context", "decision");
+        assertNull(proposed.decisionDate());
+
+        assertEquals(DECIDED_ON, proposed.accept(DECIDED_ON).decisionDate());
+    }
+
+    /**
+     * A decision is made once. Re-accepting an already-accepted one is a no-op returning the very
+     * same instance, so a second call on a later day cannot quietly move the date it was decided on.
+     */
+    @Test
+    void acceptDoesNotRestampAnAlreadyAcceptedDecision() {
+        Adr accepted = adr("name", "context", "decision").accept(DECIDED_ON);
+
+        Adr again = accepted.accept(DECIDED_ON.plusDays(30));
+
+        assertSame(accepted, again);
+        assertEquals(DECIDED_ON, again.decisionDate());
+    }
+
+    @Test
+    void acceptRequiresADecisionDate() {
+        Adr proposed = adr("name", "context", "decision");
+
+        assertThrows(NullPointerException.class, () -> proposed.accept(null));
     }
 
     @Test
@@ -366,18 +402,34 @@ class AdrTest {
         Adr rejected = withStatus(AdrStatus.REJECTED);
         Adr deprecated = withStatus(AdrStatus.DEPRECATED);
 
-        assertThrows(IllegalStateException.class, rejected::accept);
-        assertThrows(IllegalStateException.class, deprecated::accept);
+        assertThrows(IllegalStateException.class, () -> rejected.accept(DECIDED_ON));
+        assertThrows(IllegalStateException.class, () -> deprecated.accept(DECIDED_ON));
     }
 
     @Test
     void rejectTransitionsOnceAndIsIdempotent() {
         Adr proposed = adr("name", "context", "decision");
 
-        Adr rejected = proposed.reject();
+        Adr rejected = proposed.reject(DECIDED_ON);
 
         assertEquals(AdrStatus.REJECTED, rejected.status());
-        assertSame(rejected, rejected.reject());
+        assertSame(rejected, rejected.reject(DECIDED_ON));
+    }
+
+    /** Turning an option down is a decision made on a day too - same rule as {@code accept}. */
+    @Test
+    void rejectStampsTheDecisionDateOnADecisionThatHadNone() {
+        Adr proposed = adr("name", "context", "decision");
+        assertNull(proposed.decisionDate());
+
+        assertEquals(DECIDED_ON, proposed.reject(DECIDED_ON).decisionDate());
+    }
+
+    @Test
+    void rejectRequiresADecisionDate() {
+        Adr proposed = adr("name", "context", "decision");
+
+        assertThrows(NullPointerException.class, () -> proposed.reject(null));
     }
 
     @Test
@@ -385,8 +437,27 @@ class AdrTest {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
         Adr deprecated = withStatus(AdrStatus.DEPRECATED);
 
-        assertThrows(IllegalStateException.class, accepted::reject);
-        assertThrows(IllegalStateException.class, deprecated::reject);
+        assertThrows(IllegalStateException.class, () -> accepted.reject(DECIDED_ON));
+        assertThrows(IllegalStateException.class, () -> deprecated.reject(DECIDED_ON));
+    }
+
+    /**
+     * Deprecating retires a decision that was already made; it does not make one, so it leaves the
+     * day it was accepted on exactly as it stands.
+     */
+    @Test
+    void deprecateLeavesTheDecisionDateUntouched() {
+        Adr accepted = adr("name", "context", "decision").accept(DECIDED_ON);
+
+        assertEquals(DECIDED_ON, accepted.deprecate().decisionDate());
+    }
+
+    /** Same reasoning as {@code deprecate}: being replaced does not re-date the original decision. */
+    @Test
+    void supersededByLeavesTheDecisionDateUntouched() {
+        Adr accepted = adr("name", "context", "decision").accept(DECIDED_ON);
+
+        assertEquals(DECIDED_ON, accepted.supersededBy(OTHER).decisionDate());
     }
 
     @Test
@@ -444,14 +515,28 @@ class AdrTest {
     void reviseTextCorrectsEveryFieldWhileProposed() {
         Adr proposed = adr("name", "context", "decision");
 
-        Adr revised = proposed.reviseText("Better name", "Sharper context", "Sharper decision",
-                LocalDate.of(2026, 8, 23), false);
+        Adr revised = proposed.reviseText("Better name", "Sharper context", "Sharper decision", false);
 
         assertEquals("Better name", revised.name());
         assertEquals("Sharper context", revised.context());
         assertEquals("Sharper decision", revised.decision());
-        assertEquals(LocalDate.of(2026, 8, 23), revised.decisionDate());
         assertEquals(AdrStatus.PROPOSED, revised.status());
+    }
+
+    /**
+     * The other half of kogn-io/arknet#374: correcting a decision cannot reach its date. Before
+     * #374 {@code decisionDate} travelled with the prose through this method, so an accepted
+     * decision's date could be rewritten under the new-language exemption - a translation carries
+     * no date, yet it lifted the gate for the whole call. Now the field is simply not addressable
+     * here, and the correction leaves the stamped date exactly as the transition wrote it.
+     */
+    @Test
+    void reviseTextCannotReachTheDecisionDate() {
+        Adr accepted = adr("name", "context", "decision").accept(DECIDED_ON);
+
+        Adr translated = accepted.reviseText("Ein Titel", "context", "decision", true);
+
+        assertEquals(DECIDED_ON, translated.decisionDate());
     }
 
     /**
@@ -466,7 +551,7 @@ class AdrTest {
             Adr inForce = withStatus(status);
 
             AdrTextImmutableException thrown = assertThrows(AdrTextImmutableException.class,
-                    () -> inForce.reviseText("Better name", "context", "decision", null, false));
+                    () -> inForce.reviseText("Better name", "context", "decision", false));
 
             assertEquals(status, thrown.status());
             assertEquals(new AdrCode("ADR-1"), thrown.adrCode());
@@ -484,7 +569,7 @@ class AdrTest {
     void reviseTextOffersSupersedeOnlyWhereSupersedeWouldBeAccepted() {
         assertTrue(assertThrows(AdrTextImmutableException.class,
                 () -> withStatus(AdrStatus.ACCEPTED)
-                        .reviseText("Better name", "context", "decision", null, false))
+                        .reviseText("Better name", "context", "decision", false))
                 .getMessage().contains("adr_supersede"));
 
         for (AdrStatus terminal : List.of(AdrStatus.REJECTED, AdrStatus.DEPRECATED,
@@ -492,7 +577,7 @@ class AdrTest {
             Adr record = withStatus(terminal);
 
             String message = assertThrows(AdrTextImmutableException.class,
-                    () -> record.reviseText("Better name", "context", "decision", null, false))
+                    () -> record.reviseText("Better name", "context", "decision", false))
                     .getMessage();
 
             assertFalse(message.contains("link it with adr_supersede"), message);
@@ -521,7 +606,7 @@ class AdrTest {
     void reviseTextAllowsANewLanguageVariantEvenWhenAccepted() {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
-        Adr revised = accepted.reviseText("Ein neuer Titel", "context", "decision", null, true);
+        Adr revised = accepted.reviseText("Ein neuer Titel", "context", "decision", true);
 
         assertEquals("Ein neuer Titel", revised.name());
         assertEquals(AdrStatus.ACCEPTED, revised.status());
@@ -532,16 +617,13 @@ class AdrTest {
      * {@code reviseText} with every text value unchanged, so a no-op must pass in any status - if it
      * threw, correcting an accepted decision's edges would be impossible.
      *
-     * <p>The mirror image: {@code newLanguageVariant=true} does not blanket-exempt every call - a
-     * decisionDate change bundled into the same call is still gated (decisionDate carries no
-     * language of its own, so it is treated like any other changed scalar).
      */
     @Test
     void reviseTextIsANoOpWithIdenticalValuesEvenWhenAccepted() {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
-        assertSame(accepted, accepted.reviseText("name", "context", "decision", null, false));
-        assertSame(accepted, accepted.reviseText("name", "context", "decision", null, true));
+        assertSame(accepted, accepted.reviseText("name", "context", "decision", false));
+        assertSame(accepted, accepted.reviseText("name", "context", "decision", true));
     }
 
     @Test
@@ -549,7 +631,7 @@ class AdrTest {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
         assertThrows(AdrTextImmutableException.class,
-                () -> accepted.reviseText("  ", "context", "decision", null, false));
+                () -> accepted.reviseText("  ", "context", "decision", false));
     }
 
     @Test

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,6 +54,8 @@ import de.hauschel.arknet.persistence.WriteFunnel;
 class KognioRdfAdrRepositoryMultilingualTest {
 
     private static final ProjectId PROJECT = new ProjectId("adr-multilingual-test");
+    /** Any fixed day - these tests exercise language round-tripping, not the stamped date itself. */
+    private static final LocalDate DECIDED_ON = LocalDate.of(2026, 8, 23);
     private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
 
     private DatasetLifecycleRdf4j lifecycle;
@@ -139,7 +142,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         // store-first (ADR-005) or pre-i18n record.
         repository.create(PROJECT, original, null);
 
-        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(),
+        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),
                 "en", "en", "en", Map.of(), Map.of(), "en");
 
         String askUntagged = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value()
@@ -220,7 +223,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals(List.of(new Consequence(1, "A flat, pre-#357 consequence.", ConsequenceType.NEUTRAL)),
                 found.consequences());
 
-        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(),
+        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),
                 "en", "en", "en", Map.of(), Map.of(), null);
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
@@ -248,7 +251,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         assertEquals("A flat, pre-#357 alternative.", found.consideredOptions().get(0).rationale());
         assertEquals(null, found.consideredOptions().get(0).outcome());
 
-        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(),
+        repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),
                 "en", "en", "en", Map.of(), Map.of(), null);
 
         String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + id.value().value() + "> <"
@@ -372,7 +375,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 List.of(new ConsideredOption(1, "Option A", "Rationale A", OptionOutcome.CHOSEN),
                         new ConsideredOption(2, "Option B", "Rationale B", OptionOutcome.REJECTED)));
         repository.create(PROJECT, original, "en");
-        repository.compareAndUpdate(PROJECT, currentHeadOf(code), original.accept(),
+        repository.compareAndUpdate(PROJECT, currentHeadOf(code), original.accept(DECIDED_ON),
                 "en", "en", "en", Map.of(1, "en", 2, "en"), Map.of(1, "en", 2, "en"), null);
 
         AdrRepository.CurrentAdr current = repository.findCurrentByCode(PROJECT, code).orElseThrow();
@@ -383,7 +386,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
                 + "erreichen kann.";
         String germanDecision = "Verwende kognio-rdf als eingebettetes RDF-Substrat hinter einem Out-Port.";
         Adr translated = current.value()
-                .reviseText(germanName, germanContext, germanDecision, null, true)
+                .reviseText(germanName, germanContext, germanDecision, true)
                 .withConsequenceCorrections(PROJECT,
                         List.of(new de.hauschel.arknet.adr.domain.ConsequenceCorrection(
                                         1, "Deutsche Folge eins", ConsequenceType.POSITIVE),
