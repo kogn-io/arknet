@@ -507,7 +507,10 @@ public final class WriteFunnel {
      * @param graphIri   the named graph the check is scoped to
      * @param subjectIri the subject's opaque IRI; expected IRIREF-safe by construction
      * @param code       the deleted subject's human-readable business code, kept out of circulation
-     *                    by {@link #findRetainedCodes} once tombstoned (must not be {@code null})
+     *                    by {@link #findRetainedCodes} once tombstoned; {@code null} retains nothing,
+     *                    same as calling the five-parameter overload (which forwards {@code null}
+     *                    here) - not validated, since "no code" is a legitimate caller intent, not
+     *                    an error
      * @param notFound   the bounded context's signal for a missing subject
      * @param body       the delete itself (plus any of the caller's own pre-delete checks), given
      *                   the live transaction after the existence check passed
