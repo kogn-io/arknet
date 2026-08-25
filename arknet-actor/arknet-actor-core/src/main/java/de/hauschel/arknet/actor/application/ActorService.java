@@ -177,17 +177,28 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
     }
 
     /**
-     * Derives the next free business code in {@code projectId}: the highest running number
-     * currently in use, plus one (starting at 1). One counter for every
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project has ever used, plus one (starting at 1). One counter for every
      * {@link de.hauschel.arknet.actor.domain.ActorType} - no per-type filter, unlike
      * {@code ConstraintService#nextCode}.
+     *
+     * <p><strong>Ever used, not currently in use.</strong> The maximum runs over the living actors
+     * <em>and</em> the codes {@link ActorRepository#findRetainedCodes} kept from deleted ones
+     * (issue #350). Over the living ones alone, deleting the highest-numbered actor would let the
+     * maximum fall back and the next {@code actor_add} hand out that same number again - and a code
+     * that already appeared in a commit message or a note would then name something else
+     * entirely.</p>
      */
     private ActorCode nextCode(ProjectId projectId) {
-        int next = repository.findAll(projectId).stream()
+        int highestLiving = repository.findAll(projectId).stream()
                 .mapToInt(actor -> runningNumber(actor.code()))
                 .max()
-                .orElse(0) + 1;
-        return new ActorCode(CODE_PREFIX + "-" + next);
+                .orElse(0);
+        int highestRetained = repository.findRetainedCodes(projectId).stream()
+                .mapToInt(ActorService::runningNumber)
+                .max()
+                .orElse(0);
+        return new ActorCode(CODE_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
     }
 
     /** Parses the running number from a code such as {@code ACTOR-7} (0 if not parseable). */

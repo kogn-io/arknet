@@ -141,5 +141,10 @@ class TermServiceConcurrencyTest {
         public void delete(ProjectId projectId, TermCode code) {
             delegate.delete(projectId, code);
         }
+
+        @Override
+        public List<TermCode> findRetainedCodes(ProjectId projectId) {
+            return delegate.findRetainedCodes(projectId);
+        }
     }
 }

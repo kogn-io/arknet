@@ -31,6 +31,7 @@ import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.vocab.VocabRdf;
@@ -620,6 +621,57 @@ class KognioRdfActorRepositoryTest {
                 "a delete in another project must not touch this project's actor");
     }
 
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
+     * triple the delete removes, so the adapter hangs it on the tombstoned revision itself (issue
+     * #350) - the only place it can outlive its resource, and what keeps {@code ACTOR-1} from
+     * naming a second actor later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        Actor stored = actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null);
+        repository.create(PROJECT_A, stored);
+        String lastRevision = headsOf(stored.id().value().value()).get(0);
+
+        repository.delete(PROJECT_A, stored.code());
+
+        assertEquals(List.of("ACTOR-1"), identifiersOf(lastRevision));
+        assertEquals(List.of(new ActorCode("ACTOR-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    /** A living actor's revision carries no retained code - only a tombstoned one does. */
+    @Test
+    void findRetainedCodesIgnoresLivingActorsAndOtherProjects() {
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        Actor deleted = actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null);
+        repository.create(PROJECT_A, deleted);
+
+        repository.delete(PROJECT_A, deleted.code());
+
+        assertEquals(List.of(new ActorCode("ACTOR-2")), repository.findRetainedCodes(PROJECT_A));
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_B));
+    }
+
+    /**
+     * The provenance graph is shared by every bounded context, so a neighbour retaining its own
+     * code the same way must not be counted as an actor code - the deleted resource's type triple
+     * is gone, leaving the code prefix as the only discriminator.
+     */
+    @Test
+    void findRetainedCodesIgnoresAnotherContextsRetainedCode() {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                        + "<https://w3id.org/arknet/revision/foreign> <" + ArkprovVocabulary.INVALIDATED_AT_TIME
+                        + "> \"2026-08-23T10:00:00Z\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"TERM-9\" } }");
+                return null;
+            });
+        }
+
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
+    }
+
     // ---- helpers ---------------------------------------------------------------------------
 
     /** Inserts one raw triple directly into the actor named graph, bypassing the domain. */
@@ -681,6 +733,17 @@ class KognioRdfActorRepositoryTest {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
+        }
+    }
+
+    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
                     .toList();
         }
     }

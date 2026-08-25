@@ -52,6 +52,7 @@ import io.kogn.rdf.terms.RDFTerm;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
 import io.kogn.rdf.terms.Triple;
+import io.kogn.rdf.terms.vocab.VocabDct;
 import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
@@ -600,6 +601,86 @@ class WriteFunnelTest {
                 () -> funnel.delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, null));
     }
 
+    // ---- delete with code retention (issue #350) ------------------------------------------
+
+    /**
+     * A caller minting {@code PREFIX-N}-style codes hangs the deleted resource's code on exactly
+     * the revision the delete tombstones - the one place {@link #findRetainedCodes} can read it
+     * back from once the model triple naming it is gone.
+     */
+    @Test
+    void deleteWithCodeRetainsItOnTheTombstonedRevision() {
+        Fixture fixture = new Fixture(List.of(true));
+        String previous = "https://w3id.org/arknet/revision/previous";
+        fixture.tx.headAnswers.add(previous);
+
+        fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, "TERM-7", Signals::unexpected, tx -> { });
+
+        List<Triple> provenance = fixture.tx.provenanceStatements();
+        List<Triple> identifiers = provenance.stream()
+                .filter(triple -> triple.getPredicate().getIRIString().equals(VocabDct.IDENTIFIER.getIRIString()))
+                .toList();
+        assertEquals(1, identifiers.size(), "exactly one retained code");
+        assertEquals(previous, ((IRI) identifiers.get(0).getSubject()).getIRIString(),
+                "the code must be hung on the tombstoned revision, not the opaque subject");
+        assertEquals("TERM-7", ((Literal) identifiers.get(0).getObject()).getLexicalForm());
+    }
+
+    /**
+     * A subject that predates the funnel's revision recording has no head to hang a code on -
+     * the gap is logged, not fabricated into a revision that never happened (see
+     * {@link WriteFunnel} class javadoc).
+     */
+    @Test
+    void deleteWithCodeButNoPriorHeadAddsNothing() {
+        Fixture fixture = new Fixture(List.of(true));
+
+        fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, "TERM-7", Signals::unexpected, tx -> { });
+
+        assertTrue(fixture.tx.provenanceStatements().isEmpty(), "nothing to hang the code on without a prior head");
+    }
+
+    /** The plain overload (no business code) must never write a {@code dcterms:identifier}. */
+    @Test
+    void deleteWithoutCodeAddsNoIdentifierTriple() {
+        Fixture fixture = new Fixture(List.of(true));
+        fixture.tx.headAnswers.add("https://w3id.org/arknet/revision/previous");
+
+        fixture.funnel().delete(fixture.dataset, GRAPH_IRI, SUBJECT_IRI, Signals::unexpected, tx -> { });
+
+        boolean anyIdentifier = fixture.tx.provenanceStatements().stream()
+                .anyMatch(triple -> triple.getPredicate().getIRIString().equals(VocabDct.IDENTIFIER.getIRIString()));
+        assertFalse(anyIdentifier, "no code was given, so nothing should be retained");
+    }
+
+    // ---- findRetainedCodes (issue #350) ---------------------------------------------------
+
+    @Test
+    void findRetainedCodesReturnsTheScriptedIdentifiers() {
+        Fixture fixture = new Fixture(List.of());
+        fixture.handle.retainedIdentifierAnswers.add("TERM-3");
+        fixture.handle.retainedIdentifierAnswers.add("TERM-1");
+
+        List<String> retained = fixture.funnel().findRetainedCodes(fixture.dataset, "TERM-");
+
+        assertEquals(List.of("TERM-3", "TERM-1"), retained);
+        assertTrue(fixture.handle.closed, "handle must be released");
+        assertEquals(1, fixture.handle.sparqlSelectQueries.size());
+        String query = fixture.handle.sparqlSelectQueries.get(0);
+        assertTrue(query.contains(ArkprovVocabulary.PROVENANCE_GRAPH));
+        assertTrue(query.contains(ArkprovVocabulary.INVALIDATED_AT_TIME));
+        assertTrue(query.contains("TERM-"), "the prefix must be filtered on, got: " + query);
+    }
+
+    @Test
+    void findRetainedCodesRejectsNullArguments() {
+        Fixture fixture = new Fixture(List.of());
+        WriteFunnel funnel = fixture.funnel();
+
+        assertThrows(NullPointerException.class, () -> funnel.findRetainedCodes(null, "TERM-"));
+        assertThrows(NullPointerException.class, () -> funnel.findRetainedCodes(fixture.dataset, null));
+    }
+
     // ---- revision recording (ADR-014, revision basis) -----------------------------------
 
     /**
@@ -1024,6 +1105,10 @@ class WriteFunnelTest {
         private final DatasetTransactor transactor;
         private boolean closed;
 
+        /** Scripted rows {@link #sparqlQuery} answers with - {@link #findRetainedCodes}'s only read. */
+        private final List<String> retainedIdentifierAnswers = new ArrayList<>();
+        private final List<String> sparqlSelectQueries = new ArrayList<>();
+
         private FakeHandle(DatasetTransactor transactor) {
             this.transactor = transactor;
         }
@@ -1040,7 +1125,40 @@ class WriteFunnelTest {
 
         @Override
         public SparqlQuery sparqlQuery() {
-            throw new UnsupportedOperationException();
+            return new SparqlQuery() {
+                @Override
+                public Stream<BindingSet> select(String sparql) {
+                    sparqlSelectQueries.add(sparql);
+                    RDF terms = new SimpleRdf();
+                    return retainedIdentifierAnswers.stream()
+                            .map(value -> (BindingSet) new SingleBinding("identifier", terms.createLiteral(value)));
+                }
+
+                @Override
+                public Stream<BindingSet> select(String sparql, java.util.Map<String, RDFTerm> bindings) {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public ReadableGraph construct(String sparql) {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public ReadableGraph construct(String sparql, java.util.Map<String, RDFTerm> bindings) {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public boolean ask(String sparql) {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public boolean ask(String sparql, java.util.Map<String, RDFTerm> bindings) {
+                    throw new UnsupportedOperationException();
+                }
+            };
         }
 
         @Override

@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.actor.application;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,7 @@ final class InMemoryActorRepository implements ActorRepository {
 
     private final Map<ProjectId, Map<ActorId, Actor>> byProject = new LinkedHashMap<>();
     private final Map<ActorId, RevisionToken> headByIdentity = new LinkedHashMap<>();
+    private final Map<ProjectId, List<ActorCode>> retainedByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Actor actor) {
@@ -110,6 +112,16 @@ final class InMemoryActorRepository implements ActorRepository {
                 .orElseThrow(() -> new ActorNotFoundException(projectId, code));
         actors.remove(id);
         headByIdentity.remove(id);
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    /**
+     * Mirrors the real out-adapter's code retention (issue #350) so {@link ActorService#add} cannot
+     * hand the deleted actor's number out again.
+     */
+    @Override
+    public List<ActorCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 
     @Override

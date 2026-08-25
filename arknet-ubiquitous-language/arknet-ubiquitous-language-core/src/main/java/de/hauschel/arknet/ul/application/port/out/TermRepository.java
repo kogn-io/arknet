@@ -198,4 +198,21 @@ public interface TermRepository {
      * @throws TermReferencedException if anything else in the project still references the term
      */
     void delete(ProjectId projectId, TermCode code);
+
+    /**
+     * Returns the business codes of terms that were deleted from the project and are kept out of
+     * circulation - what {@link #delete} retains so a code can never name two different terms over
+     * a project's lifetime (issue #350). Read together with {@link #findAll} whenever the next free
+     * code is derived; the two sets are disjoint, since a retained code belongs to a term that no
+     * longer exists.
+     *
+     * <p>Never rejects and never reports a code twice. A term deleted <em>without</em> the
+     * implementation being able to retain its code is simply absent - the contract is "every code
+     * this port could keep", not "every code ever used", and the one implementation-side gap this
+     * leaves is documented where it arises.</p>
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, never {@code null}
+     */
+    List<TermCode> findRetainedCodes(ProjectId projectId);
 }

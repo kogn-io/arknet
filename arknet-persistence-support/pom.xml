@@ -32,6 +32,13 @@
             <groupId>io.kogn.rdf</groupId>
             <artifactId>rdf-dataset-hosting</artifactId>
         </dependency>
+        <!-- WriteFunnel#delete logs a WARN when a code cannot be retained (no recorded revision
+             to hang it on, issue #350). Explicit rather than only transitive; version managed by
+             the rdf4j BOM imported in the root pom. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

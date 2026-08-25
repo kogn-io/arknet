@@ -40,6 +40,7 @@ import io.kogn.rdf.dataset.SparqlUpdate;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
 import io.kogn.rdf.terms.Graph;
 import io.kogn.rdf.terms.IRI;
+import io.kogn.rdf.terms.Literal;
 import io.kogn.rdf.terms.RDF;
 import io.kogn.rdf.terms.ReadableGraph;
 import io.kogn.rdf.terms.SimpleRdf;
@@ -1674,6 +1675,60 @@ class KognioRdfTermRepositoryTest {
                 "a delete in another project must not touch this project's term");
     }
 
+    /**
+     * The one thing the funnel's tombstone cannot carry: the business code lives on the model
+     * triple the delete removes, so the adapter hangs it on the tombstoned revision itself (issue
+     * #350) - the only place it can outlive its resource, and what keeps {@code TERM-1} from
+     * naming a second term later.
+     */
+    @Test
+    void deleteKeepsTheBusinessCodeOnTheTombstonedRevision() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
+        String lastRevision = headsOf(id).get(0);
+
+        repository.delete(PROJECT_A, code);
+
+        assertEquals(List.of("TERM-1"), identifiersOf(lastRevision));
+        assertEquals(List.of(new TermCode("TERM-1")), repository.findRetainedCodes(PROJECT_A));
+    }
+
+    /** A living term's revision carries no retained code - only a tombstoned one does. */
+    @Test
+    void findRetainedCodesIgnoresLivingTermsAndOtherProjects() {
+        repository.create(PROJECT_A, new Term(freshId(), new TermCode("TERM-1"), "Gutschrift",
+                "Eine Erstattung.", null), null);
+        TermCode deletedCode = new TermCode("TERM-2");
+        repository.create(PROJECT_A, new Term(freshId(), deletedCode, "Bestellung",
+                "Eine Anfrage.", null), null);
+
+        repository.delete(PROJECT_A, deletedCode);
+
+        assertEquals(List.of(deletedCode), repository.findRetainedCodes(PROJECT_A));
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_B));
+    }
+
+    /**
+     * The provenance graph is shared by every bounded context, so a neighbour retaining its own
+     * code the same way must not be counted as a term code - the deleted resource's type triple is
+     * gone, leaving the code prefix as the only discriminator.
+     */
+    @Test
+    void findRetainedCodesIgnoresAnotherContextsRetainedCode() {
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update("INSERT DATA { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                        + "<https://w3id.org/arknet/revision/foreign> <" + ArkprovVocabulary.INVALIDATED_AT_TIME
+                        + "> \"2026-08-23T10:00:00Z\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"ADR-9\" } }");
+                return null;
+            });
+        }
+
+        assertEquals(List.of(), repository.findRetainedCodes(PROJECT_A));
+    }
+
     private List<String> revisionsOf(TermId id) {
         return selectIris("SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?v a <" + ArkprovVocabulary.REVISION_TYPE + "> ; "
@@ -1689,6 +1744,17 @@ class KognioRdfTermRepositoryTest {
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
             return handle.sparqlQuery().select(query)
                     .map(row -> ((IRI) row.getValue("v").orElseThrow()).getIRIString())
+                    .toList();
+        }
+    }
+
+    /** The {@code dcterms:identifier} literals a revision carries in the provenance graph. */
+    private List<String> identifiersOf(String revisionIri) {
+        String query = "SELECT ?v WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
+                + revisionIri + "> <http://purl.org/dc/terms/identifier> ?v } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> ((Literal) row.getValue("v").orElseThrow()).getLexicalForm())
                     .toList();
         }
     }

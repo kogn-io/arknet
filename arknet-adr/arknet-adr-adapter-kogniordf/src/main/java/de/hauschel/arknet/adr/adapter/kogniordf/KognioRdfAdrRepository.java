@@ -550,7 +550,9 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /**
      * Deletes the decision identified by {@code code}, and every triple it carries in
      * {@link #ADR_GRAPH} (including every consequence/considered-option child's own triples), from
-     * the project.
+     * the project. Passes {@code code} through to {@link WriteFunnel#delete}, which keeps it out of
+     * circulation on the tombstoned revision (issue #350) - shared with {@code term_delete}/
+     * {@code actor_delete} rather than kept as a local mechanism, see {@link #findRetainedCodes}.
      */
     @Override
     public void delete(ProjectId projectId, AdrCode code) {
@@ -570,12 +572,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        funnel.delete(dataset, ADR_GRAPH, subjectIriString,
+        funnel.delete(dataset, ADR_GRAPH, subjectIriString, code.value(),
                 () -> new AdrNotFoundException(projectId, code),
                 tx -> {
                     rejectIfNotProposed(tx, code, subjectIriString);
                     rejectIfReferenced(tx, projectId, code, subjectIriString);
-                    retainCode(tx, subjectIriString, code);
                     tx.update("DELETE { GRAPH <" + ADR_GRAPH + "> { ?s ?p ?o } } WHERE { "
                             + "GRAPH <" + ADR_GRAPH + "> { "
                             + "{ " + subject + " ?p ?o . BIND(" + subject + " AS ?s) } UNION "
@@ -617,42 +618,20 @@ public class KognioRdfAdrRepository implements AdrRepository {
                         new AdrReferencedException.Reference(new AdrCode(value), shorthand)));
     }
 
-    private void retainCode(DatasetTx tx, String subjectIri, AdrCode code) {
-        String subject = SparqlTerms.iriRef(subjectIri);
-        Optional<IRI> head = tx.select("SELECT ?head WHERE { GRAPH <"
-                        + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                        + subject + " <" + ArkprovVocabulary.HEAD + "> ?head } }")
-                .map(row -> row.getValue("head").orElse(null))
-                .filter(IRI.class::isInstance)
-                .map(IRI.class::cast)
-                .findFirst();
-        if (head.isEmpty()) {
-            LOG.warn("ADR {} has no recorded revision, so its code {} cannot be kept out of "
-                    + "circulation and may be assigned again", subjectIri, code.value());
-            return;
-        }
-        Graph retained = rdf.createGraph();
-        retained.add(head.get(), VocabDct.IDENTIFIER, rdf.createLiteral(code.value()));
-        tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), retained);
-    }
-
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
+     * strings to {@link AdrCode} and orders them by running number.
+     */
     @Override
     public List<AdrCode> findRetainedCodes(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
 
-        String query = "SELECT ?identifier WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
-                + "?revision <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?invalidatedAt . "
-                + "?revision <" + IDENTIFIER_PROPERTY + "> ?identifier } "
-                + "FILTER(STRSTARTS(STR(?identifier), \"" + CODE_PREFIX + "\")) }";
-
-        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
-            return handle.sparqlQuery().select(query)
-                    .map(row -> literalOf(row, "identifier").getLexicalForm())
-                    .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
-                    .stream()
-                    .map(AdrCode::new)
-                    .toList();
-        }
+        return funnel.findRetainedCodes(new DatasetId(projectId.value()), CODE_PREFIX).stream()
+                .collect(Collectors.toCollection(() -> new TreeSet<>(CODE_BY_RUNNING_NUMBER)))
+                .stream()
+                .map(AdrCode::new)
+                .toList();
     }
 
     // ---- reads ---------------------------------------------------------------------------

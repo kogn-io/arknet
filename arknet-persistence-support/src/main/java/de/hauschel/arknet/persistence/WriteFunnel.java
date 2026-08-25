@@ -5,6 +5,7 @@ package de.hauschel.arknet.persistence;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,10 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.kogn.rdf.dataset.BindingSet;
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
@@ -137,6 +142,8 @@ public final class WriteFunnel {
      */
     public static final Predicate<RuntimeException> DEFAULT_WRITE_CONFLICT =
             ConcurrencyConflictException.class::isInstance;
+
+    private static final Logger LOG = LoggerFactory.getLogger(WriteFunnel.class);
 
     private static final String IDENTIFIER_PROPERTY = VocabDct.IDENTIFIER.getIRIString();
 
@@ -450,6 +457,12 @@ public final class WriteFunnel {
      * bounded context (same "context differences are parameters" rule as everywhere else in this
      * class).</p>
      *
+     * <p><strong>No business code to retain.</strong> This overload leaves the tombstoned
+     * revision's {@code dcterms:identifier} untouched - for a caller with no business-code concept
+     * of its own. A caller minting {@code PREFIX-N}-style codes wants
+     * {@link #delete(DatasetId, String, String, String, Supplier, Consumer)} instead, so a deleted
+     * resource's number cannot be handed out again (issue #350).</p>
+     *
      * @param dataset    the dataset (project) to write into
      * @param graphIri   the named graph the check is scoped to
      * @param subjectIri the subject's opaque IRI; expected IRIREF-safe by construction
@@ -458,6 +471,48 @@ public final class WriteFunnel {
      *                   the live transaction after the existence check passed
      */
     public void delete(DatasetId dataset, String graphIri, String subjectIri,
+            Supplier<RuntimeException> notFound, Consumer<DatasetTx> body) {
+        delete(dataset, graphIri, subjectIri, null, notFound, body);
+    }
+
+    /**
+     * Runs a guarded delete (issue #335) that also keeps the deleted resource's business code out
+     * of circulation (issue #350): the subject must already exist; only then does {@code body}
+     * run, inside the same write transaction as the check, and is expected to remove every triple
+     * of the subject the caller's own model graph holds. No SHACL gate runs - there is no
+     * candidate graph to validate, only triples going away - and no {@code assertedContext} is
+     * accepted for the same reason.
+     *
+     * <p><strong>Revision handling is a tombstone, not {@link #recordRevision}.</strong> See the
+     * other overload's javadoc for why a delete tombstones the last revision instead of recording
+     * a new one.</p>
+     *
+     * <p><strong>The business code outlives the resource.</strong> The tombstone above keeps the
+     * revision chain but, by itself, records no code of its own - it writes
+     * {@code prov:specializationOf} against the <em>opaque</em> subject IRI, and a readable code
+     * such as {@code TERM-7} lives solely on the model triple this delete removes. Every code
+     * counter in this codebase derives the next free number as the highest running number
+     * <em>ever used</em>, not merely currently in use: over the living resources alone, deleting
+     * the highest-numbered one would let the maximum fall back and the next mint hand out that
+     * same number again - a false trail for a number that may already appear in a commit message
+     * or a note. {@code code} is therefore hung as a {@code dcterms:identifier} on exactly the
+     * revision this delete is about to tombstone - the one thing that still lets a later reader
+     * (see {@link #findRetainedCodes}) tell a deleted resource's code apart from a neighbouring
+     * bounded context's own resources sharing this same provenance graph. A subject with no prior
+     * head (predates this funnel's revision recording) has nothing to hang the code on - logged as
+     * a {@code WARN} rather than fabricating a revision that never happened, so its number may be
+     * assigned again (known, documented gap, not repaired here).</p>
+     *
+     * @param dataset    the dataset (project) to write into
+     * @param graphIri   the named graph the check is scoped to
+     * @param subjectIri the subject's opaque IRI; expected IRIREF-safe by construction
+     * @param code       the deleted subject's human-readable business code, kept out of circulation
+     *                    by {@link #findRetainedCodes} once tombstoned (must not be {@code null})
+     * @param notFound   the bounded context's signal for a missing subject
+     * @param body       the delete itself (plus any of the caller's own pre-delete checks), given
+     *                   the live transaction after the existence check passed
+     */
+    public void delete(DatasetId dataset, String graphIri, String subjectIri, String code,
             Supplier<RuntimeException> notFound, Consumer<DatasetTx> body) {
         Objects.requireNonNull(dataset, "dataset");
         Objects.requireNonNull(graphIri, "graphIri");
@@ -474,7 +529,7 @@ public final class WriteFunnel {
                 }
                 Optional<IRI> currentHead = readHead(tx, subjectIri);
                 body.accept(tx);
-                invalidateRevision(tx, subjectIri, currentHead);
+                invalidateRevision(tx, subjectIri, currentHead, code);
                 return null;
             });
         }
@@ -483,12 +538,17 @@ public final class WriteFunnel {
     /**
      * Tombstones a deleted subject's last revision (see {@link #delete}): removes the
      * {@code arkprov:head} triple and, only if one was ever recorded, marks that revision
-     * {@code prov:invalidatedAtTime} at this delete's instant. A subject with no prior head (
+     * {@code prov:invalidatedAtTime} at this delete's instant, plus {@code code} as a
+     * {@code dcterms:identifier} if the caller minted one. A subject with no prior head (
      * {@code currentHead} empty) leaves the provenance graph untouched - there is nothing to
-     * tombstone.
+     * tombstone, and nothing to hang a code on either.
      */
-    private void invalidateRevision(DatasetTx tx, String subjectIri, Optional<IRI> currentHead) {
+    private void invalidateRevision(DatasetTx tx, String subjectIri, Optional<IRI> currentHead, String code) {
         if (currentHead.isEmpty()) {
+            if (code != null) {
+                LOG.warn("{} has no recorded revision, so its code {} cannot be kept out of "
+                        + "circulation and may be assigned again", subjectIri, code);
+            }
             return;
         }
         String subject = SparqlTerms.iriRef(subjectIri);
@@ -499,7 +559,48 @@ public final class WriteFunnel {
         Graph invalidation = rdf.createGraph();
         invalidation.add(currentHead.get(), rdf.createIRI(ArkprovVocabulary.INVALIDATED_AT_TIME),
                 rdf.createLiteral(Instant.now(clock).toString(), VocabXsd.DATETIME));
+        if (code != null) {
+            invalidation.add(currentHead.get(), rdf.createIRI(IDENTIFIER_PROPERTY), rdf.createLiteral(code));
+        }
         tx.add(rdf.createIRI(ArkprovVocabulary.PROVENANCE_GRAPH), invalidation);
+    }
+
+    /**
+     * Reads back the business codes {@link #delete}'s {@code code} parameter retained: the
+     * {@code dcterms:identifier} of every tombstoned revision in {@code dataset}'s provenance graph
+     * whose value starts with {@code codePrefix}.
+     *
+     * <p>The provenance graph is shared by every bounded context, so the read is narrowed twice: to
+     * revisions that actually carry {@code prov:invalidatedAtTime} (a live resource's revisions
+     * never do), and to identifiers starting with {@code codePrefix}. The second filter is what
+     * keeps a neighbouring bounded context that retains its own codes the same way from inflating
+     * the caller's numbering - the deleted resource's type triple is gone by then, so its code
+     * prefix is the only thing left to tell the two apart. Returned in no particular order: an
+     * ordering suited to a specific {@code PREFIX-N} scheme, and the mapping to the caller's own
+     * code type, are both the caller's concern.</p>
+     *
+     * @param dataset    the dataset (project) to read from
+     * @param codePrefix the business-code prefix to filter on (e.g. {@code "TERM-"})
+     */
+    public List<String> findRetainedCodes(DatasetId dataset, String codePrefix) {
+        Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(codePrefix, "codePrefix");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
+                + "?revision <" + ArkprovVocabulary.INVALIDATED_AT_TIME + "> ?invalidatedAt . "
+                + "?revision <" + IDENTIFIER_PROPERTY + "> ?identifier } "
+                + "FILTER(STRSTARTS(STR(?identifier), \"" + SparqlTerms.escape(codePrefix) + "\")) }";
+
+        try (DatasetHandle handle = lifecycle.acquire(dataset)) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .toList();
+        }
+    }
+
+    private static Literal literalOf(BindingSet row, String name) {
+        return (Literal) row.getValue(name)
+                .orElseThrow(() -> new IllegalStateException("missing binding '" + name + "'"));
     }
 
     /**
