@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.ul.application;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ import de.hauschel.arknet.ul.domain.TermNotFoundException;
 final class InMemoryTermRepository implements TermRepository {
 
     private final Map<ProjectId, Map<TermId, Term>> byProject = new LinkedHashMap<>();
+    private final Map<ProjectId, List<TermCode>> retainedByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Term term, String language) {
@@ -109,5 +111,15 @@ final class InMemoryTermRepository implements TermRepository {
                 .map(Term::id)
                 .orElseThrow(() -> new TermNotFoundException(projectId, code));
         terms.remove(id);
+        retainedByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
+    }
+
+    /**
+     * Mirrors the real out-adapter's code retention (issue #350) so {@link TermService#add} cannot
+     * hand the deleted term's number out again.
+     */
+    @Override
+    public List<TermCode> findRetainedCodes(ProjectId projectId) {
+        return List.copyOf(retainedByProject.getOrDefault(projectId, List.of()));
     }
 }

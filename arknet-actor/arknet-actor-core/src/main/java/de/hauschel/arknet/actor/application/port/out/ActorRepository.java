@@ -147,6 +147,23 @@ public interface ActorRepository {
     void delete(ProjectId projectId, ActorCode code);
 
     /**
+     * Returns the business codes of actors that were deleted from the project and are kept out of
+     * circulation - what {@link #delete} retains so a code can never name two different actors over
+     * a project's lifetime (issue #350). Read together with {@link #findAll} whenever the next free
+     * code is derived; the two sets are disjoint, since a retained code belongs to an actor that no
+     * longer exists.
+     *
+     * <p>Never rejects and never reports a code twice. An actor deleted <em>without</em> the
+     * implementation being able to retain its code is simply absent - the contract is "every code
+     * this port could keep", not "every code ever used", and the one implementation-side gap this
+     * leaves is documented where it arises.</p>
+     *
+     * @param projectId the project (architecture model) to read the retained codes of
+     * @return the retained codes, never {@code null}
+     */
+    List<ActorCode> findRetainedCodes(ProjectId projectId);
+
+    /**
      * Finds every actor in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveActors}. This is a batch lookup, not a per-id existence
      * check: an id absent from the project is simply absent from the result, never an error.

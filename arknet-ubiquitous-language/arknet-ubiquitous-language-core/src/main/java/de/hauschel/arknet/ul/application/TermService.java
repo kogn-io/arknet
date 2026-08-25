@@ -169,18 +169,29 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
     }
 
     /**
-     * Derives the next free business code in {@code projectId}: the highest running
-     * number currently in use, plus one (starting at 1).
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project has ever used, plus one (starting at 1).
+     *
+     * <p><strong>Ever used, not currently in use.</strong> The maximum runs over the living terms
+     * <em>and</em> the codes {@link TermRepository#findRetainedCodes} kept from deleted ones
+     * (issue #350). Over the living ones alone, deleting the highest-numbered term would let the
+     * maximum fall back and the next {@code term_add} hand out that same number again - and a code
+     * that already appeared in a commit message or a note would then name something else
+     * entirely.</p>
      */
     private TermCode nextCode(ProjectId projectId) {
         // Only each term's TermCode is read here, never a label, so this call has no need for a
         // display language override - null uses the repository's own configured preference, which
         // has no bearing on this method's result either way.
-        int next = repository.findAll(projectId, null).stream()
+        int highestLiving = repository.findAll(projectId, null).stream()
                 .mapToInt(t -> runningNumber(t.code()))
                 .max()
-                .orElse(0) + 1;
-        return new TermCode(ID_PREFIX + "-" + next);
+                .orElse(0);
+        int highestRetained = repository.findRetainedCodes(projectId).stream()
+                .mapToInt(TermService::runningNumber)
+                .max()
+                .orElse(0);
+        return new TermCode(ID_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
     }
 
     /** Parses the running number from a code such as {@code TERM-7} (0 if not parseable). */

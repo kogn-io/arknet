@@ -194,6 +194,13 @@ public class KognioRdfTermRepository implements TermRepository {
     private static final String IDENTIFIER_PROPERTY = VocabDct.NAMESPACE + "identifier";
 
     /**
+     * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
+     * tell a term's own retained code apart from a neighbouring bounded context's, since the
+     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     */
+    private static final String CODE_PREFIX = "TERM-";
+
+    /**
      * Bound on {@link #update}'s CAS retry loop (same bound and rationale as {@code
      * RequirementService#MAX_RETRY_ATTEMPTS}): a head conflict is resolved by a single retry in
      * the overwhelming majority of cases, since each retry re-reads the now-current state and
@@ -477,12 +484,26 @@ public class KognioRdfTermRepository implements TermRepository {
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        funnel.delete(dataset, TERMS_GRAPH, subjectIriString,
+        funnel.delete(dataset, TERMS_GRAPH, subjectIriString, code.value(),
                 () -> new TermNotFoundException(projectId, code),
                 tx -> {
                     rejectIfReferenced(tx, subjectIriString, projectId, code);
                     tx.update("DELETE WHERE { GRAPH <" + TERMS_GRAPH + "> { " + subject + " ?p ?o } }");
                 });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
+     * strings to {@link TermCode}.
+     */
+    @Override
+    public List<TermCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        return funnel.findRetainedCodes(new DatasetId(projectId.value()), CODE_PREFIX).stream()
+                .map(TermCode::new)
+                .toList();
     }
 
     /**

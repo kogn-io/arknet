@@ -128,6 +128,13 @@ public class KognioRdfActorRepository implements ActorRepository {
     private static final String NAME_PROPERTY = ARKNET_NAMESPACE + "name";
     private static final String DESCRIPTION_PROPERTY = ARKNET_NAMESPACE + "description";
 
+    /**
+     * The prefix every code this hexagon mints carries. Used only by {@link #findRetainedCodes} to
+     * tell an actor's own retained code apart from a neighbouring bounded context's, since the
+     * provenance graph {@link WriteFunnel#findRetainedCodes} reads from is shared by all of them.
+     */
+    private static final String CODE_PREFIX = "ACTOR-";
+
     private final DatasetLifecycle lifecycle;
     private final WriteFunnel funnel;
     private final RDF rdf = new SimpleRdf();
@@ -290,12 +297,26 @@ public class KognioRdfActorRepository implements ActorRepository {
         }
         String subject = SparqlTerms.iriRef(subjectIriString);
 
-        funnel.delete(dataset, ACTOR_GRAPH, subjectIriString,
+        funnel.delete(dataset, ACTOR_GRAPH, subjectIriString, code.value(),
                 () -> new ActorNotFoundException(projectId, code),
                 tx -> {
                     rejectIfReferenced(tx, subjectIriString, projectId, code);
                     tx.update("DELETE WHERE { GRAPH <" + ACTOR_GRAPH + "> { " + subject + " ?p ?o } }");
                 });
+    }
+
+    /**
+     * Reads back the codes {@link WriteFunnel#delete}'s {@code code} parameter retained (issue
+     * #350): the shared funnel keeps the number out of circulation, this hexagon only maps its raw
+     * strings to {@link ActorCode}.
+     */
+    @Override
+    public List<ActorCode> findRetainedCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        return funnel.findRetainedCodes(new DatasetId(projectId.value()), CODE_PREFIX).stream()
+                .map(ActorCode::new)
+                .toList();
     }
 
     /**
