@@ -71,6 +71,13 @@ public final class UseCaseCards {
     /** The section title, shared with {@link ModelViews}' failure message for this section. */
     public static final String SECTION_TITLE = "Use Cases";
 
+    /**
+     * The extensions block's label, shared with {@link HtmlReportRenderer#langSources} so it can
+     * pair this specific {@link Block.Bullets} list with its own sub-resources rather than another
+     * {@link Block.Bullets} list the same card might carry (issue #358).
+     */
+    public static final String EXTENSIONS_LABEL = "Extensions";
+
     private final ListUseCases useCases;
     private final ResolveRequirements requirements;
 
@@ -150,7 +157,7 @@ public final class UseCaseCards {
             for (int index = 0; index < uc.extensions().size(); index++) {
                 items.add(new BulletItem(index + 1, glossary.markUp(uc.extensions().get(index), linked)));
             }
-            blocks.add(new Block.Bullets("Extensions", items));
+            blocks.add(new Block.Bullets(EXTENSIONS_LABEL, items));
         }
         UnmentionedTerms.addTo(blocks, usesTerms, glossary, texts, "Uses terms", "not named in the text");
         return new ModelCard(uc.code().value(), uc.title(), uc.id().value().value(), List.of(), blocks);

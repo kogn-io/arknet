@@ -629,6 +629,46 @@ class HtmlReportRendererTest {
     }
 
     /**
+     * Issue #358: before this fix, every {@link Block.Bullets} list on one card shared a single
+     * flat position table. Two lists on the same card both starting at position 1 - unrealistic
+     * for today's {@link RequirementCards}/{@link UseCaseCards} (each emits at most one), but
+     * exactly what a card combining both shapes would produce - collided into "ambiguous, so no
+     * switch for either item" rather than each list keeping its own variants. Keying the source
+     * table by the block's own label (shared between the card builders and this renderer) keeps
+     * the two apart even though both items sit at position 1.
+     */
+    @Test
+    void keepsTwoBulletListsOnTheSameCardApart() {
+        final ModelSection section = new ModelSection("Use Cases", "use-cases", "", List.of(
+                new ModelCard("UC1", "Bestellen", UC_1, List.of(), List.of(
+                        new Block.Bullets(UseCaseCards.EXTENSIONS_LABEL,
+                                List.of(new BulletItem(1, RichText.plain("Der Kunde bricht ab.")))),
+                        new Block.Bullets(RequirementCards.ACCEPTANCE_CRITERIA_LABEL,
+                                List.of(new BulletItem(1, RichText.plain("Die Bestellung ist gespeichert."))))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(UC_1, ARKREQ + "extensionStep", STEP_1),
+                literal(STEP_1, ARKREQ + "position", "1"),
+                literalLang(STEP_1, ARKREQ + "stepText", "Der Kunde bricht ab.", "de"),
+                literalLang(STEP_1, ARKREQ + "stepText", "The customer cancels.", "en"),
+                iri(UC_1, ARKREQ + "acceptanceCriterion", CRITERION_1),
+                literal(CRITERION_1, ARKREQ + "position", "1"),
+                literalLang(CRITERION_1, ARKREQ + "criterionText", "Die Bestellung ist gespeichert.", "de"),
+                literalLang(CRITERION_1, ARKREQ + "criterionText", "The order is stored.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<li><span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Der Kunde bricht ab.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The customer cancels.</span>"
+                + "</span></li>");
+        assertThat(html).contains("<li><span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Die Bestellung ist gespeichert.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>The order is stored.</span>"
+                + "</span></li>");
+    }
+
+    /**
      * Two sub-resources claiming the same position leave the store unable to say which one an
      * item shows. The item then renders exactly as it did before this issue rather than being
      * switched to a guess - the same "empty rather than wrong" rule the text match follows when

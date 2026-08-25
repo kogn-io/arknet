@@ -40,6 +40,13 @@ public final class RequirementCards {
     /** The section title, shared with {@link ModelViews}' failure message for this section. */
     public static final String SECTION_TITLE = "Requirements";
 
+    /**
+     * The acceptance-criteria block's label, shared with {@link HtmlReportRenderer#langSources}
+     * so it can pair this specific {@link Block.Bullets} list with its own sub-resources rather
+     * than another {@link Block.Bullets} list the same card might carry (issue #358).
+     */
+    public static final String ACCEPTANCE_CRITERIA_LABEL = "Acceptance criteria";
+
     private final ListRequirements requirements;
 
     /**
@@ -95,7 +102,7 @@ public final class RequirementCards {
             // optional, so no block beats an empty one.
             blocks.add(new Block.Prose("Rationale", glossary.markUp(requirement.rationale(), linked)));
         }
-        blocks.add(new Block.Bullets("Acceptance criteria", requirement.acceptanceCriteria().stream()
+        blocks.add(new Block.Bullets(ACCEPTANCE_CRITERIA_LABEL, requirement.acceptanceCriteria().stream()
                 .map(criterion -> new BulletItem(criterion.position(), glossary.markUp(criterion.text(), linked)))
                 .toList()));
         if (requirement.qualityCategory() != null) {
