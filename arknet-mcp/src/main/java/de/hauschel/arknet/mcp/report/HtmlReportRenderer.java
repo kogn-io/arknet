@@ -26,6 +26,7 @@ import de.hauschel.arknet.mcp.store.RdfNode;
 import de.hauschel.arknet.mcp.store.StoreResource;
 import de.hauschel.arknet.mcp.store.StoreSnapshot;
 import de.hauschel.arknet.mcp.store.Triple;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 
 /**
@@ -101,6 +102,18 @@ public final class HtmlReportRenderer {
 
     /** {@code arkreq:criterionText} - the text of one acceptance criterion. */
     private static final String CRITERION_TEXT = ArkreqVocabulary.CRITERION_TEXT;
+
+    /** {@code arkarch:consequence} - an ADR's edge to one of its {@code arkarch:Consequence} resources. */
+    private static final String CONSEQUENCE_EDGE = ArkarchVocabulary.CONSEQUENCE;
+
+    /** {@code arkarch:consequenceStatement} - the text of one consequence. */
+    private static final String CONSEQUENCE_STATEMENT = ArkarchVocabulary.CONSEQUENCE_STATEMENT;
+
+    /** {@code arkarch:consideredOption} - an ADR's edge to one of its {@code ConsideredOption} resources. */
+    private static final String CONSIDERED_OPTION_EDGE = ArkarchVocabulary.CONSIDERED_OPTION;
+
+    /** {@code arkarch:optionRationale} - the text of one considered option. */
+    private static final String OPTION_RATIONALE = ArkarchVocabulary.OPTION_RATIONALE;
 
     private final Prefixes prefixes;
 
@@ -406,8 +419,15 @@ public final class HtmlReportRenderer {
                     final String rendered = renderText(item.text(), carded, subjects);
                     final Optional<LangVariants> variants =
                             itemVariants(bulletSources.get(item.position()), item.text().text(), displayLocale);
-                    html.append("                  <li>").append(langSwitchable(rendered, variants))
-                            .append("</li>\n");
+                    html.append("                  <li>");
+                    if (item.badge() != null) {
+                        html.append(badgePill(item.badge())).append(' ');
+                    }
+                    if (item.caption() != null) {
+                        html.append("<strong class=\"bullet-caption\">").append(escape(item.caption()))
+                                .append("</strong> ");
+                    }
+                    html.append(langSwitchable(rendered, variants)).append("</li>\n");
                 }
                 html.append("                </ul>\n");
             }
@@ -575,12 +595,22 @@ public final class HtmlReportRenderer {
      * would either collide with the first's positions or, if the two happened not to collide,
      * silently borrow the wrong sub-resource). The label is a fixed, shared constant between a
      * card builder ({@link RequirementCards#ACCEPTANCE_CRITERIA_LABEL}, {@link
-     * UseCaseCards#EXTENSIONS_LABEL}) and this renderer, not a guess back from the rendered text -
-     * the same "known key beats a text-equality guess" choice {@link #itemVariants} already makes
-     * over {@link #languageVariants} for a single item. The card's own type still never reaches
-     * this renderer: which edges feed which label is this class's own, already-hardcoded
-     * knowledge (see the class-level note on {@link #MAIN_STEP_EDGE} and friends), and {@link
-     * Block}'s shape-only vocabulary is untouched (issue #319).</p>
+     * UseCaseCards#EXTENSIONS_LABEL}, {@link AdrCards#CONSEQUENCES_LABEL}, {@link
+     * AdrCards#CONSIDERED_OPTIONS_LABEL} - issue #382 is the "future pair" this javadoc already
+     * anticipated, an ADR card carrying both at once) and this renderer, not a guess back from the
+     * rendered text - the same "known key beats a text-equality guess" choice {@link
+     * #itemVariants} already makes over {@link #languageVariants} for a single item. The card's
+     * own type still never reaches this renderer: which edges feed which label is this class's
+     * own, already-hardcoded knowledge (see the class-level note on {@link #MAIN_STEP_EDGE} and
+     * friends), and {@link Block}'s shape-only vocabulary is untouched (issue #319).</p>
+     *
+     * <p><strong>A {@link BulletItem#caption()} is never switched (issue #382).</strong> An
+     * {@code arkarch:ConsideredOption} carries two independent multilingual fields -
+     * {@code arknet:name} (the caption) and {@code arkarch:optionRationale} (the item {@code
+     * text}) - but one {@link SubResource} names only one {@code textPredicate}, and this class
+     * only ever resolves variants for {@code text}. A caption therefore always shows the
+     * resolved-{@code displayLocale} name with no switch offered, the same "no source, no switch"
+     * fallback an item with no positioned sub-resource at all already gets.</p>
      *
      * @param flow    main-flow steps by their 1-based position
      * @param bullets every bullets list's sub-resources, keyed by the list's own label and then
@@ -612,22 +642,40 @@ public final class HtmlReportRenderer {
             return LangSources.NONE;
         }
         final Map<Integer, List<SubResource>> flow = new LinkedHashMap<>();
-        collectPositioned(card, bySubject, MAIN_STEP_EDGE, STEP_TEXT, flow);
+        collectPositioned(card, bySubject, MAIN_STEP_EDGE, POSITION, STEP_TEXT, flow);
         final Map<Integer, List<SubResource>> extensions = new LinkedHashMap<>();
-        collectPositioned(card, bySubject, EXTENSION_STEP_EDGE, STEP_TEXT, extensions);
+        collectPositioned(card, bySubject, EXTENSION_STEP_EDGE, POSITION, STEP_TEXT, extensions);
         final Map<Integer, List<SubResource>> acceptanceCriteria = new LinkedHashMap<>();
-        collectPositioned(card, bySubject, ACCEPTANCE_CRITERION_EDGE, CRITERION_TEXT, acceptanceCriteria);
+        collectPositioned(card, bySubject, ACCEPTANCE_CRITERION_EDGE, POSITION, CRITERION_TEXT, acceptanceCriteria);
+        final Map<Integer, List<SubResource>> consequences = new LinkedHashMap<>();
+        collectPositioned(card, bySubject, CONSEQUENCE_EDGE, ArkarchVocabulary.POSITION, CONSEQUENCE_STATEMENT,
+                consequences);
+        final Map<Integer, List<SubResource>> consideredOptions = new LinkedHashMap<>();
+        collectPositioned(card, bySubject, CONSIDERED_OPTION_EDGE, ArkarchVocabulary.POSITION, OPTION_RATIONALE,
+                consideredOptions);
         final Map<String, Map<Integer, SubResource>> bullets = new LinkedHashMap<>();
         bullets.put(UseCaseCards.EXTENSIONS_LABEL, unambiguous(extensions));
         bullets.put(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, unambiguous(acceptanceCriteria));
+        bullets.put(AdrCards.CONSEQUENCES_LABEL, unambiguous(consequences));
+        bullets.put(AdrCards.CONSIDERED_OPTIONS_LABEL, unambiguous(consideredOptions));
         return new LangSources(unambiguous(flow), bullets);
     }
 
-    /** Adds every sub-resource {@code card} reaches through {@code edge} under its own position. */
+    /**
+     * Adds every sub-resource {@code card} reaches through {@code edge} under its own position.
+     *
+     * @param positionPredicate the predicate {@code sub} carries its position under - {@code
+     *                          arkreq:position} for a use-case step/requirement acceptance
+     *                          criterion, {@code arknet:position} for an ADR consequence/
+     *                          considered option (kogn-io/arknet#357 moved new child resources to
+     *                          the core namespace's own property; issue #382 is this renderer's
+     *                          first consumer of that newer property)
+     */
     private static void collectPositioned(
             final StoreResource card,
             final Map<String, StoreResource> bySubject,
             final String edge,
+            final String positionPredicate,
             final String textPredicate,
             final Map<Integer, List<SubResource>> collected) {
         for (final Triple triple : card.outgoing()) {
@@ -638,16 +686,16 @@ public final class HtmlReportRenderer {
             if (sub == null) {
                 continue;
             }
-            position(sub).ifPresent(position -> collected
+            position(sub, positionPredicate).ifPresent(position -> collected
                     .computeIfAbsent(position, key -> new ArrayList<>())
                     .add(new SubResource(sub, textPredicate)));
         }
     }
 
-    /** {@code sub}'s {@code arkreq:position}, or empty if it carries none or an unparsable one. */
-    private static Optional<Integer> position(final StoreResource sub) {
+    /** {@code sub}'s value under {@code positionPredicate}, or empty if none or unparsable. */
+    private static Optional<Integer> position(final StoreResource sub, final String positionPredicate) {
         for (final Triple triple : sub.outgoing()) {
-            if (POSITION.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
+            if (positionPredicate.equals(triple.predicate()) && triple.object() instanceof RdfNode.Literal literal) {
                 try {
                     return Optional.of(Integer.valueOf(literal.lexicalForm().trim()));
                 } catch (final NumberFormatException notANumber) {
@@ -999,6 +1047,8 @@ public final class HtmlReportRenderer {
             .block .prose{margin:0;font-size:14px;color:var(--ink-soft);}
             .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);}
             .block .bullets li{margin:2px 0;}
+            .block .bullets li .pill{margin-right:6px;}
+            .bullet-caption{color:var(--ink);}
             .term{color:var(--iri);text-decoration:none;border-bottom:1px solid var(--border-strong);}
             a.term:hover{color:var(--accent);border-bottom-color:var(--accent);}
             .term.gap{color:var(--warn);border-bottom:1px dashed var(--warn);cursor:help;}
@@ -1044,6 +1094,12 @@ public final class HtmlReportRenderer {
             .pill.priority{background:var(--accent-soft);color:var(--accent);}
             .pill.type{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--border);}
             .pill.actor,.pill.subdomain{background:var(--info-bg);color:var(--info);}
+            .pill.consequence{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--border);}
+            .pill.consequence.v-positive{background:var(--ok-bg);color:var(--ok);}
+            .pill.consequence.v-negative{background:var(--bad-bg);color:var(--bad);}
+            .pill.outcome{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--border);}
+            .pill.outcome.v-chosen{background:var(--ok-bg);color:var(--ok);}
+            .pill.outcome.v-rejected{background:var(--warn-bg);color:var(--warn);}
             footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:var(--mono);
               border-top:1px solid var(--border);padding-top:14px;}
             @media (max-width:760px){.layout{grid-template-columns:1fr;}

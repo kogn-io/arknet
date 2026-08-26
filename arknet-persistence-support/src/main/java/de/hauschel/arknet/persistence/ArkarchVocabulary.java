@@ -51,8 +51,31 @@ public final class ArkarchVocabulary {
 
     private static final String NAMESPACE = "https://w3id.org/arknet/architecture#";
 
+    /**
+     * {@code https://w3id.org/arknet/core#} - the generic core namespace {@link #NAME} and
+     * {@link #POSITION} below borrow from, the same cross-namespace-constant precedent
+     * {@link ArkreqVocabulary#CONSTRAINED_BY} already sets for a single predicate this module's
+     * write/read pair both need named once.
+     */
+    private static final String CORE_NAMESPACE = "https://w3id.org/arknet/core#";
+
     /** {@code arkarch:ArchitectureDecisionRecord} - the type of an architecture decision record. */
     public static final String ADR_TYPE = NAMESPACE + "ArchitectureDecisionRecord";
+
+    /**
+     * {@code arknet:name} - an ADR's own decision name, and (kogn-io/arknet#357) a
+     * {@link #CONSIDERED_OPTION_TYPE_CLASS}'s short option name.
+     */
+    public static final String NAME = CORE_NAMESPACE + "name";
+
+    /**
+     * {@code arknet:position} - the 1-based position of a {@link #CONSEQUENCE_TYPE_CLASS} or
+     * {@link #CONSIDERED_OPTION_TYPE_CLASS} within its list (kogn-io/arknet#357) - the core
+     * namespace's own property, not {@code arkreq:position}: see {@code arknet-core.ttl}'s
+     * {@code arknet:position} comment for why new child resources use this one instead of the
+     * requirements module's older, otherwise-identical property.
+     */
+    public static final String POSITION = CORE_NAMESPACE + "position";
 
     /** {@code arkarch:adrContext} - ADR -&gt; why the decision was necessary. */
     public static final String ADR_CONTEXT = NAMESPACE + "adrContext";

@@ -22,21 +22,25 @@ public record Badge(Kind kind, String value) {
     }
 
     /**
-     * A badge's family (issue #103). {@link Known} lists the five kinds {@code
+     * A badge's family (issue #103). {@link Known} lists the kinds {@code
      * HtmlReportRenderer}'s CSS actually styles ({@code .pill.status}/{@code .priority}/
-     * {@code .type}/{@code .actor}/{@code .subdomain}) - a misspelled kind is now a compile
-     * error instead of a silently neutral pill. {@link Custom} is the deliberate escape hatch
-     * for a badge that has no dedicated style (yet): it always renders in the neutral style,
-     * the same fallback {@link Known} never needs.
+     * {@code .type}/{@code .actor}/{@code .subdomain}/{@code .consequence}/{@code .outcome}) - a
+     * misspelled kind is now a compile error instead of a silently neutral pill. {@link Custom}
+     * is the deliberate escape hatch for a badge that has no dedicated style (yet): it always
+     * renders in the neutral style, the same fallback {@link Known} never needs.
      */
     public sealed interface Kind {
 
         /** @return the CSS class {@code HtmlReportRenderer} styles this kind with. */
         String cssClass();
 
-        /** The five badge families {@code HtmlReportRenderer}'s stylesheet defines a pill for. */
+        /** The badge families {@code HtmlReportRenderer}'s stylesheet defines a pill for. */
         enum Known implements Kind {
-            STATUS, PRIORITY, TYPE, ACTOR, SUBDOMAIN;
+            STATUS, PRIORITY, TYPE, ACTOR, SUBDOMAIN,
+            /** An {@code arkarch:Consequence}'s {@code POSITIVE}/{@code NEGATIVE}/{@code NEUTRAL} type (issue #382). */
+            CONSEQUENCE,
+            /** An {@code arkarch:ConsideredOption}'s {@code CHOSEN}/{@code REJECTED} outcome (issue #382). */
+            OUTCOME;
 
             @Override
             public String cssClass() {

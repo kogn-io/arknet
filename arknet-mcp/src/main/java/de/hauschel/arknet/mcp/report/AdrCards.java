@@ -17,6 +17,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.Consequence;
 import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
@@ -56,6 +57,17 @@ public final class AdrCards {
 
     /** The section title, shared with {@link ModelViews}' failure message for this section. */
     public static final String SECTION_TITLE = "Architecture Decisions";
+
+    /**
+     * The consequences block's label, shared with {@link HtmlReportRenderer} - the key by which
+     * it finds this block's own positioned sub-resources (issue #382), the same role {@link
+     * UseCaseCards#EXTENSIONS_LABEL}/{@link RequirementCards#ACCEPTANCE_CRITERIA_LABEL} already
+     * play.
+     */
+    public static final String CONSEQUENCES_LABEL = "Consequences";
+
+    /** The considered-options block's label, shared with {@link HtmlReportRenderer} likewise. */
+    public static final String CONSIDERED_OPTIONS_LABEL = "Considered options";
 
     private final ListAdrs adrs;
     private final ResolveRequirements resolveRequirements;
@@ -160,48 +172,55 @@ public final class AdrCards {
     }
 
     /**
-     * Renders {@code consequences} (kogn-io/arknet#357) as a single {@link Block.Bullets} list, one
-     * item per structured consequence - the existing bullets mechanism already carries exactly one
-     * list per card without a language-switch regression (see {@link HtmlReportRenderer}'s
-     * {@code LangSources} javadoc). {@link Block.Bullets#plain} numbers items by list order, which
-     * matches this list's own {@code arknet:position} order. A legacy-only decision (the flat
+     * Renders {@code consequences} (kogn-io/arknet#357) as a {@link Block.Bullets} list, one item
+     * per structured consequence, its {@link Consequence#type()} shown as a {@link Badge} rather
+     * than folded into the text (issue #382 - {@code HtmlReportRenderer}'s language-switch, added
+     * for {@link Block.Bullets} by issue #358, keys a list's positioned sub-resources by this
+     * block's own label; see {@link #CONSEQUENCES_LABEL}). A legacy-only decision (the flat
      * {@code arkarch:adrConsequences} literal, synthesised by the out-adapter as one {@code NEUTRAL}
-     * entry) renders identically - a single bullet - so there is no visible regression against the
-     * pre-#357 report.
-     *
-     * <p><strong>Not yet a second list.</strong> Rendering considered options as their own bullets
-     * list too is deliberately deferred to issue #358, which reworks {@code HtmlReportRenderer}'s
-     * language-switch to support more than one {@link Block.Bullets} per card; see
-     * {@link #addConsideredOptions} for the conservative {@link Block.Prose} it uses instead in the
-     * meantime.</p>
+     * entry) renders identically - a single, badged bullet.
      */
     private static void addConsequences(final List<Block> blocks, final List<Consequence> consequences) {
         if (consequences.isEmpty()) {
             return;
         }
-        final List<String> lines = consequences.stream()
-                .map(c -> "[%s] %s".formatted(c.type(), c.statement()))
+        final List<BulletItem> items = consequences.stream()
+                .map(c -> new BulletItem(c.position(), RichText.plain(c.statement()),
+                        new Badge(Badge.Kind.Known.CONSEQUENCE, Labels.humanise(c.type().name())), null))
                 .toList();
-        blocks.add(Block.Bullets.plain("Consequences", lines));
+        blocks.add(new Block.Bullets(CONSEQUENCES_LABEL, items));
     }
 
     /**
-     * Renders {@code consideredOptions} (kogn-io/arknet#357) as one merged {@link Block.Prose}
-     * block, exactly as the pre-#357 flat {@code arkarch:adrAlternatives} literal was rendered -
-     * deliberately conservative rather than a second {@link Block.Bullets} list: see
-     * {@link #addConsequences}'s javadoc for why a second list is issue #358's job, not this one's.
-     * Unlike the pre-#357 literal (rejected options only), this now also shows the {@code CHOSEN}
-     * option, since {@link ConsideredOption} makes the MADR "Decision Outcome" representable at
-     * all.
+     * Renders {@code consideredOptions} (kogn-io/arknet#357) as a {@link Block.Bullets} list, one
+     * item per option, mirroring {@link #addConsequences} now that issue #358 lets a card carry
+     * more than one {@link Block.Bullets} list without losing its language switch. An option's
+     * {@link ConsideredOption#outcome()} becomes a {@link Badge} and its {@link
+     * ConsideredOption#name()} the item's {@code caption}, kept apart from {@link
+     * ConsideredOption#rationale()} (the item {@code text}) rather than glued together with
+     * {@code " - "} as the pre-#382 single merged {@link Block.Prose} block did - name and
+     * rationale are separate fields on the resource, not one string. Unlike the pre-#357 flat
+     * {@code arkarch:adrAlternatives} literal (rejected options only), this also shows the {@code
+     * CHOSEN} option, since {@link ConsideredOption} makes the MADR "Decision Outcome"
+     * representable at all. An outcome-less option (the out-adapter's legacy-literal fallback,
+     * see {@link ConsideredOption#outcome()}) gets a neutral {@code Unclassified} badge instead of
+     * one of the two real outcomes, since neither would be honest.
      */
     private static void addConsideredOptions(final List<Block> blocks, final List<ConsideredOption> options) {
         if (options.isEmpty()) {
             return;
         }
-        final String merged = options.stream()
-                .map(o -> "[%s] %s - %s".formatted(o.outcome() == null ? "?" : o.outcome(), o.name(), o.rationale()))
-                .collect(Collectors.joining("\n"));
-        blocks.add(Block.Prose.plain("Considered options", merged));
+        final List<BulletItem> items = options.stream()
+                .map(o -> new BulletItem(o.position(), RichText.plain(o.rationale()),
+                        outcomeBadge(o.outcome()), o.name()))
+                .toList();
+        blocks.add(new Block.Bullets(CONSIDERED_OPTIONS_LABEL, items));
+    }
+
+    private static Badge outcomeBadge(final OptionOutcome outcome) {
+        return outcome == null
+                ? new Badge(new Badge.Kind.Custom("outcome"), "Unclassified")
+                : new Badge(Badge.Kind.Known.OUTCOME, Labels.humanise(outcome.name()));
     }
 
     /**
