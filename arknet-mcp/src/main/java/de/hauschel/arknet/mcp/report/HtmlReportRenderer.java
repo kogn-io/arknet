@@ -398,10 +398,30 @@ public final class HtmlReportRenderer {
         html.append("            </details>\n          </article>\n");
     }
 
+    /**
+     * Renders one block of a card, tagged with a CSS class derived from its own label.
+     *
+     * <p><strong>Why a per-label class.</strong> Blocks are structurally identical here - a label
+     * and a text - but they are not of equal weight to a reader. An architecture decision record
+     * puts its context and its decision side by side in the same shape, and the decision, the one
+     * sentence the whole record exists to carry, then looks exactly like the situation report
+     * above it. The class lets the stylesheet lift that one block without this method growing a
+     * per-section special case: the renderer keeps emitting blocks uniformly, and which of them a
+     * theme chooses to distinguish stays a question of CSS.</p>
+     *
+     * <p><strong>Prose keeps the author's line breaks</strong> ({@code white-space:pre-line} in
+     * the stylesheet, rather than splitting into several {@code <p>} here). A store literal is
+     * free text: whoever wrote it may well have separated an enumeration from its lead-in, and
+     * collapsing that into one wall of text discards structure the author put there deliberately.
+     * Doing it in CSS rather than by splitting the string keeps the language-switch wrapper
+     * ({@link #langSwitchable}) around a single element - one switchable literal stays one node,
+     * whatever it looks like when laid out.</p>
+     */
     private void appendBlock(
             final StringBuilder html, final Block block, final Set<String> carded, final Set<String> subjects,
             final StoreResource raw, final LangSources sources, final DisplayLocale displayLocale) {
-        html.append("              <div class=\"block\">\n                <span class=\"blabel\">")
+        html.append("              <div class=\"block b-").append(sanitize(block.label()).toLowerCase(Locale.ROOT))
+                .append("\">\n                <span class=\"blabel\">")
                 .append(escape(block.label())).append("</span>\n");
         switch (block) {
             case Block.Prose prose -> {
@@ -1044,8 +1064,10 @@ public final class HtmlReportRenderer {
             article.card .body{margin-top:12px;display:grid;gap:11px;}
             .block .blabel{display:block;text-transform:uppercase;letter-spacing:0.07em;font-size:10px;
               font-weight:700;color:var(--ink-faint);margin-bottom:3px;}
-            .block .prose{margin:0;font-size:14px;color:var(--ink-soft);}
-            .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);}
+            .block .prose{margin:0;font-size:14px;color:var(--ink-soft);max-width:74ch;
+              white-space:pre-line;}
+            .block.b-decision .prose{color:var(--ink);border-left:2px solid var(--accent);padding-left:13px;}
+            .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);max-width:74ch;}
             .block .bullets li{margin:2px 0;}
             .block .bullets li .pill{margin-right:6px;}
             .bullet-caption{color:var(--ink);}

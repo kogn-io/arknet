@@ -325,6 +325,43 @@ class HtmlReportRendererTest {
                 .doesNotContain("http://cdn").doesNotContain("https://cdn");
     }
 
+    /**
+     * A block carries a class derived from its own label, so a stylesheet can lift the one block
+     * a record exists for - an ADR's decision - without the renderer growing a special case.
+     */
+    @Test
+    void tagsEveryBlockWithAClassTakenFromItsLabel() {
+        final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
+                List.of(new ModelCard("ADR-1", "A decision", FR_1, List.of(), List.of(
+                        Block.Prose.plain("Context", "the situation"),
+                        Block.Prose.plain("Decision", "the decision"),
+                        Block.Prose.plain("Decision date", "2026-08-26")))));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest",
+                views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<div class=\"block b-context\">")
+                .contains("<div class=\"block b-decision\">")
+                .contains("<div class=\"block b-decision-date\">");
+    }
+
+    /**
+     * Line breaks an author put into a store literal survive into the report: the enumeration
+     * they separated from its lead-in must not silently collapse back into one wall of text.
+     */
+    @Test
+    void keepsTheLineBreaksAnAuthorPutIntoProse() {
+        final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
+                List.of(new ModelCard("ADR-1", "A decision", FR_1, List.of(),
+                        List.of(Block.Prose.plain("Decision", "lead-in:\n\n(1) first\n(2) second")))));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest",
+                views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("lead-in:\n\n(1) first\n(2) second");
+        assertThat(html).contains("white-space:pre-line");
+    }
+
     /** Free text from the store is escaped, not injected into the document. */
     @Test
     void escapesModelText() {
