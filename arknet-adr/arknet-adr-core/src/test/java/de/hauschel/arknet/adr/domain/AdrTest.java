@@ -133,9 +133,11 @@ class AdrTest {
 
     /**
      * At most one considered option may be {@link OptionOutcome#CHOSEN} - the domain-level half of
-     * the invariant the SHACL {@code sh:qualifiedValueShape}/{@code sh:qualifiedMaxCount} enforces a
-     * second time at the write gate (kogn-io/arknet#357). Mutation test: removing this check would
-     * let two options both claim to be the decision's actual outcome.
+     * the invariant the SHACL write gate's {@code ashapes:ADR-consideredOption-atMostOneChosen}
+     * enforces a second time (kogn-io/arknet#357; a {@code sh:sparql}-based constraint since
+     * kogn-io/arknet#376, not the original {@code sh:qualifiedValueShape}/{@code sh:qualifiedMaxCount}
+     * form). Mutation test: removing this check would let two options both claim to be the
+     * decision's actual outcome.
      */
     @Test
     void rejectsMoreThanOneChosenConsideredOption() {

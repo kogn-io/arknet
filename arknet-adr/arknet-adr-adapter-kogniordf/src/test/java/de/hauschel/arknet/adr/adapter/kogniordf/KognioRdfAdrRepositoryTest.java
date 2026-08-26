@@ -21,6 +21,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
@@ -438,6 +439,27 @@ class KognioRdfAdrRepositoryTest {
     }
 
     @Test
+    void compareAndUpdateKeepsARecordCarryingSeveralOptionsWithOneChosenWritable() {
+        // Dry-run finding: a decision created with more than one considered option, exactly one of
+        // them CHOSEN, could not be corrected afterwards - every compareAndUpdate was refused by
+        // ashapes:ADR-consideredOption-atMostOneChosen although the stored state carries a single
+        // arkarch:Chosen. One option alone never reproduced it.
+        AdrId id = freshId();
+        Adr original = adr(id, new AdrCode("ADR-1"), AdrStatus.PROPOSED, List.of(),
+                List.of(new ConsideredOption(1, "Rejected one", "Only here to count.", OptionOutcome.REJECTED),
+                        new ConsideredOption(2, "Chosen one", "Only here to count.", OptionOutcome.CHOSEN)),
+                null, List.of(), List.of(), null);
+        repository.create(PROJECT_A, original, "de");
+
+        var current = repository.findCurrentByCode(PROJECT_A, original.code()).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, current.head(), current.value(), null, null, null,
+                Map.of(), Map.of(), "de");
+
+        assertEquals(2, repository.findByCode(PROJECT_A, original.code(), null).orElseThrow()
+                .consideredOptions().size());
+    }
+
+    @Test
     void compareAndUpdateRejectsAMissingIdentity() {
         Adr missing = adr(new AdrCode("ADR-1"));
 
@@ -582,9 +604,11 @@ class KognioRdfAdrRepositoryTest {
     // compact constructor enforces a second time (AdrTest#rejectsMoreThanOneChosenConsideredOption).
 
     /**
-     * {@code sh:qualifiedValueShape}/{@code sh:qualifiedMaxCount 1} on {@code
-     * ashapes:ADR-consideredOption-atMostOneChosen} - the spike this issue verified against the real
-     * RDF4J SHACL engine (arknet-wt-spike-shacl), made permanent here.
+     * The {@code sh:sparql}-based {@code ashapes:ADR-consideredOption-atMostOneChosen} (originally a
+     * {@code sh:qualifiedValueShape}/{@code sh:qualifiedMaxCount 1} form, replaced by
+     * kogn-io/arknet#376 - see the shape's own comment in {@code architecture-shapes.ttl} for why) -
+     * the spike this issue verified against the real RDF4J SHACL engine (arknet-wt-spike-shacl), made
+     * permanent here.
      */
     @Test
     void writeRejectsMoreThanOneChosenConsideredOption() {
@@ -619,6 +643,35 @@ class KognioRdfAdrRepositoryTest {
 
         ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
         gate.enforce(candidate);
+    }
+
+    /**
+     * kogn-io/arknet#376: RDF4J 6.x's ShaclSail measurably misfires the (pre-fix)
+     * {@code sh:qualifiedValueShape}/{@code sh:qualifiedMaxCount 1} form of {@code
+     * ashapes:ADR-consideredOption-atMostOneChosen} whenever the validated data graph carries a
+     * <em>second</em> {@code arkarch:ArchitectureDecisionRecord} focus node beside the one actually
+     * being written - exactly the shape of a {@code relatedTo}/{@code supersededBy} peer's
+     * validation-only {@code assertedContext} copy ({@link KognioRdfAdrRepository
+     * #crossReferenceAssertedContext}), even though the peer carries zero considered options of its
+     * own and the candidate itself never carries more than one {@code Chosen}. Reproduced roughly
+     * two thirds of the time pre-fix (driven directly against the real gate, exactly like
+     * {@link #gateConformsWithExactlyOneChosenConsideredOptionAmongSeveral} plus a relatedTo peer);
+     * {@code @RepeatedTest} rather than a single run because the flake would otherwise pass by luck
+     * about a third of the time even without the fix.
+     */
+    @RepeatedTest(20)
+    void gateConformsWithExactlyOneChosenAmongSeveralWhenARelatedToPeerIsAlsoAFocusNode() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI peer = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.PROPOSED);
+        addConsideredOption(rdf, candidate, subject, 1, ArkarchVocabulary.OPTION_REJECTED);
+        addConsideredOption(rdf, candidate, subject, 2, ArkarchVocabulary.CHOSEN);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.RELATED_TO), peer);
+        Graph assertedContext = minimalCandidate(rdf, peer, "ADR-2", ArkarchVocabulary.PROPOSED);
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        gate.enforce(candidate, assertedContext);
     }
 
     /** Adds one well-formed {@code arkarch:ConsideredOption} child, satisfying {@code ashapes:ConsideredOptionShape}. */

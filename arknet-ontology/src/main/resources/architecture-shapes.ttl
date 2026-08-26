@@ -38,7 +38,7 @@ ashapes:ADRShape
     sh:property ashapes:ADR-consequence-class ;
     sh:property ashapes:ADR-consideredOption ;
     sh:property ashapes:ADR-consideredOption-class ;
-    sh:property ashapes:ADR-consideredOption-atMostOneChosen ;
+    sh:sparql   ashapes:ADR-consideredOption-atMostOneChosen ;
     sh:property ashapes:ADR-relatedTo ;
     sh:property ashapes:ADR-supersededBy .
 
@@ -152,15 +152,29 @@ ashapes:ADR-consideredOption-class
 # real RDF4J SHACL engine this project's write gate runs (spike, arknet-wt-spike-shacl). Nailed down
 # a second time, unconditionally, in Adr's own compact constructor: SHACL only guards a store-first
 # (ADR-005) write, never a direct edit that bypasses the gate.
+#
+# A SPARQL-based constraint (sh:sparql), not sh:qualifiedValueShape/sh:qualifiedMaxCount
+# (kogn-io/arknet#376): the qualified-value-shape form measurably misfires against RDF4J 6.x's
+# ShaclSail whenever the validated data graph carries a SECOND arkarch:ArchitectureDecisionRecord
+# focus node beside the one actually being written - exactly what a relatedTo/supersededBy peer's
+# validation-only assertedContext copy is (KognioRdfAdrRepository#crossReferenceAssertedContext),
+# so an adr_update that only touched relatedTo could spuriously fail on a decision that had always
+# carried a single Chosen option. $this-scoped SPARQL evaluates one focus node at a time and is not
+# affected by a sibling focus node of the same shape.
 ashapes:ADR-consideredOption-atMostOneChosen
-    a sh:PropertyShape ;
-    sh:path     arkarch:consideredOption ;
-    sh:qualifiedValueShape [
-        sh:property [ sh:path arkarch:optionOutcome ; sh:hasValue arkarch:Chosen ; sh:minCount 1 ]
-    ] ;
-    sh:qualifiedMaxCount 1 ;
+    a sh:SPARQLConstraint ;
     sh:message  "At most one arkarch:consideredOption may have arkarch:optionOutcome arkarch:Chosen."@en , "Hoechstens eine arkarch:consideredOption darf arkarch:optionOutcome arkarch:Chosen tragen."@de ;
-    sh:severity sh:Violation .
+    sh:select   """
+        PREFIX arkarch: <https://w3id.org/arknet/architecture#>
+        SELECT DISTINCT $this
+        WHERE {
+            $this arkarch:consideredOption ?option1 .
+            ?option1 arkarch:optionOutcome arkarch:Chosen .
+            $this arkarch:consideredOption ?option2 .
+            ?option2 arkarch:optionOutcome arkarch:Chosen .
+            FILTER (?option1 != ?option2)
+        }
+    """ .
 
 ##############################################################################
 #  CONSEQUENCE SHAPES  (kogn-io/arknet#357 -- own resource, mirrors the
