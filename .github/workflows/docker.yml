@@ -5,20 +5,25 @@ name: Docker image (arknet-mcp)
 # immutable, SemVer-tagged `vX.Y.Z` image is a separate, manual publish; see
 # release.yml.
 
+# The trigger is a NEGATIVE filter on purpose (kogn-io/arknet#379). It used to be a
+# positive `paths` list enumerating the modules that go into the image. That list was
+# complete the day it was written and silently rotted: arknet-project, arknet-adr and
+# arknet-actor were added to the reactor afterwards and never appended, so a fix
+# touching only one of them merged green while `:latest` stayed on the old build --
+# no failed run, no skipped job, just a daemon that keeps serving the old code.
+# A positive list has to be maintained on every new module; forgetting is silent and
+# wrong. With paths-ignore, forgetting costs a redundant build and is loud.
+# Only list here what provably cannot change the produced jar: no .md is a packaged
+# resource, and no pom refers to docs/.
 on:
   push:
     branches: [main]
-    paths:
-      - "arknet-mcp/**"
-      - "arknet-shared-kernel/**"
-      - "arknet-persistence-support/**"
-      - "arknet-requirements/**"
-      - "arknet-ubiquitous-language/**"
-      - "arknet-use-cases/**"
-      - "arknet-bounded-context/**"
-      - "arknet-ontology/**"
-      - "pom.xml"
-      - ".github/workflows/docker.yml"
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - ".mcp.json"
+      - "docker-compose.yml"
   workflow_dispatch: {}
 
 permissions:
