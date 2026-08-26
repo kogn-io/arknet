@@ -9,6 +9,7 @@ bin/
 *.iml
 .idea/
 .vscode/
+.theia/
 
 # OS
 .DS_Store
