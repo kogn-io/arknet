@@ -65,11 +65,13 @@ class AdrCardsTest {
     }
 
     /**
-     * Optional MADR fields present on the ADR must render, each under its own label -
-     * consequences as a {@link Block.Bullets} list (kogn-io/arknet#357, Vorentscheidung 3: the
-     * existing single-bullets-list mechanism, no report restructuring here - see issue #358),
-     * considered options as one merged {@link Block.Prose} block, conservatively unchanged from
-     * the pre-#357 rendering shape.
+     * Optional MADR fields present on the ADR must render, each under its own label - both
+     * consequences and considered options as their own {@link Block.Bullets} list (kogn-io/
+     * arknet#357/#358/#382), a consequence's {@link
+     * de.hauschel.arknet.adr.domain.ConsequenceType} and an option's {@link
+     * de.hauschel.arknet.adr.domain.OptionOutcome} as a {@link Badge} rather than folded into the
+     * text, and an option's name kept apart from its rationale as the item's {@code caption}
+     * rather than glued on with {@code " - "}.
      */
     @Test
     void rendersOptionalFieldsWhenPresent() {
@@ -88,10 +90,33 @@ class AdrCardsTest {
 
         assertThat(labels).containsExactly(
                 "Context", "Decision", "Consequences", "Considered options", "Decision date");
-        assertThat(blockOf(cards, "Consequences")).isInstanceOf(Block.Bullets.class);
-        assertThat(blockOf(cards, "Considered options")).isEqualTo(Block.Prose.plain("Considered options",
-                "[REJECTED] Option A - Options that were considered."));
+        assertThat(blockOf(cards, "Consequences")).isEqualTo(new Block.Bullets("Consequences", List.of(
+                new BulletItem(1, RichText.plain("Positive and negative consequences."),
+                        new Badge(Badge.Kind.Known.CONSEQUENCE, "Neutral"), null))));
+        assertThat(blockOf(cards, "Considered options")).isEqualTo(new Block.Bullets("Considered options", List.of(
+                new BulletItem(1, RichText.plain("Options that were considered."),
+                        new Badge(Badge.Kind.Known.OUTCOME, "Rejected"), "Option A"))));
         assertThat(blockOf(cards, "Decision date")).isEqualTo(Block.Prose.plain("Decision date", "2026-07-01"));
+    }
+
+    /**
+     * An option the out-adapter's legacy-literal fallback synthesises with no outcome (see
+     * {@link de.hauschel.arknet.adr.domain.ConsideredOption#outcome()}) must not render as either
+     * real outcome - {@code Unclassified} in the neutral pill style is the honest reading.
+     */
+    @Test
+    void rendersAnOutcomeLessOptionAsUnclassified() {
+        final Adr adr = new Adr(
+                new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.ACCEPTED,
+                "Forces and constraints.", "What was decided.", null,
+                List.of(new de.hauschel.arknet.adr.domain.ConsideredOption(1, "Option A",
+                        "Options that were considered.", null)),
+                null, List.of(), List.of(), null, List.of());
+        final AdrCards cards = cardsFor(adr);
+
+        assertThat(blockOf(cards, "Considered options")).isEqualTo(new Block.Bullets("Considered options", List.of(
+                new BulletItem(1, RichText.plain("Options that were considered."),
+                        new Badge(new Badge.Kind.Custom("outcome"), "Unclassified"), "Option A"))));
     }
 
     @Test

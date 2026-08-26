@@ -722,6 +722,63 @@ class HtmlReportRendererTest {
         assertThat(html).doesNotContain("<span class=\"lang-group\"");
     }
 
+    /**
+     * A {@link BulletItem}'s optional {@code badge} and {@code caption} (issue #382) render
+     * before its text - the badge as the usual pill, the caption as a plain {@code <strong>} run,
+     * neither one bracket-formatted or glued into the text itself the way an ADR consequence/
+     * considered option used to render.
+     */
+    @Test
+    void rendersABulletItemsBadgeAndCaptionBeforeItsText() {
+        final ModelSection section = new ModelSection("Architecture Decisions", "architecture-decisions", "",
+                List.of(new ModelCard(
+                        "ADR-1", "Use kognio-rdf", FR_1, List.of(),
+                        List.of(new Block.Bullets(AdrCards.CONSIDERED_OPTIONS_LABEL, List.of(
+                                new BulletItem(1, RichText.plain("Options that were considered."),
+                                        new Badge(Badge.Kind.Known.OUTCOME, "Rejected"), "Option A")))))));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), StoreSnapshot.of(List.of()), "digest", views(section),
+                DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<li><span class=\"pill outcome v-rejected\">Rejected</span> "
+                + "<strong class=\"bullet-caption\">Option A</strong> Options that were considered.</li>");
+    }
+
+    /**
+     * The bullets language switch (issue #319/#358) also serves an ADR's own {@code
+     * arkarch:Consequence}/{@code arkarch:ConsideredOption} bullets (issue #382) - reached by
+     * another edge again ({@code arkarch:consequence}) and positioned under {@code
+     * arknet:position} (kogn-io/arknet#357's core-namespace property for new child resources,
+     * not the legacy {@code arkreq:position} the use-case/requirement bullets above carry).
+     */
+    @Test
+    void offersEveryLanguageVariantOfAConsequence() {
+        final String adr1 = ID + "adr-1";
+        final String consequence1 = ID + "consequence-1";
+        final String arkarch = "https://w3id.org/arknet/architecture#";
+        final String arknetCore = "https://w3id.org/arknet/core#";
+        final ModelSection section = new ModelSection("Architecture Decisions", "architecture-decisions", "",
+                List.of(new ModelCard(
+                        "ADR-1", "Use kognio-rdf", adr1, List.of(),
+                        List.of(new Block.Bullets(AdrCards.CONSEQUENCES_LABEL, List.of(
+                                new BulletItem(1, RichText.plain("Weniger Boilerplate."),
+                                        new Badge(Badge.Kind.Known.CONSEQUENCE, "Positive"), null)))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(adr1, arkarch + "consequence", consequence1),
+                literal(consequence1, arknetCore + "position", "1"),
+                literalLang(consequence1, arkarch + "consequenceStatement", "Weniger Boilerplate.", "de"),
+                literalLang(consequence1, arkarch + "consequenceStatement", "Less boilerplate.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">"
+                + "<span class=\"lang-variant\" data-lang=\"de\">Weniger Boilerplate.</span>"
+                + "<span class=\"lang-variant\" data-lang=\"en\" hidden>Less boilerplate.</span>"
+                + "</span>");
+    }
+
     /** The toolbar always offers the control; the script hides it when no field has variants. */
     @Test
     void addsALanguageSwitchToTheToolbar() {
