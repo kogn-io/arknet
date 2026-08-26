@@ -60,6 +60,29 @@ public sealed interface Span {
     }
 
     /**
+     * A business code written into the prose ({@code "see ADR-3"}) that names another carded
+     * resource - rendered as a link to that card, with the card's title as its tooltip.
+     *
+     * <p>Unlike {@link TermLink}, this says nothing about an edge: a sentence naming a decision
+     * is prose, not a relationship the model was supposed to record, and there is accordingly no
+     * gap counterpart. A code that names nothing in this project is left as plain text - see
+     * {@link CodeReferences}.</p>
+     *
+     * @param text  the matched text as written
+     * @param iri   the referenced card's subject IRI
+     * @param code  the referenced card's business code (e.g. {@code ADR-3})
+     * @param title the referenced card's title, shown as a tooltip
+     */
+    record CodeRef(String text, String iri, String code, String title) implements Span {
+        public CodeRef {
+            Objects.requireNonNull(text, "text");
+            Objects.requireNonNull(iri, "iri");
+            Objects.requireNonNull(code, "code");
+            Objects.requireNonNull(title, "title");
+        }
+    }
+
+    /**
      * A glossary term mentioned in the text with <em>no</em> edge from the owning model element
      * to it - a gap between what the prose says and what the model records.
      *

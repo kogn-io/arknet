@@ -797,6 +797,11 @@ public final class HtmlReportRenderer {
      * term with no such edge becomes a marked but unlinked run - it is not a reference, it is
      * the <em>absence</em> of one, and rendering it as a working link would tell the reader the
      * model holds a relationship that nobody ever recorded.</p>
+     *
+     * <p>A business code naming another card ({@link Span.CodeRef}, marked up across sections by
+     * {@link CodeReferences}) becomes a link to it, carrying that card's title as its tooltip -
+     * "see ADR-3" is navigable, and says what ADR-3 is without the reader leaving the
+     * sentence.</p>
      */
     private String renderText(final RichText text, final Set<String> carded, final Set<String> subjects) {
         final StringBuilder out = new StringBuilder();
@@ -813,6 +818,10 @@ public final class HtmlReportRenderer {
                                 .append(escape(link.text())).append("</span>");
                     }
                 }
+                case Span.CodeRef ref -> out.append("<a class=\"code-ref\" href=\"#")
+                        .append(resourceAnchor(ref.iri())).append('"')
+                        .append(titleAttribute(ref.code() + " - " + ref.title())).append('>')
+                        .append(escape(ref.text())).append("</a>");
                 case Span.TermGap gap -> out.append("<span class=\"term gap\"")
                         .append(titleAttribute(gap.code() + " - in the glossary, but this element does not"
                                 + " link to it"))
@@ -993,7 +1002,7 @@ public final class HtmlReportRenderer {
             *{box-sizing:border-box;}
             body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;
               line-height:1.55;}
-            .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;}
+            .wrap{max-width:min(1600px,95vw);margin:0 auto;padding:28px 24px 80px;}
             header.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;
               border-bottom:2px solid var(--border-strong);padding-bottom:16px;margin-bottom:8px;}
             header.top h1{font-size:19px;margin:0;font-weight:650;}
@@ -1064,10 +1073,10 @@ public final class HtmlReportRenderer {
             article.card .body{margin-top:12px;display:grid;gap:11px;}
             .block .blabel{display:block;text-transform:uppercase;letter-spacing:0.07em;font-size:10px;
               font-weight:700;color:var(--ink-faint);margin-bottom:3px;}
-            .block .prose{margin:0;font-size:14px;color:var(--ink-soft);max-width:74ch;
+            .block .prose{margin:0;font-size:14px;color:var(--ink-soft);line-height:1.65;
               white-space:pre-line;}
             .block.b-decision .prose{color:var(--ink);border-left:2px solid var(--accent);padding-left:13px;}
-            .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);max-width:74ch;}
+            .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);line-height:1.65;}
             .block .bullets li{margin:2px 0;}
             .block .bullets li .pill{margin-right:6px;}
             .bullet-caption{color:var(--ink);}
@@ -1107,6 +1116,9 @@ public final class HtmlReportRenderer {
             table.props td.obj a:hover{color:var(--accent);}
             table.props td.obj .lit.str{color:var(--ok);}
             table.props td.obj .dt{color:var(--ink-faint);font-size:11px;}
+            a.code-ref{font-family:var(--mono);font-size:0.92em;color:var(--accent);text-decoration:none;
+              border-bottom:1px dotted var(--accent);}
+            a.code-ref:hover{border-bottom-style:solid;}
             .pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:11px;font-weight:600;
               font-family:var(--sans);background:var(--surface-2);color:var(--ink-soft);}
             .pill.neutral{font-family:var(--mono);font-size:10.5px;color:var(--mono-key);}

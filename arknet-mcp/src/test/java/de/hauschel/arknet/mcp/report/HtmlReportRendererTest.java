@@ -362,6 +362,25 @@ class HtmlReportRendererTest {
         assertThat(html).contains("white-space:pre-line");
     }
 
+    /**
+     * A code reference renders as a link to the card it names, with that card's title in the
+     * tooltip - the reader learns what ADR-3 is without leaving the sentence.
+     */
+    @Test
+    void rendersACodeReferenceAsALinkCarryingTheTargetsTitle() {
+        final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
+                List.of(new ModelCard("ADR-1", "Scope frame", FR_1, List.of(),
+                        List.of(new Block.Prose("Decision", new RichText(List.of(
+                                new Span.Plain("cross-cutting is "),
+                                new Span.CodeRef("ADR-3", ID + "actor-1", "ADR-3", "Actor identity"))))))));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest",
+                views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<a class=\"code-ref\" href=\"#r-" + anchorOf(ID + "actor-1")
+                + "\" title=\"ADR-3 - Actor identity\">ADR-3</a>");
+    }
+
     /** Free text from the store is escaped, not injected into the document. */
     @Test
     void escapesModelText() {
