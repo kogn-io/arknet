@@ -87,7 +87,10 @@ public final class ModelViews {
      *                      {@code term_list}'s own port so the report's glossary section honours
      *                      the same project default {@code orphan_check}/{@code trace_matrix}
      *                      already do (issue #276), instead of always the process-wide default
-     * @return the sections that could be read and carry at least one card, plus the failures
+     * @return the sections that could be read and carry at least one card - with cross-section
+     *         code references in their prose marked up ({@link CodeReferences}, which needs every
+     *         section in hand and therefore runs here rather than in a card builder) - plus the
+     *         failures
      */
     public Views of(final ProjectId projectId, final String displayLocale) {
         final List<ModelSection> sections = new ArrayList<>();
@@ -102,7 +105,7 @@ public final class ModelViews {
         collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));
         collect(sections, failures, ActorCards.SECTION_TITLE, () -> actors.section(projectId));
         collect(sections, failures, TermCards.SECTION_TITLE, () -> TermCards.section(glossary));
-        return new Views(sections, failures);
+        return new Views(CodeReferences.markUp(sections), failures);
     }
 
     /**
