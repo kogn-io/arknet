@@ -77,6 +77,21 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  */
 public final class BoundedContextMcpTools {
 
+    /**
+     * The prose markup this tool's free-text fields accept, appended to every writing tool's
+     * description (issue #388).
+     *
+     * <p>It belongs on the tool, not only in the module docs: the writing agent reads the tool
+     * schema and nothing else, which is exactly why the {@code white-space:pre-line} mechanism of
+     * issue #385 was never used by anyone. The same sentence is repeated in each bounded
+     * context's MCP adapter rather than shared, because these adapters deliberately have no
+     * common module - a shared string is not reason enough to create one.</p>
+     */
+    private static final String PROSE_MARKUP = " Free-text fields accept a narrow Markdown subset:"
+            + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
+            + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
+            + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
+
     private final AddBoundedContext addBoundedContext;
     private final ListBoundedContexts listBoundedContexts;
     private final GetBoundedContext getBoundedContext;
@@ -144,7 +159,7 @@ public final class BoundedContextMcpTools {
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "bc_add", description = "Register a new DDD bounded context (an explicit "
-            + "semantic boundary within which a domain model is consistent).")
+            + "semantic boundary within which a domain model is consistent)." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The context's human-readable name, e.g. OrderManagement")

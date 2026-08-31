@@ -50,7 +50,7 @@ class CodeReferencesTest {
                 new Span.TermLink("Actor", ID + "term-1", "TERM-1"),
                 new Span.Plain(" is defined in ADR-3")));
         final ModelCard card = new ModelCard("ADR-1", "Scope frame", ID + "adr-1", List.of(),
-                List.of(new Block.Prose("Decision", mixed)));
+                List.of(Block.Prose.paragraph("Decision", mixed)));
 
         final List<ModelSection> marked = CodeReferences.markUp(List.of(
                 section("Architecture decisions", card),
@@ -80,7 +80,7 @@ class CodeReferencesTest {
     }
 
     private static List<Span> spansOf(final ModelSection section) {
-        return ((Block.Prose) section.cards().get(0).blocks().get(0)).text().spans();
+        return ProseParts.soleParagraph(section.cards().get(0).blocks().get(0)).spans();
     }
 
     private static ModelSection section(final String title, final ModelCard card) {

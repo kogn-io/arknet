@@ -15,13 +15,35 @@ import java.util.Objects;
  * the same division of labour {@link Block} rests on, and the reason the Vaadin review UI of
  * ADR-010 can become a second renderer without a second text analysis.</p>
  *
- * @param spans the runs in reading order; concatenating their {@link Span#text()} reproduces
- *              the original text exactly, so nothing can be lost or reordered by marking it up
+ * <p><strong>Why the source text is carried alongside its spans.</strong> Marking up glossary
+ * mentions and code references only ever <em>splits</em> a text, so the spans used to be the
+ * text: concatenating them reproduced the literal. Markdown markup (issue #388) breaks that -
+ * {@code **bold**} renders as four characters fewer than it was written. The renderer still needs
+ * the literal exactly as the store holds it, to find that same literal's other language variants
+ * among the subject's raw triples, so this record keeps it rather than letting the renderer
+ * reconstruct something that is no longer reconstructable.</p>
+ *
+ * @param text  the source text this rich text was built from, character for character as the
+ *              store holds it
+ * @param spans the runs in reading order; they reproduce {@code text} minus any markup syntax
+ *              that was consumed while recognising it
  */
-public record RichText(List<Span> spans) {
+public record RichText(String text, List<Span> spans) {
 
     public RichText {
+        Objects.requireNonNull(text, "text");
         spans = spans == null ? List.of() : List.copyOf(spans);
+    }
+
+    /**
+     * Spans that consumed nothing, so the source text is what they concatenate to - the shape
+     * every markup pass that only splits a text ({@link Glossary#markUp}, {@link CodeReferences})
+     * produces.
+     *
+     * @param spans the runs in reading order
+     */
+    public RichText(final List<Span> spans) {
+        this(concat(spans), spans);
     }
 
     /**
@@ -33,11 +55,18 @@ public record RichText(List<Span> spans) {
      */
     public static RichText plain(final String text) {
         Objects.requireNonNull(text, "text");
-        return new RichText(List.of(new Span.Plain(text)));
+        return new RichText(text, List.of(new Span.Plain(text)));
     }
 
-    /** @return the concatenated text of every span, i.e. the original unmarked text. */
-    public String text() {
+    /** @return whether this text has no content at all. */
+    public boolean isEmpty() {
+        return spans.isEmpty();
+    }
+
+    private static String concat(final List<Span> spans) {
+        if (spans == null) {
+            return "";
+        }
         final StringBuilder out = new StringBuilder();
         for (final Span span : spans) {
             out.append(span.text());

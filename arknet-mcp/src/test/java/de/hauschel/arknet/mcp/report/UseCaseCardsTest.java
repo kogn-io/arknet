@@ -112,7 +112,7 @@ class UseCaseCardsTest {
                 "Ziel.", "Der Kunde verwaltet seinen Warenkorb.", null, ACTOR, List.of(), null, null,
                 List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
 
-        assertThat(((Block.Prose) block(cards, "Scope")).text().spans())
+        assertThat(ProseParts.soleParagraph(block(cards, "Scope")).spans())
                 .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
     }
 
@@ -122,7 +122,7 @@ class UseCaseCardsTest {
                 "Ziel.", null, "Der Kunde oeffnet den Warenkorb.", ACTOR, List.of(), null, null,
                 List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
 
-        assertThat(((Block.Prose) block(cards, "Trigger")).text().spans())
+        assertThat(ProseParts.soleParagraph(block(cards, "Trigger")).spans())
                 .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
     }
 
@@ -132,7 +132,7 @@ class UseCaseCardsTest {
                 "Ziel.", null, null, ACTOR, List.of(), "Der Warenkorb des Kunden ist leer.", null,
                 List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
 
-        assertThat(((Block.Prose) block(cards, "Precondition")).text().spans())
+        assertThat(ProseParts.soleParagraph(block(cards, "Precondition")).spans())
                 .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
     }
 
@@ -142,7 +142,7 @@ class UseCaseCardsTest {
                 "Ziel.", null, null, ACTOR, List.of(), null, "Der Warenkorb des Kunden ist leer.",
                 List.of(new Step(1, "Ein Schritt", List.of())), List.of(), List.of(WARENKORB)));
 
-        assertThat(((Block.Prose) block(cards, "Postcondition")).text().spans())
+        assertThat(ProseParts.soleParagraph(block(cards, "Postcondition")).spans())
                 .contains(new Span.TermLink("Warenkorb", WARENKORB.value(), "TERM-2"));
     }
 
@@ -317,7 +317,7 @@ class UseCaseCardsTest {
     }
 
     private static RichText goal(final UseCaseCards cards) {
-        return ((Block.Prose) block(cards, "Goal")).text();
+        return ProseParts.soleParagraph(block(cards, "Goal"));
     }
 
     private static Block block(final UseCaseCards cards, final String label) {

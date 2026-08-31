@@ -118,8 +118,8 @@ public final class AdrCards {
         final List<Badge> badges = List.of(new Badge(Badge.Kind.Known.STATUS, Labels.humanise(adr.status().name())));
 
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(Block.Prose.plain("Context", adr.context()));
-        blocks.add(Block.Prose.plain("Decision", adr.decision()));
+        blocks.add(ProseMarkdown.prose("Context", adr.context(), RichText::plain));
+        blocks.add(ProseMarkdown.prose("Decision", adr.decision(), RichText::plain));
         addConsequences(blocks, adr.consequences());
         addConsideredOptions(blocks, adr.consideredOptions());
         if (adr.decisionDate() != null) {
@@ -185,7 +185,7 @@ public final class AdrCards {
             return;
         }
         final List<BulletItem> items = consequences.stream()
-                .map(c -> new BulletItem(c.position(), RichText.plain(c.statement()),
+                .map(c -> new BulletItem(c.position(), ProseMarkdown.inline(c.statement(), RichText::plain),
                         new Badge(Badge.Kind.Known.CONSEQUENCE, Labels.humanise(c.type().name())), null))
                 .toList();
         blocks.add(new Block.Bullets(CONSEQUENCES_LABEL, items));
@@ -211,7 +211,7 @@ public final class AdrCards {
             return;
         }
         final List<BulletItem> items = options.stream()
-                .map(o -> new BulletItem(o.position(), RichText.plain(o.rationale()),
+                .map(o -> new BulletItem(o.position(), ProseMarkdown.inline(o.rationale(), RichText::plain),
                         outcomeBadge(o.outcome()), o.name()))
                 .toList();
         blocks.add(new Block.Bullets(CONSIDERED_OPTIONS_LABEL, items));

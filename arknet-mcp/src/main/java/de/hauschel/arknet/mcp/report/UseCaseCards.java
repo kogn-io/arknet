@@ -138,7 +138,7 @@ public final class UseCaseCards {
         texts.addAll(uc.extensions());
 
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(new Block.Prose("Goal", glossary.markUp(uc.goal(), linked)));
+        blocks.add(ProseMarkdown.prose("Goal", uc.goal(), text -> glossary.markUp(text, linked)));
         addIfPresent(blocks, "Scope", uc.scope(), glossary, linked);
         addIfPresent(blocks, "Trigger", uc.trigger(), glossary, linked);
         blocks.add(new Block.Refs("Primary actor", List.of(glossary.ref(uc.primaryActor().value()))));
@@ -155,7 +155,8 @@ public final class UseCaseCards {
         if (!uc.extensions().isEmpty()) {
             final List<BulletItem> items = new ArrayList<>(uc.extensions().size());
             for (int index = 0; index < uc.extensions().size(); index++) {
-                items.add(new BulletItem(index + 1, glossary.markUp(uc.extensions().get(index), linked)));
+                items.add(new BulletItem(index + 1,
+                        ProseMarkdown.inline(uc.extensions().get(index), text -> glossary.markUp(text, linked))));
             }
             blocks.add(new Block.Bullets(EXTENSIONS_LABEL, items));
         }
@@ -166,7 +167,7 @@ public final class UseCaseCards {
     private static FlowStep flowStep(
             final Step step, final Map<ResourceId, ResolvedRequirement> reqs,
             final Glossary glossary, final Set<ResourceId> linked) {
-        return new FlowStep(step.position(), glossary.markUp(step.text(), linked),
+        return new FlowStep(step.position(), ProseMarkdown.inline(step.text(), text -> glossary.markUp(text, linked)),
                 step.realises().stream().map(ref -> requirementRef(ref, reqs)).toList());
     }
 
@@ -179,7 +180,7 @@ public final class UseCaseCards {
             final List<Block> blocks, final String label, final String value,
             final Glossary glossary, final Set<ResourceId> linked) {
         if (value != null && !value.isBlank()) {
-            blocks.add(new Block.Prose(label, glossary.markUp(value, linked)));
+            blocks.add(ProseMarkdown.prose(label, value, text -> glossary.markUp(text, linked)));
         }
     }
 

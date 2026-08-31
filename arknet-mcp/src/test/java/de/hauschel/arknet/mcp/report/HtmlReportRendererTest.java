@@ -278,7 +278,7 @@ class HtmlReportRendererTest {
     void rendersALinkedMentionAsALinkAndAnUnlinkedOneAsAGap() {
         final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
                 new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of(
-                        new Block.Prose("Description", new RichText(List.of(
+                        Block.Prose.paragraph("Description", new RichText(List.of(
                                 new Span.Plain("Der "),
                                 new Span.TermLink("Kunde", ID + "actor-1", "TERM-1"),
                                 new Span.Plain(" legt eine "),
@@ -346,20 +346,61 @@ class HtmlReportRendererTest {
     }
 
     /**
-     * Line breaks an author put into a store literal survive into the report: the enumeration
-     * they separated from its lead-in must not silently collapse back into one wall of text.
+     * The structure an author put into a store literal survives into the report as structure:
+     * a blank line becomes a new paragraph, a {@code - } line becomes a list item (issue #388).
+     *
+     * <p>This replaces the {@code white-space:pre-line} of issue #385, which kept the author's
+     * line breaks by printing them rather than by reading them - it could not tell an
+     * enumeration from a hard-wrapped sentence, so it preserved both and structured neither.</p>
      */
     @Test
-    void keepsTheLineBreaksAnAuthorPutIntoProse() {
+    void rendersTheStructureAnAuthorPutIntoProse() {
         final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
                 List.of(new ModelCard("ADR-1", "A decision", FR_1, List.of(),
-                        List.of(Block.Prose.plain("Decision", "lead-in:\n\n(1) first\n(2) second")))));
+                        List.of(ProseMarkdown.prose("Decision", "lead-in:\n\n- first\n- second",
+                                RichText::plain)))));
 
         final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest",
                 views(section), DisplayLocale.DEFAULT);
 
-        assertThat(html).contains("lead-in:\n\n(1) first\n(2) second");
-        assertThat(html).contains("white-space:pre-line");
+        assertThat(html).contains("<p class=\"prose\">lead-in:</p>")
+                .contains("<ul class=\"prose-bullets\"><li>first</li><li>second</li></ul>");
+    }
+
+    /**
+     * A hard-wrapped sentence is one sentence: a single line break inside a paragraph collapses
+     * to a space, as it does in Markdown, instead of being printed as a break the author never
+     * meant (issue #388).
+     */
+    @Test
+    void collapsesASingleLineBreakInsideAParagraph() {
+        final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
+                List.of(new ModelCard("ADR-1", "A decision", FR_1, List.of(),
+                        List.of(ProseMarkdown.prose("Decision", "one sentence\nwrapped by an editor",
+                                RichText::plain)))));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest",
+                views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<p class=\"prose\">one sentence wrapped by an editor</p>");
+    }
+
+    /**
+     * Emphasis and code from the accepted subset become elements; everything else in the literal
+     * still goes through escaping, so a text containing markup-looking characters stays text.
+     */
+    @Test
+    void rendersEmphasisAndCodeFromTheAcceptedSubset() {
+        final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
+                List.of(new ModelCard("ADR-1", "A decision", FR_1, List.of(),
+                        List.of(ProseMarkdown.prose("Decision",
+                                "the **head** is `arkprov:head`, not <b>bold</b>", RichText::plain)))));
+
+        final String html = renderer.render(PROJECT, Optional.empty(), Optional.empty(), snapshot(), "digest",
+                views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("the <strong>head</strong> is"
+                + " <code class=\"md-code\">arkprov:head</code>, not &lt;b&gt;bold&lt;/b&gt;");
     }
 
     /**
@@ -370,7 +411,7 @@ class HtmlReportRendererTest {
     void rendersACodeReferenceAsALinkCarryingTheTargetsTitle() {
         final ModelSection section = new ModelSection("Architecture decisions", "architecture-decisions", "",
                 List.of(new ModelCard("ADR-1", "Scope frame", FR_1, List.of(),
-                        List.of(new Block.Prose("Decision", new RichText(List.of(
+                        List.of(Block.Prose.paragraph("Decision", new RichText(List.of(
                                 new Span.Plain("cross-cutting is "),
                                 new Span.CodeRef("ADR-3", ID + "actor-1", "ADR-3", "Actor identity"))))))));
 
@@ -460,7 +501,11 @@ class HtmlReportRendererTest {
         assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"en\" hidden>Order</span>");
     }
 
-    /** Same mechanism for a {@link Block.Prose} field - here a requirement's description. */
+    /**
+     * Same mechanism for a {@link Block.Prose} field - here a requirement's description. A prose
+     * field renders as block elements of its own, so its switch wrapper is a {@code div}: a
+     * {@code span} around a {@code p} would be markup no browser is obliged to keep together.
+     */
     @Test
     void offersEveryLanguageVariantOfAProseBlock() {
         final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
@@ -473,9 +518,32 @@ class HtmlReportRendererTest {
         final String html = renderer.render(
                 PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
 
-        assertThat(html).contains("<span class=\"lang-group\" data-default-lang=\"de\">");
-        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"de\">Der Kunde bestellt.</span>");
-        assertThat(html).contains("<span class=\"lang-variant\" data-lang=\"en\" hidden>The customer orders.</span>");
+        assertThat(html).contains("<div class=\"lang-group\" data-default-lang=\"de\">");
+        assertThat(html).contains("<div class=\"lang-variant\" data-lang=\"de\"><div class=\"prose-body\">"
+                + "<p class=\"prose\">Der Kunde bestellt.</p></div></div>");
+        assertThat(html).contains("<div class=\"lang-variant\" data-lang=\"en\" hidden><div class=\"prose-body\">"
+                + "<p class=\"prose\">The customer orders.</p></div></div>");
+    }
+
+    /**
+     * A language variant is structured by the same subset the active one is: the markup an author
+     * wrote is language-independent, and showing raw asterisks after a switch would read as the
+     * switch having broken the text (issue #388).
+     */
+    @Test
+    void structuresTheInactiveLanguageVariantToo() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(),
+                        List.of(ProseMarkdown.prose("Description", "Der **Kunde** bestellt.", RichText::plain)))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                literalLang(FR_1, "http://purl.org/dc/terms/description", "Der **Kunde** bestellt.", "de"),
+                literalLang(FR_1, "http://purl.org/dc/terms/description", "The **customer** orders.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<p class=\"prose\">Der <strong>Kunde</strong> bestellt.</p>")
+                .contains("<p class=\"prose\">The <strong>customer</strong> orders.</p>");
     }
 
     /** A field with only one language on offer stays exactly as it rendered before this issue. */

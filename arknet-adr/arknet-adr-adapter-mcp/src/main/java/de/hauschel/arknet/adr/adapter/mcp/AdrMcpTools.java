@@ -90,6 +90,21 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  */
 public final class AdrMcpTools {
 
+    /**
+     * The prose markup this tool's free-text fields accept, appended to every writing tool's
+     * description (issue #388).
+     *
+     * <p>It belongs on the tool, not only in the module docs: the writing agent reads the tool
+     * schema and nothing else, which is exactly why the {@code white-space:pre-line} mechanism of
+     * issue #385 was never used by anyone. The same sentence is repeated in each bounded
+     * context's MCP adapter rather than shared, because these adapters deliberately have no
+     * common module - a shared string is not reason enough to create one.</p>
+     */
+    private static final String PROSE_MARKUP = " Free-text fields accept a narrow Markdown subset:"
+            + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
+            + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
+            + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
+
     private static final String PROJECT_ANCHOR_DESCRIPTION =
             "Optional anchor identifying the project this call targets, used INSTEAD of the anchor "
                     + "your transport sends in the X-Arknet-Project-Anchor header. Only needed for a "
@@ -292,7 +307,7 @@ public final class AdrMcpTools {
             + "the bounded contexts it affects and the peer decisions it is related to; all fields "
             + "stay correctable with adr_update. The assigned code runs ADR-1, ADR-2, ... per "
             + "project and is unrelated to the numbering of any markdown decision records the "
-            + "repository may also keep.")
+            + "repository may also keep." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The decision's title, e.g. 'Use an embedded triple store'")
@@ -409,7 +424,7 @@ public final class AdrMcpTools {
             + "reference lists stay correctable in EVERY status: passing a list replaces that relation "
             + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
             + "untouched. Status and the supersededBy relation are not changed here - use "
-            + "adr_set_status and adr_supersede.")
+            + "adr_set_status and adr_supersede." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,

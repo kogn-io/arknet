@@ -149,7 +149,13 @@ mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
 `language`-Argument beim Schreiben gesetzt und beim Lesen ueber die
 `DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-Felder (z.B. die
 ADR-Textfelder, BoundedContext-`name`/`description`) bleiben einfache,
-ungetaggte Literale ohne diesen Mechanismus. Die ADRs unter `docs/adr/`
+ungetaggte Literale ohne diesen Mechanismus. Quer dazu akzeptiert **jedes**
+Prosa-Feld ein enges Markdown-Subset (`**fett**`, `*kursiv*`, `` `code` ``,
+`- `-Listen, Absaetze an Leerzeilen); Links, Ueberschriften, Tabellen und HTML
+bleiben bewusst Text, weil ein handgeschriebener Link den modellvalidierten
+Bezug (`usesTerm` & Co.) und damit die Luecken-Erkennung umginge. Das
+Store-Literal bleibt roh -- geparst wird beim Lesen (`ProseMarkdown` in
+`arknet-mcp`), nicht beim Schreiben. Die ADRs unter `docs/adr/`
 sind **konventionsgemaess Deutsch** (Entscheidungsprotokolle, keine geshippte
 Plugin-Flaeche) -- kein Uebersetzungs-Rueckstand.
 

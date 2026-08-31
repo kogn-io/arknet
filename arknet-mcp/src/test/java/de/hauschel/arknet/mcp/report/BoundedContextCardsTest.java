@@ -91,7 +91,7 @@ class BoundedContextCardsTest {
     }
 
     private static RichText vision(final BoundedContextCards cards) {
-        return ((Block.Prose) block(cards, "Domain vision")).text();
+        return ProseParts.soleParagraph(block(cards, "Domain vision"));
     }
 
     private static Block block(final BoundedContextCards cards, final String label) {

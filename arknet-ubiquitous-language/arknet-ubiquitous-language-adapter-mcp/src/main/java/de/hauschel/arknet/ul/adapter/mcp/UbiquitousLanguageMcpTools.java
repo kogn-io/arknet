@@ -58,6 +58,21 @@ import de.hauschel.arknet.ul.domain.TermCode;
  */
 public final class UbiquitousLanguageMcpTools {
 
+    /**
+     * The prose markup this tool's free-text fields accept, appended to every writing tool's
+     * description (issue #388).
+     *
+     * <p>It belongs on the tool, not only in the module docs: the writing agent reads the tool
+     * schema and nothing else, which is exactly why the {@code white-space:pre-line} mechanism of
+     * issue #385 was never used by anyone. The same sentence is repeated in each bounded
+     * context's MCP adapter rather than shared, because these adapters deliberately have no
+     * common module - a shared string is not reason enough to create one.</p>
+     */
+    private static final String PROSE_MARKUP = " Free-text fields accept a narrow Markdown subset:"
+            + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
+            + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
+            + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
+
     private static final String PROJECT_ANCHOR_DESCRIPTION = "Optional anchor identifying the project this call "
             + "targets, used INSTEAD of the anchor your transport sends in the "
             + "X-Arknet-Project-Anchor header. Only needed for a client that cannot set that "
@@ -161,7 +176,7 @@ public final class UbiquitousLanguageMcpTools {
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "term_add",
-            description = "Register a new ubiquitous-language term (minted as a SKOS concept in the glossary).")
+            description = "Register a new ubiquitous-language term (minted as a SKOS concept in the glossary)." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The term itself (its preferred label), e.g. 'Gutschrift'")
@@ -230,7 +245,7 @@ public final class UbiquitousLanguageMcpTools {
     @McpTool(name = "term_update",
             description = "Correct an already-created term's preferred label and/or definition, "
                     + "keeping its identity and every existing link into it (e.g. arkreq:usesTerm) unchanged. "
-                    + "Every argument is optional - an omitted one leaves that field unchanged.")
+                    + "Every argument is optional - an omitted one leaves that field unchanged." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,

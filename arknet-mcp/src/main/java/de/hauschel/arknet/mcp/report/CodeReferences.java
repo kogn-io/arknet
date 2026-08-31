@@ -74,7 +74,8 @@ final class CodeReferences {
 
     private static Block markUp(final Block block, final LabelMentions<Target> mentions, final String self) {
         return switch (block) {
-            case Block.Prose prose -> new Block.Prose(prose.label(), markUp(prose.text(), mentions, self));
+            case Block.Prose prose -> new Block.Prose(prose.label(), prose.source(),
+                    prose.parts().stream().map(part -> markUp(part, mentions, self)).toList());
             case Block.Bullets bullets -> new Block.Bullets(bullets.label(), bullets.items().stream()
                     .map(item -> new BulletItem(item.position(), markUp(item.text(), mentions, self),
                             item.badge(), item.caption()))
@@ -86,15 +87,34 @@ final class CodeReferences {
         };
     }
 
+    private static ProsePart markUp(final ProsePart part, final LabelMentions<Target> mentions, final String self) {
+        return switch (part) {
+            case ProsePart.Paragraph paragraph ->
+                new ProsePart.Paragraph(markUp(paragraph.text(), mentions, self));
+            case ProsePart.Bullets bullets -> new ProsePart.Bullets(
+                    bullets.items().stream().map(item -> markUp(item, mentions, self)).toList());
+        };
+    }
+
     /**
      * Marks up the plain runs of one text, leaving every span a card builder already recognised
      * as it is - a glossary mention stays a glossary mention even if its label happens to read
      * like a code.
+     *
+     * <p>An emphasised run is descended into, so {@code **see ADR-3**} still links; a
+     * {@link Span.Code} run is not, because a code in backticks is a symbol the author quoted
+     * verbatim, not a sentence naming another card.</p>
      */
     private static RichText markUp(final RichText text, final LabelMentions<Target> mentions, final String self) {
         final List<Span> spans = new ArrayList<>();
         boolean changed = false;
         for (final Span span : text.spans()) {
+            if (span instanceof Span.Emphasis emphasis) {
+                final RichText content = markUp(emphasis.content(), mentions, self);
+                changed |= content != emphasis.content();
+                spans.add(new Span.Emphasis(emphasis.style(), content));
+                continue;
+            }
             if (!(span instanceof Span.Plain plain)) {
                 spans.add(span);
                 continue;
@@ -103,7 +123,7 @@ final class CodeReferences {
             changed |= split.size() > 1;
             spans.addAll(split);
         }
-        return changed ? new RichText(spans) : text;
+        return changed ? new RichText(text.text(), spans) : text;
     }
 
     private static List<Span> split(final String text, final LabelMentions<Target> mentions, final String self) {

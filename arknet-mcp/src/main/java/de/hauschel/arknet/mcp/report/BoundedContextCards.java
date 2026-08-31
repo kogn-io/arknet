@@ -67,7 +67,8 @@ public final class BoundedContextCards {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(new Block.Prose("Domain vision", glossary.markUp(context.domainVision(), linked)));
+        blocks.add(ProseMarkdown.prose("Domain vision", context.domainVision(),
+                text -> glossary.markUp(text, linked)));
         if (context.ownedBy() != null) {
             blocks.add(Block.Prose.plain("Owned by", context.ownedBy()));
         }

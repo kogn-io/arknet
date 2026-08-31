@@ -409,13 +409,13 @@ public final class HtmlReportRenderer {
      * per-section special case: the renderer keeps emitting blocks uniformly, and which of them a
      * theme chooses to distinguish stays a question of CSS.</p>
      *
-     * <p><strong>Prose keeps the author's line breaks</strong> ({@code white-space:pre-line} in
-     * the stylesheet, rather than splitting into several {@code <p>} here). A store literal is
-     * free text: whoever wrote it may well have separated an enumeration from its lead-in, and
-     * collapsing that into one wall of text discards structure the author put there deliberately.
-     * Doing it in CSS rather than by splitting the string keeps the language-switch wrapper
-     * ({@link #langSwitchable}) around a single element - one switchable literal stays one node,
-     * whatever it looks like when laid out.</p>
+     * <p><strong>Prose renders the structure its author wrote</strong> - paragraphs and bullet
+     * lists, read from the literal by {@link ProseMarkdown} (issue #388) rather than printed as
+     * raw line breaks by {@code white-space:pre-line}, which is what issue #385 did before: that
+     * could not tell an enumeration from a hard-wrapped sentence, so it preserved both and
+     * structured neither. The parts are wrapped in one {@code .prose-body} element, which is what
+     * keeps the language-switch wrapper ({@link #langSwitchable}) around a single node - one
+     * switchable literal stays one node, whatever structure it turns out to have.</p>
      */
     private void appendBlock(
             final StringBuilder html, final Block block, final Set<String> carded, final Set<String> subjects,
@@ -425,11 +425,12 @@ public final class HtmlReportRenderer {
                 .append(escape(block.label())).append("</span>\n");
         switch (block) {
             case Block.Prose prose -> {
-                final String rendered = renderText(prose.text(), carded, subjects);
-                final Optional<LangVariants> variants =
-                        languageVariants(raw, prose.text().text(), displayLocale);
-                html.append("                <p class=\"prose\">")
-                        .append(langSwitchable(rendered, variants)).append("</p>\n");
+                final Optional<LangVariants> variants = languageVariants(raw, prose.source(), displayLocale);
+                html.append("                ")
+                        .append(langSwitchable(proseBody(prose.parts(), carded, subjects), variants,
+                                literal -> proseBody(ProseMarkdown.parts(literal, RichText::plain), carded, subjects),
+                                "div"))
+                        .append('\n');
             }
             case Block.Bullets bullets -> {
                 html.append("                <ul class=\"bullets\">\n");
@@ -439,6 +440,8 @@ public final class HtmlReportRenderer {
                     final String rendered = renderText(item.text(), carded, subjects);
                     final Optional<LangVariants> variants =
                             itemVariants(bulletSources.get(item.position()), item.text().text(), displayLocale);
+                    final String itemHtml = langSwitchable(rendered, variants,
+                            literal -> renderInline(literal, carded, subjects), "span");
                     html.append("                  <li>");
                     if (item.badge() != null) {
                         html.append(badgePill(item.badge())).append(' ');
@@ -447,7 +450,7 @@ public final class HtmlReportRenderer {
                         html.append("<strong class=\"bullet-caption\">").append(escape(item.caption()))
                                 .append("</strong> ");
                     }
-                    html.append(langSwitchable(rendered, variants)).append("</li>\n");
+                    html.append(itemHtml).append("</li>\n");
                 }
                 html.append("                </ul>\n");
             }
@@ -570,29 +573,47 @@ public final class HtmlReportRenderer {
 
     /**
      * Wraps already-rendered HTML in the language-switch markup the report's script toggles,
+     * or returns it unchanged when there is nothing to switch between. Escapes the inactive
+     * literals - the shape for a field that carries no markup at all, such as a card title.
+     */
+    private static String langSwitchable(final String activeHtml, final Optional<LangVariants> variants) {
+        return langSwitchable(activeHtml, variants, HtmlReportRenderer::escape, "span");
+    }
+
+    /**
+     * Wraps already-rendered HTML in the language-switch markup the report's script toggles,
      * or returns it unchanged when there is nothing to switch between.
      *
      * <p>Only the active language carries {@code activeHtml} (which may itself hold glossary
-     * markup); every other language shows its own literal escaped as plain text - a description's
-     * German variant is not re-run through {@link Glossary#markUp}, since that would need that
-     * language's own term labels, a related but separate concern this issue does not cover.</p>
+     * markup); every other language is rendered by {@code inactive} from its own literal. A
+     * variant is <em>not</em> re-run through {@link Glossary#markUp}, since that would need that
+     * language's own term labels, a related but separate concern; it is run through
+     * {@link ProseMarkdown} though, because the accepted markup subset is the same in every
+     * language, and showing raw asterisks after a language switch would look like the switch
+     * broke the text (issue #388).</p>
+     *
+     * @param tag the wrapper element - {@code span} inside a sentence, {@code div} around a
+     *            field that renders as block elements of its own
      */
-    private static String langSwitchable(final String activeHtml, final Optional<LangVariants> variants) {
+    private static String langSwitchable(final String activeHtml, final Optional<LangVariants> variants,
+            final Function<String, String> inactive, final String tag) {
         if (variants.isEmpty()) {
             return activeHtml;
         }
         final LangVariants langVariants = variants.get();
-        final StringBuilder out = new StringBuilder("<span class=\"lang-group\" data-default-lang=\"")
-                .append(escape(langVariants.activeLang())).append("\">");
+        final StringBuilder out = new StringBuilder("<").append(tag).append(" class=\"lang-group\"")
+                .append(" data-default-lang=\"").append(escape(langVariants.activeLang())).append("\">");
         for (final Map.Entry<String, String> entry : langVariants.byLang().entrySet()) {
             final boolean active = entry.getKey().equals(langVariants.activeLang());
-            out.append("<span class=\"lang-variant\" data-lang=\"").append(escape(entry.getKey())).append('"');
+            out.append('<').append(tag).append(" class=\"lang-variant\" data-lang=\"")
+                    .append(escape(entry.getKey())).append('"');
             if (!active) {
                 out.append(" hidden");
             }
-            out.append('>').append(active ? activeHtml : escape(entry.getValue())).append("</span>");
+            out.append('>').append(active ? activeHtml : inactive.apply(entry.getValue()))
+                    .append("</").append(tag).append('>');
         }
-        return out.append("</span>").toString();
+        return out.append("</").append(tag).append('>').toString();
     }
 
     /**
@@ -752,7 +773,9 @@ public final class HtmlReportRenderer {
                     itemVariants(sources.flow().get(step.position()), step.text().text(), displayLocale);
             html.append("                  <li><span class=\"num\">").append(step.position())
                     .append("</span><div class=\"step\"><p>")
-                    .append(langSwitchable(rendered, variants)).append("</p>\n");
+                    .append(langSwitchable(rendered, variants,
+                            literal -> renderInline(literal, carded, subjects), "span"))
+                    .append("</p>\n");
             if (!step.realises().isEmpty()) {
                 html.append("                  <span class=\"realises\">realises</span>\n");
                 appendChips(html, step.realises(), carded, subjects);
@@ -791,6 +814,37 @@ public final class HtmlReportRenderer {
     }
 
     /**
+     * Renders one prose field's parts: paragraphs as {@code <p>}, an author-written bullet list as
+     * a {@code <ul>} of its own (issue #388).
+     *
+     * <p>Wrapped in a single element so the field stays one node whatever its structure - that is
+     * what lets the language switch wrap a whole field, and what lets the stylesheet lift one
+     * block (a decision's accent rule) without striping every paragraph in it.</p>
+     */
+    private String proseBody(final List<ProsePart> parts, final Set<String> carded, final Set<String> subjects) {
+        final StringBuilder out = new StringBuilder("<div class=\"prose-body\">");
+        for (final ProsePart part : parts) {
+            switch (part) {
+                case ProsePart.Paragraph paragraph -> out.append("<p class=\"prose\">")
+                        .append(renderText(paragraph.text(), carded, subjects)).append("</p>");
+                case ProsePart.Bullets bullets -> {
+                    out.append("<ul class=\"prose-bullets\">");
+                    for (final RichText item : bullets.items()) {
+                        out.append("<li>").append(renderText(item, carded, subjects)).append("</li>");
+                    }
+                    out.append("</ul>");
+                }
+            }
+        }
+        return out.append("</div>").toString();
+    }
+
+    /** Renders one literal with inline markup only and no glossary analysis - see {@link #langSwitchable}. */
+    private String renderInline(final String literal, final Set<String> carded, final Set<String> subjects) {
+        return renderText(ProseMarkdown.inline(literal, RichText::plain), carded, subjects);
+    }
+
+    /**
      * Renders a text's spans: plain runs escaped as they are, glossary mentions marked up.
      *
      * <p>A mention the model backs with an edge becomes a link into the glossary. A mention of a
@@ -802,6 +856,11 @@ public final class HtmlReportRenderer {
      * {@link CodeReferences}) becomes a link to it, carrying that card's title as its tooltip -
      * "see ADR-3" is navigable, and says what ADR-3 is without the reader leaving the
      * sentence.</p>
+     *
+     * <p>Author markup ({@link Span.Emphasis}, {@link Span.Code}) becomes the corresponding
+     * element. Only these two span kinds ever emit markup the author asked for, and both come
+     * from {@link ProseMarkdown}'s closed subset - every other character still goes through
+     * {@link #escape}, so a literal that happens to contain {@code <script>} stays text.</p>
      */
     private String renderText(final RichText text, final Set<String> carded, final Set<String> subjects) {
         final StringBuilder out = new StringBuilder();
@@ -826,6 +885,14 @@ public final class HtmlReportRenderer {
                         .append(titleAttribute(gap.code() + " - in the glossary, but this element does not"
                                 + " link to it"))
                         .append('>').append(escape(gap.text())).append("</span>");
+                case Span.Emphasis emphasis -> {
+                    final String tag = emphasis.style() == Span.Style.STRONG ? "strong" : "em";
+                    out.append('<').append(tag).append('>')
+                            .append(renderText(emphasis.content(), carded, subjects))
+                            .append("</").append(tag).append('>');
+                }
+                case Span.Code code -> out.append("<code class=\"md-code\">")
+                        .append(escape(code.text())).append("</code>");
             }
         }
         return out.toString();
@@ -1073,9 +1140,15 @@ public final class HtmlReportRenderer {
             article.card .body{margin-top:12px;display:grid;gap:11px;}
             .block .blabel{display:block;text-transform:uppercase;letter-spacing:0.07em;font-size:10px;
               font-weight:700;color:var(--ink-faint);margin-bottom:3px;}
-            .block .prose{margin:0;font-size:14px;color:var(--ink-soft);line-height:1.65;
-              white-space:pre-line;}
-            .block.b-decision .prose{color:var(--ink);border-left:2px solid var(--accent);padding-left:13px;}
+            .block .prose{margin:0;font-size:14px;color:var(--ink-soft);line-height:1.65;}
+            .block .prose+.prose,.block .prose-bullets+.prose{margin-top:9px;}
+            .block .prose-bullets{margin:7px 0 0;padding-left:18px;font-size:14px;color:var(--ink-soft);
+              line-height:1.65;}
+            .block .prose-bullets li{margin:2px 0;}
+            .block.b-decision .prose-body{color:var(--ink);border-left:2px solid var(--accent);padding-left:13px;}
+            .block .prose-body strong,.block .bullets strong,.flow strong{color:var(--ink);}
+            .md-code{font-family:var(--mono);font-size:0.92em;background:var(--surface-2);
+              border:1px solid var(--border);border-radius:4px;padding:0 4px;color:var(--mono-key);}
             .block .bullets{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft);line-height:1.65;}
             .block .bullets li{margin:2px 0;}
             .block .bullets li .pill{margin-right:6px;}

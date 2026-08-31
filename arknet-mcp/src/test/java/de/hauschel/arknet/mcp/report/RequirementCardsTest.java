@@ -114,7 +114,7 @@ class RequirementCardsTest {
 
         final Block.Prose rationale = (Block.Prose) block(cards, "Rationale");
 
-        assertThat(rationale.text().spans()).contains(new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
+        assertThat(ProseParts.soleParagraph(rationale).spans()).contains(new Span.TermLink("Kunde", KUNDE.value(), "TERM-1"));
     }
 
     /**
@@ -164,8 +164,35 @@ class RequirementCardsTest {
         assertThat(labels(cards)).doesNotContain("Uses terms", "Uses terms (not named in the text)");
     }
 
+    /**
+     * The two markup passes compose: the author's emphasis is structure, the glossary link inside
+     * it is what the model knows - and neither swallows the other (issue #388).
+     */
+    @Test
+    void keepsAGlossaryLinkInsideAnEmphasisedRun() {
+        final RequirementCards cards = cardsFor(requirement(
+                "Der **Kunde** legt an.", List.of(KUNDE), List.of()));
+
+        assertThat(description(cards).spans()).contains(new Span.Emphasis(Span.Style.STRONG,
+                new RichText("Kunde", List.of(new Span.TermLink("Kunde", KUNDE.value(), "TERM-1")))));
+    }
+
+    /**
+     * A description that enumerates gets a real list, instead of the numbering-in-brackets
+     * workaround structure used to fall back on (issue #388).
+     */
+    @Test
+    void structuresABulletListInsideADescription() {
+        final RequirementCards cards = cardsFor(requirement(
+                "Es gilt:\n\n- erstens\n- zweitens", List.of(), List.of()));
+
+        assertThat(ProseParts.partsOf(block(cards, "Description"))).containsExactly(
+                new ProsePart.Paragraph(RichText.plain("Es gilt:")),
+                new ProsePart.Bullets(List.of(RichText.plain("erstens"), RichText.plain("zweitens"))));
+    }
+
     private static RichText description(final RequirementCards cards) {
-        return ((Block.Prose) block(cards, "Description")).text();
+        return ProseParts.soleParagraph(block(cards, "Description"));
     }
 
     private static Block block(final RequirementCards cards, final String label) {

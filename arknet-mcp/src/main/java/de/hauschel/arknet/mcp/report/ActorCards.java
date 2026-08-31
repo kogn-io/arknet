@@ -60,7 +60,7 @@ public final class ActorCards {
         final List<Badge> badges = List.of(new Badge(Badge.Kind.Known.ACTOR, Labels.humanise(actor.type().name())));
         final List<Block> blocks = new ArrayList<>();
         if (actor.description() != null) {
-            blocks.add(Block.Prose.plain("Description", actor.description()));
+            blocks.add(ProseMarkdown.prose("Description", actor.description(), RichText::plain));
         }
         return new ModelCard(actor.code().value(), actor.name(), actor.id().value().value(), badges, blocks);
     }
