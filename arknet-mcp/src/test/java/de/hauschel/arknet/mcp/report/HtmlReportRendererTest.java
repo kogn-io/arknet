@@ -226,6 +226,48 @@ class HtmlReportRendererTest {
         assertThat(html).contains("arkreq:mainStep");
     }
 
+    /**
+     * The mirror image of {@link #hangsTheRawTriplesOffEveryCard()}: a resource named as the
+     * object of another resource's edge shows who points at it, not just what it says about
+     * itself - a reader trying to understand why a term is defined the way it is should not have
+     * to run {@code impact_analysis} separately to find out.
+     */
+    @Test
+    void hangsReferencedByOffACardWithIncomingEdges() {
+        final String term = ID + "term-1";
+        final ModelSection section = new ModelSection("Glossary", "glossary", "", List.of(
+                new ModelCard("TERM-1", "Kunde", term, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(term, RDF_TYPE, "http://www.w3.org/2004/02/skos/core#Concept"),
+                literal(term, "http://purl.org/dc/terms/identifier", "TERM-1"),
+                iri(FR_1, RDF_TYPE, ARKREQ + "Requirement"),
+                literal(FR_1, "http://purl.org/dc/terms/identifier", "FR-1"),
+                iri(FR_1, ARKREQ + "usesTerm", term)));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("<details class=\"referenced-by\">");
+        assertThat(html).contains("Referenced by 1");
+        assertThat(html).contains("arkreq:usesTerm");
+        assertThat(html).contains("<a href=\"#r-" + anchorOf(FR_1) + "\"").contains(">FR-1<");
+    }
+
+    /** No incoming edge, no block - the section stays out of a card nothing references. */
+    @Test
+    void omitsReferencedByWhenNothingPointsAtTheResource() {
+        final ModelSection section = new ModelSection("Requirements", "requirements", "", List.of(
+                new ModelCard("FR-1", "Bestellen", FR_1, List.of(), List.of())));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(FR_1, RDF_TYPE, ARKREQ + "Requirement"),
+                literal(FR_1, "http://purl.org/dc/terms/identifier", "FR-1")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).doesNotContain("<details class=\"referenced-by\">");
+    }
+
     /** A section that could not be read is stated, not silently dropped - a missing section reads as "empty store". */
     @Test
     void showsSectionFailuresInsteadOfPretendingTheStoreIsEmpty() {
