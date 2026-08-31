@@ -70,10 +70,27 @@ public final class StoreReportController {
         try {
             return ResponseEntity.ok(reportTools.htmlReport(projectAnchor));
         } catch (final UnresolvedProjectAnchorException unresolved) {
-            return textResponse(HttpStatus.BAD_REQUEST,
-                    "GET /report needs a registered project - pass ?projectAnchor=<anchor>. "
-                            + unresolved.getMessage());
+            return textResponse(HttpStatus.BAD_REQUEST, browserRemedyFor(unresolved));
         }
+    }
+
+    /**
+     * A browser-actionable remedy for {@link UnresolvedProjectAnchorException}, deliberately not
+     * {@code unresolved.getMessage()}: that message is composed by {@code
+     * RegisteredAnchorProjectResolver} for MCP tool callers and names {@code project_list}/
+     * {@code project_add}/{@code project_adopt} - tools a browser opening this URL cannot invoke
+     * without an agent, exactly the audience this endpoint exists for (issue #391 review
+     * follow-up). {@link UnresolvedProjectAnchorException#anchor()} tells the two cases apart the
+     * same way the kernel exception's javadoc does: {@code null} for a call that carried no anchor
+     * at all, a value for one nobody registered.
+     */
+    private static String browserRemedyFor(final UnresolvedProjectAnchorException unresolved) {
+        return unresolved.anchor() == null
+                ? "GET /report needs a registered project - add ?projectAnchor=<anchor> to the URL. "
+                        + "An MCP client can see the registered anchors via the project_list tool."
+                : "No project is registered for anchor '" + unresolved.anchor() + "'. Check the "
+                        + "?projectAnchor=<anchor> value in the URL, or ask an MCP client to register "
+                        + "it via project_add or project_adopt.";
     }
 
     private static ResponseEntity<String> textResponse(final HttpStatus status, final String message) {

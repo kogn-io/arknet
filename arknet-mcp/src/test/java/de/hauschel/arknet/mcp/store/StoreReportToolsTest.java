@@ -477,6 +477,36 @@ class StoreReportToolsTest {
     }
 
     /**
+     * {@code htmlReport} backs the browser-reachable {@code GET /report} endpoint
+     * ({@code StoreReportController}, issue #391) and, per its own javadoc, exists specifically
+     * to render "without writing it anywhere" - a GET a person triggers by navigating to a URL
+     * must not have the side effect of a file write. Pins both halves of that promise: the return
+     * value is exactly the HTML document - unlike {@code storeOverview}, which wraps the very same
+     * HTML's digest between the text digest and the "# HTML report: ..." write-result line - and
+     * no file ever lands under the project's report subdirectory. The rendered HTML legitimately
+     * embeds a copy of the digest in its own agent panel either way (see
+     * {@code HtmlReportRenderer}), so that text appearing inside {@code html} is expected, not a
+     * sign of leakage.
+     */
+    @Test
+    void htmlReportRendersOnlyTheHtmlAndNeverWritesAFile() throws Exception {
+        final String html = tools.htmlReport(ANCHOR);
+
+        assertThat(html).startsWith("<!doctype html>").contains("arknet Store Report").endsWith("</html>\n");
+        assertThat(html).doesNotContain("# HTML report:");
+        final Path segmentDir = reportDir.resolve(StoreReportTools.reportSegment(PROJECT));
+        assertThat(segmentDir).doesNotExist();
+    }
+
+    /** An anchor no project is registered under is rejected here too, never quietly resolved. */
+    @Test
+    void htmlReportRejectsAnUnregisteredAnchor() {
+        assertThatThrownBy(() -> tools.htmlReport("/never/registered"))
+                .isInstanceOf(UnresolvedProjectAnchorException.class)
+                .hasMessageContaining("/never/registered");
+    }
+
+    /**
      * A project registered with a human-readable label must show it in both the
      * digest and the HTML report header, with the raw id kept alongside rather than replaced.
      */
