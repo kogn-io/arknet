@@ -34,6 +34,7 @@ public final class ModelViews {
 
     private final UseCaseCards useCases;
     private final RequirementCards requirements;
+    private final ConstraintCards constraints;
     private final ListTerms terms;
     private final BoundedContextCards boundedContexts;
     private final AdrCards adrs;
@@ -44,6 +45,7 @@ public final class ModelViews {
      *                        {@link Glossary} every other section is rendered against
      * @param useCases        builds the use-case section
      * @param requirements    builds the requirements section
+     * @param constraints     builds the constraint section (issue #390)
      * @param boundedContexts builds the bounded-context section
      * @param adrs            builds the architecture-decisions section
      * @param actors          builds the actor section
@@ -52,12 +54,14 @@ public final class ModelViews {
             final ListTerms terms,
             final UseCaseCards useCases,
             final RequirementCards requirements,
+            final ConstraintCards constraints,
             final BoundedContextCards boundedContexts,
             final AdrCards adrs,
             final ActorCards actors) {
         this.terms = Objects.requireNonNull(terms, "terms");
         this.useCases = Objects.requireNonNull(useCases, "useCases");
         this.requirements = Objects.requireNonNull(requirements, "requirements");
+        this.constraints = Objects.requireNonNull(constraints, "constraints");
         this.boundedContexts = Objects.requireNonNull(boundedContexts, "boundedContexts");
         this.adrs = Objects.requireNonNull(adrs, "adrs");
         this.actors = Objects.requireNonNull(actors, "actors");
@@ -100,6 +104,8 @@ public final class ModelViews {
                 () -> boundedContexts.section(projectId, glossary));
         collect(sections, failures, RequirementCards.SECTION_TITLE,
                 () -> requirements.section(projectId, displayLocale, glossary));
+        collect(sections, failures, ConstraintCards.SECTION_TITLE,
+                () -> constraints.section(projectId, displayLocale));
         collect(sections, failures, UseCaseCards.SECTION_TITLE,
                 () -> useCases.section(projectId, displayLocale, glossary));
         collect(sections, failures, AdrCards.SECTION_TITLE, () -> adrs.section(projectId, glossary));

@@ -26,6 +26,10 @@ import de.hauschel.arknet.bc.domain.Subdomain;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.req.domain.AcceptanceCriterion;
+import de.hauschel.arknet.req.domain.Constraint;
+import de.hauschel.arknet.req.domain.ConstraintCode;
+import de.hauschel.arknet.req.domain.ConstraintId;
+import de.hauschel.arknet.req.domain.ConstraintType;
 import de.hauschel.arknet.req.domain.Priority;
 import de.hauschel.arknet.req.domain.Requirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
@@ -57,6 +61,7 @@ class ModelViewsTest {
                     throw new IllegalStateException("store closed");
                 }, (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
+                emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards(),
                 emptyActorCards());
@@ -85,6 +90,7 @@ class ModelViewsTest {
                 },
                 new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
+                emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 emptyAdrCards(),
                 emptyActorCards());
@@ -106,6 +112,7 @@ class ModelViewsTest {
                 (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
+                emptyConstraintCards(),
                 new BoundedContextCards(projectId -> List.of()),
                 emptyAdrCards(),
                 emptyActorCards());
@@ -118,8 +125,9 @@ class ModelViewsTest {
 
     /**
      * Reading order is strategic to detailed: what the model is about (bounded contexts), what it
-     * must do (requirements), how that plays out (use cases), what was decided about it (ADRs),
-     * who or what acts on it (actors, issue #336), and the shared language underneath all of it.
+     * must do (requirements), the non-negotiable boundaries around that (constraints, issue
+     * #390), how that plays out (use cases), what was decided about it (ADRs), who or what acts
+     * on it (actors, issue #336), and the shared language underneath all of it.
      */
     @Test
     void ordersSectionsFromStrategicToDetailed() {
@@ -127,14 +135,15 @@ class ModelViewsTest {
                 (projectId, displayLocale) -> List.of(term()),
                 new UseCaseCards((projectId, displayLocale) -> List.of(useCase()), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of(requirement())),
+                new ConstraintCards((projectId, displayLocale) -> List.of(constraint())),
                 new BoundedContextCards(projectId -> List.of(boundedContext())),
                 new AdrCards((projectId, displayLocale) -> List.of(adrDetail()),
                         (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
                 new ActorCards(projectId -> List.of(actor())));
 
         assertThat(views.of(PROJECT, null).sections()).extracting(ModelSection::title)
-                .containsExactly("Bounded Contexts", "Requirements", "Use Cases", "Architecture Decisions",
-                        "Actors", "Glossary");
+                .containsExactly("Bounded Contexts", "Requirements", "Constraints", "Use Cases",
+                        "Architecture Decisions", "Actors", "Glossary");
     }
 
     private static UseCase useCase() {
@@ -161,6 +170,16 @@ class ModelViewsTest {
                 new BoundedContextId(ResourceId.of("https://w3id.org/arknet/id/bc-1")),
                 new BoundedContextCode("BC-1"), "Ordering", "Bestellungen aufnehmen und verfolgen.",
                 Subdomain.CORE_DOMAIN, null, List.of());
+    }
+
+    private static Constraint constraint() {
+        return new Constraint(
+                new ConstraintId(ResourceId.of("https://w3id.org/arknet/id/tcon-1")),
+                new ConstraintCode("TCON-1"), "JVM only", "Must run on the JVM.", ConstraintType.TECHNICAL);
+    }
+
+    private static ConstraintCards emptyConstraintCards() {
+        return new ConstraintCards((projectId, displayLocale) -> List.of());
     }
 
     private static Term term() {
