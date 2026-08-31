@@ -335,6 +335,14 @@ Store report -- generic, cross-BC read path (readOnly; works for any BC without 
 | `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, bare business id (`FR-1`), or a blank-node reference (`_:...`) as shown by `store_overview` for a store-first resource with no minted IRI. The revision trail is left out -- it is change history, not model ([ADR-014](docs/adr/adr-014-revision-als-concurrency-token.md)); read it with `resource_history` |
 | `resource_history` | The change history the model view leaves out: every PROV-O revision the shared write funnel has recorded for a resource, oldest first, with the current one marked -- same handle contract as `resource_get`. A resource written only store-first, or predating the funnel, has no history (empty, not an error) |
 
+`store_overview`'s HTML report is also reachable directly in a browser at
+`http://127.0.0.1:47331/report?projectAnchor=<your-registered-anchor>` -- a
+second, additive way to view the same rendering `store_overview` already
+writes to disk, for opening it without going through an agent first. It shares
+the daemon's loopback-only trust boundary (ADR-009): a request with a `Host`
+header naming anything other than `127.0.0.1`/`localhost` is rejected, the
+same DNS-rebinding defense the MCP endpoint itself enforces.
+
 Traceability -- readOnly graph traversal over the same store snapshot (no second SPARQL path):
 
 | Tool | Description |

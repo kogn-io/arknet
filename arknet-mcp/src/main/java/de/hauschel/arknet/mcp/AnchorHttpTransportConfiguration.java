@@ -3,7 +3,6 @@
 
 package de.hauschel.arknet.mcp;
 
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -13,7 +12,6 @@ import org.springframework.web.servlet.function.ServerRequest;
 
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
-import io.modelcontextprotocol.server.transport.DefaultServerTransportSecurityValidator;
 
 import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerStreamableHttpProperties;
 import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServerTransportProvider;
@@ -42,11 +40,11 @@ import de.hauschel.arknet.kernel.ProjectResolver;
  * shorten it, or fall back to anything when it does not recognise it.</p>
  *
  * <p>The bean otherwise reproduces the auto-configuration's provider verbatim (same JSON mapper,
- * endpoint, keep-alive and delete policy); it adds the extractor plus a {@link
- * #ALLOWED_HOSTS host-restricted security validator} (ADR-009 decision 4). The header itself is
- * still not authentication: on a loopback-only single-user server a local client could claim any
- * anchor - an accepted assumption at this trust boundary, and unchanged by ADR-016, which routes on
- * the anchor rather than vouching for it.</p>
+ * endpoint, keep-alive and delete policy); it adds the extractor plus
+ * {@link LoopbackHostSecurity}'s host-restricted security validator (ADR-009 decision 4). The
+ * header itself is still not authentication: on a loopback-only single-user server a local client
+ * could claim any anchor - an accepted assumption at this trust boundary, and unchanged by
+ * ADR-016, which routes on the anchor rather than vouching for it.</p>
  */
 @Configuration(proxyBeanMethods = false)
 class AnchorHttpTransportConfiguration {
@@ -58,33 +56,12 @@ class AnchorHttpTransportConfiguration {
     static final String ANCHOR_HEADER = "X-Arknet-Project-Anchor";
 
     /**
-     * The daemon's fixed loopback host, in both the numeric and the {@code localhost} spelling a
-     * browser's Host header may carry - port left as a {@code :*} wildcard rather than pinned to the
-     * {@code application.properties} default of {@value #DEFAULT_PORT},
-     * because {@code server.port} is itself overridable via {@code arknet.mcp.port} and a validator
-     * pinned to the default port would reject every request against an overridden one with a 421
-     * that names neither cause nor remedy (issue #295). The wildcard is security-equivalent to a
-     * pinned port: {@link DefaultServerTransportSecurityValidator}'s DNS-rebinding defense keys on
-     * the host name, not the port, so any port on {@code 127.0.0.1}/{@code localhost} is still only
-     * reachable from this machine. Anything else is rejected by the {@link
-     * #webMvcStreamableServerTransportProvider security validator} below, which is what closes the
-     * DNS-rebinding gap: without it, Spring AI MCP's default {@code
-     * ServerTransportSecurityValidator.NOOP} calls the Origin/Host check but enforces nothing, so a
-     * malicious page that rebinds a hostname to {@code 127.0.0.1} becomes same-origin with the
-     * daemon and can drive any tool.
-     */
-    private static final List<String> ALLOWED_HOSTS = List.of("127.0.0.1:*", "localhost:*");
-
-    /** The port {@code application.properties} falls back to when {@code arknet.mcp.port} is unset. */
-    private static final String DEFAULT_PORT = "47331";
-
-    /**
      * Overrides the auto-configured Streamable-HTTP transport provider with one that extracts the
      * project-anchor header into the per-call transport context. Carries the same
      * {@code @Qualifier("mcpServerJsonMapper")} the auto-configuration uses so it binds the same
-     * JSON mapper bean. Also sets a {@link DefaultServerTransportSecurityValidator} restricted to
-     * {@link #ALLOWED_HOSTS} - Spring AI MCP's default is {@code
-     * ServerTransportSecurityValidator.NOOP}, which would otherwise leave the Host check a no-op.
+     * JSON mapper bean. Also sets {@link LoopbackHostSecurity}'s host-restricted validator - Spring
+     * AI MCP's default is {@code ServerTransportSecurityValidator.NOOP}, which would otherwise
+     * leave the Host check a no-op.
      */
     @Bean
     WebMvcStreamableServerTransportProvider webMvcStreamableServerTransportProvider(
@@ -96,9 +73,7 @@ class AnchorHttpTransportConfiguration {
                 .keepAliveInterval(properties.getKeepAliveInterval())
                 .disallowDelete(properties.isDisallowDelete())
                 .contextExtractor(AnchorHttpTransportConfiguration::extractAnchor)
-                .securityValidator(DefaultServerTransportSecurityValidator.builder()
-                        .allowedHosts(ALLOWED_HOSTS)
-                        .build())
+                .securityValidator(LoopbackHostSecurity.hostValidator())
                 .build();
     }
 

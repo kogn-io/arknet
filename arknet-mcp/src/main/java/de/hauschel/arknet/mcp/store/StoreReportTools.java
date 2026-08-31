@@ -137,6 +137,37 @@ public final class StoreReportTools {
                     + "what is registered.", required = false)
             final String projectAnchor) {
         final ResolvedProject resolved = AnchorContext.resolveResolvedProject(context, projectAnchor, projects);
+        final RenderedReport report = renderReport(resolved);
+        return report.digest() + "\n" + writeReportLine(report.html(), report.projectId()) + "\n";
+    }
+
+    /**
+     * Renders the very same self-contained HTML {@link #storeOverview} writes to disk, for the
+     * browser-reachable {@code GET /report} endpoint ({@code StoreReportController}, issue #391) -
+     * without writing it anywhere. A GET a person triggers by navigating to a URL should not have
+     * the side effect of a file write, and {@code store_overview} already covers that path
+     * unchanged.
+     *
+     * <p>Resolves {@code projectAnchor} the same way {@link #storeOverview}'s explicit-parameter
+     * path does, minus the transport-context fallback: a plain HTTP GET carries no
+     * {@code X-Arknet-Project-Anchor} header for {@link AnchorContext} to fall back to, so the
+     * query parameter is the only way a browser client names its project.
+     *
+     * @param projectAnchor the anchor identifying the project to report on; must be a registered
+     *                       anchor, the same requirement {@code store_overview}'s parameter carries
+     * @throws de.hauschel.arknet.kernel.UnresolvedProjectAnchorException if {@code projectAnchor}
+     *                                                                    is blank or unregistered
+     */
+    String htmlReport(final String projectAnchor) {
+        final ResolvedProject resolved = AnchorContext.resolveResolvedProject(null, projectAnchor, projects);
+        return renderReport(resolved).html();
+    }
+
+    /** The digest/HTML pair {@link #storeOverview} and {@link #htmlReport} both derive from one render pass. */
+    private record RenderedReport(ProjectId projectId, String digest, String html) {
+    }
+
+    private RenderedReport renderReport(final ResolvedProject resolved) {
         final ProjectId projectId = resolved.id();
         final DisplayLocale effective = displayLocale.withRequestedOverride(resolved.defaultLanguage());
         final Optional<Project> project = findProject.findById(projectId);
@@ -147,7 +178,7 @@ public final class StoreReportTools {
         final String digest = digestRenderer.render(projectId, label, description, snapshot, effective);
         final String html = htmlRenderer.render(projectId, label, description, snapshot, digest,
                 modelViews.of(projectId, resolved.defaultLanguage()), effective);
-        return digest + "\n" + writeReportLine(html, projectId) + "\n";
+        return new RenderedReport(projectId, digest, html);
     }
 
     @McpTool(name = "resource_get",
