@@ -1,6 +1,7 @@
 # ADR-020: Ein breit gefasster Actor statt eines eigenen Stakeholder-Typs
 
-- Status: Accepted (2026-08-19)
+- Status: Proposed (2026-08-31) -- wird Accepted, sobald geklaert ist, ob eine Rolle
+  eine eigene Ressource wird und der Actor damit ein reiner Traeger bleibt
 - Verwandt: ADR-017
 
 ## Kontext

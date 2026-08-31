@@ -1,6 +1,7 @@
 # ADR-022: Actor wird ein eigener Bounded Context
 
-- Status: Accepted (2026-08-19)
+- Status: Proposed (2026-08-31) -- wird Accepted, sobald feststeht, ob eine eigene
+  Rollen-Ressource in diesen Kontext gehoert oder daneben
 - Verwandt: ADR-020
 
 ## Kontext

@@ -1,6 +1,7 @@
 # ADR-023: Das Requirement bekommt eine Herkunftskante zum Actor
 
-- Status: Accepted (2026-08-19)
+- Status: Proposed (2026-08-31) -- wird Accepted, sobald das Ziel der Herkunftskante
+  feststeht: der Traeger oder die Rolle
 - Verwandt: ADR-017, ADR-020, ADR-021
 
 ## Kontext
