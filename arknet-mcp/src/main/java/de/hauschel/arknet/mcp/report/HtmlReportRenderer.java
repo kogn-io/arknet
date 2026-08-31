@@ -165,6 +165,7 @@ public final class HtmlReportRenderer {
                 .map(StoreResource::iri).collect(Collectors.toSet());
         final Map<String, StoreResource> bySubject = snapshot.resources().stream()
                 .collect(Collectors.toMap(StoreResource::iri, Function.identity(), (first, second) -> first));
+        final Map<String, List<Triple>> incomingByObject = incomingByObject(snapshot);
         final Set<String> carded = views.sections().stream()
                 .flatMap(section -> section.cards().stream())
                 .map(ModelCard::iri)
@@ -188,9 +189,9 @@ public final class HtmlReportRenderer {
         appendIndex(html, views.sections(), leftovers.size());
         html.append("    <main>\n");
         for (final ModelSection section : views.sections()) {
-            appendSection(html, section, carded, subjects, bySubject, displayLocale);
+            appendSection(html, section, carded, subjects, bySubject, incomingByObject, displayLocale);
         }
-        appendLeftovers(html, leftovers, subjects, displayLocale);
+        appendLeftovers(html, leftovers, subjects, bySubject, incomingByObject, displayLocale);
         appendEmptyState(html, views.sections(), leftovers);
         html.append("    </main>\n  </div>\n");
 
@@ -200,6 +201,26 @@ public final class HtmlReportRenderer {
     }
 
     // --- structure -------------------------------------------------------------
+
+    /**
+     * Every resource's outgoing triples that point at another resource, grouped by that target's
+     * IRI - the reverse of what each {@link StoreResource#outgoing()} already holds. Built once
+     * per report from the same snapshot every card's raw triples already come from, so "who
+     * references this card" costs no second store read and stays exactly as complete as the raw
+     * view next to it: a term the report can show as referenced is a term some resource's
+     * outgoing edge actually names, nothing inferred or guessed.
+     */
+    private static Map<String, List<Triple>> incomingByObject(final StoreSnapshot snapshot) {
+        final Map<String, List<Triple>> index = new LinkedHashMap<>();
+        for (final StoreResource resource : snapshot.resources()) {
+            for (final Triple triple : resource.outgoing()) {
+                if (triple.object() instanceof RdfNode.Resource target) {
+                    index.computeIfAbsent(target.iri(), key -> new ArrayList<>()).add(triple);
+                }
+            }
+        }
+        return index;
+    }
 
     /**
      * Every resource no card was built for, minus the use-case steps and requirement acceptance
@@ -322,6 +343,7 @@ public final class HtmlReportRenderer {
             final Set<String> carded,
             final Set<String> subjects,
             final Map<String, StoreResource> bySubject,
+            final Map<String, List<Triple>> incomingByObject,
             final DisplayLocale displayLocale) {
         html.append("      <section class=\"group\" id=\"sec-").append(escape(section.id())).append("\">\n")
                 .append("        <h2>").append(escape(section.title()))
@@ -331,13 +353,14 @@ public final class HtmlReportRenderer {
         }
         html.append("        <div class=\"cards\">\n");
         for (final ModelCard card : section.cards()) {
-            appendCard(html, card, carded, subjects, bySubject, displayLocale);
+            appendCard(html, card, carded, subjects, bySubject, incomingByObject, displayLocale);
         }
         html.append("        </div>\n      </section>\n");
     }
 
     private void appendLeftovers(
             final StringBuilder html, final List<StoreResource> leftovers, final Set<String> subjects,
+            final Map<String, StoreResource> bySubject, final Map<String, List<Triple>> incomingByObject,
             final DisplayLocale displayLocale) {
         if (leftovers.isEmpty()) {
             return;
@@ -351,7 +374,7 @@ public final class HtmlReportRenderer {
                 .append("          <summary>show raw resources</summary>\n")
                 .append("          <div class=\"cards\">\n");
         for (final StoreResource resource : leftovers) {
-            appendRawCard(html, resource, subjects, displayLocale);
+            appendRawCard(html, resource, subjects, bySubject, incomingByObject, displayLocale);
         }
         html.append("          </div>\n        </details>\n      </section>\n");
     }
@@ -374,6 +397,7 @@ public final class HtmlReportRenderer {
             final Set<String> carded,
             final Set<String> subjects,
             final Map<String, StoreResource> bySubject,
+            final Map<String, List<Triple>> incomingByObject,
             final DisplayLocale displayLocale) {
         final StoreResource raw = bySubject.get(card.iri());
         final LangSources sources = langSources(raw, bySubject);
@@ -394,6 +418,7 @@ public final class HtmlReportRenderer {
             appendBlock(html, block, carded, subjects, raw, sources, displayLocale);
         }
         html.append("              </div>\n");
+        appendReferencedBy(html, card.iri(), incomingByObject, bySubject, subjects, displayLocale);
         appendRawTriples(html, raw, subjects);
         html.append("            </details>\n          </article>\n");
     }
@@ -915,6 +940,7 @@ public final class HtmlReportRenderer {
     }
 
     private void appendRawCard(final StringBuilder html, final StoreResource resource, final Set<String> subjects,
+            final Map<String, StoreResource> bySubject, final Map<String, List<Triple>> incomingByObject,
             final DisplayLocale displayLocale) {
         final String anchor = resourceAnchor(resource.iri());
         html.append("            <article class=\"card raw-card\" id=\"").append(anchor).append("\">\n")
@@ -929,7 +955,59 @@ public final class HtmlReportRenderer {
                 .append("                  <a class=\"anchor\" href=\"#").append(anchor).append("\">#</a>\n")
                 .append("                </summary>\n");
         appendPropertyTable(html, resource, subjects);
+        appendReferencedBy(html, resource.iri(), incomingByObject, bySubject, subjects, displayLocale);
         html.append("              </details>\n            </article>\n");
+    }
+
+    /**
+     * Who points at this resource, one row per incoming edge - the mirror image of {@link
+     * #appendRawTriples}: that shows what a card knows, this shows who relies on it, so a reader
+     * does not have to run {@code impact_analysis} separately to see why a term is defined the way
+     * it is.
+     *
+     * <p>Read straight out of {@code incomingByObject} ({@link #incomingByObject(StoreSnapshot)}),
+     * a plain one-hop reverse lookup - not {@code TraceabilityGraph#dependents}, which walks a
+     * fixed predicate whitelist transitively for impact analysis. Every edge that names this IRI
+     * as its object shows up here, whichever predicate it is; nothing is filtered by relevance,
+     * the same "nothing can hide" stance the raw triples view already takes.</p>
+     */
+    private void appendReferencedBy(
+            final StringBuilder html, final String iri, final Map<String, List<Triple>> incomingByObject,
+            final Map<String, StoreResource> bySubject, final Set<String> subjects,
+            final DisplayLocale displayLocale) {
+        final List<Triple> incoming = incomingByObject.getOrDefault(iri, List.of());
+        if (incoming.isEmpty()) {
+            return;
+        }
+        html.append("            <details class=\"referenced-by\">\n              <summary>Referenced by ")
+                .append(incoming.size()).append("</summary>\n              <table class=\"props\">\n");
+        for (final Triple triple : incoming) {
+            html.append("                <tr><td class=\"pred\">")
+                    .append(escape(prefixes.toCurie(triple.predicate())))
+                    .append("</td><td class=\"obj\">")
+                    .append(renderReferrer(triple.subject(), bySubject, subjects, displayLocale))
+                    .append("</td></tr>\n");
+        }
+        html.append("              </table>\n            </details>\n");
+    }
+
+    /**
+     * The referencing subject as a link carrying its own card's title - unlike {@link
+     * #renderObject}, which shows a triple's object as its bare CURIE, a referrer is rendered by
+     * its business handle: the reader came here to find out <em>which</em> requirement or use case
+     * points back, not to see another IRI.
+     */
+    private String renderReferrer(
+            final String subjectIri, final Map<String, StoreResource> bySubject, final Set<String> subjects,
+            final DisplayLocale displayLocale) {
+        if (!subjects.contains(subjectIri)) {
+            return escape(subjectIri);
+        }
+        final StoreResource referrer = bySubject.get(subjectIri);
+        final String handle = referrer == null ? subjectIri : displayHandle(referrer);
+        final String title = referrer == null ? null : referrer.label(displayLocale).orElse(null);
+        return "<a href=\"#" + resourceAnchor(subjectIri) + "\"" + titleAttribute(title) + ">"
+                + escape(handle) + "</a>";
     }
 
     private void appendPropertyTable(
@@ -1174,6 +1252,10 @@ public final class HtmlReportRenderer {
             details.raw{margin-top:12px;border-top:1px solid var(--border);padding-top:8px;}
             details.raw>summary{cursor:pointer;font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);}
             details.raw>summary:hover{color:var(--accent);}
+            details.referenced-by{margin-top:12px;border-top:1px solid var(--border);padding-top:8px;}
+            details.referenced-by>summary{cursor:pointer;font-family:var(--mono);font-size:11.5px;
+              font-weight:650;color:var(--ink-soft);}
+            details.referenced-by>summary:hover{color:var(--accent);}
             details.raw-group>summary{cursor:pointer;font-family:var(--mono);font-size:12.5px;
               color:var(--ink-faint);margin-bottom:12px;}
             section.group.other article.card{background:var(--surface-2);}
