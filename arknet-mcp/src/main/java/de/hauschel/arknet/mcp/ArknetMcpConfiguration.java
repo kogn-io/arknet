@@ -56,6 +56,7 @@ import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.mcp.store.StoreExportTools;
 import de.hauschel.arknet.mcp.store.StoreExporter;
 import de.hauschel.arknet.mcp.store.StoreReader;
+import de.hauschel.arknet.mcp.store.StoreReportController;
 import de.hauschel.arknet.mcp.store.StoreReportTools;
 import de.hauschel.arknet.mcp.trace.TraceabilityMcpTools;
 import de.hauschel.arknet.persistence.WriteFunnel;
@@ -851,6 +852,20 @@ public class ArknetMcpConfiguration {
         return new StoreReportTools(
                 storeReader, prefixes, displayLocale, new HtmlReportRenderer(prefixes), modelViews,
                 projectResolver, projectService, fallbackReportDir, reportHostDir);
+    }
+
+    /**
+     * A second, browser-reachable way to fetch the very same self-contained HTML
+     * {@link #storeReportTools} renders: {@code GET /report?projectAnchor=...} returns it
+     * directly as the HTTP response, instead of the file path a human would otherwise have to
+     * open by hand (issue #391). Purely additive - {@code store_overview} keeps writing the file
+     * exactly as before; this bean only registers a second, read-only consumer of the same
+     * rendering, guarded by the same loopback allowlist as the MCP transport
+     * ({@link LoopbackHostSecurity}, ADR-009 decision 4).
+     */
+    @Bean
+    StoreReportController storeReportController(final StoreReportTools storeReportTools) {
+        return new StoreReportController(storeReportTools);
     }
 
     /**
