@@ -5,9 +5,11 @@ package de.hauschel.arknet.mcp.report;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
@@ -19,6 +21,7 @@ import de.hauschel.arknet.adr.domain.Consequence;
 import de.hauschel.arknet.adr.domain.ConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -50,8 +53,12 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * that no longer resolves (deleted store-first, ADR-005) falls back to itself rather than being
  * dropped, the same "never drop a reference" stance the two borrowed ports already take.</p>
  *
- * <p><strong>No marked-up prose here.</strong> An ADR has no glossary edge - see
- * {@link UseCaseCards}'s Javadoc for the same reasoning - so its text arrives unmarked-up.</p>
+ * <p><strong>Marked-up prose, like {@link RequirementCards} (kogn-io/arknet#393).</strong> An ADR's
+ * {@code context}/{@code decision}, every consequence's statement and every considered option's
+ * name/rationale are scanned against its own {@code arkarch:usesTerm} edges via {@link Glossary}: a
+ * mention backed by an edge becomes a link, a mention without one a gap, and an edge whose term the
+ * prose never names survives as an {@link UnmentionedTerms} chip - the same three-way split
+ * {@link RequirementCards} already applies to a requirement's description/acceptance criteria.</p>
  */
 public final class AdrCards {
 
@@ -89,8 +96,8 @@ public final class AdrCards {
 
     /**
      * @param projectId the project to read
-     * @param glossary  the project's glossary; accepted for the signature every section shares,
-     *                  but never consulted - an ADR's prose has no glossary edge to mark up against
+     * @param glossary  the project's glossary, for labelling and marking up {@code usesTerm}
+     *                  references (kogn-io/arknet#393)
      * @return the architecture-decisions section, ordered by business code
      */
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {
@@ -103,7 +110,7 @@ public final class AdrCards {
                         detail -> detail.adr().id().value().value(), (first, second) -> first));
         final List<ModelCard> cards = all.stream()
                 .sorted(Comparator.comparing(detail -> detail.adr().code().value(), BusinessCodes.ORDER))
-                .map(detail -> card(detail, requirements, contexts, idsByCode))
+                .map(detail -> card(detail, requirements, contexts, idsByCode, glossary))
                 .toList();
         return new ModelSection(SECTION_TITLE, "architecture-decisions",
                 "decisions made, their status, what they replace and what they relate to", cards);
@@ -113,15 +120,28 @@ public final class AdrCards {
             final AdrDetail detail,
             final Map<ResourceId, ResolvedRequirement> requirements,
             final Map<ResourceId, ResolvedBoundedContext> contexts,
-            final Map<AdrCode, String> idsByCode) {
+            final Map<AdrCode, String> idsByCode,
+            final Glossary glossary) {
         final Adr adr = detail.adr();
         final List<Badge> badges = List.of(new Badge(Badge.Kind.Known.STATUS, Labels.humanise(adr.status().name())));
 
+        final Set<ResourceId> linked = adr.usesTerms().stream()
+                .map(TermRef::value)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        final List<String> texts = new ArrayList<>();
+        texts.add(adr.context());
+        texts.add(adr.decision());
+        adr.consequences().stream().map(Consequence::statement).forEach(texts::add);
+        adr.consideredOptions().forEach(option -> {
+            texts.add(option.name());
+            texts.add(option.rationale());
+        });
+
         final List<Block> blocks = new ArrayList<>();
-        blocks.add(ProseMarkdown.prose("Context", adr.context(), RichText::plain));
-        blocks.add(ProseMarkdown.prose("Decision", adr.decision(), RichText::plain));
-        addConsequences(blocks, adr.consequences());
-        addConsideredOptions(blocks, adr.consideredOptions());
+        blocks.add(ProseMarkdown.prose("Context", adr.context(), text -> glossary.markUp(text, linked)));
+        blocks.add(ProseMarkdown.prose("Decision", adr.decision(), text -> glossary.markUp(text, linked)));
+        addConsequences(blocks, adr.consequences(), glossary, linked);
+        addConsideredOptions(blocks, adr.consideredOptions(), glossary, linked);
         if (adr.decisionDate() != null) {
             blocks.add(Block.Prose.plain("Decision date", adr.decisionDate().toString()));
         }
@@ -152,6 +172,7 @@ public final class AdrCards {
                     .map(code -> codeRef(code, idsByCode))
                     .toList()));
         }
+        UnmentionedTerms.addTo(blocks, linked, glossary, texts, "Uses terms", "not named in the text");
         return new ModelCard(adr.code().value(), adr.name(), adr.id().value().value(), badges, blocks);
     }
 
@@ -178,14 +199,18 @@ public final class AdrCards {
      * for {@link Block.Bullets} by issue #358, keys a list's positioned sub-resources by this
      * block's own label; see {@link #CONSEQUENCES_LABEL}). A legacy-only decision (the flat
      * {@code arkarch:adrConsequences} literal, synthesised by the out-adapter as one {@code NEUTRAL}
-     * entry) renders identically - a single, badged bullet.
+     * entry) renders identically - a single, badged bullet. Marked up against {@code linked}
+     * (kogn-io/arknet#393), the same {@link Glossary} treatment {@link #card} gives {@code context}/
+     * {@code decision}.
      */
-    private static void addConsequences(final List<Block> blocks, final List<Consequence> consequences) {
+    private static void addConsequences(final List<Block> blocks, final List<Consequence> consequences,
+            final Glossary glossary, final Set<ResourceId> linked) {
         if (consequences.isEmpty()) {
             return;
         }
         final List<BulletItem> items = consequences.stream()
-                .map(c -> new BulletItem(c.position(), ProseMarkdown.inline(c.statement(), RichText::plain),
+                .map(c -> new BulletItem(c.position(),
+                        ProseMarkdown.inline(c.statement(), text -> glossary.markUp(text, linked)),
                         new Badge(Badge.Kind.Known.CONSEQUENCE, Labels.humanise(c.type().name())), null))
                 .toList();
         blocks.add(new Block.Bullets(CONSEQUENCES_LABEL, items));
@@ -204,14 +229,18 @@ public final class AdrCards {
      * CHOSEN} option, since {@link ConsideredOption} makes the MADR "Decision Outcome"
      * representable at all. An outcome-less option (the out-adapter's legacy-literal fallback,
      * see {@link ConsideredOption#outcome()}) gets a neutral {@code Unclassified} badge instead of
-     * one of the two real outcomes, since neither would be honest.
+     * one of the two real outcomes, since neither would be honest. The rationale is marked up
+     * against {@code linked} (kogn-io/arknet#393), like {@link #addConsequences}; {@code caption}
+     * (the option's short name) is a plain string, not {@link RichText}, so it stays unmarked.
      */
-    private static void addConsideredOptions(final List<Block> blocks, final List<ConsideredOption> options) {
+    private static void addConsideredOptions(final List<Block> blocks, final List<ConsideredOption> options,
+            final Glossary glossary, final Set<ResourceId> linked) {
         if (options.isEmpty()) {
             return;
         }
         final List<BulletItem> items = options.stream()
-                .map(o -> new BulletItem(o.position(), ProseMarkdown.inline(o.rationale(), RichText::plain),
+                .map(o -> new BulletItem(o.position(),
+                        ProseMarkdown.inline(o.rationale(), text -> glossary.markUp(text, linked)),
                         outcomeBadge(o.outcome()), o.name()))
                 .toList();
         blocks.add(new Block.Bullets(CONSIDERED_OPTIONS_LABEL, items));

@@ -63,22 +63,23 @@ import de.hauschel.arknet.kernel.ProjectId;
  * ({@code consequenceType}/{@code optionOutcome}) is never exempt, even when the same correction also
  * writes a genuinely new language for that position's text.</p>
  *
- * <p><strong>The three reference lists are the deliberate exception and stay correctable in every
- * status.</strong> Adding an {@code addressesRequirement}, {@code affectsContext} or
- * {@code relatedTo} edge later completes a reference that could not be written when the decision
- * was recorded - the requirement, bounded context or peer decision did not exist yet - rather than
- * changing what was decided. The precedent is {@code adr_supersede}, which already writes into an
- * accepted decision's {@code supersedes}. For {@code relatedTo} this is also the answer to the
- * ordering problem the relation would otherwise have: the decision recorded first cannot name the
- * one recorded later at {@code adr_add} time, and this port is where it names it afterwards -
- * which is why the relation needs no {@code adr_link_related} tool of its own.</p>
+ * <p><strong>The four reference lists are the deliberate exception and stay correctable in every
+ * status.</strong> Adding an {@code addressesRequirement}, {@code affectsContext},
+ * {@code usesTerm} (kogn-io/arknet#393) or {@code relatedTo} edge later completes a reference that
+ * could not be written when the decision was recorded - the requirement, bounded context, glossary
+ * term or peer decision did not exist yet - rather than changing what was decided. The precedent is
+ * {@code adr_supersede}, which already writes into an accepted decision's {@code supersedes}. For
+ * {@code relatedTo} this is also the answer to the ordering problem the relation would otherwise
+ * have: the decision recorded first cannot name the one recorded later at {@code adr_add} time, and
+ * this port is where it names it afterwards - which is why the relation needs no
+ * {@code adr_link_related} tool of its own.</p>
  *
  * <p><strong>Tri-state reference lists.</strong> For {@code addressesRequirementCodes},
- * {@code affectsContextCodes} and {@code relatedToCodes} alike: {@code null} leaves the existing
- * edges untouched, an empty list is the explicit, unambiguous signal to remove every edge of that
- * relation, and a non-empty list replaces the relation wholesale. This is the one place where
- * {@code null} and empty must not be conflated - the same tri-state {@code UpdateUseCase}'s
- * {@code supportingActors} carries.</p>
+ * {@code affectsContextCodes}, {@code usesTermCodes} and {@code relatedToCodes} alike:
+ * {@code null} leaves the existing edges untouched, an empty list is the explicit, unambiguous
+ * signal to remove every edge of that relation, and a non-empty list replaces the relation
+ * wholesale. This is the one place where {@code null} and empty must not be conflated - the same
+ * tri-state {@code UpdateUseCase}'s {@code supportingActors} carries.</p>
  */
 public interface UpdateAdr {
 
@@ -102,13 +103,14 @@ public interface UpdateAdr {
      *                                          {@code projectId}
      * @throws AdrTextImmutableException        if the correction would change a text field of a
      *                                          decision that is no longer {@link AdrStatus#PROPOSED}
-     * @throws RuntimeException                 if a reference code names a requirement or bounded
-     *                                          context unknown within {@code projectId} - the same
-     *                                          didactic rejection {@link AddAdr} raises, thrown
-     *                                          before anything is written
+     * @throws RuntimeException                 if a reference code names a requirement, bounded
+     *                                          context or glossary term unknown within
+     *                                          {@code projectId} - the same didactic rejection
+     *                                          {@link AddAdr} raises, thrown before anything is
+     *                                          written
      * @throws AdrNotFoundException             if a {@code relatedTo} code names no decision in
      *                                          {@code projectId} - rejected before anything is
-     *                                          written, exactly like the two cross-context lists
+     *                                          written, exactly like the three cross-context lists
      * @throws IllegalArgumentException         if a {@code relatedTo} code names the very decision
      *                                          being corrected - the same self-reference refusal
      *                                          {@code adr_supersede} makes
@@ -163,6 +165,9 @@ public interface UpdateAdr {
      * @param affectsContextCodes       business codes of the bounded contexts this decision should
      *                                  affect going forward, e.g. {@code BC-1}, with the same
      *                                  tri-state as {@code addressesRequirementCodes}
+     * @param usesTermCodes             business codes of the glossary terms this decision should use
+     *                                  going forward, e.g. {@code TERM-1} (kogn-io/arknet#393), with
+     *                                  the same tri-state again
      * @param relatedToCodes            business codes of the peer decisions this one should
      *                                  cross-reference going forward, e.g. {@code ADR-3}, with the
      *                                  same tri-state again; only this direction is stored, and the
@@ -179,6 +184,7 @@ public interface UpdateAdr {
             String language,
             List<String> addressesRequirementCodes,
             List<String> affectsContextCodes,
+            List<String> usesTermCodes,
             List<String> relatedToCodes) {
 
         public AdrCorrection {
@@ -190,6 +196,7 @@ public interface UpdateAdr {
             addressesRequirementCodes =
                     addressesRequirementCodes == null ? null : List.copyOf(addressesRequirementCodes);
             affectsContextCodes = affectsContextCodes == null ? null : List.copyOf(affectsContextCodes);
+            usesTermCodes = usesTermCodes == null ? null : List.copyOf(usesTermCodes);
             relatedToCodes = relatedToCodes == null ? null : List.copyOf(relatedToCodes);
         }
 
@@ -216,6 +223,7 @@ public interface UpdateAdr {
             private String language;
             private List<String> addressesRequirementCodes;
             private List<String> affectsContextCodes;
+            private List<String> usesTermCodes;
             private List<String> relatedToCodes;
 
             private Builder() {
@@ -287,6 +295,12 @@ public interface UpdateAdr {
                 return this;
             }
 
+            /** @param value see {@link AdrCorrection#usesTermCodes()} @return this builder */
+            public Builder usesTermCodes(List<String> value) {
+                this.usesTermCodes = value;
+                return this;
+            }
+
             /** @param value see {@link AdrCorrection#relatedToCodes()} @return this builder */
             public Builder relatedToCodes(List<String> value) {
                 this.relatedToCodes = value;
@@ -297,7 +311,7 @@ public interface UpdateAdr {
             public AdrCorrection build() {
                 return new AdrCorrection(name, context, decision, newConsequences, consequenceCorrections,
                         newConsideredOptions, consideredOptionCorrections, language,
-                        addressesRequirementCodes, affectsContextCodes, relatedToCodes);
+                        addressesRequirementCodes, affectsContextCodes, usesTermCodes, relatedToCodes);
             }
         }
     }

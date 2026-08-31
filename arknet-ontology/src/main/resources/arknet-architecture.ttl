@@ -23,6 +23,7 @@
 #  Cross-Modul-Mehrwert:
 #    ADR -> arkreq:Requirement (welche Anforderung adressiert die Entscheidung)
 #    ADR -> arkddd:BoundedContext (welchen Teil des Systems betrifft sie)
+#    ADR -> skos:Concept (welche Glossarbegriffe verwendet die Entscheidung, kogn-io/arknet#393)
 #
 #  Konvention: Instanzen nutzen arknet:name / arknet:description (Core-Reuse,
 #              Hausstil). ADRs tragen zusaetzlich dcterms:identifier (Nummer),
@@ -224,6 +225,13 @@ arkarch:affectsContext a owl:ObjectProperty ;
     rdfs:range  arkddd:BoundedContext ;
     rdfs:label  "affects context"@en ;
     rdfs:comment "Welchen Bounded Context betrifft diese Entscheidung? Bruecke zur DDD-Schicht."@de .
+
+arkarch:usesTerm a owl:ObjectProperty ;
+    rdfs:domain arkarch:ArchitectureDecisionRecord ;
+    rdfs:range  skos:Concept ;
+    rdfs:label  "uses term"@en , "verwendet Begriff"@de ;
+    rdfs:comment "An architecture decision uses a term of the ubiquitous language (skos:Concept from the glossary). May occur multiple times - one triple per term. Points at the term's identity (dcterms:identifier, e.g. TERM-1), not its skos:prefLabel, so the edge survives renaming the term. An own property rather than an extension of arkreq:usesTerm's domain: that domain is widened to Requirement/UseCase because both live in the same arkreq namespace, which does not carry over to an ADR's own arkarch namespace (kogn-io/arknet#393)."@en ,
+                 "Eine Architekturentscheidung verwendet einen Begriff der Ubiquitous Language (skos:Concept aus dem Glossar). Kann mehrfach vorkommen -- ein Triple pro Begriff. Zeigt auf die Term-Identitaet (dcterms:identifier, z.B. TERM-1), nicht auf das skos:prefLabel: die Kante bleibt damit stabil, wenn der Begriff umbenannt wird. Eine eigene Property statt einer Erweiterung der arkreq:usesTerm-Domain: jene Domain wird auf Requirement/UseCase erweitert, weil beide im selben arkreq-Namespace wohnen -- das trifft auf eine ADR im eigenen arkarch-Namespace nicht zu (kogn-io/arknet#393)."@de .
 
 
 ##############################################################################

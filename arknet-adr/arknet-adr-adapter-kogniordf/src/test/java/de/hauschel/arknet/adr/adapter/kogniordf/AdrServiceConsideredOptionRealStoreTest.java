@@ -30,6 +30,7 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
+import de.hauschel.arknet.adr.application.port.out.TermLookup;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.kernel.DisplayLocale;
@@ -79,8 +80,11 @@ class AdrServiceConsideredOptionRealStoreTest {
         BoundedContextLookup neverCalledContextLookup = (projectId, code) -> {
             throw new AssertionError("not expected to resolve a bounded context code in this test");
         };
+        TermLookup neverCalledTermLookup = (projectId, code) -> {
+            throw new AssertionError("not expected to resolve a term code in this test");
+        };
         service = new AdrService(repository, new UuidResourceIdFactory(), neverCalledRequirementLookup,
-                neverCalledContextLookup, CLOCK);
+                neverCalledContextLookup, neverCalledTermLookup, CLOCK);
     }
 
     @AfterEach
@@ -97,7 +101,7 @@ class AdrServiceConsideredOptionRealStoreTest {
     void updateOfARecordCarryingSeveralOptionsWithOneChosenSucceedsWhenOnlyRelatedToIsTouched() {
         AdrDetail peer = service.add(PROJECT,
                 new NewAdr("A peer decision", "Some context", "Some decision", List.of(), List.of(), "en",
-                        List.of(), List.of(), List.of()),
+                        List.of(), List.of(), List.of(), List.of()),
                 "en");
         AdrDetail created = service.add(PROJECT,
                 new NewAdr("A decision with several options", "Some context", "Some decision", List.of(),
@@ -105,7 +109,7 @@ class AdrServiceConsideredOptionRealStoreTest {
                                 new NewConsideredOption("Rejected one", "Only here to count.",
                                         OptionOutcome.REJECTED),
                                 new NewConsideredOption("Chosen one", "Only here to count.", OptionOutcome.CHOSEN)),
-                        "en", List.of(), List.of(), List.of()),
+                        "en", List.of(), List.of(), List.of(), List.of()),
                 "en");
 
         AdrCorrection correction = AdrCorrection.builder()
@@ -124,7 +128,7 @@ class AdrServiceConsideredOptionRealStoreTest {
     void updateOfAnAcceptedRecordCarryingSeveralOptionsWithOneChosenSucceeds() {
         AdrDetail peer = service.add(PROJECT,
                 new NewAdr("A peer decision", "Some context", "Some decision", List.of(), List.of(), "en",
-                        List.of(), List.of(), List.of()),
+                        List.of(), List.of(), List.of(), List.of()),
                 "en");
         AdrDetail created = service.add(PROJECT,
                 new NewAdr("A decision with several options", "Some context", "Some decision", List.of(),
@@ -132,7 +136,7 @@ class AdrServiceConsideredOptionRealStoreTest {
                                 new NewConsideredOption("Rejected one", "Only here to count.",
                                         OptionOutcome.REJECTED),
                                 new NewConsideredOption("Chosen one", "Only here to count.", OptionOutcome.CHOSEN)),
-                        "en", List.of(), List.of(), List.of()),
+                        "en", List.of(), List.of(), List.of(), List.of()),
                 "en");
         service.accept(PROJECT, created.adr().code(), null);
 
@@ -148,12 +152,12 @@ class AdrServiceConsideredOptionRealStoreTest {
     void updateOfARecordCarryingASingleChosenOptionSucceeds() {
         AdrDetail peer = service.add(PROJECT,
                 new NewAdr("A peer decision", "Some context", "Some decision", List.of(), List.of(), "en",
-                        List.of(), List.of(), List.of()),
+                        List.of(), List.of(), List.of(), List.of()),
                 "en");
         AdrDetail created = service.add(PROJECT,
                 new NewAdr("A decision with a single option", "Some context", "Some decision", List.of(),
                         List.of(new NewConsideredOption("Chosen one", "Only here to count.", OptionOutcome.CHOSEN)),
-                        "en", List.of(), List.of(), List.of()),
+                        "en", List.of(), List.of(), List.of(), List.of()),
                 "en");
 
         AdrCorrection correction = AdrCorrection.builder()
@@ -177,7 +181,7 @@ class AdrServiceConsideredOptionRealStoreTest {
                                 new NewConsideredOption("Rejected one", "Only here to count.",
                                         OptionOutcome.REJECTED),
                                 new NewConsideredOption("Chosen one", "Only here to count.", OptionOutcome.CHOSEN)),
-                        "en", List.of(), List.of(), List.of()),
+                        "en", List.of(), List.of(), List.of(), List.of()),
                 "en");
 
         assertDoesNotThrow(() -> service.accept(PROJECT, created.adr().code(), null));

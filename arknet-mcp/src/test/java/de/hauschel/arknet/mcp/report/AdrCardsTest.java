@@ -17,12 +17,16 @@ import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * An ADR card must carry the decision itself (context/decision) as plain prose, its optional
@@ -39,6 +43,12 @@ class AdrCardsTest {
     private static final ResourceId ADR_10_ID = ResourceId.of(ID + "adr-10");
     private static final ResourceId FR_1 = ResourceId.of(ID + "fr-1");
     private static final ResourceId BC_1 = ResourceId.of(ID + "bc-1");
+    private static final ResourceId TERM_1 = ResourceId.of(ID + "term-1");
+    private static final ResourceId TERM_2 = ResourceId.of(ID + "term-2");
+
+    private static final Glossary GLOSSARY = Glossary.of(List.of(
+            term(TERM_1, "TERM-1", "Bounded Context"),
+            term(TERM_2, "TERM-2", "Aggregate")));
 
     @Test
     void rendersContextAndDecisionAsPlainProse() {
@@ -82,7 +92,7 @@ class AdrCardsTest {
                         de.hauschel.arknet.adr.domain.ConsequenceType.NEUTRAL)),
                 List.of(new de.hauschel.arknet.adr.domain.ConsideredOption(1, "Option A",
                         "Options that were considered.", de.hauschel.arknet.adr.domain.OptionOutcome.REJECTED)),
-                LocalDate.of(2026, 7, 1), List.of(), List.of(), null, List.of());
+                LocalDate.of(2026, 7, 1), List.of(), List.of(), List.of(), null, List.of());
         final AdrCards cards = cardsFor(adr);
 
         final List<String> labels = cards.section(PROJECT, Glossary.empty()).cards().getFirst().blocks().stream()
@@ -111,7 +121,7 @@ class AdrCardsTest {
                 "Forces and constraints.", "What was decided.", null,
                 List.of(new de.hauschel.arknet.adr.domain.ConsideredOption(1, "Option A",
                         "Options that were considered.", null)),
-                null, List.of(), List.of(), null, List.of());
+                null, List.of(), List.of(), List.of(), null, List.of());
         final AdrCards cards = cardsFor(adr);
 
         assertThat(blockOf(cards, "Considered options")).isEqualTo(new Block.Bullets("Considered options", List.of(
@@ -124,7 +134,7 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(new RequirementRef(FR_1)), List.of(), null, List.of());
+                List.of(new RequirementRef(FR_1)), List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(new ResolvedRequirement(FR_1, new RequirementCode("FR-1"))),
@@ -139,7 +149,7 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(), List.of(new BoundedContextRef(BC_1)), null, List.of());
+                List.of(), List.of(new BoundedContextRef(BC_1)), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(),
@@ -158,7 +168,8 @@ class AdrCardsTest {
         final Adr adr = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(new RequirementRef(FR_1)), List.of(new BoundedContextRef(BC_1)), null, List.of());
+                List.of(new RequirementRef(FR_1)), List.of(new BoundedContextRef(BC_1)), List.of(), null,
+                List.of());
         final AdrCards cards = new AdrCards(
                 (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
                 (projectId, ids) -> List.of(),
@@ -179,11 +190,12 @@ class AdrCardsTest {
     void rendersSupersedesAndSupersededByAsRefsToTheOtherAdrsOwnId() {
         final Adr older = new Adr(
                 new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Store data in files", AdrStatus.DEPRECATED,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(),
+                List.of(), List.of(), null, List.of());
         final Adr newer = new Adr(
                 new AdrId(ADR_2_ID), new AdrCode("ADR-2"), "Use kognio-rdf", AdrStatus.ACCEPTED,
                 "Forces and constraints.", "What was decided.", null, null, null,
-                List.of(), List.of(), null, List.of());
+                List.of(), List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 (projectId, displayLocale) -> List.of(
                         new AdrDetail(older, List.of(), List.of(new AdrCode("ADR-2")), List.of()),
@@ -206,7 +218,8 @@ class AdrCardsTest {
     void fallsBackToTheCodeWhenTheSupersededAdrIsNoLongerInTheList() {
         final Adr adr = new Adr(
                 new AdrId(ADR_2_ID), new AdrCode("ADR-2"), "Use kognio-rdf", AdrStatus.ACCEPTED,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(),
+                List.of(), List.of(), null, List.of());
         final AdrCards cards = new AdrCards(
                 (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(new AdrCode("ADR-1")), List.of(), List.of())),
                 (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
@@ -275,6 +288,76 @@ class AdrCardsTest {
                 new Badge(Badge.Kind.Known.STATUS, "Rejected"));
     }
 
+    // --- usesTerm (kogn-io/arknet#393) -----------------------------------------------------
+
+    /** A term named in the decision's context/decision text reads as a link, like a requirement's prose. */
+    @Test
+    void marksALinkedTermInsideContextAndDecision() {
+        final Adr adr = new Adr(
+                new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
+                "This Bounded Context needs its own store.", "Adopt a Bounded Context per store.", null, null, null,
+                List.of(), List.of(), List.of(new TermRef(TERM_1)), null, List.of());
+        final AdrCards cards = cardsFor(adr);
+
+        final Block.Prose context = (Block.Prose) blockOf(cards, "Context", GLOSSARY);
+        final Block.Prose decision = (Block.Prose) blockOf(cards, "Decision", GLOSSARY);
+
+        assertThat(ProseParts.soleParagraph(context).spans()).contains(
+                new Span.TermLink("Bounded Context", TERM_1.value(), "TERM-1"));
+        assertThat(ProseParts.soleParagraph(decision).spans()).contains(
+                new Span.TermLink("Bounded Context", TERM_1.value(), "TERM-1"));
+    }
+
+    /** A linked term the prose never names still has to be visible, as a chip. */
+    @Test
+    void listsALinkedTermTheTextDoesNotName() {
+        final Adr adr = new Adr(
+                new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
+                "Forces and constraints.", "What was decided.", null, null, null,
+                List.of(), List.of(), List.of(new TermRef(TERM_2)), null, List.of());
+        final AdrCards cards = cardsFor(adr);
+
+        final Block.Refs refs = (Block.Refs) blockOf(cards, "Uses terms", GLOSSARY);
+
+        assertThat(refs.refs()).containsExactly(new Ref("Aggregate", "TERM-2", TERM_2.value()));
+    }
+
+    /** Every linked term already appears in the prose, so the chip list would be pure repetition. */
+    @Test
+    void dropsTheUsesTermsChipListWhenTheTextNamesEveryLinkedTerm() {
+        final Adr adr = new Adr(
+                new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
+                "This Bounded Context needs its own store.", "What was decided.", null, null, null,
+                List.of(), List.of(), List.of(new TermRef(TERM_1)), null, List.of());
+        final AdrCards cards = cardsFor(adr);
+
+        final List<String> labels = cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
+                .map(Block::label).toList();
+
+        assertThat(labels).doesNotContain("Uses terms", "Uses terms (not named in the text)");
+    }
+
+    /** A term named only in a consequence's statement counts as named, the same as description/rationale. */
+    @Test
+    void countsATermNamedOnlyInAConsequenceAsNamedInTheText() {
+        final Adr adr = new Adr(
+                new AdrId(ADR_1_ID), new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.PROPOSED,
+                "Forces and constraints.", "What was decided.",
+                List.of(new de.hauschel.arknet.adr.domain.Consequence(1, "Splits the Aggregate cleanly.",
+                        de.hauschel.arknet.adr.domain.ConsequenceType.POSITIVE)),
+                null, null, List.of(), List.of(), List.of(new TermRef(TERM_2)), null, List.of());
+        final AdrCards cards = cardsFor(adr);
+
+        final List<String> labels = cards.section(PROJECT, GLOSSARY).cards().getFirst().blocks().stream()
+                .map(Block::label).toList();
+
+        assertThat(labels).doesNotContain("Uses terms (not named in the text)");
+    }
+
+    private static Term term(final ResourceId id, final String code, final String label) {
+        return new Term(new TermId(id), new TermCode(code), label, "Definition von " + label + ".", null);
+    }
+
     private static Adr minimalAdr() {
         return adr(ADR_1_ID, "ADR-1", AdrStatus.PROPOSED);
     }
@@ -282,7 +365,8 @@ class AdrCardsTest {
     private static Adr adr(final ResourceId id, final String code, final AdrStatus status) {
         return new Adr(
                 new AdrId(id), new AdrCode(code), "Use kognio-rdf", status,
-                "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(), null, List.of());
+                "Forces and constraints.", "What was decided.", null, null, null, List.of(),
+                List.of(), List.of(), null, List.of());
     }
 
     private static AdrCards cardsFor(final Adr adr) {
@@ -292,7 +376,11 @@ class AdrCardsTest {
     }
 
     private static Block blockOf(final AdrCards cards, final String label) {
-        return cards.section(PROJECT, Glossary.empty()).cards().getFirst().blocks().stream()
+        return blockOf(cards, label, Glossary.empty());
+    }
+
+    private static Block blockOf(final AdrCards cards, final String label, final Glossary glossary) {
+        return cards.section(PROJECT, glossary).cards().getFirst().blocks().stream()
                 .filter(b -> b.label().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("no block " + label));
     }

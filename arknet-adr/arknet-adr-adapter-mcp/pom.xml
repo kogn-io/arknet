@@ -22,9 +22,10 @@
              dessen Core - eine Abhaengigkeit hierher auf einen anderen BCs In-Port verletzt die
              Invariante "kein *-core* haengt an einem anderen BC" nicht (die gilt fuer die
              *-core-Module, siehe arknet-architecture-tests in CLAUDE.md). Genutzt nur fuer die
-             read-only Anzeige-Aufloesung ResourceId -> FR-N bzw. ResourceId -> BC-N in
-             AdrMcpTools#format; der Schreibpfad von adr_add bleibt ueber die eigenen Out-Ports
-             RequirementLookup/BoundedContextLookup entkoppelt. -->
+             read-only Anzeige-Aufloesung ResourceId -> FR-N bzw. ResourceId -> BC-N bzw.
+             ResourceId -> TERM-N (kogn-io/arknet#393) in AdrMcpTools#format; der Schreibpfad von
+             adr_add bleibt ueber die eigenen Out-Ports RequirementLookup/BoundedContextLookup/
+             TermLookup entkoppelt. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-requirements-core</artifactId>
@@ -33,6 +34,11 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-bounded-context-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

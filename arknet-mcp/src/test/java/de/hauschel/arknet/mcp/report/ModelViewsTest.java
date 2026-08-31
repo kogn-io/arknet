@@ -174,7 +174,7 @@ class ModelViewsTest {
                 new AdrId(ResourceId.of("https://w3id.org/arknet/id/adr-1")),
                 new AdrCode("ADR-1"), "Use kognio-rdf", AdrStatus.ACCEPTED,
                 "Forces and constraints.", "What was decided.", null, null, null, List.of(), List.of(),
-                null, List.of());
+                List.of(), null, List.of());
         return new AdrDetail(adr, List.of(), List.of(), List.of());
     }
 

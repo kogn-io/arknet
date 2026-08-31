@@ -633,6 +633,20 @@ public class ArknetMcpConfiguration {
     }
 
     /**
+     * Resolves a glossary term's human-typed business code (e.g. {@code TERM-1}) to its opaque
+     * subject identity - the strict cross-BC lookup {@code adr_add}'s {@code usesTerms} references
+     * need (kogn-io/arknet#393). A third, ADR-owned bean rather than a shared one with the
+     * requirements/use-cases/bounded-context hexagons' identically-shaped lookups: each hexagon
+     * declares the capability it needs on its own out-port. Acquires datasets from the same shared
+     * {@link DatasetLifecycle} as {@link #termRepository}, so it reads the same project the
+     * ubiquitous-language hexagon writes into.
+     */
+    @Bean
+    de.hauschel.arknet.adr.application.port.out.TermLookup adrTermLookup(final DatasetLifecycle datasetLifecycle) {
+        return new de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfTermLookup(datasetLifecycle);
+    }
+
+    /**
      * The clock supplies the day {@code adr_set_status} stamps onto a decision it accepts or rejects
      * (kogn-io/arknet#374). System default zone rather than UTC: the date recorded is the one the
      * person making the decision would write down, and this is a local single-user client (ADR-001),
@@ -642,27 +656,30 @@ public class ArknetMcpConfiguration {
     AdrService adrService(
             final AdrRepository repository, final ResourceIdFactory resourceIdFactory,
             final de.hauschel.arknet.adr.application.port.out.RequirementLookup adrRequirementLookup,
-            final BoundedContextLookup adrBoundedContextLookup) {
+            final BoundedContextLookup adrBoundedContextLookup,
+            final de.hauschel.arknet.adr.application.port.out.TermLookup adrTermLookup) {
         return new AdrService(repository, resourceIdFactory, adrRequirementLookup, adrBoundedContextLookup,
-                Clock.systemDefaultZone());
+                adrTermLookup, Clock.systemDefaultZone());
     }
 
     /**
-     * {@code resolveRequirements}/{@code resolveBoundedContexts} are the requirements and
-     * bounded-context hexagons' own driving ports (implemented by their {@code RequirementService}/
-     * {@code BoundedContextService} beans) - borrowed here purely so {@code adr_get}/
-     * {@code adr_list} can render an addressed requirement's or an affected context's business code
-     * instead of a bare IRI (ADR-008). This wires an In-Adapter to two <em>different</em> hexagons'
-     * In-Ports, not to those hexagons' cores - see the "kein *-core* haengt an einem anderen BC"
-     * precision in CLAUDE.md. The third relation, {@code supersededBy}, points back into the ADR
-     * hexagon itself and is resolved by {@link AdrService}, so it needs no borrowed port at all.
+     * {@code resolveRequirements}/{@code resolveBoundedContexts}/{@code resolveTerms} are the
+     * requirements, bounded-context and ubiquitous-language hexagons' own driving ports (implemented
+     * by their {@code RequirementService}/{@code BoundedContextService}/{@code TermService} beans) -
+     * borrowed here purely so {@code adr_get}/{@code adr_list} can render an addressed requirement's,
+     * an affected context's or a used term's business code instead of a bare IRI (ADR-008,
+     * kogn-io/arknet#393). This wires an In-Adapter to three <em>different</em> hexagons' In-Ports,
+     * not to those hexagons' cores - see the "kein *-core* haengt an einem anderen BC" precision in
+     * CLAUDE.md. The fourth relation, {@code supersededBy}, points back into the ADR hexagon itself
+     * and is resolved by {@link AdrService}, so it needs no borrowed port at all.
      */
     @Bean
     AdrMcpTools adrMcpTools(
             final AdrService service, final ResolveRequirements resolveRequirements,
-            final ResolveBoundedContexts resolveBoundedContexts, final ProjectResolver projectResolver) {
+            final ResolveBoundedContexts resolveBoundedContexts, final ResolveTerms resolveTerms,
+            final ProjectResolver projectResolver) {
         return new AdrMcpTools(service, service, service, service, service, service, service, service,
-                service, service, resolveRequirements, resolveBoundedContexts, projectResolver);
+                service, service, resolveRequirements, resolveBoundedContexts, resolveTerms, projectResolver);
     }
 
     // --- Actor hexagon -----------------------------------------------------------

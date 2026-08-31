@@ -42,6 +42,7 @@ import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -59,6 +60,7 @@ class AdrServiceTest {
     private static final ResourceId FR_1 = ResourceId.of("https://w3id.org/arknet/id/fr-1");
     private static final ResourceId NFR_2 = ResourceId.of("https://w3id.org/arknet/id/nfr-2");
     private static final ResourceId BC_1 = ResourceId.of("https://w3id.org/arknet/id/bc-1");
+    private static final ResourceId TERM_1 = ResourceId.of("https://w3id.org/arknet/id/term-1");
     private static final String DEFAULT_LANGUAGE = "en";
     /**
      * The day {@code accept}/{@code reject} stamp when the caller names none. Pinned rather than
@@ -72,6 +74,7 @@ class AdrServiceTest {
     private FakeResourceIdFactory resourceIdFactory;
     private InMemoryReferenceLookups.Requirements requirements;
     private InMemoryReferenceLookups.BoundedContexts contexts;
+    private InMemoryReferenceLookups.Terms terms;
     private AdrService service;
 
     @BeforeEach
@@ -83,7 +86,9 @@ class AdrServiceTest {
         requirements.register("NFR-2", NFR_2);
         contexts = new InMemoryReferenceLookups.BoundedContexts();
         contexts.register("BC-1", BC_1);
-        service = new AdrService(repository, resourceIdFactory, requirements, contexts, CLOCK);
+        terms = new InMemoryReferenceLookups.Terms();
+        terms.register("TERM-1", TERM_1);
+        service = new AdrService(repository, resourceIdFactory, requirements, contexts, terms, CLOCK);
     }
 
     private AdrDetail add(NewAdr command) {
@@ -116,7 +121,7 @@ class AdrServiceTest {
     @Test
     void addAcceptsOptionalFieldsAsNullOrEmpty() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null));
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null, null));
 
         assertEquals(List.of(), added.adr().consequences());
         assertEquals(List.of(), added.adr().consideredOptions());
@@ -131,7 +136,8 @@ class AdrServiceTest {
                 List.of(new NewConsequence("Faster reads", ConsequenceType.POSITIVE),
                         new NewConsequence("More operational complexity", ConsequenceType.NEGATIVE)),
                 List.of(new NewConsideredOption("Adopt library X", "Well understood", OptionOutcome.CHOSEN),
-                        new NewConsideredOption("Build in-house", "Too slow", OptionOutcome.REJECTED)), DEFAULT_LANGUAGE, null, null, null));
+                        new NewConsideredOption("Build in-house", "Too slow", OptionOutcome.REJECTED)),
+                DEFAULT_LANGUAGE, null, null, null, null));
 
         assertEquals(List.of(
                 new Consequence(1, "Faster reads", ConsequenceType.POSITIVE),
@@ -147,11 +153,12 @@ class AdrServiceTest {
     void addResolvesCrossContextReferencesToOpaqueIdentities() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
                 "Some decision here", null, null, DEFAULT_LANGUAGE,
-                List.of("FR-1", "NFR-2"), List.of("BC-1"), null));
+                List.of("FR-1", "NFR-2"), List.of("BC-1"), List.of("TERM-1"), null));
 
         assertEquals(List.of(new RequirementRef(FR_1), new RequirementRef(NFR_2)),
                 added.adr().addressesRequirements());
         assertEquals(List.of(new BoundedContextRef(BC_1)), added.adr().affectsContexts());
+        assertEquals(List.of(new TermRef(TERM_1)), added.adr().usesTerms());
     }
 
     /**
@@ -162,7 +169,7 @@ class AdrServiceTest {
     void addPropagatesTheLookupFailureForAnUnknownReferenceAndWritesNothing() {
         assertThrows(NoSuchElementException.class, () -> add(
                 new NewAdr("Title", "Some context here", "Some decision here", null, null,
-                        DEFAULT_LANGUAGE, List.of("FR-99"), null, null)));
+                        DEFAULT_LANGUAGE, List.of("FR-99"), null, null, null)));
 
         assertTrue(list(PROJECT).isEmpty());
     }
@@ -170,7 +177,7 @@ class AdrServiceTest {
     @Test
     void addDeduplicatesRepeatedReferenceCodes() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1", "FR-1"), null, null));
+                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1", "FR-1"), null, null, null));
 
         assertEquals(List.of(new RequirementRef(FR_1)), added.adr().addressesRequirements());
     }
@@ -259,8 +266,8 @@ class AdrServiceTest {
 
     @Test
     void listReturnsAllInInsertionOrder() {
-        add(new NewAdr("A", "Context of A here", "Decision A", null, null, DEFAULT_LANGUAGE, null, null, null));
-        add(new NewAdr("B", "Context of B here", "Decision B", null, null, DEFAULT_LANGUAGE, null, null, null));
+        add(new NewAdr("A", "Context of A here", "Decision A", null, null, DEFAULT_LANGUAGE, null, null, null, null));
+        add(new NewAdr("B", "Context of B here", "Decision B", null, null, DEFAULT_LANGUAGE, null, null, null, null));
 
         List<AdrDetail> all = list(PROJECT);
 
@@ -289,7 +296,7 @@ class AdrServiceTest {
     @Test
     void addRecordsNoDecisionDate() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, DEFAULT_LANGUAGE, null, null, null));
+                null, null, DEFAULT_LANGUAGE, null, null, null, null));
 
         assertEquals(AdrStatus.PROPOSED, added.adr().status());
         assertNull(added.adr().decisionDate());
@@ -299,7 +306,7 @@ class AdrServiceTest {
     @Test
     void acceptStampsTodayWhenTheCallerNamesNoDay() {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, DEFAULT_LANGUAGE, null, null, null)).adr().code();
+                null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
 
         assertEquals(TODAY, service.accept(PROJECT, code, null).adr().decisionDate());
     }
@@ -311,7 +318,7 @@ class AdrServiceTest {
     @Test
     void acceptStampsTheDayTheCallerNamesInstead() {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, DEFAULT_LANGUAGE, null, null, null)).adr().code();
+                null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
 
         assertEquals(LocalDate.of(2024, 3, 11),
                 service.accept(PROJECT, code, LocalDate.of(2024, 3, 11)).adr().decisionDate());
@@ -320,7 +327,7 @@ class AdrServiceTest {
     @Test
     void rejectStampsTheDecisionDateJustAsAcceptDoes() {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, DEFAULT_LANGUAGE, null, null, null)).adr().code();
+                null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
 
         assertEquals(TODAY, service.reject(PROJECT, code, null).adr().decisionDate());
     }
@@ -334,7 +341,7 @@ class AdrServiceTest {
     @Test
     void updateLeavesTheStampedDecisionDateAlone() {
         AdrCode code = add(new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, DEFAULT_LANGUAGE, null, null, null)).adr().code();
+                null, null, DEFAULT_LANGUAGE, null, null, null, null)).adr().code();
         service.accept(PROJECT, code, LocalDate.of(2024, 3, 11));
 
         Adr corrected = update(code,
@@ -647,7 +654,7 @@ class AdrServiceTest {
         repository.seedUnmaterialisableCode(PROJECT, phantomSuccessorId, new AdrCode("ADR-9"));
         Adr superseded = new Adr(new AdrId(ResourceId.of("https://w3id.org/arknet/id/superseded-1")),
                 new AdrCode("ADR-1"), "Title", AdrStatus.SUPERSEDED, "Some context here", "Some decision here",
-                null, null, null, List.of(), List.of(), phantomSuccessorId, List.of());
+                null, null, null, List.of(), List.of(), List.of(), phantomSuccessorId, List.of());
         repository.create(PROJECT, superseded, "en");
 
         List<AdrDetail> all = service.list(PROJECT, null);
@@ -689,7 +696,7 @@ class AdrServiceTest {
         AdrDetail peer = add(newAdr());
 
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null,
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null,
                 List.of(peer.adr().code().value())));
 
         assertEquals(List.of(peer.adr().id()), added.adr().relatedTo());
@@ -715,7 +722,7 @@ class AdrServiceTest {
     void updateLeavesRelatedToUntouchedWhenTheListIsNotGiven() {
         AdrDetail peer = add(newAdr());
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null,
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null,
                 List.of(peer.adr().code().value())));
 
         Adr updated = update(added.adr().code(),
@@ -725,14 +732,14 @@ class AdrServiceTest {
     }
 
     /**
-     * Resolution sits before any write, exactly as for the two cross-context lists - an unknown peer
+     * Resolution sits before any write, exactly as for the three cross-context lists - an unknown peer
      * code aborts the whole call rather than leaving a half-linked decision behind.
      */
     @Test
     void addRejectsAnUnknownRelatedCodeBeforeWritingAnything() {
         assertThrows(AdrNotFoundException.class, () -> add(
                 new NewAdr("Title", "Some context here", "Some decision here", null, null,
-                        DEFAULT_LANGUAGE, null, null, List.of("ADR-9"))));
+                        DEFAULT_LANGUAGE, null, null, null, List.of("ADR-9"))));
 
         assertTrue(list(PROJECT).isEmpty());
     }
@@ -771,7 +778,7 @@ class AdrServiceTest {
     void getMergesTheBackwardDirectionIntoTheOneRelatedToList() {
         AdrDetail peer = add(newAdr());
         AdrDetail naming = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null,
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null,
                 List.of(peer.adr().code().value())));
 
         assertEquals(List.of(peer.adr().code()),
@@ -785,7 +792,7 @@ class AdrServiceTest {
     void listMergesRelatedToExactlyAsGetDoes() {
         AdrDetail peer = add(newAdr());
         AdrDetail naming = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null,
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null,
                 List.of(peer.adr().code().value())));
 
         List<AdrDetail> all = list(PROJECT);
@@ -804,7 +811,7 @@ class AdrServiceTest {
     void aMutualRelatedToPairTerminatesAndReportsEachPeerOnce() {
         AdrDetail first = add(newAdr());
         AdrDetail second = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null,
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null,
                 List.of(first.adr().code().value())));
         update(first.adr().code(), AdrCorrection.builder()
                 .relatedToCodes(List.of(second.adr().code().value())).build());
@@ -823,7 +830,7 @@ class AdrServiceTest {
         AdrDetail target = add(newAdr());
         for (int i = 0; i < 10; i++) {
             add(new NewAdr("Title", "Some context here", "Some decision here",
-                    null, null, DEFAULT_LANGUAGE, null, null, List.of(target.adr().code().value())));
+                    null, null, DEFAULT_LANGUAGE, null, null, null, List.of(target.adr().code().value())));
         }
 
         assertEquals(
@@ -873,7 +880,8 @@ class AdrServiceTest {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
                 "Some decision here",
                 List.of(new NewConsequence("What follows", ConsequenceType.NEUTRAL)),
-                List.of(new NewConsideredOption("Option", "What else", OptionOutcome.REJECTED)), DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null));
+                List.of(new NewConsideredOption("Option", "What else", OptionOutcome.REJECTED)),
+                DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null, null));
 
         Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().decision("A sharper decision").build()).adr();
@@ -893,7 +901,7 @@ class AdrServiceTest {
     @Test
     void updateLeavesBothReferenceRelationsUntouchedWhenNeitherListIsGiven() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null));
+                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null, null));
 
         Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().name("Another title").build()).adr();
@@ -905,7 +913,7 @@ class AdrServiceTest {
     @Test
     void updateClearsAReferenceRelationWhenGivenAnEmptyList() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null));
+                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), List.of("BC-1"), null, null));
 
         Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().addressesRequirementCodes(List.of()).build()).adr();
@@ -917,7 +925,7 @@ class AdrServiceTest {
     @Test
     void updateReplacesAReferenceRelationWholesale() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), null, null));
+                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), null, null, null));
 
         Adr updated = update(added.adr().code(),
                 AdrCorrection.builder().addressesRequirementCodes(List.of("NFR-2")).build()).adr();
@@ -928,7 +936,7 @@ class AdrServiceTest {
     @Test
     void updateRejectsAnUnknownReferenceCodeBeforeWritingAnything() {
         AdrDetail added = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), null, null));
+                "Some decision here", null, null, DEFAULT_LANGUAGE, List.of("FR-1"), null, null, null));
 
         assertThrows(NoSuchElementException.class, () -> update(added.adr().code(),
                 AdrCorrection.builder().name("Another title")
@@ -1032,6 +1040,50 @@ class AdrServiceTest {
                 AdrCorrection.builder().name("Another title").build()));
     }
 
+    // --- usesTerm (kogn-io/arknet#393) -----------------------------------------
+
+    /** The tri-state {@code usesTermCodes} carries: replace, clear, and leave-untouched-when-omitted. */
+    @Test
+    void updateSetsClearsAndLeavesUsesTermUntouched() {
+        AdrDetail added = add(new NewAdr("Title", "Some context here",
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, List.of("TERM-1"), null));
+
+        Adr untouched = update(added.adr().code(),
+                AdrCorrection.builder().name("Another title").build()).adr();
+        assertEquals(List.of(new TermRef(TERM_1)), untouched.usesTerms());
+
+        Adr cleared = update(added.adr().code(),
+                AdrCorrection.builder().usesTermCodes(List.of()).build()).adr();
+        assertEquals(List.of(), cleared.usesTerms());
+    }
+
+    /**
+     * Resolution sits before any write, exactly as for {@code addressesRequirement}/
+     * {@code affectsContext} - an unknown term code aborts the whole call rather than leaving a
+     * half-linked decision behind.
+     */
+    @Test
+    void addPropagatesTheUsesTermLookupFailureAndWritesNothing() {
+        assertThrows(NoSuchElementException.class, () -> add(
+                new NewAdr("Title", "Some context here", "Some decision here", null, null,
+                        DEFAULT_LANGUAGE, null, null, List.of("TERM-99"), null)));
+
+        assertTrue(list(PROJECT).isEmpty());
+    }
+
+    /** {@code usesTerm} is correctable in every status, just like the other three reference lists. */
+    @Test
+    void updateCorrectsUsesTermOnAnAcceptedDecision() {
+        AdrCode code = add(newAdr()).adr().code();
+        service.accept(PROJECT, code, null);
+
+        Adr updated = update(code,
+                AdrCorrection.builder().usesTermCodes(List.of("TERM-1")).build()).adr();
+
+        assertEquals(List.of(new TermRef(TERM_1)), updated.usesTerms());
+        assertEquals(AdrStatus.ACCEPTED, updated.status());
+    }
+
     // --- consequence/considered-option correction (kogn-io/arknet#357) --------
 
     @Test
@@ -1066,7 +1118,7 @@ class AdrServiceTest {
     void updateCorrectsAConsequenceWhilePROPOSEDByPosition() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
-                DEFAULT_LANGUAGE, null, null, null));
+                DEFAULT_LANGUAGE, null, null, null, null));
 
         Adr updated = update(added.adr().code(), AdrCorrection.builder()
                 .consequenceCorrections(List.of(new ConsequenceCorrection(1, "Sharper wording", ConsequenceType.POSITIVE)))
@@ -1087,7 +1139,7 @@ class AdrServiceTest {
     void updateRejectsCorrectingAnExistingConsequenceOnAnAcceptedDecision() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
-                DEFAULT_LANGUAGE, null, null, null));
+                DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
@@ -1106,7 +1158,7 @@ class AdrServiceTest {
     void updateAllowsANewLanguageConsequenceCorrectionOnAnAcceptedDecision() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
-                DEFAULT_LANGUAGE, null, null, null));
+                DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         Adr updated = update(added.adr().code(), AdrCorrection.builder()
@@ -1129,7 +1181,7 @@ class AdrServiceTest {
     void updateRejectsAConsequenceTypeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
-                DEFAULT_LANGUAGE, null, null, null));
+                DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
@@ -1143,7 +1195,8 @@ class AdrServiceTest {
     @Test
     void updateAllowsANewLanguageConsideredOptionCorrectionOnAnAcceptedDecision() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
-                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)), DEFAULT_LANGUAGE, null, null, null));
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         Adr updated = update(added.adr().code(), AdrCorrection.builder()
@@ -1166,7 +1219,8 @@ class AdrServiceTest {
     @Test
     void updateRejectsAnOptionOutcomeChangeOnAnAcceptedDecisionEvenWithANewLanguage() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here", null,
-                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)), DEFAULT_LANGUAGE, null, null, null));
+                List.of(new NewConsideredOption("Option A", "Rationale A", OptionOutcome.REJECTED)),
+                DEFAULT_LANGUAGE, null, null, null, null));
         service.accept(PROJECT, added.adr().code(), null);
 
         assertThrows(AdrTextImmutableException.class, () -> update(added.adr().code(), AdrCorrection.builder()
@@ -1181,7 +1235,7 @@ class AdrServiceTest {
     void updateCorrectionOfAnUnknownConsequencePositionIsRejected() {
         AdrDetail added = add(new NewAdr("Title", "Some context here", "Some decision here",
                 List.of(new NewConsequence("Draft wording", ConsequenceType.NEUTRAL)), null,
-                DEFAULT_LANGUAGE, null, null, null));
+                DEFAULT_LANGUAGE, null, null, null, null));
 
         assertThrows(de.hauschel.arknet.adr.domain.ConsequencePositionNotFoundException.class,
                 () -> update(added.adr().code(), AdrCorrection.builder()
@@ -1284,7 +1338,7 @@ class AdrServiceTest {
     void deleteRefusesADecisionAnotherOneIsRelatedTo() {
         AdrCode peer = add(newAdr()).adr().code();
         add(new NewAdr("Title", "Some context here", "Some decision here",
-                null, null, DEFAULT_LANGUAGE, null, null, List.of(peer.value())));
+                null, null, DEFAULT_LANGUAGE, null, null, null, List.of(peer.value())));
 
         AdrReferencedException thrown =
                 assertThrows(AdrReferencedException.class, () -> service.delete(PROJECT, peer));
@@ -1299,7 +1353,7 @@ class AdrServiceTest {
     void deleteAllowsADecisionThatOnlyPointsAtOthers() {
         AdrCode peer = add(newAdr()).adr().code();
         AdrCode naming = add(new NewAdr("Title", "Some context here",
-                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, List.of(peer.value())))
+                "Some decision here", null, null, DEFAULT_LANGUAGE, null, null, null, List.of(peer.value())))
                 .adr().code();
 
         service.delete(PROJECT, naming);
@@ -1333,7 +1387,7 @@ class AdrServiceTest {
         return new NewAdr("Use an embedded triple store",
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                null, null, DEFAULT_LANGUAGE, null, null, null);
+                null, null, DEFAULT_LANGUAGE, null, null, null, null);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */

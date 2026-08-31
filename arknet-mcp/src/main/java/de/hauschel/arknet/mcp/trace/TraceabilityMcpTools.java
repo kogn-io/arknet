@@ -83,7 +83,8 @@ public final class TraceabilityMcpTools {
 
     @McpTool(name = "orphan_check",
             description = "Finds orphaned artifacts: requirements no use case realises, glossary terms never"
-                    + " referenced (neither used by a requirement or a use case, playing an actor role in a use"
+                    + " referenced (neither used by a requirement, a use case or an architecture decision"
+                    + " (arkarch:usesTerm), playing an actor role in a use"
                     + " case, a bounded context's ubiquitous language, nor another term's skos:broader), mentions"
                     + " without a backing edge - a requirement's, use case's or bounded context's text naming a"
                     + " term without the usesTerm/primaryActor/supportingActor/ubiquitousLanguageTerm edge (a use"
@@ -108,7 +109,7 @@ public final class TraceabilityMcpTools {
             description = "What is transitively affected if the given resource changes: follows"
                     + " arkreq:usesTerm/primaryActor/supportingActor/stepRealises, oslc_rm:constrainedBy,"
                     + " arkddd:ubiquitousLanguageTerm/upstream/downstream and"
-                    + " arkarch:addressesRequirement/affectsContext backwards (who references this)"
+                    + " arkarch:addressesRequirement/affectsContext/usesTerm backwards (who references this)"
                     + " and arkarch:supersededBy forwards (from a superseded decision to its"
                     + " successor) to every reachable requirement, term, use case, constraint,"
                     + " bounded context, context relationship or architecture decision. The id is a CURIE"

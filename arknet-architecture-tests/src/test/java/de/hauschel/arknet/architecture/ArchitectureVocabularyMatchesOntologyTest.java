@@ -80,6 +80,7 @@ class ArchitectureVocabularyMatchesOntologyTest {
                 ArkarchVocabulary.RELATED_TO,
                 ArkarchVocabulary.ADDRESSES_REQUIREMENT,
                 ArkarchVocabulary.AFFECTS_CONTEXT,
+                ArkarchVocabulary.USES_TERM,
                 ArkarchVocabulary.ADR_STATUS_TYPE,
                 ArkarchVocabulary.ADR_STATUS,
                 ArkarchVocabulary.PROPOSED,
@@ -151,9 +152,10 @@ class ArchitectureVocabularyMatchesOntologyTest {
     }
 
     /**
-     * The two cross-context edges the ADR context owns must point where the lookups resolve to: a
-     * requirement and a bounded context respectively. Without this, a range typo would let the ADR
-     * context ship edges that no traceability traversal on the other side can interpret.
+     * The three cross-context edges the ADR context owns must point where the lookups resolve to: a
+     * requirement, a bounded context and a glossary term respectively (kogn-io/arknet#393). Without
+     * this, a range typo would let the ADR context ship edges that no traceability traversal on the
+     * other side can interpret.
      */
     @Test
     void theOntologyDeclaresTheCrossContextEdgeRangesTheLookupsResolveTo() {
@@ -163,6 +165,9 @@ class ArchitectureVocabularyMatchesOntologyTest {
         assertTrue(ontology.contains(iri(ArkarchVocabulary.AFFECTS_CONTEXT), RDFS.RANGE,
                 iri("https://w3id.org/arknet/ddd#BoundedContext")),
                 "arkarch:affectsContext must range over arkddd:BoundedContext");
+        assertTrue(ontology.contains(iri(ArkarchVocabulary.USES_TERM), RDFS.RANGE,
+                iri("http://www.w3.org/2004/02/skos/core#Concept")),
+                "arkarch:usesTerm must range over skos:Concept");
     }
 
     /**

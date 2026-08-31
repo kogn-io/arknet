@@ -25,8 +25,8 @@ import java.util.Objects;
  * straight into a second rejection. The same shape {@link AdrNotDeletableException#remedy} settled
  * on.</p>
  *
- * <p>The three reference relations ({@code addressesRequirement}, {@code affectsContext},
- * {@code relatedTo}) are deliberately <em>not</em> covered by this rule and never raise it:
+ * <p>The four reference relations ({@code addressesRequirement}, {@code affectsContext},
+ * {@code usesTerm}, {@code relatedTo}) are deliberately <em>not</em> covered by this rule and never raise it:
  * completing a reference that could not be written when the decision was made (because the
  * referenced resource did not exist yet) records the same decision more fully instead of changing
  * it.</p>

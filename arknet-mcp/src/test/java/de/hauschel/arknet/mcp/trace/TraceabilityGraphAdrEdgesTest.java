@@ -25,6 +25,7 @@ import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
 import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
@@ -45,6 +46,11 @@ import de.hauschel.arknet.req.domain.RequirementCode;
 import de.hauschel.arknet.req.domain.RequirementId;
 import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
+import de.hauschel.arknet.ul.adapter.kogniordf.KognioRdfTermRepositoryFactory;
+import de.hauschel.arknet.ul.application.port.out.TermRepository;
+import de.hauschel.arknet.ul.domain.Term;
+import de.hauschel.arknet.ul.domain.TermCode;
+import de.hauschel.arknet.ul.domain.TermId;
 
 /**
  * The ADR side of the traceability traversal (issue #69), seeded through the real repositories of
@@ -62,6 +68,7 @@ class TraceabilityGraphAdrEdgesTest {
 
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/trace-adr-fr-1";
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-adr-bc-1";
+    private static final String TERM_1_IRI = "https://w3id.org/arknet/id/trace-adr-term-1";
     private static final String ADR_1_IRI = "https://w3id.org/arknet/id/trace-adr-adr-1";
     private static final String ADR_2_IRI = "https://w3id.org/arknet/id/trace-adr-adr-2";
     private static final String ADR_3_IRI = "https://w3id.org/arknet/id/trace-adr-adr-3";
@@ -83,7 +90,10 @@ class TraceabilityGraphAdrEdgesTest {
                 lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
         AdrRepository adrs =
                 KognioRdfAdrRepositoryFactory.over(lifecycle, new UuidResourceIdFactory(), DisplayLocale.DEFAULT);
+        TermRepository terms = KognioRdfTermRepositoryFactory.over(lifecycle);
 
+        terms.create(PROJECT, new Term(new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"),
+                "Bounded Context", "Eine explizite Grenze, innerhalb derer ein Domaenenmodell gilt."), null);
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", null,
@@ -101,16 +111,17 @@ class TraceabilityGraphAdrEdgesTest {
                 new AdrId(ResourceId.of(ADR_2_IRI)), new AdrCode("ADR-2"), "Swap the store",
                 AdrStatus.ACCEPTED, "The embedded store no longer covers the team case.",
                 "Move to a remote endpoint behind the same out-port.", null, null, null,
-                List.of(), List.of(), null, List.of()), "de");
+                List.of(), List.of(), List.of(new TermRef(ResourceId.of(TERM_1_IRI))), null, List.of()), "de");
         // ADR-1 addresses FR-1 and affects BC-1; ADR-2 supersedes ADR-1 (kogn-io/arknet#357: the
         // supersededBy edge - and the SUPERSEDED status it is coupled to - is written on the
-        // superseded decision, ADR-1, pointing at its successor ADR-2).
+        // superseded decision, ADR-1, pointing at its successor ADR-2). ADR-2 also uses TERM-1
+        // (kogn-io/arknet#393).
         adrs.create(PROJECT, new Adr(
                 new AdrId(ResourceId.of(ADR_1_IRI)), new AdrCode("ADR-1"), "Use an embedded triple store",
                 AdrStatus.SUPERSEDED, "A single-user client must work without a server.",
                 "Use kognio-rdf behind an out-port.", null, null, null,
                 List.of(new RequirementRef(ResourceId.of(FR_1_IRI))),
-                List.of(new BoundedContextRef(ResourceId.of(BC_1_IRI))),
+                List.of(new BoundedContextRef(ResourceId.of(BC_1_IRI))), List.of(),
                 new AdrId(ResourceId.of(ADR_2_IRI)), List.of()), "de");
 
         // ADR-4 legacy-supersedes ADR-3 (pre-#357 shape, store-first only - no tool writes it any
@@ -120,12 +131,12 @@ class TraceabilityGraphAdrEdgesTest {
                 new AdrId(ResourceId.of(ADR_3_IRI)), new AdrCode("ADR-3"), "Store data in files",
                 AdrStatus.DEPRECATED, "An earlier storage choice.",
                 "Use plain files behind an out-port.", null, null, null,
-                List.of(), List.of(), null, List.of()), "de");
+                List.of(), List.of(), List.of(), null, List.of()), "de");
         adrs.create(PROJECT, new Adr(
                 new AdrId(ResourceId.of(ADR_4_IRI)), new AdrCode("ADR-4"), "Swap to files, then back",
                 AdrStatus.PROPOSED, "The file-based approach did not scale either.",
                 "Revisit the embedded triple store.", null, null, null,
-                List.of(), List.of(), null, List.of()), "de");
+                List.of(), List.of(), List.of(), null, List.of()), "de");
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { <" + ADR_4_IRI
@@ -188,5 +199,21 @@ class TraceabilityGraphAdrEdgesTest {
     void adrsCarryTheirBusinessCodeAsTheirDisplayHandle() {
         assertThat(graph.identifierOf(ADR_1_IRI)).contains("ADR-1");
         assertThat(graph.identifierOf(ADR_2_IRI)).contains("ADR-2");
+    }
+
+    /**
+     * Changing a glossary term affects the decision that uses it via {@code arkarch:usesTerm}
+     * (kogn-io/arknet#393) - the same backward reasoning already exercised for
+     * {@code addressesRequirement}/{@code affectsContext} above.
+     */
+    @Test
+    void dependentsOfATermReachTheAdrThatUsesIt() {
+        assertThat(graph.dependents(TERM_1_IRI)).contains(ADR_2_IRI);
+    }
+
+    /** A term used only by an ADR must not be reported as an orphan by {@code orphan_check}. */
+    @Test
+    void aTermUsedOnlyByAnAdrIsNotAnOrphan() {
+        assertThat(graph.isReferencedTerm(TERM_1_IRI)).isTrue();
     }
 }

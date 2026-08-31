@@ -59,6 +59,7 @@ import de.hauschel.arknet.adr.domain.ConsequenceType;
 import de.hauschel.arknet.adr.domain.ConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -68,6 +69,9 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.domain.RequirementCode;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
+import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
  * Scaffold-level check that the adapter declares exactly the seven ADR tools and guards its in-port
@@ -92,14 +96,15 @@ class AdrMcpToolsTest {
     private final Stub stub = new Stub();
     private final RecordingResolveRequirements requirements = new RecordingResolveRequirements();
     private final RecordingResolveBoundedContexts contexts = new RecordingResolveBoundedContexts();
+    private final RecordingResolveTerms terms = new RecordingResolveTerms();
     private final AdrMcpTools adapter =
             new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                    contexts, PROJECTS);
+                    contexts, terms, PROJECTS);
 
     @Test
     void routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone() {
         String created = adapter.add(null, "A title", "Why this was needed", "What was decided",
-                null, null, null, null, null, null, ANCHOR);
+                null, null, null, null, null, null, null, ANCHOR);
 
         assertTrue(created.contains("ADR-1"), created);
         assertEquals(PROJECT, stub.lastProjectId);
@@ -109,7 +114,7 @@ class AdrMcpToolsTest {
     void rejectsACallThatCarriesNoAnchorAtAll() {
         assertThrows(UnresolvedProjectAnchorException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
-                        null, null, null, null, null, null, null));
+                        null, null, null, null, null, null, null, null));
     }
 
     @Test
@@ -129,47 +134,50 @@ class AdrMcpToolsTest {
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, stub, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, requirements,
-                        contexts, PROJECTS));
+                        contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
-                        PROJECTS));
+                        terms, PROJECTS));
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
-                        PROJECTS));
+                        terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+                        contexts, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
                 () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
-                        requirements, contexts, null));
+                        requirements, contexts, terms, null));
     }
 
     @Test
@@ -177,7 +185,8 @@ class AdrMcpToolsTest {
         String rendered = adapter.add(null, "Use an embedded triple store", "Why this was needed",
                 "What was decided",
                 List.of(new NewConsequenceInput("Faster reads", "POSITIVE")),
-                List.of(new NewConsideredOptionInput("Adopt library X", "Well understood", "CHOSEN")), "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
+                List.of(new NewConsideredOptionInput("Adopt library X", "Well understood", "CHOSEN")), "en",
+                List.of("FR-1"), List.of("BC-1"), List.of("TERM-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals("Use an embedded triple store", stub.lastAddCommand.name());
         assertEquals("Why this was needed", stub.lastAddCommand.context());
@@ -190,6 +199,7 @@ class AdrMcpToolsTest {
         assertEquals("en", stub.lastAddCommand.language());
         assertEquals(List.of("FR-1"), stub.lastAddCommand.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastAddCommand.affectsContextCodes());
+        assertEquals(List.of("TERM-1"), stub.lastAddCommand.usesTermCodes());
         assertEquals(List.of("ADR-3"), stub.lastAddCommand.relatedToCodes());
         assertTrue(rendered.contains("ADR-1"), rendered);
         assertTrue(rendered.contains("[PROPOSED]"), rendered);
@@ -200,7 +210,7 @@ class AdrMcpToolsTest {
     @Test
     void addNormalisesBlankOptionalFieldsToNull() {
         adapter.add(null, "A title", "Why this was needed", "What was decided", null, null,
-                "  ", null, null, null, ANCHOR);
+                "  ", null, null, null, null, ANCHOR);
 
         assertEquals(List.of(), stub.lastAddCommand.consequences());
         assertEquals(List.of(), stub.lastAddCommand.consideredOptions());
@@ -249,7 +259,7 @@ class AdrMcpToolsTest {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
                         List.of(new NewConsequenceInput("text", "NOT_A_TYPE")), null, "en",
-                        null, null, null, ANCHOR));
+                        null, null, null, null, ANCHOR));
     }
 
     @Test
@@ -257,22 +267,25 @@ class AdrMcpToolsTest {
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.add(null, "A title", "Why this was needed", "What was decided",
                         null, List.of(new NewConsideredOptionInput("A", "r", "MAYBE")), "en",
-                        null, null, null, ANCHOR));
+                        null, null, null, null, ANCHOR));
     }
 
     @Test
     void formatRendersTheResolvedReferenceCodesInsteadOfTheBareIris() {
         ResourceId requirementId = ResourceId.of("https://w3id.org/arknet/id/some-requirement");
         ResourceId contextId = ResourceId.of("https://w3id.org/arknet/id/some-context");
+        ResourceId termId = ResourceId.of("https://w3id.org/arknet/id/some-term");
         requirements.register(requirementId, new RequirementCode("FR-7"));
         contexts.register(contextId, new BoundedContextCode("BC-3"));
-        stub.nextDetail = detail(adrWith(List.of(requirementId), List.of(contextId), null),
+        terms.register(termId, new TermCode("TERM-2"));
+        stub.nextDetail = detail(adrWith(List.of(requirementId), List.of(contextId), List.of(termId), null),
                 List.of(), List.of());
 
         String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
 
         assertTrue(rendered.contains("addresses: FR-7"), rendered);
         assertTrue(rendered.contains("affects: BC-3"), rendered);
+        assertTrue(rendered.contains("uses terms: TERM-2"), rendered);
     }
 
     @Test
@@ -304,8 +317,8 @@ class AdrMcpToolsTest {
         Adr withChildren = new Adr(base.id(), base.code(), base.name(), base.status(), base.context(),
                 base.decision(), List.of(new Consequence(1, "Faster reads", ConsequenceType.POSITIVE)),
                 List.of(new ConsideredOption(1, "Adopt library X", "Well understood", OptionOutcome.CHOSEN)),
-                base.decisionDate(), base.addressesRequirements(), base.affectsContexts(), base.supersededBy(),
-                base.relatedTo());
+                base.decisionDate(), base.addressesRequirements(), base.affectsContexts(), base.usesTerms(),
+                base.supersededBy(), base.relatedTo());
         stub.nextDetail = detail(withChildren, List.of(), List.of());
 
         String rendered = adapter.get(null, "ADR-1", null, ANCHOR);
@@ -321,20 +334,25 @@ class AdrMcpToolsTest {
         ResourceId requirementA = ResourceId.of("https://w3id.org/arknet/id/req-a");
         ResourceId requirementB = ResourceId.of("https://w3id.org/arknet/id/req-b");
         ResourceId contextA = ResourceId.of("https://w3id.org/arknet/id/ctx-a");
+        ResourceId termA = ResourceId.of("https://w3id.org/arknet/id/term-a");
         requirements.register(requirementA, new RequirementCode("FR-1"));
         requirements.register(requirementB, new RequirementCode("FR-2"));
         contexts.register(contextA, new BoundedContextCode("BC-1"));
+        terms.register(termA, new TermCode("TERM-1"));
         stub.allAdrs = List.of(
-                detail(adrWith(List.of(requirementA), List.of(contextA), null), List.of(), List.of()),
+                detail(adrWith(List.of(requirementA), List.of(contextA), List.of(termA), null),
+                        List.of(), List.of()),
                 detail(adrWith(List.of(requirementB), List.of(), null), List.of(), List.of()));
 
         String rendered = adapter.list(null, null, ANCHOR);
 
         assertEquals(1, requirements.callCount());
         assertEquals(1, contexts.callCount());
+        assertEquals(1, terms.callCount());
         assertTrue(rendered.contains("[addresses: FR-1]"), rendered);
         assertTrue(rendered.contains("[addresses: FR-2]"), rendered);
         assertTrue(rendered.contains("[affects: BC-1]"), rendered);
+        assertTrue(rendered.contains("[uses terms: TERM-1]"), rendered);
     }
 
     @Test
@@ -345,6 +363,7 @@ class AdrMcpToolsTest {
 
         assertEquals(0, requirements.callCount());
         assertEquals(0, contexts.callCount());
+        assertEquals(0, terms.callCount());
     }
 
     @Test
@@ -606,7 +625,8 @@ class AdrMcpToolsTest {
                 List.of(new NewConsequenceInput("New one", "NEGATIVE")),
                 List.of(new ConsequenceCorrectionInput(1, "Corrected", "POSITIVE")),
                 List.of(new NewConsideredOptionInput("New option", "reason", "REJECTED")),
-                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")), "en", List.of("FR-1"), List.of("BC-1"), List.of("ADR-3"), ANCHOR);
+                List.of(new ConsideredOptionCorrectionInput(1, "Corrected option", "reason", "CHOSEN")), "en",
+                List.of("FR-1"), List.of("BC-1"), List.of("TERM-1"), List.of("ADR-3"), ANCHOR);
 
         assertEquals(new AdrCode("ADR-1"), stub.lastUpdatedCode);
         assertEquals("A better title", stub.lastCorrection.name());
@@ -619,13 +639,14 @@ class AdrMcpToolsTest {
         assertEquals("en", stub.lastCorrection.language());
         assertEquals(List.of("FR-1"), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of("BC-1"), stub.lastCorrection.affectsContextCodes());
+        assertEquals(List.of("TERM-1"), stub.lastCorrection.usesTermCodes());
         assertEquals(List.of("ADR-3"), stub.lastCorrection.relatedToCodes());
     }
 
     @Test
     void updateNormalisesBlankFieldsToTheLeaveItUnchangedSentinel() {
         adapter.update(null, "ADR-1", "  ", "", "   ", null, null, null, null, "  ",
-                null, null, null, ANCHOR);
+                null, null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.name());
         assertNull(stub.lastCorrection.context());
@@ -636,17 +657,19 @@ class AdrMcpToolsTest {
     @Test
     void updateKeepsTheReferenceListsTriStateApart() {
         adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
-                null, null, null, ANCHOR);
+                null, null, null, null, ANCHOR);
 
         assertNull(stub.lastCorrection.addressesRequirementCodes());
         assertNull(stub.lastCorrection.affectsContextCodes());
+        assertNull(stub.lastCorrection.usesTermCodes());
         assertNull(stub.lastCorrection.relatedToCodes());
 
         adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
-                List.of(), List.of(), List.of(), ANCHOR);
+                List.of(), List.of(), List.of(), List.of(), ANCHOR);
 
         assertEquals(List.of(), stub.lastCorrection.addressesRequirementCodes());
         assertEquals(List.of(), stub.lastCorrection.affectsContextCodes());
+        assertEquals(List.of(), stub.lastCorrection.usesTermCodes());
         assertEquals(List.of(), stub.lastCorrection.relatedToCodes());
     }
 
@@ -680,10 +703,16 @@ class AdrMcpToolsTest {
 
     private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
             AdrId supersededBy) {
+        return adrWith(requirementIds, contextIds, List.of(), supersededBy);
+    }
+
+    private static Adr adrWith(List<ResourceId> requirementIds, List<ResourceId> contextIds,
+            List<ResourceId> termIds, AdrId supersededBy) {
         return new Adr(ID, new AdrCode("ADR-1"), "Use an embedded triple store", AdrStatus.PROPOSED,
                 "Why this was needed", "What was decided", null, null, null,
                 requirementIds.stream().map(RequirementRef::new).toList(),
                 contextIds.stream().map(BoundedContextRef::new).toList(),
+                termIds.stream().map(TermRef::new).toList(),
                 supersededBy, List.of());
     }
 
@@ -728,7 +757,7 @@ class AdrMcpToolsTest {
             lastProjectId = projectId;
             Adr adr = new Adr(ID, new AdrCode("ADR-1"), command.name(), AdrStatus.PROPOSED,
                     command.context(), command.decision(), List.of(), List.of(),
-                    null, List.of(), List.of(), null, List.of());
+                    null, List.of(), List.of(), List.of(), null, List.of());
             return new AdrDetail(adr, List.of(), List.of(), List.of());
         }
 
@@ -832,6 +861,28 @@ class AdrMcpToolsTest {
             calls++;
             List<ResourceId> wanted = Arrays.asList(ids);
             return known.stream().filter(c -> wanted.contains(c.id())).toList();
+        }
+    }
+
+    /** {@link RecordingResolveBoundedContexts} for {@link ResolveTerms} (kogn-io/arknet#393). */
+    private static final class RecordingResolveTerms implements ResolveTerms {
+
+        private final List<ResolvedTerm> known = new ArrayList<>();
+        private int calls;
+
+        void register(ResourceId id, TermCode code) {
+            known.add(new ResolvedTerm(id, code));
+        }
+
+        int callCount() {
+            return calls;
+        }
+
+        @Override
+        public List<ResolvedTerm> resolve(ProjectId projectId, ResourceId... ids) {
+            calls++;
+            List<ResourceId> wanted = Arrays.asList(ids);
+            return known.stream().filter(t -> wanted.contains(t.id())).toList();
         }
     }
 }

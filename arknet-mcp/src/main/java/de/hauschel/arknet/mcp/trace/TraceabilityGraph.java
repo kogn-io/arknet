@@ -35,9 +35,10 @@ import de.hauschel.arknet.persistence.ArkreqVocabulary;
  * {@code arkreq:supportingActor} (UseCase -&gt; Term/Actor), {@code arkddd:ubiquitousLanguageTerm}
  * (BoundedContext -&gt; Term), {@code arkddd:upstream}/{@code arkddd:downstream} (ContextRelationship
  * -&gt; BoundedContext, issue #293), {@code oslc_rm:constrainedBy} (Requirement/UseCase -&gt;
- * Constraint, issue #223/#329), the three ADR edges
+ * Constraint, issue #223/#329), the four ADR edges
  * {@code arkarch:addressesRequirement} (ADR -&gt; Requirement), {@code arkarch:affectsContext}
- * (ADR -&gt; BoundedContext) and {@code arkarch:supersededBy} (ADR -&gt; ADR, written on the
+ * (ADR -&gt; BoundedContext), {@code arkarch:usesTerm} (ADR -&gt; Term, kogn-io/arknet#393) and
+ * {@code arkarch:supersededBy} (ADR -&gt; ADR, written on the
  * superseded decision, issue #69/kogn-io/arknet#357), and the
  * two-hop {@code arkreq:mainStep}/{@code arkreq:extensionStep} then {@code arkreq:stepRealises}
  * (UseCase -&gt; Step -&gt; Requirement). It also exposes the requirement/use-case/bounded-context
@@ -114,12 +115,21 @@ public final class TraceabilityGraph {
     /** {@code oslc_rm:constrainedBy} - Requirement/UseCase -&gt; Constraint (issue #223/#329). */
     private static final String CONSTRAINED_BY = ArkreqVocabulary.CONSTRAINED_BY;
 
-    // The three arkarch: edges an architecture decision owns (issue #69). Unlike ArkreqVocabulary/
-    // ArkdddVocabulary, whose scope is deliberately the cross-module subset only, ArkarchVocabulary
-    // mirrors its whole (ADR-only) ontology module - so these come from the same shared source the
-    // ADR out-adapter serializes them with, and a rename cannot silently desync the two sides.
+    // The four arkarch: edges an architecture decision owns (issue #69, kogn-io/arknet#393). Unlike
+    // ArkreqVocabulary/ArkdddVocabulary, whose scope is deliberately the cross-module subset only,
+    // ArkarchVocabulary mirrors its whole (ADR-only) ontology module - so these come from the same
+    // shared source the ADR out-adapter serializes them with, and a rename cannot silently desync
+    // the two sides.
     private static final String ADDRESSES_REQUIREMENT = ArkarchVocabulary.ADDRESSES_REQUIREMENT;
     private static final String AFFECTS_CONTEXT = ArkarchVocabulary.AFFECTS_CONTEXT;
+
+    /**
+     * {@code arkarch:usesTerm} - ADR -&gt; Term (kogn-io/arknet#393), the ADR component's own
+     * property (not the shared {@code arkreq:usesTerm} {@link #USES_TERM} above - see
+     * {@code ArkarchVocabulary#USES_TERM}'s javadoc for why). Named {@code ADR_USES_TERM} rather
+     * than reusing {@code USES_TERM} to avoid a naming collision with the constant above.
+     */
+    private static final String ADR_USES_TERM = ArkarchVocabulary.USES_TERM;
 
     /**
      * {@code arkarch:supersededBy} - ADR -&gt; ADR, written on the <em>superseded</em> decision
@@ -176,10 +186,13 @@ public final class TraceabilityGraph {
      * {@code arkreq:Step} back to its owning use case - a step itself is never reported (see
      * {@link #dependents(String)}).
      *
-     * <p>The three {@code arkarch:} edges here are because an architecture decision is exactly the
+     * <p>The {@code arkarch:} edges here are because an architecture decision is exactly the
      * kind of artifact "what breaks if this changes" is asked about: change a requirement and the
      * decision that addresses it is affected; change a bounded context and the decision affecting it
-     * is. {@code arkarch:supersedes} is the pre-#357 write shape - no tool asserts it any more, but a
+     * is; change (or delete) a glossary term and the decision that uses it
+     * ({@code arkarch:usesTerm}, kogn-io/arknet#393) is too - the same reasoning
+     * {@code arkreq:usesTerm} already earns a place in this set for. {@code arkarch:supersedes} is the
+     * pre-#357 write shape - no tool asserts it any more, but a
      * store-first record may still carry it, and this backward read is what keeps such a record's
      * successor reachable. {@code arkarch:supersededBy}, the current write shape, is deliberately
      * <strong>not</strong> in this backward-followed set: kogn-io/arknet#357 moved that edge onto the
@@ -207,7 +220,7 @@ public final class TraceabilityGraph {
     private static final Set<String> DEPENDENT_EDGE_PREDICATES = Set.of(
             USES_TERM, PRIMARY_ACTOR, SUPPORTING_ACTOR, STEP_REALISES, MAIN_STEP, EXTENSION_STEP,
             UBIQUITOUS_LANGUAGE_TERM, UPSTREAM, DOWNSTREAM, ADDRESSES_REQUIREMENT, AFFECTS_CONTEXT,
-            CONSTRAINED_BY, SUPERSEDES);
+            ADR_USES_TERM, CONSTRAINED_BY, SUPERSEDES);
 
     /**
      * The predicates {@link #dependents(String)} follows <em>forwards</em> instead - the target of
@@ -402,7 +415,8 @@ public final class TraceabilityGraph {
 
     /**
      * @return {@code true} if a term is used by a requirement or a use case
-     *         ({@code arkreq:usesTerm}, issue #329), plays an actor role in a use case
+     *         ({@code arkreq:usesTerm}, issue #329), by an architecture decision
+     *         ({@code arkarch:usesTerm}, kogn-io/arknet#393), plays an actor role in a use case
      *         ({@code arkreq:primaryActor}/{@code arkreq:supportingActor}), is a bounded context's
      *         ubiquitous language ({@code arkddd:ubiquitousLanguageTerm}), or is another term's
      *         broader (superordinate) term ({@code skos:broader}, issue #252) - an interior/root
@@ -411,7 +425,8 @@ public final class TraceabilityGraph {
     public boolean isReferencedTerm(String termIri) {
         Objects.requireNonNull(termIri, "termIri");
         return incomingByObject.getOrDefault(termIri, List.of()).stream()
-                .anyMatch(t -> USES_TERM.equals(t.predicate()) || PRIMARY_ACTOR.equals(t.predicate())
+                .anyMatch(t -> USES_TERM.equals(t.predicate()) || ADR_USES_TERM.equals(t.predicate())
+                        || PRIMARY_ACTOR.equals(t.predicate())
                         || SUPPORTING_ACTOR.equals(t.predicate())
                         || UBIQUITOUS_LANGUAGE_TERM.equals(t.predicate())
                         || BROADER.equals(t.predicate()));
