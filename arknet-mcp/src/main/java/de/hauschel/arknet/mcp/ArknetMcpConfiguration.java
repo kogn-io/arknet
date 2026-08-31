@@ -24,6 +24,7 @@ import de.hauschel.arknet.mcp.dataset.LockConflictReportingDatasetLifecycle;
 import de.hauschel.arknet.mcp.report.ActorCards;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
+import de.hauschel.arknet.mcp.report.ConstraintCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
@@ -807,16 +808,22 @@ public class ArknetMcpConfiguration {
      * <p>{@link ActorCards} (issue #336) is the sixth: {@code actorService} was already wired for
      * {@link #actorMcpTools}, and {@link ActorService} implements {@code ListActors} too, so no
      * new bean is needed to read it a second time for the report.</p>
+     *
+     * <p>{@link ConstraintCards} (issue #390) reuses {@code constraintService} the same way:
+     * {@link ConstraintService} already implements {@code ListConstraints} for
+     * {@link #constraintMcpTools}, so reading it a second time here needs no new bean either.</p>
      */
     @Bean
     ModelViews modelViews(
-            final UseCaseService useCases, final RequirementService requirements, final TermService terms,
+            final UseCaseService useCases, final RequirementService requirements,
+            final ConstraintService constraintService, final TermService terms,
             final BoundedContextService boundedContexts, final AdrService adrs, final ActorService actorService,
             final ResolveRequirements resolveRequirements) {
         return new ModelViews(
                 terms,
                 new UseCaseCards(useCases, resolveRequirements),
                 new RequirementCards(requirements),
+                new ConstraintCards(constraintService),
                 new BoundedContextCards(boundedContexts),
                 new AdrCards(adrs, resolveRequirements, boundedContexts),
                 new ActorCards(actorService));

@@ -46,6 +46,7 @@ import de.hauschel.arknet.kernel.UuidResourceIdFactory;
 import de.hauschel.arknet.mcp.report.ActorCards;
 import de.hauschel.arknet.mcp.report.AdrCards;
 import de.hauschel.arknet.mcp.report.BoundedContextCards;
+import de.hauschel.arknet.mcp.report.ConstraintCards;
 import de.hauschel.arknet.mcp.report.HtmlReportRenderer;
 import de.hauschel.arknet.mcp.report.ModelViews;
 import de.hauschel.arknet.mcp.report.RequirementCards;
@@ -162,6 +163,7 @@ class StoreReportToolsTest {
                 new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards(
                         (projectId, displayLocale) -> PROJECT.equals(projectId) ? List.of(fr1) : List.of()),
+                new ConstraintCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
                 new ActorCards(projectId -> List.of()));
@@ -558,6 +560,7 @@ class StoreReportToolsTest {
                 termService,
                 new UseCaseCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of()),
                 new RequirementCards((projectId, displayLocale) -> List.of()),
+                new ConstraintCards((projectId, displayLocale) -> List.of()),
                 new BoundedContextCards(projectId -> List.of()),
                 new AdrCards((projectId, displayLocale) -> List.of(), (projectId, ids) -> List.of(), (projectId, ids) -> List.of()),
                 new ActorCards(projectId -> List.of()));
