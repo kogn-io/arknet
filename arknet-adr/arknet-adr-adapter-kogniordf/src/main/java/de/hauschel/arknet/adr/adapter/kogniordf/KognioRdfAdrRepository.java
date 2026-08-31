@@ -55,6 +55,7 @@ import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
@@ -141,6 +142,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final String DECISION_DATE_PROPERTY = ArkarchVocabulary.DECISION_DATE;
     private static final String ADDRESSES_REQUIREMENT_PROPERTY = ArkarchVocabulary.ADDRESSES_REQUIREMENT;
     private static final String AFFECTS_CONTEXT_PROPERTY = ArkarchVocabulary.AFFECTS_CONTEXT;
+    private static final String USES_TERM_PROPERTY = ArkarchVocabulary.USES_TERM;
     private static final String SUPERSEDES_PROPERTY = ArkarchVocabulary.SUPERSEDES;
     private static final String SUPERSEDED_BY_PROPERTY = ArkarchVocabulary.SUPERSEDED_BY;
     private static final String RELATED_TO_PROPERTY = ArkarchVocabulary.RELATED_TO;
@@ -264,7 +266,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * Builds the candidate graph for one decision's triples: type, identifier, status, the three
      * multilingual scalar literals (each written under its own tag), the two optional pre-#357 flat
      * literals (never written by this method - see class javadoc), {@code decisionDate}, every
-     * consequence/considered-option as its own freshly minted resource, and the four reference
+     * consequence/considered-option as its own freshly minted resource, and the five reference
      * edges. Shared by {@link #create} and {@link #compareAndUpdate}.
      */
     private AdrCandidate buildCandidateGraph(IRI subjectIri, Adr adr, String nameTag, String contextTag,
@@ -319,6 +321,9 @@ public class KognioRdfAdrRepository implements AdrRepository {
         }
         for (BoundedContextRef ref : adr.affectsContexts()) {
             graph.add(subjectIri, rdf.createIRI(AFFECTS_CONTEXT_PROPERTY), rdf.createIRI(ref.value().value()));
+        }
+        for (TermRef ref : adr.usesTerms()) {
+            graph.add(subjectIri, rdf.createIRI(USES_TERM_PROPERTY), rdf.createIRI(ref.value().value()));
         }
         if (adr.supersededBy() != null) {
             graph.add(subjectIri, rdf.createIRI(SUPERSEDED_BY_PROPERTY),
@@ -866,7 +871,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * the multilingual {@code name}/{@code context}/{@code decision} selected via {@code locale}, the
      * structured consequence/considered-option lists (falling back to a synthesised legacy entry only
      * when {@code applyLegacyFallback} and the structured list is empty - see class javadoc), and the
-     * four reference lists. Returns {@code null} - logged at {@code WARN} - for any store-first
+     * five reference lists. Returns {@code null} - logged at {@code WARN} - for any store-first
      * anomaly {@link Adr}'s own constructor would otherwise reject, or a missing mandatory
      * name/context/decision candidate.
      */
@@ -902,12 +907,14 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 readRefs(handle.sparqlQuery()::select, subject, ADDRESSES_REQUIREMENT_PROPERTY, RequirementRef::new);
         List<BoundedContextRef> contexts =
                 readRefs(handle.sparqlQuery()::select, subject, AFFECTS_CONTEXT_PROPERTY, BoundedContextRef::new);
+        List<TermRef> terms = readRefs(handle.sparqlQuery()::select, subject, USES_TERM_PROPERTY, TermRef::new);
         AdrId supersededBy = firstRefOrNull(handle.sparqlQuery()::select, subject, SUPERSEDED_BY_PROPERTY,
                 subjectIriString);
         List<AdrId> relatedTo = readRefs(handle.sparqlQuery()::select, subject, RELATED_TO_PROPERTY, AdrId::new);
 
         return toAdrOrNull(id, code, name.get().value(), status, context.get().value(), decision.get().value(),
-                consequences, consideredOptions, decisionDate, requirements, contexts, supersededBy, relatedTo);
+                consequences, consideredOptions, decisionDate, requirements, contexts, terms, supersededBy,
+                relatedTo);
     }
 
     /**
@@ -919,10 +926,10 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static Adr toAdrOrNull(AdrId id, AdrCode code, String name, AdrStatus status, String context,
             String decision, List<Consequence> consequences, List<ConsideredOption> consideredOptions,
             LocalDate decisionDate, List<RequirementRef> requirements, List<BoundedContextRef> contexts,
-            AdrId supersededBy, List<AdrId> relatedTo) {
+            List<TermRef> terms, AdrId supersededBy, List<AdrId> relatedTo) {
         try {
             return new Adr(id, code, name, status, context, decision, consequences, consideredOptions,
-                    decisionDate, requirements, contexts, supersededBy, relatedTo);
+                    decisionDate, requirements, contexts, terms, supersededBy, relatedTo);
         } catch (IllegalArgumentException e) {
             LOG.warn("ADR {}: {}, skipping this decision", id.value().value(), e.getMessage());
             return null;

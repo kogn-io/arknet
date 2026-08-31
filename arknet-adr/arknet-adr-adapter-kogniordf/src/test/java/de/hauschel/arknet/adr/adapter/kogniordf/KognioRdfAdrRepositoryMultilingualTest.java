@@ -87,7 +87,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         return new Adr(id, code, "Use an embedded triple store", AdrStatus.PROPOSED,
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                consequences, consideredOptions, null, List.of(), List.of(), null, List.of());
+                consequences, consideredOptions, null, List.of(), List.of(), List.of(), null, List.of());
     }
 
     private void update(String sparqlUpdate) {
@@ -118,7 +118,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
 
         Adr translated = new Adr(id, original.code(), "Einen eingebetteten Triple Store verwenden",
                 original.status(), original.context(), original.decision(), List.of(), List.of(), null,
-                List.of(), List.of(), null, List.of());
+                List.of(), List.of(), List.of(), null, List.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), translated,
                 "de", "en", "en", Map.of(), Map.of(), null);
 
@@ -344,7 +344,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         // named a consequence correction.
         Adr renamed = new Adr(id, original.code(), "Renamed", original.status(), original.context(),
                 original.decision(), original.consequences(), original.consideredOptions(), null,
-                List.of(), List.of(), null, List.of());
+                List.of(), List.of(), List.of(), null, List.of());
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), renamed,
                 "en", "en", "en", Map.of(1, "en"), Map.of(), null);
 

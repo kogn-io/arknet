@@ -53,6 +53,7 @@ import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
@@ -117,7 +118,8 @@ class KognioRdfAdrRepositoryTest {
         return new Adr(id, code, "Use an embedded triple store", status,
                 "The model has to live somewhere a single-user client can reach without a server.",
                 "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
-                consequences, consideredOptions, decisionDate, requirements, contexts, supersededBy, relatedTo);
+                consequences, consideredOptions, decisionDate, requirements, contexts, List.of(), supersededBy,
+                relatedTo);
     }
 
     @Test
@@ -771,7 +773,7 @@ class KognioRdfAdrRepositoryTest {
         // A further write on A, referencing B (Superseded) as its own successor.
         Adr supersededA = repository.findByCode(PROJECT_A, a.code(), null).orElseThrow();
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
-        Adr correctedA = supersededA.reviseReferences(List.of(requirement), List.of(), List.of());
+        Adr correctedA = supersededA.reviseReferences(List.of(requirement), List.of(), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(a.code()), correctedA, "en", "en", "en", Map.of(),
                 Map.of(), null);
 
@@ -877,20 +879,46 @@ class KognioRdfAdrRepositoryTest {
     }
 
     @Test
-    void writePersistsAllFourRelationsAndReadsThemBack() {
+    void writePersistsAllFiveRelationsAndReadsThemBack() {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
         BoundedContextRef contextRef = new BoundedContextRef(ResourceId.of("https://w3id.org/arknet/id/bc-1"));
+        TermRef termRef = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
         Adr successor = adr(new AdrCode("ADR-1"));
         repository.create(PROJECT_A, successor, "en");
-        Adr created = adr(freshId(), new AdrCode("ADR-2"), AdrStatus.SUPERSEDED, null, null, null,
-                List.of(requirement), List.of(contextRef), successor.id());
+        Adr created = new Adr(freshId(), new AdrCode("ADR-2"), "Use an embedded triple store",
+                AdrStatus.SUPERSEDED,
+                "The model has to live somewhere a single-user client can reach without a server.",
+                "Use kognio-rdf as the embedded RDF substrate behind an out-port.",
+                null, null, null, List.of(requirement), List.of(contextRef), List.of(termRef), successor.id(),
+                List.of());
 
         repository.create(PROJECT_A, created, "en");
         Adr found = repository.findByCode(PROJECT_A, new AdrCode("ADR-2"), null).orElseThrow();
 
         assertEquals(List.of(requirement), found.addressesRequirements());
         assertEquals(List.of(contextRef), found.affectsContexts());
+        assertEquals(List.of(termRef), found.usesTerms());
         assertEquals(successor.id(), found.supersededBy());
+    }
+
+    /**
+     * {@code usesTerm} (kogn-io/arknet#393) round-trips through {@code compareAndUpdate} exactly
+     * like {@code addressesRequirement}/{@code affectsContext} - mirrors
+     * {@link #compareAndUpdatePreservesTheSupersededByEdgeWhileExtendingAnotherRelation}, for the
+     * fourth reference list rather than the first.
+     */
+    @Test
+    void compareAndUpdateAddsAndReadsBackAUsesTermEdge() {
+        Adr created = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, created, "en");
+        TermRef termRef = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+
+        Adr updated = created.reviseReferences(List.of(), List.of(), List.of(termRef), List.of());
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(created.code()), updated, null, null, null, Map.of(),
+                Map.of(), null);
+
+        assertEquals(List.of(termRef),
+                repository.findByCode(PROJECT_A, created.code(), null).orElseThrow().usesTerms());
     }
 
     /**
@@ -1092,7 +1120,7 @@ class KognioRdfAdrRepositoryTest {
         repository.create(PROJECT_A, original, "en");
 
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
-        Adr extended = original.reviseReferences(List.of(requirement), List.of(), List.of());
+        Adr extended = original.reviseReferences(List.of(requirement), List.of(), List.of(), List.of());
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(original.code()), extended, null, null, null, Map.of(), Map.of(), null);
 
         Adr found = repository.findByCode(PROJECT_A, original.code(), null).orElseThrow();
@@ -1239,7 +1267,8 @@ class KognioRdfAdrRepositoryTest {
         repository.create(PROJECT_A, related, "en");
 
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(related.code()),
-                related.reviseReferences(List.of(), List.of(), List.of()), null, null, null, Map.of(), Map.of(), null);
+                related.reviseReferences(List.of(), List.of(), List.of(), List.of()), null, null, null, Map.of(),
+                Map.of(), null);
 
         assertEquals(List.of(), repository.findByCode(PROJECT_A, related.code(), null).orElseThrow().relatedTo());
     }
@@ -1546,7 +1575,8 @@ class KognioRdfAdrRepositoryTest {
         // A second write that leaves the decision PROPOSED (delete's own status check runs next),
         // so the revision chain has more than one entry to tombstone correctly.
         repository.compareAndUpdate(PROJECT_A, currentHeadOf(created.code()),
-                created.reviseReferences(List.of(), List.of(), List.of(peer.id())), null, null, null, Map.of(), Map.of(), null);
+                created.reviseReferences(List.of(), List.of(), List.of(), List.of(peer.id())), null, null, null,
+                Map.of(), Map.of(), null);
         String lastRevision = headsOf(subject).get(0);
 
         repository.delete(PROJECT_A, created.code());

@@ -43,6 +43,7 @@ class AdrTest {
         assertEquals(List.of(), adr.consideredOptions());
         assertEquals(List.of(), adr.addressesRequirements());
         assertEquals(List.of(), adr.affectsContexts());
+        assertEquals(List.of(), adr.usesTerms());
         assertNull(adr.supersededBy());
         assertEquals(List.of(), adr.relatedTo());
     }
@@ -52,31 +53,42 @@ class AdrTest {
         RequirementRef ref = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
 
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, List.of(ref, ref), null, null, null));
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, List.of(ref, ref), null, null, null,
+                null));
+    }
+
+    /** {@link #rejectsDuplicateReferences} for {@code usesTerms} (kogn-io/arknet#393). */
+    @Test
+    void rejectsDuplicateUsesTermsReferences() {
+        TermRef ref = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+
+        assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, List.of(ref, ref), null,
+                null));
     }
 
     @Test
     void rejectsSupersedingItself() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, ID, null));
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null, ID, null));
     }
 
     @Test
     void rejectsSupersededStatusWithoutSupersededByEdge() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, null, null));
+                AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, null, null, null));
     }
 
     @Test
     void rejectsSupersededByEdgeWithoutSupersededStatus() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.ACCEPTED, "context", "decision", null, null, null, null, null, OTHER, null));
+                AdrStatus.ACCEPTED, "context", "decision", null, null, null, null, null, null, OTHER, null));
     }
 
     @Test
     void permitsSupersededStatusTogetherWithSupersededByEdge() {
         Adr superseded = new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, OTHER, null);
+                AdrStatus.SUPERSEDED, "context", "decision", null, null, null, null, null, null, OTHER, null);
 
         assertEquals(AdrStatus.SUPERSEDED, superseded.status());
         assertEquals(OTHER, superseded.supersededBy());
@@ -85,14 +97,14 @@ class AdrTest {
     @Test
     void rejectsBeingRelatedToItself() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null,
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null, null,
                 List.of(ID)));
     }
 
     @Test
     void rejectsDuplicateRelatedToEntries() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
-                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null,
+                AdrStatus.PROPOSED, "context", "decision", null, null, null, null, null, null, null,
                 List.of(OTHER, OTHER)));
     }
 
@@ -102,7 +114,8 @@ class AdrTest {
     void rejectsAGapInConsequencePositions() {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
                 AdrStatus.PROPOSED, "context", "decision",
-                List.of(new Consequence(2, "text", ConsequenceType.NEUTRAL)), null, null, null, null, null, null));
+                List.of(new Consequence(2, "text", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null));
     }
 
     @Test
@@ -111,7 +124,7 @@ class AdrTest {
                 AdrStatus.PROPOSED, "context", "decision",
                 List.of(new Consequence(1, "a", ConsequenceType.POSITIVE),
                         new Consequence(1, "b", ConsequenceType.NEGATIVE)),
-                null, null, null, null, null, null));
+                null, null, null, null, null, null, null));
     }
 
     @Test
@@ -119,7 +132,7 @@ class AdrTest {
         assertThrows(IllegalArgumentException.class, () -> new Adr(ID, new AdrCode("ADR-1"), "name",
                 AdrStatus.PROPOSED, "context", "decision", null,
                 List.of(new ConsideredOption(2, "name", "rationale", OptionOutcome.REJECTED)),
-                null, null, null, null, null));
+                null, null, null, null, null, null));
     }
 
     /** An empty consequence/considered-option list is legal - both are optional, unlike acceptanceCriterion. */
@@ -145,7 +158,7 @@ class AdrTest {
                 AdrStatus.PROPOSED, "context", "decision", null,
                 List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN),
                         new ConsideredOption(2, "B", "r2", OptionOutcome.CHOSEN)),
-                null, null, null, null, null));
+                null, null, null, null, null, null));
     }
 
     @Test
@@ -153,7 +166,7 @@ class AdrTest {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
                 List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN),
                         new ConsideredOption(2, "B", "r2", OptionOutcome.REJECTED)),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
 
         assertEquals(2, adr.consideredOptions().size());
     }
@@ -162,7 +175,7 @@ class AdrTest {
     void permitsZeroChosenConsideredOptions() {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
                 List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
 
         assertEquals(1, adr.consideredOptions().size());
     }
@@ -170,7 +183,8 @@ class AdrTest {
     @Test
     void withAppendedConsequencesNumbersContinuingFromTheCurrentHighestPosition() {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
-                List.of(new Consequence(1, "first", ConsequenceType.POSITIVE)), null, null, null, null, null, null);
+                List.of(new Consequence(1, "first", ConsequenceType.POSITIVE)), null, null, null, null, null, null,
+                null);
 
         Adr appended = adr.withAppendedConsequences(
                 List.of(new NewConsequence("second", ConsequenceType.NEGATIVE)));
@@ -198,7 +212,7 @@ class AdrTest {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
                 List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL),
                         new Consequence(2, "other", ConsequenceType.NEGATIVE)),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         Adr patched = adr.withConsequenceCorrections(PROJECT,
                 List.of(new ConsequenceCorrection(1, "sharper", ConsequenceType.POSITIVE)), Set.of());
@@ -211,7 +225,8 @@ class AdrTest {
     @Test
     void withConsequenceCorrectionsThrowsForAnUnknownPosition() {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision",
-                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
 
         assertThrows(ConsequencePositionNotFoundException.class, () -> adr.withConsequenceCorrections(PROJECT,
                 List.of(new ConsequenceCorrection(9, "x", ConsequenceType.NEUTRAL)), Set.of()));
@@ -226,7 +241,8 @@ class AdrTest {
     @Test
     void withConsequenceCorrectionsThrowsOnAnAcceptedDecision() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
-                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
 
         assertThrows(AdrTextImmutableException.class, () -> accepted.withConsequenceCorrections(PROJECT,
                 List.of(new ConsequenceCorrection(1, "rewritten", ConsequenceType.POSITIVE)), Set.of()));
@@ -241,7 +257,8 @@ class AdrTest {
     @Test
     void withConsequenceCorrectionsAllowsANewLanguageVariantEvenWhenAccepted() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
-                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
 
         Adr patched = accepted.withConsequenceCorrections(PROJECT,
                 List.of(new ConsequenceCorrection(1, "Entwurf", ConsequenceType.NEUTRAL)), Set.of(1));
@@ -260,7 +277,8 @@ class AdrTest {
     @Test
     void withConsequenceCorrectionsRejectsATypeChangeEvenWithANewLanguageVariant() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
-                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
 
         assertThrows(AdrTextImmutableException.class, () -> accepted.withConsequenceCorrections(PROJECT,
                 List.of(new ConsequenceCorrection(1, "Entwurf", ConsequenceType.POSITIVE)), Set.of(1)));
@@ -270,7 +288,8 @@ class AdrTest {
     @Test
     void withConsequenceCorrectionsIsANoOpWhenNothingChangesEvenWhenAccepted() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision",
-                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null);
+                List.of(new Consequence(1, "draft", ConsequenceType.NEUTRAL)), null, null, null, null, null, null,
+                null);
 
         Adr result = accepted.withConsequenceCorrections(PROJECT,
                 List.of(new ConsequenceCorrection(1, "draft", ConsequenceType.NEUTRAL)), Set.of());
@@ -293,7 +312,8 @@ class AdrTest {
     @Test
     void withAppendedConsideredOptionsRejectsASecondChosenOption() {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
-                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN)), null, null, null, null, null);
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN)), null, null, null, null, null,
+                null);
 
         assertThrows(IllegalArgumentException.class, () -> adr.withAppendedConsideredOptions(
                 List.of(new NewConsideredOption("B", "r2", OptionOutcome.CHOSEN))));
@@ -307,7 +327,8 @@ class AdrTest {
     @Test
     void withConsideredOptionCorrectionsThrowsOnAnAcceptedDecision() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
-                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null,
+                null);
 
         assertThrows(AdrTextImmutableException.class, () -> accepted.withConsideredOptionCorrections(PROJECT,
                 List.of(new ConsideredOptionCorrection(1, "A", "rewritten", OptionOutcome.CHOSEN)), Set.of()));
@@ -316,7 +337,8 @@ class AdrTest {
     @Test
     void withConsideredOptionCorrectionsThrowsForAnUnknownPosition() {
         Adr adr = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
-                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null,
+                null);
 
         assertThrows(ConsideredOptionPositionNotFoundException.class, () -> adr.withConsideredOptionCorrections(
                 PROJECT, List.of(new ConsideredOptionCorrection(9, "x", "y", OptionOutcome.REJECTED)), Set.of()));
@@ -331,7 +353,8 @@ class AdrTest {
     @Test
     void withConsideredOptionCorrectionsAllowsANewLanguageVariantEvenWhenAccepted() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
-                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null,
+                null);
 
         Adr patched = accepted.withConsideredOptionCorrections(PROJECT,
                 List.of(new ConsideredOptionCorrection(1, "Ein A", "r1-de", OptionOutcome.REJECTED)), Set.of(1));
@@ -349,7 +372,8 @@ class AdrTest {
     @Test
     void withConsideredOptionCorrectionsRejectsAnOutcomeChangeEvenWithANewLanguageVariant() {
         Adr accepted = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.ACCEPTED, "context", "decision", null,
-                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null);
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null,
+                null);
 
         assertThrows(AdrTextImmutableException.class, () -> accepted.withConsideredOptionCorrections(PROJECT,
                 List.of(new ConsideredOptionCorrection(1, "Ein A", "r1-de", OptionOutcome.CHOSEN)), Set.of(1)));
@@ -641,13 +665,15 @@ class AdrTest {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
         BoundedContextRef boundedContext =
                 new BoundedContextRef(ResourceId.of("https://w3id.org/arknet/id/bc-1"));
+        TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
 
         for (AdrStatus status : AdrStatus.values()) {
             Adr revised = withStatus(status)
-                    .reviseReferences(List.of(requirement), List.of(boundedContext), List.of());
+                    .reviseReferences(List.of(requirement), List.of(boundedContext), List.of(term), List.of());
 
             assertEquals(List.of(requirement), revised.addressesRequirements());
             assertEquals(List.of(boundedContext), revised.affectsContexts());
+            assertEquals(List.of(term), revised.usesTerms());
             assertEquals(status, revised.status());
         }
     }
@@ -655,12 +681,12 @@ class AdrTest {
     @Test
     void reviseReferencesSetsAndClearsRelatedToInEveryStatusIncludingAccepted() {
         for (AdrStatus status : AdrStatus.values()) {
-            Adr linked = withStatus(status).reviseReferences(List.of(), List.of(), List.of(OTHER));
+            Adr linked = withStatus(status).reviseReferences(List.of(), List.of(), List.of(), List.of(OTHER));
 
             assertEquals(List.of(OTHER), linked.relatedTo());
             assertEquals(status, linked.status());
 
-            Adr cleared = linked.reviseReferences(List.of(), List.of(), List.of());
+            Adr cleared = linked.reviseReferences(List.of(), List.of(), List.of(), List.of());
 
             assertEquals(List.of(), cleared.relatedTo());
             assertEquals(status, cleared.status());
@@ -672,7 +698,7 @@ class AdrTest {
         Adr accepted = withStatus(AdrStatus.ACCEPTED);
 
         assertThrows(IllegalArgumentException.class,
-                () -> accepted.reviseReferences(List.of(), List.of(), List.of(ID)));
+                () -> accepted.reviseReferences(List.of(), List.of(), List.of(), List.of(ID)));
     }
 
     @Test
@@ -680,13 +706,15 @@ class AdrTest {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
         BoundedContextRef boundedContext =
                 new BoundedContextRef(ResourceId.of("https://w3id.org/arknet/id/bc-1"));
+        TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
         Adr linked = withStatus(AdrStatus.ACCEPTED)
-                .reviseReferences(List.of(requirement), List.of(boundedContext), List.of(OTHER));
+                .reviseReferences(List.of(requirement), List.of(boundedContext), List.of(term), List.of(OTHER));
 
-        Adr cleared = linked.reviseReferences(List.of(), List.of(), List.of());
+        Adr cleared = linked.reviseReferences(List.of(), List.of(), List.of(), List.of());
 
         assertEquals(List.of(), cleared.addressesRequirements());
         assertEquals(List.of(), cleared.affectsContexts());
+        assertEquals(List.of(), cleared.usesTerms());
         assertEquals(List.of(), cleared.relatedTo());
     }
 
@@ -694,14 +722,24 @@ class AdrTest {
     void reviseReferencesIsANoOpWhenEveryListAlreadyMatches() {
         RequirementRef requirement = new RequirementRef(ResourceId.of("https://w3id.org/arknet/id/fr-1"));
         Adr linked = adr("name", "context", "decision")
-                .reviseReferences(List.of(requirement), List.of(), List.of());
+                .reviseReferences(List.of(requirement), List.of(), List.of(), List.of());
 
-        assertSame(linked, linked.reviseReferences(List.of(requirement), List.of(), List.of()));
+        assertSame(linked, linked.reviseReferences(List.of(requirement), List.of(), List.of(), List.of()));
+    }
+
+    /** {@code usesTerms}'s own no-op check, mirroring {@link #reviseReferencesIsANoOpWhenEveryListAlreadyMatches}. */
+    @Test
+    void reviseReferencesIsANoOpWhenUsesTermsAlreadyMatches() {
+        TermRef term = new TermRef(ResourceId.of("https://w3id.org/arknet/id/term-1"));
+        Adr linked = adr("name", "context", "decision")
+                .reviseReferences(List.of(), List.of(), List.of(term), List.of());
+
+        assertSame(linked, linked.reviseReferences(List.of(), List.of(), List.of(term), List.of()));
     }
 
     private static Adr adr(String name, String context, String decision) {
         return new Adr(ID, new AdrCode("ADR-1"), name, AdrStatus.PROPOSED, context, decision,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -712,6 +750,6 @@ class AdrTest {
     private static Adr withStatus(AdrStatus status) {
         AdrId supersededBy = status == AdrStatus.SUPERSEDED ? OTHER : null;
         return new Adr(ID, new AdrCode("ADR-1"), "name", status, "context", "decision",
-                null, null, null, null, null, supersededBy, null);
+                null, null, null, null, null, null, supersededBy, null);
     }
 }

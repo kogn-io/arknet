@@ -33,6 +33,7 @@ import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
+import de.hauschel.arknet.adr.application.port.out.TermLookup;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
@@ -51,6 +52,7 @@ import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -60,7 +62,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * Application service implementing the architecture-decision use cases.
  *
  * <p>This is the policy seat of the hexagon: it drives the {@link AdrRepository} driven port plus
- * the two cross-context lookups. The component is wired as a plain object (constructor injection) by
+ * the three cross-context lookups. The component is wired as a plain object (constructor injection) by
  * the composition root; there are deliberately no framework annotations here.</p>
  *
  * <p><strong>Policy.</strong> Identity ({@link AdrId}) is opaque and minted once per decision via
@@ -157,8 +159,9 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * here, before anything is written - an unresolvable one must abort the whole {@code adr_add} (or
  * {@code adr_update}) rather than leave a half-linked decision behind, which is also why resolution
  * sits <em>outside</em> the code-assignment and compare-and-set retries: an unknown {@code FR-9} is
- * not a code collision and must not be retried. The two cross-context codes go through their
- * dedicated lookup ports. The two self-referential relations - the {@code adr_supersede} target and
+ * not a code collision and must not be retried. The three cross-context codes ({@code
+ * addressesRequirement}, {@code affectsContext}, {@code usesTerm}, kogn-io/arknet#393) go through
+ * their dedicated lookup ports. The two self-referential relations - the {@code adr_supersede} target and
  * every {@code relatedTo} peer - need no lookup port at all: they are this hexagon's own resources,
  * resolved through {@link AdrRepository#findByCode}, and an unknown one is a plain
  * {@link AdrNotFoundException} rather than a didactic cross-context rejection.</p>
@@ -206,6 +209,7 @@ public class AdrService
     private final ResourceIdFactory resourceIdFactory;
     private final RequirementLookup requirementLookup;
     private final BoundedContextLookup boundedContextLookup;
+    private final TermLookup termLookup;
     private final Clock clock;
 
     /**
@@ -218,17 +222,21 @@ public class AdrService
      *                             (must not be {@code null})
      * @param boundedContextLookup resolves a human-typed bounded-context code to its opaque identity
      *                             (must not be {@code null})
+     * @param termLookup            resolves a human-typed glossary-term code to its opaque identity
+     *                             (kogn-io/arknet#393; must not be {@code null})
      * @param clock                supplies the day {@link #accept}/{@link #reject} stamp onto a
      *                             decision when the caller names none (must not be {@code null});
      *                             injected rather than read ambiently so a test can pin the stamped
      *                             date instead of asserting against whatever day it happens to run
      */
     public AdrService(AdrRepository repository, ResourceIdFactory resourceIdFactory,
-            RequirementLookup requirementLookup, BoundedContextLookup boundedContextLookup, Clock clock) {
+            RequirementLookup requirementLookup, BoundedContextLookup boundedContextLookup,
+            TermLookup termLookup, Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resourceIdFactory = Objects.requireNonNull(resourceIdFactory, "resourceIdFactory");
         this.requirementLookup = Objects.requireNonNull(requirementLookup, "requirementLookup");
         this.boundedContextLookup = Objects.requireNonNull(boundedContextLookup, "boundedContextLookup");
+        this.termLookup = Objects.requireNonNull(termLookup, "termLookup");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -244,6 +252,10 @@ public class AdrService
                 .toList();
         List<BoundedContextRef> contexts = command.affectsContextCodes().stream()
                 .map(code -> new BoundedContextRef(boundedContextLookup.resolveByCode(projectId, code)))
+                .distinct()
+                .toList();
+        List<TermRef> terms = command.usesTermCodes().stream()
+                .map(code -> new TermRef(termLookup.resolveByCode(projectId, code)))
                 .distinct()
                 .toList();
         // The peer decisions are this hexagon's own resources, so they resolve through the
@@ -270,7 +282,7 @@ public class AdrService
                     // transition that actually decides (kogn-io/arknet#374).
                     Adr adr = new Adr(id, code, command.name(), AdrStatus.PROPOSED, command.context(),
                             command.decision(), consequences, consideredOptions, null,
-                            requirements, contexts, null, peers);
+                            requirements, contexts, terms, null, peers);
                     repository.create(projectId, adr, language);
                     return adr;
                 });
@@ -413,6 +425,12 @@ public class AdrService
                                 boundedContextLookup.resolveByCode(projectId, referenced)))
                         .distinct()
                         .toList();
+        List<TermRef> terms = correction.usesTermCodes() == null
+                ? null
+                : correction.usesTermCodes().stream()
+                        .map(referenced -> new TermRef(termLookup.resolveByCode(projectId, referenced)))
+                        .distinct()
+                        .toList();
         // Self-reference is refused before the peer codes are even looked up, so a caller naming
         // the decision itself is told exactly that rather than that "ADR-1" resolves - the same
         // refusal, and the same wording, supersede() makes for the same shape of mistake.
@@ -454,6 +472,7 @@ public class AdrService
                         .reviseReferences(
                                 requirements != null ? requirements : current.value().addressesRequirements(),
                                 contexts != null ? contexts : current.value().affectsContexts(),
+                                terms != null ? terms : current.value().usesTerms(),
                                 peers != null ? peers : current.value().relatedTo()));
         return detailOf(projectId, updated);
     }

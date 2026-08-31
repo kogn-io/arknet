@@ -9,11 +9,12 @@ import java.util.NoSuchElementException;
 
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
 import de.hauschel.arknet.adr.application.port.out.RequirementLookup;
+import de.hauschel.arknet.adr.application.port.out.TermLookup;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 
 /**
- * In-memory test doubles for the two cross-context lookup ports.
+ * In-memory test doubles for the three cross-context lookup ports.
  *
  * <p>Hand-rolled fakes (not mocks): a code must be {@link Fake#register registered} before it
  * resolves, mirroring the real adapters' contract that an unknown code is rejected rather than
@@ -74,6 +75,19 @@ final class InMemoryReferenceLookups {
         @Override
         public ResourceId resolveByCode(ProjectId projectId, String boundedContextCode) {
             return resolve(boundedContextCode);
+        }
+    }
+
+    /** Fake {@link TermLookup} (kogn-io/arknet#393). */
+    static final class Terms extends Fake implements TermLookup {
+
+        Terms() {
+            super("term");
+        }
+
+        @Override
+        public ResourceId resolveByCode(ProjectId projectId, String termCode) {
+            return resolve(termCode);
         }
     }
 }

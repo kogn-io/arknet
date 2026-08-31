@@ -46,6 +46,7 @@ import de.hauschel.arknet.adr.domain.NewConsequence;
 import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
+import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts.ResolvedBoundedContext;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -54,6 +55,8 @@ import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements;
 import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRequirement;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
+import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 
 /**
  * Driving (in) adapter of the ADR component: exposes the architecture-decision use cases as MCP
@@ -81,9 +84,10 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * own default language exactly as {@code req_get}/{@code req_list} do.</p>
  *
  * <p><strong>Reference display resolution (ADR-008).</strong> {@link RequirementRef}/
- * {@link BoundedContextRef} carry a referenced resource's opaque subject identity, not its business
- * code - resolved for display via the borrowed {@link ResolveRequirements}/
- * {@link ResolveBoundedContexts} ports, batched across every reference involved.</p>
+ * {@link BoundedContextRef}/{@link TermRef} carry a referenced resource's opaque subject identity,
+ * not its business code - resolved for display via the borrowed {@link ResolveRequirements}/
+ * {@link ResolveBoundedContexts}/{@link ResolveTerms} ports (kogn-io/arknet#393), batched across
+ * every reference involved.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a {@link ProjectId} routing
  * key, resolved per call from the request's anchor (ADR-016).</p>
@@ -131,10 +135,11 @@ public final class AdrMcpTools {
     private final DeleteAdr deleteAdr;
     private final ResolveRequirements resolveRequirements;
     private final ResolveBoundedContexts resolveBoundedContexts;
+    private final ResolveTerms resolveTerms;
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its ten driving in-ports, the two borrowed display ports and the
+     * Creates the adapter with its ten driving in-ports, the three borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
@@ -153,6 +158,8 @@ public final class AdrMcpTools {
      *                               requirement's business code instead of its bare IRI
      * @param resolveBoundedContexts bounded-context driving port used only to render an affected
      *                               context's business code instead of its bare IRI
+     * @param resolveTerms           ubiquitous-language driving port used only to render a used
+     *                               term's business code instead of its bare IRI (kogn-io/arknet#393)
      * @param projects               resolves each call's target project from its anchor
      */
     public AdrMcpTools(
@@ -168,6 +175,7 @@ public final class AdrMcpTools {
             final DeleteAdr deleteAdr,
             final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts,
+            final ResolveTerms resolveTerms,
             final ProjectResolver projects) {
         this.addAdr = Objects.requireNonNull(addAdr, "addAdr");
         this.listAdrs = Objects.requireNonNull(listAdrs, "listAdrs");
@@ -181,6 +189,7 @@ public final class AdrMcpTools {
         this.deleteAdr = Objects.requireNonNull(deleteAdr, "deleteAdr");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
+        this.resolveTerms = Objects.requireNonNull(resolveTerms, "resolveTerms");
         this.projects = Objects.requireNonNull(projects, "projects");
     }
 
@@ -304,8 +313,9 @@ public final class AdrMcpTools {
             + "with adr_set_status. Consequences and considered options are each a list of "
             + "structured entries (statement+type / name+rationale+outcome) - at most one considered "
             + "option may have outcome CHOSEN. It can already name the requirements it addresses, "
-            + "the bounded contexts it affects and the peer decisions it is related to; all fields "
-            + "stay correctable with adr_update. The assigned code runs ADR-1, ADR-2, ... per "
+            + "the bounded contexts it affects, the glossary terms it uses and the peer decisions "
+            + "it is related to; all fields stay correctable with adr_update. The assigned code "
+            + "runs ADR-1, ADR-2, ... per "
             + "project and is unrelated to the numbering of any markdown decision records the "
             + "repository may also keep." + PROSE_MARKUP)
     public String add(
@@ -333,6 +343,10 @@ public final class AdrMcpTools {
                     + "e.g. [\"BC-1\"]. Each must already exist (create it with bc_add first). "
                     + "Optional.", required = false)
             final List<String> affectsContexts,
+            @McpToolParam(description = "Business codes of the glossary terms this decision uses, "
+                    + "e.g. [\"TERM-1\"]. Each must already exist (create it with term_add first). "
+                    + "Optional.", required = false)
+            final List<String> usesTerms,
             @McpToolParam(description = "Business codes of other decisions this one is related to "
                     + "('see also'), e.g. [\"ADR-3\"]. Each must already exist and must not be this "
                     + "decision itself. Optional.", required = false)
@@ -342,7 +356,7 @@ public final class AdrMcpTools {
         final ResolvedProject project = resolveProject(context, projectAnchor);
         final AdrDetail created = addAdr.add(project.id(), new NewAdr(name, adrContext, decision,
                 toNewConsequences(consequences), toNewConsideredOptions(consideredOptions),
-                blankToNull(language), addressesRequirements, affectsContexts, relatedTo),
+                blankToNull(language), addressesRequirements, affectsContexts, usesTerms, relatedTo),
                 project.defaultLanguage());
         return format(project, created);
     }
@@ -370,8 +384,9 @@ public final class AdrMcpTools {
         // One batch resolution per borrowed port across every decision, not one per decision.
         final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirementsFor(project.id(), all);
         final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContextsFor(project.id(), all);
+        final Map<ResourceId, ResolvedTerm> terms = resolveTermsFor(project.id(), all);
         final String lines = all.stream()
-                .map(detail -> summaryLine(detail, requirements, contexts))
+                .map(detail -> summaryLine(detail, requirements, contexts, terms))
                 .collect(Collectors.joining("\n"));
         return skipped == 0 ? lines : lines + "\n" + skippedNote(skipped);
     }
@@ -420,7 +435,7 @@ public final class AdrMcpTools {
             + "by position and carry the same per-position translation exemption: writing a language "
             + "that position never carried yet is allowed in every status, correcting the wording of a "
             + "language that position already carries is PROPOSED-only, and changing consequenceType/"
-            + "optionOutcome is never exempt regardless of language once no longer PROPOSED. The three "
+            + "optionOutcome is never exempt regardless of language once no longer PROPOSED. The four "
             + "reference lists stay correctable in EVERY status: passing a list replaces that relation "
             + "wholesale, passing an empty list removes every edge of it, omitting it leaves it "
             + "untouched. Status and the supersededBy relation are not changed here - use "
@@ -459,6 +474,10 @@ public final class AdrMcpTools {
                     + "affect going forward, with the same tri-state as addressesRequirements. "
                     + "Correctable in every status.", required = false)
             final List<String> affectsContexts,
+            @McpToolParam(description = "Business codes of the glossary terms this decision should "
+                    + "use going forward, with the same tri-state again. Correctable in every "
+                    + "status.", required = false)
+            final List<String> usesTerms,
             @McpToolParam(description = "Business codes of the decisions this one should be related "
                     + "to going forward, with the same tri-state again. Correctable in every "
                     + "status.", required = false)
@@ -477,6 +496,7 @@ public final class AdrMcpTools {
                 .language(blankToNull(language))
                 .addressesRequirementCodes(addressesRequirements)
                 .affectsContextCodes(affectsContexts)
+                .usesTermCodes(usesTerms)
                 .relatedToCodes(relatedTo)
                 .build();
         return format(project,
@@ -591,16 +611,19 @@ public final class AdrMcpTools {
     /** Renders a single decision in full, resolving its own references in one batch call per port. */
     private String format(final ResolvedProject project, final AdrDetail detail) {
         final List<AdrDetail> one = List.of(detail);
-        return fullText(detail, resolveRequirementsFor(project.id(), one), resolveContextsFor(project.id(), one));
+        return fullText(detail, resolveRequirementsFor(project.id(), one), resolveContextsFor(project.id(), one),
+                resolveTermsFor(project.id(), one));
     }
 
     private static String summaryLine(final AdrDetail detail,
             final Map<ResourceId, ResolvedRequirement> requirements,
-            final Map<ResourceId, ResolvedBoundedContext> contexts) {
+            final Map<ResourceId, ResolvedBoundedContext> contexts,
+            final Map<ResourceId, ResolvedTerm> terms) {
         final StringBuilder line = new StringBuilder("%s [%s] %s".formatted(
                 detail.adr().code().value(), detail.adr().status(), detail.adr().name()));
         appendInline(line, "addresses", requirementCodes(detail, requirements));
         appendInline(line, "affects", contextCodes(detail, contexts));
+        appendInline(line, "uses terms", termCodes(detail, terms));
         appendInline(line, "supersedes", codeValues(detail.supersedes()));
         appendInline(line, "superseded by", codeValues(detail.supersededBy()));
         appendInline(line, "related to", codeValues(detail.relatedTo()));
@@ -609,7 +632,8 @@ public final class AdrMcpTools {
 
     private static String fullText(final AdrDetail detail,
             final Map<ResourceId, ResolvedRequirement> requirements,
-            final Map<ResourceId, ResolvedBoundedContext> contexts) {
+            final Map<ResourceId, ResolvedBoundedContext> contexts,
+            final Map<ResourceId, ResolvedTerm> terms) {
         final StringBuilder out = new StringBuilder("%s [%s] %s".formatted(
                 detail.adr().code().value(), detail.adr().status(), detail.adr().name()));
         appendField(out, "context", detail.adr().context());
@@ -620,6 +644,7 @@ public final class AdrMcpTools {
                 ? null : detail.adr().decisionDate().toString());
         appendField(out, "addresses", joinOrNull(requirementCodes(detail, requirements)));
         appendField(out, "affects", joinOrNull(contextCodes(detail, contexts)));
+        appendField(out, "uses terms", joinOrNull(termCodes(detail, terms)));
         appendField(out, "supersedes", joinOrNull(codeValues(detail.supersedes())));
         appendField(out, "superseded by", joinOrNull(codeValues(detail.supersededBy())));
         appendField(out, "related to", joinOrNull(codeValues(detail.relatedTo())));
@@ -681,6 +706,15 @@ public final class AdrMcpTools {
         return rendered;
     }
 
+    private static List<String> termCodes(final AdrDetail detail, final Map<ResourceId, ResolvedTerm> resolved) {
+        final List<String> rendered = new ArrayList<>();
+        for (TermRef ref : detail.adr().usesTerms()) {
+            final ResolvedTerm match = resolved.get(ref.value());
+            rendered.add(match != null ? match.code().value() : ref.value().value());
+        }
+        return rendered;
+    }
+
     private Map<ResourceId, ResolvedRequirement> resolveRequirementsFor(
             final ProjectId projectId, final List<AdrDetail> details) {
         final ResourceId[] ids = details.stream()
@@ -707,6 +741,20 @@ public final class AdrMcpTools {
         }
         return resolveBoundedContexts.resolveExisting(projectId, ids).stream()
                 .collect(Collectors.toMap(ResolvedBoundedContext::id, c -> c, (first, second) -> first));
+    }
+
+    /** {@link #resolveContextsFor} for {@code usesTerm} (kogn-io/arknet#393), same shape. */
+    private Map<ResourceId, ResolvedTerm> resolveTermsFor(final ProjectId projectId, final List<AdrDetail> details) {
+        final ResourceId[] ids = details.stream()
+                .flatMap(detail -> detail.adr().usesTerms().stream())
+                .map(TermRef::value)
+                .distinct()
+                .toArray(ResourceId[]::new);
+        if (ids.length == 0) {
+            return Map.of();
+        }
+        return resolveTerms.resolve(projectId, ids).stream()
+                .collect(Collectors.toMap(ResolvedTerm::id, t -> t, (first, second) -> first));
     }
 
     private static LocalDate parseDate(final String value) {

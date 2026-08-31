@@ -202,6 +202,17 @@ public final class ArkarchVocabulary {
     /** {@code arkarch:affectsContext} - ADR -&gt; the {@code arkddd:BoundedContext} it affects. */
     public static final String AFFECTS_CONTEXT = NAMESPACE + "affectsContext";
 
+    /**
+     * {@code arkarch:usesTerm} - ADR -&gt; a {@code skos:Concept} glossary term it uses
+     * (kogn-io/arknet#393). An own property rather than an extension of the shared
+     * {@code arkreq:usesTerm} domain: that domain is widened to a union of
+     * {@code arkreq:Requirement}/{@code arkreq:UseCase} only because both live in the same
+     * {@code arkreq} namespace/bounded context, a justification that does not carry over to an ADR,
+     * which lives in its own {@code arkarch} namespace/bounded context - the same choice
+     * {@link #AFFECTS_CONTEXT}'s sibling {@code arkddd:ubiquitousLanguageTerm} already made.
+     */
+    public static final String USES_TERM = NAMESPACE + "usesTerm";
+
     /** {@code arkarch:ADRStatus} - the class of the lifecycle status individuals below. */
     public static final String ADR_STATUS_TYPE = NAMESPACE + "ADRStatus";
 

@@ -22,11 +22,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Value object of the ADR component. All invariants are enforced in the compact constructor;
  * instances are immutable and their collections are defensively copied.</p>
  *
- * <p><strong>Every edge lives inside the record.</strong> All four relations
- * ({@code addressesRequirement}, {@code affectsContext}, {@code supersededBy}, {@code relatedTo}) are
- * part of the decision's own state rather than side edges: the out-adapter persists a decision by
- * replacing its triples wholesale, so an edge kept outside this record would be silently dropped by
- * the next write - the lesson the requirements and bounded-context contexts already paid for.</p>
+ * <p><strong>Every edge lives inside the record.</strong> All five relations
+ * ({@code addressesRequirement}, {@code affectsContext}, {@code usesTerm}, {@code supersededBy},
+ * {@code relatedTo}) are part of the decision's own state rather than side edges: the out-adapter
+ * persists a decision by replacing its triples wholesale, so an edge kept outside this record would
+ * be silently dropped by the next write - the lesson the requirements and bounded-context contexts
+ * already paid for.</p>
  *
  * <p><strong>Consequences and considered options are structured resources (kogn-io/arknet#357),
  * not flat strings.</strong> {@link #consequences()}/{@link #consideredOptions()} replace the
@@ -49,6 +50,7 @@ public record Adr(
         LocalDate decisionDate,
         List<RequirementRef> addressesRequirements,
         List<BoundedContextRef> affectsContexts,
+        List<TermRef> usesTerms,
         AdrId supersededBy,
         List<AdrId> relatedTo) {
 
@@ -63,6 +65,7 @@ public record Adr(
         consideredOptions = consideredOptions == null ? List.of() : List.copyOf(consideredOptions);
         addressesRequirements = addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
         affectsContexts = affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
+        usesTerms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
         relatedTo = relatedTo == null ? List.of() : List.copyOf(relatedTo);
         requireNotBlank(name, "name");
         requireNotBlank(context, "context");
@@ -78,6 +81,7 @@ public record Adr(
         }
         requireNoDuplicates(addressesRequirements, "addressesRequirements");
         requireNoDuplicates(affectsContexts, "affectsContexts");
+        requireNoDuplicates(usesTerms, "usesTerms");
         requireNoDuplicates(relatedTo, "relatedTo");
         if (relatedTo.contains(id)) {
             throw new IllegalArgumentException("an ADR must not be related to itself");
@@ -139,7 +143,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be accepted while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, consideredOptions,
-                decidedOn, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decidedOn, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -169,7 +173,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be rejected while PROPOSED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.REJECTED, context, decision, consequences, consideredOptions,
-                decidedOn, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decidedOn, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -197,7 +201,7 @@ public record Adr(
             throw new IllegalStateException("an ADR can only be deprecated while ACCEPTED, was " + status);
         }
         return new Adr(id, code, name, AdrStatus.DEPRECATED, context, decision, consequences, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -225,7 +229,7 @@ public record Adr(
                     + status + ": " + code.value());
         }
         return new Adr(id, code, name, AdrStatus.SUPERSEDED, context, decision, consequences, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersedingId, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersedingId, relatedTo);
     }
 
     /**
@@ -297,7 +301,7 @@ public record Adr(
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -325,7 +329,7 @@ public record Adr(
             appended.add(new Consequence(nextPosition++, draft.statement(), draft.type()));
         }
         return new Adr(id, code, name, status, context, decision, appended, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -424,7 +428,7 @@ public record Adr(
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, patched, consideredOptions,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -447,7 +451,7 @@ public record Adr(
             appended.add(new ConsideredOption(nextPosition++, draft.name(), draft.rationale(), draft.outcome()));
         }
         return new Adr(id, code, name, status, context, decision, consequences, appended,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
@@ -522,20 +526,21 @@ public record Adr(
             throw new AdrTextImmutableException(code, status);
         }
         return new Adr(id, code, name, status, context, decision, consequences, patched,
-                decisionDate, addressesRequirements, affectsContexts, supersededBy, relatedTo);
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, supersededBy, relatedTo);
     }
 
     /**
-     * Returns this decision with all three of its reference lists replaced wholesale, in
+     * Returns this decision with all four of its reference lists replaced wholesale, in
      * <em>every</em> status - the deliberate exception to {@link #reviseText}'s immutability rule.
      *
      * <p><strong>Why no status check here.</strong> Adding {@code addressesRequirement},
-     * {@code affectsContext} or {@code relatedTo} later does not change what was decided; it
-     * completes a reference that could not be written when the decision was recorded, because the
-     * requirement, bounded context or peer decision it points at did not exist yet. Freezing these
-     * along with the prose would leave a decision in force permanently unable to state what it
-     * applies to. The precedent is already in this record: {@link #supersededBy(AdrId)} writes into
-     * an accepted decision's {@code supersededBy} for exactly the same reason.</p>
+     * {@code affectsContext}, {@code usesTerm} or {@code relatedTo} later does not change what was
+     * decided; it completes a reference that could not be written when the decision was recorded,
+     * because the requirement, bounded context, glossary term or peer decision it points at did not
+     * exist yet. Freezing these along with the prose would leave a decision in force permanently
+     * unable to state what it applies to. The precedent is already in this record:
+     * {@link #supersededBy(AdrId)} writes into an accepted decision's {@code supersededBy} for
+     * exactly the same reason.</p>
      *
      * <p>Every argument is a replacement, not an addition: an empty (or {@code null}) list clears
      * that relation, mirroring the compact constructor's own {@code null}-to-empty normalisation.
@@ -544,24 +549,27 @@ public record Adr(
      *
      * @param addressesRequirements the requirements this decision should address going forward
      * @param affectsContexts       the bounded contexts it should affect going forward
+     * @param usesTerms             the glossary terms this decision uses going forward
+     *                              (kogn-io/arknet#393)
      * @param relatedTo             the peer decisions it should cross-reference going forward
-     * @return the corrected decision, or {@code this} if all three lists already matched
+     * @return the corrected decision, or {@code this} if all four lists already matched
      * @throws IllegalArgumentException if a list contains duplicates, or if {@code relatedTo}
      *                                  contains this decision's own identity
      */
     public Adr reviseReferences(List<RequirementRef> addressesRequirements,
-            List<BoundedContextRef> affectsContexts, List<AdrId> relatedTo) {
+            List<BoundedContextRef> affectsContexts, List<TermRef> usesTerms, List<AdrId> relatedTo) {
         List<RequirementRef> requirements =
                 addressesRequirements == null ? List.of() : List.copyOf(addressesRequirements);
         List<BoundedContextRef> contexts =
                 affectsContexts == null ? List.of() : List.copyOf(affectsContexts);
+        List<TermRef> terms = usesTerms == null ? List.of() : List.copyOf(usesTerms);
         List<AdrId> peers = relatedTo == null ? List.of() : List.copyOf(relatedTo);
         if (requirements.equals(this.addressesRequirements) && contexts.equals(this.affectsContexts)
-                && peers.equals(this.relatedTo)) {
+                && terms.equals(this.usesTerms) && peers.equals(this.relatedTo)) {
             return this;
         }
         return new Adr(id, code, name, status, context, decision, consequences, consideredOptions,
-                decisionDate, requirements, contexts, supersededBy, peers);
+                decisionDate, requirements, contexts, terms, supersededBy, peers);
     }
 
     private static void requireNotBlank(String value, String field) {

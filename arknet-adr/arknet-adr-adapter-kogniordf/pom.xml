@@ -70,14 +70,14 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
-        <!-- Test-only: KognioRdfRequirementLookup/KognioRdfBoundedContextLookup hardcode the
-             requirements and bounded-context out-adapters' private storage schemas (graph IRI,
-             dcterms:identifier) with no compile-time coupling between the adapter modules. These
-             dependencies let a schema test write a requirement / a bounded context through those
-             BCs' actual repositories and resolve them through this module's actual lookups against
-             the same store - the substitute regression signal for a future schema drift (mirrors
-             the bounded-context adapter's KognioRdfTermLookupUbiquitousLanguageSchemaTest, issue
-             #109). -->
+        <!-- Test-only: KognioRdfRequirementLookup/KognioRdfBoundedContextLookup/KognioRdfTermLookup
+             hardcode the requirements, bounded-context and ubiquitous-language out-adapters'
+             private storage schemas (graph IRI, dcterms:identifier) with no compile-time coupling
+             between the adapter modules. These dependencies let a schema test write a requirement /
+             a bounded context / a term through those BCs' actual repositories and resolve them
+             through this module's actual lookups against the same store - the substitute regression
+             signal for a future schema drift (mirrors the bounded-context adapter's
+             KognioRdfTermLookupUbiquitousLanguageSchemaTest, issue #109). -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-requirements-adapter-kogniordf</artifactId>
@@ -87,6 +87,20 @@
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-bounded-context-adapter-kogniordf</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Test-only: KognioRdfTermLookup (kogn-io/arknet#393) hardcodes the ubiquitous-language
+             out-adapter's private storage schema (graph IRI, skos:Concept, dcterms:identifier) with
+             no compile-time coupling between the two adapter modules. This dependency lets a schema
+             test write a term through the ubiquitous-language BC's actual KognioRdfTermRepository
+             and resolve it through this module's actual KognioRdfTermLookup against the same store -
+             the substitute regression signal for a future schema drift (mirrors the
+             requirements/bounded-context adapters' own KognioRdfTermLookupUbiquitousLanguageSchemaTest,
+             issue #109). -->
+        <dependency>
+            <groupId>de.hauschel.arknet</groupId>
+            <artifactId>arknet-ubiquitous-language-adapter-kogniordf</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
