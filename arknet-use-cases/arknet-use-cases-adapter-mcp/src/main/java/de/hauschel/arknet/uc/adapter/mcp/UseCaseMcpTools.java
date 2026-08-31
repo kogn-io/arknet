@@ -80,6 +80,21 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms;
  */
 public final class UseCaseMcpTools {
 
+    /**
+     * The prose markup this tool's free-text fields accept, appended to every writing tool's
+     * description (issue #388).
+     *
+     * <p>It belongs on the tool, not only in the module docs: the writing agent reads the tool
+     * schema and nothing else, which is exactly why the {@code white-space:pre-line} mechanism of
+     * issue #385 was never used by anyone. The same sentence is repeated in each bounded
+     * context's MCP adapter rather than shared, because these adapters deliberately have no
+     * common module - a shared string is not reason enough to create one.</p>
+     */
+    private static final String PROSE_MARKUP = " Free-text fields accept a narrow Markdown subset:"
+            + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
+            + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
+            + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
+
     private final AddUseCase addUseCase;
     private final ListUseCases listUseCases;
     private final GetUseCase getUseCase;
@@ -234,7 +249,7 @@ public final class UseCaseMcpTools {
             description = "Register a complete use case (Cockburn-style, goal + ordered main flow) in a "
                     + "single call. Requirement and actor references are given as bare labels that must "
                     + "already exist in this project (create requirements with req_add, actors with "
-                    + "actor_add first).")
+                    + "actor_add first)." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Short human-readable name of the use case, e.g. 'Place order'")
@@ -357,7 +372,7 @@ public final class UseCaseMcpTools {
                     + "supportingActors array replaces the current list wholesale, an empty array clearing "
                     + "it. Does not touch the step list's structure; use uc_add to create a replacement use "
                     + "case if the flow itself needs restructuring - note that this mints a new use-case code "
-                    + "and does not carry over inbound references.")
+                    + "and does not carry over inbound references." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Use-case code, e.g. UC1") final String id,

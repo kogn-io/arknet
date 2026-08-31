@@ -24,6 +24,13 @@ import java.util.Objects;
  * relationships the store does not hold; keeping them apart is what lets a reader see the
  * missing edge instead of being told a comfortable lie.</p>
  *
+ * <p><strong>Author markup is a third kind of run.</strong> {@link Emphasis} and {@link Code}
+ * come from the narrow Markdown subset the prose fields accept (issue #388), not from the model:
+ * they say how the author meant a run to read, where {@link TermLink}/{@link TermGap} say what
+ * the model knows about it. Keeping them as spans rather than letting the renderer re-scan the
+ * text is what lets a second renderer (the Vaadin review UI of ADR-010) show the same structure
+ * without a second text analysis.</p>
+ *
  * <p>Sealed, so a new kind of span is a compile error in every renderer rather than silently
  * unrendered text.</p>
  */
@@ -99,6 +106,55 @@ public sealed interface Span {
             Objects.requireNonNull(text, "text");
             Objects.requireNonNull(iri, "iri");
             Objects.requireNonNull(code, "code");
+        }
+    }
+
+    /**
+     * A run the author marked up as emphasised - {@code *italic*} or {@code **bold**} in the
+     * accepted Markdown subset (issue #388).
+     *
+     * <p>Carries a nested {@link RichText} rather than a string, so that a term inside an
+     * emphasised run is still recognised as a term: {@code **the Customer places an order**} keeps
+     * its glossary link. {@link #text()} is the emphasised text <em>without</em> its markers -
+     * the markers are syntax, not content, and no renderer should ever print them.</p>
+     *
+     * @param style   whether the author wrote one marker or two
+     * @param content the emphasised text, itself marked up
+     */
+    record Emphasis(Style style, RichText content) implements Span {
+        public Emphasis {
+            Objects.requireNonNull(style, "style");
+            Objects.requireNonNull(content, "content");
+        }
+
+        @Override
+        public String text() {
+            return content.text();
+        }
+    }
+
+    /** How strongly an {@link Emphasis} run is emphasised. */
+    enum Style {
+        /** {@code *one marker*} - shown in italics. */
+        ITALIC,
+        /** {@code **two markers**} - shown in bold. */
+        STRONG
+    }
+
+    /**
+     * A run the author marked up as code - {@code `arkreq:usesTerm`} in the accepted Markdown
+     * subset (issue #388).
+     *
+     * <p>Deliberately holds a plain string and no nested {@link RichText}: code is literal. A
+     * predicate, a type name or a port written in backticks is an identifier, and marking it up as
+     * a glossary mention would claim the model knows a relationship where the author only named a
+     * symbol.</p>
+     *
+     * @param text the code text, without its backticks
+     */
+    record Code(String text) implements Span {
+        public Code {
+            Objects.requireNonNull(text, "text");
         }
     }
 }

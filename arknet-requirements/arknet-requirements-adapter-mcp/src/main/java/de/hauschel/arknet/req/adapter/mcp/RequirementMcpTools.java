@@ -86,6 +86,21 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  */
 public final class RequirementMcpTools {
 
+    /**
+     * The prose markup this tool's free-text fields accept, appended to every writing tool's
+     * description (issue #388).
+     *
+     * <p>It belongs on the tool, not only in the module docs: the writing agent reads the tool
+     * schema and nothing else, which is exactly why the {@code white-space:pre-line} mechanism of
+     * issue #385 was never used by anyone. The same sentence is repeated in each bounded
+     * context's MCP adapter rather than shared, because these adapters deliberately have no
+     * common module - a shared string is not reason enough to create one.</p>
+     */
+    private static final String PROSE_MARKUP = " Free-text fields accept a narrow Markdown subset:"
+            + " **bold**, *italic*, `code`, lines starting with '- ' as a bullet list, and a blank line"
+            + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
+            + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
+
     private final AddRequirement addRequirement;
     private final ListRequirements listRequirements;
     private final GetRequirement getRequirement;
@@ -184,7 +199,7 @@ public final class RequirementMcpTools {
 
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
-    @McpTool(name = "req_add", description = "Register a new requirement (functional or non-functional).")
+    @McpTool(name = "req_add", description = "Register a new requirement (functional or non-functional)." + PROSE_MARKUP)
     public String add(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Short human-readable summary of the requirement") final String title,
@@ -382,7 +397,7 @@ public final class RequirementMcpTools {
                     + "newAcceptanceCriteria appends new criteria after the existing ones; "
                     + "acceptanceCriteriaTextPatches corrects the wording of one or more existing criteria "
                     + "by position - neither can insert mid-list, delete or reorder a criterion. "
-                    + "Does not touch status (use req_set_status) or linked terms (use req_link_term).")
+                    + "Does not touch status (use req_set_status) or linked terms (use req_link_term)." + PROSE_MARKUP)
     public String update(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Requirement identity, e.g. FR-1 or NFR-7") final String id,

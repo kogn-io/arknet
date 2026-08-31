@@ -27,28 +27,51 @@ public sealed interface Block {
     /**
      * A single run of text: a goal, a description, a precondition.
      *
-     * <p>Carries {@link RichText} rather than a string because a text may mention the
+     * <p>Carries {@link ProsePart}s rather than a string because a text may mention the
      * ubiquitous language, and the builder - not the renderer - is who can tell a mention the
-     * model backs with an edge from one it does not. A field nobody analyses simply arrives as
-     * {@link RichText#plain}.</p>
+     * model backs with an edge from one it does not; and because a prose field may itself be
+     * structured, the author having written paragraphs and a bullet list into one literal (issue
+     * #388). A field nobody analyses simply arrives as {@link #plain}.</p>
      *
-     * @param label the block heading
-     * @param text  the text; non-blank (an absent optional field is left out entirely rather
-     *              than rendered as an empty block)
+     * @param label  the block heading
+     * @param source the store literal this block was built from, character for character - what
+     *               the renderer matches against the subject's other language-tagged literals
+     * @param parts  the field's structure in reading order; never empty for a block that is
+     *               rendered at all (an absent optional field is left out entirely rather than
+     *               rendered as an empty block)
      */
-    record Prose(String label, RichText text) implements Block {
+    record Prose(String label, String source, List<ProsePart> parts) implements Block {
         public Prose {
             Objects.requireNonNull(label, "label");
-            Objects.requireNonNull(text, "text");
+            Objects.requireNonNull(source, "source");
+            parts = parts == null ? List.of() : List.copyOf(parts);
         }
 
         /**
+         * A single, unstructured paragraph - the shape for a field that is not free prose at all
+         * (a date, a category name, an owner) and would only be damaged by looking for markup in
+         * it.
+         *
          * @param label the block heading
          * @param text  a text with nothing marked up
          * @return the block
          */
         public static Prose plain(final String label, final String text) {
-            return new Prose(label, RichText.plain(text));
+            Objects.requireNonNull(text, "text");
+            return new Prose(label, text, List.of(new ProsePart.Paragraph(RichText.plain(text))));
+        }
+
+        /**
+         * A single paragraph with its spans already marked up - the shape a caller produces that
+         * analyses the text itself rather than letting {@link ProseMarkdown} structure it.
+         *
+         * @param label the block heading
+         * @param text  the marked-up text
+         * @return the block
+         */
+        public static Prose paragraph(final String label, final RichText text) {
+            Objects.requireNonNull(text, "text");
+            return new Prose(label, text.text(), List.of(new ProsePart.Paragraph(text)));
         }
     }
 
