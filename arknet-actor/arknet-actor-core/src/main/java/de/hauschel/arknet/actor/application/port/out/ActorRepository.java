@@ -134,6 +134,35 @@ public interface ActorRepository {
     List<Actor> findAll(ProjectId projectId);
 
     /**
+     * Returns the business code of every actor registered in a project, read independently of
+     * whether that actor can currently be materialised into an {@link Actor} - unlike
+     * {@link #findAll}, which needs a name to build one and therefore passes over a store-first
+     * (ADR-005) actor that has none, this method reports its code too.
+     *
+     * <p><strong>Why this exists (kogn-io/arknet#360).</strong>
+     * {@link de.hauschel.arknet.actor.application.ActorService#add} derives the next free
+     * {@code ACTOR-N} from the highest running number the project has ever used. An actor without a
+     * name is nameless, not gone: it occupies its {@code ACTOR-N} just as firmly as any other. Were
+     * the maximum derived from {@link #findAll} alone, such an actor holding the project's highest
+     * number would let that number be recomputed and handed out again, which {@link #create} then
+     * rejects as a {@link DuplicateActorCodeException} - and since every retry recomputes the very
+     * same number, {@code actor_add} would be permanently dead for the project rather than merely
+     * racing. This method joins nothing but the actor type and {@code dcterms:identifier}, neither of
+     * which any read-time tolerance skips, so the number it feeds the counter never depends on a
+     * field's presence.</p>
+     *
+     * <p>Covers all four {@link de.hauschel.arknet.actor.domain.ActorType}s in one result, matching
+     * the single {@code ACTOR-N} counter shared across them. Complements
+     * {@link #findRetainedCodes}, which reports the codes of actors that were <em>deleted</em>: the
+     * two sets are disjoint - a code here belongs to an actor that still exists, one there to an
+     * actor that no longer does - and the next free code is the maximum over both.</p>
+     *
+     * @param projectId the project (architecture model) to read codes from
+     * @return every registered actor's business code, never {@code null}
+     */
+    List<ActorCode> findAllCodes(ProjectId projectId);
+
+    /**
      * Deletes the actor identified by {@code code}, and every triple it carries in this
      * hexagon's own named graph, from the project (issue #335). Rejects outright, without deleting
      * anything, if anything else in the project still references the actor - see
@@ -149,9 +178,9 @@ public interface ActorRepository {
     /**
      * Returns the business codes of actors that were deleted from the project and are kept out of
      * circulation - what {@link #delete} retains so a code can never name two different actors over
-     * a project's lifetime (issue #350). Read together with {@link #findAll} whenever the next free
-     * code is derived; the two sets are disjoint, since a retained code belongs to an actor that no
-     * longer exists.
+     * a project's lifetime (issue #350). Read together with {@link #findAllCodes} whenever the next
+     * free code is derived; the two sets are disjoint, since a retained code belongs to an actor that
+     * no longer exists.
      *
      * <p>Never rejects and never reports a code twice. An actor deleted <em>without</em> the
      * implementation being able to retain its code is simply absent - the contract is "every code

@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -208,29 +209,27 @@ public class ConstraintService
 
     /**
      * Derives the next free business code for {@code type} in {@code projectId}: the highest
-     * running number currently used by that subtype, plus one (starting at 1) - mirrors
-     * {@code RequirementService#nextCode} exactly.
+     * running number that subtype has ever used, plus one (starting at 1). Same shape as
+     * {@code RequirementService#nextCode}, and since kogn-io/arknet#360 the same two
+     * corrections - see that method for the reasoning in full; what follows is what the two facts
+     * mean for a constraint.
+     *
+     * <p>{@link ConstraintRepository#findAllCodes} is the source, because
+     * {@link ConstraintRepository#findAll} omits a constraint whose {@code title} or
+     * {@code constraintStatement} is unreadable, and a code omitted from the count is a code this
+     * method hands out for the second time - into a
+     * {@link DuplicateConstraintCodeException} that recomputing only reproduces.</p>
+     *
+     * <p>The three counters are kept apart by the {@code TCON-}/{@code BCON-}/{@code RCON-} prefix
+     * that {@link CodeCounter} anchors on, no longer by filtering on
+     * {@link de.hauschel.arknet.req.domain.Constraint#type()}: a constraint's type is fixed at
+     * creation, but the triple recording it is no more guaranteed readable than any other, and the
+     * counter must not depend on it.</p>
      */
     private ConstraintCode nextCode(ProjectId projectId, ConstraintType type) {
-        int next = repository.findAll(projectId, null).stream()
-                .filter(c -> c.type() == type)
-                .mapToInt(c -> runningNumber(c.code()))
-                .max()
-                .orElse(0) + 1;
-        return new ConstraintCode(type.idPrefix() + "-" + next);
-    }
-
-    /** Parses the running number from a code such as {@code TCON-7} (0 if not parseable). */
-    private static int runningNumber(ConstraintCode code) {
-        String value = code.value();
-        int dash = value.lastIndexOf('-');
-        if (dash < 0 || dash == value.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        String prefix = type.idPrefix() + "-";
+        int highest = CodeCounter.highestRunningNumber(prefix, repository.findAllCodes(projectId),
+                ConstraintCode::value);
+        return new ConstraintCode(prefix + (highest + 1));
     }
 }

@@ -1166,6 +1166,105 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
+    // ---- findAllCodes: the raw code read behind the code assignment ------------------------
+
+    /**
+     * What {@link TermRepository#findAllCodes} exists for (kogn-io/arknet#360), pinned against the
+     * real store: the query joins the {@code skos:Concept} type and {@code dcterms:identifier} and
+     * nothing else, so a code stays taken even by a subject {@link TermRepository#findAll} cannot
+     * materialise at all. Deliberately the barest such concept there is - neither
+     * {@code skos:prefLabel} nor {@code skos:definition}, the two literals the listing read joins as
+     * mandatory - so any further mandatory join added to this query later (the tempting "a code
+     * alone is not a term") fails here, instead of silently letting {@code term_add} mint
+     * {@code TERM-2} a second time.
+     *
+     * <p>The exact count also pins the type join's second duty: the glossary's own
+     * {@code skos:ConceptScheme} subject shares this named graph and must not turn up among the
+     * codes.</p>
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        repository.create(PROJECT_A,
+                new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null), null);
+        givenBareConcept(PROJECT_A, freshId(), "TERM-2");
+
+        List<TermCode> codes = repository.findAllCodes(PROJECT_A);
+
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
+        assertTrue(repository.findByCode(PROJECT_A, new TermCode("TERM-2"), null).isEmpty());
+        assertEquals(2, codes.size());
+        assertTrue(codes.containsAll(List.of(new TermCode("TERM-1"), new TermCode("TERM-2"))));
+    }
+
+    /**
+     * The same guarantee against a blank-node holder (kogn-io/arknet#360). {@code skos:Concept}
+     * says nothing about node kind, and neither does the counting query: no
+     * {@code FILTER(isIRI(?s))}, unlike every read around it. It has to stay absent, because the
+     * writer is just as node-kind-blind - {@code WriteFunnel#create} asks
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} with a wildcard subject and would
+     * reject a {@code term_add} minting {@code TERM-2}. A counter that skipped the blank node would
+     * keep proposing that very number, retry after retry, and {@code term_add} would stay dead for
+     * the project. Re-introduce the filter and this test goes red.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        repository.create(PROJECT_A,
+                new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null), null);
+        givenBareBlankNodeConcept(PROJECT_A, "TERM-2");
+
+        List<TermCode> codes = repository.findAllCodes(PROJECT_A);
+
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
+        assertTrue(codes.contains(new TermCode("TERM-2")), codes.toString());
+    }
+
+    /** Codes are read per project, never across projects - same scoping {@code findAll} promises. */
+    @Test
+    void findAllCodesIsScopedToItsProject() {
+        repository.create(PROJECT_A,
+                new Term(freshId(), new TermCode("TERM-1"), "Gutschrift", "def a", null), null);
+
+        assertEquals(List.of(), repository.findAllCodes(PROJECT_B));
+    }
+
+    /**
+     * Writes the barest {@code skos:Concept} the store accepts - a type triple and a
+     * {@code dcterms:identifier}, no {@code skos:prefLabel}, no {@code skos:definition}. Written
+     * raw, because no in-port can produce it: {@code term_add} always writes both literals, and
+     * {@code ulshapes:Term-prefLabel}'s {@code sh:minCount 1} would reject this shape at the write
+     * gate. Store-first (ADR-005) data that arrived some other way is exactly the case
+     * {@code findAllCodes} has to survive.
+     */
+    private void givenBareConcept(ProjectId projectId, TermId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "<" + id.value().value() + "> a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * The same bare concept, only anonymous: {@code []} mints a fresh blank node, the node kind
+     * {@code ulshapes:TermShape} never rules out and {@code term_add} never produces. Written raw
+     * for the same reason as its IRI sibling - only a store-first (ADR-005) write can put a code on
+     * a subject shaped like this.
+     */
+    private void givenBareBlankNodeConcept(ProjectId projectId, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/ubiquitous-language> { "
+                + "[] a <http://www.w3.org/2004/02/skos/core#Concept> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     // ---- blank-node subject guard ----------------------------------------------------------
 
     /**

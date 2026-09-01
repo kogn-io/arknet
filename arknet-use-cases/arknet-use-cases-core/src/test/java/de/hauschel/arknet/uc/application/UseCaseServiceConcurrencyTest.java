@@ -39,8 +39,10 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  *
  * <p>The race is reproduced deterministically, without real threads: a {@link UseCaseRepository}
  * decorator runs an "other caller"'s complete add exactly once, right after the first {@code
- * findAll} (which {@code nextCode()} reads) returns - pinning the exact interleaving instead of
- * relying on thread scheduling, which would make the test flaky. Mirrors {@code
+ * findAllCodes} returns - {@code nextCode()} reads via {@code findAllCodes} rather than
+ * {@code findAll} (kogn-io/arknet#360, see {@link UseCaseRepository#findAllCodes}'s own javadoc) -
+ * pinning the exact interleaving instead of relying on thread scheduling, which would make the test
+ * flaky. Mirrors {@code
  * RequirementServiceConcurrencyTest}, the one type that already guarded this.</p>
  */
 class UseCaseServiceConcurrencyTest {
@@ -82,8 +84,8 @@ class UseCaseServiceConcurrencyTest {
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
-        RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE));
+        RaceOnFirstFindAllCodesRepository racing =
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newUseCase(), DEFAULT_LANGUAGE));
         UseCaseService underTest = new UseCaseService(
                 racing, resourceIdFactory, requirementLookup, actorLookup, termLookup, constraintLookup);
 
@@ -187,17 +189,17 @@ class UseCaseServiceConcurrencyTest {
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
-     * {@link #findAll} call returns - {@code nextCode()} reads via {@code findAll}, so this
-     * simulates a concurrent {@code uc_add} committing between this caller's code computation and
-     * its own {@code create()}.
+     * {@link #findAllCodes} call returns - {@code nextCode()} reads via {@code findAllCodes}
+     * (kogn-io/arknet#360), so this simulates a concurrent {@code uc_add} committing between this
+     * caller's code computation and its own {@code create()}.
      */
-    private static final class RaceOnFirstFindAllRepository implements UseCaseRepository {
+    private static final class RaceOnFirstFindAllCodesRepository implements UseCaseRepository {
 
         private final UseCaseRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
-        RaceOnFirstFindAllRepository(UseCaseRepository delegate, Runnable injection) {
+        RaceOnFirstFindAllCodesRepository(UseCaseRepository delegate, Runnable injection) {
             this.delegate = delegate;
             this.injection = injection;
         }
@@ -230,7 +232,12 @@ class UseCaseServiceConcurrencyTest {
 
         @Override
         public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
-            List<UseCase> result = delegate.findAll(projectId, displayLocale);
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<UseCaseCode> findAllCodes(ProjectId projectId) {
+            List<UseCaseCode> result = delegate.findAllCodes(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -293,6 +300,11 @@ class UseCaseServiceConcurrencyTest {
         public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
         }
+
+        @Override
+        public List<UseCaseCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
+        }
     }
 
     /** A repository whose {@code compareAndUpdate} always reports a conflict, never applying. */
@@ -340,6 +352,11 @@ class UseCaseServiceConcurrencyTest {
         @Override
         public List<UseCase> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<UseCaseCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
         }
     }
 }

@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.bc.application;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,16 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
 
     private final Map<ProjectId, Map<BoundedContextId, BoundedContext>> byProject = new LinkedHashMap<>();
     private final Map<BoundedContextId, RevisionToken> headByIdentity = new LinkedHashMap<>();
+
+    /**
+     * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately kept out of
+     * {@link #byProject}, so {@link #findAll} never reports them while {@link #findAllCodes}
+     * always does. What lets a test reproduce the real out-adapter's store-first (ADR-005) skip
+     * without a real store: a bounded context whose {@code BC-N} is assigned and whose subject
+     * exists, but which misses {@code arknet:name} or {@code arkddd:domainVision} and therefore
+     * binds no row in {@code findAll}'s query (kogn-io/arknet#360).
+     */
+    private final Map<ProjectId, List<BoundedContextCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, BoundedContext boundedContext) {
@@ -98,6 +109,32 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
     @Override
     public List<BoundedContext> findAll(ProjectId projectId) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Every stored bounded context's code, plus every code {@link #seedUnmaterialisableCode}
+     * seeded - the latter standing in for what the real out-adapter's mandatory
+     * {@code name}/{@code domainVision} joins hide from {@link #findAll}
+     * alone (kogn-io/arknet#360).
+     */
+    @Override
+    public List<BoundedContextCode> findAllCodes(ProjectId projectId) {
+        List<BoundedContextCode> codes = new ArrayList<>(byProject.getOrDefault(projectId, Map.of())
+                .values().stream().map(BoundedContext::code).toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, List.of()));
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will - simulating a
+     * bounded context written store-first (ADR-005) without {@code arknet:name} or
+     * {@code arkddd:domainVision}, which the real out-adapter's listing query cannot bind even
+     * though the code stays taken (kogn-io/arknet#360). No {@link BoundedContext} is constructed
+     * for it on purpose: the record's own invariants forbid exactly the incomplete state being
+     * simulated here.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, BoundedContextCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 
     @Override

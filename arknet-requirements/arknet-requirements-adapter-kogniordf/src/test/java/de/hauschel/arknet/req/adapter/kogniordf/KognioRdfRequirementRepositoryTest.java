@@ -163,6 +163,89 @@ class KognioRdfRequirementRepositoryTest {
         assertTrue(all.contains(second));
     }
 
+    /**
+     * What {@link RequirementRepository#findAllCodes} is for (kogn-io/arknet#360), pinned against
+     * the real store: the query joins the requirement type and {@code dcterms:identifier} and
+     * nothing further, so a number stays taken even by a subject the listing cannot build a
+     * {@link Requirement} out of at all. The inserted subject is deliberately as bare as the graph
+     * permits - no title, no description, no status - since every one of those is a join the
+     * listing makes and this read must not. Add any field to
+     * {@code KognioRdfRequirementRepository#findAllCodes}'s query later and this test fails, rather
+     * than the counter quietly handing {@code FR-2} out for a second time.
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        Requirement first = new Requirement(
+                freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
+        repository.create(PROJECT_A, first, null);
+        givenBareCodedSubject(PROJECT_A, freshId(), "FR-2");
+
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
+        assertTrue(repository.findByCode(PROJECT_A, new RequirementCode("FR-2"), null).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new RequirementCode("FR-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * The node-kind case of the same read (kogn-io/arknet#360). No {@code FILTER(isIRI(?s))} guards
+     * this query, so an {@code FR-2} held by an anonymous subject is counted - deliberately,
+     * because the write path is equally indifferent: {@code WriteFunnel#create} looks for the code
+     * with {@code tx.contains(graph, null, dcterms:identifier, code)}, a wildcard subject, and would
+     * refuse a {@code req_add} for {@code FR-2}. Overlooking such a code would make the retry loop
+     * behind the code assignment propose the same rejected number for ever. Put the filter back to
+     * match the neighbouring reads and this test reports the miss.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        Requirement first = new Requirement(
+                freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
+        repository.create(PROJECT_A, first, null);
+        givenBareBlankNodeSubject(PROJECT_A, "FR-2");
+
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new RequirementCode("FR-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * Writes the leanest subject that still counts as a coded requirement: the type triple and
+     * {@code dcterms:identifier}, nothing else. Shape-illegal, and therefore unreachable through
+     * {@code req_add} - only a store-first (ADR-005) write can produce it, which is exactly the
+     * situation kogn-io/arknet#360 is about.
+     */
+    private void givenBareCodedSubject(ProjectId projectId, RequirementId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * The same lean subject without an identity of its own: {@code []} is a fresh blank node,
+     * which {@code rshapes:RequirementShape} does not forbid and no {@code req_add} can mint. Only
+     * a store-first (ADR-005) write reaches this shape, and the code on it is taken all the same.
+     */
+    private void givenBareBlankNodeSubject(ProjectId projectId, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "[] a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
     @Test
     void createRejectsAnAlreadyExistingIdentityAndPersistsNothingElse() {
         RequirementId id = freshId();

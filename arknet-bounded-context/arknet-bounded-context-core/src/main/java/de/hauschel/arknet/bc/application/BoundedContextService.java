@@ -29,6 +29,7 @@ import de.hauschel.arknet.bc.domain.DuplicateBoundedContextCodeException;
 import de.hauschel.arknet.bc.domain.RelationshipType;
 import de.hauschel.arknet.bc.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -225,28 +226,25 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
     }
 
     /**
-     * Derives the next free business code in {@code projectId}: the highest running number
-     * currently in use, plus one (starting at 1).
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project already uses, plus one (starting at 1).
+     *
+     * <p><strong>{@link BoundedContextRepository#findAllCodes}, not
+     * {@link BoundedContextRepository#findAll} (kogn-io/arknet#360).</strong> A bounded context
+     * written store-first (ADR-005) without {@code arknet:name} or {@code arkddd:domainVision} is
+     * invisible to {@code findAll}, which joins both as mandatory - yet its {@code BC-N} is taken
+     * just the same. Counting over {@code findAll} would therefore hand that very number out again
+     * as soon as such a context holds the project's highest one; {@link #create}'s uniqueness guard
+     * then rejects the write, and because every retry recomputes the identical number,
+     * {@link CodeAssignment#createRetryingOnCodeCollision} cannot work its way past it either -
+     * {@code bc_add} would be permanently dead for that project rather than merely racing.
+     * {@code findAllCodes} reads the identifier without those joins, so this computation no longer
+     * depends on how complete a context's other fields are.</p>
      */
     private BoundedContextCode nextCode(ProjectId projectId) {
-        int next = repository.findAll(projectId).stream()
-                .mapToInt(bc -> runningNumber(bc.code()))
-                .max()
-                .orElse(0) + 1;
-        return new BoundedContextCode(CODE_PREFIX + "-" + next);
-    }
-
-    /** Parses the running number from a code such as {@code BC-7} (0 if not parseable). */
-    private static int runningNumber(BoundedContextCode code) {
-        String value = code.value();
-        int dash = value.lastIndexOf('-');
-        if (dash < 0 || dash == value.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        String prefix = CODE_PREFIX + "-";
+        int highest = CodeCounter.highestRunningNumber(prefix,
+                repository.findAllCodes(projectId), BoundedContextCode::value);
+        return new BoundedContextCode(prefix + (highest + 1));
     }
 }

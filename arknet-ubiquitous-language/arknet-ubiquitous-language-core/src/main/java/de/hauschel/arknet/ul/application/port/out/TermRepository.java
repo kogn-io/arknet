@@ -169,6 +169,36 @@ public interface TermRepository {
     List<Term> findAll(ProjectId projectId, String displayLocale);
 
     /**
+     * Returns the business code of every term recorded in a project glossary, read independently of
+     * whether that term can currently be materialised into a {@link Term}. {@link #findAll} joins
+     * {@code skos:prefLabel} and {@code skos:definition} as mandatory - a {@link Term} refuses to
+     * exist without either - and so silently drops a store-first (ADR-005) concept that carries
+     * neither, or only one of the two; a concept dropped that way is still there and its code still
+     * taken, and this method still reports it.
+     *
+     * <p><strong>Why this exists (kogn-io/arknet#360).</strong>
+     * {@link de.hauschel.arknet.ul.application.TermService#add} derives the next free
+     * {@code TERM-N} from the highest running number the project ever handed out. Derived from
+     * {@link #findAll} alone, that number would depend on whether the highest-numbered concept
+     * happens to carry both literals right now: a label-less concept holding the project's highest
+     * number is invisible to the listing read, so the derivation would mint its code a second time,
+     * and the implementation's in-transaction uniqueness guard would reject the write with
+     * {@link DuplicateTermCodeException}. Retrying does not help, because the recomputation reads
+     * the same store and arrives at the same taken number again - the project's {@code term_add}
+     * is not racing, it is dead. This method joins only the concept type and the mandatory
+     * {@code dcterms:identifier}, neither of which a missing label or definition can hide, so the
+     * derived number does not depend on materialisability at all.</p>
+     *
+     * <p>Never rejects, and never reports one code twice; a glossary with no terms yields an empty
+     * list. Disjoint from {@link #findRetainedCodes}, which covers the codes of terms that no
+     * longer exist - the next free code is derived from both.</p>
+     *
+     * @param projectId the project (architecture model) to read the term codes of
+     * @return every recorded term's business code, never {@code null}
+     */
+    List<TermCode> findAllCodes(ProjectId projectId);
+
+    /**
      * Finds every term in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveTerms}. This is a batch lookup, not a per-id
      * existence check: an id absent from the project is simply absent from the result, never an

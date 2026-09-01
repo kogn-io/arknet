@@ -368,6 +368,28 @@ class KognioRdfAdrRepositoryTest {
         assertTrue(repository.findByCode(PROJECT_A, new AdrCode("ADR-2"), null).isEmpty());
     }
 
+    /**
+     * Node kind is the other half of the same promise (kogn-io/arknet#360): the counting query
+     * carries no {@code FILTER(isIRI(?s))}, so {@code ADR-2} counts even when a blank node holds
+     * it. That is not laxity but agreement with the writer - {@code WriteFunnel#create} decides
+     * code uniqueness with {@code tx.contains(graph, null, dcterms:identifier, code)}, a wildcard
+     * subject that never asks for a node kind, and would turn down an {@code adr_add} for
+     * {@code ADR-2}. Were the counter to look past that code, the {@code CodeAssignment} retry
+     * would recompute the identical rejected number every time and the bounded context could never
+     * add a decision again. Restoring the filter here - "make it mirror the other reads" - fails
+     * this test.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        repository.create(PROJECT_A, adr(new AdrCode("ADR-1")), "en");
+        update("INSERT DATA { GRAPH <" + ADR_GRAPH + "> { [] a <" + ArkarchVocabulary.ADR_TYPE
+                + "> ; <http://purl.org/dc/terms/identifier> \"ADR-2\" } }");
+
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new AdrCode("ADR-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
     @Test
     void compareAndUpdateTransitionsToRejected() {
         Adr original = adr(freshId(), new AdrCode("ADR-1"), AdrStatus.PROPOSED, null, null, null,
@@ -983,7 +1005,7 @@ class KognioRdfAdrRepositoryTest {
     /**
      * Regression for #187: two distinct, non-standard store-first (ADR-005) codes that both parse to
      * the same running number (unparseable, hence 0 - see
-     * {@code KognioRdfAdrRepository#runningNumber}) must not collide in the internal
+     * {@code CodeCounter#runningNumber}) must not collide in the internal
      * {@link java.util.TreeSet}. A comparator ordering only by parsed running number is inconsistent
      * with {@link AdrCode#equals}, and a {@link java.util.TreeSet} dedupes by comparator, not by
      * {@code equals} - so without a tie-breaker one of the two codes would be silently dropped.

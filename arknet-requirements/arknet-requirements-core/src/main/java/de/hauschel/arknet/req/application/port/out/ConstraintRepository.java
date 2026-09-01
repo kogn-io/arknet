@@ -196,6 +196,35 @@ public interface ConstraintRepository {
     List<Constraint> findAll(ProjectId projectId, String displayLocale);
 
     /**
+     * Returns the business code of every constraint recorded in a project, whether or not that
+     * constraint can currently be materialised into a {@link Constraint}. The reason a code can
+     * outlive its listing entry is the same one {@link RequirementRepository#findAllCodes}
+     * describes for requirements, with this hexagon's other pair of mandatory literals:
+     * {@link #findAll} skips a subject whose {@code title} or {@code constraintStatement} it
+     * cannot select, which a store-first (ADR-005) write can produce; the subject stays, and so
+     * does its code. Only the type and {@code dcterms:identifier} are joined here, and neither is
+     * ever the field that goes missing.
+     *
+     * <p><strong>Every type in one list.</strong> Technical, business and regulatory codes come
+     * back together, in no particular order, with no
+     * {@link de.hauschel.arknet.req.domain.ConstraintType} argument to narrow them:
+     * {@link de.hauschel.arknet.req.application.ConstraintService} keeps its three counters apart
+     * on the {@code TCON-}/{@code BCON-}/{@code RCON-} prefix of the code itself, which is
+     * readable even when the type triple is not.</p>
+     *
+     * <p><strong>Why it exists (kogn-io/arknet#360).</strong> Counting the next free code over
+     * {@link #findAll} would let a skipped constraint's number be minted twice, and
+     * {@link #create} answers the second attempt with a
+     * {@link DuplicateConstraintCodeException} that recomputing cannot escape - {@code
+     * constraint_add} would fail for the project every single time, not just once.</p>
+     *
+     * @param projectId the project (architecture model) to read codes from
+     * @return every recorded constraint's business code, of any of the three types, never
+     *         {@code null}
+     */
+    List<ConstraintCode> findAllCodes(ProjectId projectId);
+
+    /**
      * Finds every constraint in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveConstraints}. This is a batch lookup, not a per-id
      * existence check: an id absent from the project is simply absent from the result, never an

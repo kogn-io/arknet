@@ -54,6 +54,7 @@ import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -197,12 +198,12 @@ public class AdrService
      * order once a project passes ten decisions. Falls back to natural string order when the running
      * number ties, which every well-formed {@code ADR-N} code only ever does with itself - the
      * fallback exists for two distinct, non-conforming store-first (ADR-005) codes that both parse to
-     * 0 (see {@link #runningNumber}): without it this comparator returns 0 for two different codes,
-     * which is inconsistent with {@link Object#equals} and silently collapses both into one entry in
-     * a {@link TreeSet} (see {@link #list}).
+     * 0 (see {@link CodeCounter#runningNumber}): without it this comparator returns 0 for two
+     * different codes, which is inconsistent with {@link Object#equals} and silently collapses both
+     * into one entry in a {@link TreeSet} (see {@link #list}).
      */
     private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
-            Comparator.<String>comparingInt(code -> runningNumber(new AdrCode(code)))
+            Comparator.<String>comparingInt(code -> CodeCounter.runningNumber(CODE_PREFIX + "-", code))
                     .thenComparing(Comparator.naturalOrder());
 
     private final AdrRepository repository;
@@ -829,17 +830,18 @@ public class AdrService
      * {@code findAllCodes} reads only the mandatory identifier/type pair, which no read-time
      * tolerance ever skips, so the number this method derives never depends on whether an existing
      * decision happens to be materialisable right now.</p>
+     *
+     * <p>The parse itself is {@link CodeCounter}'s (kogn-io/arknet#360), which anchors on the very
+     * prefix this method mints with: a code that does not start with {@code ADR-} contributes
+     * nothing, so a neighbouring counter's number can never be mistaken for this one's.</p>
      */
     private AdrCode nextCode(ProjectId projectId) {
-        int highestLiving = repository.findAllCodes(projectId).stream()
-                .mapToInt(AdrService::runningNumber)
-                .max()
-                .orElse(0);
-        int highestRetained = repository.findRetainedCodes(projectId).stream()
-                .mapToInt(AdrService::runningNumber)
-                .max()
-                .orElse(0);
-        return new AdrCode(CODE_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
+        String prefix = CODE_PREFIX + "-";
+        int highestLiving = CodeCounter.highestRunningNumber(prefix,
+                repository.findAllCodes(projectId), AdrCode::value);
+        int highestRetained = CodeCounter.highestRunningNumber(prefix,
+                repository.findRetainedCodes(projectId), AdrCode::value);
+        return new AdrCode(prefix + (Math.max(highestLiving, highestRetained) + 1));
     }
 
     @Override
@@ -856,19 +858,5 @@ public class AdrService
         // merely stale zero.
         int total = repository.findAllCodes(projectId).size();
         return Math.max(0, total - materialisedCount);
-    }
-
-    /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */
-    private static int runningNumber(AdrCode code) {
-        String value = code.value();
-        int dash = value.lastIndexOf('-');
-        if (dash < 0 || dash == value.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 }

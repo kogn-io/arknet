@@ -326,6 +326,37 @@ public interface RequirementRepository {
     List<Requirement> findAll(ProjectId projectId, String displayLocale);
 
     /**
+     * Returns the business code of every requirement recorded in a project, whether or not that
+     * requirement can currently be materialised into a {@link Requirement}. {@link #findAll} drops
+     * a subject whose mandatory {@code title} or {@code description} literal it cannot select -
+     * absent, or present only under a language nothing falls back to - so that one store-first
+     * (ADR-005) write does not take the whole listing down with it. Such a requirement is still
+     * there and its code is still taken; this method sees it, because it joins nothing but the
+     * type and {@code dcterms:identifier}.
+     *
+     * <p><strong>Every type in one list.</strong> Functional and non-functional codes come back
+     * together, in no particular order, and this port deliberately takes no
+     * {@link de.hauschel.arknet.req.domain.RequirementType} argument. Splitting the two counters is
+     * the caller's business, and
+     * {@link de.hauschel.arknet.req.application.RequirementService} splits them on the code prefix
+     * ({@code FR-} against {@code NFR-}) rather than on the domain type - a subject's type triple
+     * is precisely the sort of thing an unmaterialisable requirement may be missing, so filtering
+     * on it here would put back the dependency this method exists to remove.</p>
+     *
+     * <p><strong>Why it exists (kogn-io/arknet#360).</strong> The next free code is the highest
+     * running number ever handed out, plus one. Take that maximum from {@link #findAll} and a
+     * skipped requirement stops counting: holding the project's highest number, its code gets
+     * computed a second time and handed to the next {@code req_add}, where {@link #create}
+     * rejects it as a {@link DuplicateRequirementCodeException}. Recomputation yields the very same
+     * number, so no retry can get past it - not a race that resolves itself, but a
+     * {@code req_add} that stays broken for that project until someone repairs the data.</p>
+     *
+     * @param projectId the project (architecture model) to read codes from
+     * @return every recorded requirement's business code, of either type, never {@code null}
+     */
+    List<RequirementCode> findAllCodes(ProjectId projectId);
+
+    /**
      * Finds every requirement in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveRequirements}. This is a batch lookup, not a
      * per-id existence check: an id absent from the project is simply absent from the result,

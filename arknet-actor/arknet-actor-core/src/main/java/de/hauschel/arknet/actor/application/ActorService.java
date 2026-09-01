@@ -21,6 +21,7 @@ import de.hauschel.arknet.actor.domain.ActorId;
 import de.hauschel.arknet.actor.domain.ActorNotFoundException;
 import de.hauschel.arknet.actor.domain.DuplicateActorCodeException;
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -188,30 +189,25 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
      * maximum fall back and the next {@code actor_add} hand out that same number again - and a code
      * that already appeared in a commit message or a note would then name something else
      * entirely.</p>
+     *
+     * <p><strong>{@link ActorRepository#findAllCodes}, not {@link ActorRepository#findAll}
+     * (kogn-io/arknet#360).</strong> A living actor can still be missing from {@link #list}/
+     * {@link ActorRepository#findAll}: building an {@link de.hauschel.arknet.actor.domain.Actor}
+     * needs a name, and a store-first (ADR-005) actor written without one has no name to give - it
+     * is skipped on the way out while keeping its {@code ACTOR-N}. Deriving the maximum from
+     * {@code findAll} would recompute that number the moment such an actor holds the project's
+     * highest one, and every retry recomputes it again, so
+     * {@link CodeAssignment#createRetryingOnCodeCollision} could not retry its way out of the
+     * resulting {@link DuplicateActorCodeException} - {@code actor_add} would be dead for the project
+     * rather than merely racing. {@code findAllCodes} reads only the type/identifier pair, which no
+     * missing field can hide, so this maximum never depends on materialisability.</p>
      */
     private ActorCode nextCode(ProjectId projectId) {
-        int highestLiving = repository.findAll(projectId).stream()
-                .mapToInt(actor -> runningNumber(actor.code()))
-                .max()
-                .orElse(0);
-        int highestRetained = repository.findRetainedCodes(projectId).stream()
-                .mapToInt(ActorService::runningNumber)
-                .max()
-                .orElse(0);
-        return new ActorCode(CODE_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
-    }
-
-    /** Parses the running number from a code such as {@code ACTOR-7} (0 if not parseable). */
-    private static int runningNumber(ActorCode code) {
-        String value = code.value();
-        int dash = value.lastIndexOf('-');
-        if (dash < 0 || dash == value.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        String prefix = CODE_PREFIX + "-";
+        int highestLiving = CodeCounter.highestRunningNumber(prefix,
+                repository.findAllCodes(projectId), ActorCode::value);
+        int highestRetained = CodeCounter.highestRunningNumber(prefix,
+                repository.findRetainedCodes(projectId), ActorCode::value);
+        return new ActorCode(prefix + (Math.max(highestLiving, highestRetained) + 1));
     }
 }

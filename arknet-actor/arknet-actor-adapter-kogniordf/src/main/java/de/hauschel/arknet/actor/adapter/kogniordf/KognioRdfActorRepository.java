@@ -445,6 +445,15 @@ public class KognioRdfActorRepository implements ActorRepository {
         return assembly.toActor();
     }
 
+    /**
+     * Lists every actor this adapter can materialise. {@code arknet:name} is joined as a mandatory
+     * pattern, so a store-first (ADR-005) actor written without one binds no row at all and is
+     * silently skipped here - {@code actshapes:Actor-name} carries {@code sh:minCount 1} at
+     * {@code sh:Violation} severity, so nothing written through this port can end up that way, but
+     * an edit that bypassed it can. Skipping keeps the listing readable; what must not follow from
+     * the skip is the actor's code falling free, which is why the code counter reads
+     * {@link #findAllCodes} rather than this method (kogn-io/arknet#360).
+     */
     @Override
     public List<Actor> findAll(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
@@ -468,6 +477,41 @@ public class KognioRdfActorRepository implements ActorRepository {
                         new ActorCode(literalOf(row, "identifier").getLexicalForm()))).addRow(row);
             });
             return bySubject.values().stream().map(ActorAssembly::toActor).toList();
+        }
+    }
+
+    /**
+     * Reads every registered actor's business code straight off {@code dcterms:identifier}, joining
+     * nothing but the type triple {@link #actorTypeFilter} needs - in particular not
+     * {@code arknet:name}, whose mandatory join in {@link #findAll} is exactly what hides a
+     * store-first (ADR-005) actor from that read while its {@code ACTOR-N} stays taken
+     * (kogn-io/arknet#360, see {@link ActorRepository#findAllCodes}'s own javadoc). The same type
+     * filter as every other read path, because one {@code ACTOR-N} counter spans all four actor
+     * types: a code missed here is a code handed out twice.
+     *
+     * <p>Deduplicated, because rows multiply here just as they do on every other read path: a
+     * store-first subject may carry two of the four types, and {@code dcterms:identifier} is not
+     * even shape-bounded ({@code actshapes:ActorShape} constrains {@code name}/{@code description}
+     * only), so two identifier triples are possible too. The counter only ever wants the highest
+     * running number, so collapsing identical duplicates costs nothing - and unlike the
+     * single-actor read paths there is no field to reduce here and therefore nothing to
+     * {@code WARN} about.</p>
+     */
+    @Override
+    public List<ActorCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + ACTOR_GRAPH + "> { "
+                + "?s a ?type . "
+                + actorTypeFilter()
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(ActorCode::new)
+                    .toList();
         }
     }
 

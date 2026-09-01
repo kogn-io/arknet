@@ -1034,6 +1034,47 @@ public class KognioRdfTermRepository implements TermRepository {
     }
 
     /**
+     * The codes themselves, read without the two literals {@link #findAll} has to join
+     * (kogn-io/arknet#360): only the {@code skos:Concept} type triple and the
+     * {@code dcterms:identifier} carrying the code, so a store-first (ADR-005) concept missing its
+     * {@code skos:prefLabel} or {@code skos:definition} - invisible to every read that materialises
+     * a {@link Term} - still reports the {@code TERM-N} it holds. See
+     * {@link TermRepository#findAllCodes} for why the code assignment must not lose it.
+     *
+     * <p>The type join doubles as the filter that keeps the glossary's own
+     * {@code skos:ConceptScheme} subject out of the result: it lives in the same named graph and
+     * carries no {@code dcterms:identifier}, but joining on {@code skos:Concept} means it is never
+     * a candidate in the first place. Deduplicated, because nothing stops a store-first concept from carrying two
+     * {@code dcterms:identifier} triples ({@code ulshapes:TermShape} constrains the property no
+     * further); the caller only wants the highest running number, so collapsing identical
+     * duplicates changes nothing about the result.</p>
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
+     */
+    @Override
+    public List<TermCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + TERMS_GRAPH + "> { "
+                + "?s a <" + CONCEPT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(TermCode::new)
+                    .toList();
+        }
+    }
+
+    /**
      * Groups the (potentially several) rows of one concept - a mandatory but now
      * <em>multi-valued</em> {@code skos:prefLabel}/{@code skos:definition} join multiplies a
      * concept into one row per candidate value - into a single

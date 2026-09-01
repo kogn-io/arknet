@@ -295,6 +295,43 @@ class RequirementServiceTest {
         assertEquals(new RequirementCode("FR-2"), fr2);
     }
 
+    /**
+     * Mutation test for {@code nextCode} counting over {@link RequirementRepository#findAllCodes}
+     * instead of {@link RequirementRepository#findAll} (kogn-io/arknet#360): put the count back on
+     * {@code findAll} and this turns red. The seeded {@code FR-2} is what a store-first (ADR-005)
+     * requirement with an unreadable title or description looks like from the service's side -
+     * absent from the listing, its code taken all the same - so a listing-based count would mint
+     * {@code FR-2} a second time and walk straight into the out-adapter's uniqueness guard, on this
+     * attempt and on every recomputed retry after it.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        repository.seedUnmaterialisableCode(WS, new RequirementCode("FR-2"));
+
+        Requirement third = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-3"), third.code());
+    }
+
+    /**
+     * The other half of moving the type filter off {@code r.type()} and onto the code prefix
+     * (kogn-io/arknet#360): {@code FR-} and {@code NFR-} share one raw code list now, so the
+     * partition holds only as long as the prefix match is anchored at the start of the code.
+     * Search for {@code FR-} anywhere in the string instead - the obvious way to write it wrong -
+     * and the seeded {@code NFR-9} starts driving the functional counter, handing out {@code FR-10}
+     * where the project's only functional requirement is {@code FR-1}.
+     */
+    @Test
+    void addKeepsTheFunctionalCounterClearOfNonFunctionalCodes() {
+        service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+        repository.seedUnmaterialisableCode(WS, new RequirementCode("NFR-9"));
+
+        Requirement second = service.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE);
+
+        assertEquals(new RequirementCode("FR-2"), second.code());
+    }
+
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");

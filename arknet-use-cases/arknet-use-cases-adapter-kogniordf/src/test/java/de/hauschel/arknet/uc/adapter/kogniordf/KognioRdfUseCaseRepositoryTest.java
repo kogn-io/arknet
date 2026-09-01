@@ -534,6 +534,62 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
+     * What {@link UseCaseRepository#findAllCodes} exists for (kogn-io/arknet#360), pinned against
+     * the real store: the query joins the type and {@code dcterms:identifier} and nothing else, so a
+     * {@code UCn} stays taken even by a subject {@link UseCaseRepository#findAll} cannot materialise
+     * at all. Deliberately the barest such subject there is - no title, no goal, no primary actor,
+     * no step - so that it trips every mandatory join the listing read makes; any field joined into
+     * {@code findAllCodes} later (the tempting "the identifier alone is not enough") goes red here
+     * rather than quietly letting {@code UseCaseService#nextCode} hand the same number out twice.
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        UseCaseCode bareCode = new UseCaseCode("UC2");
+        seed(PROJECT_A, USE_CASES_GRAPH,
+                "<https://w3id.org/arknet/id/uc-bare> "
+                        + "a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + bareCode.value() + "\" .");
+
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
+        assertEquals(1, all.size());
+        assertEquals(CODE_1, all.get(0).code());
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, bareCode, null));
+
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(bareCode));
+    }
+
+    /**
+     * Same read, a blank-node holder (kogn-io/arknet#360). {@code UC2} sitting on an anonymous
+     * subject still counts, because the query has no {@code FILTER(isIRI(?s))} to drop it -
+     * matching what {@code WriteFunnel#create} does at write time, where the uniqueness probe
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} binds any subject at all and so
+     * refuses {@code uc_add} for {@code UC2}. Counting one number too many merely wastes a number;
+     * missing one the writer blocks costs the {@code add} itself, since every retry of the code
+     * assignment lands on the same blocked value. Adding the filter back for symmetry with the
+     * listing read breaks this test.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        UseCaseCode blankNodeCode = new UseCaseCode("UC2");
+        seed(PROJECT_A, USE_CASES_GRAPH,
+                "[] a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + blankNodeCode.value() + "\" .");
+
+        // Deliberately no findAll assertion beside it, unlike the IRI-subject test above: findAll
+        // maps ?s through an unguarded IRI cast, so a blank-node subject makes it throw a
+        // ClassCastException instead of skipping the row. That is a separate defect - the glossary
+        // adapter guards the same spot - and not what this test pins.
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(blankNodeCode),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
      * Regression test: nothing in SHACL prevents two distinct
      * {@code arkreq:Step} nodes under the same use case's {@code arkreq:mainStep} from sharing
      * the same {@code arkreq:position} - uniqueness is only enforced in-process by

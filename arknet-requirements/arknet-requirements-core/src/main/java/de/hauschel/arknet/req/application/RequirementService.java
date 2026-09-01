@@ -15,6 +15,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -586,31 +587,30 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
 
     /**
      * Derives the next free business code for {@code type} in {@code projectId}: the highest
-     * running number currently used by that type, plus one (starting at 1).
+     * running number that type has ever used, plus one (starting at 1).
+     *
+     * <p><strong>Counted over {@link RequirementRepository#findAllCodes}, not
+     * {@link RequirementRepository#findAll} (kogn-io/arknet#360).</strong> The listing drops a
+     * requirement it cannot materialise - a store-first (ADR-005) write can leave the mandatory
+     * {@code title} or {@code description} unreadable - while the code that requirement holds
+     * stays as taken as any other. Counting over the listing would therefore mint that code again
+     * as soon as it is the project's highest, and {@code create} would answer with a
+     * {@link DuplicateRequirementCodeException} that
+     * {@link CodeAssignment#createRetryingOnCodeCollision} cannot retry away, because every retry
+     * recomputes the identical number. {@code findAllCodes} reads code and type only, so nothing
+     * a listing skips can hide a taken number from this method.</p>
+     *
+     * <p><strong>The type comes from the prefix, not from {@code r.type()}.</strong> Both counters
+     * used to be separated by filtering the listing on the domain type, which the raw read no
+     * longer offers - and deliberately so: a requirement whose type triple cannot be read is
+     * exactly the sort this method must still count. The code carries the same partition anyway,
+     * and {@link CodeCounter} anchors its match at the start of the code, so the {@code FR-}
+     * counter passes over an {@code NFR-3} rather than swallowing it.</p>
      */
     private RequirementCode nextCode(ProjectId projectId, RequirementType type) {
-        // Only each requirement's RequirementCode is read here, never a title/description, so
-        // this call has no need for a display language override - null uses the repository's own
-        // configured preference, which has no bearing on this method's result either way.
-        int next = repository.findAll(projectId, null).stream()
-                .filter(r -> r.type() == type)
-                .mapToInt(r -> runningNumber(r.code()))
-                .max()
-                .orElse(0) + 1;
-        return new RequirementCode(type.idPrefix() + "-" + next);
-    }
-
-    /** Parses the running number from a code such as {@code FR-7} (0 if not parseable). */
-    private static int runningNumber(RequirementCode code) {
-        String value = code.value();
-        int dash = value.lastIndexOf('-');
-        if (dash < 0 || dash == value.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        String prefix = type.idPrefix() + "-";
+        int highest = CodeCounter.highestRunningNumber(prefix, repository.findAllCodes(projectId),
+                RequirementCode::value);
+        return new RequirementCode(prefix + (highest + 1));
     }
 }

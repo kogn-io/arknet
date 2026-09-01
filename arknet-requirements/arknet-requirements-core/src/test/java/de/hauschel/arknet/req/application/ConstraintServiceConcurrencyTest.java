@@ -171,6 +171,11 @@ class ConstraintServiceConcurrencyTest {
         }
 
         @Override
+        public List<ConstraintCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
+        }
+
+        @Override
         public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
         }
@@ -218,6 +223,11 @@ class ConstraintServiceConcurrencyTest {
         @Override
         public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<ConstraintCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
         }
 
         @Override

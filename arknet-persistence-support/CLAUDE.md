@@ -38,3 +38,9 @@ Alle Meldungen zu rendern gaebe dem Nutzer dieselbe Beanstandung mehrfach in Spr
 Traegt die verletzte Shape gar keine `sh:message` (in SHACL erlaubt), bleibt die Meldung weg -- genauso still wie frueher ein `null`.
 Kontextunterschiede sind Konstruktor-Parameter (`shapes`/`axioms`/`options`/`displayLocale`), **kein Code im Gate**: req reasont ueber die Axiome (`subClassOf`, volle Shapes), ul uebergibt leere Axiome + `defaults()` (kein Reasoning), uc konstruiert Axiome/Options identisch zu req -- sein echter Unterschied sind **gefilterte** Shapes (`loadUseCaseShapes()` entfernt fremde `sh:targetClass`), und diese Filterung ist Code in der uc-Factory.
 Siehe ADR-007.
+
+**Der Uniqueness-Guard sieht mehr als ein Lesepfad (kogn-io/arknet#360).**
+`create`s Code-Pruefung ist `tx.contains(graph, null, dcterms:identifier, code)` -- das Subjekt ist ein Wildcard.
+Sie trifft damit auch ein Blank-Node-Subjekt, das einen Code haelt, und lehnt den Write ab, obwohl kein gewoehnlicher Lesepfad dieses Subjekt je zeigt (die BC-Adapter filtern durchweg mit `FILTER(isIRI(?s))`, weil sie die Subject-IRI danach brauchen).
+Genau darum filtern die `findAllCodes`-Lesepfade der BCs **nicht** auf `isIRI`, als einzige Reads ihrer Adapter: ein Zaehler, der weniger sieht als der Guard, vergaebe eine Nummer, die der Guard anschliessend zurueckweist -- und da jeder `CodeAssignment`-Retry dieselbe Nummer neu ausrechnet, waere das `add` des betroffenen BCs dauerhaft tot statt bloss im Rennen.
+Eine zu viel gezaehlte Nummer kostet eine Nummer, eine zu wenig gezaehlte kostet den Schreibpfad; die Asymmetrie entscheidet die Richtung.

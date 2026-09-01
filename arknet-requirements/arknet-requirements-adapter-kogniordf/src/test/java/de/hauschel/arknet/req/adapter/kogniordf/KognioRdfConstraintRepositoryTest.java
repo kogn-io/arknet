@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.kogn.rdf.dataset.hosting.DatasetHandle;
+import io.kogn.rdf.dataset.hosting.DatasetId;
 import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 import io.kogn.rdf.dataset.hosting.DatasetStoreConfig;
 import io.kogn.rdf.rdf4j.dataset.hosting.DatasetLifecycleRdf4j;
@@ -166,6 +168,86 @@ class KognioRdfConstraintRepositoryTest {
 
         assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertEquals(1, repository.findAll(PROJECT_B, null).size());
+    }
+
+    /**
+     * What {@link ConstraintRepository#findAllCodes} is for (kogn-io/arknet#360), against the real
+     * store: type and {@code dcterms:identifier} are the whole query, so a code survives on a
+     * subject {@link ConstraintRepository#findAll} throws away for want of a readable title and
+     * statement. The inserted subject carries neither, the barest thing the constraints graph can
+     * hold - anything the counting query joins in future beyond those two triples breaks this test
+     * instead of silently reissuing {@code TCON-2}.
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        Constraint first = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, first);
+        givenBareCodedSubject(PROJECT_A, freshId(), "TCON-2");
+
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
+        assertTrue(repository.findByCode(PROJECT_A, new ConstraintCode("TCON-2"), null).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new ConstraintCode("TCON-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * The blank-node variant of the previous test (kogn-io/arknet#360). Nothing in this query
+     * restricts {@code ?s} to an IRI, on purpose: {@code WriteFunnel#create} probes for a taken
+     * code with a wildcard subject ({@code tx.contains(graph, null, dcterms:identifier, code)}) and
+     * would therefore decline a {@code constraint_add} for {@code TCON-2} while an anonymous
+     * subject holds it. A counter that did not see it would keep handing the blocked number to
+     * every retry of the code assignment. A {@code FILTER(isIRI(?s))} added here later is caught by
+     * this test rather than by a bounded context that can no longer add a constraint.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        Constraint first = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, first);
+        givenBareBlankNodeSubject(PROJECT_A, "TCON-2");
+
+        // No findAll assertion alongside, unlike the IRI-subject test above: this adapter's
+        // findAll casts ?s to an IRI unguarded, so a blank-node subject makes it throw a
+        // ClassCastException rather than skip the row - a separate defect the glossary and
+        // requirements adapters already guard against, and not what this test is about.
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new ConstraintCode("TCON-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * Writes a subject with the constraint type triple and {@code dcterms:identifier} and nothing
+     * else. Both shapes demand a title and a statement, so no {@code constraint_add} can produce
+     * this - only a store-first (ADR-005) write, the case kogn-io/arknet#360 concerns.
+     */
+    private void givenBareCodedSubject(ProjectId projectId, ConstraintId id, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
+                + "<" + id.value().value() + "> a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * The same subject stripped of its identity too - {@code []} mints an anonymous node, which no
+     * constraint shape rules out and which {@code constraint_add} cannot produce, since it always
+     * goes through a minted {@code ResourceId}. Store-first (ADR-005) data of this shape still owns
+     * its code.
+     */
+    private void givenBareBlankNodeSubject(ProjectId projectId, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
+                + "[] a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
     }
 
     @Test

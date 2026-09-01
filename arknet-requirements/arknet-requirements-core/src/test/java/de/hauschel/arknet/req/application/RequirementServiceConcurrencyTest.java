@@ -173,7 +173,7 @@ class RequirementServiceConcurrencyTest {
      */
     @Test
     void concurrentAddCallsForTheSameTypeBothGetDistinctCodesInsteadOfOneFailing() {
-        RaceOnFirstFindAllRepository racing = new RaceOnFirstFindAllRepository(store,
+        RaceOnFirstFindAllCodesRepository racing = new RaceOnFirstFindAllCodesRepository(store,
                 () -> otherCaller.add(WS, newFunctionalRequirement(), DEFAULT_LANGUAGE));
         RequirementService underTest =
                 new RequirementService(racing, resourceIdFactory, termLookup, constraintRepository, UNUSED_SCHEMA_SOURCE);
@@ -257,6 +257,11 @@ class RequirementServiceConcurrencyTest {
         }
 
         @Override
+        public List<RequirementCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
+        }
+
+        @Override
         public List<ResolveRequirements.ResolvedRequirement> findByIds(ProjectId projectId,
                 List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
@@ -265,17 +270,17 @@ class RequirementServiceConcurrencyTest {
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
-     * {@link #findAll} call returns - {@code nextCode()} reads via {@code findAll}, so this
-     * simulates a concurrent {@code req_add} committing between this caller's code computation and
-     * its own {@code create()}.
+     * {@link #findAllCodes} call returns - {@code nextCode()} reads via {@code findAllCodes} since
+     * kogn-io/arknet#360, so this simulates a concurrent {@code req_add} committing between this
+     * caller's code computation and its own {@code create()}.
      */
-    private static final class RaceOnFirstFindAllRepository implements RequirementRepository {
+    private static final class RaceOnFirstFindAllCodesRepository implements RequirementRepository {
 
         private final RequirementRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
-        RaceOnFirstFindAllRepository(RequirementRepository delegate, Runnable injection) {
+        RaceOnFirstFindAllCodesRepository(RequirementRepository delegate, Runnable injection) {
             this.delegate = delegate;
             this.injection = injection;
         }
@@ -306,7 +311,12 @@ class RequirementServiceConcurrencyTest {
 
         @Override
         public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
-            List<Requirement> result = delegate.findAll(projectId, displayLocale);
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<RequirementCode> findAllCodes(ProjectId projectId) {
+            List<RequirementCode> result = delegate.findAllCodes(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -366,6 +376,11 @@ class RequirementServiceConcurrencyTest {
         @Override
         public List<Requirement> findAll(ProjectId projectId, String displayLocale) {
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<RequirementCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
         }
 
         @Override

@@ -43,9 +43,9 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * <p>Both races are reproduced deterministically, without real threads: an
  * {@link ActorRepository} decorator runs an "other caller"'s complete round trip exactly once, at
  * the precise point where a concurrent writer's commit would land - after the first
- * {@code findAll} (which {@code nextCode()} reads) for the code-assignment race, after the first
- * {@code findCurrentByCode} for the lost-update race. That pins the exact interleaving instead of
- * relying on thread scheduling, which would make these tests flaky.</p>
+ * {@code findAllCodes} (which {@code nextCode()} reads, kogn-io/arknet#360) for the code-assignment
+ * race, after the first {@code findCurrentByCode} for the lost-update race. That pins the exact
+ * interleaving instead of relying on thread scheduling, which would make these tests flaky.</p>
  */
 class ActorServiceConcurrencyTest {
 
@@ -69,8 +69,8 @@ class ActorServiceConcurrencyTest {
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
-        RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newActor()));
+        RaceOnFirstFindAllCodesRepository racing =
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newActor()));
         ActorService underTest = new ActorService(racing, resourceIdFactory);
 
         Actor result = underTest.add(WS, newActor());
@@ -149,17 +149,18 @@ class ActorServiceConcurrencyTest {
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
-     * {@link #findAll} call returns - {@code nextCode()} reads via {@code findAll}, so this
-     * simulates a concurrent {@code actor_add} committing between this caller's code computation
-     * and its own {@code create()}.
+     * {@link #findAllCodes} call returns - {@code nextCode()} reads via {@code findAllCodes} rather
+     * than {@code findAll} (kogn-io/arknet#360, see {@link ActorRepository#findAllCodes}'s own
+     * javadoc), so this simulates a concurrent {@code actor_add} committing between this caller's
+     * code computation and its own {@code create()}.
      */
-    private static final class RaceOnFirstFindAllRepository implements ActorRepository {
+    private static final class RaceOnFirstFindAllCodesRepository implements ActorRepository {
 
         private final ActorRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
-        RaceOnFirstFindAllRepository(ActorRepository delegate, Runnable injection) {
+        RaceOnFirstFindAllCodesRepository(ActorRepository delegate, Runnable injection) {
             this.delegate = delegate;
             this.injection = injection;
         }
@@ -186,17 +187,22 @@ class ActorServiceConcurrencyTest {
 
         @Override
         public List<Actor> findAll(ProjectId projectId) {
-            List<Actor> result = delegate.findAll(projectId);
-            if (!injected) {
-                injected = true;
-                injection.run();
-            }
-            return result;
+            return delegate.findAll(projectId);
         }
 
         @Override
         public void delete(ProjectId projectId, ActorCode code) {
             delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<ActorCode> findAllCodes(ProjectId projectId) {
+            List<ActorCode> result = delegate.findAllCodes(projectId);
+            if (!injected) {
+                injected = true;
+                injection.run();
+            }
+            return result;
         }
 
         @Override
@@ -265,6 +271,11 @@ class ActorServiceConcurrencyTest {
         }
 
         @Override
+        public List<ActorCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
+        }
+
+        @Override
         public List<ActorCode> findRetainedCodes(ProjectId projectId) {
             return delegate.findRetainedCodes(projectId);
         }
@@ -316,6 +327,11 @@ class ActorServiceConcurrencyTest {
         @Override
         public void delete(ProjectId projectId, ActorCode code) {
             delegate.delete(projectId, code);
+        }
+
+        @Override
+        public List<ActorCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
         }
 
         @Override
