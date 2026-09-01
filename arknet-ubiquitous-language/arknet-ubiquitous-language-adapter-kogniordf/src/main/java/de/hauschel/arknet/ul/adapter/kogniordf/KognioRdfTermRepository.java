@@ -529,7 +529,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * half-prefixed list reads as if the bare names were a different kind of thing.</p>
      *
      * <p>Whether this map is complete is not left to reviewer attention: {@code
-     * TermReferenceGuardCoversEveryTermEdgeTest} in {@code arknet-architecture-tests} holds it
+     * ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds it
      * against the shipped ontologies, so every property declared with {@code rdfs:range
      * skos:Concept} has to appear here.</p>
      */
