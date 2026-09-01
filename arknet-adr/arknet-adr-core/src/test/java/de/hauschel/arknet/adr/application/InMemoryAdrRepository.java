@@ -24,6 +24,7 @@ import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
 import de.hauschel.arknet.adr.domain.DuplicateAdrCodeException;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.ProjectId;
 import de.hauschel.arknet.kernel.ResourceId;
 
@@ -45,17 +46,22 @@ import de.hauschel.arknet.kernel.ResourceId;
  */
 class InMemoryAdrRepository implements AdrRepository {
 
+    /** The literal every {@code ADR-N} code starts with - what {@link CodeCounter} anchors on. */
+    private static final String CODE_PREFIX = "ADR-";
+
     /**
      * Orders {@code ADR-N} code strings by their parsed running number, not by {@link String}'s
      * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
      * order once a project passes ten decisions. Falls back to natural string order when the running
-     * number ties, which every well-formed {@code ADR-N} code only ever does with itself. Mirrors
-     * {@code AdrService}'s and {@code KognioRdfAdrRepository}'s identically-named, identically-behaved
-     * helper (this fake has no dependency it could reuse it through).
+     * number ties, which every well-formed {@code ADR-N} code only ever does with itself. Parses
+     * through the same shared {@link CodeCounter} the production comparators use
+     * (kogn-io/arknet#360), so this fake cannot order codes by a rule the real adapter has since
+     * stopped following.
      */
     private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
-            Comparator.<String>comparingInt(InMemoryAdrRepository::runningNumber)
+            Comparator.<String>comparingInt(code -> CodeCounter.runningNumber(CODE_PREFIX, code))
                     .thenComparing(Comparator.naturalOrder());
+
 
     private final Map<ProjectId, Map<AdrId, Adr>> byProject = new LinkedHashMap<>();
     private final Map<AdrId, String> headByIdentity = new LinkedHashMap<>();
@@ -382,18 +388,5 @@ class InMemoryAdrRepository implements AdrRepository {
                 .stream()
                 .map(AdrCode::new)
                 .toList();
-    }
-
-    /** Parses the running number from a code such as {@code ADR-7} (0 if not parseable). */
-    private static int runningNumber(String code) {
-        int dash = code.lastIndexOf('-');
-        if (dash < 0 || dash == code.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(code.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 }

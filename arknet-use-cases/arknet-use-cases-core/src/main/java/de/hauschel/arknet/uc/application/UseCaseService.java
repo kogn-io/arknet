@@ -14,6 +14,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.kernel.ProjectId;
@@ -497,34 +498,24 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
     }
 
     /**
-     * Derives the next free business code in {@code projectId}: the highest running number
-     * currently in use, plus one (starting at 1).
+     * Derives the next free business code in {@code projectId}: the highest running number the
+     * project has handed out, plus one (starting at 1).
+     *
+     * <p><strong>{@link UseCaseRepository#findAllCodes}, not {@link UseCaseRepository#findAll}
+     * (kogn-io/arknet#360).</strong> A use case that exists and holds its code can still be missing
+     * from {@link #list}/{@link UseCaseRepository#findAll}: the out-adapter skips store-first
+     * (ADR-005) data it cannot turn into a {@link UseCase} - no title or no goal literal, an empty
+     * main flow, main-flow positions the domain type refuses - so that one broken record does not
+     * take the whole project's listing down with it. Counting over that listing would let such a
+     * use case's number be minted a second time the moment it is the project's highest, which the
+     * out-adapter's uniqueness guard then rejects; because the retry recomputes the identical
+     * number, {@link CodeAssignment#createRetryingOnCodeCollision} cannot work its way past it and
+     * {@code uc_add} stays dead for the project rather than merely losing one race.
+     * {@code findAllCodes} reads the codes raw, past every one of those skips.</p>
      */
     private UseCaseCode nextCode(ProjectId projectId) {
-        // Only each use case's UseCaseCode is read here, never a text field, so this call has no
-        // need for a display language override - null uses the repository's own configured
-        // preference, which has no bearing on this method's result either way.
-        int next = repository.findAll(projectId, null).stream()
-                .mapToInt(uc -> runningNumber(uc.code()))
-                .max()
-                .orElse(0) + 1;
-        return new UseCaseCode(CODE_PREFIX + next);
-    }
-
-    /** Parses the running number from a code such as {@code UC7} (0 if not parseable). */
-    private static int runningNumber(UseCaseCode code) {
-        String value = code.value();
-        int i = 0;
-        while (i < value.length() && !Character.isDigit(value.charAt(i))) {
-            i++;
-        }
-        if (i >= value.length()) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(i));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        int highest = CodeCounter.highestRunningNumber(CODE_PREFIX,
+                repository.findAllCodes(projectId), UseCaseCode::value);
+        return new UseCaseCode(CODE_PREFIX + (highest + 1));
     }
 }

@@ -152,6 +152,35 @@ public interface BoundedContextRepository {
     List<BoundedContext> findAll(ProjectId projectId);
 
     /**
+     * Returns the business code of every bounded context recorded in a project, read independently
+     * of whether that bounded context can currently be materialised into a {@link BoundedContext} -
+     * unlike {@link #findAll}, which joins {@code arknet:name} and {@code arkddd:domainVision} as
+     * mandatory and therefore never reports a store-first (ADR-005) context missing either of them,
+     * even though its {@code BC-N} is every bit as taken as any other's.
+     *
+     * <p><strong>Why this exists (kogn-io/arknet#360).</strong>
+     * {@link de.hauschel.arknet.bc.application.BoundedContextService#add} derives the next free
+     * {@code BC-N} from the highest running number the project already uses. Derived from
+     * {@link #findAll}, that maximum silently ignores a name-less or vision-less context - so once
+     * such a context holds the project's highest number, the very next {@code bc_add} recomputes
+     * that same number, {@link #create}'s in-transaction uniqueness guard rejects it with
+     * {@link DuplicateBoundedContextCodeException}, and the retry recomputes it again: not a
+     * transient collision two racing callers work their way out of, but a permanently dead
+     * {@code bc_add} for that project. This method joins only the type triple and
+     * {@code dcterms:identifier} - the pair a bounded context cannot lack and still be one - so the
+     * number it feeds the counter never depends on how complete a context's remaining fields
+     * happen to be.</p>
+     *
+     * <p>There is deliberately no companion for deleted contexts: this hexagon has no delete
+     * operation at all, so a code recorded here is the only kind of code that was ever handed
+     * out.</p>
+     *
+     * @param projectId the project (architecture model) to read codes from
+     * @return every recorded bounded context's business code, never {@code null}
+     */
+    List<BoundedContextCode> findAllCodes(ProjectId projectId);
+
+    /**
      * Finds every bounded context in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveBoundedContexts}. This is a batch lookup, not a per-id
      * existence check: an id absent from the project is simply absent from the result, never an

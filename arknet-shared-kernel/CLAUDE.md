@@ -73,3 +73,25 @@ Praedikats/Subjects mit auf, statt es als vermeintliche andere Sprachvariante zu
 gemeinsamer Kernel-Mechanismus, sondern in jedem der drei Out-Adapter in dessen eigenem Stil
 nachgebaut (Java-Stream-Filter bei req/uc, SPARQL-`FILTER`-Erweiterung bei ul) -- Details je in
 `arknet-requirements/CLAUDE.md`, `arknet-ubiquitous-language/CLAUDE.md`, `arknet-use-cases/CLAUDE.md`.
+
+Neben `CodeAssignment` (der Schreibhaelfte des Code-Zaehlers) liegt seit kogn-io/arknet#360 dessen
+Lesehaelfte `CodeCounter` (`runningNumber(codePrefix, code)`, `highestRunningNumber(codePrefix,
+codes, codeValue)`).
+Sie loest sieben in den `*-core`-Services duplizierte `runningNumber`-Kopien ab, die in **zwei**
+verschiedenen Parse-Varianten auseinandergelaufen waren: "die Ziffern nach dem letzten Bindestrich"
+fuer `TERM-7` und "die Ziffern nach den fuehrenden Buchstaben" fuer `UC12`.
+Der Helfer kommt ohne Trennzeichen-Konvention aus, weil der Aufrufer genau das Praefix-Literal
+uebergibt, mit dem er auch praegt (`TERM-`, `UC`, `FR-`, `ACTOR-`) -- Praegen und Zaehlen lesen
+damit dieselbe Konstante, und `UC` faellt nicht mehr aus der Reihe.
+Der Match ist **am Anfang verankert**: ein Code, der nicht mit dem Praefix beginnt, zaehlt nicht,
+und was auf das Praefix folgt, muss reine Ziffern sein (sonst 0 -- store-first-Daten (ADR-005) sind
+zu ueberleben, nicht zu quittieren; eine gepraegte Nummer beginnt bei 1, kann also nie mit 0
+kollidieren).
+Genau diese Verankerung ersetzt in `RequirementService`/`ConstraintService` den fruehreren Filter
+auf den Domaenentyp (`FR`/`NFR`, `TCON`/`BCON`/`RCON`): die Partition steckt im Code selbst, sodass
+der Zaehler nicht mehr davon abhaengt, ob das Typ-Tripel einer Ressource lesbar ist -- der Punkt der
+ganzen Aenderung.
+Shared-Kernel-Grund derselbe wie bei `CodeAssignment`: jeder `*-core` braucht den Helfer und muss
+RDF-frei bleiben (ArchUnit Regel 3); die Out-Adapter duerfen ihn mitbenutzen und tun es dort, wo sie
+Codes nach laufender Nummer sortieren (`KognioRdfAdrRepository#CODE_BY_RUNNING_NUMBER`), damit
+Sortier- und Zaehl-Parse nicht auseinanderdriften koennen.

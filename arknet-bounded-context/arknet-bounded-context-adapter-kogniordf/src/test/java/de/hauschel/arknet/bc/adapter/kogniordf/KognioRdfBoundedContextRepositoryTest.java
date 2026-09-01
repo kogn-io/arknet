@@ -143,6 +143,60 @@ class KognioRdfBoundedContextRepositoryTest {
         assertEquals(2, all.size());
     }
 
+    /**
+     * What {@link BoundedContextRepository#findAllCodes} exists for (kogn-io/arknet#360), pinned
+     * against the real store: the query joins the type triple and {@code dcterms:identifier} and
+     * nothing else, so a code stays taken even by a subject {@code findAll} cannot materialise at
+     * all. Deliberately the barest such subject there is - no {@code arknet:name}, no
+     * {@code arkddd:domainVision}, the two joins {@code findAll} makes mandatory. Any predicate
+     * joined into {@code findAllCodes} later (the tempting "surely the code alone is not enough")
+     * fails here rather than silently handing {@code BC-2} out a second time.
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        String bare = "https://w3id.org/arknet/id/" + UUID.randomUUID();
+        insertTriple(bare, VocabRdf.TYPE.getIRIString(), "<" + BOUNDED_CONTEXT_TYPE + ">");
+        insertTriple(bare, "http://purl.org/dc/terms/identifier", "\"BC-2\"");
+
+        List<BoundedContext> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new BoundedContextCode("BC-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2")).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new BoundedContextCode("BC-2")));
+    }
+
+    /**
+     * What the missing {@code FILTER(isIRI(?s))} buys (kogn-io/arknet#360): a {@code BC-2} carried
+     * by an anonymous subject is counted just like one on an IRI. The write path sets that
+     * standard - {@code WriteFunnel#create} checks the code with
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} and a wildcard subject, so it
+     * would already have refused a {@code bc_add} for {@code BC-2}. Were the counter narrower than
+     * the guard, every attempt would compute the same refused number and the bounded context could
+     * add nothing further. The filter is easy to re-add out of symmetry with {@code findAll}; this
+     * test is what stops that.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        String insertBlankNodeCode = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { [] a <"
+                + BOUNDED_CONTEXT_TYPE + "> ; <http://purl.org/dc/terms/identifier> \"BC-2\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertBlankNodeCode);
+                return null;
+            });
+        }
+
+        List<BoundedContext> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new BoundedContextCode("BC-1"), all.get(0).code());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new BoundedContextCode("BC-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
     @Test
     void findByCodeIsEmptyForUnknownCode() {
         assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-99")).isEmpty());

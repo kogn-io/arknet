@@ -32,7 +32,8 @@ import de.hauschel.arknet.ul.domain.TermCode;
  *
  * <p>The race is reproduced deterministically, without real threads: a {@link TermRepository}
  * decorator runs an "other caller"'s complete add exactly once, right after the first {@code
- * findAll} (which {@code nextCode()} reads) returns - pinning the exact interleaving instead of
+ * findAllCodes} returns - the read {@code nextCode()} derives the candidate code from since
+ * kogn-io/arknet#360 (it used to read {@code findAll}) - pinning the exact interleaving instead of
  * relying on thread scheduling, which would make the test flaky. Mirrors {@code
  * RequirementServiceConcurrencyTest}, the one type that already guarded this.</p>
  */
@@ -60,8 +61,8 @@ class TermServiceConcurrencyTest {
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
-        RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newTerm(), "en"));
+        RaceOnFirstFindAllCodesRepository racing =
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newTerm(), "en"));
         TermService underTest = new TermService(racing, resourceIdFactory);
 
         Term result = underTest.add(WS, newTerm(), "en");
@@ -91,17 +92,17 @@ class TermServiceConcurrencyTest {
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
-     * {@link #findAll} call returns - {@code nextCode()} reads via {@code findAll}, so this
-     * simulates a concurrent {@code term_add} committing between this caller's code computation and
-     * its own {@code create()}.
+     * {@link #findAllCodes} call returns - {@code nextCode()} derives the candidate code from that
+     * read (kogn-io/arknet#360), so this simulates a concurrent {@code term_add} committing between
+     * this caller's code computation and its own {@code create()}.
      */
-    private static final class RaceOnFirstFindAllRepository implements TermRepository {
+    private static final class RaceOnFirstFindAllCodesRepository implements TermRepository {
 
         private final TermRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
-        RaceOnFirstFindAllRepository(TermRepository delegate, Runnable injection) {
+        RaceOnFirstFindAllCodesRepository(TermRepository delegate, Runnable injection) {
             this.delegate = delegate;
             this.injection = injection;
         }
@@ -124,7 +125,12 @@ class TermServiceConcurrencyTest {
 
         @Override
         public List<Term> findAll(ProjectId projectId, String displayLocale) {
-            List<Term> result = delegate.findAll(projectId, displayLocale);
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<TermCode> findAllCodes(ProjectId projectId) {
+            List<TermCode> result = delegate.findAllCodes(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();

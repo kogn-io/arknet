@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.req.application;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +53,12 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 final class InMemoryRequirementRepository implements RequirementRepository {
 
     private final Map<ProjectId, Map<RequirementId, Requirement>> byProject = new LinkedHashMap<>();
+    /**
+     * Codes seeded by {@link #seedUnmaterialisableCode}, deliberately kept out of {@link #byProject}
+     * so that {@link #findAll} cannot see them while {@link #findAllCodes} can
+     * (kogn-io/arknet#360).
+     */
+    private final Map<ProjectId, List<RequirementCode>> unmaterialisableByProject = new LinkedHashMap<>();
     private final Map<RequirementId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Set<RequirementId> legacyAcceptanceCriteria = new HashSet<>();
     private final Map<RequirementId, String> titleLanguageByIdentity = new LinkedHashMap<>();
@@ -154,6 +161,31 @@ final class InMemoryRequirementRepository implements RequirementRepository {
         // Nothing multi-valued to select a language variant from in this plain in-memory fake -
         // displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Every stored requirement's code, plus every code {@link #seedUnmaterialisableCode} planted -
+     * the latter standing in for what the real out-adapter's title/description skip hides from
+     * {@link #findAll} (kogn-io/arknet#360). Unordered and untyped, as the port promises.
+     */
+    @Override
+    public List<RequirementCode> findAllCodes(ProjectId projectId) {
+        List<RequirementCode> codes = new ArrayList<>(byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .map(Requirement::code)
+                .toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, List.of()));
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Plants a code that {@link #findAllCodes} reports and {@link #findAll} never will - the fake's
+     * stand-in for a requirement the real out-adapter reads but cannot materialise, its mandatory
+     * {@code title} or {@code description} having been left unreadable by a store-first (ADR-005)
+     * write. Nothing but the code is stored, because nothing but the code is what such a
+     * requirement still contributes: the counter has to see it, every other read must not.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, RequirementCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 
     @Override

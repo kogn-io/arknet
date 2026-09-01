@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -68,6 +69,7 @@ class KognioRdfActorRepositoryTest {
     private static final String ACTOR_GRAPH = "https://w3id.org/arknet/model/actors";
     private static final String HUMAN_ACTOR_TYPE = "https://w3id.org/arknet/process#HumanActor";
     private static final String GROUP_ACTOR_TYPE = "https://w3id.org/arknet/process#GroupActor";
+    private static final String IDENTIFIER_PROPERTY = "http://purl.org/dc/terms/identifier";
     private static final String NAME_PROPERTY = "https://w3id.org/arknet/core#name";
     private static final String DESCRIPTION_PROPERTY = "https://w3id.org/arknet/core#description";
 
@@ -395,6 +397,70 @@ class KognioRdfActorRepositoryTest {
         List<Actor> all = repository.findAll(PROJECT_A);
 
         assertEquals(1, all.size(), "one subject, one actor - regardless of how many rows it binds");
+    }
+
+    /**
+     * What {@link ActorRepository#findAllCodes} exists for (kogn-io/arknet#360), pinned against the
+     * real store: the query joins the actor type and {@code dcterms:identifier} and nothing else, so
+     * a code stays taken even by a subject {@link ActorRepository#findAll} cannot materialise at
+     * all. Deliberately the leanest such subject there is - a type triple and a code, no
+     * {@code arknet:name}, which is the one mandatory join of the listing read a store-first
+     * (ADR-005) actor can lack; any field joined into {@code findAllCodes} later (the tempting "the
+     * code alone is not enough") fails here rather than silently handing the number out twice.
+     */
+    @Test
+    void findAllCodesKeepsTheCodeOfASubjectFindAllCannotMaterialiseAtAll() {
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        ActorId bare = freshId();
+        insertTriple(bare.value().value(), VocabRdf.TYPE.getIRIString(), "<" + HUMAN_ACTOR_TYPE + ">");
+        insertTriple(bare.value().value(), IDENTIFIER_PROPERTY, "\"ACTOR-2\"");
+
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2")).isEmpty());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new ActorCode("ACTOR-2")));
+    }
+
+    /**
+     * The counter's node-kind blindness, pinned (kogn-io/arknet#360): an {@code ACTOR-2} on an
+     * anonymous subject is part of the answer, because the query holds no
+     * {@code FILTER(isIRI(?s))}. Deliberate - {@code WriteFunnel#create} tests code uniqueness
+     * through {@code tx.contains(graph, null, dcterms:identifier, code)}, whose wildcard subject
+     * matches a blank node too, and would reject an {@code actor_add} for that very code. A counter
+     * ignoring it would hand the same refused number to every retry of the assignment and the
+     * register would never accept another actor. Re-adding the filter turns this test red.
+     */
+    @Test
+    void findAllCodesCountsACodeHeldByABlankNodeSubject() {
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        String insertBlankNodeCode = "INSERT DATA { GRAPH <" + ACTOR_GRAPH + "> { [] a <"
+                + HUMAN_ACTOR_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \"ACTOR-2\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertBlankNodeCode);
+                return null;
+            });
+        }
+
+        assertEquals(1, repository.findAll(PROJECT_A).size());
+        assertTrue(repository.findAllCodes(PROJECT_A).contains(new ActorCode("ACTOR-2")),
+                repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * The single {@code ACTOR-N} counter spans all four types, so {@code findAllCodes} has to see
+     * all four - a type missed by its filter would be a code handed out twice.
+     */
+    @Test
+    void findAllCodesCoversEveryActorType() {
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-2"), ActorType.SYSTEM, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-3"), ActorType.LEGAL, null));
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-4"), ActorType.GROUP, null));
+
+        assertEquals(List.of(new ActorCode("ACTOR-1"), new ActorCode("ACTOR-2"),
+                new ActorCode("ACTOR-3"), new ActorCode("ACTOR-4")),
+                repository.findAllCodes(PROJECT_A).stream().sorted(
+                        Comparator.comparing(ActorCode::value)).toList());
     }
 
     @Test

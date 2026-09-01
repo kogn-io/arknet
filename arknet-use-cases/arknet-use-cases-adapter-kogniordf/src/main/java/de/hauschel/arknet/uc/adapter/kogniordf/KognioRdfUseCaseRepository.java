@@ -749,6 +749,43 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
     }
 
     /**
+     * Reads every recorded use case's {@code dcterms:identifier} straight off the type triple, with
+     * no join on anything {@link #buildUseCase} can refuse to materialise on - not
+     * {@code dcterms:title}, not {@code arkreq:useCaseGoal}, not the main flow. That is the whole
+     * point of the method (see {@link UseCaseRepository#findAllCodes}'s own javadoc, and
+     * kogn-io/arknet#360): a store-first (ADR-005) use case those reads skip keeps its {@code UCn},
+     * so the code has to stay visible to the counter even while the use case itself is not listable.
+     *
+     * <p>Deduplicated, since a store-first subject could carry two {@code dcterms:identifier}
+     * triples - {@code rshapes:UseCase-identifier} enforces {@code sh:maxCount 1} at write time
+     * only; the caller derives a maximum, so which of two equal duplicates survives makes no
+     * difference.</p>
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
+     */
+    @Override
+    public List<UseCaseCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
+                + "?s a <" + USE_CASE_TYPE + "> . ?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(UseCaseCode::new)
+                    .toList();
+        }
+    }
+
+    /**
      * Reads a use case's current state together with its concurrency token (the
      * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014) - the read
      * side of the read-modify-write round trip {@link #compareAndUpdate} guards the write side

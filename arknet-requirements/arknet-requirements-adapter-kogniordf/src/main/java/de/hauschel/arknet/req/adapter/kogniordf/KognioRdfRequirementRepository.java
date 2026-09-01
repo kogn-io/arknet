@@ -833,14 +833,24 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * language candidate (issue #321).</p>
      */
     private static String requirementWhereClause(String identifierClause) {
-        return "?s a ?type . "
-                + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
-                + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) "
+        return requirementTypeClause()
                 + identifierClause
                 + "?s <" + STATUS_PROPERTY + "> ?status . "
                 + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
                 + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
                 + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } ";
+    }
+
+    /**
+     * The mandatory type join alone, shared by {@link #requirementWhereClause} and
+     * {@link #findAllCodes}: the latter needs this filter and nothing else of the listing read, and
+     * a second hand-written copy of it would be free to drift the day a third requirement type
+     * appears - the very drift {@link #requirementWhereClause} was extracted to prevent.
+     */
+    private static String requirementTypeClause() {
+        return "?s a ?type . "
+                + "FILTER(?type = <" + FUNCTIONAL_REQUIREMENT_TYPE + "> || ?type = <"
+                + NON_FUNCTIONAL_REQUIREMENT_TYPE + ">) ";
     }
 
     /**
@@ -1281,6 +1291,50 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                         .filter(Objects::nonNull)
                         .toList();
             });
+        }
+    }
+
+    /**
+     * Reads the codes off {@code dcterms:identifier} alone, next to the same type filter
+     * {@link #requirementWhereClause} applies - and nothing else. No status join, no
+     * {@link #readTitlesBySubject}/{@link #readDescriptionsBySubject} lookup, hence none of the
+     * conditions under which {@link #findAll} returns a subject fewer than it read: exactly what
+     * {@link RequirementRepository#findAllCodes} promises, and the reason a code counted here
+     * cannot be minted twice (kogn-io/arknet#360).
+     *
+     * <p>The type join is kept, and shared with the listing through
+     * {@link #requirementTypeClause}, so both reads agree on what counts as a requirement. This
+     * graph is not requirements-only - the derived acceptance-criterion resources live in it too -
+     * so an unfiltered read would be a standing invitation for some later coded sub-resource to
+     * start feeding foreign numbers into the {@code FR}/{@code NFR} counters.</p>
+     *
+     * <p>Distinct, because {@code ashapes:Requirement-identifier} enforces {@code sh:maxCount 1}
+     * on the way in only: a subject that acquired a second identifier triple store-first would
+     * otherwise appear twice. Duplicates would not change the maximum, but they would make the
+     * list say something untrue about the project.</p>
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
+     */
+    @Override
+    public List<RequirementCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
+                + requirementTypeClause()
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(RequirementCode::new)
+                    .toList();
         }
     }
 

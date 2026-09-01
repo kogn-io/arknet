@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.req.application;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,11 @@ import de.hauschel.arknet.req.domain.ResourceAlreadyExistsException;
 public final class InMemoryConstraintRepository implements ConstraintRepository {
 
     private final Map<ProjectId, Map<ConstraintId, Constraint>> byProject = new LinkedHashMap<>();
+    /**
+     * Codes seeded by {@link #seedUnmaterialisableCode}, held apart from {@link #byProject} so that
+     * only {@link #findAllCodes} reports them (kogn-io/arknet#360).
+     */
+    private final Map<ProjectId, List<ConstraintCode>> unmaterialisableByProject = new LinkedHashMap<>();
     private final Map<ConstraintId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Map<ConstraintId, String> titleLanguageByIdentity = new LinkedHashMap<>();
     private final Map<ConstraintId, String> statementLanguageByIdentity = new LinkedHashMap<>();
@@ -106,6 +112,29 @@ public final class InMemoryConstraintRepository implements ConstraintRepository 
     @Override
     public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Every stored constraint's code, plus whatever {@link #seedUnmaterialisableCode} planted - the
+     * codes the real out-adapter keeps but {@link #findAll} drops (kogn-io/arknet#360). All three
+     * types in one unordered list, exactly as the port describes.
+     */
+    @Override
+    public List<ConstraintCode> findAllCodes(ProjectId projectId) {
+        List<ConstraintCode> codes = new ArrayList<>(byProject.getOrDefault(projectId, Map.of()).values().stream()
+                .map(Constraint::code)
+                .toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, List.of()));
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Plants a code visible to {@link #findAllCodes} and to nothing else - the fake's stand-in for
+     * a constraint whose {@code title} or {@code constraintStatement} a store-first (ADR-005) write
+     * left unreadable, so that the real adapter's listing skips it while its code stays taken.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, ConstraintCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 
     @Override

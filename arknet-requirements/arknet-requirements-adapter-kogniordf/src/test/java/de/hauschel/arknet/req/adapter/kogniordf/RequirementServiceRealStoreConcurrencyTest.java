@@ -111,6 +111,11 @@ class RequirementServiceRealStoreConcurrencyTest {
         }
 
         @Override
+        public List<ConstraintCode> findAllCodes(ProjectId projectId) {
+            throw new UnsupportedOperationException("not exercised by this test");
+        }
+
+        @Override
         public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Constraint updated,
                 String titleLanguage, String statementLanguage, String defaultLanguage) {
             throw new UnsupportedOperationException("not exercised by this test");

@@ -447,6 +447,45 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
     }
 
     /**
+     * Joins the type - the very filter {@link #constraintWhereClause} builds, all three constraint
+     * types alike - and {@code dcterms:identifier}, and stops there. What {@link #findAll} adds on
+     * top of that pair is the title/statement selection whose failure makes it skip a subject, so
+     * leaving that selection out is precisely what makes a code survive here that the listing
+     * loses (kogn-io/arknet#360, and see {@link ConstraintRepository#findAllCodes}).
+     *
+     * <p>The graph holds constraints only, but the type join stays anyway: it keeps this read
+     * shaped like the listing it backstops, so a future third resource type in this graph does not
+     * quietly start feeding foreign codes into the constraint counters.</p>
+     *
+     * <p>Distinct, for the same reason {@link KognioRdfRequirementRepository#findAllCodes} is:
+     * {@code sh:maxCount 1} on the identifier only gates writes, and a doubled code would
+     * misreport the project even where it would not misplace the counter.</p>
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
+     */
+    @Override
+    public List<ConstraintCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
+                + constraintWhereClause("?s <" + IDENTIFIER_PROPERTY + "> ?identifier . ") + "} }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(ConstraintCode::new)
+                    .toList();
+        }
+    }
+
+    /**
      * Finds every constraint in a project whose identity is among {@code ids}, in one store
      * round-trip - backs {@link ResolveConstraints}. Mirrors
      * {@code KognioRdfRequirementRepository#findByIds}: no type filter, since

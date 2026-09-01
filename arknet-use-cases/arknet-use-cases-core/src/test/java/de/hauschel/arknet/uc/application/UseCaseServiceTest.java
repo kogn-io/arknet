@@ -311,6 +311,25 @@ class UseCaseServiceTest {
         assertEquals(new UseCaseCode("UC3"), service.add(WS, newUseCase("c"), DEFAULT_LANGUAGE).code());
     }
 
+    /**
+     * Mutation-tests {@code nextCode}'s reliance on {@link UseCaseRepository#findAllCodes} rather
+     * than {@link UseCaseRepository#findAll} (kogn-io/arknet#360): turn {@code nextCode} back to
+     * deriving its maximum from {@code findAll} and this goes red - the seeded {@code UC2} holds
+     * the project's highest number but is invisible to {@code findAll}, exactly as the out-adapter's
+     * skip of a store-first (ADR-005) use case without a title/goal literal or with an empty main
+     * flow makes it, so {@code add} would recompute {@code UC2} and collide with a code that is
+     * still very much assigned.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(WS, newUseCase("a"), DEFAULT_LANGUAGE);
+        repository.seedUnmaterialisableCode(WS, new UseCaseCode("UC2"));
+
+        UseCase third = service.add(WS, newUseCase("c"), DEFAULT_LANGUAGE);
+
+        assertEquals(new UseCaseCode("UC3"), third.code());
+    }
+
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");

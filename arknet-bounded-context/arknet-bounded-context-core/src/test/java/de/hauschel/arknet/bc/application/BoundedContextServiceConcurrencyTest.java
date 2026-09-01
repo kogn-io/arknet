@@ -47,9 +47,9 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p>Both races are reproduced deterministically, without real threads: a {@link
  * BoundedContextRepository} decorator runs an "other caller"'s complete round trip exactly once,
  * at the precise point where a concurrent writer's commit would land - after the first
- * {@code findAll} (which {@code nextCode()} reads) for the code-assignment race, after the first
- * {@code findCurrentByCode} for the lost-update race. That pins the exact interleaving instead of
- * relying on thread scheduling, which would make these tests flaky. Mirrors
+ * {@code findAllCodes} (which {@code nextCode()} reads) for the code-assignment race, after the
+ * first {@code findCurrentByCode} for the lost-update race. That pins the exact interleaving
+ * instead of relying on thread scheduling, which would make these tests flaky. Mirrors
  * {@code RequirementServiceConcurrencyTest}, the bounded context that got both guards first.</p>
  */
 class BoundedContextServiceConcurrencyTest {
@@ -137,8 +137,8 @@ class BoundedContextServiceConcurrencyTest {
 
     @Test
     void concurrentAddCallsBothGetDistinctCodesInsteadOfOneFailing() {
-        RaceOnFirstFindAllRepository racing =
-                new RaceOnFirstFindAllRepository(store, () -> otherCaller.add(WS, newBoundedContext()));
+        RaceOnFirstFindAllCodesRepository racing =
+                new RaceOnFirstFindAllCodesRepository(store, () -> otherCaller.add(WS, newBoundedContext()));
         BoundedContextService underTest = new BoundedContextService(
                 racing, resourceIdFactory, new InMemoryTermLookup(), contextRelationshipRepository);
 
@@ -171,17 +171,19 @@ class BoundedContextServiceConcurrencyTest {
 
     /**
      * Decorator that runs {@code injection} exactly once, synchronously, right after the first
-     * {@link #findAll} call returns - {@code nextCode()} reads via {@code findAll}, so this
-     * simulates a concurrent {@code bc_add} committing between this caller's code computation and
-     * its own {@code create()}.
+     * {@link #findAllCodes} call returns - {@code nextCode()} reads via {@code findAllCodes}
+     * rather than {@code findAll} (kogn-io/arknet#360, see
+     * {@link BoundedContextRepository#findAllCodes}'s own javadoc), so this simulates a concurrent
+     * {@code bc_add} committing between this caller's code computation and its own
+     * {@code create()}.
      */
-    private static final class RaceOnFirstFindAllRepository implements BoundedContextRepository {
+    private static final class RaceOnFirstFindAllCodesRepository implements BoundedContextRepository {
 
         private final BoundedContextRepository delegate;
         private final Runnable injection;
         private boolean injected;
 
-        RaceOnFirstFindAllRepository(BoundedContextRepository delegate, Runnable injection) {
+        RaceOnFirstFindAllCodesRepository(BoundedContextRepository delegate, Runnable injection) {
             this.delegate = delegate;
             this.injection = injection;
         }
@@ -209,7 +211,12 @@ class BoundedContextServiceConcurrencyTest {
 
         @Override
         public List<BoundedContext> findAll(ProjectId projectId) {
-            List<BoundedContext> result = delegate.findAll(projectId);
+            return delegate.findAll(projectId);
+        }
+
+        @Override
+        public List<BoundedContextCode> findAllCodes(ProjectId projectId) {
+            List<BoundedContextCode> result = delegate.findAllCodes(projectId);
             if (!injected) {
                 injected = true;
                 injection.run();
@@ -274,6 +281,11 @@ class BoundedContextServiceConcurrencyTest {
         }
 
         @Override
+        public List<BoundedContextCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
+        }
+
+        @Override
         public List<ResolveBoundedContexts.ResolvedBoundedContext> findByIds(
                 ProjectId projectId, List<ResourceId> ids) {
             return delegate.findByIds(projectId, ids);
@@ -316,6 +328,11 @@ class BoundedContextServiceConcurrencyTest {
         @Override
         public List<BoundedContext> findAll(ProjectId projectId) {
             return delegate.findAll(projectId);
+        }
+
+        @Override
+        public List<BoundedContextCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
         }
 
         @Override

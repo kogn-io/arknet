@@ -49,6 +49,11 @@ final class InMemoryActorRepository implements ActorRepository {
     private final Map<ProjectId, Map<ActorId, Actor>> byProject = new LinkedHashMap<>();
     private final Map<ActorId, RevisionToken> headByIdentity = new LinkedHashMap<>();
     private final Map<ProjectId, List<ActorCode>> retainedByProject = new LinkedHashMap<>();
+    /**
+     * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately absent from
+     * {@link #byProject}, so {@link #findAll} never sees them while {@link #findAllCodes} does.
+     */
+    private final Map<ProjectId, List<ActorCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Actor actor) {
@@ -98,6 +103,30 @@ final class InMemoryActorRepository implements ActorRepository {
     @Override
     public List<Actor> findAll(ProjectId projectId) {
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Every stored actor's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
+     * latter standing in for what the real out-adapter's mandatory {@code arknet:name} join hides
+     * from {@link #findAll} alone (kogn-io/arknet#360).
+     */
+    @Override
+    public List<ActorCode> findAllCodes(ProjectId projectId) {
+        List<ActorCode> codes = new ArrayList<>(
+                byProject.getOrDefault(projectId, Map.of()).values().stream().map(Actor::code).toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, List.of()));
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Seeds a code that {@link #findAllCodes} reports but {@link #findAll} never will - simulating
+     * an actor the real out-adapter cannot materialise because it was written store-first (ADR-005)
+     * without the {@code arknet:name} that read path joins as mandatory, while its {@code ACTOR-N}
+     * remains just as taken as any other. Lets a test reproduce that skip without a real store
+     * (kogn-io/arknet#360).
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, ActorCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 
     @Override

@@ -56,6 +56,7 @@ import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.ResourceAlreadyExistsException;
 import de.hauschel.arknet.adr.domain.TermRef;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.InvalidLanguageTagException;
 import de.hauschel.arknet.kernel.LanguageTag;
@@ -160,8 +161,15 @@ public class KognioRdfAdrRepository implements AdrRepository {
     /** Legacy-fallback placeholder name for a store-first {@code arkarch:adrAlternatives} literal. */
     private static final String LEGACY_OPTION_NAME_PLACEHOLDER = "(Altdatensatz - kein Name hinterlegt)";
 
+    /**
+     * Orders raw {@code ADR-N} code strings by running number rather than lexicographically, so
+     * {@code ADR-2} precedes {@code ADR-10}. The parse is {@link CodeCounter}'s, shared with
+     * {@code AdrService}'s own counter (kogn-io/arknet#360) so the two can never drift apart on what
+     * counts as a number; the natural-order tiebreak keeps two distinct unparseable store-first
+     * (ADR-005) codes from collapsing into one {@link TreeSet} entry.
+     */
     private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
-            Comparator.<String>comparingInt(KognioRdfAdrRepository::runningNumber)
+            Comparator.<String>comparingInt(code -> CodeCounter.runningNumber(CODE_PREFIX, code))
                     .thenComparing(Comparator.naturalOrder());
 
     private final DatasetLifecycle lifecycle;
@@ -822,14 +830,21 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * could in principle carry two {@code dcterms:identifier} triples ({@code ashapes:ADR-identifier}
      * enforces {@code sh:maxCount 1} only at write time); {@link #nextCode} only ever wants the
      * highest running number, so which of two identical duplicates survives does not matter.
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
      */
     @Override
     public List<AdrCode> findAllCodes(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
 
         String query = "SELECT ?identifier WHERE { GRAPH <" + ADR_GRAPH + "> { "
-                + "?s a <" + ADR_TYPE + "> . ?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
-                + "FILTER(isIRI(?s)) } }";
+                + "?s a <" + ADR_TYPE + "> . ?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             return handle.sparqlQuery().select(query)
@@ -1287,18 +1302,6 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     // ---- helpers ---------------------------------------------------------------------------
-
-    private static int runningNumber(String code) {
-        int dash = code.lastIndexOf('-');
-        if (dash < 0 || dash == code.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(code.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
 
     private static String statusIriFor(AdrStatus status) {
         return switch (status) {

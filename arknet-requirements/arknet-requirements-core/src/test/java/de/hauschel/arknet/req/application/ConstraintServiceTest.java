@@ -78,6 +78,24 @@ class ConstraintServiceTest {
         assertEquals(new ConstraintCode("RCON-1"), rcon1);
     }
 
+    /**
+     * Mutation test for {@code nextCode} counting over {@link ConstraintRepository#findAllCodes}
+     * instead of {@link ConstraintRepository#findAll} (kogn-io/arknet#360): move the count back to
+     * the listing and this fails. {@code TCON-2} is seeded the way a store-first (ADR-005) write
+     * leaves a constraint whose title or statement no longer reads - out of every listing, still
+     * holding its number - and a listing-based count would reissue that number until someone
+     * repaired the data by hand.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        add(WS, "a", "s a", ConstraintType.TECHNICAL);
+        repository.seedUnmaterialisableCode(WS, new ConstraintCode("TCON-2"));
+
+        Constraint third = add(WS, "c", "s c", ConstraintType.TECHNICAL);
+
+        assertEquals(new ConstraintCode("TCON-3"), third.code());
+    }
+
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");

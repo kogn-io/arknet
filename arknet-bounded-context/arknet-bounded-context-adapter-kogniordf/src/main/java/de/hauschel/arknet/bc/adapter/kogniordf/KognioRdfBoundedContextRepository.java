@@ -503,6 +503,18 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 readUsesTerms(handle.sparqlQuery()::select, SparqlTerms.iriRef(subjectIriString)));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>Store-first skip (ADR-005).</strong> {@code name} and {@code domainVision} are
+     * joined as mandatory, not {@code OPTIONAL}: a subject missing either one binds no row at all
+     * and is simply absent from the listing. Unreachable through {@code bc_add}, whose write gate
+     * enforces {@code shapes:BoundedContext-name}/{@code -domainVision} at {@code sh:Violation}
+     * severity - but a context written straight into the store can lack one, and dropping just that
+     * one context is still preferable to failing the whole listing over it. Its {@code BC-N} stays
+     * taken all the same, which is why {@link #findAllCodes} exists and why the code counter reads
+     * that instead of this (kogn-io/arknet#360).</p>
+     */
     @Override
     public List<BoundedContext> findAll(ProjectId projectId) {
         Objects.requireNonNull(projectId, "projectId");
@@ -532,6 +544,46 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
             return bySubject.entrySet().stream()
                     .map(entry -> entry.getValue().toBoundedContext(
                             termsBySubject.getOrDefault(entry.getKey(), List.of())))
+                    .toList();
+        }
+    }
+
+    /**
+     * Reads every recorded bounded context's business code straight off {@code dcterms:identifier},
+     * joining neither {@code arknet:name} nor {@code arkddd:domainVision} - the two mandatory joins
+     * that make {@link #findAll} drop a store-first context, and the whole point of this method
+     * (kogn-io/arknet#360, see {@link BoundedContextRepository#findAllCodes}'s own javadoc). Any
+     * further predicate joined in here would re-introduce exactly the skip the code counter must not
+     * have.
+     *
+     * <p>Deduplicated, because nothing stops a store-first subject from carrying two
+     * {@code dcterms:identifier} triples: {@code shapes:BoundedContextShape} constrains
+     * {@code name}, {@code domainVision}, {@code hasAggregate}, {@code partOf} and {@code ownedBy},
+     * and no property shape at all for the identifier - so not even a write-time
+     * {@code sh:maxCount 1} stands behind it here. {@code nextCode} only wants the highest running
+     * number, so which of two duplicates survives makes no difference.</p>
+     *
+     * <p><strong>No {@code FILTER(isIRI(?s))}, unlike the read paths around it
+     * (kogn-io/arknet#360).</strong> {@code WriteFunnel#create}'s uniqueness check is
+     * {@code tx.contains(graph, null, dcterms:identifier, code)} - a wildcard subject, so it sees a
+     * blank-node subject holding a code just as well as an IRI one and rejects the write either way.
+     * A counter that filtered blank nodes out would therefore be blind to a code the write path
+     * still refuses, which is this bug over again through a different skip. Counting one number too
+     * many costs a number; counting one too few costs the {@code add}.</p>
+     */
+    @Override
+    public List<BoundedContextCode> findAllCodes(ProjectId projectId) {
+        Objects.requireNonNull(projectId, "projectId");
+
+        String query = "SELECT ?identifier WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
+                + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . } }";
+
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            return handle.sparqlQuery().select(query)
+                    .map(row -> literalOf(row, "identifier").getLexicalForm())
+                    .distinct()
+                    .map(BoundedContextCode::new)
                     .toList();
         }
     }

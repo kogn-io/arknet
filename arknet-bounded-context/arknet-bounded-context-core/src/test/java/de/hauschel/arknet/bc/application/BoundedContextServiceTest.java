@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.bc.application.port.in.AddBoundedContext.NewBoundedContext;
 import de.hauschel.arknet.bc.application.port.in.ResolveBoundedContexts;
+import de.hauschel.arknet.bc.application.port.out.BoundedContextRepository;
 import de.hauschel.arknet.bc.domain.BoundedContext;
 import de.hauschel.arknet.bc.domain.BoundedContextCode;
 import de.hauschel.arknet.bc.domain.BoundedContextId;
@@ -122,6 +123,26 @@ class BoundedContextServiceTest {
         BoundedContextCode next = service.add(WS, newBoundedContext()).code();
 
         assertEquals(new BoundedContextCode("BC-1"), next);
+    }
+
+    /**
+     * Mutation-tests {@code nextCode}'s reliance on {@link BoundedContextRepository#findAllCodes}
+     * rather than {@link BoundedContextRepository#findAll} (kogn-io/arknet#360): revert
+     * {@code nextCode} to deriving its maximum from {@code findAll} and this goes red - the seeded
+     * {@code BC-2} holds the project's highest number but binds no row in {@code findAll}'s query,
+     * exactly as a store-first context missing {@code arknet:name} or {@code arkddd:domainVision}
+     * does against the real store, so {@code add} would recompute {@code BC-2} and collide with a
+     * code that is still very much taken - and, since every retry recomputes the same number, would
+     * keep colliding until it gives up.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(WS, newBoundedContext());
+        repository.seedUnmaterialisableCode(WS, new BoundedContextCode("BC-2"));
+
+        BoundedContextCode next = service.add(WS, newBoundedContext()).code();
+
+        assertEquals(new BoundedContextCode("BC-3"), next);
     }
 
     @Test

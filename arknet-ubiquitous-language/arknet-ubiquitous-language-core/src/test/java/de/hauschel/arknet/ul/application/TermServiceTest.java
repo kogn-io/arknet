@@ -81,6 +81,25 @@ class TermServiceTest {
         assertEquals(new TermCode("TERM-2"), second);
     }
 
+    /**
+     * Mutation-tests {@code nextCode}'s reliance on {@link TermRepository#findAllCodes} rather than
+     * {@link TermRepository#findAll} (kogn-io/arknet#360): turn {@code nextCode} back into a count
+     * over {@code findAll} and this goes red - the seeded {@code TERM-2} holds the project's highest
+     * number while being invisible to {@code findAll}, exactly as a store-first (ADR-005) concept
+     * without {@code skos:prefLabel}/{@code skos:definition} is to the real out-adapter, so
+     * {@code add} would mint {@code TERM-2} again instead of {@code TERM-3} and collide with a code
+     * that is still very much taken.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(WS, new NewTerm("Gutschrift", "def a", null), DEFAULT_LANGUAGE);
+        repository.seedUnmaterialisableCode(WS, new TermCode("TERM-2"));
+
+        Term third = service.add(WS, new NewTerm("Bestellung", "def b", null), DEFAULT_LANGUAGE);
+
+        assertEquals(new TermCode("TERM-3"), third.code());
+    }
+
     @Test
     void addIsScopedPerProject() {
         ProjectId other = new ProjectId("other");
@@ -373,6 +392,11 @@ class TermServiceTest {
         public List<Term> findAll(ProjectId projectId, String displayLocale) {
             findAllCalls++;
             return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<TermCode> findAllCodes(ProjectId projectId) {
+            return delegate.findAllCodes(projectId);
         }
 
         @Override

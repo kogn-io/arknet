@@ -3,6 +3,7 @@
 
 package de.hauschel.arknet.uc.application;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,12 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
     private final Map<UseCaseId, Map<Integer, String>> stepTextLanguageByIdentity = new LinkedHashMap<>();
     private final Map<UseCaseId, Map<Integer, String>> extensionTextLanguageByIdentity = new LinkedHashMap<>();
     private Integer lastStableExtensionPrefixLength;
+
+    /**
+     * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately absent from
+     * {@link #byProject}, so {@link #findAll} never sees them while {@link #findAllCodes} does.
+     */
+    private final Map<ProjectId, List<UseCaseCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     /**
      * The {@code stableExtensionPrefixLength} {@link UseCaseService} passed on the most recent
@@ -145,5 +152,29 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
         // Nothing multi-valued to select a language variant from in this plain in-memory fake -
         // displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Every stored use case's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
+     * latter standing in for what the real out-adapter's own store-first (ADR-005) read-time skip
+     * hides from {@link #findAll} alone (kogn-io/arknet#360).
+     */
+    @Override
+    public List<UseCaseCode> findAllCodes(ProjectId projectId) {
+        List<UseCaseCode> codes = new ArrayList<>(
+                byProject.getOrDefault(projectId, Map.of()).values().stream().map(UseCase::code).toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, List.of()));
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will - standing in for a
+     * use case the real out-adapter's read-time tolerance skips (store-first (ADR-005) data with no
+     * title or goal literal, or with an empty main flow) without needing a real store to produce
+     * that skip in (kogn-io/arknet#360). The code is assigned all the same, so nothing may hand it
+     * out again.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, UseCaseCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 }

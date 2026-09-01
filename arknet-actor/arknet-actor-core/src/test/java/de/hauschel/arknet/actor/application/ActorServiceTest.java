@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import de.hauschel.arknet.actor.application.port.in.AddActor.NewActor;
+import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.actor.domain.Actor;
 import de.hauschel.arknet.actor.domain.ActorCode;
 import de.hauschel.arknet.actor.domain.ActorId;
@@ -116,6 +117,24 @@ class ActorServiceTest {
         ActorCode next = service.add(WS, newActor()).code();
 
         assertEquals(new ActorCode("ACTOR-1"), next);
+    }
+
+    /**
+     * Mutation-tests {@code nextCode}'s reliance on {@link ActorRepository#findAllCodes} rather than
+     * {@link ActorRepository#findAll} (kogn-io/arknet#360): revert {@code nextCode} back to deriving
+     * its maximum from {@code findAll} and this goes red - the seeded {@code ACTOR-2} holds the
+     * project's highest number but is invisible to {@code findAll}, exactly as a store-first
+     * (ADR-005) actor without an {@code arknet:name} would be, so {@code add} would recompute
+     * {@code ACTOR-2} and collide with a code that is still very much taken.
+     */
+    @Test
+    void addSkipsOverACodeThatIsAssignedButNotCurrentlyMaterialisable() {
+        service.add(WS, newActor());
+        repository.seedUnmaterialisableCode(WS, new ActorCode("ACTOR-2"));
+
+        ActorCode third = service.add(WS, newActor()).code();
+
+        assertEquals(new ActorCode("ACTOR-3"), third);
     }
 
     @Test

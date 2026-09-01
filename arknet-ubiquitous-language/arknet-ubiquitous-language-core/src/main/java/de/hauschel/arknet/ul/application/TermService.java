@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import de.hauschel.arknet.kernel.CodeAssignment;
+import de.hauschel.arknet.kernel.CodeCounter;
 import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
@@ -178,33 +179,25 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
      * maximum fall back and the next {@code term_add} hand out that same number again - and a code
      * that already appeared in a commit message or a note would then name something else
      * entirely.</p>
+     *
+     * <p><strong>Counted over {@link TermRepository#findAllCodes}, not
+     * {@link TermRepository#findAll} (kogn-io/arknet#360).</strong> A term written store-first
+     * (ADR-005) without a {@code skos:prefLabel} or without a {@code skos:definition} cannot be
+     * materialised into a {@link Term} and is dropped by the listing read - but it exists, and its
+     * code stays taken. Counting over the listing read would therefore mint that code again as soon
+     * as such a term holds the project's highest number, and {@link #add}'s
+     * {@link CodeAssignment#createRetryingOnCodeCollision} could not retry its way out: every
+     * attempt re-reads the same store and recomputes the same taken number, so the collision
+     * repeats until the attempts run out and {@code term_add} stays broken for that project.
+     * {@code findAllCodes} reads the codes themselves rather than the terms behind them, which is
+     * why the label a term does or does not carry no longer decides which number comes next.</p>
      */
     private TermCode nextCode(ProjectId projectId) {
-        // Only each term's TermCode is read here, never a label, so this call has no need for a
-        // display language override - null uses the repository's own configured preference, which
-        // has no bearing on this method's result either way.
-        int highestLiving = repository.findAll(projectId, null).stream()
-                .mapToInt(t -> runningNumber(t.code()))
-                .max()
-                .orElse(0);
-        int highestRetained = repository.findRetainedCodes(projectId).stream()
-                .mapToInt(TermService::runningNumber)
-                .max()
-                .orElse(0);
-        return new TermCode(ID_PREFIX + "-" + (Math.max(highestLiving, highestRetained) + 1));
-    }
-
-    /** Parses the running number from a code such as {@code TERM-7} (0 if not parseable). */
-    private static int runningNumber(TermCode code) {
-        String value = code.value();
-        int dash = value.lastIndexOf('-');
-        if (dash < 0 || dash == value.length() - 1) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.substring(dash + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        String prefix = ID_PREFIX + "-";
+        int highestLiving = CodeCounter.highestRunningNumber(prefix,
+                repository.findAllCodes(projectId), TermCode::value);
+        int highestRetained = CodeCounter.highestRunningNumber(prefix,
+                repository.findRetainedCodes(projectId), TermCode::value);
+        return new TermCode(prefix + (Math.max(highestLiving, highestRetained) + 1));
     }
 }

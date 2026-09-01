@@ -252,4 +252,32 @@ public interface UseCaseRepository {
      * @return all use cases, never {@code null}
      */
     List<UseCase> findAll(ProjectId projectId, String displayLocale);
+
+    /**
+     * Returns the business code of every use case recorded in a project, read independently of
+     * whether that use case can currently be materialised into a {@link UseCase} - unlike
+     * {@link #findAll}, a use case this hexagon's own read-time tolerance skips (store-first
+     * (ADR-005) data with no {@code dcterms:title} or no {@code arkreq:useCaseGoal} literal, with an
+     * empty main flow, or with main-flow positions the domain type refuses) still counts here.
+     *
+     * <p><strong>Why this exists (kogn-io/arknet#360).</strong>
+     * {@link de.hauschel.arknet.uc.application.UseCaseService#nextCode} derives the next free
+     * {@code UCn} from the highest running number the project has handed out. Deriving it from
+     * {@link #findAll} alone would make that number depend on whether the highest-numbered use case
+     * happens to be materialisable right now: a skipped use case still exists and still holds its
+     * code, so {@code findAll} omitting it would let {@code nextCode} recompute the very same number
+     * and the next {@link #create} reject it as a {@link DuplicateUseCaseCodeException} - and since
+     * every retry recomputes that identical number, {@code uc_add} would be permanently dead for
+     * the project rather than merely racing. This method joins only the type triple and the
+     * mandatory {@code dcterms:identifier}, neither of which any read-time skip depends on, so the
+     * number it feeds {@code nextCode} is independent of materialisability.</p>
+     *
+     * <p>There is no retained-code counterpart here as there is in the ADR hexagon: this port has no
+     * {@code delete}, so no use case's code ever leaves circulation and every code ever minted is
+     * still carried by a live subject this method reads.</p>
+     *
+     * @param projectId the project (architecture model) to read codes from
+     * @return every recorded use case's business code, never {@code null}
+     */
+    List<UseCaseCode> findAllCodes(ProjectId projectId);
 }

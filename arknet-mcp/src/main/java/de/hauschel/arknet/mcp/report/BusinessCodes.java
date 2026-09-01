@@ -12,9 +12,12 @@ import java.util.Comparator;
  * back to the plain lexicographic order for a code whose suffix does not parse as a number, so
  * every code still sorts somewhere instead of the comparator breaking.
  *
- * <p>Shared by every card builder in this package; {@code arknet-adr} carries its own,
- * independent copies of the same idea ({@code AdrService}/{@code KognioRdfAdrRepository}) since
- * neither hexagon this package sits above may depend on the other.</p>
+ * <p>Shared by every card builder in this package. Deliberately <em>not</em>
+ * {@code de.hauschel.arknet.kernel.CodeCounter}, which this module could reach: that helper is
+ * <em>given</em> the one prefix its caller mints with and counts only codes carrying it, which is
+ * what a single bounded context's counter needs (kogn-io/arknet#360). This comparator has the
+ * opposite job - it sorts codes from every hexagon at once and must therefore <em>derive</em> each
+ * code's prefix to group by it, a question {@code CodeCounter} never asks.</p>
  */
 final class BusinessCodes {
 

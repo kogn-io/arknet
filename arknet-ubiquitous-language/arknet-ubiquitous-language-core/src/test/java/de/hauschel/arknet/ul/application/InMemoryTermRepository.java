@@ -38,6 +38,15 @@ final class InMemoryTermRepository implements TermRepository {
 
     private final Map<ProjectId, Map<TermId, Term>> byProject = new LinkedHashMap<>();
     private final Map<ProjectId, List<TermCode>> retainedByProject = new LinkedHashMap<>();
+    /**
+     * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately kept out of
+     * {@link #byProject}, so {@link #findAll} never sees them while {@link #findAllCodes} always
+     * does. What lets a test reproduce, without a real store, the read-time skip the real
+     * out-adapter performs on a store-first (ADR-005) concept that carries no
+     * {@code skos:prefLabel} or no {@code skos:definition}: a term that exists and holds its code,
+     * but cannot be materialised into a {@link Term} right now (kogn-io/arknet#360).
+     */
+    private final Map<ProjectId, List<TermCode>> unmaterialisableByProject = new LinkedHashMap<>();
 
     @Override
     public void create(ProjectId projectId, Term term, String language) {
@@ -87,6 +96,30 @@ final class InMemoryTermRepository implements TermRepository {
         // Nothing multi-valued to select a language variant from in this plain in-memory fake
         // either (see class-level note) - displayLocale is accepted and ignored.
         return List.copyOf(byProject.getOrDefault(projectId, Map.of()).values());
+    }
+
+    /**
+     * Every stored term's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
+     * latter standing in for what the real out-adapter's read-time skip hides from {@link #findAll}
+     * alone (kogn-io/arknet#360).
+     */
+    @Override
+    public List<TermCode> findAllCodes(ProjectId projectId) {
+        List<TermCode> codes = new ArrayList<>(
+                byProject.getOrDefault(projectId, Map.of()).values().stream().map(Term::code).toList());
+        codes.addAll(unmaterialisableByProject.getOrDefault(projectId, List.of()));
+        return List.copyOf(codes);
+    }
+
+    /**
+     * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will - a term the real
+     * out-adapter cannot materialise because it lacks a mandatory {@code skos:prefLabel} or
+     * {@code skos:definition}, reproduced here without needing a real store to write such a concept
+     * into (kogn-io/arknet#360). The code stays taken all the same, which is the whole point:
+     * {@link TermService#add} must not hand it out a second time.
+     */
+    void seedUnmaterialisableCode(ProjectId projectId, TermCode code) {
+        unmaterialisableByProject.computeIfAbsent(projectId, key -> new ArrayList<>()).add(code);
     }
 
     @Override
