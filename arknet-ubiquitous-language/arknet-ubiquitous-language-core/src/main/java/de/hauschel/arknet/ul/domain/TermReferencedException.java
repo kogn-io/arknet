@@ -10,7 +10,8 @@ import de.hauschel.arknet.kernel.ProjectId;
 
 /**
  * Thrown when {@code term_delete} is asked to remove a term that something else in the project
- * still points at - a requirement's or use case's {@code arkreq:usesTerm}, a bounded context's
+ * still points at - a requirement's or use case's {@code arkreq:usesTerm}, an architecture
+ * decision's {@code arkarch:usesTerm}, a bounded context's
  * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, or - only where a
  * store still holds pre-#336 data, back when an actor was a facette of a glossary term - a use
  * case's {@code arkreq:primaryActor}/{@code supportingActor} (issue #335).
@@ -20,8 +21,12 @@ import de.hauschel.arknet.kernel.ProjectId;
  * a dangling reference is never created on purpose here either, so it is never created by
  * deletion. The message is deliberately didactic: it names every predicate found still pointing
  * at the term, so the caller knows which edge(s) to remove first - e.g. via {@code req_update}/
- * {@code uc_update} (drop {@code usesTerm}), {@code bc_link_term} (re-link a different term) or
- * {@code term_update} (clear {@code broader}) - before retrying {@code term_delete}.</p>
+ * {@code uc_update} (drop {@code arkreq:usesTerm}), {@code adr_update} (drop
+ * {@code arkarch:usesTerm}), {@code bc_link_term} (re-link a different term) or
+ * {@code term_update} (clear {@code skos:broader}) - before retrying {@code term_delete}. Each
+ * predicate is named with its namespace prefix, because {@code arkreq:usesTerm} and
+ * {@code arkarch:usesTerm} are two different properties whose local names collide and whose
+ * edges are dropped through two different tools (kogn-io/arknet#399).</p>
  */
 public class TermReferencedException extends RuntimeException {
 
@@ -37,8 +42,8 @@ public class TermReferencedException extends RuntimeException {
      * @param projectId              the project the term lives in
      * @param code                   the term the caller tried to delete
      * @param referencingPredicates  the predicate(s) found still pointing at the term, in the
-     *                               human-readable shorthand a caller would recognise (e.g.
-     *                               {@code "usesTerm"}), never empty
+     *                               prefixed shorthand a caller would recognise (e.g.
+     *                               {@code "arkreq:usesTerm"}), never empty
      */
     public TermReferencedException(ProjectId projectId, TermCode code, List<String> referencingPredicates) {
         super("term " + Objects.requireNonNull(code, "code").value() + " in project "

@@ -38,6 +38,7 @@ import de.hauschel.arknet.kernel.LanguageTag;
 import de.hauschel.arknet.kernel.LocalizedLiteral;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkdddVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
@@ -508,7 +509,8 @@ public class KognioRdfTermRepository implements TermRepository {
 
     /**
      * The predicates that, if found pointing at a term, block its deletion (issue #335): a
-     * requirement's or use case's {@code arkreq:usesTerm}, a bounded context's
+     * requirement's or use case's {@code arkreq:usesTerm}, an architecture decision's
+     * {@code arkarch:usesTerm} (kogn-io/arknet#399), a bounded context's
      * {@code arkddd:ubiquitousLanguageTerm}, another term's {@code skos:broader}, and - still
      * checked although issue #336 moved actor resolution off glossary terms, since a store filled
      * before that cut can hold such an edge - a use case's {@code arkreq:primaryActor}/{@code
@@ -516,12 +518,27 @@ public class KognioRdfTermRepository implements TermRepository {
      * are the absolute predicate IRIs this adapter and its siblings write; values are the
      * human-readable shorthand {@link de.hauschel.arknet.ul.domain.TermReferencedException} names
      * a caller by.
+     *
+     * <p><strong>Why the shorthands carry their namespace prefix.</strong> Two entries share the
+     * local name {@code usesTerm}: an ADR's edge lives in arknet's own {@code arkarch} namespace
+     * rather than extending the shared {@code arkreq:usesTerm} domain (kogn-io/arknet#393), so
+     * they are two different properties written by two different bounded contexts. A bare
+     * {@code "usesTerm"} in the rejection message would leave the caller guessing which edge to
+     * remove - and would send them to {@code req_update}/{@code uc_update} for an edge only
+     * {@code adr_update} can drop. Every shorthand is prefixed, not just the ambiguous pair: a
+     * half-prefixed list reads as if the bare names were a different kind of thing.</p>
+     *
+     * <p>Whether this map is complete is not left to reviewer attention: {@code
+     * ReferenceGuardsCoverEveryOntologyEdgeTest} in {@code arknet-architecture-tests} holds it
+     * against the shipped ontologies, so every property declared with {@code rdfs:range
+     * skos:Concept} has to appear here.</p>
      */
     private static final Map<String, String> REFERENCING_PREDICATES = Map.of(
-            ArkreqVocabulary.USES_TERM, "usesTerm",
-            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "ubiquitousLanguageTerm",
-            ArkreqVocabulary.PRIMARY_ACTOR, "primaryActor",
-            ArkreqVocabulary.SUPPORTING_ACTOR, "supportingActor");
+            ArkreqVocabulary.USES_TERM, "arkreq:usesTerm",
+            ArkarchVocabulary.USES_TERM, "arkarch:usesTerm",
+            ArkdddVocabulary.UBIQUITOUS_LANGUAGE_TERM, "arkddd:ubiquitousLanguageTerm",
+            ArkreqVocabulary.PRIMARY_ACTOR, "arkreq:primaryActor",
+            ArkreqVocabulary.SUPPORTING_ACTOR, "arkreq:supportingActor");
 
     /**
      * Rejects the delete, without touching a single triple, if anything in the project still
@@ -540,7 +557,7 @@ public class KognioRdfTermRepository implements TermRepository {
             }
         });
         if (isReferencedVia(tx, target, BROADER_PROPERTY)) {
-            referencing.add("broader");
+            referencing.add("skos:broader");
         }
         if (!referencing.isEmpty()) {
             throw new TermReferencedException(projectId, code, referencing);

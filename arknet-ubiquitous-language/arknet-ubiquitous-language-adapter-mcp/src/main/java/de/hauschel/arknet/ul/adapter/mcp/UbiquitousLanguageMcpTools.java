@@ -285,8 +285,9 @@ public final class UbiquitousLanguageMcpTools {
             description = "Delete an already-created term and every triple it carries (its label and "
                     + "definition, in every language) - not just a correction, the whole resource goes "
                     + "away. Rejected if anything else still references it: a requirement's or use case's "
-                    + "usesTerm, a bounded context's ubiquitousLanguageTerm, or another term's broader. Remove "
-                    + "those edges first (req_update/uc_update, bc_link_term, or term_update to clear broader).")
+                    + "arkreq:usesTerm, an architecture decision's arkarch:usesTerm, a bounded context's "
+                    + "ubiquitousLanguageTerm, or another term's broader. Remove those edges first "
+                    + "(req_update/uc_update, adr_update, bc_link_term, or term_update to clear broader).")
     public String delete(
             final McpSyncRequestContext context,
             @McpToolParam(description = "Term identity, e.g. TERM-1") final String id,

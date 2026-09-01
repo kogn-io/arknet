@@ -49,6 +49,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
 import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
@@ -1739,6 +1740,40 @@ class KognioRdfTermRepositoryTest {
         }
 
         assertThrows(TermReferencedException.class, () -> repository.delete(PROJECT_A, code));
+        assertTrue(repository.findByCode(PROJECT_A, code, null).isPresent(),
+                "a rejected delete must leave the term untouched");
+    }
+
+    /**
+     * The ADR counterpart of the test above (kogn-io/arknet#399). An architecture decision points
+     * at a glossary term through {@code arkarch:usesTerm} - its own property in its own namespace,
+     * not the shared {@code arkreq:usesTerm} the requirements BC writes (kogn-io/arknet#393) - and
+     * that edge was missing from {@code REFERENCING_PREDICATES}, so the delete went through and
+     * left the decision pointing into nothing.
+     *
+     * <p>The assertion on the reported shorthand is part of the fix, not decoration: the two
+     * properties share the local name {@code usesTerm}, and only the namespace prefix tells the
+     * caller that {@code adr_update}, not {@code req_update}, is the tool that drops this
+     * edge.</p>
+     */
+    @Test
+    void deleteRejectsATermStillReferencedViaAnArchitectureDecisionsUsesTerm() {
+        TermId id = freshId();
+        TermCode code = new TermCode("TERM-1");
+        repository.create(PROJECT_A, new Term(id, code, "Gutschrift", "Eine Erstattung.", null), null);
+        String reference = "INSERT DATA { GRAPH <https://example.org/adr> { <https://example.org/adr/1> <"
+                + ArkarchVocabulary.USES_TERM + "> <" + id.value().value() + "> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(reference);
+                return null;
+            });
+        }
+
+        TermReferencedException ex = assertThrows(TermReferencedException.class,
+                () -> repository.delete(PROJECT_A, code));
+        assertEquals(List.of("arkarch:usesTerm"), ex.referencingPredicates(),
+                "the rejection must name the ADR's own property, distinguishable from arkreq:usesTerm");
         assertTrue(repository.findByCode(PROJECT_A, code, null).isPresent(),
                 "a rejected delete must leave the term untouched");
     }
