@@ -365,7 +365,7 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 - UC1  [UseCase] "Place an order"
 ```
 
-Backup -- not project-scoped, one call covers every registered project:
+Backup -- every registered project in one call, or only the one this call addresses:
 
 | Tool | Description |
 |------|-------------|

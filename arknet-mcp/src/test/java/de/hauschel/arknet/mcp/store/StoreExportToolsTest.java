@@ -51,11 +51,12 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
- * Unit tests for {@link StoreExportTools}: {@code project_export} writes every registered
- * project's complete TriG export into a timestamp subdirectory of a configurable base
- * directory. {@link ListProjects} is a structural fake (as {@code ProjectMcpToolsTest} does for
- * its in-ports); {@link StoreExporter} runs for real over a real kognio-rdf store, since it is
- * the collaborator under test alongside the file-writing orchestration.
+ * Unit tests for {@link StoreExportTools}: by default {@code project_export} writes every
+ * registered project's complete TriG export into a timestamp subdirectory of a configurable base
+ * directory; with {@code projectOnly=true} it narrows to just the one project the call addresses
+ * through its anchor. {@link ListProjects} is a structural fake (as {@code ProjectMcpToolsTest}
+ * does for its in-ports); {@link StoreExporter} runs for real over a real kognio-rdf store, since
+ * it is the collaborator under test alongside the file-writing orchestration.
  */
 class StoreExportToolsTest {
 
@@ -511,9 +512,35 @@ class StoreExportToolsTest {
     }
 
     /**
-     * The default scope addresses no single project, so it reads no anchor: a call carrying one -
-     * every header-setting client does - still exports every registered project, and an anchor
-     * nobody registered does not turn the full backup into an error.
+     * Pins the defensive branch in the {@code projectOnly=true} scope that reports a per-project
+     * failure line instead of throwing {@link java.util.NoSuchElementException} when the resolved
+     * project cannot be found by id - not reachable through the registry today (it offers no
+     * deregistration operation), but kept for the day one is added. Needs its own, deliberately
+     * divergent {@link ProjectResolver}/{@link FindProject} fakes built directly with {@code new
+     * StoreExportTools(...)} instead of {@link #exportToolsOver}: that factory derives both from
+     * the very same {@link ListProjects}, which can never disagree the way this test needs it to.
+     */
+    @Test
+    void exportOfProjectOnlyReportsFailureInsteadOfThrowingWhenTheResolvedProjectIsNotFound() {
+        ProjectResolver resolver = anchor -> new ResolvedProject(PROJECT_1, null);
+        FindProject findProject = id -> Optional.empty();
+        StoreExportTools tools = new StoreExportTools(
+                listProjectsOf(), findProject, resolver, new StoreExporter(lifecycle), exportDir, null);
+
+        String result = tools.export(contextAnchoredAt("/x"), true, null);
+
+        assertThat(result).contains("FAILED to export (project is no longer registered)");
+        assertThat(findTrigFiles(exportDir)).isEmpty();
+    }
+
+    /**
+     * The default scope addresses no single project, so it reads no anchor: a call carrying one
+     * through its transport header - every header-setting client does - still exports every
+     * registered project, and a header anchor nobody registered does not turn the full backup into
+     * an error. The explicit {@code projectAnchor} argument is left {@code null} here on purpose:
+     * unlike the header, an explicit anchor given without {@code projectOnly=true} is rejected (see
+     * {@link #exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected()}), so this test only pins the
+     * header path.
      */
     @Test
     void exportWithoutProjectOnlyIgnoresTheAnchorAndExportsEveryProject() {
@@ -528,13 +555,35 @@ class StoreExportToolsTest {
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
                     new StoreExporter(lifecycle), exportDir, null);
 
-            String result = tools.export(contextAnchoredAt("/nobody/registered/this"), false, "/neither/did/this");
+            String result = tools.export(contextAnchoredAt("/nobody/registered/this"), false, null);
 
             assertThat(result).contains("# Exported first: ").contains("# Exported second: ");
             assertThat(findTrigFiles(exportDir)).hasSize(2);
         } finally {
             lifecycle.close(new DatasetId(PROJECT_2.value()));
         }
+    }
+
+    /**
+     * An explicit {@code projectAnchor} names one project, so applying it while the call otherwise
+     * exports every registered project would silently do the opposite of what the caller most
+     * likely meant. Rejected instead, whether {@code projectOnly} is left unset or is explicitly
+     * {@code false} - in both cases no file is written.
+     */
+    @Test
+    void exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected() {
+        StoreExportTools tools = exportToolsOver(
+                listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
+                new StoreExporter(lifecycle), exportDir, null);
+
+        assertThatThrownBy(() -> tools.export(null, null, "/x"))
+                .as("projectOnly left unset")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tools.export(null, false, "/x"))
+                .as("projectOnly explicitly false")
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(findTrigFiles(exportDir)).isEmpty();
     }
 
     private static Anchor pathAnchor(String value) {

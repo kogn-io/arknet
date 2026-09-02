@@ -38,7 +38,10 @@ import de.hauschel.arknet.prj.domain.Project;
  * ({@link AnchorContext}: the {@code projectAnchor} argument if given, otherwise the transport's
  * header - both delivery paths open, ADR-016 decision 2), and a missing or unregistered anchor is
  * an error rather than a silent fall-back to the full export. The anchor is simply not read in the
- * default scope; a call that addresses no project needs none.</p>
+ * default scope; a call that addresses no project needs none. An explicit {@code projectAnchor}
+ * argument given without {@code projectOnly=true} is rejected outright rather than silently
+ * ignored, though - a silently ignored anchor argument would hand the caller the opposite of what
+ * it asked for.</p>
  *
  * <p>There is deliberately no restore counterpart - restoring a {@code .trig} file back into a
  * dataset is left to manual or agent-assisted recovery for now.</p>
@@ -66,6 +69,18 @@ public final class StoreExportTools {
      * be unique within this daemon's lifetime, not across restarts.
      */
     private static final AtomicLong CALL_SEQUENCE = new AtomicLong();
+
+    /**
+     * Rejection for an explicit {@code projectAnchor} argument given without
+     * {@code projectOnly=true}. Named after what the caller should do, the same style
+     * {@link de.hauschel.arknet.mcp.RegisteredAnchorProjectResolver}'s remedy messages use, rather
+     * than a bare "invalid argument".
+     */
+    static final String ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE =
+            "projectAnchor was given without projectOnly=true. Pass projectOnly=true if you meant "
+                    + "to export only the project this anchor names, or omit projectAnchor if you "
+                    + "meant the full backup of every registered project - a full export addresses "
+                    + "no single project, so an explicit anchor cannot be silently applied to it.";
 
     private final ListProjects listProjects;
     private final FindProject findProject;
@@ -117,9 +132,13 @@ public final class StoreExportTools {
                     + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
                     + "Only needed for a client that cannot set that header - most callers should omit "
                     + "this. Must be an anchor already registered for the project; project_list shows "
-                    + "what is registered. Ignored unless projectOnly=true, because a full export "
-                    + "addresses no single project.", required = false)
+                    + "what is registered. Requires projectOnly=true - a full export addresses no "
+                    + "single project, so this anchor is rejected rather than ignored if projectOnly "
+                    + "is not also true.", required = false)
             final String projectAnchor) {
+        if (projectAnchor != null && !projectAnchor.isBlank() && !Boolean.TRUE.equals(projectOnly)) {
+            throw new IllegalArgumentException(ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
+        }
         final String timestamp = timestampFolderName();
         if (Boolean.TRUE.equals(projectOnly)) {
             return exportAddressedProject(context, projectAnchor, timestamp);
@@ -149,9 +168,14 @@ public final class StoreExportTools {
         final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
         final Optional<Project> project = findProject.findById(projectId);
         if (project.isEmpty()) {
-            // The anchor resolved a moment ago, so this is the narrow race of a project deregistered
-            // in between - reported rather than thrown, in the same shape as every other per-project
-            // failure line.
+            // Not reachable today: ProjectRegistry (arknet-project-core, port/out) offers no
+            // deregistration operation - only register/findByAnchor/findById/findAll/
+            // findCurrentById/compareAndUpdate/updateAttributes - and there is no project_delete
+            // tool, so a project this anchor just resolved to cannot vanish before this lookup
+            // runs. Kept as defensive code anyway, in the same shape as every other per-project
+            // failure line, rather than left out: without it, the day a deregistration operation
+            // is added, project.get() below would throw NoSuchElementException instead of
+            // reporting a clean failure.
             return "# Exported " + projectId.value() + ": FAILED to export (project is no longer registered)\n";
         }
         return exportOne(project.get(), timestamp) + "\n";
