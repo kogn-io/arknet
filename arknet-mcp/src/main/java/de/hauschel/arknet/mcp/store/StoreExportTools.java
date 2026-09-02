@@ -12,25 +12,36 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
 
+import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.domain.Project;
 
 /**
- * The one backup tool exposed over MCP: {@code project_export} writes every registered project's
- * complete TriG export ({@link StoreExporter}) into a timestamped subdirectory of a configurable
- * base directory, once per call.
+ * The one backup tool exposed over MCP: {@code project_export} writes a complete TriG export
+ * ({@link StoreExporter}) into a timestamped subdirectory of a configurable base directory, once
+ * per call.
  *
- * <p>Unlike every other tool in {@code mcp/store/}, this one addresses no single project - it has
- * no anchor parameter and takes no {@link org.springframework.ai.mcp.annotation.context.McpSyncRequestContext},
- * because a backup trigger is inherently cross-project: it asks {@link ListProjects} for every
- * registered project rather than routing one call to one dataset. There is deliberately no
- * restore counterpart - restoring a {@code .trig} file back into a dataset is left to
- * manual or agent-assisted recovery for now.</p>
+ * <p><strong>Two scopes, one tool.</strong> By default the call addresses no single project - it
+ * asks {@link ListProjects} for every registered project and exports them all, because a backup
+ * trigger is inherently cross-project. With {@code projectOnly=true} it narrows to the one project
+ * this call addresses through its anchor, resolved exactly like every other tool's
+ * ({@link AnchorContext}: the {@code projectAnchor} argument if given, otherwise the transport's
+ * header - both delivery paths open, ADR-016 decision 2), and a missing or unregistered anchor is
+ * an error rather than a silent fall-back to the full export. The anchor is simply not read in the
+ * default scope; a call that addresses no project needs none.</p>
+ *
+ * <p>There is deliberately no restore counterpart - restoring a {@code .trig} file back into a
+ * dataset is left to manual or agent-assisted recovery for now.</p>
  *
  * <p>Each project's file is written to a sibling {@code .tmp} path first and only moved onto its
  * final name once {@link StoreExporter#exportTrig} returns - {@code exportTrig} now streams
@@ -57,12 +68,19 @@ public final class StoreExportTools {
     private static final AtomicLong CALL_SEQUENCE = new AtomicLong();
 
     private final ListProjects listProjects;
+    private final FindProject findProject;
+    private final ProjectResolver projects;
     private final StoreExporter exporter;
     private final Path fallbackExportDir;
     private final Path exportHostDir;
 
     /**
-     * @param listProjects      lists every registered project to export
+     * @param listProjects      lists every registered project to export in the default, full scope
+     * @param findProject       looks up the project an anchor resolved to, for its label - the
+     *                          {@code projectOnly=true} scope needs the same {@link Project} the
+     *                          full scope gets straight from {@link ListProjects}
+     * @param projects          resolves this call's target project from its anchor, used only in
+     *                          the {@code projectOnly=true} scope
      * @param exporter          the complete-store TriG export path
      * @param fallbackExportDir the directory a timestamped subdirectory is created under for
      *                          every export call
@@ -72,29 +90,71 @@ public final class StoreExportTools {
      *                          {@link StoreReportTools}'s {@code reportHostDir})
      */
     public StoreExportTools(
-            final ListProjects listProjects, final StoreExporter exporter,
-            final Path fallbackExportDir, final Path exportHostDir) {
+            final ListProjects listProjects, final FindProject findProject, final ProjectResolver projects,
+            final StoreExporter exporter, final Path fallbackExportDir, final Path exportHostDir) {
         this.listProjects = Objects.requireNonNull(listProjects, "listProjects");
+        this.findProject = Objects.requireNonNull(findProject, "findProject");
+        this.projects = Objects.requireNonNull(projects, "projects");
         this.exporter = Objects.requireNonNull(exporter, "exporter");
         this.fallbackExportDir = Objects.requireNonNull(fallbackExportDir, "fallbackExportDir");
         this.exportHostDir = exportHostDir;
     }
 
     @McpTool(name = "project_export",
-            description = "Backup: export every registered project's complete RDF store as a .trig file"
-                    + " (including provenance and project self-description) into a timestamped subdirectory"
-                    + " of the server's export directory. Not project-scoped - exports ALL registered"
-                    + " projects in one call. There is no matching import/restore tool yet.",
+            description = "Backup: export a complete RDF store as a .trig file (including provenance and"
+                    + " project self-description) into a timestamped subdirectory of the server's export"
+                    + " directory. By default this is NOT project-scoped - it exports ALL registered"
+                    + " projects in one call; pass projectOnly=true to export only the project this call"
+                    + " addresses. There is no matching import/restore tool yet.",
             annotations = @McpTool.McpAnnotations(readOnlyHint = true))
-    public String export() {
-        final List<Project> projects = listProjects.list();
-        if (projects.isEmpty()) {
+    public String export(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "Export only the project this call addresses through its anchor,"
+                    + " instead of every registered project. Defaults to false, i.e. a full backup of all"
+                    + " projects.", required = false)
+            final Boolean projectOnly,
+            @McpToolParam(description = "Optional anchor identifying the project to export, used "
+                    + "INSTEAD of the anchor your transport sends in the X-Arknet-Project-Anchor header. "
+                    + "Only needed for a client that cannot set that header - most callers should omit "
+                    + "this. Must be an anchor already registered for the project; project_list shows "
+                    + "what is registered. Ignored unless projectOnly=true, because a full export "
+                    + "addresses no single project.", required = false)
+            final String projectAnchor) {
+        final String timestamp = timestampFolderName();
+        if (Boolean.TRUE.equals(projectOnly)) {
+            return exportAddressedProject(context, projectAnchor, timestamp);
+        }
+        return exportAll(timestamp);
+    }
+
+    private String exportAll(final String timestamp) {
+        final List<Project> projectsToExport = listProjects.list();
+        if (projectsToExport.isEmpty()) {
             return "(no projects to export)";
         }
-        final String timestamp = timestampFolderName();
-        return projects.stream()
+        return projectsToExport.stream()
                 .map(project -> exportOne(project, timestamp))
                 .collect(Collectors.joining("\n")) + "\n";
+    }
+
+    /**
+     * The {@code projectOnly=true} scope. Resolution is {@link AnchorContext}'s, unchanged, so a
+     * missing or unregistered anchor throws
+     * {@link de.hauschel.arknet.kernel.UnresolvedProjectAnchorException} exactly as it does for
+     * every read tool - narrowing the export to "this project" without knowing which project that
+     * is has no defensible fall-back, least of all the full export the caller just opted out of.
+     */
+    private String exportAddressedProject(
+            final McpSyncRequestContext context, final String projectAnchor, final String timestamp) {
+        final ProjectId projectId = AnchorContext.resolveProject(context, projectAnchor, projects);
+        final Optional<Project> project = findProject.findById(projectId);
+        if (project.isEmpty()) {
+            // The anchor resolved a moment ago, so this is the narrow race of a project deregistered
+            // in between - reported rather than thrown, in the same shape as every other per-project
+            // failure line.
+            return "# Exported " + projectId.value() + ": FAILED to export (project is no longer registered)\n";
+        }
+        return exportOne(project.get(), timestamp) + "\n";
     }
 
     private String exportOne(final Project project, final String timestamp) {
@@ -167,7 +227,7 @@ public final class StoreExportTools {
     }
 
     /**
-     * One shared point in time per {@link #export()} call - every registered project's file lands
+     * One shared point in time per {@link #export} call - every project exported by that call lands
      * under the very same subdirectory, not one per project - disambiguated by an appended
      * process-wide call sequence number so two calls landing in the same wall-clock second still
      * get distinct subdirectories (issue #146). Package-private (rather than fully private) only
