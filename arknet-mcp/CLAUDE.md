@@ -97,10 +97,11 @@ aus dem `.mcp.json`-Header `X-Arknet-Project-Anchor: ${PWD}` --
 `contextExtractor`, der den Header unter `ProjectResolver.ANCHOR_KEY` in den
 `McpTransportContext` legt; die `*McpTools` lesen ihn dort pro Call und loesen ihn ueber den
 `ProjectResolver`-Bean (`RegisteredAnchorProjectResolver` -> `ResolveProject` des
-`arknet-project`-BC) auf. Alternativ nimmt **jedes** Tool einen optionalen
+`arknet-project`-BC) auf. Alternativ nimmt **jedes projekt-adressierende** Tool einen optionalen
 `projectAnchor`-Parameter, damit ein Client ohne Header-Kontrolle nicht ausgesperrt ist (ADR-016
 Punkt 2); der Header bleibt Primaerweg, weil ein per Parameter uebergebener Anker vom Sprachmodell
 stammt und ein geratener, aber zufaellig existierender still das falsche Projekt traefe.
+`project_export` ist der Sonderfall dazu: es adressiert nur mit `projectOnly=true` ein einzelnes Projekt und nimmt den Parameter deshalb zwar an, lehnt ihn ausserhalb dieses Scopes aber ab, statt ihn stillschweigend fallenzulassen.
 Fehlender oder unbekannter Anker ist ein Fehler mit nach Aufrufstelle getrennter Meldung -- **kein**
 Default, **kein** Rueckfall auf das Daemon-Arbeitsverzeichnis (ADR-016 Punkt 3). Der Header ist
 Projekt-Routing, keine Authentifizierung (ADR-009). Weil das Projekt pro Aufruf aus dem Anker kommt,

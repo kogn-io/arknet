@@ -569,6 +569,14 @@ class StoreExportToolsTest {
      * exports every registered project would silently do the opposite of what the caller most
      * likely meant. Rejected instead, whether {@code projectOnly} is left unset or is explicitly
      * {@code false} - in both cases no file is written.
+     *
+     * <p>Pins the message, not just the exception type - in two steps, because the whole point of
+     * {@link StoreExportTools#ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE} is its wording and a rejection
+     * degraded to a bare "invalid argument" would still satisfy {@code isInstanceOf} alone.
+     * {@code hasMessage} against the constant pins that the guard still throws <em>that</em>
+     * message (and is what its package-private visibility is for); asserting on the constant's own
+     * content pins the part a caller acts on - both ways out, not just the rejection - which
+     * comparing the constant to itself cannot.</p>
      */
     @Test
     void exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected() {
@@ -578,10 +586,15 @@ class StoreExportToolsTest {
 
         assertThatThrownBy(() -> tools.export(null, null, "/x"))
                 .as("projectOnly left unset")
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
         assertThatThrownBy(() -> tools.export(null, false, "/x"))
                 .as("projectOnly explicitly false")
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
+        assertThat(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE)
+                .as("the remedy names both ways out of the rejected combination")
+                .contains("projectOnly=true", "omit projectAnchor");
 
         assertThat(findTrigFiles(exportDir)).isEmpty();
     }

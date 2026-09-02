@@ -94,7 +94,11 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   undocumented as an exception — check any future absolute-sounding ADR-016 claim against these
   two tools specifically. `project_export`'s `projectOnly=true` scope (2026-09-02) does resolve an
   anchor, through the same `AnchorContext` path as every other tool, and is bound by decision 3
-  again: the narrowed export has no fall-back to the full one.
+  again: the narrowed export has no fall-back to the full one. It also carries the one exception to
+  "every tool takes an optional `projectAnchor` parameter": `project_export` takes one, but rejects
+  it outside that scope instead of ignoring it, because the default scope addresses no single
+  project and an anchor silently dropped there would hand the caller the opposite of what it asked
+  for.
 - **`CodeAssignment`'s retry loop is duplicated logic made generic, not a shared implementation
   detail.** It exists in the kernel (not `arknet-persistence-support`) because the calling
   `*-core` services must stay free of `io.kogn.rdf` (ArchUnit rule 3), while
