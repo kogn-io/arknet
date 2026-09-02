@@ -89,10 +89,16 @@ no Java ports (`.ttl` resources only) and is out of scope for this skill entirel
   change touching project routing should be re-checked against ADR-016 decisions 3 (no default)
   and 5 (no migration of legacy opaque ids) specifically.
   **Extension found (2026-08-01, issue #149):** the "no call without an anchor" wording is
-  absolute in ADR-016/CLAUDE.md but does NOT hold for `project_export`/`project_list`, which are
-  deliberately anchor-less (they enumerate across all registered projects). Correct as built, but
+  absolute in ADR-016/CLAUDE.md but does NOT hold for `project_list`, nor for `project_export` in
+  its default scope, which enumerate across all registered projects. Correct as built, but
   undocumented as an exception — check any future absolute-sounding ADR-016 claim against these
-  two tools specifically.
+  two tools specifically. `project_export`'s `projectOnly=true` scope (2026-09-02) does resolve an
+  anchor, through the same `AnchorContext` path as every other tool, and is bound by decision 3
+  again: the narrowed export has no fall-back to the full one. It also carries the one exception to
+  "every tool takes an optional `projectAnchor` parameter": `project_export` takes one, but rejects
+  it outside that scope instead of ignoring it, because the default scope addresses no single
+  project and an anchor silently dropped there would hand the caller the opposite of what it asked
+  for.
 - **`CodeAssignment`'s retry loop is duplicated logic made generic, not a shared implementation
   detail.** It exists in the kernel (not `arknet-persistence-support`) because the calling
   `*-core` services must stay free of `io.kogn.rdf` (ArchUnit rule 3), while

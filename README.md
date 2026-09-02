@@ -365,11 +365,11 @@ Traceability -- readOnly graph traversal over the same store snapshot (no second
 - UC1  [UseCase] "Place an order"
 ```
 
-Backup -- not project-scoped, one call covers every registered project:
+Backup -- every registered project in one call, or only the one this call addresses:
 
 | Tool | Description |
 |------|-------------|
-| `project_export` | Export every registered project's complete RDF store (every named graph, including provenance and project self-description -- unlike `store_overview`, this hides nothing) as a `.trig` file into a timestamped subdirectory of a configurable export directory. There is no matching import/restore tool yet -- a dataset restored by hand is claimed back into the registry with `project_adopt` |
+| `project_export` | Export a complete RDF store (every named graph, including provenance and project self-description -- unlike `store_overview`, this hides nothing) as a `.trig` file into a timestamped subdirectory of a configurable export directory. Exports every registered project by default; pass `projectOnly=true` to export only the project the call addresses through its anchor. There is no matching import/restore tool yet -- a dataset restored by hand is claimed back into the registry with `project_adopt` |
 
 ### Storage model (store-first)
 

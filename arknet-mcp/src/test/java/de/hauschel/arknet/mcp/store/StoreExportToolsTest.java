@@ -4,17 +4,26 @@
 package de.hauschel.arknet.mcp.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.AbstractList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import org.springframework.ai.mcp.annotation.context.McpSyncRequestContext;
+
+import io.modelcontextprotocol.common.McpTransportContext;
 
 import io.kogn.rdf.dataset.hosting.DatasetHandle;
 import io.kogn.rdf.dataset.hosting.DatasetId;
@@ -22,7 +31,11 @@ import io.kogn.rdf.dataset.hosting.DatasetLifecycle;
 
 import de.hauschel.arknet.kernel.DisplayLocale;
 import de.hauschel.arknet.kernel.ProjectId;
+import de.hauschel.arknet.kernel.ProjectResolver;
+import de.hauschel.arknet.kernel.ResolvedProject;
 import de.hauschel.arknet.kernel.ResourceId;
+import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
+import de.hauschel.arknet.prj.application.port.in.FindProject;
 import de.hauschel.arknet.prj.application.port.in.ListProjects;
 import de.hauschel.arknet.prj.domain.Anchor;
 import de.hauschel.arknet.prj.domain.AnchorType;
@@ -38,11 +51,12 @@ import de.hauschel.arknet.req.domain.RequirementStatus;
 import de.hauschel.arknet.req.domain.RequirementType;
 
 /**
- * Unit tests for {@link StoreExportTools}: {@code project_export} writes every registered
- * project's complete TriG export into a timestamp subdirectory of a configurable base
- * directory. {@link ListProjects} is a structural fake (as {@code ProjectMcpToolsTest} does for
- * its in-ports); {@link StoreExporter} runs for real over a real kognio-rdf store, since it is
- * the collaborator under test alongside the file-writing orchestration.
+ * Unit tests for {@link StoreExportTools}: by default {@code project_export} writes every
+ * registered project's complete TriG export into a timestamp subdirectory of a configurable base
+ * directory; with {@code projectOnly=true} it narrows to just the one project the call addresses
+ * through its anchor. {@link ListProjects} is a structural fake (as {@code ProjectMcpToolsTest}
+ * does for its in-ports); {@link StoreExporter} runs for real over a real kognio-rdf store, since
+ * it is the collaborator under test alongside the file-writing orchestration.
  */
 class StoreExportToolsTest {
 
@@ -84,11 +98,11 @@ class StoreExportToolsTest {
 
     @Test
     void exportWritesEachProjectToAFileUnderATimestampSubdirectoryOfTheFallbackDir() {
-        StoreExportTools tools = new StoreExportTools(
+        StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
                 new StoreExporter(lifecycle), exportDir, null);
 
-        String result = tools.export();
+        String result = tools.export(null, null, null);
 
         assertThat(result).contains("# Exported arknet: ");
         List<Path> written = findTrigFiles(exportDir);
@@ -110,12 +124,12 @@ class StoreExportToolsTest {
      */
     @Test
     void exportOfTwoRapidCallsWritesToDistinctSubdirectories() {
-        StoreExportTools tools = new StoreExportTools(
+        StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
                 new StoreExporter(lifecycle), exportDir, null);
 
-        tools.export();
-        tools.export();
+        tools.export(null, null, null);
+        tools.export(null, null, null);
 
         List<Path> written = findTrigFiles(exportDir);
         assertThat(written).hasSize(2);
@@ -128,11 +142,11 @@ class StoreExportToolsTest {
      */
     @Test
     void exportSanitizesTheProjectLabelIntoAFilesystemSafeFileName() {
-        StoreExportTools tools = new StoreExportTools(
+        StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet / dev (main)", List.of(pathAnchor("/x")))),
                 new StoreExporter(lifecycle), exportDir, null);
 
-        tools.export();
+        tools.export(null, null, null);
 
         List<Path> written = findTrigFiles(exportDir);
         assertThat(written).hasSize(1);
@@ -153,13 +167,13 @@ class StoreExportToolsTest {
                     KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
             requirements.create(PROJECT_2, requirementTitled("Second"), null);
 
-            StoreExportTools tools = new StoreExportTools(
+            StoreExportTools tools = exportToolsOver(
                     listProjectsOf(
                             new Project(PROJECT_1, "team/main", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "team main", List.of(pathAnchor("/y")))),
                     new StoreExporter(lifecycle), exportDir, null);
 
-            String result = tools.export();
+            String result = tools.export(null, null, null);
 
             assertThat(result).contains("# Exported team/main: ").contains("# Exported team main: ");
             List<Path> written = findTrigFiles(exportDir);
@@ -192,13 +206,13 @@ class StoreExportToolsTest {
 
             assertThat(FileNameSanitizer.sanitize(idA.value())).isEqualTo(FileNameSanitizer.sanitize(idB.value()));
 
-            StoreExportTools tools = new StoreExportTools(
+            StoreExportTools tools = exportToolsOver(
                     listProjectsOf(
                             new Project(idA, "team", List.of(pathAnchor("/x"))),
                             new Project(idB, "team", List.of(pathAnchor("/y")))),
                     new StoreExporter(lifecycle), exportDir, null);
 
-            tools.export();
+            tools.export(null, null, null);
 
             List<Path> written = findTrigFiles(exportDir);
             assertThat(written.stream().map(p -> p.getFileName().toString()).toList())
@@ -222,13 +236,13 @@ class StoreExportToolsTest {
                     KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
             requirements.create(PROJECT_2, requirementTitled("Second"), null);
 
-            StoreExportTools tools = new StoreExportTools(
+            StoreExportTools tools = exportToolsOver(
                     listProjectsOf(
                             new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
                             new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
                     new StoreExporter(lifecycle), exportDir, null);
 
-            tools.export();
+            tools.export(null, null, null);
 
             List<Path> written = findTrigFiles(exportDir);
             assertThat(written).hasSize(2);
@@ -245,11 +259,11 @@ class StoreExportToolsTest {
      */
     @Test
     void exportReportsTheHostDirInsteadOfTheFallbackDirWhenSet(@TempDir Path hostDir) {
-        StoreExportTools tools = new StoreExportTools(
+        StoreExportTools tools = exportToolsOver(
                 listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/home/f/DEV/arknet")))),
                 new StoreExporter(lifecycle), exportDir, hostDir);
 
-        String result = tools.export();
+        String result = tools.export(null, null, null);
 
         assertThat(result).contains(hostDir.toString());
         assertThat(result).doesNotContain(exportDir.toString());
@@ -293,9 +307,9 @@ class StoreExportToolsTest {
                     List.of(working, broken),
                     () -> blockTmpFileOfTheOnlyTimestampSubdirectory(root, brokenTmpFileName));
             StoreExportTools tools =
-                    new StoreExportTools(() -> workingThenBroken, new StoreExporter(lifecycle), root, null);
+                    exportToolsOver(() -> workingThenBroken, new StoreExporter(lifecycle), root, null);
 
-            String result = tools.export();
+            String result = tools.export(null, null, null);
 
             assertThat(result).contains("# Exported working: ").doesNotContain("# Exported working: FAILED");
             assertThat(result).contains("# Exported broken: FAILED to write to");
@@ -367,11 +381,11 @@ class StoreExportToolsTest {
         DatasetHandle heldOpen = lifecycle.acquire(new DatasetId(PROJECT_1.value()));
         try {
             DatasetLifecycle competingLifecycle = KognioRdfRequirementRepositoryFactory.persistentLifecycle(storageDir);
-            StoreExportTools tools = new StoreExportTools(
+            StoreExportTools tools = exportToolsOver(
                     listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
                     new StoreExporter(competingLifecycle), exportDir, null);
 
-            String result = tools.export();
+            String result = tools.export(null, null, null);
 
             assertThat(result).contains("# Exported arknet: FAILED to export");
             assertThat(result).doesNotContain("FAILED to write");
@@ -382,9 +396,207 @@ class StoreExportToolsTest {
 
     @Test
     void exportOfNoRegisteredProjectsRendersAPlaceholderInsteadOfAnEmptyString() {
-        StoreExportTools tools = new StoreExportTools(listProjectsOf(), new StoreExporter(lifecycle), exportDir, null);
+        StoreExportTools tools = exportToolsOver(listProjectsOf(), new StoreExporter(lifecycle), exportDir, null);
 
-        assertThat(tools.export()).contains("no projects");
+        assertThat(tools.export(null, null, null)).contains("no projects");
+    }
+
+    /**
+     * Builds the tool over one {@link ListProjects}, deriving the two collaborators the
+     * {@code projectOnly=true} scope needs from that very same list: {@link FindProject} looks a
+     * project up by id, and the {@link ProjectResolver} matches an anchor against the projects'
+     * own registered anchors, raising {@link UnresolvedProjectAnchorException} for anything else -
+     * the registry behaviour ADR-016 decision 3 prescribes, in the smallest fake that has it.
+     */
+    private static StoreExportTools exportToolsOver(
+            ListProjects list, StoreExporter exporter, Path exportDir, Path hostDir) {
+        FindProject findProject = id -> list.list().stream().filter(p -> p.id().equals(id)).findFirst();
+        ProjectResolver resolver = anchor -> projectAnchoredAt(list, anchor)
+                .map(project -> new ResolvedProject(project.id(), null))
+                .orElseThrow(() -> new UnresolvedProjectAnchorException(anchor, "no project registered for " + anchor));
+        return new StoreExportTools(list, findProject, resolver, exporter, exportDir, hostDir);
+    }
+
+    private static Optional<Project> projectAnchoredAt(ListProjects list, String anchor) {
+        if (anchor == null || anchor.isBlank()) {
+            return Optional.empty();
+        }
+        return list.list().stream()
+                .filter(project -> project.anchors().stream().anyMatch(a -> a.value().equals(anchor)))
+                .findFirst();
+    }
+
+    private static McpSyncRequestContext contextAnchoredAt(String anchor) {
+        McpSyncRequestContext context = mock(McpSyncRequestContext.class);
+        when(context.transportContext())
+                .thenReturn(McpTransportContext.create(Map.of(ProjectResolver.ANCHOR_KEY, anchor)));
+        return context;
+    }
+
+    /**
+     * The {@code projectOnly=true} scope over the header path: only the project this call
+     * addresses through its transport anchor is exported, even though a second project is
+     * registered and the default scope would have written both.
+     */
+    @Test
+    void exportOfProjectOnlyWritesOnlyTheProjectTheTransportAnchorAddresses() {
+        try {
+            RequirementRepository requirements =
+                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+
+            StoreExportTools tools = exportToolsOver(
+                    listProjectsOf(
+                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                    new StoreExporter(lifecycle), exportDir, null);
+
+            String result = tools.export(contextAnchoredAt("/y"), true, null);
+
+            assertThat(result).contains("# Exported second: ").doesNotContain("# Exported first: ");
+            List<Path> written = findTrigFiles(exportDir);
+            assertThat(written).hasSize(1);
+            assertThat(written.get(0).getFileName().toString())
+                    .isEqualTo("second__" + FileNameSanitizer.uniqueSegment(PROJECT_2.value()) + ".trig");
+        } finally {
+            lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
+    }
+
+    /**
+     * The other delivery path ADR-016 decision 2 keeps open to every client: the explicit
+     * {@code projectAnchor} parameter routes the same narrowed export for a client that cannot set
+     * the header, and takes precedence over a header naming a different project.
+     */
+    @Test
+    void exportOfProjectOnlyRoutesByTheExplicitAnchorParameterOverTheHeader() {
+        try {
+            RequirementRepository requirements =
+                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+
+            StoreExportTools tools = exportToolsOver(
+                    listProjectsOf(
+                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                    new StoreExporter(lifecycle), exportDir, null);
+
+            assertThat(tools.export(null, true, "/y")).contains("# Exported second: ");
+            assertThat(tools.export(contextAnchoredAt("/x"), true, "/y"))
+                    .as("the explicit parameter is used INSTEAD of the header, not merged with it")
+                    .contains("# Exported second: ").doesNotContain("# Exported first: ");
+        } finally {
+            lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
+    }
+
+    /**
+     * ADR-016 decision 3 on the narrowed scope: narrowing the export to "this project" without a
+     * registered anchor has no defensible fall-back - least of all the full export the caller just
+     * opted out of - so it fails the same way every read tool does.
+     */
+    @Test
+    void exportOfProjectOnlyWithoutARegisteredAnchorFailsInsteadOfExportingEverything() {
+        StoreExportTools tools = exportToolsOver(
+                listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
+                new StoreExporter(lifecycle), exportDir, null);
+
+        assertThatThrownBy(() -> tools.export(null, true, null))
+                .as("no anchor at all")
+                .isInstanceOf(UnresolvedProjectAnchorException.class);
+        assertThatThrownBy(() -> tools.export(contextAnchoredAt("/somewhere/else"), true, null))
+                .as("an anchor nobody registered")
+                .isInstanceOf(UnresolvedProjectAnchorException.class);
+
+        assertThat(findTrigFiles(exportDir)).isEmpty();
+    }
+
+    /**
+     * Pins the defensive branch in the {@code projectOnly=true} scope that reports a per-project
+     * failure line instead of throwing {@link java.util.NoSuchElementException} when the resolved
+     * project cannot be found by id - not reachable through the registry today (it offers no
+     * deregistration operation), but kept for the day one is added. Needs its own, deliberately
+     * divergent {@link ProjectResolver}/{@link FindProject} fakes built directly with {@code new
+     * StoreExportTools(...)} instead of {@link #exportToolsOver}: that factory derives both from
+     * the very same {@link ListProjects}, which can never disagree the way this test needs it to.
+     */
+    @Test
+    void exportOfProjectOnlyReportsFailureInsteadOfThrowingWhenTheResolvedProjectIsNotFound() {
+        ProjectResolver resolver = anchor -> new ResolvedProject(PROJECT_1, null);
+        FindProject findProject = id -> Optional.empty();
+        StoreExportTools tools = new StoreExportTools(
+                listProjectsOf(), findProject, resolver, new StoreExporter(lifecycle), exportDir, null);
+
+        String result = tools.export(contextAnchoredAt("/x"), true, null);
+
+        assertThat(result).contains("FAILED to export (project is no longer registered)");
+        assertThat(findTrigFiles(exportDir)).isEmpty();
+    }
+
+    /**
+     * The default scope addresses no single project, so it reads no anchor: a call carrying one
+     * through its transport header - every header-setting client does - still exports every
+     * registered project, and a header anchor nobody registered does not turn the full backup into
+     * an error. The explicit {@code projectAnchor} argument is left {@code null} here on purpose:
+     * unlike the header, an explicit anchor given without {@code projectOnly=true} is rejected (see
+     * {@link #exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected()}), so this test only pins the
+     * header path.
+     */
+    @Test
+    void exportWithoutProjectOnlyIgnoresTheAnchorAndExportsEveryProject() {
+        try {
+            RequirementRepository requirements =
+                    KognioRdfRequirementRepositoryFactory.over(lifecycle, DisplayLocale.DEFAULT);
+            requirements.create(PROJECT_2, requirementTitled("Second"), null);
+
+            StoreExportTools tools = exportToolsOver(
+                    listProjectsOf(
+                            new Project(PROJECT_1, "first", List.of(pathAnchor("/x"))),
+                            new Project(PROJECT_2, "second", List.of(pathAnchor("/y")))),
+                    new StoreExporter(lifecycle), exportDir, null);
+
+            String result = tools.export(contextAnchoredAt("/nobody/registered/this"), false, null);
+
+            assertThat(result).contains("# Exported first: ").contains("# Exported second: ");
+            assertThat(findTrigFiles(exportDir)).hasSize(2);
+        } finally {
+            lifecycle.close(new DatasetId(PROJECT_2.value()));
+        }
+    }
+
+    /**
+     * An explicit {@code projectAnchor} names one project, so applying it while the call otherwise
+     * exports every registered project would silently do the opposite of what the caller most
+     * likely meant. Rejected instead, whether {@code projectOnly} is left unset or is explicitly
+     * {@code false} - in both cases no file is written.
+     *
+     * <p>Pins the message, not just the exception type - in two steps, because the whole point of
+     * {@link StoreExportTools#ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE} is its wording and a rejection
+     * degraded to a bare "invalid argument" would still satisfy {@code isInstanceOf} alone.
+     * {@code hasMessage} against the constant pins that the guard still throws <em>that</em>
+     * message (and is what its package-private visibility is for); asserting on the constant's own
+     * content pins the part a caller acts on - both ways out, not just the rejection - which
+     * comparing the constant to itself cannot.</p>
+     */
+    @Test
+    void exportOfAnExplicitAnchorWithoutProjectOnlyIsRejected() {
+        StoreExportTools tools = exportToolsOver(
+                listProjectsOf(new Project(PROJECT_1, "arknet", List.of(pathAnchor("/x")))),
+                new StoreExporter(lifecycle), exportDir, null);
+
+        assertThatThrownBy(() -> tools.export(null, null, "/x"))
+                .as("projectOnly left unset")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
+        assertThatThrownBy(() -> tools.export(null, false, "/x"))
+                .as("projectOnly explicitly false")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE);
+        assertThat(StoreExportTools.ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE)
+                .as("the remedy names both ways out of the rejected combination")
+                .contains("projectOnly=true", "omit projectAnchor");
+
+        assertThat(findTrigFiles(exportDir)).isEmpty();
     }
 
     private static Anchor pathAnchor(String value) {

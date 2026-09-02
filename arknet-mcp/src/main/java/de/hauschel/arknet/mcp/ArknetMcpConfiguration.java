@@ -903,19 +903,24 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * The one backup tool ({@code project_export}). Not project-scoped like every
-     * other {@code *McpTools} bean here - it exports every project {@link ProjectService} (as its
-     * {@code ListProjects} in-port) reports as registered, in one call. {@code arknet.export.dir}/
-     * {@code arknet.export.host-dir} mirror {@code arknet.report.dir}/{@code arknet.report.host-dir}
-     * for the same reason: on a containerized daemon the export directory is a
-     * container-internal mount point the calling agent cannot reach directly.
+     * The one backup tool ({@code project_export}). Project-scoped only on request: by default it
+     * exports every project {@link ProjectService} (as its {@code ListProjects} in-port) reports as
+     * registered, in one call, and narrows to this call's own project - resolved through
+     * {@code projectResolver} like every other tool's - when the caller passes
+     * {@code projectOnly=true}. {@code arknet.export.dir}/{@code arknet.export.host-dir} mirror
+     * {@code arknet.report.dir}/{@code arknet.report.host-dir} for the same reason: on a
+     * containerized daemon the export directory is a container-internal mount point the calling
+     * agent cannot reach directly.
      */
     @Bean
     StoreExportTools storeExportTools(
-            final ProjectService projectService, final StoreExporter storeExporter,
+            final ProjectService projectService, final ProjectResolver projectResolver,
+            final StoreExporter storeExporter,
             @Value("${arknet.export.dir:${user.home}/.arknet/export}") final Path fallbackExportDir,
             @Value("${arknet.export.host-dir:#{null}}") final Path exportHostDir) {
-        return new StoreExportTools(projectService, storeExporter, fallbackExportDir, exportHostDir);
+        return new StoreExportTools(
+                projectService, projectService, projectResolver, storeExporter, fallbackExportDir,
+                exportHostDir);
     }
 
     /**
