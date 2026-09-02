@@ -73,8 +73,9 @@ public final class StoreExportTools {
     /**
      * Rejection for an explicit {@code projectAnchor} argument given without
      * {@code projectOnly=true}. Named after what the caller should do, the same style
-     * {@link de.hauschel.arknet.mcp.RegisteredAnchorProjectResolver}'s remedy messages use, rather
-     * than a bare "invalid argument".
+     * {@code RegisteredAnchorProjectResolver}'s remedy messages use, rather than a bare "invalid
+     * argument". That resolver is named rather than linked because it is package-private in
+     * {@code de.hauschel.arknet.mcp}, the same way {@link StoreReportController} refers to it.
      */
     static final String ANCHOR_WITHOUT_PROJECT_ONLY_MESSAGE =
             "projectAnchor was given without projectOnly=true. Pass projectOnly=true if you meant "
