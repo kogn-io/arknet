@@ -141,15 +141,20 @@ vorhandene einsprachige nicht nachtraeglich vereinheitlichen. Was **in den Store
 geschrieben wird, ist fuer die zentralen benannten/beschreibenden Felder nativ
 **mehrsprachig**: Glossarbegriffe (`term_add`/`term_update`), die optionale
 Projektbeschreibung (`project_add`/`project_update`), Requirement-`title`/
-`description`/AcceptanceCriterion-`text` (`req_add`/`req_update`) und
+`description`/AcceptanceCriterion-`text` (`req_add`/`req_update`),
 UseCase-`title`/`goal`/`scope`/`trigger`/`precondition`/`postcondition`/
-Step-`text`/Extension-`text` (`uc_add`/`uc_update`) sowie Constraint-`title`/
-`constraintStatement` (`constraint_add`/`constraint_update`) tragen jeweils
+Step-`text`/Extension-`text` (`uc_add`/`uc_update`), Constraint-`title`/
+`constraintStatement` (`constraint_add`/`constraint_update`) sowie die
+ADR-Felder `name`/`context`/`decision` samt Consequence- und
+ConsideredOption-Texten (`adr_add`/`adr_update`) tragen jeweils
 mehrere sprachgetaggte RDF-Literale je Ressource, ueber ein optionales
 `language`-Argument beim Schreiben gesetzt und beim Lesen ueber die
-`DisplayLocale`-Fallback-Kette aufgeloest. Andere Freitext-Felder (z.B. die
-ADR-Textfelder, BoundedContext-`name`/`description`) bleiben einfache,
-ungetaggte Literale ohne diesen Mechanismus. Quer dazu akzeptiert **jedes**
+`DisplayLocale`-Fallback-Kette aufgeloest. Ausgenommen von der Uebersetzung
+ist das `prefLabel` eines Glossarbegriffs: es traegt unter jedem Sprachtag
+dasselbe Wort, uebersetzt wird allein die Definition -- zwei Woerter fuer
+denselben Begriff heben auf, wozu ein Glossar da ist. Andere Freitext-Felder
+(z.B. BoundedContext-`name`/`description`) bleiben einfache, ungetaggte
+Literale ohne diesen Mechanismus. Quer dazu akzeptiert **jedes**
 Prosa-Feld ein enges Markdown-Subset (`**fett**`, `*kursiv*`, `` `code` ``,
 `- `-Listen, Absaetze an Leerzeilen); Links, Ueberschriften, Tabellen und HTML
 bleiben bewusst Text, weil ein handgeschriebener Link den modellvalidierten
