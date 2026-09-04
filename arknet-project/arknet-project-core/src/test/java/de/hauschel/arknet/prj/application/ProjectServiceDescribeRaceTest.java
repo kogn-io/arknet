@@ -9,13 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.util.List;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import de.hauschel.arknet.prj.application.port.out.ProjectSelfDescription;
 import de.hauschel.arknet.prj.domain.Anchor;
@@ -50,8 +48,13 @@ import de.hauschel.arknet.prj.domain.Project;
  * the winner's and overwrite it with a state missing the winner's change - the exact defect issue
  * #173 reported. The test asserts the self-description equals the final registry state, not merely
  * that it is non-null, which is the property that was broken.</p>
+ *
+ * <p><strong>Timeout.</strong> Both callers park on a {@link CyclicBarrier}: a regression that
+ * stops either from ever reaching it would hang {@code join()} forever and stall the build instead
+ * of failing it. The backstop is project-wide rather than class-level -
+ * {@code junit.jupiter.execution.timeout.default} in the root POM's Surefire
+ * {@code configurationParameters} (kogn-io/arknet#458).</p>
  */
-@Timeout(value = 10, unit = TimeUnit.SECONDS)
 class ProjectServiceDescribeRaceTest {
 
     private InMemoryProjectRegistry registry;

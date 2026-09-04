@@ -14,7 +14,6 @@ import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -23,7 +22,6 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.kogn.rdf.dataset.BindingSet;
@@ -116,12 +114,12 @@ import de.hauschel.arknet.req.domain.RequirementType;
  * follow-up read - reached fresh, after the writer's commit - returns the post-write criteria,
  * neither pair.</p>
  *
- * <p><strong>Timeout.</strong> Same backstop as the sibling real-store concurrency tests: no
- * {@code junit-platform.properties}/Surefire-level timeout exists project-wide, so this
- * class-level {@link Timeout} is what turns a future regression that stops either thread from
- * ever reaching its barrier/latch into a failure instead of a hang.</p>
+ * <p><strong>Timeout.</strong> Same backstop as the sibling real-store concurrency tests, and it
+ * lives project-wide rather than on any of them: {@code junit.jupiter.execution.timeout.default}
+ * in the root POM's Surefire {@code configurationParameters} (kogn-io/arknet#458) is what turns a
+ * future regression that stops either thread from ever reaching its barrier/latch into a failure
+ * instead of a hang.</p>
  */
-@Timeout(value = 10, unit = TimeUnit.SECONDS)
 class RequirementReadTornReadRealStoreConcurrencyTest {
 
     private static final ProjectId WS = new ProjectId("test-project");
