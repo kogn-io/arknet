@@ -607,6 +607,8 @@ class AdrMcpToolsTest {
         String setStatus = descriptionOf("setStatus");
         assertTrue(setStatus.contains("considered and turned down"), setStatus);
         assertTrue(setStatus.contains("adr_delete"), setStatus);
+        assertTrue(setStatus.contains("exactly one considered option marked CHOSEN"), setStatus);
+        assertTrue(setStatus.contains("consideredOptionCorrections"), setStatus);
     }
 
     private String descriptionOf(String methodName) {

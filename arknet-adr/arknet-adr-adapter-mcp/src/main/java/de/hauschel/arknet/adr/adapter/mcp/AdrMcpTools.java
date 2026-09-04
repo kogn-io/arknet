@@ -512,7 +512,10 @@ public final class AdrMcpTools {
             + "recorded by mistake: use adr_delete for that, which removes a PROPOSED decision "
             + "outright. Moving to ACCEPTED or REJECTED also records the decision date - this is "
             + "the only place it is ever set, because that is the moment the decision is made; pass "
-            + "decidedOn only for a decision that was really made on an earlier day.")
+            + "decidedOn only for a decision that was really made on an earlier day. ACCEPTED requires "
+            + "exactly one considered option marked CHOSEN whenever the decision lists any at all - a "
+            + "decision with options but none of them CHOSEN is refused; correct the outcome with "
+            + "adr_update (consideredOptionCorrections) while still PROPOSED, then retry.")
     public String setStatus(
             final McpSyncRequestContext context,
             @McpToolParam(description = "ADR identity, e.g. ADR-1") final String id,
