@@ -14,7 +14,7 @@ package de.hauschel.arknet.persistence;
  * strings they keep this module RDF4J-free. The ontology side is
  * {@code arknet-ontology/src/main/resources/arknet-project.ttl}.</p>
  *
- * <p><strong>Two graphs, two datasets, one vocabulary (ADR-016 decisions 6 and 7).</strong> A
+ * <p><strong>Two graphs, two datasets, one vocabulary.</strong> A
  * project is written twice, deliberately:</p>
  *
  * <ul>

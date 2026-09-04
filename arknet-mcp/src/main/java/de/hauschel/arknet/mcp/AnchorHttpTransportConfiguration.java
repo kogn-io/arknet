@@ -34,7 +34,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
  *
  * <p><strong>An anchor, not a directory.</strong> The header used to carry the client's working
  * directory, from which the server derived an id by slugging its git top-level's basename - the
- * derivation ADR-016 removes. What travels here now is opaque:
+ * derivation registered anchors remove. What travels here now is opaque:
  * whatever string the client registered. A path is still the natural thing for a filesystem client
  * to send ({@code ${PWD}}), but the server no longer treats it as a path - it does not parse it,
  * shorten it, or fall back to anything when it does not recognise it.</p>
@@ -43,8 +43,8 @@ import de.hauschel.arknet.kernel.ProjectResolver;
  * endpoint, keep-alive and delete policy); it adds the extractor plus
  * {@link LoopbackHostSecurity}'s host-restricted security validator. The
  * header itself is still not authentication: on a loopback-only single-user server a local client
- * could claim any anchor - an accepted assumption at this trust boundary, and unchanged by
- * ADR-016, which routes on the anchor rather than vouching for it.</p>
+ * could claim any anchor - an accepted assumption at this trust boundary, unchanged by an anchor
+ * model that routes on the anchor rather than vouching for it.</p>
  */
 @Configuration(proxyBeanMethods = false)
 class AnchorHttpTransportConfiguration {
@@ -82,7 +82,7 @@ class AnchorHttpTransportConfiguration {
      * {@link ProjectResolver#ANCHOR_KEY}. A missing or blank header yields
      * {@link McpTransportContext#EMPTY} - which no longer means "the default project" but "this
      * call has no project yet": the in-adapters then require the tool's explicit
-     * {@code projectAnchor} parameter, and failing that reject the call (ADR-016 decision 3).
+     * {@code projectAnchor} parameter, and failing that reject the call.
      */
     static McpTransportContext extractAnchor(final ServerRequest request) {
         final String anchor = request.headers().firstHeader(ANCHOR_HEADER);

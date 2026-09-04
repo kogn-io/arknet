@@ -28,7 +28,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * triple shape {@link KognioRdfProjectRegistry} writes into the registry (see
  * {@link ProjectGraphs} - the shared builder that keeps the two from drifting apart), but into
  * {@code project}'s own dataset ({@code new DatasetId(project.id().value())}), named graph
- * {@link ArkprjVocabulary#IDENTITY_GRAPH}, per ADR-016 decision 7.
+ * {@link ArkprjVocabulary#IDENTITY_GRAPH}.
  *
  * <p><strong>With the SHACL gate, without the shared {@link WriteFunnel}.</strong> Both halves of
  * that sentence are deliberate:</p>
@@ -54,7 +54,7 @@ import de.hauschel.arknet.prj.domain.Project;
  *       information in the project's own dataset would only fill that dataset's provenance graph
  *       with routing noise; it would never answer a question the registry's revision trail does
  *       not already answer. The self-description is a rebuildable duplicate of registry state
- *       (ADR-016 decision 7), not a second model object with its own history worth tracking.</li>
+ *       not a second model object with its own history worth tracking.</li>
  * </ul>
  *
  * <p>Because there is no create/update distinction, the write body is a plain delete-then-add

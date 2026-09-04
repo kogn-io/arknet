@@ -7,9 +7,9 @@ import java.util.Objects;
 
 /**
  * Raised when a tool call cannot be attributed to a project: it carried no anchor at all, or an
- * anchor no project is registered under (ADR-016 decision 3).
+ * anchor no project is registered under.
  *
- * <p><strong>This is the type that makes "no default" enforceable.</strong> Before ADR-016 an
+ * <p><strong>This is the type that makes "no default" enforceable.</strong> Before the registered-anchor model, an
  * unattributable call still routed somewhere - to a slug derived from a directory name, or to an
  * implicit default project - and the caller never learned that the server had guessed. Making it
  * an exception moves the failure to the one moment where it is still cheap and unambiguous: before

@@ -9,7 +9,7 @@ import java.util.Objects;
  * Thrown when a client presents an {@link Anchor} no project has ever been registered or
  * attached with.
  *
- * <p>This is the exception ADR-016 decision 3 is built around: an unknown anchor is a fatal,
+ * <p>This is the exception the no-default, no-fallback rule is built around: an unknown anchor is a fatal,
  * caller-visible error, never a silent default and never a fallback to some server-side working
  * directory. Rather than fail with a bare "not found", the message is deliberately didactic - it
  * names the two tools that resolve the situation ({@code project_add} for a brand-new project,

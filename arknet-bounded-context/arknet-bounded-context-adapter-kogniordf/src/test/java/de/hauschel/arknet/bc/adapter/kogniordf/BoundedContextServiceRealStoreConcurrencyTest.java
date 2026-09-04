@@ -239,7 +239,7 @@ class BoundedContextServiceRealStoreConcurrencyTest {
     /**
      * Renders everything a past random sighting asked the next one to be evaluable with: both
      * racers' results (business code plus resource IRI), each result's current
-     * {@code arkprov:head} read fresh from the store after the race (ADR-014's concurrency token -
+     * {@code arkprov:head} read fresh from the store after the race (the concurrency token -
      * shows whether the two results really are two distinct, independently committed revisions),
      * the loser's exception if any, the system load at failure time, and the full timestamped
      * timeline of guard/barrier/latch/commit events. Built lazily by an assertion's message

@@ -227,7 +227,7 @@ class ProjectServiceTest {
         assertEquals(3, selfDescription.writeCount());
     }
 
-    // --- adoption of pre-ADR-016 datasets -------------------------------------
+    // --- adoption of datasets written before the registered-anchor model -----
 
     @Test
     void adoptRegistersTheExistingDatasetUnderItsOwnIdentity() {

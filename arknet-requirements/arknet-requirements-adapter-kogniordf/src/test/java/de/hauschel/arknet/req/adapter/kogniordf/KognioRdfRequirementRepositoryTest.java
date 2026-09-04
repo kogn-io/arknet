@@ -1843,10 +1843,10 @@ class KognioRdfRequirementRepositoryTest {
     // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
-     * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
+     * Revision basis for this bounded context's funnel write paths: {@code create} and
      * {@code compareAndUpdate} each record exactly one immutable revision, and the head is
-     * queryable per resource. Since {@code compareAndUpdate} was resolved into the funnel
-     * (ADR-014 decision 4), this is no longer a special path any more than {@code create} is -
+     * queryable per resource. Since {@code compareAndUpdate} was resolved into the funnel,
+     * this is no longer a special path any more than {@code create} is -
      * {@code RequirementService} routes every state change ({@code req_update}, {@code
      * req_set_status}, {@code req_link_term}) through it, so the head now moves on every
      * user-reachable requirement write, not just the initial {@code create}.

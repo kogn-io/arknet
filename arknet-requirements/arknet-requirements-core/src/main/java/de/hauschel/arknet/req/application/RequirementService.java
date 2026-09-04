@@ -364,7 +364,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      * fresh read whenever a concurrent writer commits a change in between: two parallel
      * read-modify-write round trips on the same requirement used to silently lose
      * whichever one committed last; the compare-and-set guard itself degenerated from a
-     * full-snapshot comparison to a head comparison (ADR-014 decision 4).
+     * full-snapshot comparison to a head comparison.
      *
      * <p>{@code mutation} returning its input unchanged (by {@link Object#equals}) is treated as
      * a no-op: the existing idempotency rules ({@link Requirement#accept()} on an already-accepted

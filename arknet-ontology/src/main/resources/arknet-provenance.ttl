@@ -28,8 +28,8 @@
 #         revision and head move with each of them. Where the caller uses the
 #         funnel's compare-and-update variant, the head additionally serves as
 #         an optimistic-concurrency token - the expected head is compared
-#         inside the write transaction and a stale caller is rejected
-#         (ADR-014 decisions 3 and 4). Where the caller uses the unconditional
+#         inside the write transaction and a stale caller is rejected.
+#         Where the caller uses the unconditional
 #         update variant, the head still moves but guards nothing: two
 #         concurrent read-modify-writes can lose one of the two changes.
 #

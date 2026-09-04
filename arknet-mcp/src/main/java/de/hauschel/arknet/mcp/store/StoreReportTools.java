@@ -242,11 +242,11 @@ public final class StoreReportTools {
      * the identical file name.
      *
      * <p><strong>The client's own directory is no longer a candidate</strong>, and that follows
-     * from ADR-016 rather than from a preference. The report used to be written into whatever the
-     * client sent in its header, because that value <em>was</em> a working directory. What arrives
-     * now is an anchor: opaque, possibly a URL or a UUID, and the server does not interpret it -
-     * that is the whole of decision 2. Passing it to {@code Path.of} would be exactly the
-     * interpretation ADR-016 removes, and it would fail outright for any client whose anchor is
+     * from the anchor model rather than from a preference. The report used to be written into
+     * whatever the client sent in its header, because that value <em>was</em> a working directory.
+     * What arrives now is an anchor: opaque, possibly a URL or a UUID, and the server does not
+     * interpret it at all. Passing it to {@code Path.of} would be exactly the
+     * interpretation registered anchors remove, and it would fail outright for any client whose anchor is
      * not a path. The written path is returned in the digest either way, and on a containerized
      * daemon this was already the only reachable target: there, the client's
      * directory does not exist inside the container at all.</p>
@@ -295,7 +295,7 @@ public final class StoreReportTools {
      * changes.
      *
      * <p>There used to be a second attempt here, falling back from the client's own directory to
-     * {@link #fallbackReportDir}. It went with the client directory itself: since ADR-016 there is
+     * {@link #fallbackReportDir}. It went with the client directory itself: there is now
      * only ever one target (see {@link #fallbackDirFor}), so a retry would just repeat the write
      * that has already failed.</p>
      *

@@ -6,8 +6,8 @@ package de.hauschel.arknet.prj.application.port.out;
 import de.hauschel.arknet.prj.domain.Project;
 
 /**
- * Driven port: writes a project's own anchors and label into that project's <em>own</em> dataset
- * (ADR-016 decision 7), so the registry stays an index rebuildable from the datasets it indexes
+ * Driven port: writes a project's own anchors and label into that project's <em>own</em> dataset,
+ * so the registry stays an index rebuildable from the datasets it indexes
  * rather than a single point of failure - a dataset restored from a backup carries its identity
  * with it, without the registry having to be restored in lockstep.
  *

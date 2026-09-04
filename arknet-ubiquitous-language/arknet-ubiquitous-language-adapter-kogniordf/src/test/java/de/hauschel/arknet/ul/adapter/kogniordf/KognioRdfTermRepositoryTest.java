@@ -1365,7 +1365,7 @@ class KognioRdfTermRepositoryTest {
     // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
-     * ADR-014 revision basis for this bounded context's funnel write paths: {@code create}
+     * Revision basis for this bounded context's funnel write paths: {@code create}
      * records exactly one immutable revision and the head is queryable per resource.
      */
     @Test
@@ -1380,8 +1380,8 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * The other half of the same ADR-014 guarantee, for the write path that only joined the
-     * funnel with ADR-014 decision 4: the patch-{@code update} is no longer a
+     * The other half of the same revision guarantee, for the write path that only joined the
+     * funnel later: the patch-{@code update} is no longer a
      * special path outside the revision trail - it records exactly one further revision and
      * moves the head, so every user-reachable {@code term_update} is now provenanced and its
      * head usable as the next writer's concurrency token.
@@ -1428,7 +1428,7 @@ class KognioRdfTermRepositoryTest {
     }
 
     /**
-     * The retry half of ADR-014 decision 4: a concurrent writer that advances the
+     * The retry half of the compare-and-set guarantee: a concurrent writer that advances the
      * term's shared head between this caller's read and its write must cost the caller nothing.
      * The losing attempt is retried against a fresh read, so both changes survive - the caller's
      * own patched predicate and the other writer's change to a <em>different</em> predicate,

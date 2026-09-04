@@ -164,9 +164,9 @@ public final class UseCaseMcpTools {
 
     /**
      * Resolves the project this call targets: the explicit {@code projectAnchor} parameter if the
-     * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 - both
-     * delivery paths are open to every MCP client). Neither present is a caller error; there is no
-     * default project and no fallback to a server-side working directory (decision 3).
+     * caller supplied one, otherwise the anchor its transport carried; both delivery paths are open
+     * to every MCP client. Neither present is a caller error; there is no default project and no
+     * fallback to a server-side working directory.
      *
      * <p>Returns the full {@link ResolvedProject}, not just its {@link ProjectId}: this component
      * needs the resolved project's configured default language for three, independent purposes -

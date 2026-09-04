@@ -14,7 +14,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * <p><strong>Why the registry alone is not enough.</strong> Every other question this component
  * answers is answered from {@link ProjectRegistry}, which by construction only knows projects
  * somebody registered. Adoption is the one operation about data the registry has never heard of:
- * datasets written before ADR-016, when a project's identity was derived from a directory name
+ * datasets written before the registered-anchor model, when a project's identity was derived from a directory name
  * rather than registered. Those datasets are real, hold a project's whole model, and are reachable
  * by nothing - the registry cannot list them because they were never in it, which is precisely why
  * this second, deliberately minimal port exists.</p>

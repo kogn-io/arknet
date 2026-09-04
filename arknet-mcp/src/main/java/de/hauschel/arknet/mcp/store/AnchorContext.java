@@ -29,8 +29,8 @@ public final class AnchorContext {
 
     /**
      * Resolves the project a read-tool call targets: the explicit {@code projectAnchor} argument if
-     * the caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2 -
-     * both delivery paths are open to every MCP client). Shared by {@link StoreReportTools}
+     * the caller supplied one, otherwise the anchor its transport carried; both delivery paths are
+     * open to every MCP client. Shared by {@link StoreReportTools}
      * ({@code store_overview}/{@code resource_get}) and the five traceability tools
      * ({@code trace_matrix}/{@code orphan_check}/{@code impact_analysis}/
      * {@code actor_usecase_matrix}/{@code term_cooccurrence}), which each expose the same
@@ -39,7 +39,7 @@ public final class AnchorContext {
      * <p><strong>An anchor, not an id.</strong> This parameter used to be called {@code workspace}
      * and was wrapped straight into a {@link ProjectId} - so a caller could address <em>any</em>
      * dataset by naming it, with nothing checking that the name meant anything. That is the
-     * cross-project bleed ADR-016 closes, arriving through the read path instead of the header: a
+     * cross-project bleed the anchor closes, arriving through the read path instead of the header: a
      * language model that extrapolated a plausible id would silently read a stranger's model. What
      * it accepts now is an anchor, which is looked up like every other anchor and rejected when it
      * is not registered.</p>

@@ -30,14 +30,13 @@ package de.hauschel.arknet.persistence;
  * reaches the unconditional {@link WriteFunnel#update} the head moves but guards nothing, and a
  * write issued directly against the store moves it not at all - see {@link WriteFunnel} for
  * both limits. The activity carries no resolved agent yet - agent attribution
- * ({@code prov:wasAssociatedWith}) is deliberately additive and out of scope here (ADR-014
- * decision 5).</p>
+ * ({@code prov:wasAssociatedWith}) is deliberately additive and out of scope here.</p>
  *
  * <p><strong>A revision is not a snapshot.</strong> It records <em>that</em> a resource was
  * written, with its instant and its predecessor - the model graph itself is still replaced in
  * place, so no earlier state survives and two revisions cannot be compared against each other.
  * Making historical states queryable is open, and so is the compaction strategy the resulting
- * growth would need (both deferred by ADR-014). Nothing here is SHACL-validated either: the
+ * growth would need (both deferred). Nothing here is SHACL-validated either: the
  * gate runs on the candidate model graph before the transaction opens, while the revision is
  * written inside it into {@link #PROVENANCE_GRAPH}, for which arknet ships no shapes.</p>
  *

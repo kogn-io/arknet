@@ -86,7 +86,7 @@ class AnchorHttpTransportConfigurationTest {
      * The regression this class exists to prevent: a provider built without the anchor
      * extractor wired in would fall back to {@link McpTransportContextExtractor}'s default
      * ({@code serverRequest -> McpTransportContext.EMPTY}), so every real request would silently
-     * carry no project - exactly the production failure ADR-016 routing depends on this bean to
+     * carry no project - exactly the production failure anchor routing depends on this bean to
      * avoid. The extractor is package-private state with no accessor, so this pins the built
      * object's actual field rather than trusting the builder call alone.
      */

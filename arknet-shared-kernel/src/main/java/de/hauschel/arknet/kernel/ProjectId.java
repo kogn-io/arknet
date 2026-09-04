@@ -19,19 +19,19 @@ import java.util.Objects;
  *
  * <p><strong>Not a {@link ResourceId}.</strong> A {@code ResourceId} is a subject IRI addressing a
  * resource inside a dataset; a {@code ProjectId} instead <em>becomes</em> the dataset id itself
- * (ADR-016 decision 1 - one dataset holds exactly one project's data). Conflating the two would
+ * (one dataset holds exactly one project's data). Conflating the two would
  * make a project's identity depend on the very store it identifies, which is backwards: the id has
  * to exist before the dataset it names does. A {@code ProjectId} is therefore a bare opaque
  * string, minted directly by the project component's application service, never derived from
  * anything a client sends, never interpreted.</p>
  *
- * <p><strong>Registered, not derived.</strong> Until ADR-016 this value was computed from the
+ * <p><strong>Registered, not derived.</strong> Until the registered-anchor model this value was computed from the
  * calling client's directory name (the slugged git top-level), which made two identically named
  * directories in different places collapse onto one store. It is now minted once and
  * reached through the registered anchors a client presents, see {@link ProjectResolver}. Because
  * it is opaque, its <em>form</em> is deliberately unconstrained beyond non-blankness: ids that
  * grew out of that old slug-based derivation (e.g. {@code "arknet"}) remain valid values and are
- * never migrated or reshaped (ADR-016 decision 5) - they simply gain the anchors they were always
+ * never migrated or reshaped - they simply gain the anchors they were always
  * reached by.</p>
  *
  * @param value the opaque identity value, never {@code null} or blank, and never the reserved
@@ -40,7 +40,7 @@ import java.util.Objects;
 public record ProjectId(String value) {
 
     /**
-     * The dataset id the project registry itself lives in (ADR-016 decision 6).
+     * The dataset id the project registry itself lives in.
      *
      * <p>A project registered under this id would write its own data into the registry's own
      * management dataset, corrupting the very index that is supposed to describe it. This

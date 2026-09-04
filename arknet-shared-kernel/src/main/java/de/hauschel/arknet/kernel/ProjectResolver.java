@@ -21,7 +21,7 @@ package de.hauschel.arknet.kernel;
  * could have caught that. Resolution is now a registry lookup on a value nothing shortens, which
  * makes the collision structurally impossible rather than unlikely.</p>
  *
- * <p><strong>No default, no fallback (ADR-016 decision 3).</strong> A missing or unregistered
+ * <p><strong>No default, no fallback.</strong> A missing or unregistered
  * anchor raises {@link UnresolvedProjectAnchorException}; it never routes to a server-side working
  * directory or to some implicit default project. There is deliberately no "resolve or return
  * empty" variant: a call site handed an {@link java.util.Optional} would be tempted to invent

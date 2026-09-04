@@ -755,7 +755,7 @@ class KognioRdfBoundedContextRepositoryTest {
     // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
-     * ADR-014 revision basis, exercised against a real store: every write through the funnel
+     * Revision basis, exercised against a real store: every write through the funnel
      * records exactly one immutable revision, the head is queryable per resource and moves
      * with every update, and the new head chains to the superseded one.
      */
@@ -866,7 +866,7 @@ class KognioRdfBoundedContextRepositoryTest {
         BoundedContext original = new BoundedContext(id, new BoundedContextCode("BC-1"), "OrderManagement",
                 "Owns the lifecycle of a customer order from placement to fulfilment.", null, null, List.of());
         repository.create(PROJECT_A, original);
-        // Strips the head the create recorded, leaving the pre-ADR-014 state behind.
+        // Strips the head the create recorded, leaving the state from before the revision trail existed.
         String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
                 + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {

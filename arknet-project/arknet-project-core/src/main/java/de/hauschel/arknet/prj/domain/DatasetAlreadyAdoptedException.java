@@ -12,7 +12,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>Adoption is a one-time claim, not a way to take over. Letting a second caller adopt the same
  * dataset would silently give it a second label and a second set of anchors - two projects, one
- * body of data, which is the very state ADR-016 exists to make impossible. A caller that legitimately
+ * body of data, which is the very state adoption exists to make impossible. A caller that legitimately
  * works on this project from another place wants {@code project_attach_anchor} instead, which adds
  * an anchor to the existing registration rather than creating a rival one.</p>
  */

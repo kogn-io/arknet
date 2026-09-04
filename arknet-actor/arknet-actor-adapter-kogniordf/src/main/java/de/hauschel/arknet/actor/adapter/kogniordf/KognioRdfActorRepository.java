@@ -376,7 +376,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      * {@link #actorByCodeWhereClause} (possibly row-multiplied - see the class-level "Row
      * multiplication" note) plus the head itself come from this method's one query call - one
      * snapshot, which is the load-bearing guarantee, not an ordering of clauses within that query.
-     * {@code head} is single-valued (ADR-014's queryable-head invariant), so every row carries the
+     * {@code head} is single-valued (the queryable-head invariant), so every row carries the
      * same value; only the first row is consulted for it. Builds the {@link Actor} the same way
      * {@link #findByCode} does - both call {@link #actorOf} on their rows, so the two read paths
      * cannot drift apart field-by-field.

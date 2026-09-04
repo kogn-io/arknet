@@ -10,8 +10,8 @@ import java.util.Objects;
  * Thrown when an {@link Anchor} a caller tries to register or attach already belongs to a
  * project - possibly a different one than the caller intended.
  *
- * <p>This is the enforcement point for ADR-016's central invariant: an anchor belongs to exactly
- * one project (decision 4). Two callers - or the same caller, twice, by mistake - registering the
+ * <p>This is the enforcement point for the anchor model's central invariant: an anchor belongs to
+ * exactly one project. Two callers - or the same caller, twice, by mistake - registering the
  * same anchor for two different projects would silently split a client's own history between
  * them; this exception makes that collision a loud, immediate rejection instead. The message
  * names both the offending anchor and the project that already owns it, so a caller can decide

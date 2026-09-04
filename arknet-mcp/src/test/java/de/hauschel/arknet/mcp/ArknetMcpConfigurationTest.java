@@ -52,7 +52,7 @@ class ArknetMcpConfigurationTest {
      * The project the hexagon-wiring tests below write into.
      *
      * <p>They used to pin it through the {@code arknet.workspace.id} property, which is gone with
-     * the rest of the derived resolution path (ADR-016 decision 9). Nothing needs to replace it
+     * the rest of the derived resolution path. Nothing needs to replace it
      * here: these tests drive the application services directly, and a service takes the project
      * as a parameter. The property was only ever pinning the <em>resolver</em>, which these tests
      * never went through - see {@link #resolvesProjectIdByLookingUpARegisteredAnchor} for the one
@@ -181,7 +181,7 @@ class ArknetMcpConfigurationTest {
                     DatasetLifecycle lifecycle = context.getBean(DatasetLifecycle.class);
                     assertThat(graphSize(lifecycle, registered.id().value(),
                             ArkprjVocabulary.IDENTITY_GRAPH))
-                            .as("the self-description belongs in the project's own dataset (ADR-016 point 7), "
+                            .as("the self-description belongs in the project's own dataset, "
                                     + "so a restored backup carries its identity with it")
                             .isPositive();
                 });
@@ -210,19 +210,19 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * The migration path for data written before ADR-016, end to end - and the reason adoption is a
+     * The migration path for data written before the registered-anchor model, end to end - and the reason adoption is a
      * tool rather than a startup routine.
      *
      * <p>The setup is the real situation: a dataset already sits under the id {@code arknet}, the
      * slug the old resolver derived from a directory basename, and holds this project's whole model.
      * Nothing points at it. The server cannot repair that by itself - the slug is not invertible, so
      * it cannot know which of possibly several {@code .../arknet} directories once produced it, and
-     * guessing is precisely what ADR-016 removes. The person at the keyboard supplies the missing
+     * guessing is precisely what registered anchors remove. The person at the keyboard supplies the missing
      * half by naming the dataset; the anchor arrives from their client as it always does.</p>
      *
      * <p>What must hold afterwards is that no data moved: the requirement written before adoption
      * reads back through the ordinary routing path, under the same business code, addressed only by
-     * the anchor (ADR-016 decision 5 - pre-existing ids stay valid opaque values and simply gain the
+     * the anchor (pre-existing ids stay valid opaque values and simply gain the
      * anchors they were always reached by).</p>
      */
     @Test
@@ -234,7 +234,7 @@ class ArknetMcpConfigurationTest {
                     ProjectId legacy = new ProjectId("arknet");
                     RequirementService requirements = context.getBean(RequirementService.class);
                     Requirement before = requirements.add(legacy,
-                            new NewRequirement("Written before ADR-016",
+                            new NewRequirement("Written before the registered-anchor model",
                                     "The system shall keep data written under a derived id reachable.", null,
                                     RequirementType.FUNCTIONAL, null, null, null,
                                     List.of("The requirement survives adoption"), null), "en");
@@ -275,7 +275,7 @@ class ArknetMcpConfigurationTest {
      * The switch-over itself, wired end to end: the {@link ProjectResolver} bean every model
      * hexagon routes on answers by looking the anchor up in the registry.
      *
-     * <p>Three assertions, one per property ADR-016 turns on. A registered anchor resolves to
+     * <p>Three assertions, one per property the anchor model turns on. A registered anchor resolves to
      * <em>its own</em> project, so a call lands where its data is. An unregistered anchor fails
      * instead of resolving, so a typo or a copied client config cannot silently open a second
      * store. And no anchor at all fails too, rather than falling back to the daemon's working

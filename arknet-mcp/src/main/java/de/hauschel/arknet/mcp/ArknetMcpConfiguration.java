@@ -179,7 +179,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       model hexagons above and deliberately so: it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
  *       hexagon here wired <em>without</em> a {@link ProjectResolver} - it reads the caller's
- *       anchor raw and looks it up, which is the substance of ADR-016 rather than an omission.
+ *       anchor raw and looks it up, which is deliberate rather than an omission.
  *       Since it answers the routing question for everyone else, it cannot itself be routed.</li>
  *   <li><strong>actor</strong> ({@link ActorMcpTools} over {@link ActorService} over an
  *       RDF-persisted actor repository) - the four actor tools ({@code actor_add}/
@@ -204,7 +204,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  * project land in the same dataset and can reference each other, while different projects stay
  * isolated.</p>
  *
- * <p><strong>What is no longer wired here, and why that is the point (ADR-016 decision 9).</strong>
+ * <p><strong>What is no longer wired here, and why that is the point.</strong>
  * There used to be a resolver bean deriving that identity from the caller's directory
  * ({@code arknet.workspace.id}, a git top-level lookup, slugging, a fallback to the daemon's own
  * working directory). It is gone in full rather than kept as a fallback: a second resolution path
@@ -371,7 +371,7 @@ public class ArknetMcpConfiguration {
      * in-port, so the model hexagons depend on the neutral port and never on {@code arknet-project} - see
      * {@link RegisteredAnchorProjectResolver}. It takes no configuration at all, which is the
      * point: {@code arknet.workspace.id}, the working-directory fallback and the git derivation
-     * they fed are gone, not made optional (ADR-016 decision 9).</p>
+     * they fed are gone, not made optional.</p>
      */
     @Bean
     ProjectResolver projectResolver(final ProjectService projectService) {
@@ -775,8 +775,8 @@ public class ArknetMcpConfiguration {
     }
 
     /**
-     * Writes each project's self-description into that project's <em>own</em> dataset (ADR-016
-     * decision 7), so the registry stays a rebuildable index rather than a single point of failure
+     * Writes each project's self-description into that project's <em>own</em> dataset,
+     * so the registry stays a rebuildable index rather than a single point of failure
      * and a dataset restored from a backup carries its own identity with it. A second bean rather
      * than a method on {@link #projectRegistry}, because it writes to a different dataset - there
      * is no shared transaction between the two, and the ordering (registry first, self-description
@@ -790,7 +790,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * Lists which datasets the store physically holds - the one question the registry cannot answer,
-     * because a dataset written before ADR-016 was never in it. Backs {@code project_adopt} and the
+     * because a dataset written before the registered-anchor model was never in it. Backs {@code project_adopt} and the
      * "unregistered datasets" section of {@code project_list}.
      *
      * <p>Reads over the same shared {@link DatasetLifecycle} as everything else, and only its
@@ -815,7 +815,7 @@ public class ArknetMcpConfiguration {
      * <p>Note what is <em>not</em> injected: no {@link ProjectResolver}. Every other
      * {@code *McpTools} bean gets one to turn a call's anchor into a {@link ProjectId}
      * by looking it up in the registry; this adapter also treats the anchor as opaque and
-     * looks it up, which is the whole substance of ADR-016. Wiring it without a separate
+     * looks it up, same as every other anchor-aware adapter. Wiring it without a separate
      * resolver is not an omission but intentional - this component answers the routing question
      * and therefore cannot itself sit behind a routing answer.</p>
      *

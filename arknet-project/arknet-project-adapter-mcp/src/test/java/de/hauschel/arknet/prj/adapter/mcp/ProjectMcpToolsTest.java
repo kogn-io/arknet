@@ -38,8 +38,7 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 /**
  * Scaffold-level check that the adapter declares exactly the five project tools, resolves the
  * caller's own project from its transport-context anchor rather than from any derived {@link
- * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default
- * (ADR-016 decision 3).
+ * ProjectResolver} workspace, and never turns an unknown-anchor situation into a silent default.
  */
 class ProjectMcpToolsTest {
 
@@ -309,7 +308,7 @@ class ProjectMcpToolsTest {
     void listRendersEachAnchorSoItIsCopyablePlainAsTheProjectAnchorParameter() {
         // Regression for issue #386: the type must not be a prefix on the copyable value, or
         // pasting the rendered anchor straight into a tool's 'projectAnchor' parameter (which
-        // expects Anchor#value alone, per ADR-016) fails.
+        // expects Anchor#value alone) fails.
         final Anchor uuidAnchor = new Anchor("da82fde6-0104-4de2-95d7-4f40f3d0660f", AnchorType.UUID);
         listProjects.all = List.of(new Project(new ProjectId("id-1"), "arknet-adr-dryrun-2", List.of(uuidAnchor)));
 

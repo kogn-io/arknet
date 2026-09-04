@@ -26,7 +26,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * serialisation is built on. The single place both {@link KognioRdfProjectRegistry} (the
  * registry, in the reserved system dataset) and {@link KognioRdfProjectSelfDescription} (the
  * self-description, in the project's own dataset) build the identical triple shape from - so the
- * two write paths ADR-016 deliberately keeps separate (decisions 6 and 7) cannot drift apart
+ * two write paths the anchor model deliberately keeps separate cannot drift apart
  * triple-by-triple the way two near-identical read/write paths in sibling out-adapters already
  * have.
  *
@@ -50,7 +50,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *       old node and minting a fresh one - there is no orphaned "previous anchor node" a rewrite
  *       could ever leave behind in the first place, because the node a kept anchor writes to
  *       never changes.</li>
- *   <li><strong>Cross-project uniqueness becomes an existence check.</strong> ADR-016 decision 4's
+ *   <li><strong>Cross-project uniqueness becomes an existence check.</strong> The anchor model's
  *       central invariant - an anchor belongs to at most one project - reduces to
  *       {@code DatasetTx#contains(graph, anchorIri, null, null)} on this one, predictable
  *       subject: "does any project already have triples for the node this exact anchor value

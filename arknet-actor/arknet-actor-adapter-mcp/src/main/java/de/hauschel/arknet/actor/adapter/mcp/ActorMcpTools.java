@@ -126,9 +126,9 @@ public final class ActorMcpTools {
 
     /**
      * Resolves the project this call targets: the explicit {@code projectAnchor} parameter if the
-     * caller supplied one, otherwise the anchor its transport carried (ADR-016 decision 2). Neither
-     * present is a caller error; there is no default project and no fallback to a server-side
-     * working directory (decision 3).
+     * caller supplied one, otherwise the anchor its transport carried; both delivery paths are open
+     * to every MCP client. Neither present is a caller error; there is no default project and no
+     * fallback to a server-side working directory.
      */
     private ProjectId resolveProject(final McpSyncRequestContext context, final String projectAnchor) {
         final String explicit = projectAnchor == null || projectAnchor.isBlank() ? null : projectAnchor;

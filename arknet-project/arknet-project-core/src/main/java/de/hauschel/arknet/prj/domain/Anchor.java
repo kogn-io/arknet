@@ -7,16 +7,16 @@ import de.hauschel.arknet.kernel.ProjectId;
 import java.util.Objects;
 
 /**
- * A client-supplied handle a {@link Project} is reachable by (ADR-016 decision 2).
+ * A client-supplied handle a {@link Project} is reachable by.
  *
  * <p>The value is deliberately opaque: the server looks it up, it never parses or validates it
  * for well-formedness. Whether a string looks like a plausible filesystem path or URL is the
- * sending client's concern, not this component's - the whole point of ADR-016 is that the server
- * stopped trying to derive meaning from what a client sends and started only ever looking it up
+ * sending client's concern, not this component's - the whole point is that the server stopped
+ * trying to derive meaning from what a client sends and started only ever looking it up
  * against what was explicitly registered. A malformed-looking anchor is not a domain error here;
  * an anchor nobody registered is (see {@link UnknownAnchorException}).</p>
  *
- * <p>Anchor and {@link ProjectId} are two different things on purpose (ADR-016 decision 2): the
+ * <p>Anchor and {@link ProjectId} are two different things on purpose: the
  * anchor is the place a client works from and recognises; the {@code ProjectId} is the opaque
  * identity the server keeps. That split is exactly what lets several anchors - a main checkout, a
  * git worktree, a second IDE window on a copy of the same repository - resolve to one project

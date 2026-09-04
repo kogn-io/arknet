@@ -130,7 +130,7 @@ class StoreReportToolsTest {
     /**
      * Stands in for the project registry: two registered anchors, and a hard failure for anything
      * else. Rejecting the unknown case rather than defaulting is the point - a stub that answered
-     * every anchor would let a test pass that a real deployment fails (ADR-016 decision 3).
+     * every anchor would let a test pass that a real deployment fails.
      */
     private static ResolvedProject resolveTestAnchor(final String anchor) {
         if (ANCHOR.equals(anchor)) {
@@ -204,7 +204,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * Under ADR-016 the report is written to the server's own report directory
+     * The report is written to the server's own report directory
      * and never to anything the client sent, so a daemon that shares no filesystem with its caller
      * (containerized, only {@code /data/rdf} mounted) cannot fail the tool call over it.
      *
@@ -237,7 +237,7 @@ class StoreReportToolsTest {
     /**
      * The header path end to end: an anchor arriving in the transport context routes the call,
      * with no explicit parameter involved. Its counterpart - an anchor nobody registered - fails
-     * rather than falling back (ADR-016 decision 3).
+     * rather than falling back.
      */
     @Test
     void storeOverviewRoutesByTheTransportAnchorAndRejectsAnUnregisteredOne() {
@@ -583,8 +583,8 @@ class StoreReportToolsTest {
     /**
      * Every project served by a shared daemon writes into the very same
      * {@code fallbackReportDir}. Without a project-scoped subdirectory, the second project's
-     * report would silently overwrite the first's under the identical file name - and since
-     * ADR-016 that directory is the <em>only</em> target, which makes the subdirectory the sole
+     * report would silently overwrite the first's under the identical file name - that directory
+     * is the <em>only</em> target, which makes the subdirectory the sole
      * thing keeping the two apart.
      */
     @Test
@@ -665,7 +665,7 @@ class StoreReportToolsTest {
      * identities/titles - a caller passing the other project's anchor must get that project's
      * resource back, not a silent hit in the one its transport would have selected.
      *
-     * <p>Since ADR-016 the parameter carries an anchor rather than a raw project id, which is what
+     * <p>The parameter carries an anchor rather than a raw project id, which is what
      * keeps this convenience from being a second, unchecked way into any dataset on the machine:
      * {@link #resolveTestAnchor} rejects anything unregistered, as the real registry does.</p>
      */

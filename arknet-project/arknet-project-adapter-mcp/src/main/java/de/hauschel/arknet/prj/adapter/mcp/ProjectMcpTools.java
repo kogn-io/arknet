@@ -48,7 +48,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * already working in. A project identity has no such boundary: it is the boundary. A short,
  * guessable {@code PRJ-1}-style code shared across every project on the machine would invite a
  * language model that mistypes or extrapolates one digit to silently address a <em>different</em>
- * project's data - exactly the cross-project bleed ADR-016 exists to close. Projects are
+ * project's data - exactly the cross-project bleed the anchor model exists to close. Projects are
  * therefore addressed only by the {@link Anchor}s a client actually presented and registered
  * (never by a short code a human could mistype into someone else's project), and rendered with
  * their full opaque {@link de.hauschel.arknet.kernel.ProjectId} so a later surface without an
@@ -64,7 +64,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * travels in the MCP transport context - and never calls {@link ProjectResolver#resolve(String)}.
  * The raw value read under that key is wrapped directly as an {@link Anchor} and looked up here.</p>
  *
- * <p><strong>No default, no fallback (ADR-016 decision 3).</strong> A call whose transport context
+ * <p><strong>No default, no fallback.</strong> A call whose transport context
  * carries no anchor, and which was not given an explicit anchor parameter either, is a caller error
  * - never a silent fallback to some server-side working directory. Such a call would have no way to
  * know which project it belongs to, and inventing an answer is precisely the failure mode this
@@ -73,17 +73,17 @@ import de.hauschel.arknet.prj.domain.Project;
  * guessing.</p>
  *
  * <p><strong>{@link #adopt} exists because the server cannot repair the past on its own.</strong>
- * Datasets written before ADR-016 sit under ids derived from a directory name
+ * Datasets written before the registered-anchor model sit under ids derived from a directory name
  * ({@code slug(basename(git-common-dir))}), and that derivation is not invertible: the server
  * cannot know which directory the dataset {@code arknet} once meant, and guessing is the thing
- * ADR-016 removes. Only the person at the keyboard knows, so adoption is a tool rather than a
+ * registered anchors remove. Only the person at the keyboard knows, so adoption is a tool rather than a
  * migration that runs at startup - the anchor arrives from the calling client as it always does,
  * and the dataset is named explicitly. {@link #list} renders the adoptable datasets alongside the
  * registered projects so that name never has to be guessed either.</p>
  *
- * <p><strong>Both anchor paths open to every tool (ADR-016 decision 2).</strong> This is not a
- * relaxation of the paragraph above - a missing anchor is still a hard error - but ADR-016 decision
- * 2 is explicit that the transport-context path and the explicit-parameter path "are both open to
+ * <p><strong>Both anchor paths open to every tool.</strong> This is not a
+ * relaxation of the paragraph above - a missing anchor is still a hard error - but the anchor
+ * model is explicit that the transport-context path and the explicit-parameter path "are both open to
  * every MCP client", not just to one tool. {@link #add} has always accepted an explicit first
  * anchor via its {@code anchor} parameter. {@link #attachAnchor} and {@link #rename} resolve a
  * second project identity beyond their own primary parameter - the caller's <em>own</em> project,
@@ -194,7 +194,7 @@ public final class ProjectMcpTools {
 
     /**
      * Resolves the calling client's own anchor from its transport context, as a {@link
-     * AnchorType#PATH} anchor - never invented, never defaulted (ADR-016 decision 3).
+     * AnchorType#PATH} anchor - never invented, never defaulted.
      *
      * @param noAnchorMessage call-site-specific remedy, since the right advice differs between
      *                        {@link #add} (register via its own {@code anchor} parameter) and
@@ -213,7 +213,7 @@ public final class ProjectMcpTools {
     /**
      * Resolves the project the current call comes from: the explicit {@code callerAnchor}
      * parameter if the caller supplied one, otherwise the transport context's origin-directory
-     * anchor (ADR-016 decision 2 - both paths are open to every MCP client, not only to
+     * anchor (both paths are open to every MCP client, not only to
      * {@link #add}). Shared by {@link #attachAnchor} and {@link #rename}, the two tools that need
      * to know which project the call itself belongs to before they can act on it.
      *
@@ -409,13 +409,13 @@ public final class ProjectMcpTools {
      * <p><strong>The type trails the value on purpose (issue #386).</strong> Every tool's
      * {@code projectAnchor} parameter (and {@code callerAnchor} above) matches on
      * {@link Anchor#value()} alone - the type is a display annotation, never part of the lookup
-     * key (ADR-016 decision 2, {@code Anchor#equals}). A {@code type:value} rendering put the
+     * key ({@code Anchor#equals}). A {@code type:value} rendering put the
      * type where it looked like part of the copyable value, so pasting a listed anchor straight
      * into {@code projectAnchor} silently sent the type along and failed to resolve. Rendering
      * the value first and the type in trailing parentheses keeps the anchor typed for a human
      * reader while making the copyable substring exactly what {@code projectAnchor} expects - no
      * parsing is added anywhere to strip a prefix, which would have made the server start
-     * interpreting anchor values, precisely what ADR-016 rules out.</p>
+     * interpreting anchor values, precisely what the anchor model rules out.</p>
      */
     private static String format(final Project project) {
         final String anchors = project.anchors().stream()

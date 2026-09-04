@@ -45,7 +45,7 @@ final class RegisteredAnchorProjectResolver implements ProjectResolver {
     /**
      * Remedy for a call that carried no anchor at all. Names both entry points, because the caller
      * may or may not already own a dataset: {@code project_add} for a new project,
-     * {@code project_adopt} for data written before ADR-016.
+     * {@code project_adopt} for data written before the registered-anchor model.
      */
     static final String NO_ANCHOR_MESSAGE =
             "This call carries no project anchor, so the project it belongs to cannot be "

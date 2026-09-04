@@ -1,7 +1,7 @@
 # arknet-adr
 
 Sechste hexagonale BC (Bauart 1:1 zu bounded-context) -- arknet-adr-core + arknet-adr-adapter-kogniordf (Out) + arknet-adr-adapter-mcp (In).
-Macht `arkarch:ArchitectureDecisionRecord` store-first mintbar (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`/`adr_unsupersede`/`adr_delete`, #69, `adr_unsupersede` seit kogn-io/arknet#354) -- der Anlass ist ADR-005: ADRs waren die letzte Artefaktklasse mit datei-basiertem Lebenszyklus, ausgerechnet die, fuer die arknet das Vokabular laengst mitbrachte. **Die 15 Markdown-ADRs unter `docs/adr/` sind explizit nicht Teil davon**: keine Migration, keine Koexistenz-Logik, kein gemeinsamer Nummernraum -- der Store-Code laeuft ungepolstert `ADR-1`, `ADR-2`, ..., je Projekt, die Dateien zero-padded `adr-NNN-*.md`; `AdrCode`s Javadoc sagt das, und die `adr_add`-Tool-Beschreibung sagt es dem Aufrufer, damit niemand die beiden Raeume verwechselt.
+Macht `arkarch:ArchitectureDecisionRecord` store-first mintbar (`adr_add`/`adr_list`/`adr_get`/`adr_update`/`adr_set_status`/`adr_supersede`/`adr_unsupersede`/`adr_delete`, #69, `adr_unsupersede` seit kogn-io/arknet#354) -- Anlass war, dass ADRs die letzte Artefaktklasse mit datei-basiertem Lebenszyklus waren, ausgerechnet die, fuer die arknet das Vokabular laengst mitbrachte. **Die 15 Markdown-ADRs unter `docs/adr/` sind explizit nicht Teil davon**: keine Migration, keine Koexistenz-Logik, kein gemeinsamer Nummernraum -- der Store-Code laeuft ungepolstert `ADR-1`, `ADR-2`, ..., je Projekt, die Dateien zero-padded `adr-NNN-*.md`; `AdrCode`s Javadoc sagt das, und die `adr_add`-Tool-Beschreibung sagt es dem Aufrufer, damit niemand die beiden Raeume verwechselt.
 Ob und wann migriert wird, ist eine eigene, nachgelagerte Entscheidung (Klaerung zu #69).
 
 **Ontologie war die Vorarbeit, nicht der Bau.** `arkarch:` existierte vollstaendig, lag aber unter `parked/` (kein lebender Konsument, `arknet-ontology/CLAUDE.md`).
@@ -52,7 +52,7 @@ Alle fuenf Kanten stecken **im** `Adr`-Record, nicht daneben -- sonst loescht de
 Das ist die Nachruestung, die req und bc je nachtraeglich brauchten -- hier ab dem ersten Commit.
 `add()` vergibt den naechsten `ADR-N`-Code ueber den geteilten `CodeAssignment`-Retry.
 Die Cross-BC-Aufloesung sitzt bewusst **vor** dem Retry: ein unbekanntes `FR-9` ist keine Code-Kollision.
-Der Head schuetzt Trichter-Schreiber gegeneinander, nicht gegen store-first-Edits am Trichter vorbei (ADR-014-Nachtrag).
+Der Head schuetzt Trichter-Schreiber gegeneinander, nicht gegen store-first-Edits am Trichter vorbei.
 
 **Status-Vollstaendigkeit.** `AdrStatus` implementiert seit Issue #357 alle fuenf Ontologie-Werte: `PROPOSED`, `ACCEPTED`, `REJECTED`, `DEPRECATED`, `SUPERSEDED`.
 Legale Transitionen: `PROPOSED -> ACCEPTED`/`REJECTED` (`Adr#accept(LocalDate)`/`Adr#reject(LocalDate)`), `ACCEPTED -> DEPRECATED` (`Adr#deprecate()`) fuer eine obsolete Entscheidung ohne Nachfolger, `ACCEPTED -> SUPERSEDED` (`Adr#supersededBy(AdrId)`) fuer eine obsolete Entscheidung mit einem konkreten Nachfolger, und seit kogn-io/arknet#354 `SUPERSEDED -> ACCEPTED` (`Adr#unsupersede()`) als der eine, nutzergetriebene Rueckweg -- die Korrektur einer vertippten Abloesung, keine allgemeine Ent-Terminierung.

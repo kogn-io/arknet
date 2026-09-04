@@ -72,7 +72,7 @@ class BoundedContextMcpToolsTest {
             new BoundedContextMcpTools(stub, stub, stub, stub, stub, resolveTerms, PROJECTS);
 
     /**
-     * ADR-016 decision 2: the explicit tool parameter is a full second delivery path, open to a
+     * The explicit tool parameter is a full second delivery path, open to a
      * client that cannot set the transport header - not a fallback for when the header is missing.
      * Passing it here with a {@code null} context is exactly that client's situation.
      */
@@ -86,7 +86,7 @@ class BoundedContextMcpToolsTest {
 
     /**
      * The counterpart: no anchor at all is a caller error, never a route to a default project
-     * (ADR-016 decision 3). Without this the adapter could silently pass {@code null} on and let
+     * Without this the adapter could silently pass {@code null} on and let
      * some later layer invent an answer.
      */
     @Test

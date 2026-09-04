@@ -318,7 +318,7 @@ Actor BC (`arknet-actor`) -- actors as resources of their own: someone or someth
 | `actor_update` | Correct an actor's name and/or description (each optional, unchanged if omitted -- omitting the description does not remove it). Type and code stay as created |
 | `actor_delete` | Delete an actor and every triple it carries -- the whole resource, not a field correction. Rejected if a use case still references it as `primaryActor`/`supportingActor`. A resource that is also a glossary term (`term_add`) keeps its glossary entry |
 
-Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project (ADR-016). An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
+Project BC (`arknet-project`) -- the project registry: which anchor a call arrives with belongs to which project. An anchor is an opaque, typed string (`path`, `url`, `uuid`) the client sends and the server only ever looks up -- never parses, never derives an identity from. One project holds several anchors (a git worktree, a second checkout); one anchor belongs to exactly one project. Unlike every other bounded context, these tools are not scoped to one project -- their registry is what answers the routing question:
 
 | Tool | Description |
 |------|-------------|
@@ -334,7 +334,7 @@ Store report -- generic, cross-BC read path (readOnly; works for any BC without 
 | Tool | Description |
 |------|-------------|
 | `store_overview` | Compact text digest of the project store (prefix legend, type counts, entity rows with `resource_get` drill-down, integrity hint) + writes a self-contained HTML report and returns its path. The report reads as the model rather than as triples -- use cases with their numbered flow, requirements with their acceptance criteria, glossary, bounded contexts -- and keeps a raw section for everything no bounded context claims, so nothing in the store can hide from it. References show the term itself rather than its running number, and requirement and bounded-context prose is marked up against the glossary: a mention the model links to becomes a link, a mention of a glossary term with no such link is flagged as a gap -- the link is only ever created by an explicit `req_link_term`/`bc_link_term` call, so text and model drift apart by default. A card's title, its description-like fields and its positioned items (flow steps, extensions, acceptance criteria) carry a client-side language switch when the store holds more than one language for them, toggled from the report's own toolbar -- no server round-trip needed. Every card also carries a "Referenced by" detail listing every incoming edge that points at it, with predicate and link to the referencing card, so a term's card shows who uses it without a separate `impact_analysis` call |
-| `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, bare business id (`FR-1`), or a blank-node reference (`_:...`) as shown by `store_overview` for a store-first resource with no minted IRI. The revision trail is left out -- it is change history, not model (ADR-014); read it with `resource_history` |
+| `resource_get` | The model triples of a resource (outgoing and incoming); handle as CURIE (`req:FR-1`), full IRI, bare business id (`FR-1`), or a blank-node reference (`_:...`) as shown by `store_overview` for a store-first resource with no minted IRI. The revision trail is left out -- it is change history, not model; read it with `resource_history` |
 | `resource_history` | The change history the model view leaves out: every PROV-O revision the shared write funnel has recorded for a resource, oldest first, with the current one marked -- same handle contract as `resource_get`. A resource written only store-first, or predating the funnel, has no history (empty, not an error) |
 
 `store_overview`'s HTML report is also reachable directly in a browser at
@@ -388,7 +388,7 @@ the store's write gate: an invalid write is rejected and nothing is persisted.
 The formerly tolerated file-based `arknet_*` tools
 (`arknet_load`/`arknet_validate`/`arknet_query`/`arknet_generate` from a `.ttl`)
 have been removed -- store-first is the only model lifecycle, no parallel file
-truth anymore. Background: ADR-005, including its addendum.
+truth anymore.
 
 ## Modules
 
@@ -403,7 +403,7 @@ truth anymore. Background: ADR-005, including its addendum.
 | `arknet-ubiquitous-language` | Second hexagonal BC: glossary terms as SKOS Concepts (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-use-cases` | Third hexagonal BC: flow-oriented Cockburn use cases (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
 | `arknet-bounded-context` | Fourth hexagonal BC: BoundedContext lifecycle, assigns glossary terms to a domain cut (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter) |
-| `arknet-project` | Fifth hexagonal BC: the project registry, mapping a client's opaque anchor to the project whose dataset holds its data (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter); unlike the other BCs it is not itself project-scoped (ADR-016) |
+| `arknet-project` | Fifth hexagonal BC: the project registry, mapping a client's opaque anchor to the project whose dataset holds its data (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter); unlike the other BCs it is not itself project-scoped |
 | `arknet-adr` | Sixth hexagonal BC: architecture decision records -- context, decision, and consequences/considered options as their own positioned resources (each with a classification: consequence type POSITIVE/NEGATIVE/NEUTRAL, considered-option outcome CHOSEN/REJECTED), plus the edges to the requirement a decision addresses, the bounded context it affects, the glossary terms it uses (`arkarch:usesTerm`, kogn-io/arknet#393), and its successor (`arkarch:supersededBy`, written on the superseded decision together with its SUPERSEDED status) (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter). Store-backed and numbered independently of the hand-written markdown decision records under `docs/adr/` |
 | `arknet-actor` | Seventh hexagonal BC: actors as resources of their own -- human, system, legal and group actors that act on the system under description or hold an interest in it (core + kognio-rdf out-adapter + MCP/Spring AI in-adapter). `arknet-use-cases` resolves a use case's `primaryActor`/`supportingActors` against this register; the glossary's former optional actor facet has been removed without replacement |
 | `arknet-architecture-tests` | ArchUnit rules for the dependency invariants the module cut cannot enforce (only `src/test`, no production code) |
@@ -420,8 +420,8 @@ Active modules (consumed by a BC, published under `w3id.org/arknet/`):
 | `arknet-ddd.ttl` | `arkddd:` | BoundedContext, Domain, Subdomain -- the strategic-DDD concepts `arknet-bounded-context` actually writes. Namespace shared with the parked `arknet-ddd_parked.ttl` below (Context Mapping, tactical DDD) |
 | `arknet-actor.ttl` | `arkproc:` | Actor (a `prov:Agent` subclass), HumanActor, SystemActor, LegalActor, GroupActor, actorRole -- split out of `parked/arknet-process.ttl`; the only slice of that module a BC touches. `arknet-actor` persists it; `arknet-use-cases` only reads it (resolving `primaryActor`/`supportingActor`), never writes |
 | `arknet-requirements.ttl` | `arkreq:` | Requirement (FR/NFR), UseCase, Goal, Constraint, Priority (MoSCoW), Status, Milestone, Release |
-| `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel (ADR-014) |
-| `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity (ADR-016) |
+| `arknet-provenance.ttl` | `arkprov:` | Revision, head -- PROV-O-based revision trail written by the shared write funnel |
+| `arknet-project.ttl` | `arkprj:` | Project, Anchor, AnchorType -- the registered store identity |
 | `arknet-architecture.ttl` | `arkarch:` | ArchitectureDecisionRecord, its text properties, the supersededBy/supersedes/relatedTo/addressesRequirement/affectsContext/usesTerm relations and the five ADRStatus individuals -- the ISO-42010 slice `arknet-adr` actually writes. Namespace shared with the parked `arknet-architecture_parked.ttl` below |
 
 Parked modules (`arknet-ontology/src/main/resources/parked/`, no BC consumes them yet, not published):
@@ -441,8 +441,8 @@ Not created yet (no file at all, just an intended future namespace):
 
 ## Architecture
 
-Pipes & Filters (**not implemented** -- no generating output path, see
-ADR-005):
+Pipes & Filters (**not implemented** -- no generating output path, store-first
+is the only model lifecycle):
 
 ```
 Turtle (.ttl) -> Parse -> Validate (SHACL) -> Triple Store (RDF4J) -> SPARQL -> Mustache -> AsciiDoc -> HTML/PDF

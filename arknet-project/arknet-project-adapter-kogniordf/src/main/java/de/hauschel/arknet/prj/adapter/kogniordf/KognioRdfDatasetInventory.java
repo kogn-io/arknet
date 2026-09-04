@@ -21,8 +21,8 @@ import de.hauschel.arknet.prj.application.port.out.DatasetInventory;
  * other projects' data. No dataset is acquired, opened or read here.</p>
  *
  * <p>The reserved system dataset is filtered out before any {@link ProjectId} is constructed, not
- * after. It has to be that way round: {@link ProjectId} rejects that value in its constructor
- * (ADR-016 decision 6), so mapping first and filtering second would throw on every single call
+ * after. It has to be that way round: {@link ProjectId} rejects that value in its constructor,
+ * so mapping first and filtering second would throw on every single call
  * rather than skip one entry.</p>
  */
 public final class KognioRdfDatasetInventory implements DatasetInventory {

@@ -24,14 +24,14 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * caller may choose the identity. Here it must, and that is only safe because the identity has to
  * name a dataset that is already in the store and not yet claimed.</p>
  *
- * <p><strong>What it is for.</strong> Before ADR-016 a project's dataset id was derived from its
- * directory name ({@code slug(basename(git-common-dir))}), so datasets exist under ids like
- * {@code arknet} that no anchor points to. The server cannot repair this on its own: the slug is
- * not invertible, so it cannot know which directory {@code arknet} once meant, and inventing an
- * answer is what ADR-016 removes. Only the person at the keyboard knows, and this port is how they
- * say it - the anchor comes from the calling client as usual, the dataset is named explicitly.
- * ADR-016 decision 5 is satisfied that way round: pre-existing ids are kept as opaque values and
- * gain the anchors they were always reached by, without being renamed or migrated.</p>
+ * <p><strong>What it is for.</strong> Before the registered-anchor model, a project's dataset id
+ * was derived from its directory name ({@code slug(basename(git-common-dir))}), so datasets exist
+ * under ids like {@code arknet} that no anchor points to. The server cannot repair this on its
+ * own: the slug is not invertible, so it cannot know which directory {@code arknet} once meant,
+ * and inventing an answer is exactly what registered anchors remove. Only the person at the
+ * keyboard knows, and this port is how they say it - the anchor comes from the calling client as
+ * usual, the dataset is named explicitly, keeping pre-existing ids as opaque values that gain the
+ * anchors they were always reached by, without being renamed or migrated.</p>
  *
  * <p>It stays useful after that migration: a dataset restored from a backup onto a machine whose
  * registry does not know it is the same situation.</p>
