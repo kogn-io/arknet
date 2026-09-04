@@ -646,7 +646,7 @@ public class KognioRdfTermRepository implements TermRepository {
             // No field to patch - a true no-op: the funnel is never
             // consulted, so no revision is recorded and the head does not move (see class-level
             // "No-op update" note).
-            return resultingTerm(current, null, null, null);
+            return resultingTerm(current, null, null, null, defaultLanguage);
         }
 
         String subjectIriString = current.id.value().value();
@@ -736,7 +736,7 @@ public class KognioRdfTermRepository implements TermRepository {
                     }
                 });
 
-        return resultingTerm(current, prefLabel, definition, broader);
+        return resultingTerm(current, prefLabel, definition, broader, defaultLanguage);
     }
 
     /** Deletes every existing triple of {@code subject} on {@code predicateIri} - a no-op if none exists. */
@@ -841,10 +841,32 @@ public class KognioRdfTermRepository implements TermRepository {
      * Builds the {@link Term} {@link #update} returns: {@code newXxx} where the caller actually
      * supplied one, otherwise {@code current}'s own already-selected/materialised value - so the
      * caller sees exactly the state {@link #update} just wrote, without a second read.
+     *
+     * <p><strong>An untouched field is rendered the way {@link #findByCode} renders it</strong>
+     * (issue #404). {@code prefLabel} and {@code definition} are multilingual, so projecting
+     * {@code current} down to a single value is a display-language choice - and it used to be
+     * made against this repository's process-wide configured {@link #displayLocale} (English by
+     * default) while {@code term_get} makes the very same choice against the calling project's
+     * own default language. One and the same store state therefore answered {@code term_update}
+     * with the English label and a directly following {@code term_get} with the German one, for a
+     * term carrying both. {@code defaultLanguage} - already in hand here as the tag a write
+     * without an explicit {@code language} falls back to - is merged into the {@code requested}
+     * tier for this projection, which is exactly the value {@code UbiquitousLanguageMcpTools}
+     * hands {@link #findByCode} when {@code term_get} is called without a {@code displayLocale}
+     * argument. {@link #withRequestedOverride} is a no-op for a {@code null}/blank tag, so a
+     * project without a configured default language degrades exactly as before.</p>
+     *
+     * <p>A field the caller <em>did</em> supply is still echoed back verbatim rather than
+     * re-selected: {@code term_update} confirms the value it was asked to write, in the language
+     * it was asked to write it in. Only the fields this call left alone are a display choice at
+     * all, and only those are what issue #404 saw diverge.</p>
+     *
+     * @param defaultLanguage the target project's configured default language, canonicalized, or
+     *                        {@code null} if it has none
      */
     private Term resultingTerm(TermAssembly current, String newPrefLabel, String newDefinition,
-            Optional<TermCode> newBroader) {
-        Term currentProjection = current.toTerm(displayLocale);
+            Optional<TermCode> newBroader, String defaultLanguage) {
+        Term currentProjection = current.toTerm(withRequestedOverride(defaultLanguage));
         String prefLabel = newPrefLabel != null ? newPrefLabel : currentProjection.prefLabel();
         String definition = newDefinition != null ? newDefinition : currentProjection.definition();
         TermCode broader = resultingBroader(current.broaderCode, newBroader);
