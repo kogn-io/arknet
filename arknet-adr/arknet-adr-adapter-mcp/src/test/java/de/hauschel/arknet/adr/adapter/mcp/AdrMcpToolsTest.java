@@ -58,6 +58,8 @@ import de.hauschel.arknet.adr.domain.BoundedContextRef;
 import de.hauschel.arknet.adr.domain.Consequence;
 import de.hauschel.arknet.adr.domain.ConsequenceType;
 import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.NewConsequence;
+import de.hauschel.arknet.adr.domain.NewConsideredOption;
 import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.TermRef;
@@ -209,6 +211,43 @@ class AdrMcpToolsTest {
         assertTrue(rendered.contains("[PROPOSED]"), rendered);
         // Nothing decided yet, so nothing to date (kogn-io/arknet#374).
         assertFalse(rendered.contains("decided:"), rendered);
+    }
+
+    /**
+     * kogn-io/arknet#425: {@code architecture-shapes.ttl} carries {@code sh:Warning} best-practice
+     * shapes for a missing consequence/considered option, but the SHACL write gate only ever surfaced
+     * {@code sh:Violation}s - the caller never learned the record was accepted without either. The
+     * tool output now says so itself, non-blocking.
+     */
+    @Test
+    void addWarnsAboutMissingConsequencesAndConsideredOptions() {
+        String rendered = adapter.add(null, "A title", "Why this was needed", "What was decided",
+                null, null, null, null, null, null, null, ANCHOR);
+
+        assertTrue(rendered.contains("no consequence recorded"), rendered);
+        assertTrue(rendered.contains("no considered option recorded"), rendered);
+    }
+
+    @Test
+    void addOmitsTheWarningWhenBothListsAreRecorded() {
+        String rendered = adapter.add(null, "Use an embedded triple store", "Why this was needed",
+                "What was decided",
+                List.of(new NewConsequenceInput("Faster reads", "POSITIVE")),
+                List.of(new NewConsideredOptionInput("Adopt library X", "Well understood", "CHOSEN")),
+                null, null, null, null, null, ANCHOR);
+
+        assertFalse(rendered.contains("no consequence recorded"), rendered);
+        assertFalse(rendered.contains("no considered option recorded"), rendered);
+    }
+
+    /** {@code adr_update}'s default in-port result (the stub's stand-in) still carries neither list. */
+    @Test
+    void updateRepeatsTheWarningWhileTheResultStillHasNeitherList() {
+        String rendered = adapter.update(null, "ADR-1", null, null, null, null, null, null, null, null,
+                null, null, null, null, ANCHOR);
+
+        assertTrue(rendered.contains("no consequence recorded"), rendered);
+        assertTrue(rendered.contains("no considered option recorded"), rendered);
     }
 
     @Test
@@ -772,9 +811,29 @@ class AdrMcpToolsTest {
             lastAddCommand = command;
             lastProjectId = projectId;
             Adr adr = new Adr(ID, new AdrCode("ADR-1"), command.name(), AdrStatus.PROPOSED,
-                    command.context(), command.decision(), List.of(), List.of(),
+                    command.context(), command.decision(), consequencesOf(command), consideredOptionsOf(command),
                     null, List.of(), List.of(), List.of(), null, List.of());
             return new AdrDetail(adr, List.of(), List.of(), List.of());
+        }
+
+        /** Positions the command's flat {@link NewConsequence}s the way {@code Adr#add} really would. */
+        private static List<Consequence> consequencesOf(NewAdr command) {
+            List<Consequence> consequences = new ArrayList<>();
+            int position = 1;
+            for (NewConsequence c : command.consequences()) {
+                consequences.add(new Consequence(position++, c.statement(), c.type()));
+            }
+            return consequences;
+        }
+
+        /** {@link #consequencesOf} for {@link NewConsideredOption}. */
+        private static List<ConsideredOption> consideredOptionsOf(NewAdr command) {
+            List<ConsideredOption> options = new ArrayList<>();
+            int position = 1;
+            for (NewConsideredOption o : command.consideredOptions()) {
+                options.add(new ConsideredOption(position++, o.name(), o.rationale(), o.outcome()));
+            }
+            return options;
         }
 
         @Override

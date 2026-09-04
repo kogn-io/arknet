@@ -35,6 +35,7 @@ import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
 import de.hauschel.arknet.adr.application.port.in.UnsupersedeAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
+import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
@@ -363,7 +364,7 @@ public final class AdrMcpTools {
                 toNewConsequences(consequences), toNewConsideredOptions(consideredOptions),
                 blankToNull(language), addressesRequirements, affectsContexts, usesTerms, relatedTo),
                 project.defaultLanguage());
-        return format(project, created);
+        return format(project, created) + missingContentWarnings(created.adr());
     }
 
     @McpTool(name = "adr_list", description = "List all recorded architecture decisions, one compact "
@@ -405,6 +406,29 @@ public final class AdrMcpTools {
     private static String skippedNote(final int skipped) {
         return "(" + skipped + (skipped == 1 ? " decision" : " decisions")
                 + " skipped: unresolvable store-first status or supersededBy data - see server logs)";
+    }
+
+    /**
+     * Renders the same "best practice: document at least one ..." signal {@code architecture-shapes.ttl}
+     * carries as {@code sh:Warning} for a missing consequence/considered option (kogn-io/arknet#425) -
+     * non-blocking, appended to {@code adr_add}/{@code adr_update}'s own response instead of getting lost
+     * as an {@code sh:Warning} result the SHACL write gate never surfaces (it only ever rejects on
+     * {@code sh:Violation}). Neither list is required: an empty result here is expected whenever the
+     * record genuinely has none yet, not a defect.
+     */
+    private static String missingContentWarnings(final Adr adr) {
+        final List<String> warnings = new ArrayList<>();
+        if (adr.consequences().isEmpty()) {
+            warnings.add("no consequence recorded");
+        }
+        if (adr.consideredOptions().isEmpty()) {
+            warnings.add("no considered option recorded");
+        }
+        if (warnings.isEmpty()) {
+            return "";
+        }
+        return "\n(" + warnings.size() + (warnings.size() == 1 ? " warning: " : " warnings: ")
+                + String.join("; ", warnings) + ")";
     }
 
     @McpTool(name = "adr_get", description = "Fetch a single architecture decision by its identity "
@@ -504,8 +528,9 @@ public final class AdrMcpTools {
                 .usesTermCodes(usesTerms)
                 .relatedToCodes(relatedTo)
                 .build();
-        return format(project,
-                updateAdr.update(project.id(), new AdrCode(id), correction, project.defaultLanguage()));
+        final AdrDetail updated =
+                updateAdr.update(project.id(), new AdrCode(id), correction, project.defaultLanguage());
+        return format(project, updated) + missingContentWarnings(updated.adr());
     }
 
     @McpTool(name = "adr_set_status", description = "Change the lifecycle status of an architecture "
