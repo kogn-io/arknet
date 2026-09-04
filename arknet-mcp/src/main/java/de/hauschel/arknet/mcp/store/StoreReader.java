@@ -237,7 +237,7 @@ public final class StoreReader {
 
     /**
      * Reads a resource's change history (issue #251): every {@code arkprov:Revision} the shared
-     * write funnel has recorded for it (ADR-013), oldest first, with the one matching
+     * write funnel has recorded for it, oldest first, with the one matching
      * the resource's current {@code arkprov:head} marked {@link Revision#current}.
      *
      * <p>A resource the funnel has never written through - written entirely store-first,

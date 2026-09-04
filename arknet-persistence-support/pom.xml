@@ -47,8 +47,8 @@
         <!-- compile-Scope (nicht mehr nur test): das Write-Gate waehlt die Sprache der
              Verletzungsmeldung ueber DisplayLocale, seit io.kogn.rdf 0.2.0 jede sh:message
              mit ihrem Sprachtag ausliefert (kogn-io/rdf-core#20). Der Kernel ist
-             dependency-frei, zieht also nichts nach; ADR-007s Trennung bleibt intakt, denn
-             sie richtet sich gegen den Merge von Gate und Kernel, nicht gegen diese Kante. -->
+             dependency-frei, zieht also nichts nach; die Trennung von Gate und Kernel bleibt
+             intakt, denn sie richtet sich gegen deren Merge, nicht gegen diese Kante. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-shared-kernel</artifactId>

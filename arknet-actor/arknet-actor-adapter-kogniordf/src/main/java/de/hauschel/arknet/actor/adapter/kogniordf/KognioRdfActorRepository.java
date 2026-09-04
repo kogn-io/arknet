@@ -76,8 +76,8 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The transactional
  * mechanics - the in-transaction {@code contains} existence guards, the SHACL gate, the
- * commit-conflict translation and the head comparison - live in the shared {@link WriteFunnel}
- * (ADR-013), not here. {@link #create} rejects an existing subject with
+ * commit-conflict translation and the head comparison - live in the shared {@link WriteFunnel},
+ * not here. {@link #create} rejects an existing subject with
  * {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateActorCodeException}; {@link #compareAndUpdate}
  * rejects a missing subject with {@link ActorNotFoundException}, a stale {@code expectedHead} with
@@ -97,7 +97,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the actor SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
- * {@link WriteFunnel} (ADR-013). No {@code sh:class} constraint applies to anything this adapter
+ * {@link WriteFunnel}. No {@code sh:class} constraint applies to anything this adapter
  * writes, so the plain {@link ShaclWriteGate#enforce(io.kogn.rdf.terms.ReadableGraph)} suffices -
  * no validation-only asserted context is needed.</p>
  *
@@ -144,7 +144,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      *
      * @param lifecycle the kognio-rdf dataset lifecycle to acquire datasets from - read paths only,
      *                  the write path goes through {@code funnel} (must not be {@code null})
-     * @param funnel    the shared write funnel (ADR-013) running the SHACL gate, dataset
+     * @param funnel    the shared write funnel running the SHACL gate, dataset
      *                  acquisition and existence/head checks for every
      *                  {@link #create}/{@link #compareAndUpdate} (must not be {@code null})
      */

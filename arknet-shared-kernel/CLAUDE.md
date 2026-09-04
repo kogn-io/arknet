@@ -32,7 +32,7 @@ Standard-Anzeige-Language-Tag des aufgeloesten Projekts gleich mit -- derselbe R
 jeder Tool-Aufruf ohnehin fuer das Routing macht, beantwortet die Sprachfrage "for free" mit,
 statt dass ein Bounded Context, der die Standardsprache braucht (heute nur
 ubiquitous-language, fuer `term_get`s Anzeige-Fallback), den Project-BC dafuer ein zweites Mal ueber
-einen eigenen ADR-008-Borrow ansprechen muesste. Ein Aufrufer, der nur die `ProjectId` braucht, liest
+einen eigenen Borrowed In-Port ansprechen muesste. Ein Aufrufer, der nur die `ProjectId` braucht, liest
 `resolve(anchor).id()`. `defaultLanguage` bedient seit Issue #258 zwei Rollen: lesend waehlt es,
 welche Sprachvariante ein Lesepfad ohne explizite Anfrage bevorzugt zeigt (unveraendert); schreibend
 ist es fuer requirements/ubiquitous-language/use-cases der Fallback, auf den `LanguageTag#resolveWriteLanguage`

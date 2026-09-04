@@ -19,8 +19,8 @@ import de.hauschel.arknet.req.domain.ConstraintCode;
  * show its business code ({@code TCON-N}/{@code BCON-N}/{@code RCON-N}) instead of a bare subject
  * IRI, batched once per {@code req_get}/{@code req_list} call rather than once per reference. Since
  * {@link de.hauschel.arknet.req.domain.Constraint} lives in this same bounded context (unlike a
- * glossary {@code Term}), this port needs no {@code ResolveTerms}-style ADR-008 in-adapter borrow
- * from a sibling hexagon - {@code arknet-requirements-adapter-mcp} simply depends on this in-port
+ * glossary {@code Term}), this port needs no {@code ResolveTerms}-style Borrowed In-Port from a
+ * sibling hexagon - {@code arknet-requirements-adapter-mcp} simply depends on this in-port
  * the same way it already depends on every other one this module exposes.</p>
  *
  * <p><strong>Never rejects.</strong> Unlike {@code GetConstraint} (single lookup by code, empty

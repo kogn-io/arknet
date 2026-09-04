@@ -31,8 +31,8 @@ import de.hauschel.arknet.ul.domain.TermId;
 /**
  * An ADR card must carry the decision itself (context/decision) as plain prose, its optional
  * MADR fields only when actually recorded, and its three relations as {@link Ref}s a reader can
- * follow - the addressed requirement and affected context through the borrowed resolve ports
- * (ADR-008), {@code supersedes}/{@code supersededBy} back to the ADR's own card in this report.
+ * follow - the addressed requirement and affected context through the borrowed resolve ports,
+ * {@code supersedes}/{@code supersededBy} back to the ADR's own card in this report.
  */
 class AdrCardsTest {
 

@@ -35,7 +35,7 @@ import io.kogn.rdf.terms.vocab.VocabRdf;
 import io.kogn.rdf.terms.vocab.VocabXsd;
 
 /**
- * The shared write funnel of the kognio-rdf out-adapters (ADR-013): the transactional
+ * The shared write funnel of the kognio-rdf out-adapters: the transactional
  * skeleton every bounded context's guarded graph write runs through - SHACL gate, dataset
  * acquisition, the in-transaction existence checks, and the commit-conflict translation.
  * Everything that differs per context arrives as a parameter; the funnel knows no bounded
@@ -86,7 +86,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * {@code assertedContext}) before opening the transaction; a violation throws
  * {@link WriteConstraintViolationException} and nothing is acquired or persisted. What the
  * {@code body} then writes is the adapter's own business - the deliberate bypass
- * (re-attaching preserved, never-newly-asserted edges past the gate, ADR-007 Nachtrag)
+ * (re-attaching preserved, never-newly-asserted edges past the gate)
  * remains possible and remains the adapter's decision.</p>
  *
  * <p><strong>Owning the transaction is the point.</strong> The funnel, not the adapter, opens
@@ -125,7 +125,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  *
  * <p><strong>Technology-neutral.</strong> Depends only on the {@code io.kogn.rdf} ports
  * ({@code dataset} + {@code terms}), never on RDF4J - same property, same reasoning and same
- * ArchUnit guard as {@link ShaclWriteGate} (ADR-007).</p>
+ * ArchUnit guard as {@link ShaclWriteGate}.</p>
  */
 public final class WriteFunnel {
 

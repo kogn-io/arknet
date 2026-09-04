@@ -55,7 +55,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  *       {@code DatasetTx#contains(graph, anchorIri, null, null)} on this one, predictable
  *       subject: "does any project already have triples for the node this exact anchor value
  *       would produce". {@code contains} is conflict-protected under {@code SERIALIZABLE} in a
- *       way a SPARQL {@code ASK} guard on a not-yet-known IRI is not (ADR-013 Nachtrag) - a
+ *       way a SPARQL {@code ASK} guard on a not-yet-known IRI is not - a
  *       property that only holds because the node's identity is knowable <em>before</em> the
  *       write runs, which a randomly minted IRI could never offer.</li>
  *   <li><strong>Not a security control.</strong> SHA-256 here is a stable, collision-resistant

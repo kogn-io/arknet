@@ -45,8 +45,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * to home: {@link ConstraintRef} carries a linked constraint's opaque subject identity, and
  * {@link #format(ProjectId, Requirement)} batches {@link ResolveConstraints#resolveExisting} the
  * same way it batches {@link ResolveTerms#resolve} - once per rendering, never once per
- * {@link ConstraintRef}. Unlike {@link ResolveTerms} (a genuinely cross-bounded-context port,
- * ADR-008), {@link ResolveConstraints} is this same module's own in-port, since
+ * {@link ConstraintRef}. Unlike {@link ResolveTerms} (a genuinely cross-bounded-context port),
+ * {@link ResolveConstraints} is this same module's own in-port, since
  * {@code Constraint} lives inside this bounded context.</p>
  */
 final class RequirementPresenter {

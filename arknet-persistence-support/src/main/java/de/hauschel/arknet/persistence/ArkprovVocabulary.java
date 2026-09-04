@@ -43,7 +43,7 @@ package de.hauschel.arknet.persistence;
  *
  * <p><strong>Why here.</strong> Like {@link ArkreqVocabulary} these are RDF serialization
  * constants, not domain vocabulary - the bounded-context cores never see them (opaque
- * identity), and as plain {@code String}s they keep this module RDF4J-free (ADR-007). The
+ * identity), and as plain {@code String}s they keep this module RDF4J-free. The
  * ontology-side documentation of the same terms lives in
  * {@code arknet-ontology/src/main/resources/arknet-provenance.ttl}.</p>
  */

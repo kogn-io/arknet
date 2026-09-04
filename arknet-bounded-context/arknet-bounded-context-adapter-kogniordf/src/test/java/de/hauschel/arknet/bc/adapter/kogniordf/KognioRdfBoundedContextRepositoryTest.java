@@ -850,8 +850,8 @@ class KognioRdfBoundedContextRepositoryTest {
     // ---- batch identity resolution (backs the ResolveBoundedContexts in-port) ---------------
 
     /**
-     * The batch a sibling hexagon's in-adapter borrows through {@code ResolveBoundedContexts}
-     * (ADR-008): one {@code VALUES}-bound query, never rejecting - an identity the project does not
+     * The batch a sibling hexagon's in-adapter borrows through {@code ResolveBoundedContexts}: one
+     * {@code VALUES}-bound query, never rejecting - an identity the project does not
      * hold is simply absent from the result.
      */
     @Test

@@ -20,7 +20,7 @@
         </dependency>
         <!-- No neighbour bounded context's in-port here, unlike the bc/adr/uc in-adapters: an
              Actor holds no cross-BC reference of its own in this scope, so there is nothing to
-             resolve for display and no ADR-008 borrow to make. -->
+             resolve for display and no Borrowed In-Port to make. -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-mcp-annotations</artifactId>

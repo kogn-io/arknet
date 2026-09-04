@@ -161,7 +161,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * minted once, "insert or replace by identity" is no longer one coherent operation. The
  * transactional mechanics of that distinction - the in-transaction {@code contains}/head checks,
  * the SHACL gate, the commit-conflict translation - live in the shared
- * {@link WriteFunnel} (ADR-013), not here: {@link #create} only builds the candidate graph and
+ * {@link WriteFunnel}, not here: {@link #create} only builds the candidate graph and
  * rejects an existing subject with {@link ResourceAlreadyExistsException} or a colliding business
  * code with {@link DuplicateUseCaseCodeException}; {@link #compareAndUpdate} rejects a missing
  * subject with {@link UseCaseNotFoundException} and a stale {@code expectedHead} with
@@ -230,7 +230,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *                          {@code arkreq:useCasePostcondition}/each main-flow-step's and
      *                          extension-step's {@code arkreq:stepText} the read paths surface for
      *                          a multilingual use case (must not be {@code null})
-     * @param funnel            the shared write funnel (ADR-013) both {@link #create} and
+     * @param funnel            the shared write funnel both {@link #create} and
      *                          {@link #compareAndUpdate} run through - SHACL gate, dataset
      *                          acquisition, the in-transaction existence/head checks and the
      *                          commit-conflict translation (must not be {@code null})

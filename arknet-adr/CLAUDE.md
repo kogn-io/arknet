@@ -25,7 +25,7 @@ Die Rueckrichtung kommt, je nach Blickwinkel, entweder direkt aus dem eigenen Fe
 Ein `KognioRdfAdrRepositoryTest` nagelt fest, dass `arkarch:supersedes` nach einem `adr_supersede` **nicht** im Graphen steht.
 2. `arkarch:addressesRequirement` (ADR -> `arkreq:Requirement`, Cross-BC).
 Schreibseite: eigener Out-Port `RequirementLookup` + `KognioRdfRequirementLookup` (Code -> `ResourceId` per `dcterms:identifier`, didaktische Ablehnung ueber `UnresolvedReferenceException`), Bauart 1:1 zum gleichnamigen uc-Adapter.
-Leseseite: der **bestehende** req-In-Port `ResolveRequirements`, konsumiert vom In-Adapter (ADR-008) -- kein zweiter Mechanismus fuer dieselbe Richtung.
+Leseseite: der **bestehende** req-In-Port `ResolveRequirements`, als Borrowed In-Port vom In-Adapter konsumiert -- kein zweiter Mechanismus fuer dieselbe Richtung.
 3. `arkarch:relatedTo` (ADR <-> ADR, selbstbezueglich, `owl:SymmetricProperty`).
 Kein neuer Out-Port und kein eigenes Link-Tool: `AdrService` loest die Ziel-Codes wie bei `supersededBy` ueber `AdrRepository#findByCode` im eigenen Hexagon auf, gesetzt wird die Kante mit `adr_add` und korrigiert mit `adr_update` -- dieselbe Regel, der `addressesRequirement`/`affectsContext` folgen, und die zugleich den Reihenfolge-Fall abdeckt (der zuerst geschriebene Record kann den spaeteren erst nachtraeglich nennen).
 `supersededBy` behaelt sein eigenes Tool (`adr_supersede`), weil es ein Lifecycle-Akt ist und keine Referenz.
@@ -42,7 +42,7 @@ Der neue folgt dem juengeren (`resolveExisting`); die Vereinheitlichung der best
 5. `arkarch:usesTerm` (ADR -> `skos:Concept`, Cross-BC, kogn-io/arknet#393).
 Eigene Property statt Erweiterung der geteilten `arkreq:usesTerm`-Domain: jene wird auf `arkreq:Requirement`/`arkreq:UseCase` erweitert, weil beide im selben `arkreq`-Namespace wohnen -- eine ADR lebt im eigenen `arkarch`-Namespace, die Begruendung traegt dort nicht, also derselbe Schnitt wie bei `arkddd:ubiquitousLanguageTerm`.
 Schreibseite: eigener Out-Port `TermLookup` + `KognioRdfTermLookup`, Bauart 1:1 zu `RequirementLookup`/`KognioRdfRequirementLookup`, liest den `ubiquitous-language`-Graph ueber `dcterms:identifier`.
-Leseseite: der **bestehende** ul-In-Port `ResolveTerms`, konsumiert vom In-Adapter (ADR-008) -- kein zweiter Mechanismus fuer dieselbe Richtung.
+Leseseite: der **bestehende** ul-In-Port `ResolveTerms`, als Borrowed In-Port vom In-Adapter konsumiert -- kein zweiter Mechanismus fuer dieselbe Richtung.
 Kein eigenes `adr_link_term`-Tool: gesetzt/korrigiert wird die Kante wie `addressesRequirement`/`affectsContext` ueber `adr_add`/`adr_update`, wholesale-ersetzt in jedem Status.
 
 Alle fuenf Kanten stecken **im** `Adr`-Record, nicht daneben -- sonst loescht der naechste replace-by-identity-Write sie still (Lehre aus req/bc).
@@ -116,7 +116,7 @@ Der Mechanismus sass bis #350 **adapter-lokal**, mit genau dieser offenen Frage;
 *Bekannte Luecke, dokumentiert statt kaschiert:* eine Ressource ohne jede Revision (vor Einfuehrung der Revisionsaufzeichnung angelegt) hat keinen Head, an den sich der Code haengen liesse -- ihr Code kann ein zweites Mal vergeben werden; der Trichter loggt das mit `WARN`, statt eine Revision zu erfinden, die es nie gab.
 
 **`AdrDetail` statt nacktem `Adr` an jedem In-Port.** Jeder Driving-Port liefert `AdrDetail(Adr, List<AdrCode> supersedes, List<AdrCode> supersededBy, List<AdrCode> relatedTo)`.
-Grund: die `supersededBy`- und `relatedTo`-Identitaeten sind opak, ihre Anzeige-Codes gehoeren diesem Hexagon (kein ADR-008-Borrow noetig), und die jeweilige Rueckrichtung ist ueberhaupt nur per Reverse-Read zu haben.
+Grund: die `supersededBy`- und `relatedTo`-Identitaeten sind opak, ihre Anzeige-Codes gehoeren diesem Hexagon (kein Borrowed In-Port noetig), und die jeweilige Rueckrichtung ist ueberhaupt nur per Reverse-Read zu haben.
 Beide `supersedes`/`supersededBy`-Felder bleiben Listen, obwohl `Adr#supersededBy` seit Issue #357 einwertig ist: jedes vereint das aktuelle Feld (bzw. dessen Reverse-Read) mit einem Auffang der store-first verbliebenen Alt-Kante `arkarch:supersedes` -- ein Projekt, in dem noch nie store-first editiert wurde, sieht darum hoechstens einen Eintrag je Richtung, waehrend Altbestand mehrere zeigen kann.
 `adr_list` leitet **beide** Richtungen -- die von `supersededBy`/`supersedes` und die von `relatedTo` -- aus seinem einen `findAll` plus einem einzigen zusaetzlichen Bulk-Read der Alt-Kanten (`findLegacySupersedesEdges`) in-memory ab (kein Reverse-Query je Zeile); die Einzel-ADR-Pfade zahlen dafuer vier billige Reads (`findCodesByIds` + `findSupersedingCodes` + `findSupersededCodes` + `findRelatedCodes`).
 

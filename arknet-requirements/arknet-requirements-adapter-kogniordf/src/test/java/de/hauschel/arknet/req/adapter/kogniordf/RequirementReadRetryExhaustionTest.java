@@ -37,7 +37,7 @@ import de.hauschel.arknet.req.domain.RequirementReadConflictException;
  * {@code ConcurrencyConflictException} that survives every retry attempt into the bounded
  * context's own {@link RequirementReadConflictException} - never let the raw
  * {@code io.kogn.rdf} type reach a caller - exactly the "always translate, never pass through
- * raw" convention {@code WriteFunnel} (ADR-013) establishes for every write path of this adapter,
+ * raw" convention {@code WriteFunnel} establishes for every write path of this adapter,
  * extended here to its read paths.
  *
  * <p>Uses a fake {@link DatasetLifecycle} whose {@link DatasetTransactor#inTransaction} always

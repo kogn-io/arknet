@@ -84,7 +84,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The
  * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
  * the commit-conflict translation, and the head comparison - live in the shared
- * {@link WriteFunnel} (ADR-013), not here. {@link #create} rejects an existing subject
+ * {@link WriteFunnel}, not here. {@link #create} rejects an existing subject
  * with {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
  * {@link #compareAndUpdate} rejects a missing subject with
@@ -119,7 +119,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>SHACL write-gate.</strong> The gate mechanics - validate the candidate instance graph
  * against the DDD SHACL shapes before the write transaction opens, throw
  * {@link WriteConstraintViolationException} on a violation, persist nothing - live in the shared
- * {@link WriteFunnel} (ADR-013). {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning},
+ * {@link WriteFunnel}. {@code shapes:BoundedContext-hasAggregate} is {@code sh:Warning},
  * not {@code sh:Violation}: a store-first bounded context minted during analysis,
  * before tactical design, has no aggregates yet, and that must not block the write.</p>
  *
@@ -176,7 +176,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      *                          when a bounded context carries a subdomain classification (must
      *                          not be {@code null}); the bounded context's own identity is minted
      *                          store-neutrally above the store
-     * @param funnel            the shared write funnel (ADR-013) running the SHACL gate, dataset
+     * @param funnel            the shared write funnel running the SHACL gate, dataset
      *                          acquisition and existence/head checks for every
      *                          {@link #create}/{@link #compareAndUpdate}
      *                          (must not be {@code null})

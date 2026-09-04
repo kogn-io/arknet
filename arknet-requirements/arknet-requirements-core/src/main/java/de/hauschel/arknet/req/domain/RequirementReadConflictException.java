@@ -20,7 +20,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * simply never observed a snapshot stable enough to commit its own read-only transaction. Wraps
  * the store's raw {@code io.kogn.rdf.dataset.ConcurrencyConflictException} as {@linkplain
  * #getCause() cause} - the same "never leak the raw store exception" convention the shared {@code
- * WriteFunnel} (ADR-013) establishes for every write path of this adapter, extended here to its
+ * WriteFunnel} establishes for every write path of this adapter, extended here to its
  * read paths.</p>
  */
 public class RequirementReadConflictException extends RuntimeException {

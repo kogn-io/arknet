@@ -15,7 +15,7 @@ import java.util.Objects;
  * every tool call - a bounded context that needs the default language (today, ubiquitous-language,
  * for picking a term's write/display language when a caller does not state one explicitly) gets it
  * "for free" alongside the routing id, rather than the composition root's project component being
- * borrowed a second time (ADR-008) just to ask a question the anchor resolution already had the
+ * borrowed a second time just to ask a question the anchor resolution already had the
  * answer to.</p>
  *
  * @param id              the project a tool call routes to, never {@code null}

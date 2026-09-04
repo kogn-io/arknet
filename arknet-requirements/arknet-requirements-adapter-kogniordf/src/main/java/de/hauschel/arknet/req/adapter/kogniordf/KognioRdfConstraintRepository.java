@@ -120,7 +120,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * @param displayLocale the display-language preference selecting which {@code dcterms:title}/
      *                      {@code arkreq:constraintStatement} the read paths surface for a
      *                      multilingual constraint (issue #313; must not be {@code null})
-     * @param funnel        the shared write funnel (ADR-013) both writes run through - the very
+     * @param funnel        the shared write funnel both writes run through - the very
      *                      same instance {@link KognioRdfRequirementRepository} uses (must not be
      *                      {@code null})
      */

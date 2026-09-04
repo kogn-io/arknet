@@ -261,8 +261,8 @@ class BoundedContextServiceTest {
     }
 
     /**
-     * The batch identity-to-code direction a sibling hexagon's in-adapter borrows (ADR-008, today the
-     * ADR context rendering {@code arkarch:affectsContext}). Never rejects: an unknown identity is
+     * The batch identity-to-code direction a sibling hexagon's in-adapter borrows (today the ADR
+     * context rendering {@code arkarch:affectsContext}). Never rejects: an unknown identity is
      * simply absent from the result.
      */
     @Test

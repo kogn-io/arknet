@@ -15,8 +15,8 @@ import de.hauschel.arknet.ul.application.port.in.ListTerms;
  * Assembles the report's per-bounded-context sections by asking each context's read in-ports
  * for its own model elements.
  *
- * <p><strong>Why this exists.</strong> {@code store_overview}'s data path stays what ADR-006
- * made it - one generic {@code SELECT ?s ?p ?o} - but the human-facing HTML no longer renders
+ * <p><strong>Why this exists.</strong> {@code store_overview}'s data path stays what it always
+ * was - one generic {@code SELECT ?s ?p ?o} - but the human-facing HTML no longer renders
  * that flat result as its skeleton. A use case read as triples is unreadable as a use case:
  * its flow is {@code n} opaque {@code arkreq:Step} subjects ordered by an
  * {@code arkreq:position} literal, its actors and realised requirements further opaque IRIs.

@@ -26,7 +26,7 @@ import de.hauschel.arknet.mcp.store.StoreReader;
  * <p>Like {@link de.hauschel.arknet.mcp.store.StoreReportTools}, this is an in-adapter of the
  * composition root, not of a bounded context - it is a generic technical read path over
  * whatever the requirements/ubiquitous-language/use-cases/bounded-context/adr hexagons wrote, not a
- * bounded context of its own (ADR-006).
+ * bounded context of its own.
  * It differs from {@code store_overview}/{@code resource_get} by doing graph traversal rather
  * than a full-snapshot digest or a single-resource fetch, but reuses the very same {@link
  * StoreReader} read path and {@link HandleResolver} handle contract - see

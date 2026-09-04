@@ -354,8 +354,8 @@ class TermServiceRealStoreConcurrencyTest {
      * {@code DELETE WHERE} that follows it. While paused, a second writer commits a fresh
      * {@code arkreq:usesTerm} triple pointing at the very same term, in its own transaction against
      * the same real store - deliberately raw SPARQL rather than a {@code RequirementService} call:
-     * this adapter module cannot depend on the requirements bounded context (ADR-006/ADR-007
-     * dependency rules), and the race is a store-level phenomenon between two write transactions,
+     * this adapter module cannot depend on the requirements bounded context, and the race is a
+     * store-level phenomenon between two write transactions,
      * independent of which bounded context authored either one. Only then is the delete allowed to
      * resume and attempt its commit.</p>
      *

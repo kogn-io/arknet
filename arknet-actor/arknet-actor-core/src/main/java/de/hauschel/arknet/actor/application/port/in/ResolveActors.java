@@ -18,7 +18,7 @@ import de.hauschel.arknet.kernel.ResourceId;
  * {@code ResolveRequirements}/{@code ResolveTerms} already establish: an In-Adapter is the gate
  * into its own hexagon, not part of its core, so it may call another hexagon's driving port
  * without breaking the "no {@code *-core} depends on another bounded context" invariant, which
- * binds the {@code *-core} modules, not the adapters around them (ADR-008). Since issue #336 the
+ * binds the {@code *-core} modules, not the adapters around them. Since issue #336 the
  * use-cases MCP adapter uses this to render a use case's {@code primaryActor}/{@code
  * supportingActors} as their business code ({@code ACTOR-1}) instead of their bare subject IRI,
  * without the use-cases bounded context ever depending on {@code arknet-actor-core} - the

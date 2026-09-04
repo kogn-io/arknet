@@ -27,7 +27,8 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
  *
  * <p><strong>Where the bounded contexts meet.</strong> This is a composition-root class wiring the
  * kernel's {@link ProjectResolver} port onto the project component's {@link ResolveProject} in-port
- * - the same in-adapter-as-gateway role ADR-008 grants, here for routing rather than for display.
+ * - the same in-adapter-as-gateway role the Borrowed In-Port pattern grants, here for routing
+ * rather than for display.
  * The four model bounded contexts stay unaware of it: they depend on the neutral port, never on
  * {@code arknet-project}. That direction matters, because the project component is what answers the
  * routing question and therefore cannot itself sit behind an answer to it.</p>
