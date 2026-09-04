@@ -463,8 +463,9 @@ public final class HtmlReportRenderer {
                         sources.bullets().getOrDefault(bullets.label(), Map.of());
                 for (final BulletItem item : bullets.items()) {
                     final String rendered = renderText(item.text(), carded, subjects);
+                    final SubResource source = bulletSources.get(item.position());
                     final Optional<LangVariants> variants =
-                            itemVariants(bulletSources.get(item.position()), item.text().text(), displayLocale);
+                            itemVariants(source, item.text().text(), displayLocale);
                     final String itemHtml = langSwitchable(rendered, variants,
                             literal -> renderInline(literal, carded, subjects), "span");
                     html.append("                  <li>");
@@ -472,8 +473,13 @@ public final class HtmlReportRenderer {
                         html.append(badgePill(item.badge())).append(' ');
                     }
                     if (item.caption() != null) {
-                        html.append("<strong class=\"bullet-caption\">").append(escape(item.caption()))
-                                .append("</strong> ");
+                        final Optional<LangVariants> captionVariants = source != null && source.captionPredicate() != null
+                                ? languageVariants(source.resource(), source.captionPredicate(), item.caption(), displayLocale)
+                                : Optional.empty();
+                        html.append("<strong class=\"bullet-caption\">");
+                        html.append(langSwitchable(escape(item.caption()), captionVariants,
+                                HtmlReportRenderer::escape, "span"));
+                        html.append("</strong> ");
                     }
                     html.append(itemHtml).append("</li>\n");
                 }
@@ -691,10 +697,17 @@ public final class HtmlReportRenderer {
     }
 
     /**
-     * @param resource      the sub-resource carrying one item's text
-     * @param textPredicate the predicate its text lives under
+     * @param resource          the sub-resource carrying one item's text (and optionally its caption)
+     * @param textPredicate     the predicate its text lives under
+     * @param captionPredicate  the predicate its caption lives under, or {@code null} if the item
+     *                          has no multilingual caption (issue #384)
      */
-    private record SubResource(StoreResource resource, String textPredicate) {
+    private record SubResource(StoreResource resource, String textPredicate, String captionPredicate) {
+
+        /** Backward-compatibility constructor for items with no caption. */
+        SubResource(final StoreResource resource, final String textPredicate) {
+            this(resource, textPredicate, null);
+        }
     }
 
     /**
@@ -718,7 +731,7 @@ public final class HtmlReportRenderer {
                 consequences);
         final Map<Integer, List<SubResource>> consideredOptions = new LinkedHashMap<>();
         collectPositioned(card, bySubject, CONSIDERED_OPTION_EDGE, ArkarchVocabulary.POSITION, OPTION_RATIONALE,
-                consideredOptions);
+                ArkarchVocabulary.NAME, consideredOptions);
         final Map<String, Map<Integer, SubResource>> bullets = new LinkedHashMap<>();
         bullets.put(UseCaseCards.EXTENSIONS_LABEL, unambiguous(extensions));
         bullets.put(RequirementCards.ACCEPTANCE_CRITERIA_LABEL, unambiguous(acceptanceCriteria));
@@ -736,6 +749,8 @@ public final class HtmlReportRenderer {
      *                          considered option (kogn-io/arknet#357 moved new child resources to
      *                          the core namespace's own property; issue #382 is this renderer's
      *                          first consumer of that newer property)
+     * @param captionPredicate  the predicate carrying a multilingual caption, or {@code null} if
+     *                          the item has no caption (issue #384)
      */
     private static void collectPositioned(
             final StoreResource card,
@@ -743,6 +758,7 @@ public final class HtmlReportRenderer {
             final String edge,
             final String positionPredicate,
             final String textPredicate,
+            final String captionPredicate,
             final Map<Integer, List<SubResource>> collected) {
         for (final Triple triple : card.outgoing()) {
             if (!edge.equals(triple.predicate()) || !(triple.object() instanceof RdfNode.Resource target)) {
@@ -754,8 +770,21 @@ public final class HtmlReportRenderer {
             }
             position(sub, positionPredicate).ifPresent(position -> collected
                     .computeIfAbsent(position, key -> new ArrayList<>())
-                    .add(new SubResource(sub, textPredicate)));
+                    .add(new SubResource(sub, textPredicate, captionPredicate)));
         }
+    }
+
+    /**
+     * Overload for items with no caption (backward compatibility).
+     */
+    private static void collectPositioned(
+            final StoreResource card,
+            final Map<String, StoreResource> bySubject,
+            final String edge,
+            final String positionPredicate,
+            final String textPredicate,
+            final Map<Integer, List<SubResource>> collected) {
+        collectPositioned(card, bySubject, edge, positionPredicate, textPredicate, null, collected);
     }
 
     /** {@code sub}'s value under {@code positionPredicate}, or empty if none or unparsable. */

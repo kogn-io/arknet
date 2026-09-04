@@ -945,6 +945,38 @@ class HtmlReportRendererTest {
                 + "</span>");
     }
 
+    /**
+     * A {@link BulletItem}'s {@code caption} (issue #384) - the name of a considered option -
+     * is multilingual like the rationale text and must offer language variants just like the
+     * text does.
+     */
+    @Test
+    void offersEveryLanguageVariantOfAConsideredOptionCaption() {
+        final String adr1 = ID + "adr-1";
+        final String option1 = ID + "option-1";
+        final String arkarch = "https://w3id.org/arknet/architecture#";
+        final String arknetCore = "https://w3id.org/arknet/core#";
+        final ModelSection section = new ModelSection("Architecture Decisions", "architecture-decisions", "",
+                List.of(new ModelCard(
+                        "ADR-1", "Use kognio-rdf", adr1, List.of(),
+                        List.of(new Block.Bullets(AdrCards.CONSIDERED_OPTIONS_LABEL, List.of(
+                                new BulletItem(1, RichText.plain("Weniger Boilerplate."),
+                                        new Badge(Badge.Kind.Known.OUTCOME, "Rejected"), "Option A")))))));
+        final StoreSnapshot snapshot = StoreSnapshot.of(List.of(
+                iri(adr1, arkarch + "consideredOption", option1),
+                literal(option1, arknetCore + "position", "1"),
+                literalLang(option1, arknetCore + "name", "Variante A", "de"),
+                literalLang(option1, arknetCore + "name", "Option A", "en"),
+                literalLang(option1, arkarch + "optionRationale", "Weniger Boilerplate.", "de"),
+                literalLang(option1, arkarch + "optionRationale", "Less boilerplate.", "en")));
+
+        final String html = renderer.render(
+                PROJECT, Optional.empty(), Optional.empty(), snapshot, "digest", views(section), DisplayLocale.DEFAULT);
+
+        assertThat(html).contains("Variante A").contains("Option A")
+                .contains("<strong class=\"bullet-caption\"><span class=\"lang-group\"");
+    }
+
     /** The toolbar always offers the control; the script hides it when no field has variants. */
     @Test
     void addsALanguageSwitchToTheToolbar() {
