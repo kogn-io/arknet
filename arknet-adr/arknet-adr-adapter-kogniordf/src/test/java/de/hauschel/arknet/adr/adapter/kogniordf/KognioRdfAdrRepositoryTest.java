@@ -225,6 +225,43 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
+     * The remedy for a mistaken {@code adr_supersede} call (kogn-io/arknet#354): {@code Adr#unsupersede()}
+     * clears the {@code supersededBy} triple and moves the status back to {@code Accepted} in the very
+     * same {@code compareAndUpdate} write - no adapter code was added for this, since the field
+     * already round-trips exactly the way {@code
+     * compareAndUpdateDropsAStoreFirstSupersededByEdgeTheRecordNoLongerCarries} nails down for a
+     * store-first edge; this is the same mechanism exercised through the actual domain transition.
+     */
+    @Test
+    void compareAndUpdateUnsupersedeClearsTheEdgeAndRestoresAccepted() {
+        Adr older = adr(new AdrCode("ADR-1"));
+        repository.create(PROJECT_A, older, "en");
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(older.code()), older.accept(DECIDED_ON), "en", "en",
+                "en", Map.of(), Map.of(), null);
+        Adr newer = adr(new AdrCode("ADR-2"));
+        repository.create(PROJECT_A, newer, "en");
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(newer.code()), newer.accept(DECIDED_ON), "en", "en",
+                "en", Map.of(), Map.of(), null);
+        Adr acceptedOlder = repository.findByCode(PROJECT_A, older.code(), null).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(older.code()), acceptedOlder.supersededBy(newer.id()),
+                "en", "en", "en", Map.of(), Map.of(), null);
+
+        Adr superseded = repository.findByCode(PROJECT_A, older.code(), null).orElseThrow();
+        repository.compareAndUpdate(PROJECT_A, currentHeadOf(older.code()), superseded.unsupersede(), "en", "en",
+                "en", Map.of(), Map.of(), null);
+
+        Adr restored = repository.findByCode(PROJECT_A, older.code(), null).orElseThrow();
+        assertEquals(AdrStatus.ACCEPTED, restored.status());
+        assertNull(restored.supersededBy());
+        String ask = "ASK { GRAPH <" + ADR_GRAPH + "> { <" + older.id().value().value() + "> <"
+                + ArkarchVocabulary.SUPERSEDED_BY + "> ?o } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            assertFalse(handle.sparqlQuery().ask(ask),
+                    "unsupersede must remove the supersededBy triple, not just clear the field on read");
+        }
+    }
+
+    /**
      * A store-first {@code arkarch:adrStatus} value the gate's {@code sh:in} list admits
      * but {@link de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepository} cannot decode
      * (there is none left, now that all five lifecycle individuals are decoded) is simulated with a
@@ -765,8 +802,9 @@ class KognioRdfAdrRepositoryTest {
      * as its {@code supersededBy} target; {@code crossReferenceAssertedContext}'s copy of {@code B}
      * never carries {@code B}'s own {@code supersededBy} edge (to {@code C}), so {@code B} looked like
      * "Superseded without the edge" to the old bi-implication shape and every further write on
-     * {@code A} was refused - permanently, since nothing can un-supersede {@code B} back to
-     * {@code Accepted} either.
+     * {@code A} was refused - permanently at the time, since nothing could un-supersede {@code B} back
+     * to {@code Accepted} either (kogn-io/arknet#354 later added exactly that escape hatch,
+     * {@code adr_unsupersede}, but it did not exist when this bug made the refusal unrecoverable).
      */
     @Test
     void furtherWriteOnADecisionSucceedsAfterItsSuccessorIsItselfSuperseded() {

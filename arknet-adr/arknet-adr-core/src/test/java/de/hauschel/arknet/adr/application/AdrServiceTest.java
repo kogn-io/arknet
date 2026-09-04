@@ -606,6 +606,53 @@ class AdrServiceTest {
     }
 
     /**
+     * The remedy for a mistaken {@code adr_supersede} call (kogn-io/arknet#354): restores ACCEPTED
+     * and clears the edge, in one write, without touching the successor's own record at all.
+     */
+    @Test
+    void unsupersedeRestoresAcceptedAndClearsTheEdge() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        service.supersede(PROJECT, newer, older);
+        Adr successorBefore = repository.findByCode(PROJECT, newer, null).orElseThrow();
+
+        AdrDetail restored = service.unsupersede(PROJECT, older);
+
+        assertEquals(AdrStatus.ACCEPTED, restored.adr().status());
+        assertNull(restored.adr().supersededBy());
+        assertEquals(List.of(), restored.supersededBy());
+        assertEquals(successorBefore, repository.findByCode(PROJECT, newer, null).orElseThrow());
+    }
+
+    /** Once unsuperseded, the decision can be superseded again, including by the very same successor. */
+    @Test
+    void unsupersededDecisionCanBeSupersededAgain() {
+        AdrCode older = acceptedAdr();
+        AdrCode newer = acceptedAdr();
+        service.supersede(PROJECT, newer, older);
+        service.unsupersede(PROJECT, older);
+
+        AdrDetail supersededAgain = service.supersede(PROJECT, newer, older);
+
+        assertEquals(AdrStatus.SUPERSEDED, supersededAgain.adr().status());
+        assertEquals(List.of(newer), supersededAgain.supersededBy());
+    }
+
+    @Test
+    void unsupersedeThrowsUnlessTheDecisionIsSuperseded() {
+        AdrCode accepted = acceptedAdr();
+        AdrCode proposed = add(newAdr()).adr().code();
+
+        assertThrows(IllegalStateException.class, () -> service.unsupersede(PROJECT, accepted));
+        assertThrows(IllegalStateException.class, () -> service.unsupersede(PROJECT, proposed));
+    }
+
+    @Test
+    void unsupersedeRejectsAnUnknownCode() {
+        assertThrows(AdrNotFoundException.class, () -> service.unsupersede(PROJECT, new AdrCode("ADR-99")));
+    }
+
+    /**
      * Regression guard for the replace-by-identity write path: the out-adapter persists a decision by
      * wiping and re-writing its triples, so correcting the superseded decision's references
      * afterwards - allowed in every status - must carry its SUPERSEDED status and supersededBy edge

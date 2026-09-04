@@ -45,6 +45,7 @@ import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UnsupersedeAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.Adr;
@@ -74,7 +75,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 import de.hauschel.arknet.ul.domain.TermCode;
 
 /**
- * Scaffold-level check that the adapter declares exactly the seven ADR tools and guards its in-port
+ * Scaffold-level check that the adapter declares exactly the eight ADR tools and guards its in-port
  * dependencies, plus the reference-display-resolution contract ({@link ResolveRequirements},
  * {@link ResolveBoundedContexts}, ADR-008) and the structured consequence/considered-option input
  * translation (kogn-io/arknet#357).
@@ -98,7 +99,7 @@ class AdrMcpToolsTest {
     private final RecordingResolveBoundedContexts contexts = new RecordingResolveBoundedContexts();
     private final RecordingResolveTerms terms = new RecordingResolveTerms();
     private final AdrMcpTools adapter =
-            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+            new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
                     contexts, terms, PROJECTS);
 
     @Test
@@ -118,65 +119,68 @@ class AdrMcpToolsTest {
     }
 
     @Test
-    void declaresTheSevenAdrTools() {
+    void declaresTheEightAdrTools() {
         List<String> names = Arrays.stream(adapter.getClass().getDeclaredMethods())
                 .map(m -> m.getAnnotation(McpTool.class))
                 .filter(a -> a != null)
                 .map(McpTool::name)
                 .toList();
 
-        assertEquals(7, names.size());
+        assertEquals(8, names.size());
         assertTrue(names.containsAll(List.of("adr_add", "adr_list", "adr_get", "adr_update",
-                "adr_set_status", "adr_supersede", "adr_delete")));
+                "adr_set_status", "adr_supersede", "adr_unsupersede", "adr_delete")));
     }
 
     @Test
     void rejectsNullInPort() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
+                () -> new AdrMcpTools(null, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, stub, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, stub,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null,
+                        requirements, contexts, terms, PROJECTS));
+        assertThrows(NullPointerException.class,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null,
                         contexts, terms, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, null, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, null, terms, PROJECTS));
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, null, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, null, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, null, stub, stub, stub, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, null, stub, stub, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, null, stub, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, null, stub, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, null, stub, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, null, requirements,
-                        contexts, terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, null, contexts,
-                        terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements, null,
-                        terms, PROJECTS));
-        assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, requirements,
-                        contexts, null, PROJECTS));
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                        requirements, contexts, null, PROJECTS));
     }
 
     @Test
     void rejectsNullProjectResolver() {
         assertThrows(NullPointerException.class,
-                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+                () -> new AdrMcpTools(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
                         requirements, contexts, terms, null));
     }
 
@@ -571,6 +575,15 @@ class AdrMcpToolsTest {
     }
 
     @Test
+    void unsupersedePassesTheCodeThroughToTheInPort() {
+        String rendered = adapter.unsupersede(null, "ADR-1", ANCHOR);
+
+        assertEquals(new AdrCode("ADR-1"), stub.lastUnsupersededCode);
+        assertEquals(PROJECT, stub.lastProjectId);
+        assertTrue(rendered.contains("ADR-1"), rendered);
+    }
+
+    @Test
     void deletePassesTheParsedCodeThroughAndConfirmsIt() {
         String rendered = adapter.delete(null, "ADR-1", ANCHOR);
 
@@ -728,7 +741,7 @@ class AdrMcpToolsTest {
     /** Structural stub implementing the nine driving in-ports. */
     private static final class Stub
             implements AddAdr, ListAdrs, CountSkippedAdrs, GetAdr, UpdateAdr, AcceptAdr, RejectAdr, DeprecateAdr,
-            SupersedeAdr, DeleteAdr {
+            SupersedeAdr, UnsupersedeAdr, DeleteAdr {
 
         private NewAdr lastAddCommand;
         private AdrCorrection lastCorrection;
@@ -740,6 +753,7 @@ class AdrMcpToolsTest {
         private AdrCode lastDeprecatedCode;
         private AdrCode lastSupersedingCode;
         private AdrCode lastSupersededCode;
+        private AdrCode lastUnsupersededCode;
         private AdrCode lastDeletedCode;
         private RuntimeException deleteFailure;
         private AdrDetail nextDetail;
@@ -810,6 +824,13 @@ class AdrMcpToolsTest {
             lastSupersedingCode = code;
             lastSupersededCode = supersededCode;
             return detail(adrWith(List.of(), List.of(), null), List.of(supersededCode), List.of());
+        }
+
+        @Override
+        public AdrDetail unsupersede(ProjectId projectId, AdrCode code) {
+            lastUnsupersededCode = code;
+            lastProjectId = projectId;
+            return detail(adrWith(List.of(), List.of(), null), List.of(), List.of());
         }
 
         @Override

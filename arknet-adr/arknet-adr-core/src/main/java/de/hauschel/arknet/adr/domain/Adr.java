@@ -233,6 +233,44 @@ public record Adr(
     }
 
     /**
+     * Reverses {@link #supersededBy(AdrId)}: clears {@link #supersededBy} and moves this decision back
+     * from {@link AdrStatus#SUPERSEDED} to {@link AdrStatus#ACCEPTED}, in the very same step
+     * (kogn-io/arknet#354). The two can only ever change together - exactly as
+     * {@link #supersededBy(AdrId)} sets them together - so the compact constructor's bi-implication is
+     * satisfied by construction, never bypassed.
+     *
+     * <p><strong>What this undoes, and what it does not.</strong> A supersession recorded against the
+     * wrong successor (a mistyped code, a confused direction) is otherwise permanent: before this
+     * method existed, neither the {@link #status} nor the {@link #supersededBy} edge it is coupled to
+     * could be corrected, and {@code adr_delete} refuses a {@link AdrStatus#SUPERSEDED} decision on
+     * principle (Nygard) rather than because deleting one it is technically hard. This method restores
+     * the decision to exactly the state it was in immediately before {@link #supersededBy(AdrId)} last
+     * ran - {@link #decisionDate} untouched, because being superseded (like {@link #deprecate()}) never
+     * re-dates the original decision - it does not touch the successor's own record at all, which is
+     * why calling it is a single-resource write through the very same
+     * {@link de.hauschel.arknet.adr.application.port.out.AdrRepository#compareAndUpdate} path every
+     * other transition uses, not a two-record operation.</p>
+     *
+     * <p>Called on any status other than {@link AdrStatus#SUPERSEDED} it throws rather than silently
+     * doing nothing: unlike {@link #accept(LocalDate)}/{@link #reject(LocalDate)}/{@link #deprecate()},
+     * whose no-op case is "asked to reach a state already reached", there is no state this method could
+     * idempotently reach for a decision that was never superseded in the first place - a caller
+     * reaching this exception typed the wrong code or misremembered the decision's status, and is told
+     * so rather than left to wonder whether the call quietly did what it asked.</p>
+     *
+     * @return the decision, restored to {@link AdrStatus#ACCEPTED} with {@link #supersededBy} cleared
+     * @throws IllegalStateException if this decision is not currently {@link AdrStatus#SUPERSEDED}
+     */
+    public Adr unsupersede() {
+        if (status != AdrStatus.SUPERSEDED) {
+            throw new IllegalStateException(
+                    "an ADR can only be unsuperseded while SUPERSEDED, was " + status + ": " + code.value());
+        }
+        return new Adr(id, code, name, AdrStatus.ACCEPTED, context, decision, consequences, consideredOptions,
+                decisionDate, addressesRequirements, affectsContexts, usesTerms, null, relatedTo);
+    }
+
+    /**
      * Returns this decision with {@code name}/{@code context}/{@code decision} corrected - the rule
      * behind {@code adr_update}'s flagship text fields.
      *

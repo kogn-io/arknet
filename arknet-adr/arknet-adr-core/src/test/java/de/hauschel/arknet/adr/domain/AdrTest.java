@@ -538,6 +538,38 @@ class AdrTest {
     }
 
     @Test
+    void unsupersedeReversesSupersededByInOneStep() {
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+        Adr superseded = accepted.supersededBy(OTHER);
+
+        Adr restored = superseded.unsupersede();
+
+        assertEquals(AdrStatus.ACCEPTED, restored.status());
+        assertNull(restored.supersededBy());
+    }
+
+    @Test
+    void unsupersedeLeavesTheDecisionDateUntouched() {
+        Adr accepted = adr("name", "context", "decision").accept(DECIDED_ON);
+        Adr superseded = accepted.supersededBy(OTHER);
+
+        assertEquals(DECIDED_ON, superseded.unsupersede().decisionDate());
+    }
+
+    @Test
+    void unsupersedeThrowsUnlessSuperseded() {
+        Adr proposed = adr("name", "context", "decision");
+        Adr accepted = withStatus(AdrStatus.ACCEPTED);
+        Adr rejected = withStatus(AdrStatus.REJECTED);
+        Adr deprecated = withStatus(AdrStatus.DEPRECATED);
+
+        assertThrows(IllegalStateException.class, proposed::unsupersede);
+        assertThrows(IllegalStateException.class, accepted::unsupersede);
+        assertThrows(IllegalStateException.class, rejected::unsupersede);
+        assertThrows(IllegalStateException.class, deprecated::unsupersede);
+    }
+
+    @Test
     void reviseTextCorrectsEveryFieldWhileProposed() {
         Adr proposed = adr("name", "context", "decision");
 

@@ -29,6 +29,7 @@ import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UnsupersedeAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
@@ -75,7 +76,10 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * {@code PROPOSED} a decision may become {@link AdrStatus#ACCEPTED} or {@link AdrStatus#REJECTED};
  * an accepted one may further become {@link AdrStatus#DEPRECATED} or - via {@code adr_supersede} -
  * {@link AdrStatus#SUPERSEDED}, set together with {@link Adr#supersededBy()} on the <em>superseded</em>
- * decision in one write (kogn-io/arknet#357; see {@link #supersede}).</p>
+ * decision in one write (kogn-io/arknet#357; see {@link #supersede}). {@code adr_unsupersede} is the
+ * one way back out of {@code SUPERSEDED}: it undoes a mistaken supersession (wrong target, confused
+ * direction) by restoring {@code ACCEPTED} and clearing {@code supersededBy} in the very same write -
+ * see {@link #unsupersede} (kogn-io/arknet#354).</p>
  *
  * <p><strong>The decision date is stamped by the transition, never typed in (kogn-io/arknet#374).</strong>
  * {@link #add} always records {@code decisionDate} as {@code null} and {@link #update} cannot reach
@@ -179,7 +183,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  */
 public class AdrService
         implements AddAdr, ListAdrs, CountSkippedAdrs, GetAdr, AcceptAdr, RejectAdr, DeprecateAdr, SupersedeAdr,
-        UpdateAdr, DeleteAdr {
+        UnsupersedeAdr, UpdateAdr, DeleteAdr {
 
     private static final String CODE_PREFIX = "ADR";
 
@@ -587,6 +591,23 @@ public class AdrService
             throw new IllegalStateException("ADR " + code.value()
                     + " can only supersede another decision while ACCEPTED, was " + status);
         }
+    }
+
+    /**
+     * Undoes a mistaken {@link #supersede} call (kogn-io/arknet#354): restores {@code code} from
+     * {@link AdrStatus#SUPERSEDED} to {@link AdrStatus#ACCEPTED} and clears its {@code supersededBy}
+     * edge, in the very same write - {@link Adr#unsupersede()} enforces the two only ever change
+     * together, the same way {@link Adr#supersededBy(AdrId)} does for the forward direction. Never
+     * touches any multilingual field, and never reads or writes the former successor's own record:
+     * unlike {@link #supersede}, which resolves the superseding decision's identity before writing the
+     * superseded one, this is a single-resource correction.
+     */
+    @Override
+    public AdrDetail unsupersede(ProjectId projectId, AdrCode code) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(code, "code");
+        return detailOf(projectId, updateWithOptimisticRetry(projectId, code, false, false, false,
+                Set.of(), Set.of(), null, null, current -> current.value().unsupersede()));
     }
 
     @Override
