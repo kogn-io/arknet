@@ -35,7 +35,7 @@
     </scm>
 
     <properties>
-        <revision>0.1.0-SNAPSHOT</revision>
+        <revision>0.7.0-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- 25 (nicht 21): io.kogn.rdf-Artefakte sind mit Java 25 (Classfile 69) gebaut;
              release 21 kann nicht gegen sie kompilieren. arknet zieht mit (Entscheidung
