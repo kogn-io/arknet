@@ -29,7 +29,8 @@ import de.hauschel.arknet.mcp.store.StoreReader;
  * bounded context of its own (ADR-006).
  * It differs from {@code store_overview}/{@code resource_get} by doing graph traversal rather
  * than a full-snapshot digest or a single-resource fetch, but reuses the very same {@link
- * StoreReader} read path and {@link HandleResolver} handle contract - see the ADR-006 addendum.
+ * StoreReader} read path and {@link HandleResolver} handle contract - see
+ * {@code arknet-mcp/CLAUDE.md} for why this deliberately departs from a fully generic query.
  * Query logic and rendering live in the isolated, unit-testable {@link TraceabilityGraph}/
  * {@link TraceabilityRenderer}; this class only orchestrates them and declares the {@code
  * @McpTool} surface.</p>

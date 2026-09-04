@@ -21,7 +21,7 @@ import de.hauschel.arknet.ul.application.port.in.ListTerms;
  * its flow is {@code n} opaque {@code arkreq:Step} subjects ordered by an
  * {@code arkreq:position} literal, its actors and realised requirements further opaque IRIs.
  * The context that wrote it already knows how to read it back; this class asks it, rather than
- * re-deriving the answer in the composition root. See the ADR-006 addendum.</p>
+ * re-deriving the answer in the composition root. See {@code arknet-mcp/CLAUDE.md}.</p>
  *
  * <p><strong>Never fails the tool.</strong> The report gained a dependency on five contexts'
  * read paths, and {@code store_overview} is the very tool a user reaches for when they suspect
