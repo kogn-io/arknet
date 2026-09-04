@@ -332,6 +332,12 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * (issue #313): both may now legally carry several language-tagged literals each, so joining
      * them into this single-row scalar clause would multiply a subject into a row per
      * title/statement candidate combination - see {@link #readTitles}/{@link #readStatements}.</p>
+     *
+     * <p><strong>{@code FILTER(isIRI(?s))} is deliberately not part of this clause</strong>
+     * (kogn-io/arknet#401), even though all three read paths that build a {@link Constraint} out of
+     * it need the guard: {@link #findAllCodes} shares the very same clause and must
+     * <em>not</em> have it, for the reason spelled out on that method. The three reads append the
+     * filter themselves, one line each, rather than the counter silently inheriting it.</p>
      */
     private static String constraintWhereClause(String identifierClause) {
         return "?s a ?type . "
@@ -349,7 +355,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         String query = "SELECT ?s ?type WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + constraintWhereClause(
                         "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . ")
-                + "} }";
+                + "FILTER(isIRI(?s)) } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             SparqlQuery sparql = handle.sparqlQuery();
@@ -366,7 +372,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         String query = "SELECT ?s ?type ?head WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + constraintWhereClause(
                         "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . ")
-                + "} "
+                + "FILTER(isIRI(?s)) } "
                 + "OPTIONAL { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { "
                 + "?s <" + ArkprovVocabulary.HEAD + "> ?head } } }";
 
@@ -410,7 +416,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
 
         String query = "SELECT ?s ?identifier ?type WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
                 + constraintWhereClause("?s <" + IDENTIFIER_PROPERTY + "> ?identifier . ")
-                + "} }";
+                + "FILTER(isIRI(?s)) } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             SparqlQuery sparql = handle.sparqlQuery();
@@ -561,10 +567,17 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
         return selectFn.apply(query).map(row -> localizedLiteralOf(row, "o")).toList();
     }
 
-    /** Bulk variant of {@link #readLocalizedLiterals}: every constraint's candidates in one query. */
+    /**
+     * Bulk variant of {@link #readLocalizedLiterals}: every constraint's candidates in one query.
+     *
+     * <p>Carries a {@code FILTER(isIRI(?s))} of its own (kogn-io/arknet#401): this read joins
+     * the predicate alone, with no type join in front of it, so it binds any subject in the graph
+     * that carries a title or a statement - including a blank node the listing query itself would
+     * already have dropped.</p>
+     */
     private Map<String, List<LocalizedLiteral>> literalsBySubject(SparqlQuery query, String predicateIri) {
         String sparql = "SELECT ?s ?o WHERE { GRAPH <" + CONSTRAINTS_GRAPH + "> { "
-                + "?s <" + predicateIri + "> ?o } }";
+                + "?s <" + predicateIri + "> ?o . FILTER(isIRI(?s)) } }";
         Map<String, List<LocalizedLiteral>> bySubject = new LinkedHashMap<>();
         query.select(sparql).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())

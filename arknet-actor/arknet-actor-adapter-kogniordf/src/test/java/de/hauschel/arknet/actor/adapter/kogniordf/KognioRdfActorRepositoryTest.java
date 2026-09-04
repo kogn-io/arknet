@@ -447,6 +447,39 @@ class KognioRdfActorRepositoryTest {
     }
 
     /**
+     * The node-kind case of the <em>listing</em> read (kogn-io/arknet#401). The bare blank node
+     * above misses {@code arknet:name}, a mandatory join, and so never reaches
+     * {@code findAll}'s {@link io.kogn.rdf.terms.IRI} cast; a blank-node subject carrying the name
+     * too - a complete actor in everything but its node kind, which only a store-first write can
+     * produce - does. Before the guard that cast threw a {@code ClassCastException} out of the
+     * whole call, so one anonymous subject cost the register its entire {@code actor_list} rather
+     * than the one row it cannot address.
+     *
+     * <p>{@code findByCode} shares the clause and is asserted with it: an {@code ACTOR-2} nobody
+     * can name by IRI reads as absent, not as an exception.</p>
+     */
+    @Test
+    void findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing() {
+        repository.create(PROJECT_A, actor(new ActorCode("ACTOR-1"), ActorType.HUMAN, null));
+        String insertBlankNodeActor = "INSERT DATA { GRAPH <" + ACTOR_GRAPH + "> { [] a <"
+                + HUMAN_ACTOR_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \"ACTOR-2\" ; "
+                + "<" + NAME_PROPERTY + "> \"Anonymous\" ; "
+                + "<" + DESCRIPTION_PROPERTY + "> \"No identity.\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertBlankNodeActor);
+                return null;
+            });
+        }
+
+        List<Actor> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new ActorCode("ACTOR-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new ActorCode("ACTOR-2")).isEmpty());
+    }
+
+    /**
      * The single {@code ACTOR-N} counter spans all four types, so {@code findAllCodes} has to see
      * all four - a type missed by its filter would be a code handed out twice.
      */

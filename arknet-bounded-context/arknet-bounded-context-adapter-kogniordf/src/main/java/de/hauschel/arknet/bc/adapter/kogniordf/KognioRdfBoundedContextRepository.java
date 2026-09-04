@@ -454,12 +454,19 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * supplies
      * the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in
      * {@link #findCurrentByCode}'s case, the additional provenance-graph join.
+     *
+     * <p>{@code FILTER(isIRI(?s))} because both callers cast {@code ?s} to an {@link IRI} to name
+     * the context's identity (kogn-io/arknet#401), and {@code bounded-context-shapes.ttl}
+     * constrains no node kind on the subject: a store-first blank-node context used to make the
+     * whole call throw a {@link ClassCastException} rather than read as absent. {@link
+     * #findAllCodes} carries no such filter, on purpose - see its own javadoc.</p>
      */
     private static String boundedContextByCodeWhereClause(BoundedContextCode code) {
         return "?s a <" + BOUNDED_CONTEXT_TYPE + "> . "
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
                 + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s <" + PART_OF_PROPERTY + "> ?subdomainNode . "
                 + "?subdomainNode <" + SUBDOMAIN_TYPE_PROPERTY + "> ?subdomain } "
                 + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } ";
@@ -525,6 +532,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
                 + "?s <" + DOMAIN_VISION_PROPERTY + "> ?domainVision . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s <" + PART_OF_PROPERTY + "> ?subdomainNode . "
                 + "?subdomainNode <" + SUBDOMAIN_TYPE_PROPERTY + "> ?subdomain } "
                 + "OPTIONAL { ?s <" + OWNED_BY_PROPERTY + "> ?ownedBy } } }";
@@ -732,7 +740,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     private Map<String, List<TermRef>> readUsesTermsBySubject(DatasetHandle handle) {
         String query = "SELECT ?s ?term WHERE { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
                 + "?s <" + UBIQUITOUS_LANGUAGE_TERM_PROPERTY + "> ?term } "
-                + "FILTER(isIRI(?term)) } ORDER BY ?s ?term";
+                + "FILTER(isIRI(?s) && isIRI(?term)) } ORDER BY ?s ?term";
         Map<String, List<TermRef>> bySubject = new LinkedHashMap<>();
         handle.sparqlQuery().select(query).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())

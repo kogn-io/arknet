@@ -700,7 +700,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         DisplayLocale effective = withRequestedOverride(displayLocale);
         String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
-                + SparqlTerms.escape(code.value()) + "\" } }";
+                + SparqlTerms.escape(code.value()) + "\" . FILTER(isIRI(?s)) } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
             if (head.isEmpty()) {
@@ -734,7 +734,8 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         Objects.requireNonNull(projectId, "projectId");
         DisplayLocale effective = withRequestedOverride(displayLocale);
         String query = "SELECT ?s ?identifier WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
-                + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> ?identifier } }";
+                + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> ?identifier . "
+                + "FILTER(isIRI(?s)) } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             List<UseCaseRow> rows = handle.sparqlQuery().select(query)
                     .map(row -> new UseCaseRow(iriOf(row, "s").getIRIString(),
@@ -803,7 +804,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         Objects.requireNonNull(code, "code");
         String query = "SELECT ?s WHERE { GRAPH <" + USE_CASES_GRAPH + "> { "
                 + "?s a <" + USE_CASE_TYPE + "> ; <" + IDENTIFIER_PROPERTY + "> \""
-                + SparqlTerms.escape(code.value()) + "\" } }";
+                + SparqlTerms.escape(code.value()) + "\" . FILTER(isIRI(?s)) } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             Optional<BindingSet> head = handle.sparqlQuery().select(query).findFirst();
             if (head.isEmpty()) {
