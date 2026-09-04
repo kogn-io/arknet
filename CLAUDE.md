@@ -98,15 +98,9 @@ Details: `arknet-actor/CLAUDE.md`
 
 ## Ubiquitous Language
 
-- **Metamodell** = OWL-Ontologie (arknet-*.ttl)
-- **Architekturmodell** = Instanzdaten des Nutzers (.ttl)
-- **Projekt** = der Gegenstand, an dem Requirements, Glossarbegriffe und Use Cases haengen; ein
-  Dataset haelt die Daten genau eines Projekts, die Projektgrenze ist damit die Datengrenze
-  (ADR-016). **Nicht** das Verzeichnis, aus dem ein Client arbeitet -- das heisst Arbeits- oder
-  Projektverzeichnis. Ein Workspace-Begriff darueber existiert nicht.
-- **Anker** = die opake, typisierte Zeichenkette (`path`/`url`/`uuid`), mit der ein Client sagt,
-  welches Projekt sein Aufruf meint. Der Server schlaegt sie nach und interpretiert sie nie. Ein
-  Projekt haelt mehrere Anker, ein Anker gehoert zu genau einem Projekt.
+Die Begriffsdefinitionen des Projekts (Metamodell, Architekturmodell, Projekt, Anker, ...) leben
+als Glossar im arknet-Store selbst, nicht hier -- Zweitpflege in Markdown wuerde vom Store
+abdriften. Abfragbar ueber `term_list`/`term_get` (arknet-ubiquitous-language BC).
 
 ## Konventionen
 
