@@ -72,7 +72,7 @@ public interface ConstraintRepository {
      *
      * <p><strong>Guards writes made through this port, not edits that bypass it.</strong> Same
      * limitation as {@link RequirementRepository#compareAndUpdate} - see that method's javadoc: a
-     * direct store-first (ADR-005) edit leaves the token untouched and is therefore invisible to
+     * direct store-first edit leaves the token untouched and is therefore invisible to
      * this check.</p>
      *
      * <p><strong>Why two language arguments, not one.</strong> {@code title} and
@@ -144,7 +144,7 @@ public interface ConstraintRepository {
      * mirrors {@link RequirementRepository#findCurrentByCode}, multi-read caveat included.
      *
      * <p><strong>What "together" guarantees.</strong> The core fields (code, type) and the token
-     * itself (recorded by the last write through this port, ADR-014) come from one query call - one
+     * itself (recorded by the last write through this port) come from one query call - one
      * snapshot. {@code title} and {@code statement}, in contrast, are filled in by later,
      * independent follow-up reads, because a language-tagged literal joined into the same clause
      * would multiply one constraint into a row per title/statement combination; that is safe
@@ -201,7 +201,7 @@ public interface ConstraintRepository {
      * outlive its listing entry is the same one {@link RequirementRepository#findAllCodes}
      * describes for requirements, with this hexagon's other pair of mandatory literals:
      * {@link #findAll} skips a subject whose {@code title} or {@code constraintStatement} it
-     * cannot select, which a store-first (ADR-005) write can produce; the subject stays, and so
+     * cannot select, which a store-first write can produce; the subject stays, and so
      * does its code. Only the type and {@code dcterms:identifier} are joined here, and neither is
      * ever the field that goes missing.
      *

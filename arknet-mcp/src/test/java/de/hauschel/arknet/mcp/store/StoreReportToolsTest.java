@@ -119,7 +119,7 @@ class StoreReportToolsTest {
         Prefixes prefixes = Prefixes.defaults();
         StoreReader reader = new StoreReader(lifecycle);
         // Shared server: the project is resolved per call by looking up the caller's anchor
-        // (ADR-016). The stub below stands in for the registry with exactly two registered
+        //. The stub below stands in for the registry with exactly two registered
         // anchors, so these tests address two projects the way a real client does.
         ProjectResolver projects = StoreReportToolsTest::resolveTestAnchor;
         tools = new StoreReportTools(
@@ -735,7 +735,7 @@ class StoreReportToolsTest {
     }
 
     /**
-     * A resource that exists but was written entirely store-first (ADR-005) - straight into a
+     * A resource that exists but was written entirely store-first - straight into a
      * model graph, bypassing every repository and therefore the funnel - has no revision to
      * report: an empty, non-error history, not a "not found".
      */

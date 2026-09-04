@@ -35,7 +35,7 @@
 #
 #         The head is a funnel-internal token, not a fingerprint of a
 #         resource's state. A write issued directly against the store
-#         (store-first, ADR-005) changes that state without moving the head,
+#         (store-first) changes that state without moving the head,
 #         and the next write through the funnel then overwrites it silently.
 #
 #  NOT A STATE ARCHIVE: a revision records THAT a resource was written, with
@@ -43,7 +43,7 @@
 #         afterwards. The model graph is still replaced in place, so an
 #         earlier state cannot be recovered and two revisions cannot be
 #         compared against each other. Whether historical states become
-#         queryable is open; ADR-014 defers it, together with the compaction
+#         queryable is open defers it, together with the compaction
 #         strategy the resulting growth would need.
 #
 #  NOT VALIDATED BY SHACL: the write gate validates the candidate model graph

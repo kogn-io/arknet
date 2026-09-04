@@ -13,7 +13,7 @@ gewachsene Ids wie `arknet` bleiben gueltige opake Werte und werden nie migriert
 Dazu der Port `ProjectResolver` (`String anchor -> ResolvedProject`, Konstante `ANCHOR_KEY`):
 `ProjectId` ist **kein** Prozess-Singleton, sondern wird von jedem `@McpTool`-Adapter pro Aufruf aus
 dem Anker aufgeloest, den der Client mitschickt. Die Aufloesung ist ein Registry-Nachschlagen auf
-den ganzen, uninterpretierten Wert -- nichts wird abgeleitet, gekuerzt oder geraten (ADR-016). Die
+den ganzen, uninterpretierten Wert -- nichts wird abgeleitet, gekuerzt oder geraten. Die
 Composition-Root-Implementierung `RegisteredAnchorProjectResolver` in `arknet-mcp` adaptiert dafuer
 den `ResolveProject`-In-Port des `arknet-project`-BC; die Modell-BCs sehen nur diesen neutralen
 Port und haengen nie an jenem BC. Fehlender oder unbekannter Anker ist ein Fehler
@@ -84,7 +84,7 @@ Der Helfer kommt ohne Trennzeichen-Konvention aus, weil der Aufrufer genau das P
 uebergibt, mit dem er auch praegt (`TERM-`, `UC`, `FR-`, `ACTOR-`) -- Praegen und Zaehlen lesen
 damit dieselbe Konstante, und `UC` faellt nicht mehr aus der Reihe.
 Der Match ist **am Anfang verankert**: ein Code, der nicht mit dem Praefix beginnt, zaehlt nicht,
-und was auf das Praefix folgt, muss reine Ziffern sein (sonst 0 -- store-first-Daten (ADR-005) sind
+und was auf das Praefix folgt, muss reine Ziffern sein (sonst 0 -- store-first-Daten sind
 zu ueberleben, nicht zu quittieren; eine gepraegte Nummer beginnt bei 1, kann also nie mit 0
 kollidieren).
 Genau diese Verankerung ersetzt in `RequirementService`/`ConstraintService` den fruehreren Filter

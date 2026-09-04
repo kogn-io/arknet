@@ -372,7 +372,7 @@ class AdrMcpToolsTest {
     }
 
     /**
-     * kogn-io/arknet#359: a store-first (ADR-005) status/{@code supersededBy} anomaly used to be
+     * kogn-io/arknet#359: a store-first status/{@code supersededBy} anomaly used to be
      * visible only as a {@code WARN} log line, so a caller of {@code adr_list} could not tell a
      * genuinely empty project from one silently missing decisions. The note makes the count visible
      * in the tool's own output.

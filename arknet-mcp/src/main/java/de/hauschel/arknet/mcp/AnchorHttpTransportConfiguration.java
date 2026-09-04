@@ -21,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
- * Wires the calling client's project anchor into every MCP tool call (ADR-016).
+ * Wires the calling client's project anchor into every MCP tool call.
  *
  * <p>arknet-mcp is one shared HTTP server for every project on the machine, so a tool call must
  * carry which project it came from. Claude Code cannot set MCP {@code _meta} per call, but a

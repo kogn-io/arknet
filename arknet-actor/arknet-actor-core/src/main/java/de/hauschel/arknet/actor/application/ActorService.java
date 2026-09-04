@@ -193,7 +193,7 @@ public class ActorService implements AddActor, ListActors, GetActor, UpdateActor
      * <p><strong>{@link ActorRepository#findAllCodes}, not {@link ActorRepository#findAll}
      * (kogn-io/arknet#360).</strong> A living actor can still be missing from {@link #list}/
      * {@link ActorRepository#findAll}: building an {@link de.hauschel.arknet.actor.domain.Actor}
-     * needs a name, and a store-first (ADR-005) actor written without one has no name to give - it
+     * needs a name, and a store-first actor written without one has no name to give - it
      * is skipped on the way out while keeping its {@code ACTOR-N}. Deriving the maximum from
      * {@code findAll} would recompute that number the moment such an actor holds the project's
      * highest one, and every retry recomputes it again, so

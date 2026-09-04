@@ -136,7 +136,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  *
  * <p><strong>Display language.</strong> A concept may carry {@code skos:prefLabel} and
  * {@code skos:definition} in several languages ({@code "Kunde"@de}/{@code "Eine juristische..."@de},
- * {@code "Customer"@en}/{@code "A legal..."@en}) - SKOS-legal and store-first reachable (ADR-005).
+ * {@code "Customer"@en}/{@code "A legal..."@en}) - SKOS-legal and store-first reachable.
  * {@link #findByCode}/{@link #findAll} therefore join both {@code prefLabel} and {@code definition}
  * as <em>multi-valued</em> (but still mandatory) patterns, group the resulting rows per subject, and
  * let the injected {@link DisplayLocale} pick both fields' displayed value through the very same
@@ -147,7 +147,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * only {@code identifier}, never {@code prefLabel}/{@code definition}.</p>
  *
  * <p><strong>Blank-node subject guard.</strong> {@code ulshapes:TermShape} carries no
- * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first (ADR-005) concept whose
+ * {@code sh:nodeKind sh:IRI} constraint on the subject, so a store-first concept whose
  * subject is a blank node (e.g. {@code [] a skos:Concept ; skos:prefLabel "X" ; ...}) is
  * SHACL-legal, even though {@link #create} always mints an opaque IRI subject. {@code ?s} is
  * the primary-entity subject here, not a reference-field target, but the same problem applies: the
@@ -161,7 +161,7 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  *
  * <p><strong>Row multiplication on {@code skos:definition}.</strong> Like
  * {@code prefLabel}, {@code skos:definition} carries no {@code sh:maxCount} in {@code ulshapes} -
- * a store-first (ADR-005) concept with two definition literals (e.g. one per language) legally
+ * a store-first concept with two definition literals (e.g. one per language) legally
  * multiplies a subject into two SPARQL rows. {@code definition} shares the exact same
  * {@link DisplayLocale} fallback chain as {@code prefLabel} (issue #248): a card that shows a
  * concept's label and its definition side by side must resolve both against the very same
@@ -339,7 +339,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * Resolves a term's business code to its subject IRI within {@code TERMS_GRAPH}, mirroring
      * {@code KognioRdfTermLookup#resolveByCode} but scoped to this class's own graph (this is a
      * same-BC, self-referential lookup - see {@link TermCycleException}'s javadoc - so it needs no
-     * cross-context lookup port). The first match wins if the store-first (ADR-005) store legally
+     * cross-context lookup port). The first match wins if the store-first store legally
      * holds more than one, mirroring every other code lookup in this class (e.g.
      * {@link #readAssemblyByCode}); {@code dcterms:identifier} uniqueness going forward is
      * {@link DuplicateTermCodeException}'s concern, not this method's.
@@ -433,7 +433,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
      * method with {@code prefLabel} and {@code definition} both {@code null}.
      * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
-     * comparison. A revision documents a model change (ADR-011/ADR-014); recording one for an
+     * comparison. A revision documents a model change (ADR-011); recording one for an
      * empty patch would grow the immutable provenance trail without cause and would move the head,
      * handing a concurrent CAS writer a spurious conflict it did not actually have. The
      * requirements BC guards the same case symmetrically in
@@ -775,7 +775,7 @@ public class KognioRdfTermRepository implements TermRepository {
      *
      * <p>This is the fix for the bug {@code term_update} used to have: an earlier version deleted
      * <strong>every</strong> value of the predicate regardless of language before writing the one
-     * new literal, silently discarding every other language variant a store-first (ADR-005) term
+     * new literal, silently discarding every other language variant a store-first term
      * legally carried. {@code lang(?o)} is {@code ""} for a plain, untagged literal, which is
      * exactly what {@code language == null} maps {@code tag} to below - so an untagged correction
      * scopes its delete to the untagged slot alone, the same way a tagged one scopes to its own
@@ -905,7 +905,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * ({@code ?broaderSubject}, needed to re-assert the untouched triple during
      * {@link #attemptUpdate}'s gate check) in its own {@code OPTIONAL}, and its business code
      * ({@code ?broaderCode}, needed to project {@link Term#broader()}) in a second, nested
-     * {@code OPTIONAL} scoped inside the first. A store-first (ADR-005) broader target that itself
+     * {@code OPTIONAL} scoped inside the first. A store-first broader target that itself
      * carries no {@code dcterms:identifier} therefore still binds {@code ?broaderSubject} - the
      * edge stays visible to {@link #attemptUpdate}'s gate check even though {@link Term#broader()}
      * cannot name it by code; a single, non-nested {@code OPTIONAL} joining both variables together
@@ -985,7 +985,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * actually returns, exactly as the row grouping into {@link TermAssembly} already does for
      * the other per-subject fields. Keying it by subject rather than taking the first head seen
      * matters because {@code dcterms:identifier} carries no {@code sh:maxCount}: a store-first
-     * store (ADR-005) can hold two subjects under the same code, and the returned token must be
+     * store can hold two subjects under the same code, and the returned token must be
      * the token of the subject whose state is returned with it - a head belonging to the other
      * subject would make {@link #attemptUpdate}'s compare-and-set check a foreign resource's
      * revision.</p>
@@ -1053,7 +1053,7 @@ public class KognioRdfTermRepository implements TermRepository {
     /**
      * The codes themselves, read without the two literals {@link #findAll} has to join
      * (kogn-io/arknet#360): only the {@code skos:Concept} type triple and the
-     * {@code dcterms:identifier} carrying the code, so a store-first (ADR-005) concept missing its
+     * {@code dcterms:identifier} carrying the code, so a store-first concept missing its
      * {@code skos:prefLabel} or {@code skos:definition} - invisible to every read that materialises
      * a {@link Term} - still reports the {@code TERM-N} it holds. See
      * {@link TermRepository#findAllCodes} for why the code assignment must not lose it.
@@ -1194,7 +1194,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * <p><strong>Exactly one {@link ResolveTerms.ResolvedTerm} per resolved subject.</strong>
      * {@code ulshapes:Term-prefLabel} carries {@code sh:minCount 1} but
      * deliberately no {@code sh:maxCount}: SKOS allows - and this glossary intends to allow - one
-     * {@code skos:prefLabel} per language on the same concept, store-first (ADR-005) legally so.
+     * {@code skos:prefLabel} per language on the same concept, store-first legally so.
      * Its own SHACL identifier constraint carries no {@code sh:maxCount} either, so the single
      * mandatory join below (identifier) is not guaranteed to bind exactly one row per subject.
      * Grouping by subject and keeping the first row's binding turns that cardinality back into

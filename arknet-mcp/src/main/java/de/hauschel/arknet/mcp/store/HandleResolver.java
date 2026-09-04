@@ -20,7 +20,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * implementation growing next to it.</p>
  *
  * <p>Resolution order: (1) a blank-node reference ({@code "_:" + label}, as {@link StoreReader}
- * renders a store-first resource with no minted IRI - ADR-005 - into {@code store_overview}'s
+ * renders a store-first resource with no minted IRI - into {@code store_overview}'s
  * digest) resolves to itself, it already <em>is</em> the handle {@link StoreReader#outgoing}/
  * {@link StoreReader#incoming} expect; (2) a full IRI, or a CURIE against a known
  * {@link Prefixes} binding, is authoritative; (3) anything else is a bare business id, resolved

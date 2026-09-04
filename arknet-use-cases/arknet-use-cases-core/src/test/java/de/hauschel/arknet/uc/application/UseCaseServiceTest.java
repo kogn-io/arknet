@@ -316,7 +316,7 @@ class UseCaseServiceTest {
      * than {@link UseCaseRepository#findAll} (kogn-io/arknet#360): turn {@code nextCode} back to
      * deriving its maximum from {@code findAll} and this goes red - the seeded {@code UC2} holds
      * the project's highest number but is invisible to {@code findAll}, exactly as the out-adapter's
-     * skip of a store-first (ADR-005) use case without a title/goal literal or with an empty main
+     * skip of a store-first use case without a title/goal literal or with an empty main
      * flow makes it, so {@code add} would recompute {@code UC2} and collide with a code that is
      * still very much assigned.
      */

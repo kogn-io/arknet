@@ -8,7 +8,7 @@ import java.util.Objects;
 /**
  * One PROV-O revision of a resource, as read back for {@code resource_history} (issue #251):
  * its own opaque IRI, its {@code prov:generatedAtTime} instant (the lexical form of the
- * {@code xsd:dateTime} literal the shared write funnel wrote, ADR-014), and whether it is the
+ * {@code xsd:dateTime} literal the shared write funnel wrote), and whether it is the
  * resource's current {@code arkprov:head}. Backend-neutral, like {@link Triple}/{@link RdfNode} -
  * {@link StoreReader} is the only class here that reads the provenance graph these come from.
  *

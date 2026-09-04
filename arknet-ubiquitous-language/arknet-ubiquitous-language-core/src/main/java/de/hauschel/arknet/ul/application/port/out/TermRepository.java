@@ -172,7 +172,7 @@ public interface TermRepository {
      * Returns the business code of every term recorded in a project glossary, read independently of
      * whether that term can currently be materialised into a {@link Term}. {@link #findAll} joins
      * {@code skos:prefLabel} and {@code skos:definition} as mandatory - a {@link Term} refuses to
-     * exist without either - and so silently drops a store-first (ADR-005) concept that carries
+     * exist without either - and so silently drops a store-first concept that carries
      * neither, or only one of the two; a concept dropped that way is still there and its code still
      * taken, and this method still reports it.
      *

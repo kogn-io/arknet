@@ -36,7 +36,7 @@ import de.hauschel.arknet.prj.domain.Project;
  * trigger is inherently cross-project. With {@code projectOnly=true} it narrows to the one project
  * this call addresses through its anchor, resolved exactly like every other tool's
  * ({@link AnchorContext}: the {@code projectAnchor} argument if given, otherwise the transport's
- * header - both delivery paths open, ADR-016 decision 2), and a missing or unregistered anchor is
+ * header - both delivery paths open decision 2), and a missing or unregistered anchor is
  * an error rather than a silent fall-back to the full export. The anchor is simply not read in the
  * default scope; a call that addresses no project needs none. An explicit {@code projectAnchor}
  * argument given without {@code projectOnly=true} is rejected outright rather than silently

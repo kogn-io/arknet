@@ -16,7 +16,7 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
 /**
  * The composition root's {@link ProjectResolver}: answers every tool call's routing question by
- * looking the caller's anchor up in the project registry (ADR-016).
+ * looking the caller's anchor up in the project registry.
  *
  * <p><strong>This class is the switch-over.</strong> Its predecessor derived a {@link ProjectId}
  * from the calling client's directory - {@code slug(basename(git-common-dir))} - and so mapped two

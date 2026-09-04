@@ -54,7 +54,7 @@ class BoundedContextMcpToolsTest {
     private static final String ANCHOR = "/home/dev/projects/test-project";
 
     /**
-     * Stands in for the project registry (ADR-016): exactly one registered anchor, and a hard
+     * Stands in for the project registry: exactly one registered anchor, and a hard
      * failure for anything else. Rejecting the unknown case rather than resolving it is what makes
      * {@link #routesByTheExplicitAnchorParameterWhenTheTransportCarriesNone} mean anything - a stub
      * that answered every anchor would pass whether the parameter was honoured or ignored.

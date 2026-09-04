@@ -46,9 +46,9 @@
 #         an entry in the registry, which lives in a reserved system dataset
 #         of the same store and goes through the same write path as every
 #         other model write (SHACL write gate, WriteFunnel, head-as-
-#         concurrency-token; ADR-016 point 6), and once as a self-
+#         concurrency-token point 6), and once as a self-
 #         description inside the project's own dataset (its anchors, its
-#         label; ADR-016 point 7). The self-description is what keeps the
+#         label point 7). The self-description is what keeps the
 #         registry a REBUILDABLE INDEX rather than a single point of
 #         failure - a dataset restored from a backup carries its identity
 #         with it and can re-populate the registry, instead of depending on
@@ -74,7 +74,7 @@
 <https://w3id.org/arknet/project>
     a owl:Ontology ;
     dcterms:title    "arknet Project Ontology"@en ;
-    dcterms:description "arknet's registered-project vocabulary (ADR-016): a project holds one or more opaque, typed anchors that a client can anchor itself to; a dataset holds the data of exactly one project; an unknown anchor is an error, not a derived default."@en ;
+    dcterms:description "arknet's registered-project vocabulary: a project holds one or more opaque, typed anchors that a client can anchor itself to; a dataset holds the data of exactly one project; an unknown anchor is an error, not a derived default."@en ;
     dcterms:version  "0.1.0" ;
     dcterms:created  "2026-07-28"^^xsd:date ;
     dcterms:rights   "CC-BY-4.0" ;

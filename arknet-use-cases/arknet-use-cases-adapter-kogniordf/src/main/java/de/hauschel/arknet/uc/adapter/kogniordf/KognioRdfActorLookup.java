@@ -42,7 +42,7 @@ import de.hauschel.arknet.uc.application.port.out.ActorLookup;
  * lifecycle {@code KognioRdfUseCaseRepository} acquires datasets from.</p>
  *
  * <p><strong>Untagged literal, exact match.</strong> Unlike the {@code skos:prefLabel} this
- * adapter used to match against - which a store-first (ADR-005) actor concept could legally carry
+ * adapter used to match against - which a store-first actor concept could legally carry
  * only as a language-tagged literal, forcing a lexical-form comparison - {@code arknet:name} is
  * always written untagged (see {@code KognioRdfActorRepository}). {@code actorName} is likewise
  * what a human typed at the MCP boundary ({@code uc_add}), which never carries a language tag of

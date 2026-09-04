@@ -504,7 +504,7 @@ public class UseCaseService implements AddUseCase, GetUseCase, ListUseCases, Upd
      * <p><strong>{@link UseCaseRepository#findAllCodes}, not {@link UseCaseRepository#findAll}
      * (kogn-io/arknet#360).</strong> A use case that exists and holds its code can still be missing
      * from {@link #list}/{@link UseCaseRepository#findAll}: the out-adapter skips store-first
-     * (ADR-005) data it cannot turn into a {@link UseCase} - no title or no goal literal, an empty
+     * data it cannot turn into a {@link UseCase} - no title or no goal literal, an empty
      * main flow, main-flow positions the domain type refuses - so that one broken record does not
      * take the whole project's listing down with it. Counting over that listing would let such a
      * use case's number be minted a second time the moment it is the project's highest, which the

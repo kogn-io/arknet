@@ -4,7 +4,7 @@
 package de.hauschel.arknet.persistence;
 
 /**
- * The IRIs of arknet's project vocabulary ({@code arkprj:}, ADR-016) as plain string constants -
+ * The IRIs of arknet's project vocabulary ({@code arkprj:}) as plain string constants -
  * the single source both the project out-adapter serialises from and every reader that has to
  * recognise project triples without depending on that adapter.
  *

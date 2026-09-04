@@ -298,7 +298,7 @@ class RequirementServiceTest {
     /**
      * Mutation test for {@code nextCode} counting over {@link RequirementRepository#findAllCodes}
      * instead of {@link RequirementRepository#findAll} (kogn-io/arknet#360): put the count back on
-     * {@code findAll} and this turns red. The seeded {@code FR-2} is what a store-first (ADR-005)
+     * {@code findAll} and this turns red. The seeded {@code FR-2} is what a store-first
      * requirement with an unreadable title or description looks like from the service's side -
      * absent from the listing, its code taken all the same - so a listing-based count would mint
      * {@code FR-2} a second time and walk straight into the out-adapter's uniqueness guard, on this

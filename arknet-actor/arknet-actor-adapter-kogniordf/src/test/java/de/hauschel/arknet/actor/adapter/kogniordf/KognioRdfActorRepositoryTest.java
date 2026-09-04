@@ -293,7 +293,7 @@ class KognioRdfActorRepositoryTest {
      * through {@code rdfs:subClassOf} entailment.
      *
      * <p>The candidate is built directly rather than through {@link Actor}, whose compact
-     * constructor forbids a missing name in the first place - a store-first (ADR-005) write is the
+     * constructor forbids a missing name in the first place - a store-first write is the
      * only way to produce one.</p>
      */
     @Test
@@ -360,7 +360,7 @@ class KognioRdfActorRepositoryTest {
 
     /**
      * {@code actshapes:Actor-name} bounds the name to one value, but SHACL gates writes rather than
-     * the store: a store-first (ADR-005) actor can carry two of them. The read path must group its
+     * the store: a store-first actor can carry two of them. The read path must group its
      * rows and pick deterministically instead of returning an arbitrary, unlogged one - and must log
      * the collapse, because {@code compareAndUpdate}'s replace-by-identity write would otherwise
      * silently drop the other value on the very next update.
@@ -405,7 +405,7 @@ class KognioRdfActorRepositoryTest {
      * a code stays taken even by a subject {@link ActorRepository#findAll} cannot materialise at
      * all. Deliberately the leanest such subject there is - a type triple and a code, no
      * {@code arknet:name}, which is the one mandatory join of the listing read a store-first
-     * (ADR-005) actor can lack; any field joined into {@code findAllCodes} later (the tempting "the
+     * actor can lack; any field joined into {@code findAllCodes} later (the tempting "the
      * code alone is not enough") fails here rather than silently handing the number out twice.
      */
     @Test
@@ -498,7 +498,7 @@ class KognioRdfActorRepositoryTest {
         assertEquals(List.of(), repository.findByIds(PROJECT_A, List.of()));
     }
 
-    // ---- revision trail (ADR-014): one revision per write, head queryable ------------------
+    // ---- revision trail: one revision per write, head queryable ------------------
 
     @Test
     void everyWriteRecordsExactlyOneRevisionAndMovesTheQueryableHead() {

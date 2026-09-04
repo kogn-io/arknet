@@ -589,7 +589,7 @@ class TraceabilityGraphTest {
 
         /**
          * Regression test for issue #141: a term with several language-tagged {@code skos:prefLabel}s
-         * (SKOS textbook, ADR-005) used to resolve to whichever literal {@link
+         * (SKOS textbook) used to resolve to whichever literal {@link
          * de.hauschel.arknet.mcp.store.StoreResource#label(de.hauschel.arknet.kernel.DisplayLocale)}'s
          * predecessor happened to read first - independent of the {@code displayLocale} the caller
          * asked for, and disagreeing with the HTML report, which resolves the very same multi-language

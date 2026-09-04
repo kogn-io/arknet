@@ -30,7 +30,7 @@ import de.hauschel.arknet.mcp.store.StoreResource;
  * already establish for {@code store_overview}. The handle printed for a resource prefers its
  * {@code dcterms:identifier} (business code, e.g. {@code FR-1}) - the whole point of these
  * tools is reporting business codes, not opaque IRIs - falling back to a CURIE, then the full
- * IRI, for the rare resource that carries neither (store-first data, ADR-005).</p>
+ * IRI, for the rare resource that carries neither (store-first data).</p>
  */
 public final class TraceabilityRenderer {
 

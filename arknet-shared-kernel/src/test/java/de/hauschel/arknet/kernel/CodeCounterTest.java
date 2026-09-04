@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * (kogn-io/arknet#360), pinned here rather than seven times over in the services that call it.
  *
  * <p>The cases that matter are the ones the old per-context copies disagreed on or never saw: a
- * dash-less prefix, a code from a neighbouring counter, and store-first (ADR-005) rubbish that no
+ * dash-less prefix, a code from a neighbouring counter, and store-first rubbish that no
  * write path would ever have produced.</p>
  */
 class CodeCounterTest {

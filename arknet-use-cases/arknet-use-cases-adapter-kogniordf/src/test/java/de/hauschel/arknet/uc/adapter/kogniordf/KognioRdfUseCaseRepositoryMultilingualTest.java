@@ -730,7 +730,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
      * Regression for the review finding on issue #229 (PR #238), mirrors
      * {@code KognioRdfRequirementRepositoryMultilingualTest
      * #compareAndUpdatePassesThroughAStoreFirstIllFormedTitleLanguageTagWithoutCrashing}: a
-     * store-first (ADR-005) title tagged with a dangling BCP-47 extension singleton is rejected
+     * store-first title tagged with a dangling BCP-47 extension singleton is rejected
      * both by {@link de.hauschel.arknet.kernel.LanguageTag} and, identically, by RDF4J's own
      * literal validation reached from the SHACL gate - before the fix this blocked every future
      * correction of the use case, even a call, like this one, that leaves {@code title} untouched.
@@ -755,7 +755,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
      * Second regression for the same review finding, mirrors
      * {@code KognioRdfRequirementRepositoryMultilingualTest
      * #compareAndUpdatePassingThroughANonCanonicalStoreFirstTagDoesNotDuplicateTheTitle}: a
-     * store-first (ADR-005) title tagged with a valid but non-canonical tag (e.g. {@code "de-de"},
+     * store-first title tagged with a valid but non-canonical tag (e.g. {@code "de-de"},
      * canonicalizing to {@code "de-DE"}) must not be duplicated once a pass-through
      * {@code compareAndUpdate} rewrites it under its canonicalized form.
      */
@@ -779,7 +779,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
      * {@code dcterms:title} carrying {@code titleLanguageTag} verbatim - {@code uc_add}/
      * {@code uc_update} always route a language tag through {@link
      * de.hauschel.arknet.kernel.LanguageTag#canonicalize(String)} first, so an ill-formed or merely
-     * non-canonical tag on {@code title} is reachable only store-first (ADR-005).
+     * non-canonical tag on {@code title} is reachable only store-first.
      */
     private void givenLegacyUseCaseWithTitleLanguageTag(ProjectId projectId, UseCaseId id, String code,
             String titleLanguageTag) {
@@ -805,7 +805,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
 
     /**
      * Writes a shape-legal {@code arkreq:UseCase} straight into the use-cases graph with its
-     * {@code dcterms:title} carrying no language tag at all - the store-first (ADR-005) state
+     * {@code dcterms:title} carrying no language tag at all - the store-first state
      * issue #258's sweep normalises lazily, one write at a time.
      */
     private void givenLegacyUseCaseWithUntaggedTitle(ProjectId projectId, UseCaseId id, String code) {
@@ -832,7 +832,7 @@ class KognioRdfUseCaseRepositoryMultilingualTest {
     /**
      * Writes a shape-legal {@code arkreq:UseCase} straight into the use-cases graph with its main
      * step's {@code arkreq:stepText} (position 1) carrying no language tag at all - the store-first
-     * (ADR-005) state issue #258's sweep normalises lazily, one write at a time, mirrors {@link
+     * state issue #258's sweep normalises lazily, one write at a time, mirrors {@link
      * #givenLegacyUseCaseWithUntaggedTitle} for {@code otherLanguageStepTexts}'s own independent
      * implementation.
      */

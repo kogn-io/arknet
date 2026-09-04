@@ -8,7 +8,7 @@ package de.hauschel.arknet.adr.domain;
  *
  * <p>Mirrors the three {@code arkarch:ConsequenceType} individuals ({@code arkarch:Positive}/
  * {@code arkarch:Negative}/{@code arkarch:Neutral}, kogn-io/arknet#357). {@link #NEUTRAL} is also
- * the type the out-adapter's legacy-literal fallback substitutes for a store-first (ADR-005)
+ * the type the out-adapter's legacy-literal fallback substitutes for a store-first
  * {@code arkarch:adrConsequences} string that predates this structured resource - a plain,
  * unclassified consequence text carries no positive/negative signal of its own, and {@link #NEUTRAL}
  * is the honest reading rather than a guess.</p>

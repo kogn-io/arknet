@@ -48,7 +48,7 @@ import de.hauschel.arknet.adr.domain.AdrCode;
  *
  * @param adr          the decision itself, with its opaque reference intact
  * @param supersedes   the business codes of the decisions {@code adr} replaces; an identity that no
- *                     longer resolves (deleted store-first, ADR-005) is simply absent rather than an
+ *                     longer resolves (deleted store-first) is simply absent rather than an
  *                     error
  * @param supersededBy the business codes of the decisions that replace {@code adr}, sorted; empty
  *                     if none do

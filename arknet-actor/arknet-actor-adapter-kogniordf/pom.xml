@@ -64,7 +64,7 @@
         </dependency>
         <!-- Explizit statt nur transitiv (ueber rdf4j) - #81-Muster: WARN-Log bei mehrwertigen,
              stillschweigend auf den ersten Wert reduzierten Feldern. SHACL gated nur Writes, ein
-             store-first (ADR-005) geschriebener Actor kann also mehrere arknet:name/
+             store-first geschriebener Actor kann also mehrere arknet:name/
              arknet:description/rdf:type-Tripel tragen, obwohl actor-shapes.ttl sie einwertig
              fordert. Version aus dem rdf4j-bom gemanaged. -->
         <dependency>

@@ -84,7 +84,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The
  * transactional mechanics - the in-transaction {@code contains} existence checks, the SHACL gate,
  * the commit-conflict translation, and the head comparison - live in the shared
- * {@link WriteFunnel} (ADR-013/ADR-014), not here. {@link #create} rejects an existing subject
+ * {@link WriteFunnel} (ADR-013), not here. {@link #create} rejects an existing subject
  * with {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateBoundedContextCodeException};
  * {@link #compareAndUpdate} rejects a missing subject with
@@ -125,7 +125,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  *
  * <p><strong>Row multiplication.</strong> {@code arkddd:partOf}'s
  * {@code sh:maxCount 1} is {@code sh:Warning}-severity only and {@code arkddd:ownedBy} carries no
- * {@code sh:maxCount} at all, so a store-first (ADR-005) bounded context with two triples on
+ * {@code sh:maxCount} at all, so a store-first bounded context with two triples on
  * either predicate legally multiplies a single-subject query's SPARQL rows too, not only
  * {@link #findAll}'s. {@link #findByCode} and {@link #findCurrentByCode} share
  * {@link #boundedContextByCodeWhereClause}, whose two {@code OPTIONAL} joins (subdomain,
@@ -328,7 +328,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * transaction - the tail of {@link #compareAndUpdate}, reached once the funnel's own head
      * comparison has decided the write should proceed. It first captures two kinds of edges that
      * {@code graph} (built from the {@link BoundedContext} record) never carries, and re-attaches
-     * both after the rewrite - so a replace-by-identity write of a store-first (ADR-005) bounded
+     * both after the rewrite - so a replace-by-identity write of a store-first bounded
      * context carries them along instead of erasing them:
      *
      * <ul>
@@ -506,7 +506,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
     /**
      * {@inheritDoc}
      *
-     * <p><strong>Store-first skip (ADR-005).</strong> {@code name} and {@code domainVision} are
+     * <p><strong>Store-first skip.</strong> {@code name} and {@code domainVision} are
      * joined as mandatory, not {@code OPTIONAL}: a subject missing either one binds no row at all
      * and is simply absent from the listing. Unreachable through {@code bc_add}, whose write gate
      * enforces {@code shapes:BoundedContext-name}/{@code -domainVision} at {@code sh:Violation}
@@ -593,7 +593,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * {@code VALUES}-bound query, never one per id.
      *
      * <p>Joins only {@code dcterms:identifier} - not {@code name}/{@code domainVision} - so a
-     * store-first (ADR-005) context that carries an identity and a code but misses one of the
+     * store-first context that carries an identity and a code but misses one of the
      * otherwise-mandatory fields still resolves, exactly as {@code KognioRdfTermRepository#findByIds}
      * decided for the glossary. Rows are grouped per subject rather than mapped 1:1 (the row
      * multiplication pattern): {@code dcterms:identifier} carries no enforceable {@code sh:maxCount}, so a
@@ -653,7 +653,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * was collapsed. The shared row-multiplication guard behind both {@link #findAll} (via
      * {@link BoundedContextAssembly#toBoundedContext}) and {@link #boundedContextOf} - {@code
      * arkddd:partOf}/{@code arkddd:ownedBy} carry no enforceable {@code sh:maxCount}, so a
-     * store-first (ADR-005) bounded context can legally bind more than one row for either field
+     * store-first bounded context can legally bind more than one row for either field
      * (issue #158).
      */
     private static <T> T firstDistinctValue(List<T> candidates, String subjectIri, String fieldName) {

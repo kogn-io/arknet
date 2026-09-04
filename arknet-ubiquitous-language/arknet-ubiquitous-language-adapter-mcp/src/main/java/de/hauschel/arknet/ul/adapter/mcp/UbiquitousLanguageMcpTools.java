@@ -52,7 +52,7 @@ import de.hauschel.arknet.ul.domain.TermCode;
  * carried in the MCP transport context under {@link ProjectResolver#ANCHOR_KEY}.
  * The framework hands this adapter that context as an {@link McpSyncRequestContext}
  * parameter - a framework type, excluded from the generated tool input schema, so it is
- * not a caller-facing argument. The anchor is looked up in the project registry (ADR-016):
+ * not a caller-facing argument. The anchor is looked up in the project registry:
  * it arrives opaque, is matched whole against what was registered, and either hits exactly
  * one project or fails with an error message naming the possible remedies.</p>
  */
@@ -115,7 +115,7 @@ public final class UbiquitousLanguageMcpTools {
 
     /**
      * Extracts the calling client's project anchor from the per-call transport context - the value
-     * the server's context extractor placed there off the request header (ADR-016). Null-tolerant
+     * the server's context extractor placed there off the request header. Null-tolerant
      * on every hop: a call without a context, without a transport context, or without the key
      * resolves to {@code null}, which is a caller error rather than a route to a default.
      */

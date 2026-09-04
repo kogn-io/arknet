@@ -34,7 +34,7 @@ import java.util.Optional;
  * <ol>
  *   <li>a literal tagged with the {@link #requested} language;</li>
  *   <li>else a literal tagged with the {@link #systemDefault} language;</li>
- *   <li>else a plain, untagged literal (a store-first (ADR-005) edit, or an older resource
+ *   <li>else a plain, untagged literal (a store-first edit, or an older resource
  *       written before a project had a configured default language - since issue #258, a write
  *       without an explicit {@code language} falls back to the project's default rather than
  *       writing untagged, so this step is no longer the normal case for a project with one

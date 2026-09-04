@@ -681,7 +681,7 @@ class WriteFunnelTest {
         assertThrows(NullPointerException.class, () -> funnel.findRetainedCodes(fixture.dataset, null));
     }
 
-    // ---- revision recording (ADR-014, revision basis) -----------------------------------
+    // ---- revision recording (revision basis) -----------------------------------
 
     /**
      * ADR-014 decision 2: every write through the funnel records exactly one immutable

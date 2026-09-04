@@ -331,7 +331,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     /**
      * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
      * graph with a single {@code arkreq:AcceptanceCriterion} resource whose {@code
-     * arkreq:criterionText} carries no language tag at all - the store-first (ADR-005) state
+     * arkreq:criterionText} carries no language tag at all - the store-first state
      * issue #258's sweep normalises lazily, mirrors {@link #givenLegacyRequirementWithUntaggedTitle}.
      */
     private void givenLegacyRequirementWithUntaggedAcceptanceCriterionText(ProjectId projectId, RequirementId id,
@@ -432,7 +432,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
      * though {@code RequirementService#updateWithOptimisticRetry} passes those through verbatim
      * from {@code current.titleLanguage()}/{@code current.descriptionLanguage()} - the raw tag as
      * read off the store - for every field a given call does not intend to touch. A store-first
-     * (ADR-005) title tagged with a dangling BCP-47 extension singleton (Turtle's own language-tag
+     * title tagged with a dangling BCP-47 extension singleton (Turtle's own language-tag
      * grammar places no structural constraint on subtags, so this is legal Turtle) is rejected not
      * only by {@link de.hauschel.arknet.kernel.LanguageTag} but, identically, by RDF4J's own
      * literal validation reached from the SHACL gate - so before the fix this blocked every future
@@ -462,7 +462,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     }
 
     /**
-     * Second regression for the same review finding: a store-first (ADR-005) title tagged with a
+     * Second regression for the same review finding: a store-first title tagged with a
      * <em>valid but non-canonical</em> tag (e.g. {@code "de-de"}, canonicalizing to {@code
      * "de-DE"}) must not be duplicated once a pass-through {@code compareAndUpdate} rewrites it
      * under its canonicalized form. Before the fix, the preservation query compared the raw
@@ -495,7 +495,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
      * graph with its {@code dcterms:title} carrying {@code titleLanguageTag} verbatim - {@code
      * req_add}/{@code req_update} always route a language tag through {@link
      * de.hauschel.arknet.kernel.LanguageTag#canonicalize(String)} first, so an ill-formed or
-     * merely non-canonical tag on {@code title} is reachable only store-first (ADR-005).
+     * merely non-canonical tag on {@code title} is reachable only store-first.
      */
     private void givenLegacyRequirementWithTitleLanguageTag(ProjectId projectId, RequirementId id, String code,
             String titleLanguageTag) {
@@ -519,7 +519,7 @@ class KognioRdfRequirementRepositoryMultilingualTest {
     /**
      * Writes a shape-legal {@code arkreq:FunctionalRequirement} straight into the requirements
      * graph with its {@code dcterms:title} carrying no language tag at all - the store-first
-     * (ADR-005) state issue #258's sweep normalises lazily, one write at a time.
+     * state issue #258's sweep normalises lazily, one write at a time.
      */
     private void givenLegacyRequirementWithUntaggedTitle(ProjectId projectId, RequirementId id, String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "

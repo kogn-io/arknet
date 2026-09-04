@@ -42,7 +42,7 @@ public final class Prefixes {
      * type lives in {@code rdf:type}. This is the only base <em>model resources</em> are minted
      * under since that refactor; {@link #MODEL_INSTANCE_BASE} predates it and is no longer
      * produced. It is not the only base anything is minted under: the shared write funnel mints
-     * revision and activity identities under its own bases (ADR-014), deliberately outside this
+     * revision and activity identities under its own bases, deliberately outside this
      * one because a revision is infrastructure rather than a model resource. Only the revision
      * base is bound here (as {@code rev:}, since {@code resource_history} does render revision
      * IRIs, issue #251) - the activity base has no reader here to shorten it for.
@@ -75,8 +75,8 @@ public final class Prefixes {
      * ({@code rev:}).
      *
      * <p>Still no {@code arkprov:}/{@code prov:} predicate bindings: {@code StoreReader}
-     * excludes the provenance graph's predicates/head pointer from every model read path
-     * (ADR-014), so none of them ever reaches a renderer or the prefix legend - a binding for
+     * excludes the provenance graph's predicates/head pointer from every model read path,
+     * so none of them ever reaches a renderer or the prefix legend - a binding for
      * something unreachable is a promise the read path does not keep. The one exception is
      * {@code rev:}, bound to {@code ArkprovVocabulary#REVISION_IRI_BASE}: {@code
      * resource_history} (issue #251) is the one read path that deliberately does surface a

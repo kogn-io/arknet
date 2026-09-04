@@ -130,7 +130,7 @@ public final class InMemoryConstraintRepository implements ConstraintRepository 
 
     /**
      * Plants a code visible to {@link #findAllCodes} and to nothing else - the fake's stand-in for
-     * a constraint whose {@code title} or {@code constraintStatement} a store-first (ADR-005) write
+     * a constraint whose {@code title} or {@code constraintStatement} a store-first write
      * left unreadable, so that the real adapter's listing skips it while its code stays taken.
      */
     void seedUnmaterialisableCode(ProjectId projectId, ConstraintCode code) {

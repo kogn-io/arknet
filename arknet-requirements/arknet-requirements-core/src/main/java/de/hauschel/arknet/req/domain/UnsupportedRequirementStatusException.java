@@ -16,7 +16,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * per its own Javadoc - does not implement.
  *
  * <p><strong>Adapter-boundary translation, not a domain outcome.</strong> A SHACL-legal status
- * this narrow can only reach a requirement store-first (ADR-005; no MCP tool writes one of the
+ * this narrow can only reach a requirement store-first (no MCP tool writes one of the
  * four unimplemented values), so this is not a business rule a caller can trigger through the
  * tool surface - it is the out-adapter refusing to silently misrepresent data it cannot map.
  * Thrown directly, in place of a raw, uncaught {@link IllegalStateException}, by every read path
@@ -58,7 +58,7 @@ public class UnsupportedRequirementStatusException extends RuntimeException {
                 + " carries status " + Objects.requireNonNull(statusIri, "statusIri")
                 + ", which arknet's MVP does not implement (supported: "
                 + Arrays.toString(RequirementStatus.values())
-                + ") - this value was written store-first (ADR-005), not through req_set_status; "
+                + ") - this value was written store-first, not through req_set_status; "
                 + "fix it by editing the arkreq:status triple in the store directly");
         this.projectId = projectId;
         this.code = code;

@@ -250,7 +250,7 @@ public final class ProjectMcpTools {
             final String label,
             @McpToolParam(description = "Optional explicit first anchor, used INSTEAD of the calling "
                     + "client's origin directory. Only needed for a client that cannot supply an origin "
-                    + "directory via its transport context (ADR-016) - most callers should omit this and "
+                    + "directory via its transport context - most callers should omit this and "
                     + "let their calling directory become the anchor.", required = false)
             final String anchor,
             @McpToolParam(description = "Type of the explicit 'anchor' parameter above: 'path', 'url' "
@@ -292,7 +292,7 @@ public final class ProjectMcpTools {
             @McpToolParam(description = "Optional anchor ALREADY REGISTERED for the caller's own "
                     + "project, used INSTEAD of the calling client's transport context to find which "
                     + "project the new anchor above is attached to. Only needed for a client that cannot "
-                    + "supply an origin directory via its transport context (ADR-016); most callers should "
+                    + "supply an origin directory via its transport context; most callers should "
                     + "omit this and let their calling directory identify the project. Not the anchor "
                     + "being attached - that is the 'anchor' parameter above. No type is needed: a "
                     + "caller anchor is only looked up, and lookup matches on its value alone.",
@@ -313,7 +313,7 @@ public final class ProjectMcpTools {
             @McpToolParam(description = "Optional anchor ALREADY REGISTERED for the caller's own "
                     + "project, used INSTEAD of the calling client's transport context to find which "
                     + "project to rename. Only needed for a client that cannot supply an origin directory "
-                    + "via its transport context (ADR-016); most callers should omit this and let their "
+                    + "via its transport context; most callers should omit this and let their "
                     + "calling directory identify the project. No type is needed: a caller anchor is only "
                     + "looked up, and lookup matches on its value alone.", required = false)
             final String callerAnchor) {
@@ -342,7 +342,7 @@ public final class ProjectMcpTools {
             @McpToolParam(description = "Optional anchor ALREADY REGISTERED for the caller's own "
                     + "project, used INSTEAD of the calling client's transport context to find which "
                     + "project to correct. Only needed for a client that cannot supply an origin directory "
-                    + "via its transport context (ADR-016); most callers should omit this and let their "
+                    + "via its transport context; most callers should omit this and let their "
                     + "calling directory identify the project. No type is needed: a caller anchor is only "
                     + "looked up, and lookup matches on its value alone.", required = false)
             final String callerAnchor) {

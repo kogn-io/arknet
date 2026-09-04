@@ -101,7 +101,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * operation. The transactional mechanics - the in-transaction existence checks for identity and
  * business-code collision, the SHACL gate, the commit-conflict translation, and the
  * head comparison - live in the shared {@link de.hauschel.arknet.persistence.WriteFunnel}
- * (ADR-013/ADR-014), not here: {@link #create} and {@link #compareAndUpdate} only build the
+ * (ADR-013), not here: {@link #create} and {@link #compareAndUpdate} only build the
  * candidate graph and, via {@code alreadyExists}/{@code duplicateCode}/{@code notFound}/
  * {@code headMismatch}, supply the exceptions the funnel throws - {@link
  * ResourceAlreadyExistsException} for an identity collision on create, {@link
@@ -134,7 +134,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * <p><strong>That assertion is trusted, not verified.</strong> For a ref that {@code
  * KognioRdfTermLookup} produced the type did hold when the link was made - that query requires
  * it. For a ref that {@link #readUsesTerms} produced it may never have held: that read filters
- * for IRI-ness only and states no type condition, so a store-first (ADR-005) edge can carry a
+ * for IRI-ness only and states no type condition, so a store-first edge can carry a
  * non-{@code Concept} target into the context, where asserting the type satisfies the gate's
  * {@code sh:class} with the very fact under test. The MCP tools cannot reach the case, and it is
  * no worse than before this change (such an edge survived there too, preserved by the same
@@ -145,7 +145,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * Both properties carry no {@code sh:Violation}-severity {@code sh:maxCount} (unlike
  * {@code title}/{@code description}/{@code motivatedBy}, hardened separately): {@code priority}'s
  * {@code sh:maxCount 1} is {@code sh:Warning}-severity only (never blocks a write), and
- * {@code qualityCategory} carries no {@code sh:maxCount} at all. A store-first (ADR-005)
+ * {@code qualityCategory} carries no {@code sh:maxCount} at all. A store-first
  * requirement with two triples on either predicate therefore legally multiplies {@link #findAll}'s
  * SPARQL rows for one subject. {@link #findAll} groups rows per subject (the same
  * {@code LinkedHashMap} + {@code computeIfAbsent} pattern {@link #findByIds} already used) and
@@ -159,7 +159,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  * <p><strong>SHACL-legal but MVP-unsupported status.</strong> {@code requirements-shapes.ttl}'s
  * {@code Requirement-status} shape allows six status individuals via {@code sh:in}, but
  * {@link de.hauschel.arknet.req.domain.RequirementStatus} implements only two ({@code
- * PROPOSED}/{@code ACCEPTED}). A store-first (ADR-005) requirement carrying one of the other four
+ * PROPOSED}/{@code ACCEPTED}). A store-first requirement carrying one of the other four
  * is therefore SHACL-legal but cannot be decoded: {@link #findByCode}, {@link #findCurrentByCode}
  * and {@link #findAll} all throw {@link
  * de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException} for it, naming the
@@ -168,7 +168,7 @@ import de.hauschel.arknet.req.domain.UnsupportedRequirementStatusException;
  *
  * <p><strong>Type-mismatched {@code priority}/{@code motivatedBy}/{@code qualityCategory}.</strong>
  * All three shapes are {@code sh:Warning}-severity (never blocks a write), and none declares
- * {@code sh:nodeKind}: a store-first (ADR-005) edit can therefore legally write, say,
+ * {@code sh:nodeKind}: a store-first edit can therefore legally write, say,
  * {@code arkreq:motivatedBy "text"} as a literal instead of an IRI. Unlike {@code status} (a
  * mandatory field, so failing loudly is the right call), these three are already optional domain
  * fields - {@link #priorityOf}/{@link #motivatedByOf}/{@link #qualityCategoryOf} guard their cast
@@ -233,7 +233,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Stands in for a requirement that predates the mandatory acceptance-criterion invariant, or
-     * whose acceptance-criterion positions are store-first (ADR-005) malformed (a gap or
+     * whose acceptance-criterion positions are store-first malformed (a gap or
      * duplicate): {@code arkreq:acceptanceCriterion} became mandatory ({@code sh:minCount 1}) only
      * with this field, so a requirement written by an older {@code req_add} carries none. The gate
      * blocks that state on the next <em>write</em>, but reading is not gated - and
@@ -347,7 +347,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Compare-and-set update (degenerated from a full-snapshot comparison to a head
-     * comparison, ADR-014 decision 4): replaces the requirement's triples only if
+     * comparison decision 4): replaces the requirement's triples only if
      * its {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
      * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window
      * a plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
@@ -424,7 +424,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * (or, for a {@code null} tag, plain untagged) literal named by {@code titleTag}/
      * {@code descriptionTag}/{@code rationaleTag}/{@code criteriaTagByPosition} - never more than
      * one each, since
-     * preserving every other language variant a store-first (ADR-005) or earlier {@code req_update}
+     * preserving every other language variant a store-first or earlier {@code req_update}
      * may have left is {@link #replaceTriplesForUpdate}'s job, run after this candidate has already
      * passed the gate.
      */
@@ -505,7 +505,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>Reduced complement of what {@link #readUsesTerms} can now read: since reading
      * no longer joins into the terms graph (a usesTerm edge's target IRI <em>is</em> the
      * {@code TermRef}, no re-derivation needed), the only edges {@code Requirement#usesTerms()}
-     * can never carry are ones whose target is not an IRI at all - a store-first (ADR-005) edge
+     * can never carry are ones whose target is not an IRI at all - a store-first edge
      * may legally point at a blank node ({@code [ a skos:Concept ]}), which {@code ResourceId}
      * cannot represent. The preservation query below finds exactly those.</p>
      *
@@ -575,7 +575,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                 + "FILTER(!isIRI(?term)) }";
         // constrainedBy's shape carries sh:nodeKind sh:IRI - unlike usesTerm, a non-IRI target is
         // SHACL-illegal at write time - but that gate only guards this adapter's own writes, never
-        // a store-first (ADR-005) edit, so the same non-IRI edge can and does exist here too; the
+        // a store-first edit, so the same non-IRI edge can and does exist here too; the
         // same preserve-past-the-gate mechanism applies, for the same reason.
         String selectUnjoinableConstrainedBy = "SELECT ?constraint WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { " + subject + " <" + CONSTRAINED_BY_PROPERTY
@@ -773,7 +773,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Locale.Builder#setLanguageTag} check - so re-embedding the untouched raw tag would still
      * crash the gate a moment later with a different exception, not fix anything. Falling back to
      * {@code null} instead writes the pass-through value as a plain, untagged literal - the one
-     * literal form no tag validation ever rejects - so a requirement whose store-first (ADR-005)
+     * literal form no tag validation ever rejects - so a requirement whose store-first
      * title/description tag is irreparably malformed becomes editable again (at the cost of that
      * one field's language tag) rather than permanently blocking every future correction, even one
      * that never touches title/description at all.</p>
@@ -798,7 +798,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Builds the WHERE-clause body (inside {@code GRAPH <REQUIREMENTS_GRAPH>}) shared by
      * {@link #findByCode}, {@link #findCurrentByCode} and {@link #findAll}: the mandatory type
      * join (filtered to the two known requirement types, rather than an unfiltered "a ?type": a
-     * store-first (ADR-005) subject carrying a third {@code rdf:type} triple alongside its real
+     * store-first subject carrying a third {@code rdf:type} triple alongside its real
      * one would otherwise bind an extra, unpredictable row, and {@link #typeFromIri} throws
      * {@link IllegalStateException} for any type that is neither FunctionalRequirement nor
      * NonFunctionalRequirement), the mandatory status join, and the three optional joins
@@ -910,7 +910,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <p>Returns {@link Optional#empty()} if this subject carries no {@code dcterms:title}/
      * {@code dcterms:description} literal at all - {@code Requirement-title}/
      * {@code Requirement-description} carry {@code sh:minCount 1} at {@code sh:Violation}
-     * severity, so this is unreachable via the MCP tools; a store-first (ADR-005) requirement
+     * severity, so this is unreachable via the MCP tools; a store-first requirement
      * missing either is skipped here the same way {@code KognioRdfUseCaseRepository} skips a use
      * case with zero main steps, rather than crashing {@link #findByCode}/{@link #findAll} for the
      * whole project.</p>
@@ -1269,7 +1269,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
                             if (title.isEmpty() || description.isEmpty()) {
                                 // Requirement-title/Requirement-description carry sh:minCount 1
                                 // at sh:Violation severity, so this is unreachable via the MCP
-                                // tools - skip this one store-first (ADR-005) requirement rather
+                                // tools - skip this one store-first requirement rather
                                 // than crash the whole listing, mirroring
                                 // KognioRdfUseCaseRepository's zero-main-step skip.
                                 return null;
@@ -1492,7 +1492,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * by target IRI (RDF has no intrinsic statement order, and {@link Requirement} compares its
      * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
      * {@code arkreq:usesTerm} carries no {@code sh:nodeKind} constraint, so a store-first
-     * (ADR-005) edge may legally target a blank node, which
+     * edge may legally target a blank node, which
      * {@link de.hauschel.arknet.kernel.ResourceId} cannot represent; such an edge never appears in
      * {@link Requirement#usesTerms()}. Every edge written through {@code req_link_term} targets a
      * resolved subject IRI by construction, so this exclusion cannot bite via the MCP tools; a
@@ -1536,7 +1536,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * Reads the {@code oslc_rm:constrainedBy} edges of one requirement back as constraint
      * references, ordered by target IRI - mirrors {@link #readUsesTerms} exactly, including the
      * IRI-only filter: {@code constrainedBy}'s shape carries {@code sh:nodeKind sh:IRI}, but that
-     * only guards this adapter's own writes, not a store-first (ADR-005) edge, so the filter still
+     * only guards this adapter's own writes, not a store-first edge, so the filter still
      * matters here.
      */
     private List<ConstraintRef> readConstrainedBy(Function<String, Stream<BindingSet>> selectFn, String subject) {
@@ -1582,7 +1582,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      *
      * <p>{@code FILTER(isIRI(?criterion))} mirrors {@link #readUsesTerms}: {@code
      * arkreq:acceptanceCriterion} carries no {@code sh:nodeKind} constraint, so a store-first
-     * (ADR-005) edge may legally target a blank node - excluded here rather than crashing on the
+     * edge may legally target a blank node - excluded here rather than crashing on the
      * {@link IRI} cast, unreachable via the MCP tools since {@link #mintCriterionIri} always mints
      * a proper IRI.</p>
      */
@@ -1641,7 +1641,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * ordered acceptance-criteria list - mirrors {@code KognioRdfUseCaseRepository#toSteps}. A
      * candidate that is empty (no language variant matched, unreachable for a criterion whose
      * {@code criterionText} carries {@code sh:minCount 1}) or resolves to a blank string (a
-     * store-first, ADR-005, malformed literal the SHACL gate only guards at write time) is skipped
+     * store-first, malformed literal the SHACL gate only guards at write time) is skipped
      * rather than handed to {@link AcceptanceCriterion}'s blank-rejecting constructor - the
      * resulting gap in the position sequence is caught by
      * {@link #hasConsecutiveAcceptanceCriterionPositions} and folds into the same legacy-placeholder
@@ -1677,7 +1677,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Mirrors {@code UseCase#requireConsecutiveStepPositions} as a non-throwing predicate: the
-     * criterion at list index {@code i} must carry position {@code i + 1}. A store-first (ADR-005)
+     * criterion at list index {@code i} must carry position {@code i + 1}. A store-first
      * gap or duplicate position - nothing in SHACL forbids two {@code arkreq:AcceptanceCriterion}
      * nodes under the same requirement sharing a position - is detected here before it ever reaches
      * {@link Requirement}'s constructor.
@@ -1694,7 +1694,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     /**
      * Substitutes {@link #LEGACY_ACCEPTANCE_CRITERION_PLACEHOLDER} for a read result that is empty
      * or, once read back, does not carry gap-free, duplicate-free, ascending positions (a
-     * store-first, ADR-005, malformed acceptance-criteria set) - see
+     * store-first, malformed acceptance-criteria set) - see
      * {@link #hasConsecutiveAcceptanceCriterionPositions} and the placeholder constant's javadoc for
      * why neither must ever reach {@link Requirement}'s constructor.
      */
@@ -1741,7 +1741,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * fails {@code sh:class} at write time. This is unreachable via the MCP tools -
      * {@code req_link_constraint} always resolves an existing, immutable {@link Constraint} via
      * {@code ConstraintRepository#findByCode} first - and only reachable via a store-first
-     * (ADR-005) edge to a dangling identity, which is rejected rather than silently persisted.</p>
+     * edge to a dangling identity, which is rejected rather than silently persisted.</p>
      */
     private void constraintAssertedContext(ProjectId projectId, List<IRI> constraintIris, Graph assertedContext) {
         if (constraintIris.isEmpty()) {
@@ -1798,7 +1798,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * <strong>not</strong> filtered the same way: {@code requirements-shapes.ttl}'s
      * {@code Requirement-status} shape SHACL-legally allows six status individuals, but
      * {@link RequirementStatus} only implements two. Filtering the other four out here would
-     * silently make a SHACL-legal, store-first (ADR-005) requirement invisible to
+     * silently make a SHACL-legal, store-first requirement invisible to
      * {@code req_list}/{@code req_get} instead of failing loudly -
      * {@link UnsupportedRequirementStatusException} is thrown directly (never as a wrapped
      * {@link IllegalStateException}) so the caller sees which requirement and which unsupported
@@ -1845,7 +1845,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
 
     /**
      * Decodes the optional {@code arkreq:priority} binding, guarding the {@link IRI} cast against
-     * a store-first (ADR-005) value of the wrong RDF term kind - {@code requirements-shapes.ttl}'s
+     * a store-first value of the wrong RDF term kind - {@code requirements-shapes.ttl}'s
      * {@code Requirement-priority} shape has no {@code sh:nodeKind}, so a literal there is
      * SHACL-legal at {@code sh:Warning} severity and never rejected by the write gate. Unlike
      * {@link #statusFromIri} (a mandatory field, so a SHACL-legal but undecodable value fails

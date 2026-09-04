@@ -37,7 +37,7 @@ import de.hauschel.arknet.persistence.ArkprjVocabulary;
  * The ttl is not loaded at runtime by anything (unlike the shapes and the requirements axioms,
  * which the gate factories parse), so it cannot notice the drift either. This module is where
  * such a seam belongs: an invariant across a module cut, held by reviewer attention alone
- * otherwise (ADR-016).</p>
+ * otherwise.</p>
  *
  * <p>Deliberately bidirectional. A constant without an ontology term ships a statement arknet
  * never explains; an ontology term without a constant means the documented vocabulary has a

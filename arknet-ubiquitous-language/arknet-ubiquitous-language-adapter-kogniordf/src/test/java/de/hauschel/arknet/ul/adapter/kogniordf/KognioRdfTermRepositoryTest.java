@@ -1233,7 +1233,7 @@ class KognioRdfTermRepositoryTest {
      * {@code dcterms:identifier}, no {@code skos:prefLabel}, no {@code skos:definition}. Written
      * raw, because no in-port can produce it: {@code term_add} always writes both literals, and
      * {@code ulshapes:Term-prefLabel}'s {@code sh:minCount 1} would reject this shape at the write
-     * gate. Store-first (ADR-005) data that arrived some other way is exactly the case
+     * gate. Store-first data that arrived some other way is exactly the case
      * {@code findAllCodes} has to survive.
      */
     private void givenBareConcept(ProjectId projectId, TermId id, String code) {
@@ -1251,7 +1251,7 @@ class KognioRdfTermRepositoryTest {
     /**
      * The same bare concept, only anonymous: {@code []} mints a fresh blank node, the node kind
      * {@code ulshapes:TermShape} never rules out and {@code term_add} never produces. Written raw
-     * for the same reason as its IRI sibling - only a store-first (ADR-005) write can put a code on
+     * for the same reason as its IRI sibling - only a store-first write can put a code on
      * a subject shaped like this.
      */
     private void givenBareBlankNodeConcept(ProjectId projectId, String code) {
@@ -1300,7 +1300,7 @@ class KognioRdfTermRepositoryTest {
     /**
      * Writes a {@code skos:Concept} with a blank-node subject straight into the terms graph -
      * {@code ulshapes:TermShape} places no {@code sh:nodeKind sh:IRI} on the subject, so this is
-     * SHACL-legal store-first (ADR-005), even though {@code term_add} always mints an IRI
+     * SHACL-legal store-first, even though {@code term_add} always mints an IRI
      * subject via {@link de.hauschel.arknet.kernel.ResourceIdFactory}.
      */
     private void givenBlankNodeTerm(ProjectId projectId, String code, String prefLabel, String definition) {
@@ -1317,7 +1317,7 @@ class KognioRdfTermRepositoryTest {
         }
     }
 
-    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+    // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
      * ADR-014 revision basis for this bounded context's funnel write paths: {@code create}
@@ -1364,7 +1364,7 @@ class KognioRdfTermRepositoryTest {
      * legally invoke it with nothing but the identifying {@code code}. Such a call must be a true
      * no-op - no write, no revision, no head movement - exactly like the symmetric guard in
      * {@code RequirementService#updateWithOptimisticRetry}: a revision documents a model change
-     * (ADR-011/ADR-014), and recording one for an empty patch would both grow the immutable
+     * (ADR-011), and recording one for an empty patch would both grow the immutable
      * provenance trail without cause and hand a concurrent CAS writer a spurious conflict.
      */
     @Test

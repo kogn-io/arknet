@@ -77,7 +77,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * <p><strong>Create vs. compare-and-set update (opaque identity).</strong> The transactional
  * mechanics - the in-transaction {@code contains} existence guards, the SHACL gate, the
  * commit-conflict translation and the head comparison - live in the shared {@link WriteFunnel}
- * (ADR-013/ADR-014), not here. {@link #create} rejects an existing subject with
+ * (ADR-013), not here. {@link #create} rejects an existing subject with
  * {@link ResourceAlreadyExistsException} and a business-code collision (by
  * {@code dcterms:identifier}) with {@link DuplicateActorCodeException}; {@link #compareAndUpdate}
  * rejects a missing subject with {@link ActorNotFoundException}, a stale {@code expectedHead} with
@@ -102,7 +102,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * no validation-only asserted context is needed.</p>
  *
  * <p><strong>Row multiplication.</strong> SHACL gates writes, not the store: a store-first
- * (ADR-005) actor can legally carry two {@code arknet:name}, two {@code arknet:description} or two
+ * actor can legally carry two {@code arknet:name}, two {@code arknet:description} or two
  * of the four actor types despite {@code actor-shapes.ttl} demanding at most one of each. Every
  * read path therefore groups its rows per subject and reduces each field with
  * {@link #firstDistinctValue} - the same guard the bounded-context adapter needed (issue #158) -
@@ -173,7 +173,7 @@ public class KognioRdfActorRepository implements ActorRepository {
     }
 
     /**
-     * Compare-and-set update (ADR-014): replaces the actor's triples only if its
+     * Compare-and-set update: replaces the actor's triples only if its
      * {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
      * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window a
      * plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
@@ -447,7 +447,7 @@ public class KognioRdfActorRepository implements ActorRepository {
 
     /**
      * Lists every actor this adapter can materialise. {@code arknet:name} is joined as a mandatory
-     * pattern, so a store-first (ADR-005) actor written without one binds no row at all and is
+     * pattern, so a store-first actor written without one binds no row at all and is
      * silently skipped here - {@code actshapes:Actor-name} carries {@code sh:minCount 1} at
      * {@code sh:Violation} severity, so nothing written through this port can end up that way, but
      * an edit that bypassed it can. Skipping keeps the listing readable; what must not follow from
@@ -484,7 +484,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      * Reads every registered actor's business code straight off {@code dcterms:identifier}, joining
      * nothing but the type triple {@link #actorTypeFilter} needs - in particular not
      * {@code arknet:name}, whose mandatory join in {@link #findAll} is exactly what hides a
-     * store-first (ADR-005) actor from that read while its {@code ACTOR-N} stays taken
+     * store-first actor from that read while its {@code ACTOR-N} stays taken
      * (kogn-io/arknet#360, see {@link ActorRepository#findAllCodes}'s own javadoc). The same type
      * filter as every other read path, because one {@code ACTOR-N} counter spans all four actor
      * types: a code missed here is a code handed out twice.
@@ -560,7 +560,7 @@ public class KognioRdfActorRepository implements ActorRepository {
      * {@code WARN} naming {@code subjectIri}/{@code fieldName} when more than one distinct value was
      * collapsed. The shared row-multiplication guard behind both read paths - {@code actor-shapes.ttl}
      * bounds every field to one value, but SHACL gates writes rather than the store, so a
-     * store-first (ADR-005) actor can legally bind more than one row per field.
+     * store-first actor can legally bind more than one row per field.
      */
     private static <T> T firstDistinctValue(List<T> candidates, String subjectIri, String fieldName) {
         if (candidates.isEmpty()) {

@@ -475,7 +475,7 @@ class KognioRdfUseCaseRepositoryTest {
     /**
      * Regression test for the {@code primaryActor} blank-node bug:
      * {@code arkreq:primaryActor} carries no {@code sh:nodeKind} constraint, so a store-first
-     * (ADR-005) use case may legally target a blank node with it. Reading such a use case back
+     * use case may legally target a blank node with it. Reading such a use case back
      * must not throw a {@link ClassCastException} out of {@code readBySubject} - and, because
      * {@code primaryActor} is a required (non-{@code OPTIONAL}) triple pattern in the scalar
      * read, the malformed use case is treated as "not found" rather than crashing the rest of
@@ -505,7 +505,7 @@ class KognioRdfUseCaseRepositoryTest {
     /**
      * Regression test: {@code arkreq:mainStep} is only
      * {@code sh:Warning} severity at {@code sh:minCount 1} in the SHACL shapes, so
-     * {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case with zero main-step
+     * {@link ShaclWriteGate#enforce} lets a store-first use case with zero main-step
      * triples through. Reading such a use case back must not let {@link UseCase}'s "at least one
      * step" invariant throw out of {@code readBySubject} - mirroring the blank-node
      * {@code primaryActor} guard, the malformed use case is treated as "not found" rather than
@@ -593,7 +593,7 @@ class KognioRdfUseCaseRepositoryTest {
      * Regression test: nothing in SHACL prevents two distinct
      * {@code arkreq:Step} nodes under the same use case's {@code arkreq:mainStep} from sharing
      * the same {@code arkreq:position} - uniqueness is only enforced in-process by
-     * {@code UseCase.requireConsecutiveStepPositions}, and store-first data (ADR-005) never runs
+     * {@code UseCase.requireConsecutiveStepPositions}, and store-first data never runs
      * through that. Correlating a step's {@code arkreq:stepRealises} edges by the derived
      * position integer instead of the step's own IRI would silently merge the two steps'
      * requirement references under one key, then throw a duplicate-position
@@ -659,7 +659,7 @@ class KognioRdfUseCaseRepositoryTest {
      * {@code sh:maxCount 1}. A second {@code primaryActor} is unreachable through
      * {@link UseCaseRepository#create} - {@link UseCase#primaryActor()} is a single-valued
      * field - so this exercises the wired gate directly against a synthetic candidate graph, the
-     * way a store-first (ADR-005) write could still produce two triples.
+     * way a store-first write could still produce two triples.
      */
     @Test
     void gateRejectsUseCaseWithTwoPrimaryActors() {
@@ -820,7 +820,7 @@ class KognioRdfUseCaseRepositoryTest {
         assertTrue(ex.getMessage().contains("stepText"), ex.getMessage());
     }
 
-    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+    // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
      * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
@@ -957,8 +957,8 @@ class KognioRdfUseCaseRepositoryTest {
     }
 
     /**
-     * A blank-node {@code usesTerm}/{@code constrainedBy} target is store-first-only (ADR-005;
-     * both shapes carry {@code sh:nodeKind sh:IRI}, but that only guards this adapter's own
+     * A blank-node {@code usesTerm}/{@code constrainedBy} target is store-first-only (both
+     * shapes carry {@code sh:nodeKind sh:IRI}, but that only guards this adapter's own
      * writes, not what a store-first write already put there) - {@link
      * UseCase#usesTerms()}/{@link UseCase#constrainedBy()} can never carry it, so an update that
      * never reads it back must still not silently drop it from the store, mirroring

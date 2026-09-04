@@ -42,7 +42,7 @@ final class InMemoryTermRepository implements TermRepository {
      * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately kept out of
      * {@link #byProject}, so {@link #findAll} never sees them while {@link #findAllCodes} always
      * does. What lets a test reproduce, without a real store, the read-time skip the real
-     * out-adapter performs on a store-first (ADR-005) concept that carries no
+     * out-adapter performs on a store-first concept that carries no
      * {@code skos:prefLabel} or no {@code skos:definition}: a term that exists and holds its code,
      * but cannot be materialised into a {@link Term} right now (kogn-io/arknet#360).
      */

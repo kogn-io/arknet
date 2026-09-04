@@ -52,7 +52,7 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
     /**
      * Codes seeded by {@link #seedUnmaterialisableCode} - deliberately kept out of
      * {@link #byProject}, so {@link #findAll} never reports them while {@link #findAllCodes}
-     * always does. What lets a test reproduce the real out-adapter's store-first (ADR-005) skip
+     * always does. What lets a test reproduce the real out-adapter's store-first skip
      * without a real store: a bounded context whose {@code BC-N} is assigned and whose subject
      * exists, but which misses {@code arknet:name} or {@code arkddd:domainVision} and therefore
      * binds no row in {@code findAll}'s query (kogn-io/arknet#360).
@@ -127,7 +127,7 @@ final class InMemoryBoundedContextRepository implements BoundedContextRepository
 
     /**
      * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will - simulating a
-     * bounded context written store-first (ADR-005) without {@code arknet:name} or
+     * bounded context written store-first without {@code arknet:name} or
      * {@code arkddd:domainVision}, which the real out-adapter's listing query cannot bind even
      * though the code stays taken (kogn-io/arknet#360). No {@link BoundedContext} is constructed
      * for it on purpose: the record's own invariants forbid exactly the incomplete state being

@@ -34,7 +34,7 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
 /**
  * Policy tests for {@link ProjectService}: registration, anchor attachment, renaming and
- * resolution rules (ADR-016), exercised against in-memory fakes for both driven ports.
+ * resolution rules, exercised against in-memory fakes for both driven ports.
  */
 class ProjectServiceTest {
 

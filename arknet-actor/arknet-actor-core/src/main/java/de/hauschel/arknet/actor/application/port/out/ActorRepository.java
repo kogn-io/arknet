@@ -65,7 +65,7 @@ public interface ActorRepository {
      *
      * <p><strong>The token guards writes made through this port, not edits that bypass it.</strong>
      * {@code expectedHead} only ever changes when a write goes through this port's own
-     * {@code create}/{@code compareAndUpdate} (ADR-014); a direct store-first (ADR-005) edit to
+     * {@code create}/{@code compareAndUpdate}; a direct store-first edit to
      * this actor leaves the token untouched. Such an edit therefore passes this method's
      * compare-and-set check undetected, and the subsequent replace-by-identity write silently
      * overwrites it. The guard closes the lost-update window between two callers of this port, not
@@ -105,7 +105,7 @@ public interface ActorRepository {
 
     /**
      * Reads an actor's current state together with its concurrency token (recorded by the last
-     * write through this port, ADR-014). State and token come from one query call - one snapshot -
+     * write through this port). State and token come from one query call - one snapshot -
      * which is the load-bearing guarantee here, not an ordering of clauses within that query. Backs
      * the read side of the read-modify-write round trip {@link #compareAndUpdate} guards the write
      * side of.
@@ -137,7 +137,7 @@ public interface ActorRepository {
      * Returns the business code of every actor registered in a project, read independently of
      * whether that actor can currently be materialised into an {@link Actor} - unlike
      * {@link #findAll}, which needs a name to build one and therefore passes over a store-first
-     * (ADR-005) actor that has none, this method reports its code too.
+     * actor that has none, this method reports its code too.
      *
      * <p><strong>Why this exists (kogn-io/arknet#360).</strong>
      * {@link de.hauschel.arknet.actor.application.ActorService#add} derives the next free

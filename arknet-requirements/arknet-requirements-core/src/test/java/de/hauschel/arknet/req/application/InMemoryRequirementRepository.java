@@ -180,7 +180,7 @@ final class InMemoryRequirementRepository implements RequirementRepository {
     /**
      * Plants a code that {@link #findAllCodes} reports and {@link #findAll} never will - the fake's
      * stand-in for a requirement the real out-adapter reads but cannot materialise, its mandatory
-     * {@code title} or {@code description} having been left unreadable by a store-first (ADR-005)
+     * {@code title} or {@code description} having been left unreadable by a store-first
      * write. Nothing but the code is stored, because nothing but the code is what such a
      * requirement still contributes: the counter has to see it, every other read must not.
      */

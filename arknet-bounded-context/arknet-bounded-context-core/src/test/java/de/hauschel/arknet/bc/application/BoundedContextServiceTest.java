@@ -109,7 +109,7 @@ class BoundedContextServiceTest {
     }
 
     /**
-     * A bounded context minted store-first (ADR-005) may carry a {@code dcterms:identifier} that
+     * A bounded context minted store-first may carry a {@code dcterms:identifier} that
      * does not follow the {@code BC-N} scheme at all - the next-code computation must skip such a
      * code as if it contributed no running number, rather than letting the parse failure surface.
      */

@@ -116,7 +116,7 @@ import de.hauschel.arknet.persistence.WriteFunnel;
  * see {@code AdrService}'s class javadoc), so every touched field/position in one call resolves the
  * same tag.</p>
  *
- * <p><strong>Tolerant reads.</strong> A store-first (ADR-005) anomaly this adapter cannot decode into
+ * <p><strong>Tolerant reads.</strong> A store-first anomaly this adapter cannot decode into
  * a legal {@link Adr} - an unrecognised status, a broken status/supersededBy bi-implication, or any
  * other {@link Adr} constructor invariant (e.g. two {@code arkarch:optionOutcome Chosen} children) -
  * is logged at {@code WARN} and the one decision is skipped, never crashing {@link #findByCode}/
@@ -166,7 +166,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * {@code ADR-2} precedes {@code ADR-10}. The parse is {@link CodeCounter}'s, shared with
      * {@code AdrService}'s own counter (kogn-io/arknet#360) so the two can never drift apart on what
      * counts as a number; the natural-order tiebreak keeps two distinct unparseable store-first
-     * (ADR-005) codes from collapsing into one {@link TreeSet} entry.
+     * codes from collapsing into one {@link TreeSet} entry.
      */
     private static final Comparator<String> CODE_BY_RUNNING_NUMBER =
             Comparator.<String>comparingInt(code -> CodeCounter.runningNumber(CODE_PREFIX, code))
@@ -731,7 +731,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
      * the set this feeds ({@link AdrRepository.CurrentAdr#nameContextDecisionLanguages()}) is never
      * queried for {@code null} membership - and {@link Set#copyOf} rejects a {@code null} element
      * outright, so admitting one here would crash every read of a decision with an untagged
-     * name/context/decision literal (store-first, ADR-005, or written before this issue).
+     * name/context/decision literal (store-first, or written before this issue).
      */
     private Set<String> allLanguageTags(DatasetHandle handle, String subject, String predicateIri) {
         String query = "SELECT ?o WHERE { GRAPH <" + ADR_GRAPH + "> { " + subject + " <" + predicateIri + "> ?o } }";
@@ -934,7 +934,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
 
     /**
      * {@code new Adr(...)}, tolerant of every invariant that constructor enforces: a store-first
-     * (ADR-005) violation (a status/supersededBy bi-implication break, a gap in a child list's
+     * violation (a status/supersededBy bi-implication break, a gap in a child list's
      * positions, more than one {@code Chosen} option, ...) is logged at {@code WARN} and skips this
      * one decision instead of taking {@link #findByCode}/{@link #findAll} down with it.
      */

@@ -587,7 +587,7 @@ class KognioRdfBoundedContextRepositoryTest {
 
     /**
      * {@code arkddd:ownedBy} carries no {@code sh:maxCount} at all (only {@code sh:Warning}), so a
-     * store-first (ADR-005) bounded context can legally carry two of them for the same subject.
+     * store-first bounded context can legally carry two of them for the same subject.
      * {@link KognioRdfBoundedContextRepository#findByCode} used to run a single query joining
      * {@code subdomain} and {@code ownedBy} as two independent {@code OPTIONAL}s and take whatever
      * row {@code .findFirst()} happened to return - an unlogged, non-deterministic pick. This pins
@@ -714,7 +714,7 @@ class KognioRdfBoundedContextRepositoryTest {
         appender.stop();
     }
 
-    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+    // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
      * ADR-014 revision basis, exercised against a real store: every write through the funnel
@@ -878,7 +878,7 @@ class KognioRdfBoundedContextRepositoryTest {
     }
 
     /**
-     * A store-first (ADR-005) bounded context without {@code arknet:name}/{@code arkddd:domainVision}
+     * A store-first bounded context without {@code arknet:name}/{@code arkddd:domainVision}
      * is invisible to {@code findByCode}/{@code findAll} - but it still carries an identity and a
      * code, and the display resolution must therefore still find it. That is why this join covers
      * {@code dcterms:identifier} alone.
