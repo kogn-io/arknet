@@ -15,6 +15,9 @@
 @prefix sh:      <http://www.w3.org/ns/shacl#> .
 @prefix arkarch: <https://w3id.org/arknet/architecture#> .
 @prefix arknet:  <https://w3id.org/arknet/core#> .
+@prefix arkreq:  <https://w3id.org/arknet/requirements#> .
+@prefix arkddd:  <https://w3id.org/arknet/ddd#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
 @prefix ashapes: <https://w3id.org/arknet/shapes/architecture#> .
@@ -40,7 +43,10 @@ ashapes:ADRShape
     sh:property ashapes:ADR-consideredOption-class ;
     sh:sparql   ashapes:ADR-consideredOption-atMostOneChosen ;
     sh:property ashapes:ADR-relatedTo ;
-    sh:property ashapes:ADR-supersededBy .
+    sh:property ashapes:ADR-supersededBy ;
+    sh:property ashapes:ADR-addressesRequirement ;
+    sh:property ashapes:ADR-affectsContext ;
+    sh:property ashapes:ADR-usesTerm .
 
 ashapes:ADR-identifier
     a sh:PropertyShape ;
@@ -161,9 +167,17 @@ ashapes:ADR-consideredOption-class
 # so an adr_update that only touched relatedTo could spuriously fail on a decision that had always
 # carried a single Chosen option. $this-scoped SPARQL evaluates one focus node at a time and is not
 # affected by a sibling focus node of the same shape.
+#
+# kogn-io/arknet#378: reproduced 2026-09-04 against RDF4J 6.0.1 (this project's current
+# rdf4j.version) - the misfire from #376 is NOT fixed upstream by the 6.0.0 -> 6.0.1 upgrade, so
+# this workaround stays. Prepared upstream bug-report text (minimal reproduction, not yet filed):
+# docs/upstream-reports/rdf4j-shaclsail-qualifiedmaxcount-two-focus-nodes.md. Re-check this comment
+# and that report at the next RDF4J upgrade, and only then consider reverting to
+# sh:qualifiedValueShape/sh:qualifiedMaxCount.
 ashapes:ADR-consideredOption-atMostOneChosen
     a sh:SPARQLConstraint ;
     sh:message  "At most one arkarch:consideredOption may have arkarch:optionOutcome arkarch:Chosen."@en , "Hoechstens eine arkarch:consideredOption darf arkarch:optionOutcome arkarch:Chosen tragen."@de ;
+    sh:severity sh:Violation ;
     sh:select   """
         PREFIX arkarch: <https://w3id.org/arknet/architecture#>
         SELECT DISTINCT $this
@@ -326,6 +340,47 @@ ashapes:ADR-supersededByRequiresSupersededStatus
         [ sh:property [ sh:path arkarch:adrStatus ; sh:hasValue arkarch:Superseded ] ]
     ) ;
     sh:message  "An ADR's status must be Superseded whenever its arkarch:supersededBy edge is set."@en , "Der Status einer ADR muss Superseded sein, sobald ihre arkarch:supersededBy-Kante gesetzt ist."@de ;
+    sh:severity sh:Violation .
+
+# Zero or more, cross-BC (kogn-io/arknet#351): an ADR may address any number of requirements, and
+# most address none - hence no sh:minCount and no sh:maxCount, mirroring ashapes:ADR-relatedTo.
+# arkreq:Requirement is the abstract base class of the requirements ontology - a real instance
+# always carries arkreq:FunctionalRequirement/NonFunctionalRequirement instead, but this gate loads
+# no ontology axioms/reasoning (unlike the requirements adapter's own gate), so sh:class only ever
+# fires against a type triple asserted verbatim. KognioRdfAdrRepository#crossReferenceAssertedContext
+# asserts exactly that - a plain arkreq:Requirement type triple, not the specific subclass - for
+# every addressesRequirement/affectsContext/usesTerm target, the same "type-only, no further shape
+# revalidation" trick KognioRdfRequirementRepository already uses for its own arkreq:usesTerm edge:
+# neither RequirementShape, BoundedContextShape nor a term/Concept shape lives in this shapes file
+# (unlike ashapes:ADR-relatedTo/ADR-supersededBy, whose sh:class target - arkarch:ArchitectureDecisionRecord -
+# is ADRShape's own target class and therefore does get revalidated, which is why that assertedContext
+# copies five fields instead of one type triple). The existence check itself already happened before
+# the write, in RequirementLookup/BoundedContextLookup/TermLookup - this shape is a store-first
+# backstop, not a second existence check on the tool-mediated write path.
+ashapes:ADR-addressesRequirement
+    a sh:PropertyShape ;
+    sh:path     arkarch:addressesRequirement ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkreq:Requirement ;
+    sh:message  "An arkarch:addressesRequirement edge must point at an arkreq:Requirement identified by an IRI."@en , "Eine arkarch:addressesRequirement-Kante muss auf ein arkreq:Requirement mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
+
+# Zero or more, cross-BC (kogn-io/arknet#351) - same reasoning as ashapes:ADR-addressesRequirement above.
+ashapes:ADR-affectsContext
+    a sh:PropertyShape ;
+    sh:path     arkarch:affectsContext ;
+    sh:nodeKind sh:IRI ;
+    sh:class    arkddd:BoundedContext ;
+    sh:message  "An arkarch:affectsContext edge must point at an arkddd:BoundedContext identified by an IRI."@en , "Eine arkarch:affectsContext-Kante muss auf einen arkddd:BoundedContext mit IRI zeigen."@de ;
+    sh:severity sh:Violation .
+
+# Zero or more, cross-BC (kogn-io/arknet#351) - same reasoning as ashapes:ADR-addressesRequirement above.
+ashapes:ADR-usesTerm
+    a sh:PropertyShape ;
+    sh:path     arkarch:usesTerm ;
+    sh:nodeKind sh:IRI ;
+    sh:class    skos:Concept ;
+    sh:message  "An arkarch:usesTerm edge must point at a skos:Concept (glossary term) identified by an IRI."@en , "Eine arkarch:usesTerm-Kante muss auf ein skos:Concept (Glossarbegriff) mit IRI zeigen."@de ;
     sh:severity sh:Violation .
 
 # END OF ARCHITECTURE SHAPES

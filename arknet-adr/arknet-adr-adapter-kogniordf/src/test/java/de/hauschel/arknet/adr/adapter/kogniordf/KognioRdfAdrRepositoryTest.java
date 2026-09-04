@@ -683,6 +683,57 @@ class KognioRdfAdrRepositoryTest {
         assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
     }
 
+    // ---- ashapes:ADR-addressesRequirement/ADR-affectsContext/ADR-usesTerm (kogn-io/arknet#351),
+    // driven directly against the real gate: before this issue, none of the three carried a
+    // sh:class constraint, so a candidate graph could name any IRI regardless of what it was
+    // actually typed as - exactly the store-first gap the issue describes, reproduced here with a
+    // usesTerm edge pointing at something typed as a requirement instead of a skos:Concept, typed
+    // directly in the candidate rather than via KognioRdfAdrRepository#crossReferenceAssertedContext
+    // (which only ever synthesises the type the calling field expects - see that method's own
+    // javadoc for why it cannot catch this kind of mistake itself).
+
+    @Test
+    void writeRejectsAUsesTermEdgeToATargetThatIsNotASkosConcept() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI misclassifiedTarget = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.PROPOSED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.USES_TERM), misclassifiedTarget);
+        candidate.add(misclassifiedTarget, VocabRdf.TYPE,
+                rdf.createIRI("https://w3id.org/arknet/requirements#FunctionalRequirement"));
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
+    @Test
+    void writeRejectsAnAddressesRequirementEdgeToATargetThatIsNotARequirement() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI misclassifiedTarget = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.PROPOSED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.ADDRESSES_REQUIREMENT), misclassifiedTarget);
+        candidate.add(misclassifiedTarget, VocabRdf.TYPE,
+                rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
+    @Test
+    void writeRejectsAnAffectsContextEdgeToATargetThatIsNotABoundedContext() {
+        RDF rdf = new SimpleRdf();
+        IRI subject = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        IRI misclassifiedTarget = rdf.createIRI("https://w3id.org/arknet/id/" + UUID.randomUUID());
+        Graph candidate = minimalCandidate(rdf, subject, "ADR-1", ArkarchVocabulary.PROPOSED);
+        candidate.add(subject, rdf.createIRI(ArkarchVocabulary.AFFECTS_CONTEXT), misclassifiedTarget);
+        candidate.add(misclassifiedTarget, VocabRdf.TYPE,
+                rdf.createIRI("http://www.w3.org/2004/02/skos/core#Concept"));
+
+        ShaclWriteGate gate = KognioRdfAdrRepositoryFactory.buildGate(DisplayLocale.DEFAULT);
+        assertThrows(WriteConstraintViolationException.class, () -> gate.enforce(candidate));
+    }
+
     @Test
     void gateConformsWithExactlyOneChosenConsideredOptionAmongSeveral() {
         RDF rdf = new SimpleRdf();
@@ -718,7 +769,10 @@ class KognioRdfAdrRepositoryTest {
      * two thirds of the time pre-fix (driven directly against the real gate, exactly like
      * {@link #gateConformsWithExactlyOneChosenConsideredOptionAmongSeveral} plus a relatedTo peer);
      * {@code @RepeatedTest} rather than a single run because the flake would otherwise pass by luck
-     * about a third of the time even without the fix.
+     * about a third of the time even without the fix. kogn-io/arknet#378: the upstream RDF4J misfire
+     * itself is still reproducible against 6.0.1 (this project's current {@code rdf4j.version}, see
+     * {@code docs/upstream-reports/rdf4j-shaclsail-qualifiedmaxcount-two-focus-nodes.md}) - this test
+     * is what would go red first if a future RDF4J upgrade made the workaround unnecessary again.
      */
     @RepeatedTest(20)
     void gateConformsWithExactlyOneChosenAmongSeveralWhenARelatedToPeerIsAlsoAFocusNode() {
