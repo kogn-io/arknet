@@ -167,9 +167,17 @@ ashapes:ADR-consideredOption-class
 # so an adr_update that only touched relatedTo could spuriously fail on a decision that had always
 # carried a single Chosen option. $this-scoped SPARQL evaluates one focus node at a time and is not
 # affected by a sibling focus node of the same shape.
+#
+# kogn-io/arknet#378: reproduced 2026-09-04 against RDF4J 6.0.1 (this project's current
+# rdf4j.version) - the misfire from #376 is NOT fixed upstream by the 6.0.0 -> 6.0.1 upgrade, so
+# this workaround stays. Prepared upstream bug-report text (minimal reproduction, not yet filed):
+# docs/upstream-reports/rdf4j-shaclsail-qualifiedmaxcount-two-focus-nodes.md. Re-check this comment
+# and that report at the next RDF4J upgrade, and only then consider reverting to
+# sh:qualifiedValueShape/sh:qualifiedMaxCount.
 ashapes:ADR-consideredOption-atMostOneChosen
     a sh:SPARQLConstraint ;
     sh:message  "At most one arkarch:consideredOption may have arkarch:optionOutcome arkarch:Chosen."@en , "Hoechstens eine arkarch:consideredOption darf arkarch:optionOutcome arkarch:Chosen tragen."@de ;
+    sh:severity sh:Violation ;
     sh:select   """
         PREFIX arkarch: <https://w3id.org/arknet/architecture#>
         SELECT DISTINCT $this

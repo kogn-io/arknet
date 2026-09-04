@@ -769,7 +769,10 @@ class KognioRdfAdrRepositoryTest {
      * two thirds of the time pre-fix (driven directly against the real gate, exactly like
      * {@link #gateConformsWithExactlyOneChosenConsideredOptionAmongSeveral} plus a relatedTo peer);
      * {@code @RepeatedTest} rather than a single run because the flake would otherwise pass by luck
-     * about a third of the time even without the fix.
+     * about a third of the time even without the fix. kogn-io/arknet#378: the upstream RDF4J misfire
+     * itself is still reproducible against 6.0.1 (this project's current {@code rdf4j.version}, see
+     * {@code docs/upstream-reports/rdf4j-shaclsail-qualifiedmaxcount-two-focus-nodes.md}) - this test
+     * is what would go red first if a future RDF4J upgrade made the workaround unnecessary again.
      */
     @RepeatedTest(20)
     void gateConformsWithExactlyOneChosenAmongSeveralWhenARelatedToPeerIsAlsoAFocusNode() {
