@@ -25,6 +25,7 @@ import de.hauschel.arknet.adr.application.port.in.AcceptAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr;
 import de.hauschel.arknet.adr.application.port.in.AddAdr.NewAdr;
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.CheckAdrs.Rule;
 import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.DeleteAdr;
 import de.hauschel.arknet.adr.application.port.in.DeprecateAdr;
@@ -111,7 +112,12 @@ public final class AdrMcpTools {
             + " for a new paragraph. Links, headings, tables and HTML are deliberately not interpreted -"
             + " a reference belongs in the model (an edge such as usesTerm), not in a hand-written link.";
 
-    private static final String PROJECT_ANCHOR_DESCRIPTION =
+    /**
+     * Package-private rather than private: {@link AdrCheckMcpTools} declares the same argument on
+     * {@code adr_check} and must describe it in the same words - a caller reading two ADR tools
+     * should not have to work out whether two wordings mean two things.
+     */
+    static final String PROJECT_ANCHOR_DESCRIPTION =
             "Optional anchor identifying the project this call targets, used INSTEAD of the anchor "
                     + "your transport sends in the X-Arknet-Project-Anchor header. Only needed for a "
                     + "client that cannot set that header - most callers should omit this and let "
@@ -410,7 +416,7 @@ public final class AdrMcpTools {
      * visible only as a {@code WARN} log line an MCP caller never sees; this puts the same count in
      * the tool's own output instead.
      */
-    private static String skippedNote(final int skipped) {
+    static String skippedNote(final int skipped) {
         return "(" + skipped + (skipped == 1 ? " decision" : " decisions")
                 + " skipped: unresolvable store-first status or supersededBy data - see server logs)";
     }
@@ -422,14 +428,19 @@ public final class AdrMcpTools {
      * as an {@code sh:Warning} result the SHACL write gate never surfaces (it only ever rejects on
      * {@code sh:Violation}). Neither list is required: an empty result here is expected whenever the
      * record genuinely has none yet, not a defect.
+     *
+     * <p>The two sentences come from {@link Rule#NO_CONSEQUENCE}/{@link Rule#NO_CONSIDERED_OPTION}
+     * rather than from string literals here: {@code adr_check} reports the very same two gaps across
+     * the whole corpus (kogn-io/arknet#387), and a caller who meets the inline hint after a write and
+     * the corpus finding in a check should recognise them as one remark, not two.</p>
      */
     private static String missingContentWarnings(final Adr adr) {
         final List<String> warnings = new ArrayList<>();
         if (adr.consequences().isEmpty()) {
-            warnings.add("no consequence recorded");
+            warnings.add(Rule.NO_CONSEQUENCE.label());
         }
         if (adr.consideredOptions().isEmpty()) {
-            warnings.add("no considered option recorded");
+            warnings.add(Rule.NO_CONSIDERED_OPTION.label());
         }
         if (warnings.isEmpty()) {
             return "";
