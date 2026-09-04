@@ -400,11 +400,22 @@ public final class ProjectMcpTools {
     }
 
     /**
-     * Renders a project as its label, every anchor it is reachable by (typed, e.g.
-     * {@code path:/home/f/DEV/arknet}), its opaque identity, and its description/default
-     * language if either is set - the identity is not a caller-facing tool parameter anywhere in
-     * this adapter, but a later surface without an anchor of its own needs a stable value to
-     * address a project by.
+     * Renders a project as its label, every anchor it is reachable by (value first, type as a
+     * trailing annotation, e.g. {@code /home/f/DEV/arknet (path)}), its opaque identity, and its
+     * description/default language if either is set - the identity is not a caller-facing tool
+     * parameter anywhere in this adapter, but a later surface without an anchor of its own needs
+     * a stable value to address a project by.
+     *
+     * <p><strong>The type trails the value on purpose (issue #386).</strong> Every tool's
+     * {@code projectAnchor} parameter (and {@code callerAnchor} above) matches on
+     * {@link Anchor#value()} alone - the type is a display annotation, never part of the lookup
+     * key (ADR-016 decision 2, {@code Anchor#equals}). A {@code type:value} rendering put the
+     * type where it looked like part of the copyable value, so pasting a listed anchor straight
+     * into {@code projectAnchor} silently sent the type along and failed to resolve. Rendering
+     * the value first and the type in trailing parentheses keeps the anchor typed for a human
+     * reader while making the copyable substring exactly what {@code projectAnchor} expects - no
+     * parsing is added anywhere to strip a prefix, which would have made the server start
+     * interpreting anchor values, precisely what ADR-016 rules out.</p>
      */
     private static String format(final Project project) {
         final String anchors = project.anchors().stream()
@@ -422,7 +433,7 @@ public final class ProjectMcpTools {
     }
 
     private static String formatAnchor(final Anchor anchor) {
-        return anchor.type().name().toLowerCase(Locale.ROOT) + ":" + anchor.value();
+        return anchor.value() + " (" + anchor.type().name().toLowerCase(Locale.ROOT) + ")";
     }
 
     private static AnchorType parseAnchorType(final String anchorType) {
