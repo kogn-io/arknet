@@ -473,9 +473,11 @@ public final class HtmlReportRenderer {
                         html.append(badgePill(item.badge())).append(' ');
                     }
                     if (item.caption() != null) {
-                        final Optional<LangVariants> captionVariants = source != null && source.captionPredicate() != null
-                                ? languageVariants(source.resource(), source.captionPredicate(), item.caption(), displayLocale)
-                                : Optional.empty();
+                        final Optional<LangVariants> captionVariants =
+                                source != null && source.captionPredicate() != null
+                                        ? languageVariants(source.resource(), source.captionPredicate(),
+                                                item.caption(), displayLocale)
+                                        : Optional.empty();
                         html.append("<strong class=\"bullet-caption\">");
                         html.append(langSwitchable(escape(item.caption()), captionVariants,
                                 HtmlReportRenderer::escape, "span"));
