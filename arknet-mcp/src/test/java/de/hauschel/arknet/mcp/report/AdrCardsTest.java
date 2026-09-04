@@ -282,10 +282,20 @@ class AdrCardsTest {
 
     @Test
     void showsTheStatusAsABadge() {
-        final AdrCards cards = cardsFor(adr(ADR_1_ID, "ADR-1", AdrStatus.REJECTED));
+        final AdrCards cards = cardsFor(adr(ADR_1_ID, "ADR-1", AdrStatus.REJECTED), 0);
 
         assertThat(cards.section(PROJECT, Glossary.empty()).cards().getFirst().badges()).containsExactly(
                 new Badge(Badge.Kind.Known.STATUS, "Rejected"));
+    }
+
+    /** When ADRs are skipped (store-first status issues), a note in the section subtitle indicates this. */
+    @Test
+    void notesSkippedAdrsInTheSectionSubtitle() {
+        final AdrCards cards = cardsFor(adr(ADR_1_ID, "ADR-1", AdrStatus.ACCEPTED), 2);
+
+        final ModelSection section = cards.section(PROJECT, Glossary.empty());
+
+        assertThat(section.subtitle()).contains("2 decisions").contains("skipped");
     }
 
     // --- usesTerm (kogn-io/arknet#393) -----------------------------------------------------
@@ -370,9 +380,14 @@ class AdrCardsTest {
     }
 
     private static AdrCards cardsFor(final Adr adr) {
+        return cardsFor(adr, 0);
+    }
+
+    private static AdrCards cardsFor(final Adr adr, final int skipped) {
         return new AdrCards(
                 (projectId, displayLocale) -> List.of(new AdrDetail(adr, List.of(), List.of(), List.of())),
-                (projectId, ids) -> List.of(), (projectId, ids) -> List.of());
+                (projectId, ids) -> List.of(), (projectId, ids) -> List.of(),
+                (projectId, materialisedCount) -> skipped);
     }
 
     private static Block blockOf(final AdrCards cards, final String label) {

@@ -843,7 +843,7 @@ public class ArknetMcpConfiguration {
                 new RequirementCards(requirements),
                 new ConstraintCards(constraintService),
                 new BoundedContextCards(boundedContexts),
-                new AdrCards(adrs, resolveRequirements, boundedContexts),
+                new AdrCards(adrs, resolveRequirements, boundedContexts, adrs),
                 new ActorCards(actorService));
     }
 
