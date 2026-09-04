@@ -5,6 +5,7 @@ package de.hauschel.arknet.req.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,9 +28,10 @@ import de.hauschel.arknet.req.domain.ConstraintNotFoundException;
 import de.hauschel.arknet.req.domain.ConstraintType;
 
 /**
- * Concurrency tests for {@code ConstraintService#updateWithOptimisticRetry} - the read-modify-write
- * loop {@code constraint_update} runs (issue #313), and the only place in the constraint use cases
- * where a lost update could arise.
+ * Concurrency tests for {@link ConstraintService}: the lost-update race on
+ * {@code ConstraintService#updateWithOptimisticRetry} (issue #313), and the TOCTOU race on
+ * {@link ConstraintService#add}'s code assignment (kogn-io/arknet#402) - the two places in the
+ * constraint use cases where two racing callers could otherwise interfere.
  *
  * <p>Races are reproduced deterministically, without real threads, exactly as
  * {@link RequirementServiceConcurrencyTest} does it: a {@link ConstraintRepository} decorator runs
@@ -103,10 +105,38 @@ class ConstraintServiceConcurrencyTest {
         assertEquals(ConstraintService.MAX_RETRY_ATTEMPTS, racing.compareAndUpdateAttempts());
     }
 
+    /**
+     * Befund (TOCTOU in {@code nextCode()}): two concurrent {@code constraint_add} calls for the
+     * same subtype, when none exists yet, both compute the same candidate code client-side -
+     * exactly the race {@link RequirementServiceConcurrencyTest
+     * #concurrentAddCallsForTheSameTypeBothGetDistinctCodesInsteadOfOneFailing} pins for
+     * {@code req_add} (kogn-io/arknet#360), which every other BC already carries its own copy of
+     * except this one until kogn-io/arknet#402. Worth pinning here specifically because a
+     * constraint keeps three counters ({@code TCON-}/{@code BCON-}/{@code RCON-}) side by side
+     * behind the same {@link ConstraintRepository#findAllCodes} read, not just one.
+     */
+    @Test
+    void concurrentAddCallsForTheSameTypeBothGetDistinctCodesInsteadOfOneFailing() {
+        RaceOnFirstFindAllCodesRepository racing = new RaceOnFirstFindAllCodesRepository(store,
+                () -> otherCaller.add(WS, newTechnicalConstraint(), DEFAULT_LANGUAGE));
+        ConstraintService underTest = new ConstraintService(racing, resourceIdFactory);
+
+        Constraint result = underTest.add(WS, newTechnicalConstraint(), DEFAULT_LANGUAGE);
+
+        assertEquals(new ConstraintCode("TCON-2"), result.code());
+        assertEquals(2, store.findAll(WS, null).size());
+        assertTrue(store.findAll(WS, null).stream()
+                .map(Constraint::code)
+                .toList()
+                .containsAll(List.of(new ConstraintCode("TCON-1"), new ConstraintCode("TCON-2"))));
+    }
+
     private Constraint addTechnicalConstraint() {
-        return otherCaller.add(WS,
-                new NewConstraint("JVM", "Must run on the JVM", ConstraintType.TECHNICAL, DEFAULT_LANGUAGE),
-                DEFAULT_LANGUAGE);
+        return otherCaller.add(WS, newTechnicalConstraint(), DEFAULT_LANGUAGE);
+    }
+
+    private static NewConstraint newTechnicalConstraint() {
+        return new NewConstraint("JVM", "Must run on the JVM", ConstraintType.TECHNICAL, DEFAULT_LANGUAGE);
     }
 
     /** Deterministic fake minting sequential opaque ids, so tests never depend on randomness. */
@@ -173,6 +203,67 @@ class ConstraintServiceConcurrencyTest {
         @Override
         public List<ConstraintCode> findAllCodes(ProjectId projectId) {
             return delegate.findAllCodes(projectId);
+        }
+
+        @Override
+        public List<ResolveConstraints.ResolvedConstraint> findByIds(ProjectId projectId, List<ResourceId> ids) {
+            return delegate.findByIds(projectId, ids);
+        }
+    }
+
+    /**
+     * Decorator that runs {@code injection} exactly once, synchronously, right after the first
+     * {@link #findAllCodes} call returns - {@code nextCode()} reads via {@code findAllCodes} since
+     * kogn-io/arknet#360, so this simulates a concurrent {@code constraint_add} committing between
+     * this caller's code computation and its own {@code create()}. Mirrors {@code
+     * RequirementServiceConcurrencyTest}'s decorator of the same name.
+     */
+    private static final class RaceOnFirstFindAllCodesRepository implements ConstraintRepository {
+
+        private final ConstraintRepository delegate;
+        private final Runnable injection;
+        private boolean injected;
+
+        RaceOnFirstFindAllCodesRepository(ConstraintRepository delegate, Runnable injection) {
+            this.delegate = delegate;
+            this.injection = injection;
+        }
+
+        @Override
+        public void create(ProjectId projectId, Constraint constraint, String language) {
+            delegate.create(projectId, constraint, language);
+        }
+
+        @Override
+        public void compareAndUpdate(ProjectId projectId, RevisionToken expectedHead, Constraint updated,
+                String titleLanguage, String statementLanguage, String defaultLanguage) {
+            delegate.compareAndUpdate(projectId, expectedHead, updated, titleLanguage, statementLanguage,
+                    defaultLanguage);
+        }
+
+        @Override
+        public Optional<Constraint> findByCode(ProjectId projectId, ConstraintCode code, String displayLocale) {
+            return delegate.findByCode(projectId, code, displayLocale);
+        }
+
+        @Override
+        public Optional<CurrentConstraint> findCurrentByCode(ProjectId projectId, ConstraintCode code) {
+            return delegate.findCurrentByCode(projectId, code);
+        }
+
+        @Override
+        public List<Constraint> findAll(ProjectId projectId, String displayLocale) {
+            return delegate.findAll(projectId, displayLocale);
+        }
+
+        @Override
+        public List<ConstraintCode> findAllCodes(ProjectId projectId) {
+            List<ConstraintCode> result = delegate.findAllCodes(projectId);
+            if (!injected) {
+                injected = true;
+                injection.run();
+            }
+            return result;
         }
 
         @Override
