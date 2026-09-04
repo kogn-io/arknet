@@ -230,6 +230,46 @@ class KognioRdfRequirementRepositoryTest {
     }
 
     /**
+     * A blank-node subject that is a complete requirement in everything but its node kind
+     * (kogn-io/arknet#401) - the shape a store-first import that never minted IRIs produces. The
+     * bare fixture above never reaches {@code findAll}'s {@link io.kogn.rdf.terms.IRI} cast,
+     * because the listing query joins {@code arkreq:status} and this one carries it, and because
+     * the bulk per-predicate reads behind the listing join {@code dcterms:title} alone, with no
+     * type join in front. Before the guard either route threw a {@code ClassCastException} out of
+     * the whole call, so one anonymous subject cost the project its entire {@code req_list} - not
+     * the one skipped resource the listing documents for a subject it cannot materialise.
+     */
+    @Test
+    void findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing() {
+        Requirement first = new Requirement(
+                freshId(), new RequirementCode("FR-1"), "Login", "The system shall authenticate a user.", null,
+                RequirementType.FUNCTIONAL, RequirementStatus.PROPOSED, null, null, null, null,
+                List.of(new AcceptanceCriterion(1, "Login succeeds with valid credentials")), List.of());
+        repository.create(PROJECT_A, first, null);
+        givenPopulatedBlankNodeSubject(PROJECT_A, "FR-2");
+
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
+        assertTrue(repository.findByCode(PROJECT_A, new RequirementCode("FR-2"), null).isEmpty());
+    }
+
+    /** The fixture behind {@link #findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing}. */
+    private void givenPopulatedBlankNodeSubject(ProjectId projectId, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
+                + "[] a <https://w3id.org/arknet/requirements#FunctionalRequirement> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<https://w3id.org/arknet/requirements#status> "
+                + "<https://w3id.org/arknet/requirements#Proposed> ; "
+                + "<http://purl.org/dc/terms/title> \"Anonymous\" ; "
+                + "<http://purl.org/dc/terms/description> \"No identity.\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
      * The same lean subject without an identity of its own: {@code []} is a fresh blank node,
      * which {@code rshapes:RequirementShape} does not forbid and no {@code req_add} can mint. Only
      * a store-first write reaches this shape, and the code on it is taken all the same.

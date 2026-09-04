@@ -415,12 +415,19 @@ public class KognioRdfActorRepository implements ActorRepository {
      * multiplication cost the requirements adapter, so this text lives in one place. The caller
      * supplies the surrounding {@code SELECT}/{@code GRAPH}/{@code WHERE} wrapping and, in
      * {@link #findCurrentByCode}'s case, the additional provenance-graph join.
+     *
+     * <p>{@code FILTER(isIRI(?s))} because every caller casts {@code ?s} to an {@link IRI} to name the
+     * actor's identity (kogn-io/arknet#401), and {@code actor-shapes.ttl} constrains no node kind
+     * on the subject: a store-first blank-node actor used to make the whole call throw a
+     * {@link ClassCastException} rather than read as absent. {@link #findAllCodes} joins
+     * {@link #actorTypeFilter} alone and stays deliberately unguarded - see its own javadoc.</p>
      */
     private static String actorByCodeWhereClause(ActorCode code) {
         return "?s a ?type . "
                 + actorTypeFilter()
                 + "?s <" + IDENTIFIER_PROPERTY + "> \"" + SparqlTerms.escape(code.value()) + "\" . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s <" + DESCRIPTION_PROPERTY + "> ?description } ";
     }
 
@@ -463,6 +470,7 @@ public class KognioRdfActorRepository implements ActorRepository {
                 + actorTypeFilter()
                 + "?s <" + IDENTIFIER_PROPERTY + "> ?identifier . "
                 + "?s <" + NAME_PROPERTY + "> ?name . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s <" + DESCRIPTION_PROPERTY + "> ?description } } }";
 
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {

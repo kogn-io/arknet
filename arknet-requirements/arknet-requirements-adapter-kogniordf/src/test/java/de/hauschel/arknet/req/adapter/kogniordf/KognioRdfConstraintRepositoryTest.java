@@ -207,12 +207,52 @@ class KognioRdfConstraintRepositoryTest {
         create(PROJECT_A, first);
         givenBareBlankNodeSubject(PROJECT_A, "TCON-2");
 
-        // No findAll assertion alongside, unlike the IRI-subject test above: this adapter's
-        // findAll casts ?s to an IRI unguarded, so a blank-node subject makes it throw a
-        // ClassCastException rather than skip the row - a separate defect the glossary and
-        // requirements adapters already guard against, and not what this test is about.
+        // findAll must skip the same subject rather than crash on it - pinned separately by
+        // findAllSkipsABlankNodeSubjectInsteadOfCrashingTheWholeListing (kogn-io/arknet#401).
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
         assertTrue(repository.findAllCodes(PROJECT_A).contains(new ConstraintCode("TCON-2")),
                 repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * The listing side of the same fixture (kogn-io/arknet#401). {@code findAll} joins only the
+     * type triple and {@code dcterms:identifier}, so an anonymous subject binds {@code ?s} and
+     * reaches the {@link io.kogn.rdf.terms.IRI} cast: before the guard this threw a
+     * {@code ClassCastException} out of the whole call, taking every well-formed constraint of the
+     * project down with it. One skipped resource is the documented behaviour for a subject the
+     * listing cannot materialise - a dead {@code constraint_list} is not.
+     *
+     * <p>{@code findByCode} asserted alongside because it binds {@code ?s} through the very same
+     * clause: a blank-node holder of {@code TCON-2} is unaddressable, so the answer is "no such
+     * constraint", never an exception.</p>
+     */
+    @Test
+    void findAllSkipsABlankNodeSubjectInsteadOfCrashingTheWholeListing() {
+        Constraint first = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, first);
+        givenBareBlankNodeSubject(PROJECT_A, "TCON-2");
+
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
+        assertTrue(repository.findByCode(PROJECT_A, new ConstraintCode("TCON-2"), null).isEmpty());
+    }
+
+    /**
+     * A blank-node subject carrying the multilingual literals too (kogn-io/arknet#401). The bulk
+     * per-predicate reads behind {@code findAll} join {@code dcterms:title}/
+     * {@code arkreq:constraintStatement} alone, with no type join in front of them, so this
+     * subject reaches their {@code ?s} cast even when the listing query itself would already have
+     * dropped it. Both guards are needed; either one alone leaves {@code constraint_list} able to
+     * die on store-first data.
+     */
+    @Test
+    void findAllSkipsAFullyPopulatedBlankNodeSubject() {
+        Constraint first = new Constraint(freshId(), new ConstraintCode("TCON-1"), "JVM only",
+                "Must run on the JVM.", ConstraintType.TECHNICAL);
+        create(PROJECT_A, first);
+        givenPopulatedBlankNodeSubject(PROJECT_A, "TCON-2");
+
+        assertEquals(List.of(first), repository.findAll(PROJECT_A, null));
     }
 
     /**
@@ -242,6 +282,26 @@ class KognioRdfConstraintRepositoryTest {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
                 + "[] a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
                 + "<http://purl.org/dc/terms/identifier> \"" + code + "\" } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insert);
+                return null;
+            });
+        }
+    }
+
+    /**
+     * {@link #givenBareBlankNodeSubject} with the two mandatory literals added, so the subject is
+     * a complete constraint in everything but its node kind - the shape a store-first import that
+     * simply never minted IRIs produces, and the one that reaches the bulk literal reads
+     * (kogn-io/arknet#401).
+     */
+    private void givenPopulatedBlankNodeSubject(ProjectId projectId, String code) {
+        String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
+                + "[] a <https://w3id.org/arknet/requirements#TechnicalConstraint> ; "
+                + "<http://purl.org/dc/terms/identifier> \"" + code + "\" ; "
+                + "<http://purl.org/dc/terms/title> \"Anonymous\" ; "
+                + "<https://w3id.org/arknet/requirements#constraintStatement> \"No identity.\" } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(projectId.value()))) {
             handle.transactor().inTransaction(tx -> {
                 tx.update(insert);

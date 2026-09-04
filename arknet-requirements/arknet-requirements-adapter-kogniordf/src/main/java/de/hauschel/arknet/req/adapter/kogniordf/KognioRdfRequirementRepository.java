@@ -831,11 +831,21 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
      * second one: being optional, an {@code OPTIONAL} join would bind {@code null} for a
      * requirement that carries none, which no caller of this clause distinguishes from a missing
      * language candidate (issue #321).</p>
+     *
+     * <p>{@code FILTER(isIRI(?s))} lives in this clause and not in {@link #requirementTypeClause}
+     * (kogn-io/arknet#401): every read built on top of it casts {@code ?s} to an
+     * {@link IRI} to name the requirement's identity, and nothing in
+     * {@code requirements-shapes.ttl} constrains a requirement's node kind, so a store-first
+     * blank-node subject used to make {@code findByCode}/{@code findAll} throw a
+     * {@link ClassCastException} for the whole project instead of skipping the one subject they
+     * cannot address. {@link #findAllCodes} joins {@link #requirementTypeClause} alone and stays
+     * deliberately unguarded - see its own javadoc.</p>
      */
     private static String requirementWhereClause(String identifierClause) {
         return requirementTypeClause()
                 + identifierClause
                 + "?s <" + STATUS_PROPERTY + "> ?status . "
+                + "FILTER(isIRI(?s)) "
                 + "OPTIONAL { ?s <" + PRIORITY_PROPERTY + "> ?priority } "
                 + "OPTIONAL { ?s <" + MOTIVATED_BY_PROPERTY + "> ?motivatedBy } "
                 + "OPTIONAL { ?s <" + QUALITY_CATEGORY_PROPERTY + "> ?qualityCategory } ";
@@ -1018,9 +1028,15 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         return literalsBySubject(query, RATIONALE_PROPERTY);
     }
 
+    /**
+     * Carries a {@code FILTER(isIRI(?s))} of its own (kogn-io/arknet#401): this read joins the
+     * predicate alone, with no type join in front of it, so it binds any subject in the graph that
+     * carries the literal - including a blank node {@link #findAll}'s own query would already have
+     * dropped, and including the derived acceptance-criterion resources' own texts.
+     */
     private Map<String, List<LocalizedLiteral>> literalsBySubject(SparqlQuery query, String predicateIri) {
         String sparql = "SELECT ?s ?o WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
-                + "?s <" + predicateIri + "> ?o } }";
+                + "?s <" + predicateIri + "> ?o . FILTER(isIRI(?s)) } }";
         Map<String, List<LocalizedLiteral>> bySubject = new LinkedHashMap<>();
         query.select(sparql).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
@@ -1522,7 +1538,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private Map<String, List<TermRef>> readUsesTermsBySubject(SparqlQuery query) {
         String sparql = "SELECT ?s ?term WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + USES_TERM_PROPERTY + "> ?term } "
-                + "FILTER(isIRI(?term)) } ORDER BY ?s ?term";
+                + "FILTER(isIRI(?s) && isIRI(?term)) } ORDER BY ?s ?term";
         Map<String, List<TermRef>> bySubject = new LinkedHashMap<>();
         query.select(sparql).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
@@ -1552,7 +1568,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
     private Map<String, List<ConstraintRef>> readConstrainedByBySubject(SparqlQuery query) {
         String sparql = "SELECT ?s ?constraint WHERE { "
                 + "GRAPH <" + REQUIREMENTS_GRAPH + "> { ?s <" + CONSTRAINED_BY_PROPERTY + "> ?constraint } "
-                + "FILTER(isIRI(?constraint)) } ORDER BY ?s ?constraint";
+                + "FILTER(isIRI(?s) && isIRI(?constraint)) } ORDER BY ?s ?constraint";
         Map<String, List<ConstraintRef>> bySubject = new LinkedHashMap<>();
         query.select(sparql).forEach(row -> bySubject
                 .computeIfAbsent(iriOf(row, "s").getIRIString(), key -> new ArrayList<>())
@@ -1613,7 +1629,7 @@ public class KognioRdfRequirementRepository implements RequirementRepository {
         String sparql = "SELECT ?s ?criterion ?position ?text WHERE { GRAPH <" + REQUIREMENTS_GRAPH + "> { "
                 + "?s <" + ACCEPTANCE_CRITERION_PROPERTY + "> ?criterion . "
                 + "?criterion <" + POSITION_PROPERTY + "> ?position ; <" + CRITERION_TEXT_PROPERTY + "> ?text } "
-                + "FILTER(isIRI(?criterion)) } ORDER BY ?s ?position";
+                + "FILTER(isIRI(?s) && isIRI(?criterion)) } ORDER BY ?s ?position";
         Map<String, Map<String, Integer>> positionByCriterionBySubject = new LinkedHashMap<>();
         Map<String, Map<String, List<LocalizedLiteral>>> textsByCriterionBySubject = new LinkedHashMap<>();
         query.select(sparql).forEach(row -> {

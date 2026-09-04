@@ -581,12 +581,42 @@ class KognioRdfUseCaseRepositoryTest {
                 "[] a <https://w3id.org/arknet/requirements#UseCase> ; "
                         + "<http://purl.org/dc/terms/identifier> \"" + blankNodeCode.value() + "\" .");
 
-        // Deliberately no findAll assertion beside it, unlike the IRI-subject test above: findAll
-        // maps ?s through an unguarded IRI cast, so a blank-node subject makes it throw a
-        // ClassCastException instead of skipping the row. That is a separate defect - the glossary
-        // adapter guards the same spot - and not what this test pins.
+        // findAll skips the same subject rather than crashing on it - pinned separately by
+        // findAllSkipsABlankNodeSubjectInsteadOfCrashingTheWholeListing (kogn-io/arknet#401).
+        assertEquals(1, repository.findAll(PROJECT_A, null).size());
         assertTrue(repository.findAllCodes(PROJECT_A).contains(blankNodeCode),
                 repository.findAllCodes(PROJECT_A).toString());
+    }
+
+    /**
+     * The listing side of the same fixture (kogn-io/arknet#401). {@code findAll}'s outer query
+     * joins the type triple and {@code dcterms:identifier} only - everything else comes from
+     * follow-up reads per subject - so an anonymous subject binds {@code ?s} and reaches the
+     * {@link io.kogn.rdf.terms.IRI} cast. Before the guard that threw a
+     * {@code ClassCastException} out of the whole call: a single store-first blank node made
+     * {@code uc_list} unusable for the entire project, where the documented behaviour is to drop
+     * the one subject that cannot be materialised.
+     *
+     * <p>{@code findByCode} is asserted next to it because it binds {@code ?s} through the same
+     * pattern - a blank-node holder of {@code UC2} is unaddressable, hence empty rather than an
+     * exception.</p>
+     */
+    @Test
+    void findAllSkipsABlankNodeSubjectInsteadOfCrashingTheWholeListing() {
+        seedReferences(PROJECT_A);
+        repository.create(PROJECT_A, placeOrder(), null);
+
+        UseCaseCode blankNodeCode = new UseCaseCode("UC2");
+        seed(PROJECT_A, USE_CASES_GRAPH,
+                "[] a <https://w3id.org/arknet/requirements#UseCase> ; "
+                        + "<http://purl.org/dc/terms/identifier> \"" + blankNodeCode.value() + "\" ; "
+                        + "<http://purl.org/dc/terms/title> \"Anonymous\" .");
+
+        List<UseCase> all = repository.findAll(PROJECT_A, null);
+
+        assertEquals(1, all.size());
+        assertEquals(CODE_1, all.get(0).code());
+        assertEquals(Optional.empty(), repository.findByCode(PROJECT_A, blankNodeCode, null));
     }
 
     /**

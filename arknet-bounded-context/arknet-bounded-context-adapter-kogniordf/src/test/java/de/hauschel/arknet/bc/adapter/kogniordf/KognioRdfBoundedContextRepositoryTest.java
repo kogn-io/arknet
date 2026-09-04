@@ -197,6 +197,44 @@ class KognioRdfBoundedContextRepositoryTest {
                 repository.findAllCodes(PROJECT_A).toString());
     }
 
+    /**
+     * The node-kind case of the <em>listing</em> read (kogn-io/arknet#401). The bare blank node
+     * above misses {@code arknet:name} and {@code arkddd:domainVision}, both mandatory joins, and
+     * so never reaches {@code findAll}'s {@link IRI} cast; a blank-node subject carrying them - a
+     * complete bounded context in everything but its node kind, which only a store-first write can
+     * produce - does. Before the guard that cast threw a {@code ClassCastException} out of the
+     * whole call, so one anonymous subject cost the project its entire {@code bc_list} rather than
+     * the one row it cannot address. The {@code arkddd:ubiquitousLanguageTerm} edge is part of the
+     * fixture on purpose: the bulk term read behind the listing joins that predicate alone, with
+     * no type join in front of it, and casts {@code ?s} of its own.
+     *
+     * <p>{@code findByCode} shares the clause and is asserted with it: a {@code BC-2} nobody can
+     * name by IRI reads as absent, not as an exception.</p>
+     */
+    @Test
+    void findAllSkipsAFullyPopulatedBlankNodeSubjectInsteadOfCrashingTheWholeListing() {
+        repository.create(PROJECT_A, boundedContext(new BoundedContextCode("BC-1"), null, null, List.of()));
+        String insertBlankNodeContext = "INSERT DATA { GRAPH <" + BOUNDED_CONTEXT_GRAPH + "> { "
+                + "[] a <" + BOUNDED_CONTEXT_TYPE + "> ; "
+                + "<http://purl.org/dc/terms/identifier> \"BC-2\" ; "
+                + "<https://w3id.org/arknet/core#name> \"Anonymous\" ; "
+                + "<https://w3id.org/arknet/ddd#domainVision> \"No identity.\" ; "
+                + "<https://w3id.org/arknet/ddd#ubiquitousLanguageTerm> "
+                + "<https://w3id.org/arknet/id/some-term> } }";
+        try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {
+            handle.transactor().inTransaction(tx -> {
+                tx.update(insertBlankNodeContext);
+                return null;
+            });
+        }
+
+        List<BoundedContext> all = repository.findAll(PROJECT_A);
+
+        assertEquals(1, all.size());
+        assertEquals(new BoundedContextCode("BC-1"), all.get(0).code());
+        assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-2")).isEmpty());
+    }
+
     @Test
     void findByCodeIsEmptyForUnknownCode() {
         assertTrue(repository.findByCode(PROJECT_A, new BoundedContextCode("BC-99")).isEmpty());
