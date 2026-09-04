@@ -411,7 +411,7 @@ public class ArknetMcpConfiguration {
     /**
      * The display language this server instance reads labels in - a consumer-supplied context,
      * injected once per process as this single bean (unlike {@link ProjectId}, which arknet-mcp
-     * resolves per call from the caller's anchor rather than fixing at boot, ADR-009).
+     * resolves per call from the caller's anchor rather than fixing at boot).
      * A glossary concept may carry {@code skos:prefLabel} in several languages;
      * {@link DisplayLocale#select} then chooses which one the read paths surface, degrading
      * through a fixed fallback chain (requested language, {@code arknet.locale.requested} -> system
@@ -655,7 +655,7 @@ public class ArknetMcpConfiguration {
     /**
      * The clock supplies the day {@code adr_set_status} stamps onto a decision it accepts or rejects
      * (kogn-io/arknet#374). System default zone rather than UTC: the date recorded is the one the
-     * person making the decision would write down, and this is a local single-user client (ADR-001),
+     * person making the decision would write down, and this is a local single-user client,
      * not a service serving callers in other zones.
      */
     @Bean
@@ -919,7 +919,7 @@ public class ArknetMcpConfiguration {
      * open by hand (issue #391). Purely additive - {@code store_overview} keeps writing the file
      * exactly as before; this bean only registers a second, read-only consumer of the same
      * rendering, guarded by the same loopback allowlist as the MCP transport
-     * ({@link LoopbackHostSecurity}, ADR-009 decision 4).
+     * ({@link LoopbackHostSecurity}).
      */
     @Bean
     StoreReportController storeReportController(final StoreReportTools storeReportTools) {

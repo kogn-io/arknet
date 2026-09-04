@@ -84,7 +84,7 @@ class DependencyRulesTest {
 
     /**
      * Rule 1 -- the property that justifies {@code arknet-persistence-support} existing as its
-     * own module rather than being merged into the shared kernel (ADR-007).
+     * own module rather than being merged into the shared kernel.
      *
      * <p>The write gate is shared by all three out-adapters, every one of which depends on
      * RDF4J. The gate itself must not: it knows only the {@code io.kogn.rdf.shacl}/{@code terms}
@@ -98,8 +98,8 @@ class DependencyRulesTest {
             noClasses()
                     .that().resideInAPackage("de.hauschel.arknet.persistence..")
                     .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
-                    .because("the shared SHACL write gate is technology-neutral by design "
-                            + "(ADR-007): it knows only the kognio-rdf ports, RDF4J lives in "
+                    .because("the shared SHACL write gate is technology-neutral by design: "
+                            + "it knows only the kognio-rdf ports, RDF4J lives in "
                             + "the repository factories of the out-adapters");
 
     /**
@@ -149,9 +149,10 @@ class DependencyRulesTest {
      * translates MCP tool calls into its own bounded context's in-port, nothing more). Rule 3
      * therefore leaves the in-adapters unguarded against reaching straight past their own
      * hexagon into RDF4J or {@code io.kogn} instead of going through the out-port/service. This
-     * does not forbid an in-adapter depending on a neighbour bounded context's in-port (ADR-008,
-     * e.g. {@code arknet-requirements-adapter-mcp} on {@code arknet-ubiquitous-language-core}'s
-     * {@code ResolveTerms}) -- that neighbour port is domain-level, not RDF technology.</p>
+     * does not forbid an in-adapter depending on a neighbour bounded context's in-port as a
+     * Borrowed In-Port (e.g. {@code arknet-requirements-adapter-mcp} on
+     * {@code arknet-ubiquitous-language-core}'s {@code ResolveTerms}) -- that neighbour port is
+     * domain-level, not RDF technology.</p>
      */
     @ArchTest
     static final ArchRule driving_adapters_stay_free_of_rdf_technology =
@@ -160,8 +161,8 @@ class DependencyRulesTest {
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "org.eclipse.rdf4j..", "io.kogn..")
                     .because("a driving MCP adapter talks to its own bounded context through "
-                            + "its in-port (or, per ADR-008, a neighbour's in-port); RDF is an "
-                            + "out-adapter concern");
+                            + "its in-port (or, as a Borrowed In-Port, a neighbour's in-port); "
+                            + "RDF is an out-adapter concern");
 
     /**
      * Rule 5 -- the composition root stays free of direct RDF4J, mirroring the claim its own
@@ -170,7 +171,7 @@ class DependencyRulesTest {
      *
      * <p>Unlike rules 3 and 4, this does not ban {@code io.kogn} wholesale: the composition
      * root's generic store-read path ({@code mcp/store}, {@code mcp/trace}) deliberately reads
-     * the technology-neutral kognio-rdf ports directly (ADR-006), so only {@link
+     * the technology-neutral kognio-rdf ports directly, so only {@link
      * #RDF4J_PACKAGES} -- RDF4J itself and kognio-rdf's RDF4J-backed implementations -- is
      * checked here.</p>
      */
@@ -181,7 +182,7 @@ class DependencyRulesTest {
                     .should().dependOnClassesThat().resideInAnyPackage(RDF4J_PACKAGES)
                     .because("arknet-mcp wires the out-adapters but does not itself reach for "
                             + "RDF4J-backed types; its generic read path uses only the "
-                            + "technology-neutral kognio-rdf ports (ADR-006)");
+                            + "technology-neutral kognio-rdf ports");
 
     /**
      * Rule 6 -- the shared kernel stays technology-free too, mirroring rule 3's claim for the

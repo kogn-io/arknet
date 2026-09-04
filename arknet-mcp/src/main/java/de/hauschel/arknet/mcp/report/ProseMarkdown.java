@@ -26,8 +26,8 @@ import java.util.function.Function;
  *
  * <p><strong>Why here and not in a renderer.</strong> {@link Block} is a closed vocabulary of
  * shapes: the card builder decides the shape, the renderer decides the look. Parsing in
- * {@link HtmlReportRenderer} would put the author's structure behind one output channel, and the
- * Vaadin review UI of ADR-010 would have to re-derive it. The store literal itself stays raw -
+ * {@link HtmlReportRenderer} would put the author's structure behind one output channel, and a
+ * future Vaadin review UI would have to re-derive it. The store literal itself stays raw -
  * nothing is rewritten on write, and {@code project_export} is untouched.</p>
  *
  * <p><strong>What this cannot do.</strong> The subset is not validated anywhere: SHACL sees a

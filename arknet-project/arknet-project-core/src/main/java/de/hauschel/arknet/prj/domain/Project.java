@@ -39,7 +39,7 @@ import java.util.Objects;
  *                        {@code Term#prefLabel}: a project may carry several language-tagged
  *                        {@code dcterms:description} literals, and this field holds the one a
  *                        read path already selected via {@code DisplayLocale} - it is never a
- *                        multi-value holder itself (ADR-015). Maps to {@code dcterms:description};
+ *                        multi-value holder itself. Maps to {@code dcterms:description};
  *                        written and corrected only through the project component's targeted
  *                        description patch, never through the replace-by-identity registry write
  *                        {@code label}/{@code anchors} share, so an unrelated rename or attached

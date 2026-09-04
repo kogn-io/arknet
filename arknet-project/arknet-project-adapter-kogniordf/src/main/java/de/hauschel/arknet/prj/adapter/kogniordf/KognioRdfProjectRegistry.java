@@ -349,7 +349,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * exception's javadoc). That residual case is not what today's store does to two unrelated
      * registrations - {@code ProjectRegistryRealStoreConcurrencyTest} shows those overlap without
      * either losing - but the fallback stays: which writes a store finds in conflict is a property
-     * of the store behind the port, and it is swappable (ADR-001).</p>
+     * of the store behind the port, and it is swappable.</p>
      */
     private RuntimeException attributeLostRegistration(Project project, RuntimeException conflict) {
         for (Anchor anchor : project.anchors()) {

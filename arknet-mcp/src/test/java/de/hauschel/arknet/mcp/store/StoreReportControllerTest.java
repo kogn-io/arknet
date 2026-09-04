@@ -25,7 +25,7 @@ import de.hauschel.arknet.kernel.UnresolvedProjectAnchorException;
 
 /**
  * Pins {@code GET /report} (issue #391): the loopback Host check the endpoint must not skip
- * (ADR-009 decision 4, the same DNS-rebinding defense {@code AnchorHttpTransportConfiguration}
+ * (the same DNS-rebinding defense {@code AnchorHttpTransportConfiguration}
  * enforces for the MCP transport), and the fall-through to {@link StoreReportTools#htmlReport}
  * for a request that passes it.
  */

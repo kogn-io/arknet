@@ -433,7 +433,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * {@code term_update} MCP tool exposes is {@code required = false}, so a caller can invoke this
      * method with {@code prefLabel} and {@code definition} both {@code null}.
      * Such a call never reaches the funnel: no write, no SHACL gate, no {@code arkprov:head}
-     * comparison. A revision documents a model change (ADR-011); recording one for an
+     * comparison. A revision documents a model change; recording one for an
      * empty patch would grow the immutable provenance trail without cause and would move the head,
      * handing a concurrent CAS writer a spurious conflict it did not actually have. The
      * requirements BC guards the same case symmetrically in

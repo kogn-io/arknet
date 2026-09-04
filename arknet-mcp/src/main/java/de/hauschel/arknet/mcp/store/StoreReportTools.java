@@ -340,8 +340,8 @@ public final class StoreReportTools {
      * interleaved file). {@link Files#createTempFile} - rather than a fixed {@code .tmp} name -
      * matters here specifically because, unlike {@link StoreExportTools}'s per-call timestamped
      * subdirectory, every {@code store_overview} call for the same project shares this exact
-     * {@code targetDir}: two overlapping calls (the ADR-009 normal case - several sessions of one
-     * project against the shared daemon) would otherwise both write through the identical fixed
+     * {@code targetDir}: two overlapping calls (an ordinary occurrence under the shared daemon -
+     * several sessions of one project against it) would otherwise both write through the identical fixed
      * temp path at once, corrupting each other's content before either reached the rename.
      */
     private Path writeReport(final String html, final Path targetDir) throws IOException {

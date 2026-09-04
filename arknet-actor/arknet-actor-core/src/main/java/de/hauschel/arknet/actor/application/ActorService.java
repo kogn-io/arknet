@@ -49,8 +49,7 @@ import de.hauschel.arknet.kernel.ResourceIdFactory;
  * on {@link ActorRepository#compareAndUpdate} whenever a concurrent writer commits in between.
  * Neither race is visible to a well-formed caller; only sustained, pathological contention on the
  * very same actor surfaces as {@link ActorConcurrentlyModifiedException}. Parallel sessions of one
- * user against one local store are the normal case, not a remote/multi-writer concern
- * (ADR-001).</p>
+ * user against one local store are the normal case, not a remote/multi-writer concern.</p>
  */
 public class ActorService implements AddActor, ListActors, GetActor, UpdateActor, DeleteActor, ResolveActors {
 

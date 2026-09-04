@@ -69,7 +69,7 @@ public final class KognioRdfRequirementRepositoryFactory {
      * reaches a caller, so this one type is the complete signal - no cause chain to walk.
      * This is the predicate arknet-mcp's shared {@code DatasetLifecycle} bean wants; it is
      * offered as a default rather than hard-wired, because a different store behind
-     * {@link DatasetLifecycle} (ADR-001) may fail its lock conflicts differently, and this
+     * {@link DatasetLifecycle} may fail its lock conflicts differently, and this
      * factory - the one place allowed to name RDF4J - would then be the wrong place to
      * encode that for it.
      */

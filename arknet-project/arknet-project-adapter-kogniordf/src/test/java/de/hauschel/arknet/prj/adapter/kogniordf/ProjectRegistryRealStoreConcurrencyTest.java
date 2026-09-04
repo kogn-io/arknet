@@ -270,7 +270,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
      * for two unrelated registrations, so the conflict is injected here rather than raced - which
      * is the honest way to pin a fallback whose trigger is, by definition, something the adapter
      * does not know about (a future guard, a different sail, a store that detects conflicts more
-     * coarsely - ADR-001 keeps it swappable).
+     * coarsely - the store behind the port stays swappable).
      *
      * <p>What must not happen is the adapter inventing an explanation: reporting
      * {@link DuplicateProjectLabelException} for a label that is demonstrably free - a defect

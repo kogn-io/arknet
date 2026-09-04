@@ -68,7 +68,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * fresh read whenever a concurrent {@code uc_add} claims the same {@code UCn} first, via
  * {@link CodeAssignment#createRetryingOnCodeCollision}; the race is invisible to a well-formed
  * caller. Parallel sessions of one user against one local store are the normal case, not a remote/
- * multi-writer concern (ADR-001). {@link #update}/{@link #linkTerm}/{@link #linkConstraint} share
+ * multi-writer concern. {@link #update}/{@link #linkTerm}/{@link #linkConstraint} share
  * that same concern: read-modify-write round trips retry via
  * {@link UseCaseRepository#compareAndUpdate} whenever a concurrent writer commits in between -
  * see {@link #updateWithOptimisticRetry} (mirrors {@code RequirementService}).</p>

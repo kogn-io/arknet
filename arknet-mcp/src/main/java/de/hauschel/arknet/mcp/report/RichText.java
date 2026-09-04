@@ -12,8 +12,8 @@ import java.util.Objects;
  *
  * <p>Splitting happens in the card builders, which know both the text and the model's edges
  * ({@link Glossary#markUp}); the renderer only decides what a span <em>looks</em> like. That is
- * the same division of labour {@link Block} rests on, and the reason the Vaadin review UI of
- * ADR-010 can become a second renderer without a second text analysis.</p>
+ * the same division of labour {@link Block} rests on, and the reason a future Vaadin review UI
+ * can become a second renderer without a second text analysis.</p>
  *
  * <p><strong>Why the source text is carried alongside its spans.</strong> Marking up glossary
  * mentions and code references only ever <em>splits</em> a text, so the spans used to be the

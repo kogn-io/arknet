@@ -28,7 +28,7 @@ import java.util.Objects;
  * come from the narrow Markdown subset the prose fields accept (issue #388), not from the model:
  * they say how the author meant a run to read, where {@link TermLink}/{@link TermGap} say what
  * the model knows about it. Keeping them as spans rather than letting the renderer re-scan the
- * text is what lets a second renderer (the Vaadin review UI of ADR-010) show the same structure
+ * text is what lets a second renderer (a future Vaadin review UI) show the same structure
  * without a second text analysis.</p>
  *
  * <p>Sealed, so a new kind of span is a compile error in every renderer rather than silently

@@ -67,7 +67,7 @@ Das ist eine Domaenen-Invariante des Uebergangs, keine Urteilsfrage: `Adr#accept
 
 **`arkarch:decisionDate` wird von der Transition gestempelt, nie eingetippt** (Issue #374).
 `adr_add` und `adr_update` tragen das Feld gar nicht, `AdrService#add` schreibt es fest als `null`: ein `PROPOSED`-Record ist ausdruecklich *noch nicht* entschieden, ein Datum an ihm benennt einen Tag, den es nicht gibt.
-Gesetzt wird es ausschliesslich beim Uebergang nach `ACCEPTED`/`REJECTED` -- `AdrService#accept`/`#reject` nehmen ein optionales `decidedOn` und fallen sonst auf die injizierte `Clock` zurueck (`Clock.systemDefaultZone()` im Composition Root; der aufgezeichnete Tag ist der, den der Entscheidende aufschreiben wuerde, und der Client ist lokal, ADR-001).
+Gesetzt wird es ausschliesslich beim Uebergang nach `ACCEPTED`/`REJECTED` -- `AdrService#accept`/`#reject` nehmen ein optionales `decidedOn` und fallen sonst auf die injizierte `Clock` zurueck (`Clock.systemDefaultZone()` im Composition Root; der aufgezeichnete Tag ist der, den der Entscheidende aufschreiben wuerde, und der Client ist lokal).
 `decidedOn` deckt den einen ehrlichen Fall ab, den das alte Freitextfeld mitbediente: eine wirklich frueher getroffene Entscheidung, die erst jetzt erfasst wird.
 `DEPRECATED` lehnt ein `decidedOn` ab statt es zu ignorieren -- es zieht eine bereits getroffene Entscheidung zurueck, trifft keine, und ein stillschweigend verworfenes Datum liesse den Aufrufer glauben, es sei angekommen.
 Ein erneutes `accept` auf einen bereits akzeptierten Record ist wie zuvor ein No-op und stempelt das Datum darum nicht neu; entschieden wird einmal.

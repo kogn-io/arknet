@@ -9,7 +9,7 @@ import io.modelcontextprotocol.server.transport.DefaultServerTransportSecurityVa
 
 /**
  * The one loopback-only Host allowlist every HTTP entry point of this daemon enforces against
- * DNS rebinding (ADR-009 decision 4): the MCP transport
+ * DNS rebinding: the MCP transport
  * ({@link AnchorHttpTransportConfiguration}) and, since issue #391, the plain
  * {@code @RestController} report endpoint alike.
  *
