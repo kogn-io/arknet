@@ -102,7 +102,7 @@
 
         <!-- Project-Hexagon: fifth hexagonal BC, gleiche Verdrahtung wie die uebrigen
              (In-Adapter mit @McpTool-Beans + Out-Adapter Repository) ueber den geteilten
-             DatasetLifecycle. Registered project identity (ADR-016). -->
+             DatasetLifecycle. Registered project identity. -->
         <dependency>
             <groupId>de.hauschel.arknet</groupId>
             <artifactId>arknet-project-adapter-mcp</artifactId>

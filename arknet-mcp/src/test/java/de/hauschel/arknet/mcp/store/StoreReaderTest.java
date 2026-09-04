@@ -328,8 +328,8 @@ class StoreReaderTest {
     /**
      * Regression test for issue #136: {@code arkreq:usesTerm} carries no {@code sh:nodeKind}
      * constraint (see {@code StoreExporterTest}), so its subject is RDF-legally allowed to be a
-     * blank node too - a store-first SKOS concept with no minted IRI is a real, SHACL-legal case
-     *, not a hypothetical one. {@code readSnapshot} already handles a blank-node
+     * blank node too - a store-first SKOS concept with no minted IRI is a real, SHACL-legal case,
+     * not a hypothetical one. {@code readSnapshot} already handles a blank-node
      * <em>object</em> via {@code toNode}; before this fix it silently dropped a row whose
      * <em>subject</em> was a blank node instead, so such a resource neither counted towards
      * {@code tripleCount()}/{@code resourceCount()} nor appeared among {@link

@@ -1364,7 +1364,7 @@ class KognioRdfTermRepositoryTest {
      * legally invoke it with nothing but the identifying {@code code}. Such a call must be a true
      * no-op - no write, no revision, no head movement - exactly like the symmetric guard in
      * {@code RequirementService#updateWithOptimisticRetry}: a revision documents a model change
-     * (ADR-011/ADR-014), and recording one for an empty patch would both grow the immutable
+     * (ADR-011), and recording one for an empty patch would both grow the immutable
      * provenance trail without cause and hand a concurrent CAS writer a spurious conflict.
      */
     @Test

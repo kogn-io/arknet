@@ -16,7 +16,7 @@ import de.hauschel.arknet.kernel.ProjectId;
  * per its own Javadoc - does not implement.
  *
  * <p><strong>Adapter-boundary translation, not a domain outcome.</strong> A SHACL-legal status
- * this narrow can only reach a requirement store-first (ADR-005; no MCP tool writes one of the
+ * this narrow can only reach a requirement store-first (no MCP tool writes one of the
  * four unimplemented values), so this is not a business rule a caller can trigger through the
  * tool surface - it is the out-adapter refusing to silently misrepresent data it cannot map.
  * Thrown directly, in place of a raw, uncaught {@link IllegalStateException}, by every read path

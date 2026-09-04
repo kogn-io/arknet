@@ -25,8 +25,7 @@ import java.util.Objects;
  * @param subdomain    strategic subdomain classification; maps to {@code arkddd:partOf} (a
  *                     derived {@code arkddd:Subdomain} node carrying {@code arkddd:subdomainType})
  *                     - a {@code sh:Warning}-only property. Optional (may be
- *                     {@code null}) and may be decided after the context is minted (store-first,
- *                     ADR-005)
+ *                     {@code null}) and may be decided after the context is minted (store-first)
  * @param ownedBy      the owning team name; maps to {@code arkddd:ownedBy}. Optional (may be
  *                     {@code null}) - also a {@code sh:Warning}-only property
  * @param usesTerms    the glossary terms of the ubiquitous language this context names; maps to

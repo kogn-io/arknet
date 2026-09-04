@@ -96,7 +96,7 @@ public interface RequirementRepository {
      *
      * <p><strong>Guards writes made through this port, not edits that bypass it.</strong>
      * {@code expectedHead} is the token recorded by the last write through this port's own
-     * {@code create}/{@code compareAndUpdate} (ADR-014 compare-and-set guard against the
+     * {@code create}/{@code compareAndUpdate} (compare-and-set guard against the
      * lost-update race, degenerated from a full-snapshot comparison to a token comparison). A
      * direct store-first edit to this requirement leaves the token untouched, so such
      * an edit passes this method's check undetected and the subsequent replace-by-identity write
@@ -197,8 +197,8 @@ public interface RequirementRepository {
      * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
      *                                                 SHACL-legal but not one of the MVP subset
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
-     *                                                 implements (only reachable via a store-first,
-     *                                                 ADR-005 edit)
+     *                                                 implements (only reachable via a store-first
+     *                                                 edit)
      * @throws RequirementReadConflictException if a bounded, adapter-internal retry loop keeps
      *                                            losing the {@code SERIALIZABLE} race against
      *                                            concurrent writers of this project's requirements
@@ -228,8 +228,8 @@ public interface RequirementRepository {
      * @throws UnsupportedRequirementStatusException if the found requirement's stored status is
      *                                                 SHACL-legal but not one of the MVP subset
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
-     *                                                 implements (only reachable via a store-first,
-     *                                                 ADR-005 edit)
+     *                                                 implements (only reachable via a store-first
+     *                                                 edit)
      */
     Optional<CurrentRequirement> findCurrentByCode(ProjectId projectId, RequirementCode code);
 
@@ -314,8 +314,8 @@ public interface RequirementRepository {
      * @throws UnsupportedRequirementStatusException if any requirement's stored status is
      *                                                 SHACL-legal but not one of the MVP subset
      *                                                 {@link de.hauschel.arknet.req.domain.RequirementStatus}
-     *                                                 implements (only reachable via a store-first,
-     *                                                 ADR-005 edit) - one such requirement aborts
+     *                                                 implements (only reachable via a store-first
+     *                                                 edit) - one such requirement aborts
      *                                                 the whole listing rather than being silently
      *                                                 dropped
      * @throws RequirementReadConflictException if a bounded, adapter-internal retry loop keeps

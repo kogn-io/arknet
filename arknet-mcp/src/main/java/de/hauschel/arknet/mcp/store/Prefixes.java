@@ -75,8 +75,8 @@ public final class Prefixes {
      * ({@code rev:}).
      *
      * <p>Still no {@code arkprov:}/{@code prov:} predicate bindings: {@code StoreReader}
-     * excludes the provenance graph's predicates/head pointer from every model read path
-     *, so none of them ever reaches a renderer or the prefix legend - a binding for
+     * excludes the provenance graph's predicates/head pointer from every model read path,
+     * so none of them ever reaches a renderer or the prefix legend - a binding for
      * something unreachable is a promise the read path does not keep. The one exception is
      * {@code rev:}, bound to {@code ArkprovVocabulary#REVISION_IRI_BASE}: {@code
      * resource_history} (issue #251) is the one read path that deliberately does surface a

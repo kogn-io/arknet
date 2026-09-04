@@ -240,8 +240,8 @@ public final class StoreReader {
      * write funnel has recorded for it (ADR-013), oldest first, with the one matching
      * the resource's current {@code arkprov:head} marked {@link Revision#current}.
      *
-     * <p>A resource the funnel has never written through - written entirely store-first
-     *, or predating the funnel - has recorded no revision and yields an empty list,
+     * <p>A resource the funnel has never written through - written entirely store-first,
+     * or predating the funnel - has recorded no revision and yields an empty list,
      * not an error; distinguishing that from "no such resource" is the caller's job (as
      * {@code resource_get} already does for {@link #outgoing}/{@link #incoming} being empty).
      * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list,
