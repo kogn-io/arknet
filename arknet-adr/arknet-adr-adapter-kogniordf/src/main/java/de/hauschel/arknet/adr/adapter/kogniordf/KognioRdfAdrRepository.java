@@ -45,6 +45,7 @@ import de.hauschel.arknet.adr.domain.AdrConcurrentlyModifiedException;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrNotDeletableException;
 import de.hauschel.arknet.adr.domain.AdrNotFoundException;
+import de.hauschel.arknet.adr.domain.AdrPeerVanishedException;
 import de.hauschel.arknet.adr.domain.AdrReferencedException;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
@@ -247,8 +248,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 adr.code().value(), graph, crossReferenceAssertedContext(projectId, adr),
                 () -> new ResourceAlreadyExistsException(projectId, adr.id().value()),
                 () -> new DuplicateAdrCodeException(projectId, adr.code()),
-                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, false, tag, tag, tag, null,
-                        consequenceTags, optionTags, null, candidate));
+                tx -> {
+                    rejectIfPeersVanished(tx, projectId, graphIri, adr);
+                    replaceTriples(tx, graphIri, subjectIri, subject, graph, false, tag, tag, tag, null,
+                            consequenceTags, optionTags, null, candidate);
+                });
     }
 
     @Override
@@ -281,8 +285,11 @@ public class KognioRdfAdrRepository implements AdrRepository {
                 expectedHead, graph, crossReferenceAssertedContext(projectId, updated),
                 () -> new AdrNotFoundException(projectId, updated.code()),
                 () -> new AdrConcurrentlyModifiedException(projectId, updated.code()),
-                tx -> replaceTriples(tx, graphIri, subjectIri, subject, graph, true, nameTag, contextTag,
-                        decisionTag, defaultTag, consequenceTags, optionTags, defaultTag, candidate));
+                tx -> {
+                    rejectIfPeersVanished(tx, projectId, graphIri, updated);
+                    replaceTriples(tx, graphIri, subjectIri, subject, graph, true, nameTag, contextTag,
+                            decisionTag, defaultTag, consequenceTags, optionTags, defaultTag, candidate);
+                });
     }
 
     /**
@@ -409,9 +416,7 @@ public class KognioRdfAdrRepository implements AdrRepository {
             assertedContext.add(rdf.createIRI(ref.value().value()), VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
         }
 
-        List<AdrId> peers = adr.supersededBy() == null
-                ? adr.relatedTo()
-                : Stream.concat(adr.relatedTo().stream(), Stream.of(adr.supersededBy())).distinct().toList();
+        List<AdrId> peers = relatedAndSupersedingPeers(adr);
         if (peers.isEmpty()) {
             return assertedContext;
         }
@@ -429,6 +434,49 @@ public class KognioRdfAdrRepository implements AdrRepository {
                     iriOf(row, "s"), iriOf(row, "p"), row.getValue("o").orElseThrow()));
         }
         return assertedContext;
+    }
+
+    /**
+     * {@code relatedTo} plus the {@code supersededBy} target, if any, deduplicated - the one peer
+     * set both {@link #crossReferenceAssertedContext} (a pre-transaction read, purely for the SHACL
+     * gate) and {@link #rejectIfPeersVanished} (the in-transaction backstop closing kogn-io/arknet#356)
+     * need, kept in one place so the two can never drift onto different peer sets.
+     */
+    private static List<AdrId> relatedAndSupersedingPeers(Adr adr) {
+        return adr.supersededBy() == null
+                ? adr.relatedTo()
+                : Stream.concat(adr.relatedTo().stream(), Stream.of(adr.supersededBy())).distinct().toList();
+    }
+
+    /**
+     * Race-free backstop against kogn-io/arknet#356, run inside the very write transaction
+     * {@link #create}/{@link #compareAndUpdate} open: rejects the write if any {@code relatedTo}
+     * peer or {@code supersededBy} target - already resolved by {@code AdrService#resolvePeers}
+     * from a human-typed {@link AdrCode} outside any transaction - no longer has any triples in
+     * {@link #ADR_GRAPH} at the moment this transaction actually runs.
+     *
+     * <p>{@code AdrService#resolvePeers} and {@link #crossReferenceAssertedContext} both resolve/
+     * read outside a transaction, so a concurrent {@code adr_delete} of the very peer they saw can
+     * commit in the window between that read and this write's own commit - {@code
+     * crossReferenceAssertedContext}'s pre-transaction read would then still hand the SHACL gate
+     * the now-stale asserted triples and the gate would pass, about to write a dangling edge onto a
+     * peer that no longer exists. This check re-reads the same peers a second time, but - unlike
+     * both of the above - from inside {@code tx}, so it sees exactly what the transaction is about
+     * to commit against, closing rather than merely narrowing the race (mirrors {@link
+     * #rejectIfNotProposed}/{@link #rejectIfReferenced}'s role as the delete path's own
+     * in-transaction backstop over its own didactic pre-check).</p>
+     *
+     * <p>Deliberately not {@link AdrNotFoundException}: only the opaque {@link AdrId} survives this
+     * late, so {@link AdrPeerVanishedException} is thrown instead - see its own javadoc for why, and
+     * for the recovery path (simply retry the call).</p>
+     */
+    private void rejectIfPeersVanished(DatasetTx tx, ProjectId projectId, IRI graphIri, Adr adr) {
+        for (AdrId peer : relatedAndSupersedingPeers(adr)) {
+            IRI peerIri = rdf.createIRI(peer.value().value());
+            if (!tx.contains(graphIri, peerIri, null, null)) {
+                throw new AdrPeerVanishedException(projectId, peer);
+            }
+        }
     }
 
     /**
