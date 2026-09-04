@@ -36,7 +36,9 @@ import de.hauschel.arknet.actor.adapter.mcp.ActorMcpTools;
 import de.hauschel.arknet.actor.application.ActorService;
 import de.hauschel.arknet.actor.application.port.out.ActorRepository;
 import de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepositoryFactory;
+import de.hauschel.arknet.adr.adapter.mcp.AdrCheckMcpTools;
 import de.hauschel.arknet.adr.adapter.mcp.AdrMcpTools;
+import de.hauschel.arknet.adr.application.AdrCheckService;
 import de.hauschel.arknet.adr.application.AdrService;
 import de.hauschel.arknet.adr.application.port.out.AdrRepository;
 import de.hauschel.arknet.adr.application.port.out.BoundedContextLookup;
@@ -165,7 +167,10 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       hexagon's own {@link ResolveBoundedContexts} in-port, wired straight into
  *       {@link AdrMcpTools} (Borrowed In-Port). Its other two relations, {@code supersededBy} and
  *       {@code relatedTo}, are self-referential and therefore resolved inside {@link AdrService} -
- *       no port is borrowed for either.</li>
+ *       no port is borrowed for either. Its reading check {@code adr_check} (kogn-io/arknet#387)
+ *       sits in a tools class and an application service of its own
+ *       ({@link AdrCheckMcpTools} over {@link AdrCheckService}) rather than in the two above,
+ *       because it neither writes nor judges - see there.</li>
  *   <li><strong>project</strong> ({@link ProjectMcpTools} over {@link ProjectService} over the
  *       RDF-persisted registry) - the project tools ({@code project_add}/
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
@@ -682,6 +687,34 @@ public class ArknetMcpConfiguration {
         return new AdrMcpTools(service, service, service, service, service, service, service, service,
                 service, service, service, resolveRequirements, resolveBoundedContexts, resolveTerms,
                 projectResolver);
+    }
+
+    /**
+     * The corpus-wide, non-blocking consistency and quality check behind {@code adr_check}
+     * (kogn-io/arknet#387). Reads the decisions through the ADR hexagon's own {@code ListAdrs}
+     * in-port - the very {@link AdrService} bean above - rather than through a repository of its
+     * own: it needs both supersession directions and the merged {@code relatedTo} view that
+     * {@code AdrDetail} already carries, and a second read path would have to rebuild them.
+     * Deliberately no borrowed port here at all: this check reads no neighbour hexagon's resources,
+     * only the ADR corpus and the codes it names in its own prose.
+     */
+    @Bean
+    AdrCheckService adrCheckService(final AdrService service) {
+        return new AdrCheckService(service);
+    }
+
+    /**
+     * The one reading ADR tool ({@code adr_check}), in a tools class of its own beside
+     * {@link #adrMcpTools} because it writes nothing and renders a report rather than a record.
+     * Takes the same {@link AdrService} bean a second time as its {@code CountSkippedAdrs} in-port,
+     * so a check over a project with unreadable store-first records says so instead of reporting a
+     * clean corpus (kogn-io/arknet#359).
+     */
+    @Bean
+    AdrCheckMcpTools adrCheckMcpTools(
+            final AdrCheckService adrCheckService, final AdrService service,
+            final ProjectResolver projectResolver) {
+        return new AdrCheckMcpTools(adrCheckService, service, projectResolver);
     }
 
     // --- Actor hexagon -----------------------------------------------------------
