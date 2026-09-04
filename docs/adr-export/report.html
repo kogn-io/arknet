@@ -176,11 +176,11 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
   <header class="top">
     <h1>arknet Store Report</h1>
     <span class="ws">project: arknet (id: arknet)</span>
-    <span class="meta"><b>79</b> model elements &middot; <b>425</b> resources &middot; <b>2626</b> triples</span>
+    <span class="meta"><b>80</b> model elements &middot; <b>426</b> resources &middot; <b>2633</b> triples</span>
   </header>
   <details class="agent-panel">
     <summary>What the agent gets back <span class="hint">- compact digest as the tool return value (text)</span></summary>
-<pre># Project arknet (id: arknet) -- 425 resources, 2626 triples, 11 types
+<pre># Project arknet (id: arknet) -- 426 resources, 2633 triples, 11 types
 # Prefixes:
 #   rdf:     = http://www.w3.org/1999/02/22-rdf-syntax-ns#
 #   arkreq:  = https://w3id.org/arknet/requirements#
@@ -191,7 +191,7 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
 #   dcterms: = http://purl.org/dc/terms/
 # Handle for resource_get: a CURIE, or a bare business id, or the full IRI when neither is unique. NEVER the label.
 
-21 skos:Concept
+22 skos:Concept
 1 skos:ConceptScheme
 45 arkarch:ArchitectureDecisionRecord
 160 arkarch:Consequence
@@ -203,10 +203,11 @@ footer.foot{margin-top:40px;color:var(--ink-faint);font-size:12px;font-family:va
 27 arkreq:Step
 4 arkreq:UseCase
 
-## skos:Concept (21)
+## skos:Concept (22)
 TERM-8 [Concept] &quot;DDD Practitioner&quot;  -&gt; resource_get(&quot;TERM-8&quot;)
 TERM-1 [Concept] &quot;Metamodell&quot;  -&gt; resource_get(&quot;TERM-1&quot;)
 TERM-10 [Concept] &quot;Requirement&quot;  -&gt; resource_get(&quot;TERM-10&quot;)
+TERM-22 [Concept] &quot;Borrowed In-Port&quot;  -&gt; resource_get(&quot;TERM-22&quot;)
 TERM-14 [Concept] &quot;Ressource&quot;  -&gt; resource_get(&quot;TERM-14&quot;)
 TERM-3 [Concept] &quot;Human Actor&quot;  -&gt; resource_get(&quot;TERM-3&quot;)
 TERM-9 [Concept] &quot;Coding AI Agent&quot;  -&gt; resource_get(&quot;TERM-9&quot;)
@@ -674,7 +675,7 @@ UC2 [UseCase] &quot;Requirement erfassen&quot;  -&gt; resource_get(&quot;UC2&quo
       <a href="#sec-use-cases"><span>Use Cases</span><span class="cnt">4</span></a>
       <a href="#sec-architecture-decisions"><span>Architecture Decisions</span><span class="cnt">45</span></a>
       <a href="#sec-actors"><span>Actors</span><span class="cnt">4</span></a>
-      <a href="#sec-glossary"><span>Glossary</span><span class="cnt">21</span></a>
+      <a href="#sec-glossary"><span>Glossary</span><span class="cnt">22</span></a>
       <a class="muted" href="#sec-other"><span>Other resources</span><span class="cnt">299</span></a>
     </nav>
     <main>
@@ -4750,7 +4751,7 @@ Umgekehrt ist der Umgang mit dem Graphen vollständig Sache des Out-Adapters: er
         </div>
       </section>
       <section class="group" id="sec-glossary">
-        <h2>Glossary <span class="of">21</span></h2>
+        <h2>Glossary <span class="of">22</span></h2>
         <p class="sub">the ubiquitous language - one agreed meaning per term</p>
         <div class="cards">
           <article class="card" id="r-https-w3id-org-arknet-id-803ccddc-e007-40f8-bf43-57485cdca551-08703fead5f3ccd8">
@@ -4893,6 +4894,33 @@ Umgekehrt ist der Umgang mit dem Graphen vollständig Sache des Out-Adapters: er
                 <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Architecture Model"</span><span class="dt">@en</span></td></tr>
                 <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"Ein Architekturmodell ist die Gesamtheit der mit arknet erfassten Ressourcen eines Projekts, die einem Metamodell entsprechen."</span><span class="dt">@de</span></td></tr>
                 <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"An Architecture Model is the totality of the resources captured with arknet for a project, conforming to a metamodel."</span><span class="dt">@en</span></td></tr>
+              </table>
+            </details>
+            </details>
+          </article>
+          <article class="card" id="r-https-w3id-org-arknet-id-130e82c2-e6d4-488a-968d-3a377a6fc4b9-5632675f27f02301">
+            <details class="fold">
+              <summary class="head">
+                <span class="code">TERM-22</span>
+                <h3><span class="lang-group" data-default-lang="de"><span class="lang-variant" data-lang="de">Borrowed In-Port</span><span class="lang-variant" data-lang="en" hidden>Borrowed In-Port</span></span></h3>
+                <a class="anchor" href="#r-https-w3id-org-arknet-id-130e82c2-e6d4-488a-968d-3a377a6fc4b9-5632675f27f02301">#</a>
+              </summary>
+              <div class="body">
+              <div class="block b-definition">
+                <span class="blabel">Definition</span>
+                <div class="lang-group" data-default-lang="de"><div class="lang-variant" data-lang="de"><div class="prose-body"><p class="prose">Ein Borrowed In-Port ist ein In-Port eines Bounded Context, den ein Adapter eines <em>anderen</em> Bounded Context lesend mitbenutzt, um eine Auskunft zu erhalten, die nur der besitzende Kontext geben kann — etwa die Abbildung einer opaken Identität auf ihren Business-Code. Der Port bleibt im Besitz seines Kontexts; der leihende Adapter komponiert ihn nur und schreibt nichts über ihn. Die Grenze „kein Bounded Context hängt an einem anderen“ gilt für die Kerne, nicht für die Adapter, die um sie herum komponieren.</p></div></div><div class="lang-variant" data-lang="en" hidden><div class="prose-body"><p class="prose">A Borrowed In-Port is an in-port of one bounded context that an adapter of a <em>different</em> bounded context reads through, to obtain an answer only the owning context can give — such as mapping an opaque identity to its business code. The port stays owned by its context; the borrowing adapter merely composes it and never writes through it. The boundary &quot;no bounded context depends on another&quot; binds the cores, not the adapters that compose around them.</p></div></div></div>
+              </div>
+              </div>
+            <details class="raw">
+              <summary>7 raw triples &middot; TERM-22</summary>
+              <table class="props">
+                <tr><td class="pred">rdf:type</td><td class="obj"><span class="lit">skos:Concept</span></td></tr>
+                <tr><td class="pred">dcterms:identifier</td><td class="obj"><span class="lit str">"TERM-22"</span></td></tr>
+                <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-model-glossary-afd6502e0558826c">https://w3id.org/arknet/model/glossary</a></td></tr>
+                <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Borrowed In-Port"</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">skos:prefLabel</td><td class="obj"><span class="lit str">"Borrowed In-Port"</span><span class="dt">@en</span></td></tr>
+                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"Ein Borrowed In-Port ist ein In-Port eines Bounded Context, den ein Adapter eines *anderen* Bounded Context lesend mitbenutzt, um eine Auskunft zu erhalten, die nur der besitzende Kontext geben kann — etwa die Abbildung einer opaken Identität auf ihren Business-Code. Der Port bleibt im Besitz seines Kontexts; der leihende Adapter komponiert ihn nur und schreibt nichts über ihn. Die Grenze „kein Bounded Context hängt an einem anderen“ gilt für die Kerne, nicht für die Adapter, die um sie herum komponieren."</span><span class="dt">@de</span></td></tr>
+                <tr><td class="pred">skos:definition</td><td class="obj"><span class="lit str">"A Borrowed In-Port is an in-port of one bounded context that an adapter of a *different* bounded context reads through, to obtain an answer only the owning context can give — such as mapping an opaque identity to its business code. The port stays owned by its context; the borrowing adapter merely composes it and never writes through it. The boundary &quot;no bounded context depends on another&quot; binds the cores, not the adapters that compose around them."</span><span class="dt">@en</span></td></tr>
               </table>
             </details>
             </details>
@@ -5561,11 +5589,12 @@ Umgekehrt ist der Umgang mit dem Graphen vollständig Sache des Out-Adapters: er
                 <tr><td class="pred">rdf:type</td><td class="obj"><span class="lit">skos:ConceptScheme</span></td></tr>
               </table>
             <details class="referenced-by">
-              <summary>Referenced by 21</summary>
+              <summary>Referenced by 22</summary>
               <table class="props">
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-0a3bdb3f-55f9-490b-96fe-af078e0044cc-b26953383e8db970" title="DDD Practitioner">TERM-8</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-0a6971c4-4c22-43a2-9e91-a8a56f3bf379-e932f4dd79934933" title="Metamodell">TERM-1</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-0c5ff58a-96c6-4143-80e2-683586edf6e8-7fc5d417d036992c" title="Requirement">TERM-10</a></td></tr>
+                <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-130e82c2-e6d4-488a-968d-3a377a6fc4b9-5632675f27f02301" title="Borrowed In-Port">TERM-22</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-43046391-b5fb-4ab2-b05b-c4eacb1e88f4-c7cfd7d9fd72b101" title="Ressource">TERM-14</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-5534b165-fa1e-4a74-b725-73058fcb4853-f809cc64010f1001" title="Human Actor">TERM-3</a></td></tr>
                 <tr><td class="pred">skos:inScheme</td><td class="obj"><a href="#r-https-w3id-org-arknet-id-78b30da9-170f-4a3e-b99f-b7f6439497c6-a537a17bbcd36e40" title="Coding AI Agent">TERM-9</a></td></tr>

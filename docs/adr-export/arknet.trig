@@ -5654,4 +5654,33 @@ Umgekehrt ist der Umgang mit dem Graphen vollständig Sache des Out-Adapters: er
     <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/bdd08ced-66a4-4871-b53c-b316f76b4ba6>;
     <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/71f551a8-2c6c-4071-a4c1-1982e0cea814>;
     <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-04T13:22:55.821853907Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9> <https://w3id.org/arknet/provenance#head>
+      <https://w3id.org/arknet/revision/576fbe33-4b30-4aea-8820-b51d93bf4fe8> .
+  
+  <https://w3id.org/arknet/activity/604f070f-afe4-4e50-b99e-333895b6a29b> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/b1c86398-800a-4405-a8f8-dff7dd1cb75d> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/604f070f-afe4-4e50-b99e-333895b6a29b>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-04T16:39:35.529502954Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+  
+  <https://w3id.org/arknet/activity/39f85c67-cdd7-4ce1-b518-8d29095a6922> a <http://www.w3.org/ns/prov#Activity> .
+  
+  <https://w3id.org/arknet/revision/576fbe33-4b30-4aea-8820-b51d93bf4fe8> a <http://www.w3.org/ns/prov#Entity>,
+      <https://w3id.org/arknet/provenance#Revision>;
+    <http://www.w3.org/ns/prov#specializationOf> <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9>;
+    <http://www.w3.org/ns/prov#wasGeneratedBy> <https://w3id.org/arknet/activity/39f85c67-cdd7-4ce1-b518-8d29095a6922>;
+    <http://www.w3.org/ns/prov#generatedAtTime> "2026-09-04T16:39:43.006531688Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>;
+    <http://www.w3.org/ns/prov#wasRevisionOf> <https://w3id.org/arknet/revision/b1c86398-800a-4405-a8f8-dff7dd1cb75d> .
+}
+
+<https://w3id.org/arknet/model/ubiquitous-language> {
+  <https://w3id.org/arknet/id/130e82c2-e6d4-488a-968d-3a377a6fc4b9> a <http://www.w3.org/2004/02/skos/core#Concept>;
+    <http://purl.org/dc/terms/identifier> "TERM-22";
+    <http://www.w3.org/2004/02/skos/core#inScheme> <https://w3id.org/arknet/model/glossary>;
+    <http://www.w3.org/2004/02/skos/core#prefLabel> "Borrowed In-Port"@de, "Borrowed In-Port"@en;
+    <http://www.w3.org/2004/02/skos/core#definition> "Ein Borrowed In-Port ist ein In-Port eines Bounded Context, den ein Adapter eines *anderen* Bounded Context lesend mitbenutzt, um eine Auskunft zu erhalten, die nur der besitzende Kontext geben kann — etwa die Abbildung einer opaken Identität auf ihren Business-Code. Der Port bleibt im Besitz seines Kontexts; der leihende Adapter komponiert ihn nur und schreibt nichts über ihn. Die Grenze „kein Bounded Context hängt an einem anderen“ gilt für die Kerne, nicht für die Adapter, die um sie herum komponieren."@de,
+      "A Borrowed In-Port is an in-port of one bounded context that an adapter of a *different* bounded context reads through, to obtain an answer only the owning context can give — such as mapping an opaque identity to its business code. The port stays owned by its context; the borrowing adapter merely composes it and never writes through it. The boundary \"no bounded context depends on another\" binds the cores, not the adapters that compose around them."@en .
 }
