@@ -24,9 +24,9 @@ allow a reasonable window for a fix before any public disclosure.
 
 arknet runs as a local, single-user MCP daemon bound to loopback
 (`127.0.0.1`); the project-anchor header (`X-Arknet-Project-Anchor`) is routing, not
-authentication (see [ADR-009](docs/adr/adr-009-mcp-http-daemon-transport.md) for the
-transport/trust boundary and [ADR-016](docs/adr/adr-016-projekt-identitaet-ueber-registrierte-anker.md)
-for the anchor itself). Reports about that trust boundary are in scope; reports that assume
+authentication. The daemon enforces a loopback-only Host allowlist against DNS rebinding on
+every HTTP entry point, and an unknown or missing anchor is rejected outright rather than
+falling back to a default. Reports about that trust boundary are in scope; reports that assume
 the daemon is exposed to an untrusted network are not -- do not expose it.
 
 ## Supported versions
