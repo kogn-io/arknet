@@ -300,9 +300,22 @@ class ProjectMcpToolsTest {
 
         final String rendered = adapter.list();
 
-        assertTrue(rendered.contains("arknet [path:/home/f/DEV/arknet, path:/home/f/DEV/arknet-wt] (id: id-1)"),
-                rendered);
-        assertTrue(rendered.contains("sample-project [path:/home/f/DEV/sample-project] (id: id-2)"), rendered);
+        assertTrue(rendered.contains(
+                "arknet [/home/f/DEV/arknet (path), /home/f/DEV/arknet-wt (path)] (id: id-1)"), rendered);
+        assertTrue(rendered.contains("sample-project [/home/f/DEV/sample-project (path)] (id: id-2)"), rendered);
+    }
+
+    @Test
+    void listRendersEachAnchorSoItIsCopyablePlainAsTheProjectAnchorParameter() {
+        // Regression for issue #386: the type must not be a prefix on the copyable value, or
+        // pasting the rendered anchor straight into a tool's 'projectAnchor' parameter (which
+        // expects Anchor#value alone, per ADR-016) fails.
+        final Anchor uuidAnchor = new Anchor("da82fde6-0104-4de2-95d7-4f40f3d0660f", AnchorType.UUID);
+        listProjects.all = List.of(new Project(new ProjectId("id-1"), "arknet-adr-dryrun-2", List.of(uuidAnchor)));
+
+        final String rendered = adapter.list();
+
+        assertTrue(rendered.contains("[" + uuidAnchor.value() + " (uuid)]"), rendered);
     }
 
     @Test
