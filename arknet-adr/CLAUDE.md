@@ -6,7 +6,7 @@ Ob und wann migriert wird, ist eine eigene, nachgelagerte Entscheidung (Klaerung
 
 **Ontologie war die Vorarbeit, nicht der Bau.** `arkarch:` existierte vollstaendig, lag aber unter `parked/` (kein lebender Konsument, `arknet-ontology/CLAUDE.md`).
 Der Split folgt exakt dem `arkddd#`-Praezedenzfall aus PR #57: die ADR-Sektionen (Klasse, Datatype-Properties, Relationen, die fuenf Status-Individuen, die zwei OWL-Restriktionen) wandern in ein aktives `arknet-architecture.ttl`, der ISO-42010-Rest (Architecture, ArchitectureDescription, Stakeholder, Concern, Viewpoint, View) bleibt geparkt als `parked/arknet-architecture_parked.ttl` -- gleicher Namespace, gleicher Ontologie-IRI, `_parked`-Suffix wie bei `arknet-ddd_parked.ttl`, weil der Dateiname sonst kollidiert.
-Dieselbe Teilung fuer die Shapes: aktiv `architecture-shapes.ttl` (nur `ashapes:ADRShape` + seine acht Property-Shapes), geparkt `parked/architecture-shapes_parked.ttl`.
+Dieselbe Teilung fuer die Shapes: aktiv `architecture-shapes.ttl` (nur `ashapes:ADRShape` + ihre Property- und Sparql-Shapes, seit Issue #357 zusaetzlich eigene Shapes fuer `arkarch:Consequence`/`arkarch:ConsideredOption`), geparkt `parked/architecture-shapes_parked.ttl`.
 Fuer die Alt-Schreibform `arkarch:supersedes` traegt `ADRShape` weiterhin keine Property-Shape -- nichts schreibt sie mehr, also braucht sie auch keine Schreib-Validierung; seit Issue #357 traegt die aktuelle Schreibform `arkarch:supersededBy` dagegen eine eigene (`ashapes:ADR-supersededBy`, `sh:maxCount 1` + `sh:class`), neben `ashapes:ADR-relatedTo` die zweite Referenz-Kante mit Shape.
 Die `sh:in`-Liste von `ashapes:ADR-status` bleibt unangetastet fuenfwertig.
 
