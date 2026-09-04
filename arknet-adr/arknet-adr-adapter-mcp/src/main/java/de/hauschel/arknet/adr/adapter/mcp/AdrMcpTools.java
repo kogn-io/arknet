@@ -315,7 +315,12 @@ public final class AdrMcpTools {
     // --- Tools: Spring-AI-style, delegate to the in-ports ----------------------
 
     @McpTool(name = "adr_add", description = "Record a new architecture decision (context, decision, "
-            + "consequences, considered options) as an ADR. It starts out PROPOSED; accept it later "
+            + "consequences, considered options) as an ADR - only for a decision with real "
+            + "architectural significance: it fixes structure, an interface/contract, a dependency, "
+            + "a quality attribute or a project-wide construction technique, and reversing it later "
+            + "would be costly. A local convention, a reversible default or an open work item is not "
+            + "an ADR; a 'must/shall' about system behaviour is a requirement (req_add), a definition "
+            + "is a glossary term (term_add). It starts out PROPOSED; accept it later "
             + "with adr_set_status. Consequences and considered options are each a list of "
             + "structured entries (statement+type / name+rationale+outcome) - at most one considered "
             + "option may have outcome CHOSEN. It can already name the requirements it addresses, "
@@ -337,7 +342,9 @@ public final class AdrMcpTools {
             final List<NewConsequenceInput> consequences,
             @McpToolParam(description = "Options considered while making the decision, each with a "
                     + "name, a rationale and an outcome (CHOSEN or REJECTED) - at most one may be "
-                    + "CHOSEN. Optional.", required = false)
+                    + "CHOSEN. Optional, but 'no alternative' is a smell: if the option space was "
+                    + "genuinely empty, say why in adrContext instead of inventing a rejected option.",
+                    required = false)
             final List<NewConsideredOptionInput> consideredOptions,
             @McpToolParam(description = LANGUAGE_DESCRIPTION, required = false)
             final String language,

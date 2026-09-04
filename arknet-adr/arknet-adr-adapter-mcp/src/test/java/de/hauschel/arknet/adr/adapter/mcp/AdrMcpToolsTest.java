@@ -648,6 +648,20 @@ class AdrMcpToolsTest {
         assertTrue(referenced.getMessage().contains("adr_update"), referenced.getMessage());
     }
 
+    /**
+     * kogn-io/arknet#426: neither the tool description nor the server instructions named a
+     * criterion for when a decision qualifies as an ADR at all - a caller without the Claude Code
+     * plugin skill had nothing to go on but the field list.
+     */
+    @Test
+    void theAddDescriptionNamesTheArchitecturalSignificanceCriterion() {
+        String add = descriptionOf("add");
+        assertTrue(add.contains("architectural significance"), add);
+        assertTrue(add.contains("costly"), add);
+        assertTrue(add.contains("req_add"), add);
+        assertTrue(add.contains("term_add"), add);
+    }
+
     @Test
     void theToolDescriptionsSayWhatRejectedMeansAndWhatDeleteIsFor() {
         String delete = descriptionOf("delete");
