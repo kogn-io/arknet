@@ -100,7 +100,6 @@ Details: `arknet-actor/CLAUDE.md`
 
 - **Metamodell** = OWL-Ontologie (arknet-*.ttl)
 - **Architekturmodell** = Instanzdaten des Nutzers (.ttl)
-- **Shape** = SHACL-Validierungsregel
 - **Projekt** = der Gegenstand, an dem Requirements, Glossarbegriffe und Use Cases haengen; ein
   Dataset haelt die Daten genau eines Projekts, die Projektgrenze ist damit die Datengrenze
   (ADR-016). **Nicht** das Verzeichnis, aus dem ein Client arbeitet -- das heisst Arbeits- oder
