@@ -815,7 +815,7 @@ public class ArknetMcpConfiguration {
      * opaque {@code arkreq:Step} subjects ordered by an {@code arkreq:position} literal), so the
      * report asks the context that wrote it instead of re-deriving the answer here. The generic
      * snapshot still backs every card's raw triples and catches whatever no context claims -
-     * see the ADR-006 addendum.
+     * see {@code arknet-mcp/CLAUDE.md} for the reasoning behind the per-bounded-context report.
      *
      * <p>The glossary arrives as {@code ListTerms} rather than {@link ResolveTerms}: besides
      * labelling references, the report marks the ubiquitous language up inside the other

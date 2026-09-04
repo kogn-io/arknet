@@ -40,8 +40,8 @@ import de.hauschel.arknet.prj.domain.Project;
  * what a human reads - is assembled per bounded context through their read in-ports
  * ({@link ModelViews}), because a use case rendered as its raw triples is not a use case any
  * more: its flow is a set of opaque step subjects ordered by a position literal. The generic
- * snapshot remains the report's safety net for everything no context claims. See the ADR-006
- * addendum.</p>
+ * snapshot remains the report's safety net for everything no context claims. See
+ * {@code arknet-mcp/CLAUDE.md}.</p>
  *
  * <p>This is an in-adapter of the composition root, not of a bounded context: the store report
  * has no domain of its own. Borrowing four contexts' read in-ports for display is the same
