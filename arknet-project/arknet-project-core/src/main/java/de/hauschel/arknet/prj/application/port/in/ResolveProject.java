@@ -10,10 +10,10 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 /**
  * Driving port: resolve a client-supplied anchor to the project it belongs to.
  *
- * <p>Unknown or missing is a caller-visible error, never a silent default (ADR-016 decision 3) -
+ * <p>Unknown or missing is a caller-visible error, never a silent default -
  * there is deliberately no "resolve or return empty" variant of this method, because a call site
  * that received an {@link java.util.Optional} would be tempted to invent exactly the kind of
- * fallback ADR-016 removes.</p>
+ * fallback registered anchors remove.</p>
  *
  * <p>This is the port later store-addressing work will route every request through once the
  * anchor stops being a project-management-only concept and starts gating the store

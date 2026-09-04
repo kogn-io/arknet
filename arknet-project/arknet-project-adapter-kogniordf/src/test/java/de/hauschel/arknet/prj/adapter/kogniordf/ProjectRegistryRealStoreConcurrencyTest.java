@@ -163,7 +163,7 @@ class ProjectRegistryRealStoreConcurrencyTest {
     }
 
     /**
-     * The invariant itself (ADR-016 decision 4) under a genuinely overlapping race: one anchor
+     * The anchor uniqueness invariant itself under a genuinely overlapping race: one anchor
      * ends up owned by exactly one project - and the loser is told about the <em>anchor</em>.
      *
      * <p>Before the {@code commitConflict} translator existed, the loser was thrown

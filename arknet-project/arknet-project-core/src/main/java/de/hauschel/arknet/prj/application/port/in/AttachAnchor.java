@@ -15,7 +15,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  *
  * <p>Backs the tool {@code project_attach_anchor}. This is how a second git worktree, a further
  * IDE directory of the same checkout, or a copy at another location joins a project that already
- * exists, instead of being guessed or falling back to a default (ADR-016 decision 4). Takes a
+ * exists, instead of being guessed or falling back to a default. Takes a
  * {@link ProjectId}, not an anchor the caller wants to attach <em>to</em>: the caller resolved
  * that project via {@link ResolveProject} against its own current anchor first, so this port
  * never has to disambiguate "which project does the caller mean".</p>

@@ -58,8 +58,8 @@ public class AdrCheckService implements CheckAdrs {
 
     /**
      * A decision code named in running text. Matched literally rather than by running number, so a
-     * zero-padded {@code ADR-016} - the file records' numbering space, which is not this one - is
-     * reported as unheld instead of silently reading as {@code ADR-16}.
+     * zero-padded {@code ADR-099} - the file records' numbering space, which is not this one - is
+     * reported as unheld instead of silently reading as {@code ADR-99}.
      */
     private static final Pattern DECISION_REFERENCE = Pattern.compile("\\bADR-\\d+\\b");
 

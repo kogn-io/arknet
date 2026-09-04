@@ -54,7 +54,7 @@ class CrossBoundedContextStoreWiringTest {
      * The project all four hexagons write into here.
      *
      * <p>These tests used to additionally pin {@code arknet.workspace.id}, a property removed with
-     * the derived resolution path (ADR-016 decision 9). Dropping it costs this test nothing: it
+     * the derived resolution path. Dropping it costs this test nothing: it
      * drives the application services directly, and each of them takes the project as a parameter -
      * the property only ever configured the resolver, which is not on this path.</p>
      */

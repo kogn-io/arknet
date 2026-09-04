@@ -2,14 +2,14 @@
 #  arknet - Architecture Knowledge Net
 #  Project SHACL Shapes  :  Version 0.1.0
 #
-#  Validates ADR-016's registered-project vocabulary (arknet-project.ttl): a
+#  Validates the registered-project vocabulary (arknet-project.ttl): a
 #  project is identified by a unique dcterms:identifier and reachable only
 #  through the anchors it carries. A dataset holds the data of exactly one
 #  project, so nothing here filters by project - the store boundary already
 #  is the project boundary.
 #
 #  arkprj:Project-anchor has no upper bound and no default: a project
-#  without at least one anchor is unfindable, and ADR-016 point 3 rules out
+#  without at least one anchor is unfindable, and the registered-anchor model rules out
 #  both a default anchor and a fallback to a server-local guess.
 #
 #  Named PropertyShapes fuer RDF4J SHACL Sail Kompatibilitaet.
@@ -46,7 +46,7 @@ prjshapes:Project-anchor
     a sh:PropertyShape ;
     sh:path     arkprj:anchor ;
     sh:minCount 1 ;
-    sh:message  "A Project needs at least one arkprj:anchor. There is no default anchor and no fallback (ADR-016 point 3) - a project without an anchor cannot be reached by any client."@en , "Ein Project braucht mindestens einen arkprj:anchor. Es gibt keinen Default-Anker und keinen Fallback (ADR-016 Punkt 3) - ein Projekt ohne Anker ist von keinem Client erreichbar."@de ;
+    sh:message  "A Project needs at least one arkprj:anchor. There is no default anchor and no fallback - a project without an anchor cannot be reached by any client."@en , "Ein Project braucht mindestens einen arkprj:anchor. Es gibt keinen Default-Anker und keinen Fallback - ein Projekt ohne Anker ist von keinem Client erreichbar."@de ;
     sh:severity sh:Violation .
 
 prjshapes:Project-description

@@ -113,8 +113,8 @@ import de.hauschel.arknet.ul.domain.TermReferencedException;
  * {@code dcterms:identifier} at all, so it cannot itself introduce a code collision - a stronger,
  * structural guarantee rather than a checked one.</p>
  *
- * <p><strong>Compare-and-set through the funnel, with retry (ADR-014 decision
- * 4).</strong> An earlier version ran its own transaction and translated a genuine {@code
+ * <p><strong>Compare-and-set through the funnel, with retry.</strong> An earlier version
+ * ran its own transaction and translated a genuine {@code
  * SERIALIZABLE} write conflict (the "second interleaving" scenario) on the caller's own patched
  * predicate into {@link TermConcurrentlyModifiedException}. {@link #update} now retries {@link
  * #attemptUpdate} (bounded by {@link #MAX_RETRY_ATTEMPTS}) against the shared {@link WriteFunnel}:
@@ -413,8 +413,8 @@ public class KognioRdfTermRepository implements TermRepository {
      * is no {@code askCodeExists} check here at all: it is structurally impossible for this method
      * to introduce a duplicate code, not merely checked and rejected.</p>
      *
-     * <p><strong>Read-modify-write through the funnel, with retry (ADR-014 decision
-     * 4).</strong> The read of whatever is being preserved now happens <em>before</em> the write
+     * <p><strong>Read-modify-write through the funnel, with retry.</strong>
+     * The read of whatever is being preserved now happens <em>before</em> the write
      * transaction, exactly like {@link #create} - the SHACL gate therefore runs before the
      * transaction opens again, not inside it. What used to be a single in-adapter-transaction
      * merge is now a compare-and-set on the {@link WriteFunnel}: {@link #attemptUpdate} reads the
@@ -900,7 +900,7 @@ public class KognioRdfTermRepository implements TermRepository {
      * Overrides this repository's own configured {@link #displayLocale}'s {@code requested} tier
      * for one call - shared by {@link #findByCode} and {@link #findAll}, e.g. an explicit
      * {@code term_get} {@code displayLocale} argument or a project's own default language merged
-     * in by the caller (ADR-016-adjacent: the ubiquitous-language MCP adapter combines an
+     * in by the caller (the ubiquitous-language MCP adapter combines an
      * explicit override with {@code ResolvedProject#defaultLanguage()} before {@link #findByCode}
      * ever sees it, and passes {@code ResolvedProject#defaultLanguage()} straight through - {@code
      * term_list} has no explicit {@code displayLocale} tool argument of its own to merge against -

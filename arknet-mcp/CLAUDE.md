@@ -12,7 +12,7 @@ Ergaenzend haelt `mcp/dataset/DaemonStorageLock` eine eigene, exklusive Dateispe
 Das ist best-effort, kein garantiertes Schliessen: haelt ein paralleler `acquire`-Aufruf zum Shutdown-Zeitpunkt noch eine offene Lease auf einem Dataset, bleibt es offen -- statt darauf zu warten oder den Shutdown zu blockieren, loggt der Dekorator dafuer nur eine Warnung, und genau dieses Dataset faellt auf Crash-Recovery zurueck.
 Beherbergt zusaetzlich den generischen, BC-uebergreifenden Store-Lesepfad (`store_overview`/`resource_get`/`resource_history`, readOnly; `resource_history` issue #251) -- Logik in `mcp/store/`, kein eigener BC.
 Der Rueckgabewert von `store_overview` (Agent-Digest) kommt aus genau diesem generischen `SELECT ?s ?p ?o`; der HTML-Report daneben nicht mehr: `mcp/report/` setzt ihn pro Bounded Context aus deren Lese-In-Ports zusammen (`ListBoundedContexts`/`ListRequirements`/`ListUseCases`/`ListTerms`/`ListActors` plus `ResolveRequirements` fuer die Anzeige-Codes opaker Requirement-Referenzen -- geborgt als Borrowed In-Port, wie `uc_get` es tut), weil ein aus Tripeln rekonstruierter Use Case kein lesbarer Use Case ist (Ablauf = `n` opake `arkreq:Step`-Subjekte, geordnet ueber ein `arkreq:position`-Literal).
-Dieselbe Borrowed-In-Port-Rolle gilt fuer die Kopfzeile selbst: `StoreReportTools` fragt den neuen In-Port `FindProject` des Project-Hexagons je Aufruf ab und zeigt in Digest- und HTML-Kopfzeile das registrierte Label statt der rohen `ProjectId` -- mit Fallback auf die rohe id, wenn die Registry nichts liefert (ADR-016: jedes ueber `store_overview` erreichbare Projekt ist eigentlich bereits registriert, der Fallback ist also ein defensiver, kein regulaerer Pfad).
+Dieselbe Borrowed-In-Port-Rolle gilt fuer die Kopfzeile selbst: `StoreReportTools` fragt den neuen In-Port `FindProject` des Project-Hexagons je Aufruf ab und zeigt in Digest- und HTML-Kopfzeile das registrierte Label statt der rohen `ProjectId` -- mit Fallback auf die rohe id, wenn die Registry nichts liefert (jedes ueber `store_overview` erreichbare Projekt ist eigentlich bereits registriert, der Fallback ist also ein defensiver, kein regulaerer Pfad).
 Traegt das aufgeloeste `Project` zusaetzlich eine (mehrsprachige, bereits ueber die injizierte `DisplayLocale` aufgeloeste) Beschreibung, zeigt sowohl der Text-Digest (`DigestRenderer`, eine `# <description>`-Zeile direkt unter der Kopfzeile) als auch der HTML-Report (`HtmlReportRenderer`, `<p class="project-desc">` direkt unter `<header class="top">`) sie an -- fehlt sie, bleibt beides unveraendert wie vor dieser Beschreibung (issue #110).
 Beide Renderer nehmen dafuer ein zusaetzliches `Optional<String> description`-Argument neben dem bereits vorhandenen `label`.
 Fuer Glossar-Referenzen borgt der Report **nicht** `ResolveTerms`, sondern liest ueber `ListTerms` einmal je Report das ganze Glossar in die `Glossary`-Projektion: sie labelt jede Term-Referenz (der Chip zeigt das `skos:prefLabel`, der Code `TERM-n` wandert in den Tooltip) UND findet dieselben Labels im Prosatext der anderen BCs wieder.
@@ -73,7 +73,7 @@ Als Use-Case-Prosa zaehlt dabei `arkreq:useCaseGoal` (`TraceabilityGraph#useCase
 Ausgeblendet sind der Provenance-Graph (`ArkprovVocabulary.PROVENANCE_GRAPH`) und die Selbstbeschreibung des Projekts (`ArkprjVocabulary.IDENTITY_GRAPH` Punkt 7) -- Anker und Label, ueber die der Aufruf ueberhaupt hierher geroutet wurde.
 Die Registry selbst braucht keinen Ausschluss: sie liegt in einem reservierten Dataset, das kein gewoehnlicher Aufruf adressiert, waehrend die Selbstbeschreibung per Konstruktion IM gelesenen Dataset liegt.
 `store_overview`/`resource_get` zeigen weiterhin das Modell, nie seine Aenderungshistorie -- der Trail waechst mit jedem Write, und jede Revision zeigt via `prov:specializationOf` auf ihre Ressource.
-Auch der `arkprov:head`-Zeiger bleibt dort aussen vor, obwohl genau einer je Ressource begrenzt und billig zu zeigen waere und obwohl er seit ADR-014 Entscheidung 4 ein nutzbares Concurrency-Token ist -- alle vier vormals umgangenen Pfade (`req_update`/`req_set_status`/`req_link_term`/`term_update`) bewegen ihn jetzt, da sie durch `WriteFunnel#compareAndUpdate` laufen.
+Auch der `arkprov:head`-Zeiger bleibt dort aussen vor, obwohl genau einer je Ressource begrenzt und billig zu zeigen waere und obwohl er ein nutzbares Concurrency-Token ist -- alle vier vormals umgangenen Pfade (`req_update`/`req_set_status`/`req_link_term`/`term_update`) bewegen ihn jetzt, da sie durch `WriteFunnel#compareAndUpdate` laufen.
 Die frueher offene Frage, ob und wie die Historie ueberhaupt sichtbar wird, ist mit issue #251 fuer den Trail selbst beantwortet, nicht durch einen im Modell-Lesepfad gerenderten Head: `resource_history` (`StoreReportTools`) ist ein eigenes, bewusst separates Tool, das `StoreReader#history` direkt gegen `ArkprovVocabulary#PROVENANCE_GRAPH` fragt -- die eine Ausnahme von `StoreReader`s Infrastruktur-Ausschluss, keine Aufweichung davon; `store_overview`/`resource_get` bleiben unveraendert blind fuer diesen Graphen.
 Zurueckgegeben wird je Ressource die Liste ihrer `arkprov:Revision`s, aeltest zuerst, mit der Revision markiert, deren IRI dem aktuell gelesenen `arkprov:head` entspricht; eine Ressource, die nie durch den Trichter geschrieben wurde (store-first, oder aelter als der Trichter), hat eine leere, aber fehlerfreie Historie -- `resource_history` prueft Existenz separat ueber `outgoing`/`incoming`, genau wie `resource_get` es fuer sein eigenes "nicht gefunden" tut.
 `Prefixes.defaults()` traegt seitdem genau eine Revisions-Bindung (`rev:` -> `ArkprovVocabulary#REVISION_IRI_BASE`, dafuer aus einer vormals `WriteFunnel`-privaten Konstante in die geteilte Vokabularklasse gehoben), aber weiterhin keine `arkprov:`/`prov:`-Praedikat-Bindungen -- `resource_history` rendert eine kuratierte Sicht (laufende Nummer, Zeitstempel, current-Markierung), keine rohen Tripel, und braucht sie darum nicht.
@@ -104,12 +104,12 @@ aus dem `.mcp.json`-Header `X-Arknet-Project-Anchor: ${PWD}` --
 `McpTransportContext` legt; die `*McpTools` lesen ihn dort pro Call und loesen ihn ueber den
 `ProjectResolver`-Bean (`RegisteredAnchorProjectResolver` -> `ResolveProject` des
 `arknet-project`-BC) auf. Alternativ nimmt **jedes projekt-adressierende** Tool einen optionalen
-`projectAnchor`-Parameter, damit ein Client ohne Header-Kontrolle nicht ausgesperrt ist (ADR-016
-Punkt 2); der Header bleibt Primaerweg, weil ein per Parameter uebergebener Anker vom Sprachmodell
+`projectAnchor`-Parameter, damit ein Client ohne Header-Kontrolle nicht ausgesperrt ist; der Header
+bleibt Primaerweg, weil ein per Parameter uebergebener Anker vom Sprachmodell
 stammt und ein geratener, aber zufaellig existierender still das falsche Projekt traefe.
 `project_export` ist der Sonderfall dazu: es adressiert nur mit `projectOnly=true` ein einzelnes Projekt und nimmt den Parameter deshalb zwar an, lehnt ihn ausserhalb dieses Scopes aber ab, statt ihn stillschweigend fallenzulassen.
 Fehlender oder unbekannter Anker ist ein Fehler mit nach Aufrufstelle getrennter Meldung -- **kein**
-Default, **kein** Rueckfall auf das Daemon-Arbeitsverzeichnis (ADR-016 Punkt 3). Der Header ist
+Default, **kein** Rueckfall auf das Daemon-Arbeitsverzeichnis. Der Header ist
 Projekt-Routing, keine Authentifizierung. Weil das Projekt pro Aufruf aus dem Anker kommt,
 genuegt ein Port fuer alle Projekte. Ein HTTP-Eintrag in `.mcp.json` ist bei Claude Code rein passiv
 (nur Verbindungsaufbau, kein Prozess-Spawn/-Management) -- Start und Betrieb des Daemons sind Sache
@@ -124,7 +124,7 @@ gegen Kosten in der Groessenordnung eines Prozess-Starts, nicht gegen einen indi
 
 Der HTML-Report von `store_overview` landet **immer** im serverseitigen
 `arknet.report.dir/<projectId>`, nie im Verzeichnis des Clients: der Header traegt einen Anker,
-keinen Pfad, und ihn an `Path.of` zu reichen waere genau die Interpretation, die ADR-016
+keinen Pfad, und ihn an `Path.of` zu reichen waere genau die Interpretation, die der Anker
 ausschliesst -- fuer einen `url`/`uuid`-Anker ginge sie ohnehin schief. Im containerisierten
 Betrieb ist es der einzige erreichbare Ort, weil das Verzeichnis des Clients im Container nicht
 existiert. Der projekt-scoped Unterordner ist damit das einzige, was zwei Projekte im

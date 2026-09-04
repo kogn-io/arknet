@@ -234,7 +234,7 @@ class StoreReaderTest {
     }
 
     /**
-     * The second infrastructure graph (ADR-016 decision 7): a project describes itself - its
+     * The second infrastructure graph: a project describes itself - its
      * anchors and its label - inside its own dataset, so that the registry stays a rebuildable
      * index and a restored backup carries its identity with it. That record is routing machinery,
      * not model: without the exclusion every store report would open with the anchors by which

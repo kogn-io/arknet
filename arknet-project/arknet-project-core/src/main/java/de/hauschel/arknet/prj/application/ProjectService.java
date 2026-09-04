@@ -40,7 +40,7 @@ import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 import de.hauschel.arknet.prj.domain.UnknownDatasetException;
 
 /**
- * Application service implementing the project use cases (ADR-016 decision 8).
+ * Application service implementing the project use cases.
  *
  * <p>This is the policy seat of the hexagon: it drives the {@link ProjectRegistry} and
  * {@link ProjectSelfDescription} driven ports. The component is wired as a plain object
@@ -51,7 +51,7 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * bounded context's application service mints its aggregate's identity through the shared-kernel
  * {@code ResourceIdFactory}, which produces a subject IRI under {@code
  * https://w3id.org/arknet/id/} - an identity meant to live <em>inside</em> a dataset. A
- * {@link ProjectId} instead becomes a dataset id (ADR-016 decision 1); minting it via that
+ * {@link ProjectId} instead becomes a dataset id; minting it via that
  * factory would tie a project's identity to the id scheme of resources that live inside
  * datasets, which is the wrong direction of dependency for something that has to exist before
  * any dataset it names does. This service therefore mints a plain {@link UUID} directly.</p>
@@ -64,7 +64,7 @@ import de.hauschel.arknet.prj.domain.UnknownDatasetException;
  * BoundedContextService#linkTerm}'s "linking an already-linked term is a no-op" rule. Every
  * write that actually changes the registry - a fresh registration, an attached anchor, a rename -
  * is followed by writing the project's self-description into its own dataset
- * ({@link ProjectSelfDescription#describe}), in that order (ADR-016 decision 7): the registry is
+ * ({@link ProjectSelfDescription#describe}), in that order: the registry is
  * where a duplicate anchor or label is caught, so it must run first.</p>
  *
  * <p><strong>Concurrency.</strong> {@link #attach} and {@link #rename} both read-modify-write via

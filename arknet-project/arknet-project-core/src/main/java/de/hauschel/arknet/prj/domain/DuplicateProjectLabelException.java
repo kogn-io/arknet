@@ -12,7 +12,7 @@ import java.util.Objects;
  *
  * <p>Distinct from {@link AnchorAlreadyRegisteredException}: that one flags a collision on the
  * routing key (the anchor), this one flags a collision on the human-readable label a person
- * reads in a report or types when addressing a project by name (ADR-016 decision 5). The label is
+ * reads in a report or types when addressing a project by name. The label is
  * required to stay unique across projects precisely because it - not the opaque
  * {@link ProjectId} - is what a human is expected to recognise and type.</p>
  */

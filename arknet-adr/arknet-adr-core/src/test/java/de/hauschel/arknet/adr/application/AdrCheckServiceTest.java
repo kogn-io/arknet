@@ -131,12 +131,12 @@ class AdrCheckServiceTest {
     @Test
     void reportsAProseReferenceToADecisionTheProjectDoesNotHold() {
         // given prose naming a store code that does not exist and a file-record number that never will
-        record(draft(1).addressing(FR_1).decision("Supersedes ADR-99 and refines ADR-016."));
+        record(draft(1).addressing(FR_1).decision("Supersedes ADR-99 and refines ADR-098."));
 
         CheckReport report = service.check(PROJECT, null);
 
         assertTrue(hasEvidence(report, Rule.UNRESOLVED_DECISION_REFERENCE, "ADR-99"), report.findings().toString());
-        assertTrue(hasEvidence(report, Rule.UNRESOLVED_DECISION_REFERENCE, "ADR-016"), report.findings().toString());
+        assertTrue(hasEvidence(report, Rule.UNRESOLVED_DECISION_REFERENCE, "ADR-098"), report.findings().toString());
     }
 
     @Test

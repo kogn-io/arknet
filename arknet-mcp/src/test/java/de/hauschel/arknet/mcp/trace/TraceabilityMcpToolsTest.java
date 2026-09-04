@@ -49,7 +49,7 @@ class TraceabilityMcpToolsTest {
      * {@link ProjectId} is no longer a constant here: it is minted by the registration.
      *
      * <p>These tests used to pin the project through {@code arknet.workspace.id} instead. That
-     * property is gone with the rest of the derived resolution path (ADR-016 decision 9), and
+     * property is gone with the rest of the derived resolution path, and
      * replacing it with a stubbed resolver would have been the weaker test: routing a real tool
      * call through the real registry is precisely the behaviour the switch-over changed.</p>
      */

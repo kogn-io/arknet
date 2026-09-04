@@ -853,7 +853,7 @@ class KognioRdfUseCaseRepositoryTest {
     // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
-     * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and
+     * Revision basis for this bounded context's funnel write paths: {@code create} and
      * {@code compareAndUpdate} each record exactly one immutable revision of the use case, and
      * the head is queryable per resource. The step resources the body writes alongside get no
      * revisions of their own - the revision hangs off the funnel's subject, the use case. Since

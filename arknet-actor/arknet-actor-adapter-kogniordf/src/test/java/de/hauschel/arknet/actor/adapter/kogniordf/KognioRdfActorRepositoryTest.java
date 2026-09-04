@@ -624,7 +624,7 @@ class KognioRdfActorRepositoryTest {
         ActorId id = freshId();
         Actor original = new Actor(id, new ActorCode("ACTOR-1"), ActorType.HUMAN, "Sachbearbeiter", null);
         repository.create(PROJECT_A, original);
-        // Strips the head the create recorded, leaving the pre-ADR-014 state behind.
+        // Strips the head the create recorded, leaving the state from before the revision trail existed.
         String dropHead = "DELETE WHERE { GRAPH <" + ArkprovVocabulary.PROVENANCE_GRAPH + "> { <"
                 + id.value().value() + "> <" + ArkprovVocabulary.HEAD + "> ?head } }";
         try (DatasetHandle handle = lifecycle.acquire(new DatasetId(PROJECT_A.value()))) {

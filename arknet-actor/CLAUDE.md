@@ -28,7 +28,7 @@ Ein Typwechsel bliebe sonst dieselbe Falle wie bei Constraint: alles, was den Ak
 
 **Schreibpfad mit CAS von Anfang an.** `ActorRepository` traegt `create` + `compareAndUpdate` und **keine** unbedingte Update-Methode; `ActorService#update` laeuft ueber `updateWithOptimisticRetry` (Zustand+`arkprov:head` aus `findCurrentByCode`, Mutation, `compareAndUpdate` mit dem beobachteten Head, Retry gegen einen frischen Read, `ActorConcurrentlyModifiedException` bei Erschoepfung).
 `add()` vergibt den naechsten `ACTOR-N`-Code ueber den geteilten `CodeAssignment`-Retry (`arknet-shared-kernel`).
-Der Head schuetzt Trichter-Schreiber gegeneinander, nicht gegen store-first-Edits am Trichter vorbei (ADR-014-Nachtrag).
+Der Head schuetzt Trichter-Schreiber gegeneinander, nicht gegen store-first-Edits am Trichter vorbei.
 Ein Update, das nichts aendert, schreibt nichts -- Wertgleichheit ist hier der ganze Test, es gibt keinen "gleicher Text, anderer Sprach-Tag ist trotzdem ein Write"-Fall wie bei `ConstraintService`.
 
 **Out-Adapter.** Eigener Named Graph `https://w3id.org/arknet/model/actors`, eigenes `ShaclWriteGate` + eigener `WriteFunnel` (kein Teilen, anders als `KognioRdfConstraintRepository`, das sich den Trichter der requirements-BC leiht -- dort liegen beide Shapes in derselben Datei, hier gehoeren beide Ressourcen-Dateien diesem Hexagon allein).

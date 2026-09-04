@@ -55,7 +55,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * every other bounded context's out-adapter in this codebase, no method here takes a
  * {@code ProjectId}/{@code ProjectId} routing parameter: {@link ProjectRegistry}'s own javadoc
  * explains why - there is exactly one registry, and it lives permanently in
- * {@link ProjectId#RESERVED_SYSTEM_DATASET} (ADR-016 decision 6). This class hard-codes that one
+ * {@link ProjectId#RESERVED_SYSTEM_DATASET}. This class hard-codes that one
  * dataset id ({@link #SYSTEM_DATASET}) rather than accepting it as a parameter, so a caller
  * cannot accidentally point the registry at a project's own dataset.</p>
  *
@@ -81,7 +81,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * every correction to an already-registered project goes through the compare-and-set guard.</p>
  *
  * <p><strong>Anchor uniqueness is enforced inside the write transaction, not via a SPARQL
- * {@code ASK} guard.</strong> ADR-016 decision 4's central invariant - an anchor belongs to at
+ * {@code ASK} guard.</strong> The anchor model's central invariant - an anchor belongs to at
  * most one project - is checked in {@link #checkAnchorUniqueness} using
  * {@code DatasetTx#contains(graph, anchorIri, null, null)} against the write's own
  * {@link DatasetTx}, the same pattern the shared {@link WriteFunnel} already uses for its own
@@ -330,7 +330,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
      * <p>{@link WriteFunnel#create}'s own conflict translation cannot do this: a lost commit tells
      * it only that somebody wrote first, and this context guards <em>two</em> uniqueness rules, not
      * one - the label via the funnel's {@code code} parameter, the anchor via
-     * {@link #checkAnchorUniqueness} inside the body (ADR-016 decision 4). Reporting every lost
+     * {@link #checkAnchorUniqueness} inside the body. Reporting every lost
      * race as a label collision would tell a caller who lost on an <em>anchor</em> that its label
      * is taken, when that label may never have been used. The four model contexts are not exposed
      * to this: a business code is the only thing that can collide there, and {@code CodeAssignment}
@@ -473,7 +473,7 @@ public class KognioRdfProjectRegistry implements ProjectRegistry {
     }
 
     /**
-     * Enforces ADR-016 decision 4 inside the write transaction - see the class javadoc for why
+     * Enforces the anchor uniqueness invariant inside the write transaction - see the class javadoc for why
      * {@code contains} rather than {@code ASK}. Any anchor of {@code project} that already has
      * triples at this point in the transaction belongs to a different, still-existing project (an
      * update has already cleared this project's own previous anchors in

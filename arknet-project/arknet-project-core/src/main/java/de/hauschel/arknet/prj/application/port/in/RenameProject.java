@@ -13,7 +13,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
  * Driving port: change a project's human-readable label.
  *
  * <p>Backs the tool {@code project_rename}. Renaming never touches the project's identity or its
- * anchors (ADR-016 decision 5: identity and label are deliberately separate) - it only replaces
+ * anchors (identity and label are deliberately separate) - it only replaces
  * the label a human reads and types. Renaming to the label the project already has is idempotent
  * and performs no write.</p>
  */

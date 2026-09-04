@@ -43,15 +43,15 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  *   <li>{@link ArkprovVocabulary#PROVENANCE_GRAPH} - every guarded write records a PROV-O
  *       revision there, so an unfiltered view would grow with the change history
  *       rather than with the model.</li>
- *   <li>{@link ArkprjVocabulary#IDENTITY_GRAPH} - the project's self-description (ADR-016
- *       decision 7): the anchors and label by which a client's call is routed to this dataset.
+ *   <li>{@link ArkprjVocabulary#IDENTITY_GRAPH} - the project's self-description:
+ *       the anchors and label by which a client's call is routed to this dataset.
  *       Without the exclusion, every store report would open with its own routing record. The
  *       registry itself needs no exclusion, because it lives in a reserved dataset no ordinary
  *       call ever addresses; only the self-description sits inside the dataset being read.</li>
  * </ul>
  *
  * <p><strong>Why the head pointer is excluded too</strong>, even though it is bounded (exactly
- * one {@code arkprov:head} per resource) and, since ADR-014 decision 4, a usable concurrency
+ * one {@code arkprov:head} per resource) and a usable concurrency
  * token now that every user-reachable write path moves it through {@code WriteFunnel
  * #compareAndUpdate}: showing it here would mix the model with its change history the moment a
  * client read it as a version or change signal. That trail belongs to {@link #history}

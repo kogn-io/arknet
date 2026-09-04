@@ -8,7 +8,7 @@ im `arknet-project-core`, obwohl dort der Lebenszyklus des Bezeichneten verwalte
 Modell-BC-Cores routen auf dieser Identitaet und duerfen nicht an einem Nachbar-BC haengen,
 waehrend der Kernel das eine Modul ist, an dem jeder Core ohnehin haengt. Die Form des Werts ist
 sonst unbeschraenkt (nur non-blank) -- neue Projekte minten eine UUID, aus der alten Slug-Ableitung
-gewachsene Ids wie `arknet` bleiben gueltige opake Werte und werden nie migriert (ADR-016 Punkt 5).
+gewachsene Ids wie `arknet` bleiben gueltige opake Werte und werden nie migriert.
 
 Dazu der Port `ProjectResolver` (`String anchor -> ResolvedProject`, Konstante `ANCHOR_KEY`):
 `ProjectId` ist **kein** Prozess-Singleton, sondern wird von jedem `@McpTool`-Adapter pro Aufruf aus

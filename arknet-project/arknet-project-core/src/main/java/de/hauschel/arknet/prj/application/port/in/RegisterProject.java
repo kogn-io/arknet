@@ -14,7 +14,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  *
  * <p>Backs the tool {@code project_add}. A project cannot be registered without at least one
  * anchor - there is no "register now, attach an anchor later" path, because an anchorless
- * project would be unreachable the moment it exists (ADR-016 decision 3, enforced by
+ * project would be unreachable the moment it exists (enforced by
  * {@link Project}'s own constructor). Adding further anchors to an already-registered project is
  * the job of {@link AttachAnchor}, not this port.</p>
  */

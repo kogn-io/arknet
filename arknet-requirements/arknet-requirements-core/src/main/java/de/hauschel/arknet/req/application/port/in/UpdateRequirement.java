@@ -71,8 +71,8 @@ import de.hauschel.arknet.req.domain.RequirementCode;
  * the optional fields later because nothing else could change it once set -
  * {@code req_set_status} covers only {@code RequirementStatus} - and re-creating a requirement to
  * fix its priority loses its code and every {@code usesTerm}/{@code realises} reference. That
- * parameter is deliberately interim: a generic {@code resource_update} facade (ADR-014
- * phase 3) is meant to absorb it and the growing pile of per-bounded-context update tools it
+ * parameter is deliberately interim: a planned generic {@code resource_update} facade
+ * is meant to absorb it and the growing pile of per-bounded-context update tools it
  * belongs to; once that facade exists, this parameter goes, not the other way round.</p>
  */
 public interface UpdateRequirement {

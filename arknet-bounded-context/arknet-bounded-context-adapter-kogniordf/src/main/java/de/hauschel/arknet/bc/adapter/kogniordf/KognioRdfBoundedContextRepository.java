@@ -403,7 +403,7 @@ public class KognioRdfBoundedContextRepository implements BoundedContextReposito
      * subdomain/ownedBy - see the class-level "Row multiplication" note) plus the head itself come
      * from this method's one query call - one snapshot, which is the load-bearing
      * guarantee, not an ordering of clauses within that query. {@code head} is single-valued
-     * (ADR-014's queryable-head invariant), so every row carries the same value; only the first
+     * (the queryable-head invariant), so every row carries the same value; only the first
      * row is consulted for it. {@link #boundedContextOf} then issues one further, independent
      * query, via {@link #readUsesTerms}, to fill in {@code usesTerms}; that later read is safe
      * precisely because it can only be fresher, never staler, than the head: a concurrent funnel

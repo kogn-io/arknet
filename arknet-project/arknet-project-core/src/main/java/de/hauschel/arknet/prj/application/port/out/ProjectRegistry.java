@@ -17,8 +17,7 @@ import de.hauschel.arknet.prj.domain.StaleProjectException;
 import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
 
 /**
- * Driven port: persistence capability for the anchor-to-project registry itself (ADR-016
- * decision 6).
+ * Driven port: persistence capability for the anchor-to-project registry itself.
  *
  * <p>Named after the capability ("register and look up projects"), not after any technology.
  * Implementations live in adapter modules (e.g. an RDF-backed adapter writing into the reserved
@@ -30,8 +29,8 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * {@code RequirementRepository}) takes a {@code ProjectId}/{@code ProjectId} first parameter,
  * because those repositories address one of many possible datasets. This port cannot: the
  * registry is what a caller consults <em>before</em> it knows which project's dataset it is
- * even talking to, and it lives permanently in the one reserved system dataset (ADR-016
- * decision 6), not in a caller-selectable one. Passing a routing parameter here would be
+ * even talking to, and it lives permanently in the one reserved system dataset,
+ * not in a caller-selectable one. Passing a routing parameter here would be
  * meaningless - there is nothing left to route by.</p>
  *
  * <p><strong>Create vs. compare-and-update.</strong> Identity is opaque and minted once (see

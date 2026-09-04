@@ -406,7 +406,7 @@ class StoreExportToolsTest {
      * {@code projectOnly=true} scope needs from that very same list: {@link FindProject} looks a
      * project up by id, and the {@link ProjectResolver} matches an anchor against the projects'
      * own registered anchors, raising {@link UnresolvedProjectAnchorException} for anything else -
-     * the registry behaviour ADR-016 decision 3 prescribes, in the smallest fake that has it.
+     * the registry's no-default, no-fallback behaviour, in the smallest fake that has it.
      */
     private static StoreExportTools exportToolsOver(
             ListProjects list, StoreExporter exporter, Path exportDir, Path hostDir) {
@@ -464,7 +464,7 @@ class StoreExportToolsTest {
     }
 
     /**
-     * The other delivery path ADR-016 decision 2 keeps open to every client: the explicit
+     * The other delivery path the anchor model keeps open to every client: the explicit
      * {@code projectAnchor} parameter routes the same narrowed export for a client that cannot set
      * the header, and takes precedence over a header naming a different project.
      */
@@ -491,7 +491,7 @@ class StoreExportToolsTest {
     }
 
     /**
-     * ADR-016 decision 3 on the narrowed scope: narrowing the export to "this project" without a
+     * The no-default, no-fallback rule on the narrowed scope: narrowing the export to "this project" without a
      * registered anchor has no defensible fall-back - least of all the full export the caller just
      * opted out of - so it fails the same way every read tool does.
      */
