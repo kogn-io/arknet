@@ -75,7 +75,9 @@ public class AdrNotDeletableException extends IllegalStateException {
             case SUPERSEDED -> "the decision has already been replaced by a successor (see its "
                     + "supersededBy edge), and keeping that history is exactly what a decision "
                     + "record is for - adr_delete is for a record created by mistake, not for one "
-                    + "that was decided and then superseded";
+                    + "that was decided and then superseded. If the supersession itself was the "
+                    + "mistake (wrong successor named), adr_unsupersede undoes it and restores "
+                    + "ACCEPTED instead";
             case PROPOSED -> throw new IllegalArgumentException(
                     "ADR " + code.value() + " is PROPOSED and therefore deletable");
         };

@@ -59,6 +59,7 @@ class AdrNotDeletableExceptionTest {
         assertEquals(AdrStatus.SUPERSEDED, thrown.status());
         assertTrue(thrown.getMessage().contains("already been replaced"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains("created by mistake"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("adr_unsupersede"), thrown.getMessage());
     }
 
     /** A proposal is deletable, so constructing this refusal for one is a caller bug, not a message. */

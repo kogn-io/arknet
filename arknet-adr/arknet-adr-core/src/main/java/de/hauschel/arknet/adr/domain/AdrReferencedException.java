@@ -23,13 +23,14 @@ import de.hauschel.arknet.kernel.ProjectId;
  *
  * <p>The message is deliberately didactic about the remedy, and about the difference between the
  * three relations: a {@code relatedTo} edge is cleared with {@code adr_update} on the decision that
- * names this one; a {@code supersededBy} edge - the current write shape - has no removal tool at
- * all, it goes away only with the <em>superseded</em> decision itself, the one the edge lives on
- * (kogn-io/arknet#357 moved it there; kogn-io/arknet#359 fixed this remedy to name that decision
- * instead of the superseding one it used to, back when the edge lived on the superseding decision's
- * forward-only {@code supersedes} list); a store-first {@code supersedes} edge, where one still
- * exists, follows the pre-#357 shape and goes away only with the <em>superseding</em> decision that
- * carries it.</p>
+ * names this one; a {@code supersededBy} edge - the current write shape - is cleared with
+ * {@code adr_unsupersede} (kogn-io/arknet#354) on the <em>superseded</em> decision itself, the one
+ * the edge lives on (kogn-io/arknet#357 moved it there; kogn-io/arknet#359 fixed this remedy to name
+ * that decision instead of the superseding one it used to, back when the edge lived on the
+ * superseding decision's forward-only {@code supersedes} list) - the same call restores that
+ * decision to {@code ACCEPTED}; a store-first {@code supersedes} edge, where one still exists,
+ * follows the pre-#357 shape and has no removal tool - it goes away only with the
+ * <em>superseding</em> decision that carries it.</p>
  */
 public class AdrReferencedException extends RuntimeException {
 
@@ -115,8 +116,8 @@ public class AdrReferencedException extends RuntimeException {
             if (hints.length() > 0) {
                 hints.append("; ");
             }
-            hints.append("a supersededBy edge has no removal tool - it goes away only with the "
-                    + "superseded decision itself");
+            hints.append("adr_unsupersede on the superseded decision (the one named above) clears its "
+                    + "supersededBy edge and restores it to ACCEPTED");
         }
         if (references.stream().anyMatch(reference -> SUPERSEDES.equals(reference.predicate()))) {
             if (hints.length() > 0) {

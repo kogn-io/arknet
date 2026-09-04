@@ -32,6 +32,7 @@ import de.hauschel.arknet.adr.application.port.in.GetAdr;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.application.port.in.RejectAdr;
 import de.hauschel.arknet.adr.application.port.in.SupersedeAdr;
+import de.hauschel.arknet.adr.application.port.in.UnsupersedeAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr;
 import de.hauschel.arknet.adr.application.port.in.UpdateAdr.AdrCorrection;
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -61,8 +62,8 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
 /**
  * Driving (in) adapter of the ADR component: exposes the architecture-decision use cases as MCP
  * tools ({@code adr_add}, {@code adr_list}, {@code adr_get}, {@code adr_update},
- * {@code adr_set_status}, {@code adr_supersede}, {@code adr_delete}) and delegates each tool call to
- * the corresponding in-port.
+ * {@code adr_set_status}, {@code adr_supersede}, {@code adr_unsupersede}, {@code adr_delete}) and
+ * delegates each tool call to the corresponding in-port.
  *
  * <p>This adapter belongs to the ADR hexagon (symmetric to the out-adapter
  * {@code arknet-adr-adapter-kogniordf}). Tools are declared Spring-AI-style via
@@ -132,6 +133,7 @@ public final class AdrMcpTools {
     private final RejectAdr rejectAdr;
     private final DeprecateAdr deprecateAdr;
     private final SupersedeAdr supersedeAdr;
+    private final UnsupersedeAdr unsupersedeAdr;
     private final DeleteAdr deleteAdr;
     private final ResolveRequirements resolveRequirements;
     private final ResolveBoundedContexts resolveBoundedContexts;
@@ -139,7 +141,7 @@ public final class AdrMcpTools {
     private final ProjectResolver projects;
 
     /**
-     * Creates the adapter with its ten driving in-ports, the three borrowed display ports and the
+     * Creates the adapter with its eleven driving in-ports, the three borrowed display ports and the
      * resolver that maps each call's anchor to a project.
      *
      * @param addAdr                 in-port backing {@code adr_add}
@@ -153,6 +155,7 @@ public final class AdrMcpTools {
      * @param deprecateAdr           in-port backing {@code adr_set_status}'s {@code DEPRECATED}
      *                               target
      * @param supersedeAdr           in-port backing {@code adr_supersede}
+     * @param unsupersedeAdr         in-port backing {@code adr_unsupersede} (kogn-io/arknet#354)
      * @param deleteAdr              in-port backing {@code adr_delete}
      * @param resolveRequirements    requirements driving port used only to render an addressed
      *                               requirement's business code instead of its bare IRI
@@ -172,6 +175,7 @@ public final class AdrMcpTools {
             final RejectAdr rejectAdr,
             final DeprecateAdr deprecateAdr,
             final SupersedeAdr supersedeAdr,
+            final UnsupersedeAdr unsupersedeAdr,
             final DeleteAdr deleteAdr,
             final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts,
@@ -186,6 +190,7 @@ public final class AdrMcpTools {
         this.rejectAdr = Objects.requireNonNull(rejectAdr, "rejectAdr");
         this.deprecateAdr = Objects.requireNonNull(deprecateAdr, "deprecateAdr");
         this.supersedeAdr = Objects.requireNonNull(supersedeAdr, "supersedeAdr");
+        this.unsupersedeAdr = Objects.requireNonNull(unsupersedeAdr, "unsupersedeAdr");
         this.deleteAdr = Objects.requireNonNull(deleteAdr, "deleteAdr");
         this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
         this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
@@ -566,7 +571,9 @@ public final class AdrMcpTools {
             + "SUPERSEDED and its supersededBy edge to the newer decision, together in one write - "
             + "the older decision's own record is what this call returns. Recording the same pair "
             + "twice is a no-op; naming a different successor for an already-superseded decision is "
-            + "refused.")
+            + "refused. Named the wrong successor, or the wrong decision as superseded? adr_unsupersede "
+            + "undoes it, restoring ACCEPTED and clearing the edge - then call adr_supersede again with "
+            + "the right pair.")
     public String supersede(
             final McpSyncRequestContext context,
             @McpToolParam(description = "The superseding (newer) ADR identity, e.g. ADR-2")
@@ -581,6 +588,23 @@ public final class AdrMcpTools {
         return format(project, updated);
     }
 
+    @McpTool(name = "adr_unsupersede", description = "Undo a mistaken adr_supersede call: restores a "
+            + "SUPERSEDED decision to ACCEPTED and clears its supersededBy edge, together in one write. "
+            + "Only the decision named here is touched - the former successor's own record is not read "
+            + "or changed. Use this to correct a supersession recorded against the wrong decision (a "
+            + "mistyped code, a confused direction), then call adr_supersede again with the right pair. "
+            + "Refused unless the decision is currently SUPERSEDED.")
+    public String unsupersede(
+            final McpSyncRequestContext context,
+            @McpToolParam(description = "ADR identity, e.g. ADR-1; must currently be SUPERSEDED")
+            final String id,
+            @McpToolParam(description = PROJECT_ANCHOR_DESCRIPTION, required = false)
+            final String projectAnchor) {
+        final ResolvedProject project = resolveProject(context, projectAnchor);
+        final AdrDetail restored = unsupersedeAdr.unsupersede(project.id(), new AdrCode(id));
+        return format(project, restored);
+    }
+
     @McpTool(name = "adr_delete", description = "Delete a recorded architecture decision and every "
             + "triple it carries - the whole resource goes away, this is not a field correction. "
             + "Only a PROPOSED decision can be deleted: this tool undoes a record created by mistake "
@@ -591,9 +615,12 @@ public final class AdrMcpTools {
             + "stays as it is - neither of those two paths is open there, and the refusal names "
             + "the one that fits the status. REJECTED in particular is not a way to get rid of a "
             + "record: it means the option was considered and turned down, which is itself a "
-            + "decision worth keeping. The delete "
+            + "decision worth keeping. A SUPERSEDED decision that got there by mistake (wrong "
+            + "successor) is not deleted either - undo the supersession with adr_unsupersede first, "
+            + "which restores it to ACCEPTED. The delete "
             + "is refused while another decision still points at this one - naming it as its own "
-            + "successor (supersededBy), or via relatedTo; the refusal names those decisions. The "
+            + "successor (supersededBy, removable on that other decision with adr_unsupersede), or "
+            + "via relatedTo; the refusal names those decisions. The "
             + "freed code is NOT handed out again - the next adr_add continues above it.")
     public String delete(
             final McpSyncRequestContext context,
