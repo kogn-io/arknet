@@ -432,6 +432,64 @@ class AdrTest {
         assertThrows(IllegalStateException.class, () -> deprecated.accept(DECIDED_ON));
     }
 
+    /**
+     * kogn-io/arknet#427: ACCEPTED implies exactly one CHOSEN option whenever options exist. A
+     * record whose options were all turned down (or never classified) is a structural
+     * contradiction the moment it is accepted - "decided, but nothing was chosen" - and the
+     * rejection has to name the way out (correct the outcome with {@code adr_update} while still
+     * PROPOSED).
+     */
+    @Test
+    void acceptThrowsWhenConsideredOptionsHaveNoChosenOne() {
+        Adr proposed = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED),
+                        new ConsideredOption(2, "B", "r2", OptionOutcome.REJECTED)),
+                null, null, null, null, null, null);
+
+        IllegalStateException thrown =
+                assertThrows(IllegalStateException.class, () -> proposed.accept(DECIDED_ON));
+
+        assertTrue(thrown.getMessage().contains("adr_update"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("CHOSEN"), thrown.getMessage());
+    }
+
+    /** {@code accept} on a PROPOSED record must not mutate it - it stays PROPOSED after the throw. */
+    @Test
+    void acceptLeavesTheRecordProposedWhenItThrowsForMissingChosenOption() {
+        Adr proposed = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.REJECTED)), null, null, null, null, null,
+                null);
+
+        assertThrows(IllegalStateException.class, () -> proposed.accept(DECIDED_ON));
+
+        assertEquals(AdrStatus.PROPOSED, proposed.status());
+    }
+
+    /** The gangway back into PROPOSED: exactly one CHOSEN option accepts cleanly. */
+    @Test
+    void acceptSucceedsWithExactlyOneChosenOption() {
+        Adr proposed = new Adr(ID, new AdrCode("ADR-1"), "name", AdrStatus.PROPOSED, "context", "decision", null,
+                List.of(new ConsideredOption(1, "A", "r1", OptionOutcome.CHOSEN),
+                        new ConsideredOption(2, "B", "r2", OptionOutcome.REJECTED)),
+                null, null, null, null, null, null);
+
+        Adr accepted = proposed.accept(DECIDED_ON);
+
+        assertEquals(AdrStatus.ACCEPTED, accepted.status());
+    }
+
+    /** A record without any considered options at all remains acceptable - the empty option space
+     *  is legitimate, not a missing CHOSEN. */
+    @Test
+    void acceptSucceedsWithoutAnyConsideredOptions() {
+        Adr proposed = adr("name", "context", "decision");
+        assertEquals(List.of(), proposed.consideredOptions());
+
+        Adr accepted = proposed.accept(DECIDED_ON);
+
+        assertEquals(AdrStatus.ACCEPTED, accepted.status());
+    }
+
     @Test
     void rejectTransitionsOnceAndIsIdempotent() {
         Adr proposed = adr("name", "context", "decision");
