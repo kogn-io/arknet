@@ -66,6 +66,7 @@ import de.hauschel.arknet.kernel.ResourceId;
 import de.hauschel.arknet.kernel.ResourceIdFactory;
 import de.hauschel.arknet.persistence.ArkarchVocabulary;
 import de.hauschel.arknet.persistence.ArkprovVocabulary;
+import de.hauschel.arknet.persistence.ArkreqVocabulary;
 import de.hauschel.arknet.persistence.ShaclWriteGate;
 import de.hauschel.arknet.persistence.SparqlTerms;
 import de.hauschel.arknet.persistence.WriteConstraintViolationException;
@@ -147,6 +148,30 @@ public class KognioRdfAdrRepository implements AdrRepository {
     private static final String SUPERSEDES_PROPERTY = ArkarchVocabulary.SUPERSEDES;
     private static final String SUPERSEDED_BY_PROPERTY = ArkarchVocabulary.SUPERSEDED_BY;
     private static final String RELATED_TO_PROPERTY = ArkarchVocabulary.RELATED_TO;
+
+    /**
+     * {@code arkreq:Requirement} (kogn-io/arknet#351) - the abstract base type
+     * {@code ashapes:ADR-addressesRequirement}'s {@code sh:class} targets. Adapter-private: nothing
+     * outside {@link #crossReferenceAssertedContext} needs it, mirroring
+     * {@code KognioRdfContextRelationshipRepository}'s own local {@code BOUNDED_CONTEXT_TYPE}.
+     */
+    private static final String REQUIREMENT_TYPE = "https://w3id.org/arknet/requirements#Requirement";
+
+    /**
+     * {@code arkddd:BoundedContext} (kogn-io/arknet#351) - {@code ashapes:ADR-affectsContext}'s
+     * {@code sh:class} target. Adapter-private, same reasoning as {@link #REQUIREMENT_TYPE}.
+     */
+    private static final String BOUNDED_CONTEXT_TYPE = "https://w3id.org/arknet/ddd#BoundedContext";
+
+    /**
+     * {@code skos:Concept} (kogn-io/arknet#351) - {@code ashapes:ADR-usesTerm}'s {@code sh:class}
+     * target, reused from {@link ArkreqVocabulary} rather than duplicated: the requirements
+     * out-adapter already asserts the very same synthetic type triple for its own
+     * {@code arkreq:usesTerm} edge (see {@code KognioRdfRequirementRepository#create}), so this is a
+     * genuinely shared cross-module constant, unlike {@link #REQUIREMENT_TYPE}/
+     * {@link #BOUNDED_CONTEXT_TYPE} above.
+     */
+    private static final String CONCEPT_TYPE = ArkreqVocabulary.CONCEPT_TYPE;
 
     private static final String CONSEQUENCE_PROPERTY = ArkarchVocabulary.CONSEQUENCE;
     private static final String CONSEQUENCE_TYPE_CLASS = ArkarchVocabulary.CONSEQUENCE_TYPE_CLASS;
@@ -349,13 +374,41 @@ public class KognioRdfAdrRepository implements AdrRepository {
     }
 
     /**
-     * Collects the validation-only triples both {@code ashapes:ADR-relatedTo} and
-     * {@code ashapes:ADR-supersededBy}'s {@code sh:class} constraints need: for each {@code
-     * relatedTo} peer and the {@code supersededBy} target, its type plus the five fields
-     * {@code ashapes:ADRShape}'s {@code sh:Violation} property shapes require.
+     * Collects the validation-only triples every reference edge's {@code sh:class} constraint
+     * needs. Two different mechanisms, because the two groups of edges differ in what {@code
+     * sh:class} targets:
+     *
+     * <ul>
+     * <li>{@code ashapes:ADR-relatedTo}/{@code ADR-supersededBy} target
+     * {@code arkarch:ArchitectureDecisionRecord} - {@code ashapes:ADRShape}'s own target class, so a
+     * bare type triple would make the peer a focus node of that shape too and fail it for missing
+     * mandatory fields. For each {@code relatedTo} peer and the {@code supersededBy} target this
+     * queries the real {@link #ADR_GRAPH} for its type plus the five fields
+     * {@code ashapes:ADRShape}'s {@code sh:Violation} property shapes require - a peer that does not
+     * actually exist as a well-formed ADR yields nothing, and the write is correctly rejected.</li>
+     * <li>{@code ashapes:ADR-addressesRequirement}/{@code ADR-affectsContext}/{@code ADR-usesTerm}
+     * (kogn-io/arknet#351) target a class with no node shape in this shapes file at all
+     * ({@code arkreq:Requirement}/{@code arkddd:BoundedContext}/{@code skos:Concept}), so a plain
+     * synthetic type triple per edge suffices - no store read needed, mirroring
+     * {@code KognioRdfRequirementRepository}'s own {@code arkreq:usesTerm} handling. Existence and
+     * bounded-context membership of the target were already established by
+     * {@code RequirementLookup}/{@code BoundedContextLookup}/{@code TermLookup} before the candidate
+     * graph was built; this shape guards the store-first write path those out-ports never run
+     * against.</li>
+     * </ul>
      */
     private Graph crossReferenceAssertedContext(ProjectId projectId, Adr adr) {
         Graph assertedContext = rdf.createGraph();
+        for (RequirementRef ref : adr.addressesRequirements()) {
+            assertedContext.add(rdf.createIRI(ref.value().value()), VocabRdf.TYPE, rdf.createIRI(REQUIREMENT_TYPE));
+        }
+        for (BoundedContextRef ref : adr.affectsContexts()) {
+            assertedContext.add(rdf.createIRI(ref.value().value()), VocabRdf.TYPE, rdf.createIRI(BOUNDED_CONTEXT_TYPE));
+        }
+        for (TermRef ref : adr.usesTerms()) {
+            assertedContext.add(rdf.createIRI(ref.value().value()), VocabRdf.TYPE, rdf.createIRI(CONCEPT_TYPE));
+        }
+
         List<AdrId> peers = adr.supersededBy() == null
                 ? adr.relatedTo()
                 : Stream.concat(adr.relatedTo().stream(), Stream.of(adr.supersededBy())).distinct().toList();
