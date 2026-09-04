@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import de.hauschel.arknet.adr.application.port.in.AdrDetail;
+import de.hauschel.arknet.adr.application.port.in.CountSkippedAdrs;
 import de.hauschel.arknet.adr.application.port.in.ListAdrs;
 import de.hauschel.arknet.adr.domain.Adr;
 import de.hauschel.arknet.adr.domain.AdrCode;
@@ -79,19 +80,33 @@ public final class AdrCards {
     private final ListAdrs adrs;
     private final ResolveRequirements resolveRequirements;
     private final ResolveBoundedContexts resolveBoundedContexts;
+    private final CountSkippedAdrs countSkippedAdrs;
 
     /**
      * @param adrs                   the ADR context's list in-port
      * @param resolveRequirements    borrowed for addressed-requirement display codes
      * @param resolveBoundedContexts borrowed for affected-context display codes
+     * @param countSkippedAdrs       used to show a note when records are skipped (issue #362)
+     */
+    public AdrCards(
+            final ListAdrs adrs,
+            final ResolveRequirements resolveRequirements,
+            final ResolveBoundedContexts resolveBoundedContexts,
+            final CountSkippedAdrs countSkippedAdrs) {
+        this.adrs = Objects.requireNonNull(adrs, "adrs");
+        this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
+        this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
+        this.countSkippedAdrs = Objects.requireNonNull(countSkippedAdrs, "countSkippedAdrs");
+    }
+
+    /**
+     * Backward-compatibility constructor for tests that don't need skipped ADR counting.
      */
     public AdrCards(
             final ListAdrs adrs,
             final ResolveRequirements resolveRequirements,
             final ResolveBoundedContexts resolveBoundedContexts) {
-        this.adrs = Objects.requireNonNull(adrs, "adrs");
-        this.resolveRequirements = Objects.requireNonNull(resolveRequirements, "resolveRequirements");
-        this.resolveBoundedContexts = Objects.requireNonNull(resolveBoundedContexts, "resolveBoundedContexts");
+        this(adrs, resolveRequirements, resolveBoundedContexts, (projectId, materialisedCount) -> 0);
     }
 
     /**
@@ -103,6 +118,7 @@ public final class AdrCards {
     public ModelSection section(final ProjectId projectId, final Glossary glossary) {
         Objects.requireNonNull(glossary, "glossary");
         final List<AdrDetail> all = adrs.list(projectId, null);
+        final int skipped = countSkippedAdrs.skippedCount(projectId, all.size());
         final Map<ResourceId, ResolvedRequirement> requirements = resolveRequirements(projectId, all);
         final Map<ResourceId, ResolvedBoundedContext> contexts = resolveContexts(projectId, all);
         final Map<AdrCode, String> idsByCode = all.stream()
@@ -112,8 +128,18 @@ public final class AdrCards {
                 .sorted(Comparator.comparing(detail -> detail.adr().code().value(), BusinessCodes.ORDER))
                 .map(detail -> card(detail, requirements, contexts, idsByCode, glossary))
                 .toList();
-        return new ModelSection(SECTION_TITLE, "architecture-decisions",
-                "decisions made, their status, what they replace and what they relate to", cards);
+        final String subtitle = skipped == 0 ? "decisions made, their status, what they replace and what they relate to"
+                : "decisions made, their status, what they replace and what they relate to. " + skippedNote(skipped);
+        return new ModelSection(SECTION_TITLE, "architecture-decisions", subtitle, cards);
+    }
+
+    /**
+     * The note appended to the ADR section subtitle whenever some decisions are skipped due to
+     * store-first anomalies (analogous to the note {@code adr_list} appends).
+     */
+    private static String skippedNote(final int skipped) {
+        return "(" + skipped + (skipped == 1 ? " decision" : " decisions")
+                + " skipped: unresolvable store-first status or supersededBy data - see server logs)";
     }
 
     private static ModelCard card(
