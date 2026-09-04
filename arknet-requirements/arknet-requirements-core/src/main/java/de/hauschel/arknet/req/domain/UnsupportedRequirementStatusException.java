@@ -58,7 +58,7 @@ public class UnsupportedRequirementStatusException extends RuntimeException {
                 + " carries status " + Objects.requireNonNull(statusIri, "statusIri")
                 + ", which arknet's MVP does not implement (supported: "
                 + Arrays.toString(RequirementStatus.values())
-                + ") - this value was written store-first (ADR-005), not through req_set_status; "
+                + ") - this value was written store-first, not through req_set_status; "
                 + "fix it by editing the arkreq:status triple in the store directly");
         this.projectId = projectId;
         this.code = code;

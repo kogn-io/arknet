@@ -182,7 +182,7 @@ public class TermService implements AddTerm, ListTerms, GetTerm, ResolveTerms, U
      *
      * <p><strong>Counted over {@link TermRepository#findAllCodes}, not
      * {@link TermRepository#findAll} (kogn-io/arknet#360).</strong> A term written store-first
-     * (ADR-005) without a {@code skos:prefLabel} or without a {@code skos:definition} cannot be
+     * without a {@code skos:prefLabel} or without a {@code skos:definition} cannot be
      * materialised into a {@link Term} and is dropped by the listing read - but it exists, and its
      * code stays taken. Counting over the listing read would therefore mint that code again as soon
      * as such a term holds the project's highest number, and {@link #add}'s

@@ -225,7 +225,7 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * A store-first (ADR-005) {@code arkarch:adrStatus} value the gate's {@code sh:in} list admits
+     * A store-first {@code arkarch:adrStatus} value the gate's {@code sh:in} list admits
      * but {@link de.hauschel.arknet.adr.adapter.kogniordf.KognioRdfAdrRepository} cannot decode
      * (there is none left, now that all five lifecycle individuals are decoded) is simulated with a
      * value the shape does not even admit, the only way left to reach the unresolvable branch: the
@@ -1003,7 +1003,7 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * Regression for #187: two distinct, non-standard store-first (ADR-005) codes that both parse to
+     * Regression for #187: two distinct, non-standard store-first codes that both parse to
      * the same running number (unparseable, hence 0 - see
      * {@code CodeCounter#runningNumber}) must not collide in the internal
      * {@link java.util.TreeSet}. A comparator ordering only by parsed running number is inconsistent
@@ -1153,7 +1153,7 @@ class KognioRdfAdrRepositoryTest {
 
     /**
      * {@code arkarch:supersedes} (the pre-#357 legacy shape) has no field on {@link Adr} at all - it
-     * is reachable only store-first (ADR-005). A replace-by-identity write must carry it along
+     * is reachable only store-first. A replace-by-identity write must carry it along
      * instead of silently erasing it - the "Altbestands-Auffang" this issue introduces, the same
      * preservation the bounded-context adapter performs for {@code arkddd:hasAggregate}.
      * {@code arkarch:relatedTo}/{@code arkarch:supersededBy} deliberately no longer belong in this
@@ -1417,7 +1417,7 @@ class KognioRdfAdrRepositoryTest {
         }
     }
 
-    // ---- revision trail (ADR-014) and compare-and-set --------------------------------------
+    // ---- revision trail and compare-and-set --------------------------------------
 
     @Test
     void everyWriteRecordsExactlyOneRevisionAndMovesTheQueryableHead() {
@@ -1583,7 +1583,7 @@ class KognioRdfAdrRepositoryTest {
     }
 
     /**
-     * The tombstone the shared funnel leaves (ADR-013/ADR-014): the head pointer goes, the last
+     * The tombstone the shared funnel leaves (ADR-013): the head pointer goes, the last
      * revision is marked {@code prov:invalidatedAtTime}, and the chain up to it stays as the audit
      * trail - "this existed, until here".
      */
@@ -1660,7 +1660,7 @@ class KognioRdfAdrRepositoryTest {
 
     /**
      * Only a <em>tombstoned</em> revision retains a code. A code sitting on a live decision's
-     * revision - which nothing in this adapter writes, but a store-first (ADR-005) edit can - is not
+     * revision - which nothing in this adapter writes, but a store-first edit can - is not
      * a retained one: counting it would raise the numbering over a decision that is still there and
      * already carries that very code.
      */

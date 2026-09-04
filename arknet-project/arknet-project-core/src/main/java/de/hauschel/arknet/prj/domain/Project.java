@@ -59,7 +59,7 @@ public record Project(ProjectId id, String label, List<Anchor> anchors, String d
         }
         if (anchors == null || anchors.isEmpty()) {
             throw new IllegalArgumentException("a project must hold at least one anchor - "
-                    + "an anchorless project would be unreachable and there is no default (ADR-016)");
+                    + "an anchorless project would be unreachable and there is no default");
         }
         anchors = List.copyOf(anchors);
     }

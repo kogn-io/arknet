@@ -231,7 +231,7 @@ public class BoundedContextService implements AddBoundedContext, ListBoundedCont
      *
      * <p><strong>{@link BoundedContextRepository#findAllCodes}, not
      * {@link BoundedContextRepository#findAll} (kogn-io/arknet#360).</strong> A bounded context
-     * written store-first (ADR-005) without {@code arknet:name} or {@code arkddd:domainVision} is
+     * written store-first without {@code arknet:name} or {@code arkddd:domainVision} is
      * invisible to {@code findAll}, which joins both as mandatory - yet its {@code BC-N} is taken
      * just the same. Counting over {@code findAll} would therefore hand that very number out again
      * as soon as such a context holds the project's highest one; {@link #create}'s uniqueness guard

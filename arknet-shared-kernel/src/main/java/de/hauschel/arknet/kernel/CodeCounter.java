@@ -47,7 +47,7 @@ public final class CodeCounter {
      * what follows the prefix is not a plain sequence of digits.
      *
      * <p>{@code 0} rather than an exception or an empty {@link java.util.Optional}: this parses
-     * store-first (ADR-005) data nothing validated on the way in, where an unparseable code is a
+     * store-first data nothing validated on the way in, where an unparseable code is a
      * fact to survive rather than an error to raise, and "contributes nothing to the maximum" is
      * exactly the right contribution for one. Since a minted number always starts at {@code 1},
      * {@code 0} can never collide with a real one.</p>

@@ -120,7 +120,7 @@ final class InMemoryActorRepository implements ActorRepository {
 
     /**
      * Seeds a code that {@link #findAllCodes} reports but {@link #findAll} never will - simulating
-     * an actor the real out-adapter cannot materialise because it was written store-first (ADR-005)
+     * an actor the real out-adapter cannot materialise because it was written store-first
      * without the {@code arknet:name} that read path joins as mandatory, while its {@code ACTOR-N}
      * remains just as taken as any other. Lets a test reproduce that skip without a real store
      * (kogn-io/arknet#360).

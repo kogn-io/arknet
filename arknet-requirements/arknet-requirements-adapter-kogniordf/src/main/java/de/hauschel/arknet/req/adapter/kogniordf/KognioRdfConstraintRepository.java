@@ -151,7 +151,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
     }
 
     /**
-     * Compare-and-set update (ADR-014): replaces the constraint's triples only if its
+     * Compare-and-set update: replaces the constraint's triples only if its
      * {@code arkprov:head} still equals {@code expectedHead} at the moment the shared
      * {@link WriteFunnel} checks it inside the write transaction - closing the lost-update window
      * a plain read (via {@link #findCurrentByCode}) followed by an unconditional replace would
@@ -190,7 +190,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * serialise a {@link Constraint} identically. {@code title}/{@code statement} are written as
      * the language-tagged (or, for a {@code null} tag, plain untagged) literal named by
      * {@code titleTag}/{@code statementTag} - never more than one each, since preserving every
-     * other language variant a store-first (ADR-005) edit or an earlier {@code constraint_update}
+     * other language variant a store-first edit or an earlier {@code constraint_update}
      * may have left is {@link #replaceTriplesForUpdate}'s job, run after this candidate has
      * already passed the gate.
      */
@@ -429,7 +429,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
                                 effective.select(statementsBySubject.getOrDefault(subjectIriString, List.of()));
                         if (title.isEmpty() || statement.isEmpty()) {
                             // Both shapes carry sh:minCount 1 at sh:Violation severity, so this is
-                            // unreachable via the MCP tools - skip this one store-first (ADR-005)
+                            // unreachable via the MCP tools - skip this one store-first
                             // constraint rather than crash the whole listing, mirroring
                             // KognioRdfRequirementRepository#findAll's own skip.
                             return null;
@@ -532,7 +532,7 @@ public class KognioRdfConstraintRepository implements ConstraintRepository {
      * Selects one {@code title}/{@code statement} candidate each via {@code locale}, or
      * {@link Optional#empty()} if this subject carries no literal for either - unreachable via the
      * MCP tools (both shapes carry {@code sh:minCount 1} at {@code sh:Violation} severity), but
-     * possible for a store-first (ADR-005) constraint.
+     * possible for a store-first constraint.
      */
     private Optional<TitleStatementSelection> selectTitleStatement(
             Function<String, Stream<BindingSet>> selectFn, String subject, DisplayLocale locale) {

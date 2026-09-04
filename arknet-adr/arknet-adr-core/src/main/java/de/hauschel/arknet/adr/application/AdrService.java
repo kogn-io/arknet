@@ -197,7 +197,7 @@ public class AdrService
      * natural (lexicographic) order - {@code "ADR-10"} sorts before {@code "ADR-2"} under natural
      * order once a project passes ten decisions. Falls back to natural string order when the running
      * number ties, which every well-formed {@code ADR-N} code only ever does with itself - the
-     * fallback exists for two distinct, non-conforming store-first (ADR-005) codes that both parse to
+     * fallback exists for two distinct, non-conforming store-first codes that both parse to
      * 0 (see {@link CodeCounter#runningNumber}): without it this comparator returns 0 for two
      * different codes, which is inconsistent with {@link Object#equals} and silently collapses both
      * into one entry in a {@link TreeSet} (see {@link #list}).
@@ -616,7 +616,7 @@ public class AdrService
      *
      * <p><strong>Labelled {@code supersededBy}, the current write shape.</strong>
      * {@link AdrRepository#findSupersessionReferrers} unions two sources - the current-model
-     * {@code arkarch:supersededBy} edge and a store-first (ADR-005) pre-#357
+     * {@code arkarch:supersededBy} edge and a store-first pre-#357
      * {@code arkarch:supersedes} edge - into one flat list of codes, so a single label cannot be
      * exactly right for both (kogn-io/arknet#359). {@code supersededBy} is chosen because it is the
      * only shape any write path still produces; a legacy {@code supersedes} referrer, reachable only
@@ -794,7 +794,7 @@ public class AdrService
 
     /**
      * Maps identities to codes in the order they were held, dropping any that no longer resolve - a
-     * decision deleted store-first (ADR-005) leaves a dangling identity behind, and a display path
+     * decision deleted store-first leaves a dangling identity behind, and a display path
      * must not fail over it.
      */
     private static List<AdrCode> codesOf(List<AdrId> ids, Map<AdrId, AdrCode> codes) {
@@ -821,7 +821,7 @@ public class AdrService
      *
      * <p><strong>{@link AdrRepository#findAllCodes}, not {@link AdrRepository#findAll}
      * (kogn-io/arknet#359).</strong> A living decision can still be skipped by {@link #list}/
-     * {@link AdrRepository#findAll} - a store-first (ADR-005) status/{@code supersededBy}
+     * {@link AdrRepository#findAll} - a store-first status/{@code supersededBy}
      * disagreement, or an unrecognised status - without ceasing to exist or freeing its code. Deriving
      * the maximum from {@code findAll} would let such a decision's number be recomputed and handed
      * out again the moment it holds the project's highest number, and every retry of that collision

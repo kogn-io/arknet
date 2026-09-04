@@ -75,7 +75,7 @@ public interface AdrRepository {
      *
      * <p><strong>The token guards writes made through this port, not edits that bypass it.</strong>
      * {@code expectedHead} only ever changes when a write goes through this port's own
-     * {@code create}/{@code compareAndUpdate} (ADR-014); a direct store-first (ADR-005) edit to
+     * {@code create}/{@code compareAndUpdate}; a direct store-first edit to
      * this decision leaves the token untouched. Such an edit therefore passes this method's
      * compare-and-set check undetected, and the subsequent replace-by-identity write silently
      * overwrites it. The guard closes the lost-update window between two callers of this port, not
@@ -137,7 +137,7 @@ public interface AdrRepository {
 
     /**
      * Reads a decision's current state together with its concurrency token (recorded by the last
-     * write through this port, ADR-014). The scalar fields and the token itself come from one
+     * write through this port). The scalar fields and the token itself come from one
      * query call - one snapshot - which is the load-bearing guarantee here, not an ordering of
      * clauses within that query. The multi-valued edges are deliberately filled in by later,
      * independent follow-up reads; that is safe precisely because a later read can only be
@@ -227,7 +227,7 @@ public interface AdrRepository {
      * Returns the business code of every decision recorded in a project, read independently of
      * whether that decision can currently be materialised into an {@link Adr} - unlike
      * {@link #findAll}, a decision this hexagon's own read-time tolerance skips (an unrecognised
-     * {@code adrStatus}, or a store-first (ADR-005) {@code adrStatus}/{@code supersededBy}
+     * {@code adrStatus}, or a store-first {@code adrStatus}/{@code supersededBy}
      * disagreement, kogn-io/arknet#357) still counts here.
      *
      * <p><strong>Why this exists (kogn-io/arknet#359).</strong>

@@ -591,7 +591,7 @@ public class RequirementService implements AddRequirement, ListRequirements, Get
      *
      * <p><strong>Counted over {@link RequirementRepository#findAllCodes}, not
      * {@link RequirementRepository#findAll} (kogn-io/arknet#360).</strong> The listing drops a
-     * requirement it cannot materialise - a store-first (ADR-005) write can leave the mandatory
+     * requirement it cannot materialise - a store-first write can leave the mandatory
      * {@code title} or {@code description} unreadable - while the code that requirement holds
      * stays as taken as any other. Counting over the listing would therefore mint that code again
      * as soon as it is the project's highest, and {@code create} would answer with a

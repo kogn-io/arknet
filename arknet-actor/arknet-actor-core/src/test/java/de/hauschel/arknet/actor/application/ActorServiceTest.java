@@ -104,7 +104,7 @@ class ActorServiceTest {
     }
 
     /**
-     * An actor minted store-first (ADR-005) may carry a {@code dcterms:identifier} that does not
+     * An actor minted store-first may carry a {@code dcterms:identifier} that does not
      * follow the {@code ACTOR-N} scheme at all - the next-code computation must skip such a code as
      * if it contributed no running number, rather than letting the parse failure surface.
      */
@@ -124,7 +124,7 @@ class ActorServiceTest {
      * {@link ActorRepository#findAll} (kogn-io/arknet#360): revert {@code nextCode} back to deriving
      * its maximum from {@code findAll} and this goes red - the seeded {@code ACTOR-2} holds the
      * project's highest number but is invisible to {@code findAll}, exactly as a store-first
-     * (ADR-005) actor without an {@code arknet:name} would be, so {@code add} would recompute
+     * actor without an {@code arknet:name} would be, so {@code add} would recompute
      * {@code ACTOR-2} and collide with a code that is still very much taken.
      */
     @Test

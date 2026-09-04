@@ -214,7 +214,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Writes the leanest subject that still counts as a coded requirement: the type triple and
      * {@code dcterms:identifier}, nothing else. Shape-illegal, and therefore unreachable through
-     * {@code req_add} - only a store-first (ADR-005) write can produce it, which is exactly the
+     * {@code req_add} - only a store-first write can produce it, which is exactly the
      * situation kogn-io/arknet#360 is about.
      */
     private void givenBareCodedSubject(ProjectId projectId, RequirementId id, String code) {
@@ -232,7 +232,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * The same lean subject without an identity of its own: {@code []} is a fresh blank node,
      * which {@code rshapes:RequirementShape} does not forbid and no {@code req_add} can mint. Only
-     * a store-first (ADR-005) write reaches this shape, and the code on it is taken all the same.
+     * a store-first write reaches this shape, and the code on it is taken all the same.
      */
     private void givenBareBlankNodeSubject(ProjectId projectId, String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/requirements> { "
@@ -806,7 +806,7 @@ class KognioRdfRequirementRepositoryTest {
      * graph with two {@code arkreq:AcceptanceCriterion} resources whose positions skip a number -
      * {@code AcceptanceCriterionShape} places no uniqueness/consecutiveness constraint on
      * {@code arkreq:position} across sibling criteria, and {@code req_update} cannot produce a gap
-     * (append-only + in-place patch, issue #266), so this is reachable only store-first (ADR-005).
+     * (append-only + in-place patch, issue #266), so this is reachable only store-first.
      */
     private void givenRequirementWithAcceptanceCriterionPositionGap(ProjectId projectId, RequirementId id,
             String code) {
@@ -838,7 +838,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code AcceptanceCriterion-text} places no {@code sh:pattern}/blank-rejection on the
      * property (only {@code sh:minLength}, which a whitespace-only literal already satisfies), and
      * {@link Requirement}'s constructor is the only place that rejects a blank criterion text, so
-     * this is reachable only store-first (ADR-005).
+     * this is reachable only store-first.
      */
     private void givenRequirementWithABlankAcceptanceCriterionTextInTheMiddle(ProjectId projectId, RequirementId id,
             String code) {
@@ -953,7 +953,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Writes an {@code arkreq:FunctionalRequirement} straight into the requirements graph with one
      * additional, unrelated {@code rdf:type} triple - RDF-legal (nothing forbids a subject from
-     * carrying several types) and store-first (ADR-005) reachable, but unreachable via
+     * carrying several types) and store-first reachable, but unreachable via
      * {@code req_add}, which types a requirement exactly once.
      */
     private void givenRequirementWithAnAdditionalType(
@@ -982,7 +982,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code Requirement-status} shape SHACL-legally allows six status individuals via
      * {@code sh:in}, but {@link RequirementStatus} implements only two
      * ({@code PROPOSED}/{@code ACCEPTED}) - {@code arkreq:Rejected} is unreachable via
-     * {@code req_add}/{@code req_set_status}, but a store-first (ADR-005) edit can legally write
+     * {@code req_add}/{@code req_set_status}, but a store-first edit can legally write
      * it. Before the fix, {@code statusFromIri} threw a raw, uncaught {@link IllegalStateException}
      * that named neither the requirement nor which method it broke; the dedicated exception must
      * name both.
@@ -1064,7 +1064,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Store-first regression test for issue #163: {@code requirements-shapes.ttl}'s
      * {@code Requirement-priority} shape declares no {@code sh:nodeKind}, so a store-first
-     * (ADR-005) edit can legally write {@code arkreq:priority} as a literal instead of an IRI.
+     * edit can legally write {@code arkreq:priority} as a literal instead of an IRI.
      * Before the fix {@code priorityOf}'s unguarded {@code (IRI) value} cast threw an uncaught
      * {@link ClassCastException}; the fix reads the mismatched value as "not set" instead.
      */
@@ -1395,7 +1395,7 @@ class KognioRdfRequirementRepositoryTest {
      * {@code sh:maxCount 1}): two language-tagged titles sharing the exact same non-empty tag are
      * rejected, but {@link Requirement#title()} stays single-valued at the domain level - a second
      * title is unreachable via {@link RequirementRepository#create}, so this exercises the gate
-     * directly against a synthetic candidate graph, the way a store-first (ADR-005) write could
+     * directly against a synthetic candidate graph, the way a store-first write could
      * still produce two same-tagged triples. Two plain, <em>untagged</em> titles are deliberately
      * <strong>not</strong> covered here: {@code sh:uniqueLang} per the SHACL spec only ever
      * compares literals that carry a non-empty language tag, so two untagged titles are SHACL-legal
@@ -1614,7 +1614,7 @@ class KognioRdfRequirementRepositoryTest {
     /**
      * Writes a glossary term into the sibling terms graph <em>without</em> a
      * {@code dcterms:identifier} - unreachable via {@code term_add}/{@link #givenTerm}, but
-     * reachable store-first (ADR-005). {@code KognioRdfTermLookup} cannot resolve such a concept
+     * reachable store-first. {@code KognioRdfTermLookup} cannot resolve such a concept
      * by code (no identifier to look up by), so a test wiring an edge to it must do so directly
      * per raw SPARQL as well. Returns the term's IRI for that purpose.
      */
@@ -1634,7 +1634,7 @@ class KognioRdfRequirementRepositoryTest {
 
     /**
      * Writes an {@code arkreq:usesTerm} edge straight into the requirements graph - the
-     * store-first path (ADR-005), unmediated by {@code req_link_term}/{@code KognioRdfTermLookup},
+     * store-first path, unmediated by {@code req_link_term}/{@code KognioRdfTermLookup},
      * so it can point at a term the strict lookup would reject by code.
      */
     private void givenUsesTermEdge(ProjectId projectId, RequirementId subjectId, String termIri) {
@@ -1800,7 +1800,7 @@ class KognioRdfRequirementRepositoryTest {
         return new ConstraintRef(constraint.id().value());
     }
 
-    // ---- revision trail (ADR-014): one revision per write, head queryable ----------------
+    // ---- revision trail: one revision per write, head queryable ----------------
 
     /**
      * ADR-014 revision basis for this bounded context's funnel write paths: {@code create} and

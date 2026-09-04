@@ -218,7 +218,7 @@ class KognioRdfConstraintRepositoryTest {
     /**
      * Writes a subject with the constraint type triple and {@code dcterms:identifier} and nothing
      * else. Both shapes demand a title and a statement, so no {@code constraint_add} can produce
-     * this - only a store-first (ADR-005) write, the case kogn-io/arknet#360 concerns.
+     * this - only a store-first write, the case kogn-io/arknet#360 concerns.
      */
     private void givenBareCodedSubject(ProjectId projectId, ConstraintId id, String code) {
         String insert = "INSERT DATA { GRAPH <https://w3id.org/arknet/model/constraints> { "
@@ -235,7 +235,7 @@ class KognioRdfConstraintRepositoryTest {
     /**
      * The same subject stripped of its identity too - {@code []} mints an anonymous node, which no
      * constraint shape rules out and which {@code constraint_add} cannot produce, since it always
-     * goes through a minted {@code ResourceId}. Store-first (ADR-005) data of this shape still owns
+     * goes through a minted {@code ResourceId}. Store-first data of this shape still owns
      * its code.
      */
     private void givenBareBlankNodeSubject(ProjectId projectId, String code) {

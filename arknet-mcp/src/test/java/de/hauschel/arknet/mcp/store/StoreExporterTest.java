@@ -112,7 +112,7 @@ class StoreExporterTest {
 
     /**
      * A backup must not hide the provenance graph {@link StoreReader} excludes for report
-     * purposes - every guarded write records a PROV-O revision there (ADR-014), and losing it
+     * purposes - every guarded write records a PROV-O revision there, and losing it
      * would silently drop change history from the backup.
      */
     @Test

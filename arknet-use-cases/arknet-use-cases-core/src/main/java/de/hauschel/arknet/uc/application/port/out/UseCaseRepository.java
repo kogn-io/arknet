@@ -194,7 +194,7 @@ public interface UseCaseRepository {
 
     /**
      * Reads a use case's current state together with its concurrency token (recorded by the last
-     * write through this port, ADR-014). Backs the read side of the read-modify-write round trip
+     * write through this port). Backs the read side of the read-modify-write round trip
      * {@link #compareAndUpdate} guards the write side of - mirrors
      * {@code RequirementRepository#findCurrentByCode}.
      *
@@ -257,7 +257,7 @@ public interface UseCaseRepository {
      * Returns the business code of every use case recorded in a project, read independently of
      * whether that use case can currently be materialised into a {@link UseCase} - unlike
      * {@link #findAll}, a use case this hexagon's own read-time tolerance skips (store-first
-     * (ADR-005) data with no {@code dcterms:title} or no {@code arkreq:useCaseGoal} literal, with an
+     * data with no {@code dcterms:title} or no {@code arkreq:useCaseGoal} literal, with an
      * empty main flow, or with main-flow positions the domain type refuses) still counts here.
      *
      * <p><strong>Why this exists (kogn-io/arknet#360).</strong>

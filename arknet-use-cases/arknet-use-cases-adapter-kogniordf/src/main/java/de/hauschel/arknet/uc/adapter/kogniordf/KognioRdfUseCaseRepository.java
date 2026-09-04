@@ -105,7 +105,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  * {@code supportingActor}/{@code stepRealises} back filters for IRI-ness only
  * ({@code FILTER(isIRI(...))}), mirroring {@code KognioRdfRequirementRepository#readUsesTerms}:
  * none of the three properties carries an {@code sh:nodeKind} constraint, so a store-first
- * (ADR-005) edge may legally target a blank node, which {@link ResourceId} cannot represent. For
+ * edge may legally target a blank node, which {@link ResourceId} cannot represent. For
  * {@code supportingActor}/{@code stepRealises} such an edge is simply absent from the
  * corresponding list. {@code primaryActor} is a required (non-{@code OPTIONAL}) triple pattern
  * in the scalar read, so filtering it out there instead makes the whole use case unreadable -
@@ -142,7 +142,7 @@ import de.hauschel.arknet.uc.domain.UseCaseNotFoundException;
  *
  * <p>A use case with zero main steps is handled the same way.
  * {@code arkreq:mainStep} is only {@code sh:Warning} severity at {@code sh:minCount 1} (not
- * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first (ADR-005) use case
+ * {@code sh:Violation}), so {@link ShaclWriteGate#enforce} lets a store-first use case
  * through with no {@code arkreq:mainStep} triples at all - {@link UseCase}'s compact constructor
  * rejects an empty {@code steps} list unconditionally. {@link #readBySubject} skips such a use
  * case the same way it skips a blank-node {@code primaryActor}, rather than letting the
@@ -437,7 +437,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
                         // that UseCase#usesTerms()/#constrainedBy() (and therefore graph, built
                         // from useCase.usesTerms()/constrainedBy() above) could never have carried
                         // in the first place: both shapes carry sh:nodeKind sh:IRI, but that only
-                        // guards this adapter's own writes - a store-first (ADR-005) edge may
+                        // guards this adapter's own writes - a store-first edge may
                         // still target a blank node, which ResourceId cannot represent - read()
                         // below excludes it the same way (FILTER(isIRI(...))). Mirrors
                         // KognioRdfRequirementRepository#replaceTriplesForUpdate's
@@ -625,7 +625,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * raw tag would still crash the gate a moment later with a different exception, not fix
      * anything. Falling back to {@code null} instead writes the pass-through value as a plain,
      * untagged literal - the one literal form no tag validation ever rejects - so a use case whose
-     * store-first (ADR-005) title/goal/step-text tag is irreparably malformed becomes editable
+     * store-first title/goal/step-text tag is irreparably malformed becomes editable
      * again (at the cost of that one field's language tag) rather than permanently blocking every
      * future correction, even one that never touches title/goal/step text at all.</p>
      *
@@ -753,7 +753,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * no join on anything {@link #buildUseCase} can refuse to materialise on - not
      * {@code dcterms:title}, not {@code arkreq:useCaseGoal}, not the main flow. That is the whole
      * point of the method (see {@link UseCaseRepository#findAllCodes}'s own javadoc, and
-     * kogn-io/arknet#360): a store-first (ADR-005) use case those reads skip keeps its {@code UCn},
+     * kogn-io/arknet#360): a store-first use case those reads skip keeps its {@code UCn},
      * so the code has to stay visible to the counter even while the use case itself is not listable.
      *
      * <p>Deduplicated, since a store-first subject could carry two {@code dcterms:identifier}
@@ -787,7 +787,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
 
     /**
      * Reads a use case's current state together with its concurrency token (the
-     * {@code arkprov:head} revision IRI recorded by the last funnel write, ADR-014) - the read
+     * {@code arkprov:head} revision IRI recorded by the last funnel write) - the read
      * side of the read-modify-write round trip {@link #compareAndUpdate} guards the write side
      * of. Mirrors {@code KognioRdfRequirementRepository#findCurrentByCode}: reuses the same
      * subject lookup {@link #findByCode} does, then pairs the scalar/head read in one query call
@@ -826,7 +826,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *
      * <p>{@code FILTER(isIRI(?primaryActor))} mirrors {@link #readSupportingActors}/
      * {@link #readMainStepRealises}: {@code arkreq:primaryActor} carries no {@code sh:nodeKind}
-     * constraint, so a store-first (ADR-005) edge may legally target a blank node, which
+     * constraint, so a store-first edge may legally target a blank node, which
      * {@link ResourceId} cannot represent. Unlike the other two properties, {@code primaryActor}
      * is part of this required (non-{@code OPTIONAL}) triple pattern, so filtering it out here
      * makes the whole scalar query yield no row for such a use case - the caller then treats it
@@ -975,7 +975,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      *
      * <p>Returns {@link Optional#empty()} if this subject carries no {@code dcterms:title}/
      * {@code arkreq:useCaseGoal} literal at all - {@code UseCase-title}/{@code UseCase-goal} carry
-     * {@code sh:minCount 1}, so this is unreachable via the MCP tools; a store-first (ADR-005) use
+     * {@code sh:minCount 1}, so this is unreachable via the MCP tools; a store-first use
      * case missing either is skipped here the same way a use case with zero main steps is.</p>
      */
     private Optional<UseCase> buildUseCase(DatasetHandle handle, String subjectIriString, UseCaseCode code,
@@ -996,7 +996,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         List<Step> steps = toSteps(stepAssemblies, locale);
         if (steps.isEmpty()) {
             // arkreq:mainStep is only sh:Warning severity at sh:minCount 1 (not sh:Violation), so
-            // ShaclWriteGate#enforce lets a store-first (ADR-005) use case through with zero main
+            // ShaclWriteGate#enforce lets a store-first use case through with zero main
             // steps. UseCase's compact constructor rejects an empty steps list unconditionally -
             // mirror the primaryActor blank-node guard above: skip this one use case instead of
             // letting the constructor throw out of findByCode/findAll for the whole project.
@@ -1005,7 +1005,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
         if (!hasConsecutiveStepPositions(steps)) {
             // Nothing in SHACL forbids two arkreq:Step nodes under the same mainStep sharing an
             // arkreq:position - uniqueness is only enforced in-process by
-            // UseCase.requireConsecutiveStepPositions, and store-first data (ADR-005) never runs
+            // UseCase.requireConsecutiveStepPositions, and store-first data never runs
             // through that. Mirror the empty-steps guard above rather than letting the
             // constructor's IllegalArgumentException propagate out of findByCode/findAll for the
             // whole project.
@@ -1038,7 +1038,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * target IRI (RDF has no intrinsic statement order, and {@link UseCase} compares its
      * {@code usesTerms} list positionally). Excludes any edge whose target is not an IRI -
      * {@code usesTerm}'s shape carries {@code sh:nodeKind sh:IRI}, but that only guards this
-     * adapter's own writes, so a store-first (ADR-005) edge may still target a blank node, which
+     * adapter's own writes, so a store-first edge may still target a blank node, which
      * {@link ResourceId} cannot represent; such an edge never appears in
      * {@link UseCase#usesTerms()} but survives a later update via the unjoinable-edge
      * preservation in {@link #write}. Mirrors
@@ -1057,7 +1057,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Reads the {@code oslc_rm:constrainedBy} edges of one use case back as constraint
      * references, ordered by target IRI - mirrors {@link #readUsesTerms} exactly, including the
      * IRI-only filter: {@code constrainedBy}'s shape carries {@code sh:nodeKind sh:IRI}, but that
-     * only guards this adapter's own writes, not a store-first (ADR-005) edge, so the filter still
+     * only guards this adapter's own writes, not a store-first edge, so the filter still
      * matters here.
      */
     private List<ConstraintRef> readConstrainedBy(DatasetHandle handle, String subject) {
@@ -1076,7 +1076,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@link ActorRef} - no join into the sibling terms graph is needed, and none is performed
      * here. {@code FILTER(isIRI(?a))} mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
-     * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
+     * {@code sh:nodeKind} constraint, so a store-first edge may legally target a blank
      * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
      * tools.</p>
      */
@@ -1198,7 +1198,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * {@link RequirementRef} - no join into the sibling requirements graph is needed, and none is
      * performed here. {@code FILTER(isIRI(?req))} mirrors
      * {@code KognioRdfRequirementRepository#readUsesTerms}: the property carries no
-     * {@code sh:nodeKind} constraint, so a store-first (ADR-005) edge may legally target a blank
+     * {@code sh:nodeKind} constraint, so a store-first edge may legally target a blank
      * node, which {@link ResourceId} cannot represent - excluded here, unreachable via the MCP
      * tools.</p>
      *
@@ -1206,7 +1206,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Nothing in SHACL forbids two distinct {@code arkreq:Step} nodes under the
      * same use case's {@code arkreq:mainStep} from sharing the same {@code arkreq:position} -
      * uniqueness is only enforced in-process by {@code UseCase.requireConsecutiveStepPositions},
-     * and store-first data (ADR-005) never runs through that. Grouping by the derived position
+     * and store-first data never runs through that. Grouping by the derived position
      * integer instead of step identity would silently merge two such steps' {@code stepRealises}
      * targets under one key, the same class of bug already fixed for
      * {@code supportingActor}/{@code stepRealises} elsewhere in this adapter.</p>
@@ -1229,7 +1229,7 @@ public class KognioRdfUseCaseRepository implements UseCaseRepository {
      * Mirrors {@code UseCase.requireConsecutiveStepPositions} as a non-throwing predicate: the
      * step at list index {@code i} must carry position {@code i + 1}. {@code steps} is built by
      * {@link #toSteps} from {@link #readMainStepAssemblies}, itself sorted by
-     * {@code arkreq:position}, so a store-first (ADR-005) gap, duplicate or descending position is
+     * {@code arkreq:position}, so a store-first gap, duplicate or descending position is
      * detected here before it ever reaches {@link UseCase}'s constructor.
      */
     private static boolean hasConsecutiveStepPositions(List<Step> steps) {

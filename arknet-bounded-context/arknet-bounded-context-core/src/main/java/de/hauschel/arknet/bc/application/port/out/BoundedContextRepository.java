@@ -70,7 +70,7 @@ public interface BoundedContextRepository {
      *
      * <p><strong>The token guards writes made through this port, not edits that bypass it.</strong>
      * {@code expectedHead} only ever changes when a write goes through this port's own
-     * {@code create}/{@code compareAndUpdate} (ADR-014); a direct store-first (ADR-005) edit to
+     * {@code create}/{@code compareAndUpdate}; a direct store-first edit to
      * this bounded context leaves the token untouched. Such an edit therefore passes this method's
      * compare-and-set check undetected, and the subsequent replace-by-identity write silently
      * overwrites it. The guard closes the lost-update window between two callers of this port, not
@@ -116,7 +116,7 @@ public interface BoundedContextRepository {
 
     /**
      * Reads a bounded context's current state together with its concurrency token (recorded by
-     * the last write through this port, ADR-014). The core fields (name, domainVision, subdomain,
+     * the last write through this port). The core fields (name, domainVision, subdomain,
      * ownedBy) and the token itself come from one query call - one snapshot - which is the
      * load-bearing guarantee here, not an ordering of clauses within that query. {@code usesTerms},
      * in contrast, is deliberately filled in by a later, independent follow-up read; that is safe
@@ -155,7 +155,7 @@ public interface BoundedContextRepository {
      * Returns the business code of every bounded context recorded in a project, read independently
      * of whether that bounded context can currently be materialised into a {@link BoundedContext} -
      * unlike {@link #findAll}, which joins {@code arknet:name} and {@code arkddd:domainVision} as
-     * mandatory and therefore never reports a store-first (ADR-005) context missing either of them,
+     * mandatory and therefore never reports a store-first context missing either of them,
      * even though its {@code BC-N} is every bit as taken as any other's.
      *
      * <p><strong>Why this exists (kogn-io/arknet#360).</strong>

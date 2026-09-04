@@ -85,7 +85,7 @@ class TermServiceTest {
      * Mutation-tests {@code nextCode}'s reliance on {@link TermRepository#findAllCodes} rather than
      * {@link TermRepository#findAll} (kogn-io/arknet#360): turn {@code nextCode} back into a count
      * over {@code findAll} and this goes red - the seeded {@code TERM-2} holds the project's highest
-     * number while being invisible to {@code findAll}, exactly as a store-first (ADR-005) concept
+     * number while being invisible to {@code findAll}, exactly as a store-first concept
      * without {@code skos:prefLabel}/{@code skos:definition} is to the real out-adapter, so
      * {@code add} would mint {@code TERM-2} again instead of {@code TERM-3} and collide with a code
      * that is still very much taken.

@@ -151,7 +151,7 @@ ashapes:ADR-consideredOption-class
 # At most one considered option may be the chosen one (kogn-io/arknet#357) - verified against the
 # real RDF4J SHACL engine this project's write gate runs (spike, arknet-wt-spike-shacl). Nailed down
 # a second time, unconditionally, in Adr's own compact constructor: SHACL only guards a store-first
-# (ADR-005) write, never a direct edit that bypasses the gate.
+# write, never a direct edit that bypasses the gate.
 #
 # A SPARQL-based constraint (sh:sparql), not sh:qualifiedValueShape/sh:qualifiedMaxCount
 # (kogn-io/arknet#376): the qualified-value-shape form measurably misfires against RDF4J 6.x's

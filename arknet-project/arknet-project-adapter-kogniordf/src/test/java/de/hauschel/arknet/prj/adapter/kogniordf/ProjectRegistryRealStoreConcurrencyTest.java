@@ -72,7 +72,7 @@ import de.hauschel.arknet.prj.domain.UnattributedRegistrationConflictException;
  * <p><strong>What the {@code register} races prove.</strong> Two things the four model contexts' tests cannot cover,
  * because this context differs from them in two ways. First: it guards <em>two</em> uniqueness
  * rules, the label (through {@link de.hauschel.arknet.persistence.WriteFunnel}'s {@code code}
- * parameter) and the anchor ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}, ADR-016
+ * parameter) and the anchor ({@link KognioRdfProjectRegistry#checkAnchorUniqueness}
  * decision 4) - so "you lost the commit race" does not by itself say which rule was broken.
  * Second: there is no {@code CodeAssignment} retry to heal the loser (there is no {@code PRJ-N}
  * code to recompute), so whatever the loser is thrown is what a caller actually reads. The proof

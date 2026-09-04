@@ -41,7 +41,7 @@ import de.hauschel.arknet.persistence.SparqlTerms;
  *
  * <ul>
  *   <li>{@link ArkprovVocabulary#PROVENANCE_GRAPH} - every guarded write records a PROV-O
- *       revision there (ADR-014), so an unfiltered view would grow with the change history
+ *       revision there, so an unfiltered view would grow with the change history
  *       rather than with the model.</li>
  *   <li>{@link ArkprjVocabulary#IDENTITY_GRAPH} - the project's self-description (ADR-016
  *       decision 7): the anchors and label by which a client's call is routed to this dataset.
@@ -201,7 +201,7 @@ public final class StoreReader {
      * business id, e.g. {@code FR-1}). Returns all matches so the caller can reject an
      * ambiguous id spanning bounded contexts instead of guessing.
      *
-     * <p>A subject may be a blank node - a store-first resource with no minted IRI (ADR-005) is
+     * <p>A subject may be a blank node - a store-first resource with no minted IRI is
      * RDF-legal and does carry a {@code dcterms:identifier} like any other resource - so a match
      * is mapped through {@link #subjectReference} rather than filtered down to {@link IRI}
      * subjects only; a blank-node match comes back as the same {@code "_:" + reference} handle
@@ -237,11 +237,11 @@ public final class StoreReader {
 
     /**
      * Reads a resource's change history (issue #251): every {@code arkprov:Revision} the shared
-     * write funnel has recorded for it (ADR-013/ADR-014), oldest first, with the one matching
+     * write funnel has recorded for it (ADR-013), oldest first, with the one matching
      * the resource's current {@code arkprov:head} marked {@link Revision#current}.
      *
      * <p>A resource the funnel has never written through - written entirely store-first
-     * (ADR-005), or predating the funnel - has recorded no revision and yields an empty list,
+     *, or predating the funnel - has recorded no revision and yields an empty list,
      * not an error; distinguishing that from "no such resource" is the caller's job (as
      * {@code resource_get} already does for {@link #outgoing}/{@link #incoming} being empty).
      * A blank-node handle (see {@link #isBlankNodeReference(String)}) also yields an empty list,

@@ -105,7 +105,7 @@ class InMemoryAdrRepository implements AdrRepository {
      * Identity-to-code pairs seeded by {@link #seedUnmaterialisableCode} - deliberately absent from
      * {@link #byProject}, so {@link #findAll} never sees them, while {@link #findAllCodes} and
      * {@link #findCodesByIds} both do. What lets a test simulate the real out-adapter's store-first
-     * (ADR-005) read-time skip without a real store: a decision this hexagon considers alive, whose
+     * read-time skip without a real store: a decision this hexagon considers alive, whose
      * code and identity are both assigned, but that cannot be materialised into an {@link Adr} right
      * now (kogn-io/arknet#359).
      */
@@ -244,7 +244,7 @@ class InMemoryAdrRepository implements AdrRepository {
 
     /**
      * Every stored decision's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
-     * latter simulating what the real out-adapter's own store-first (ADR-005) read-time skip would
+     * latter simulating what the real out-adapter's own store-first read-time skip would
      * otherwise hide from {@link #findAll} alone (kogn-io/arknet#359).
      */
     @Override

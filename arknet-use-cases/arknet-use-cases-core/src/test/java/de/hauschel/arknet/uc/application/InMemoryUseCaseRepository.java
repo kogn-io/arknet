@@ -156,7 +156,7 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     /**
      * Every stored use case's code, plus every code {@link #seedUnmaterialisableCode} seeded - the
-     * latter standing in for what the real out-adapter's own store-first (ADR-005) read-time skip
+     * latter standing in for what the real out-adapter's own store-first read-time skip
      * hides from {@link #findAll} alone (kogn-io/arknet#360).
      */
     @Override
@@ -169,7 +169,7 @@ final class InMemoryUseCaseRepository implements UseCaseRepository {
 
     /**
      * Seeds a code {@link #findAllCodes} reports but {@link #findAll} never will - standing in for a
-     * use case the real out-adapter's read-time tolerance skips (store-first (ADR-005) data with no
+     * use case the real out-adapter's read-time tolerance skips (store-first data with no
      * title or goal literal, or with an empty main flow) without needing a real store to produce
      * that skip in (kogn-io/arknet#360). The code is assigned all the same, so nothing may hand it
      * out again.

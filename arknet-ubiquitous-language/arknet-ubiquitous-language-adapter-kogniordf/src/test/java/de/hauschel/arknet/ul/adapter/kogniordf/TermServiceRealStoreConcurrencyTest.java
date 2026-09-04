@@ -118,7 +118,7 @@ class TermServiceRealStoreConcurrencyTest {
         // Diagnostics for two unreproducible sightings of this assertion failing under
         // full parallel-build load left nothing to go on beyond "both got the same code" - this test
         // now also records a nanoTime-stamped timeline of both racers plus each result's arkprov:head
-        // (ADR-014), so that the next sighting is evaluable instead of merely confirming the symptom.
+        //, so that the next sighting is evaluable instead of merely confirming the symptom.
         long testStartNanos = System.nanoTime();
         List<String> timeline = new CopyOnWriteArrayList<>();
 
@@ -899,7 +899,7 @@ class TermServiceRealStoreConcurrencyTest {
     }
 
     /**
-     * Reads {@code term}'s current {@code arkprov:head} (ADR-014) straight from
+     * Reads {@code term}'s current {@code arkprov:head} straight from
      * {@link #realLifecycle} after the race, outside any transaction - the same triple pattern
      * {@link de.hauschel.arknet.persistence.WriteFunnel#compareAndUpdate} reads inside its
      * transaction, but there is no accessor for that private read path, so this queries it directly

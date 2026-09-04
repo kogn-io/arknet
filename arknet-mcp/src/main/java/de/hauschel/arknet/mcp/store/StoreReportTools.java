@@ -206,7 +206,7 @@ public final class StoreReportTools {
 
     @McpTool(name = "resource_history",
             description = "Change history of ONE resource: every PROV-O revision the shared write funnel"
-                    + " has recorded for it (ADR-013/ADR-014), oldest first, with the current revision marked"
+                    + " has recorded for it (ADR-013), oldest first, with the current revision marked"
                     + " '(current)'. The id is a CURIE (e.g. req:FR-1) or a full IRI; as a convenience a bare"
                     + " business id (e.g. FR-1) is resolved via dcterms:identifier. A resource that was only"
                     + " ever written store-first, or predates the funnel, has no history - not an error.",

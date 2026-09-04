@@ -14,7 +14,7 @@ package de.hauschel.arknet.bc.domain;
  * current SHACL shapes constrains {@code arkddd:subdomainType} itself. Optional on a bounded
  * context: {@code shapes:BoundedContext-partOf} places no {@code sh:minCount} on
  * {@code arkddd:partOf} (a {@code sh:Warning}-only property), consistent with the store-first
- * lifecycle (ADR-005) in which the strategic classification may be decided after the context
+ * lifecycle in which the strategic classification may be decided after the context
  * itself is minted.</p>
  */
 public enum Subdomain {

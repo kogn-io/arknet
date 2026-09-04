@@ -12,7 +12,7 @@ package de.hauschel.arknet.kernel;
  * per process to inject as a singleton; instead every in-adapter resolves the project <em>per
  * call</em> from the anchor the request carries.</p>
  *
- * <p><strong>Looked up, never derived (ADR-016).</strong> An anchor is an opaque string a client
+ * <p><strong>Looked up, never derived.</strong> An anchor is an opaque string a client
  * registered beforehand - the server matches it against the project registry and does not
  * interpret it. It used to be the client's working directory, from which the server
  * <em>computed</em> an id by slugging its git top-level's basename; two identically named

@@ -75,7 +75,7 @@ import io.kogn.rdf.terms.vocab.VocabXsd;
  * code is the only thing that can collide, mapping the conflict onto {@code duplicateCode} states
  * a fact - and a healing retry consumes it before any user sees it. Where a context guards a
  * second uniqueness rule of its own inside the {@code body} (the project registry's anchor
- * uniqueness, ADR-016 decision 4) and has no such retry, the same mapping would state a
+ * uniqueness decision 4) and has no such retry, the same mapping would state a
  * <em>falsehood</em> straight to the caller: "label already taken" for a write that lost on an
  * anchor. Only the caller can tell those apart, so only the caller may name the signal - and
  * returning the conflict unchanged ({@link UnaryOperator#identity()}) stays available for the
@@ -639,7 +639,7 @@ public final class WriteFunnel {
     }
 
     /**
-     * Records the write's revision (ADR-014): one {@code prov:Activity}, one immutable
+     * Records the write's revision: one {@code prov:Activity}, one immutable
      * {@code arkprov:Revision} entity chained to the superseded head via
      * {@code prov:wasRevisionOf}, and the rewritten {@code arkprov:head} pointer - all inside
      * the caller's still-open write transaction, so the revision commits or aborts with the

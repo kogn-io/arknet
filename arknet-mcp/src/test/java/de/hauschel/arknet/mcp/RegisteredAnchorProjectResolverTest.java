@@ -22,7 +22,7 @@ import de.hauschel.arknet.prj.domain.Project;
 import de.hauschel.arknet.prj.domain.UnknownAnchorException;
 
 /**
- * The switch-over itself (ADR-016), unit-tested: routing is a registry lookup on the whole anchor,
+ * The switch-over itself, unit-tested: routing is a registry lookup on the whole anchor,
  * and everything it cannot answer is an error rather than a default.
  *
  * <p>The first test is the regression stated at its smallest. Two projects live in

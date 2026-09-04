@@ -98,7 +98,7 @@ public interface RequirementRepository {
      * {@code expectedHead} is the token recorded by the last write through this port's own
      * {@code create}/{@code compareAndUpdate} (ADR-014 compare-and-set guard against the
      * lost-update race, degenerated from a full-snapshot comparison to a token comparison). A
-     * direct store-first (ADR-005) edit to this requirement leaves the token untouched, so such
+     * direct store-first edit to this requirement leaves the token untouched, so such
      * an edit passes this method's check undetected and the subsequent replace-by-identity write
      * silently overwrites it: the guard closes the lost-update window between two callers of this
      * port, not between a caller of this port and a store-first edit that bypassed it
@@ -212,7 +212,7 @@ public interface RequirementRepository {
      *
      * <p><strong>What "together" guarantees.</strong> The core fields (type, title, description,
      * rationale, status, priority, motivatedBy, qualityCategory) and the token itself (recorded by the last
-     * write through this port, ADR-014) come from one query call - one snapshot.
+     * write through this port) come from one query call - one snapshot.
      * {@code usesTerms} and {@code acceptanceCriteria}, in contrast, are filled in by later,
      * independent follow-up reads; that is safe because a later read can only be fresher, never
      * staler, than the token - a write through this port committing in between moves the token,
@@ -330,7 +330,7 @@ public interface RequirementRepository {
      * requirement can currently be materialised into a {@link Requirement}. {@link #findAll} drops
      * a subject whose mandatory {@code title} or {@code description} literal it cannot select -
      * absent, or present only under a language nothing falls back to - so that one store-first
-     * (ADR-005) write does not take the whole listing down with it. Such a requirement is still
+     * write does not take the whole listing down with it. Such a requirement is still
      * there and its code is still taken; this method sees it, because it joins nothing but the
      * type and {@code dcterms:identifier}.
      *

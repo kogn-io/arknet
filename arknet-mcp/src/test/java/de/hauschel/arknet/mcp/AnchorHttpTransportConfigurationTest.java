@@ -29,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 import de.hauschel.arknet.kernel.ProjectResolver;
 
 /**
- * Pins the project-anchor transport wiring (ADR-016): the context extractor lifts the client's
+ * Pins the project-anchor transport wiring: the context extractor lifts the client's
  * {@value AnchorHttpTransportConfiguration#ANCHOR_HEADER} header into the per-call transport
  * context (where the in-adapters read it), and the provider bean assembles.
  *

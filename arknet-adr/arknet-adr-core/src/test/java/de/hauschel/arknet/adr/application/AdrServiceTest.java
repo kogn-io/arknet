@@ -1304,7 +1304,7 @@ class AdrServiceTest {
      * any more when this check runs - the superseding decision must already be ACCEPTED, and the
      * superseded one becomes SUPERSEDED in the very same write - so the status check in
      * {@link AdrService#delete} refuses it first. What is left reachable for a PROPOSED decision is
-     * store-first (ADR-005) data: a legacy {@code arkarch:supersedes} edge naming it, written before
+     * store-first data: a legacy {@code arkarch:supersedes} edge naming it, written before
      * this issue rather than through the service. This test seeds exactly that, bypassing the
      * service the same way store-first data would have arrived.
      *

@@ -90,7 +90,7 @@ import de.hauschel.arknet.ul.application.port.in.ResolveTerms.ResolvedTerm;
  * every reference involved.</p>
  *
  * <p><strong>Project (resolved per call).</strong> Every in-port takes a {@link ProjectId} routing
- * key, resolved per call from the request's anchor (ADR-016).</p>
+ * key, resolved per call from the request's anchor.</p>
  */
 public final class AdrMcpTools {
 
@@ -393,7 +393,7 @@ public final class AdrMcpTools {
 
     /**
      * The note appended to {@code adr_list} whenever {@link CountSkippedAdrs#skippedCount} is nonzero
-     * (kogn-io/arknet#359) - a store-first (ADR-005) status/{@code supersededBy} anomaly used to be
+     * (kogn-io/arknet#359) - a store-first status/{@code supersededBy} anomaly used to be
      * visible only as a {@code WARN} log line an MCP caller never sees; this puts the same count in
      * the tool's own output instead.
      */

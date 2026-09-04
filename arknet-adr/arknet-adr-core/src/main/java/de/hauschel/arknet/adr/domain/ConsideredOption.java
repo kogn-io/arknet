@@ -25,7 +25,7 @@ import java.util.Objects;
  * @param name      the short, non-blank name of the option (e.g. "Adopt library X")
  * @param rationale the non-blank reasoning for why this option was chosen or rejected
  * @param outcome   whether this option was chosen or rejected; {@code null} only for an option the
- *                  out-adapter synthesised from a store-first (ADR-005) {@code arkarch:adrAlternatives}
+ *                  out-adapter synthesised from a store-first {@code arkarch:adrAlternatives}
  *                  literal that predates this resource and therefore carries no outcome of its own -
  *                  every option written through {@code adr_add}/{@code adr_update} carries one
  */

@@ -108,7 +108,7 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * The project hexagon (ADR-016) round-trips through the composition root: a registered
+     * The project hexagon round-trips through the composition root: a registered
      * project is listed back by the service.
      *
      * <p>Split from a formerly bundled test (issue #118) that also re-asserted "the registered
@@ -134,7 +134,7 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * The registry write target of the project hexagon (ADR-016): a registered project's entry
+     * The registry write target of the project hexagon: a registered project's entry
      * lands in the reserved system dataset, not in a project dataset.
      */
     @Test
@@ -159,7 +159,7 @@ class ArknetMcpConfigurationTest {
     }
 
     /**
-     * The self-description write target of the project hexagon (ADR-016): it lands in the
+     * The self-description write target of the project hexagon: it lands in the
      * project's <em>own</em> dataset, going through the same shared {@link
      * io.kogn.rdf.dataset.hosting.DatasetLifecycle} bean as every other hexagon - so this also
      * pins that the reserved dataset coexists with the project datasets in one store rather than

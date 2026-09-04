@@ -50,7 +50,7 @@ import de.hauschel.arknet.req.application.port.in.ResolveRequirements.ResolvedRe
  * resources, and {@link AdrDetail} already carries their codes; only the target's subject id, which a
  * {@link Ref} needs to link to that ADR's own card, is missing, so this class builds an
  * in-memory code-to-id lookup from the same list of decisions it renders. A code named there
- * that no longer resolves (deleted store-first, ADR-005) falls back to itself rather than being
+ * that no longer resolves (deleted store-first) falls back to itself rather than being
  * dropped, the same "never drop a reference" stance the two borrowed ports already take.</p>
  *
  * <p><strong>Marked-up prose, like {@link RequirementCards} (kogn-io/arknet#393).</strong> An ADR's

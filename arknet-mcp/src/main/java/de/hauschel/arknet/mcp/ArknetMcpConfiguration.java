@@ -171,7 +171,7 @@ import de.hauschel.arknet.uc.application.port.out.UseCaseRepository;
  *       {@code project_adopt}/{@code project_attach_anchor}/{@code project_rename}/
  *       {@code project_update}/{@code project_list}), assembled
  *       through {@link KognioRdfProjectRepositoryFactory}. This one is shaped differently from the
- *       model hexagons above and deliberately so (ADR-016): it manages identity rather than model, its
+ *       model hexagons above and deliberately so: it manages identity rather than model, its
  *       registry lives in one reserved dataset instead of a per-project one, and it is the only
  *       hexagon here wired <em>without</em> a {@link ProjectResolver} - it reads the caller's
  *       anchor raw and looks it up, which is the substance of ADR-016 rather than an omission.
@@ -357,7 +357,7 @@ public class ArknetMcpConfiguration {
 
     /**
      * Resolves each tool call's target project by looking the caller's anchor up in the registry
-     * (ADR-016). arknet-mcp is one shared server for every project on the machine, so there is no
+     *. arknet-mcp is one shared server for every project on the machine, so there is no
      * single project fixed at boot; the anchor arrives per call in the request header (see
      * {@link AnchorHttpTransportConfiguration}) or as a tool parameter.
      *
@@ -412,7 +412,7 @@ public class ArknetMcpConfiguration {
      * through a fixed fallback chain (requested language, {@code arknet.locale.requested} -> system
      * default, {@code arknet.locale.default} -> untagged literal -> a deterministic last resort) so
      * a term is never swallowed for lacking the requested language. Both properties default to
-     * English; a project with a configured {@code defaultLanguage} (ADR-016) now has {@code
+     * English; a project with a configured {@code defaultLanguage} now has {@code
      * term_add}/{@code term_update} write under that tag rather than untagged (issue #258), so the
      * untagged step here only surfaces a term for a project without one, or an older term written
      * before it had one.
@@ -721,10 +721,10 @@ public class ArknetMcpConfiguration {
         return new ActorMcpTools(service, service, service, service, service, projectResolver);
     }
 
-    // --- Project hexagon (the registry, ADR-016) -------------------------------
+    // --- Project hexagon (the registry) -------------------------------
 
     /**
-     * The project registry: which opaque, client-sent anchor belongs to which project (ADR-016).
+     * The project registry: which opaque, client-sent anchor belongs to which project.
      *
      * <p><strong>The one hexagon that is not project-scoped.</strong> Every other repository bean
      * here takes a per-call {@link ProjectId} and acquires that project's dataset; this one
@@ -785,7 +785,7 @@ public class ArknetMcpConfiguration {
      * resolver is not an omission but intentional - this component answers the routing question
      * and therefore cannot itself sit behind a routing answer.</p>
      *
-     * <p>This bean implements the anchor registry resolver (ADR-016): every
+     * <p>This bean implements the anchor registry resolver: every
      * tool call routes through anchor lookup instead of directory derivation. The old
      * workspace-based path has been removed; registry lookup is now the sole routing
      * mechanism for all project-scoped tool calls.</p>

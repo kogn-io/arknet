@@ -16,7 +16,7 @@ import de.hauschel.arknet.kernel.ProjectId;
 public interface CountSkippedAdrs {
 
     /**
-     * Returns how many decisions {@link ListAdrs#list} could not include: a store-first (ADR-005)
+     * Returns how many decisions {@link ListAdrs#list} could not include: a store-first
      * decision whose {@code arkarch:adrStatus} does not resolve to a known lifecycle value, or whose
      * status and {@code arkarch:supersededBy} edge disagree with the bi-implication {@code Adr}'s
      * compact constructor enforces (kogn-io/arknet#357) - either is skipped with a {@code WARN} log

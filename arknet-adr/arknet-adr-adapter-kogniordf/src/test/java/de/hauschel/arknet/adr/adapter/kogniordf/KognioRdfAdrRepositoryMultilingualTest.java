@@ -139,7 +139,7 @@ class KognioRdfAdrRepositoryMultilingualTest {
         Adr original = adr(id, new AdrCode("ADR-1"), List.of(), List.of());
         // Written untagged directly at the adapter level (bypassing AdrService's own
         // LanguageTag#resolveWriteLanguage, which never lets a write land untagged) - simulating a
-        // store-first (ADR-005) or pre-i18n record.
+        // store-first or pre-i18n record.
         repository.create(PROJECT, original, null);
 
         repository.compareAndUpdate(PROJECT, currentHeadOf(original.code()), original.accept(DECIDED_ON),

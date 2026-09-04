@@ -14,7 +14,7 @@ import de.hauschel.arknet.kernel.ProjectResolver;
 import de.hauschel.arknet.kernel.ResolvedProject;
 
 /**
- * Resolves the project an MCP tool call targets from its anchor (ADR-016).
+ * Resolves the project an MCP tool call targets from its anchor.
  *
  * <p>Split out of {@link HandleResolver} (issue #103): the two solve unrelated problems - this
  * class routes a call to its project before any resource lookup happens, {@link HandleResolver}
@@ -78,7 +78,7 @@ public final class AnchorContext {
     }
 
     /**
-     * Extracts the calling client's project anchor from the per-call transport context (ADR-016).
+     * Extracts the calling client's project anchor from the per-call transport context.
      * Null-tolerant on every hop; a {@code null} result is a caller error at
      * {@link ProjectResolver}, never a route to a default. Shared by {@link StoreReportTools} and
      * {@code de.hauschel.arknet.mcp.trace.TraceabilityMcpTools} instead of each carrying its own

@@ -122,7 +122,7 @@ public interface ProjectRegistry {
      *
      * @param project the project's current state
      * @param head    the concurrency token last observed for this project, or {@code null} if
-     *                the project was never written through the shared write funnel (ADR-014)
+     *                the project was never written through the shared write funnel
      */
     record CurrentProject(Project project, RevisionToken head) {
     }

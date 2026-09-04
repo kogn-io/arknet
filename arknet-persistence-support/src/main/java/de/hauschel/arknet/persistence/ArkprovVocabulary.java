@@ -7,7 +7,7 @@ package de.hauschel.arknet.persistence;
  * The absolute IRIs of arknet's PROV-O-based revision vocabulary as Java {@code String}
  * constants - the single source of truth shared by the code that <em>writes</em> revisions
  * (the {@link WriteFunnel}, which records one immutable revision plus the head rewrite
- * atomically with every guarded write, ADR-014) and any code that <em>reads</em> them
+ * atomically with every guarded write) and any code that <em>reads</em> them
  * (head lookups, future change views).
  *
  * <p><strong>The shape of one revision record.</strong> Every write through the funnel adds,
@@ -23,7 +23,7 @@ package de.hauschel.arknet.persistence;
  * &lt;resource&gt; arkprov:head &lt;revision&gt; .
  * </pre>
  *
- * <p>The head triple is the resource's queryable pointer to its latest revision (ADR-014):
+ * <p>The head triple is the resource's queryable pointer to its latest revision:
  * exactly one {@code arkprov:head} per resource, rewritten with every write <em>through the
  * funnel</em> - which today is every guarded write path. Where a caller reaches
  * {@link WriteFunnel#compareAndUpdate} the head is also a usable concurrency token; where it

@@ -137,7 +137,7 @@ class StoreReaderTest {
     }
 
     /**
-     * Regression test for issue #299: a store-first resource with no minted IRI (ADR-005) is
+     * Regression test for issue #299: a store-first resource with no minted IRI is
      * RDF-legally allowed to carry a {@code dcterms:identifier} on a blank-node subject just like
      * an IRI subject can - {@code DigestRenderer} already prints such an identifier as a
      * drill-down handle (see {@code StoreReaderTest#readSnapshotIncludesStatementsOnABlankNodeSubject}
@@ -180,11 +180,11 @@ class StoreReaderTest {
 
     /**
      * Every guarded write records a PROV-O revision plus a head pointer into the provenance
-     * graph (ADR-014), and that trail grows with every write, forever. None of the three read
+     * graph, and that trail grows with every write, forever. None of the three read
      * paths surfaces it: the snapshot feeds the store report, a view of the model rather than of
      * its change history, and the head pointer stays hidden even though every user-reachable
      * write now moves it through the funnel ({@code req_update}, {@code
-     * req_set_status}, {@code req_link_term} and {@code term_update} were resolved into it, ADR-014 decision 4)
+     * req_set_status}, {@code req_link_term} and {@code term_update} were resolved into it decision 4)
      * - whether and how to expose it through this generic read path is a separate, still open
      * decision, not gated on the head being a usable token any more.
      */
@@ -329,7 +329,7 @@ class StoreReaderTest {
      * Regression test for issue #136: {@code arkreq:usesTerm} carries no {@code sh:nodeKind}
      * constraint (see {@code StoreExporterTest}), so its subject is RDF-legally allowed to be a
      * blank node too - a store-first SKOS concept with no minted IRI is a real, SHACL-legal case
-     * (ADR-005), not a hypothetical one. {@code readSnapshot} already handles a blank-node
+     *, not a hypothetical one. {@code readSnapshot} already handles a blank-node
      * <em>object</em> via {@code toNode}; before this fix it silently dropped a row whose
      * <em>subject</em> was a blank node instead, so such a resource neither counted towards
      * {@code tripleCount()}/{@code resourceCount()} nor appeared among {@link
