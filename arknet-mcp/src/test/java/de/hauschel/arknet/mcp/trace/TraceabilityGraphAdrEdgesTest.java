@@ -24,6 +24,10 @@ import de.hauschel.arknet.adr.domain.AdrCode;
 import de.hauschel.arknet.adr.domain.AdrId;
 import de.hauschel.arknet.adr.domain.AdrStatus;
 import de.hauschel.arknet.adr.domain.BoundedContextRef;
+import de.hauschel.arknet.adr.domain.Consequence;
+import de.hauschel.arknet.adr.domain.ConsequenceType;
+import de.hauschel.arknet.adr.domain.ConsideredOption;
+import de.hauschel.arknet.adr.domain.OptionOutcome;
 import de.hauschel.arknet.adr.domain.RequirementRef;
 import de.hauschel.arknet.adr.domain.TermRef;
 import de.hauschel.arknet.bc.adapter.kogniordf.KognioRdfBoundedContextRepositoryFactory;
@@ -69,10 +73,13 @@ class TraceabilityGraphAdrEdgesTest {
     private static final String FR_1_IRI = "https://w3id.org/arknet/id/trace-adr-fr-1";
     private static final String BC_1_IRI = "https://w3id.org/arknet/id/trace-adr-bc-1";
     private static final String TERM_1_IRI = "https://w3id.org/arknet/id/trace-adr-term-1";
+    private static final String TERM_2_IRI = "https://w3id.org/arknet/id/trace-adr-term-2";
     private static final String ADR_1_IRI = "https://w3id.org/arknet/id/trace-adr-adr-1";
     private static final String ADR_2_IRI = "https://w3id.org/arknet/id/trace-adr-adr-2";
     private static final String ADR_3_IRI = "https://w3id.org/arknet/id/trace-adr-adr-3";
     private static final String ADR_4_IRI = "https://w3id.org/arknet/id/trace-adr-adr-4";
+    private static final String ADR_5_IRI = "https://w3id.org/arknet/id/trace-adr-adr-5";
+    private static final String ADR_6_IRI = "https://w3id.org/arknet/id/trace-adr-adr-6";
     private static final String ADR_GRAPH = "https://w3id.org/arknet/model/adr";
 
     @TempDir
@@ -94,6 +101,10 @@ class TraceabilityGraphAdrEdgesTest {
 
         terms.create(PROJECT, new Term(new TermId(ResourceId.of(TERM_1_IRI)), new TermCode("TERM-1"),
                 "Bounded Context", "Eine explizite Grenze, innerhalb derer ein Domaenenmodell gilt."), null);
+        // TERM-2 (issue #406): never usesTerm'd by anything - mentioned only in ADR prose, once
+        // without the edge (ADR-5) and once with it (ADR-6).
+        terms.create(PROJECT, new Term(new TermId(ResourceId.of(TERM_2_IRI)), new TermCode("TERM-2"),
+                "Checkpoint", "Ein wiederherstellbarer Zwischenstand."), null);
         requirements.create(PROJECT, new Requirement(
                 new RequirementId(ResourceId.of(FR_1_IRI)), new RequirementCode("FR-1"), "Login",
                 "The system shall authenticate a user.", null,
@@ -144,6 +155,27 @@ class TraceabilityGraphAdrEdgesTest {
                 return null;
             });
         }
+
+        // ADR-5 (issue #406): names TERM-2's label ("Checkpoint") in context, decision, a
+        // consequence's statement and a considered option's name/rationale - none of that prose is
+        // backed by an arkarch:usesTerm edge, the exact gap orphan_check's mention scan used to miss
+        // for ADRs.
+        adrs.create(PROJECT, new Adr(
+                new AdrId(ResourceId.of(ADR_5_IRI)), new AdrCode("ADR-5"), "Add checkpoints",
+                AdrStatus.PROPOSED, "Recovery needs a way to resume from a Checkpoint after a crash.",
+                "Introduce periodic checkpoints.",
+                List.of(new Consequence(1, "Adds Checkpoint overhead on write.", ConsequenceType.NEUTRAL)),
+                List.of(new ConsideredOption(1, "Checkpoint replay",
+                        "Never adds a Checkpoint but is slower.", OptionOutcome.REJECTED)),
+                null, List.of(), List.of(), List.of(), null, List.of()), "en");
+
+        // ADR-6: names the same label but DOES carry the arkarch:usesTerm edge to TERM-2 - the
+        // relationship is already recorded, so this must not be reported as an unlinked mention.
+        adrs.create(PROJECT, new Adr(
+                new AdrId(ResourceId.of(ADR_6_IRI)), new AdrCode("ADR-6"), "Reuse the checkpoint format",
+                AdrStatus.PROPOSED, "This decision also introduces a Checkpoint mechanism.",
+                "Reuse the same Checkpoint format as ADR-5.", List.of(), List.of(), null, List.of(), List.of(),
+                List.of(new TermRef(ResourceId.of(TERM_2_IRI))), null, List.of()), "en");
 
         StoreSnapshot snapshot = new StoreReader(lifecycle).readSnapshot(PROJECT);
         graph = TraceabilityGraph.of(snapshot, DisplayLocale.DEFAULT);
@@ -215,5 +247,47 @@ class TraceabilityGraphAdrEdgesTest {
     @Test
     void aTermUsedOnlyByAnAdrIsNotAnOrphan() {
         assertThat(graph.isReferencedTerm(TERM_1_IRI)).isTrue();
+    }
+
+    /**
+     * {@link TraceabilityGraph#adrProseTexts(String)} must read every prose field the issue names:
+     * name, context, decision, each consequence's statement, each considered option's own name and
+     * rationale.
+     */
+    @Test
+    void adrProseTextsOfAdr5CoversNameContextDecisionConsequenceAndConsideredOption() {
+        assertThat(graph.adrProseTexts(ADR_5_IRI)).containsExactlyInAnyOrder(
+                "Add checkpoints",
+                "Recovery needs a way to resume from a Checkpoint after a crash.",
+                "Introduce periodic checkpoints.",
+                "Adds Checkpoint overhead on write.",
+                "Checkpoint replay",
+                "Never adds a Checkpoint but is slower.");
+    }
+
+    /**
+     * The exact symptom issue #406 exists for: an ADR's own prose names a glossary term no
+     * {@code arkarch:usesTerm} edge backs up. {@code orphan_check}'s "Mentioned in text but not
+     * linked" list must surface it, exactly as it already does for a requirement, use case or
+     * bounded context.
+     */
+    @Test
+    void unlinkedMentionsFlagsAnAdrsProseMentionWithNoUsesTermEdge() {
+        assertThat(graph.unlinkedMentions())
+                .filteredOn(mention -> mention.sourceIri().equals(ADR_5_IRI))
+                .extracting(TraceabilityGraph.UnlinkedMention::termIri, TraceabilityGraph.UnlinkedMention::edgeLocalName)
+                .containsExactly(org.assertj.core.api.Assertions.tuple(TERM_2_IRI, "usesTerm"));
+    }
+
+    /**
+     * The negative case: an ADR that already carries {@code arkarch:usesTerm} to the term its prose
+     * names must not be reported - the relationship is already recorded, mirroring how a use case's
+     * own {@code primaryActor} mention in its goal is not flagged either (issue #333).
+     */
+    @Test
+    void unlinkedMentionsDoesNotFlagAnAdrsMentionOfItsOwnLinkedTerm() {
+        assertThat(graph.unlinkedMentions())
+                .filteredOn(mention -> mention.sourceIri().equals(ADR_6_IRI))
+                .isEmpty();
     }
 }
